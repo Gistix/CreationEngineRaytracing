@@ -67,6 +67,7 @@ struct State
 	struct Settings
 	{
 		bool UseRayQuery = false;
+		bool ValidationLayer = true;
 	} settings;
 
 	static State* GetSingleton()

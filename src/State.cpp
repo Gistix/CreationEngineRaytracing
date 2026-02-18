@@ -3,6 +3,8 @@
 
 #include "framework/DescriptorTableManager.h"
 
+#include <nvrhi/validation.h>
+
 void State::InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = spdlog::level::info)
 {
 #ifndef NDEBUG
@@ -37,8 +39,15 @@ bool State::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQu
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
 	deviceDesc.pDevice = d3d12Device;
 	deviceDesc.pGraphicsCommandQueue = commandQueue;
+	deviceDesc.aftermathEnabled = true;
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
+
+	if (settings.ValidationLayer) 
+	{
+		nvrhi::DeviceHandle nvrhiValidationLayer = nvrhi::validation::createValidationLayer(m_NVRHIDevice);
+		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
+	}
 
 	device = d3d12Device;
 
@@ -94,56 +103,54 @@ bool State::CreateRayTracingPipeline()
 {
 	nvrhi::rt::PipelineDesc pipelineDesc;
 	pipelineDesc.globalBindingLayouts = { m_BindingLayout, m_BindlessLayout };
-	//pipelineDesc.shaders
-
 	eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"0" } };
 
-	winrt::com_ptr<IDxcBlob> rayGenBlob;
+	// Compile
+	winrt::com_ptr<IDxcBlob> rayGenBlob, missBlob, closestHitBlob;
 	ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/RayGeneration.hlsl", defines);
-	auto rayGenHandle = m_NVRHIDevice->createShader({ nvrhi::ShaderType::RayGeneration, "", "Main"}, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
-
-	winrt::com_ptr<IDxcBlob> missBlob;
 	ShaderUtils::CompileShader(missBlob, L"data/shaders/raytracing/Miss.hlsl", defines);
-	auto missHandle = m_NVRHIDevice->createShader({ nvrhi::ShaderType::Miss, "", "Main" }, missBlob->GetBufferPointer(), missBlob->GetBufferSize());
-
-	winrt::com_ptr<IDxcBlob> closestHitBlob;
 	ShaderUtils::CompileShader(closestHitBlob, L"data/shaders/raytracing/ClosestHit.hlsl", defines);
-	auto closestHitHandle = m_NVRHIDevice->createShader({ nvrhi::ShaderType::ClosestHit, "", "Main" }, closestHitBlob->GetBufferPointer(), closestHitBlob->GetBufferSize());
 
-	pipelineDesc.shaders = {
-		{ "", rayGenHandle, nullptr },
-		{ "", missHandle, nullptr }
+	// Create ShaderLibrary handles (one per blob)
+	auto CreateLib = [&](winrt::com_ptr<IDxcBlob>& blob) -> nvrhi::ShaderLibraryHandle {
+		return m_NVRHIDevice->createShaderLibrary(blob->GetBufferPointer(), blob->GetBufferSize());
 	};
 
-	pipelineDesc.hitGroups = { {
-		"HitGroup",
-		closestHitHandle, // m_ShaderLibrary->getShader("ClosestHit", nvrhi::ShaderType::ClosestHit),
-		nullptr, // m_ShaderLibrary->getShader("AnyHit", nvrhi::ShaderType::AnyHit),
-		nullptr, // intersectionShader
-		nullptr, // bindingLayout
-		false  // isProceduralPrimitive
-	} };
+	auto rayGenLib = CreateLib(rayGenBlob);
+	auto missLib = CreateLib(missBlob);
+	auto hitLib = CreateLib(closestHitBlob);
+
+	// Pipeline Shaders
+	pipelineDesc.shaders = {
+		{ "RayGen", rayGenLib->getShader("Main", nvrhi::ShaderType::RayGeneration), nullptr },
+		{ "Miss", missLib->getShader("Main", nvrhi::ShaderType::Miss),            nullptr },
+	};
+
+	pipelineDesc.hitGroups = {
+		{
+			"HitGroup",
+			hitLib->getShader("Main", nvrhi::ShaderType::ClosestHit),
+			nullptr,  // any hit
+			nullptr,  // intersection
+			nullptr,  // binding layout
+			false     // isProceduralPrimitive
+		}
+	};
 
 	pipelineDesc.maxPayloadSize = 20;
-
 	pipelineDesc.allowOpacityMicromaps = true;
 
 	m_RayPipeline = m_NVRHIDevice->createRayTracingPipeline(pipelineDesc);
-
 	if (!m_RayPipeline)
 		return false;
 
-	auto& shaderTableDesc = nvrhi::rt::ShaderTableDesc()
-		.enableCaching(3)
-		.setDebugName("Shader Table");
-	m_ShaderTable = m_RayPipeline->createShaderTable(shaderTableDesc);
-
+	m_ShaderTable = m_RayPipeline->createShaderTable();
 	if (!m_ShaderTable)
 		return false;
 
-	m_ShaderTable->setRayGenerationShader("RayGen");
+	m_ShaderTable->setRayGenerationShader("RayGen");  // matches exportName above
+	m_ShaderTable->addMissShader("Miss");            // see note below
 	m_ShaderTable->addHitGroup("HitGroup");
-	m_ShaderTable->addMissShader("Miss");
 
 	return true;
 }
@@ -153,7 +160,7 @@ bool State::CreateComputePipeline()
 	eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"1" } };
 
 	winrt::com_ptr<IDxcBlob> rayGenBlob;
-	ShaderUtils::CompileShader(rayGenBlob, L"shaders/raytracing/RayGeneration.hlsl", defines);
+	ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/RayGeneration.hlsl", defines);
 	m_ComputeShader = m_NVRHIDevice->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 	if (!m_ComputeShader)
