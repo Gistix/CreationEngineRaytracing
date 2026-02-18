@@ -2,9 +2,6 @@
 
 #undef DEBUG
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
 #pragma warning(push)
 
 #if defined(SKYRIM)
@@ -22,13 +19,24 @@ namespace logger = F4SE::log;
 
 #pragma warning(pop)
 
+#define WIN32_LEAN_AND_MEAN
+#include "Windows.h"
+
+#define NOMINMAX
+
+#include <shared_mutex>
+
 #include <xbyak/xbyak.h>
 
-#include "Windows.h"
 #include <winrt/base.h>
 
 #include <string>
 using namespace std::literals;
+
+namespace stl
+{
+	using namespace SKSE::stl;
+};
 
 #include <directx/d3d12.h>
 
@@ -38,6 +46,7 @@ using namespace std::literals;
 
 #include <magic_enum/magic_enum.hpp>
 
+#include <new>
 void* operator new[](size_t size, const char* pName, int flags, unsigned debugFlags, const char* file, int line);
 void* operator new[](size_t size, size_t alignment, size_t alignmentOffset, const char* pName, int flags, unsigned debugFlags, const char* file, int line);
 
@@ -71,6 +80,7 @@ void* operator new[](size_t size, size_t alignment, size_t alignmentOffset, cons
 using float2 = DirectX::SimpleMath::Vector2;
 using float3 = DirectX::SimpleMath::Vector3;
 using float4 = DirectX::SimpleMath::Vector4;
+using float3x4 = DirectX::XMFLOAT3X4;
 using float4x4 = DirectX::SimpleMath::Matrix;
 using uint = uint32_t;
 

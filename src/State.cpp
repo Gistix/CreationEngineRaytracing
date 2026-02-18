@@ -1,5 +1,5 @@
 #include "State.h"
-#include "Utils.h"
+#include "Util.h"
 
 #include "framework/DescriptorTableManager.h"
 
@@ -67,6 +67,10 @@ bool State::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQu
 			return false;
 	}
 
+	m_CommandList = m_NVRHIDevice->createCommandList();
+
+	m_CommandList->open();
+
 	return true;
 }
 
@@ -75,10 +79,11 @@ void State::CreateRootSignature()
 	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
 	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
 	bindlessLayoutDesc.firstSlot = 0;
-	bindlessLayoutDesc.maxCapacity = 1024;
+	bindlessLayoutDesc.maxCapacity = 4096;
 	bindlessLayoutDesc.registerSpaces = {
-		nvrhi::BindingLayoutItem::RawBuffer_SRV(1),
-		nvrhi::BindingLayoutItem::Texture_SRV(2)
+		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
+		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2)
+		//nvrhi::BindingLayoutItem::Texture_SRV(3)
 	};
 
 	m_BindlessLayout = m_NVRHIDevice->createBindlessLayout(bindlessLayoutDesc);
@@ -88,9 +93,6 @@ void State::CreateRootSignature()
 	globalBindingLayoutDesc.bindings = {
 		nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 		nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
-		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
-		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
-		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),
 		nvrhi::BindingLayoutItem::Sampler(0),
 		nvrhi::BindingLayoutItem::Texture_UAV(0)
 	};
@@ -199,7 +201,7 @@ void State::AttachModel([[maybe_unused]] RE::TESForm* form) {
 		return;
 	}
 
-	if (Utils::IsPlayer(refr)) {
+	if (Util::IsPlayer(refr)) {
 		if (auto* player = reinterpret_cast<RE::PlayerCharacter*>(refr)) {
 			// First Person
 			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), pNiAVObject);
