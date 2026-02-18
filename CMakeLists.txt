@@ -9,14 +9,16 @@ project(
 )
 
 # default install path
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set_property(
-        CACHE CMAKE_INSTALL_PREFIX
-        PROPERTY VALUE "${CMAKE_CURRENT_BINARY_DIR}/aio"
-    )
-endif()
+#if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+#    set_property(
+#        CACHE CMAKE_INSTALL_PREFIX
+#        PROPERTY VALUE "${CMAKE_CURRENT_BINARY_DIR}/aio"
+#    )
+#endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+
+set(DEPLOY_DIR $ENV{DEPLOY_DIR})
 
 # ########################################################################################################################
 # ## Build options
@@ -24,8 +26,8 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 message("Options:")
 
 option(
-    AUTO_PLUGIN_DEPLOYMENT
-    "Copy the build output and addons to env:CommunityShadersOutputDir."
+    AUTO_DEPLOYMENT
+    "Copy the build output and addons to env:DEPLOY_DIR"
     OFF
 )
 
@@ -57,10 +59,10 @@ target_link_libraries(
     EASTL
 	d3d12.lib
 	magic_enum::magic_enum
+    xbyak::xbyak
 	d3dcompiler.lib
 	nvrhi_d3d12
 	nvrhi
-    xbyak::xbyak
 )
 
 include(NVRHI)
@@ -70,3 +72,15 @@ target_compile_definitions(
     PRIVATE 
     CERT_EXPORTS
 )
+
+if(AUTO_DEPLOYMENT)
+    message(STATUS "Auto deployment enabled. Build output and addons will be copied to ${DEPLOY_DIR}")
+
+    install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${DEPLOY_DIR})
+
+    install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}> DESTINATION ${DEPLOY_DIR} OPTIONAL)
+
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/shaders)
+
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/interop/ DESTINATION ${DEPLOY_DIR}/shaders/interop)
+endif()

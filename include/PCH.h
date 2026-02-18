@@ -25,12 +25,16 @@ namespace logger = F4SE::log;
 #include <xbyak/xbyak.h>
 
 #include "Windows.h"
+#include <winrt/base.h>
 
 #include <string>
 using namespace std::literals;
 
 #include <directx/d3d12.h>
+
 #include <nvrhi/d3d12.h>
+#include <nvrhi/nvrhi.h>
+#include <nvrhi/utils.h>
 
 #include <magic_enum/magic_enum.hpp>
 

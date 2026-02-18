@@ -12,7 +12,19 @@ function(add_cxx_files TARGET)
 		PREFIX "Header Files"
 		FILES ${INCLUDE_FILES})
 
-	target_sources("${TARGET}" PUBLIC ${INCLUDE_FILES})
+
+	file(GLOB_RECURSE INTEROP_FILES
+		LIST_DIRECTORIES false
+		CONFIGURE_DEPENDS
+		"interop/**/*.h"
+		"interop/**/*.hlsli"
+	)
+
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}}/interop
+		PREFIX "Interop Files"
+		FILES ${INTEROP_FILES})
+
+	target_sources("${TARGET}" PUBLIC ${INCLUDE_FILES} ${INTEROP_FILES})
 
 	file(GLOB_RECURSE HEADER_FILES
 		LIST_DIRECTORIES false
@@ -45,10 +57,10 @@ function(add_cxx_files TARGET)
 	file(GLOB_RECURSE HLSL_FILES
 		LIST_DIRECTORIES false
 		CONFIGURE_DEPENDS
-		"Features/**/*.hlsl"
-		"Features/**/*.hlsli"
-		"Package/**/*.hlsl"
-		"Package/**/*.hlsli"
+		"shaders/**/*.hlsl"
+		"shaders/**/*.hlsli"
+		"interop/**/*.hlsl"
+		"interop/**/*.hlsli"
 	)
 
 	set(HLSL_FILES ${HLSL_FILES} PARENT_SCOPE)
