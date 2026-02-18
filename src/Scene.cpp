@@ -1,11 +1,11 @@
-#include "State.h"
+#include "Scene.h"
 #include "Util.h"
 
 #include "framework/DescriptorTableManager.h"
 
 #include <nvrhi/validation.h>
 
-void State::InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = spdlog::level::info)
+void Scene::InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = spdlog::level::info)
 {
 #ifndef NDEBUG
 	auto sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
@@ -30,7 +30,7 @@ void State::InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = s
 	spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [%t] [%s:%#] %v");
 }
 
-bool State::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue)
+bool Scene::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue)
 {
 	InitializeLog();
 
@@ -74,7 +74,7 @@ bool State::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQu
 	return true;
 }
 
-void State::CreateRootSignature()
+void Scene::CreateRootSignature()
 {
 	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
 	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
@@ -101,7 +101,7 @@ void State::CreateRootSignature()
 	m_DescriptorTable = std::make_shared<DescriptorTableManager>(m_NVRHIDevice, m_BindlessLayout);
 }
 
-bool State::CreateRayTracingPipeline()
+bool Scene::CreateRayTracingPipeline()
 {
 	nvrhi::rt::PipelineDesc pipelineDesc;
 	pipelineDesc.globalBindingLayouts = { m_BindingLayout, m_BindlessLayout };
@@ -147,7 +147,7 @@ bool State::CreateRayTracingPipeline()
 	return true;
 }
 
-bool State::CreateComputePipeline()
+bool Scene::CreateComputePipeline()
 {
 	eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"1" } };
 
@@ -171,7 +171,7 @@ bool State::CreateComputePipeline()
 	return true;
 }
 
-void State::UpdateFrameBuffer(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const
+void Scene::UpdateFrameBuffer(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const
 {
 	frameData->ViewInverse = viewInverse;
 	frameData->ProjInverse = projInverse;
@@ -180,7 +180,7 @@ void State::UpdateFrameBuffer(float4x4 viewInverse, float4x4 projInverse, float4
 	frameData->Position = position;
 }
 
-void State::AttachModel([[maybe_unused]] RE::TESForm* form) {
+void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) {
 	auto* refr = form->AsReference();
 
 	auto* baseObject = refr->GetBaseObject();
@@ -219,6 +219,6 @@ void State::AttachModel([[maybe_unused]] RE::TESForm* form) {
 	}
 }
 
-void State::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::NiAVObject* root) {
+void Scene::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::NiAVObject* root) {
 
 }

@@ -35,7 +35,7 @@ struct MessageCallback : public nvrhi::IMessageCallback
 	}
 };
 
-struct State
+struct Scene
 {
 	ID3D12Device5* device;
 	ID3D11Device* d3d11Device;
@@ -70,9 +70,9 @@ struct State
 		bool ValidationLayer = true;
 	} settings;
 
-	static State* GetSingleton()
+	static Scene* GetSingleton()
 	{
-		static State singleton;
+		static Scene singleton;
 		return &singleton;
 	}
 
