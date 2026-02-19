@@ -170,7 +170,7 @@ bool Scene::CreateComputePipeline()
 	return true;
 }
 
-void Scene::SetScreenSize(uint16_t width, uint16_t height)
+void Scene::SetScreenSize(uint32_t width, uint32_t height)
 {
 	pendingRenderSize = { width, height };
 }

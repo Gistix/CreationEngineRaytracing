@@ -7,6 +7,12 @@ bool Initialize(ID3D12Device5* device, ID3D12CommandQueue* commandQueue)
 	return scene->Initialize(device, commandQueue);
 }
 
+void SetScreenSize(uint32_t width, uint32_t height)
+{
+	auto* scene = Scene::GetSingleton();
+	scene->SetScreenSize(width, height);
+}
+
 void SetupResources()
 {
 	auto* scene = Scene::GetSingleton();

@@ -93,7 +93,7 @@ struct Scene
 
 	void SetupResources();
 
-	void SetScreenSize(uint16_t width, uint16_t height);
+	void SetScreenSize(uint32_t width, uint32_t height);
 
 	void CheckResolutionResources();
 

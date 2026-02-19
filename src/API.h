@@ -2,6 +2,7 @@
 
 extern "C" {
 	CERT_API bool Initialize(ID3D12Device5* device, ID3D12CommandQueue* commandQueue);
+	CERT_API void SetScreenSize(uint32_t width, uint32_t height);
 	CERT_API void SetupResources();
 	CERT_API void UpdateFrameBuffer(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position);
 	CERT_API void Execute();
