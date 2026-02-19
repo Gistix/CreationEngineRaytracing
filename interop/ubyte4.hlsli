@@ -16,7 +16,7 @@ struct u16bytef {
     
     half unpack()
     {
-        return (half) x * BYTE_NORM_RCP;
+        return half(x * BYTE_NORM_RCP);
     }  
 };
 
