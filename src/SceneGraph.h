@@ -2,7 +2,6 @@
 
 #include "core/Model.h"
 #include "core/Instance.h"
-#include "FrameData.hlsli"
 
 struct SceneGraph
 {
@@ -18,12 +17,6 @@ struct SceneGraph
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> instancesFormIDs;
 
 	eastl::deque<eastl::string> msnConvertionQueue;
-
-	static SceneGraph* GetSingleton()
-	{
-		static SceneGraph singleton;
-		return &singleton;
-	}
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);

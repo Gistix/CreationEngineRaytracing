@@ -6,7 +6,6 @@ namespace Util
 {
 	namespace Geometry
 	{
-
 		std::uint32_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags)
 		{
 			using RE::BSGraphics::Vertex;

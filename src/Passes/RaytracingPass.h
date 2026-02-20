@@ -3,12 +3,12 @@
 #include <PCH.h>
 
 #include "RenderPass.h"
-#include "FrameData.hlsli"
+#include "CameraData.hlsli"
 #include "ShaderUtils.h"
 #include "framework/DescriptorTableManager.h"
 #include "Util.h"
 
-struct RaytracingPass : IRenderPass
+class RaytracingPass : public RenderPass
 {
 	nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 	nvrhi::rt::PipelineHandle m_RayPipeline;
@@ -22,11 +22,7 @@ struct RaytracingPass : IRenderPass
 
 	nvrhi::rt::AccelStructHandle m_TopLevelAS;
 
-	nvrhi::BufferHandle m_ConstantBuffer;
-
 	eastl::shared_ptr<DescriptorTableManager> m_DescriptorTable;
-
-	eastl::unique_ptr<FrameData> m_FrameData;
 
 	nvrhi::SamplerHandle m_LinearWrapSampler;
 
@@ -36,13 +32,12 @@ struct RaytracingPass : IRenderPass
 
 	bool m_DirtyBindings = true;
 
-	virtual void Init() override;
+public:
+	RaytracingPass(Renderer* renderer);
 
 	virtual void CreatePipeline() override;
 
 	virtual void ResolutionChanged(uint2 resolution) override;
-
-	void UpdateFrameBuffer(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const;
 
 	void CreateRootSignature();
 

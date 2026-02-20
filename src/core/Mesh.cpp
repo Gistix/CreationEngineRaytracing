@@ -237,6 +237,8 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 
 void Mesh::CreateBuffers(nvrhi::ICommandList* commandList, const std::string& name)
 {
+	auto device = Renderer::GetSingleton()->GetDevice();
+
 	// Vertex Buffer
 	{
 		const size_t size = sizeof(Vertex) * vertexCount;
@@ -248,7 +250,7 @@ void Mesh::CreateBuffers(nvrhi::ICommandList* commandList, const std::string& na
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(name + " (Vertex Buffer)");
 
-		buffers.vertexBuffer = Renderer::GetDevice()->createBuffer(vertexBufferDesc);
+		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
 
 		commandList->writeBuffer(buffers.vertexBuffer.Get(), geometry.vertices.data(), size);
 	}
@@ -264,7 +266,7 @@ void Mesh::CreateBuffers(nvrhi::ICommandList* commandList, const std::string& na
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(name + " (Triangle Buffer)");
 
-		buffers.triangleBuffer = Renderer::GetDevice()->createBuffer(triangleBufferDesc);
+		buffers.triangleBuffer = device->createBuffer(triangleBufferDesc);
 
 		commandList->writeBuffer(buffers.triangleBuffer.Get(), geometry.triangles.data(), size);
 	}

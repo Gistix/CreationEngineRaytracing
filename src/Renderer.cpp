@@ -25,11 +25,18 @@ bool Renderer::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* comman
 
 	m_NativeD3D12Device = d3d12Device;
 
-	renderPasses.emplace_back(eastl::make_unique<RaytracingPass>());
-
-	for (auto& renderPass : renderPasses)
+	// Initialize Camera Data Buffer
 	{
-		renderPass->Init();
+		m_CameraData = eastl::make_unique<CameraData>();
+
+		m_CameraDataBuffer = m_NVRHIDevice->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
+			sizeof(CameraData), "Frame Data", Constants::MAX_CB_VERSIONS));
+	}
+
+	// Initialize Render Passes
+	{
+		// Temporarily set up a single raytracing pass, more passes will be added later and in a more dynamic way
+		m_RenderPasses.emplace_back(eastl::make_unique<RaytracingPass>(this));
 	}
 
 	m_CommandList = m_NVRHIDevice->createCommandList();
@@ -72,10 +79,19 @@ void Renderer::CheckResolutionResources()
 		m_MainTexture = m_NVRHIDevice->createTexture(desc);
 	}
 
-	for (auto& renderPass : renderPasses)
+	for (auto& renderPass : m_RenderPasses)
 	{
 		renderPass->ResolutionChanged(m_RenderSize);
 	}
+}
+
+void Renderer::UpdateCameraData(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const
+{
+	m_CameraData->ViewInverse = viewInverse;
+	m_CameraData->ProjInverse = projInverse;
+	m_CameraData->CameraData = cameraData;
+	m_CameraData->NDCToView = NDCToView;
+	m_CameraData->Position = position;
 }
 
 void Renderer::SetCopyTarget(ID3D12Resource* target)
@@ -108,8 +124,11 @@ void Renderer::ExecutePasses()
 	// Get current command list
 	auto commandList = GetCommandList();
 
+	// Update camera data buffer
+	commandList->writeBuffer(m_CameraDataBuffer, m_CameraData.get(), sizeof(CameraData));
+
 	// Execute render passes on it
-	for (auto& renderPass : renderPasses) 
+	for (auto& renderPass : m_RenderPasses) 
 	{
 		renderPass->Execute(commandList);
 	}

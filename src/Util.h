@@ -2,6 +2,7 @@
 
 #include "Constants.h"
 
+#include "Utils/Game.h"
 #include "Utils/Geometry.h"
 #include "Utils/Traversal.h"
 
@@ -16,6 +17,8 @@ namespace Util
 	std::string WStringToString(const std::wstring& wideString);
 
 	std::wstring StringToWString(const std::string& str);
+
+	float3 Float3(RE::NiPoint3 niPoint);
 
 	float3 Normalize(float3 vector);
 

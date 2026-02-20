@@ -2,10 +2,23 @@
 
 #include <PCH.h>
 
-struct IRenderPass
+class Renderer;
+
+class RenderPass
 {
-	virtual void Init() = 0;
-	virtual void CreatePipeline() = 0;
-	virtual void ResolutionChanged(uint2 resolution) = 0;
-	virtual void Execute(nvrhi::ICommandList* commandList) = 0;
+private:
+    Renderer* m_Renderer = nullptr;
+
+protected:
+    Renderer* GetRenderer() { return m_Renderer; }
+
+public:
+    RenderPass(Renderer* renderer) : m_Renderer(renderer) {}
+    RenderPass() = delete;
+
+    virtual ~RenderPass() = default;
+
+    virtual void CreatePipeline() = 0;
+    virtual void ResolutionChanged(uint2 resolution) = 0;
+    virtual void Execute(nvrhi::ICommandList* commandList) = 0;
 };

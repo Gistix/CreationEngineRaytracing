@@ -1,15 +1,11 @@
 #include "RaytracingPass.h"
 #include "Renderer.h"
-#include "SceneGraph.h"
+#include "Scene.h"
 
-void RaytracingPass::Init()
+RaytracingPass::RaytracingPass(Renderer* renderer) 
+	: RenderPass(renderer)
 {
-	m_FrameData = eastl::make_unique<FrameData>();
-
-	m_ConstantBuffer = Renderer::GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
-		sizeof(FrameData), "Frame Data", Constants::MAX_CB_VERSIONS));
-
-	m_LinearWrapSampler = Renderer::GetDevice()->createSampler(
+	m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
 		nvrhi::SamplerDesc()
 		.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 		.setAllFilters(true));
@@ -21,7 +17,7 @@ void RaytracingPass::CreatePipeline()
 {
 	CreateRootSignature();
 
-	if (Renderer::GetSingleton()->settings.UseRayQuery)
+	if (GetRenderer()->settings.UseRayQuery)
 	{
 		if (!CreateComputePipeline())
 			return;
@@ -48,7 +44,7 @@ void RaytracingPass::CreateRootSignature()
 		nvrhi::BindingLayoutItem::Sampler(0),
 		nvrhi::BindingLayoutItem::Texture_UAV(0)
 	};
-	m_BindingLayout = Renderer::GetDevice()->createBindingLayout(globalBindingLayoutDesc);
+	m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 
 	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
 	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
@@ -59,9 +55,9 @@ void RaytracingPass::CreateRootSignature()
 		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2)
 		//nvrhi::BindingLayoutItem::Texture_SRV(3)
 	};
-	m_BindlessLayout = Renderer::GetDevice()->createBindlessLayout(bindlessLayoutDesc);
+	m_BindlessLayout = GetRenderer()->GetDevice()->createBindlessLayout(bindlessLayoutDesc);
 
-	m_DescriptorTable = eastl::make_shared<DescriptorTableManager>(Renderer::GetDevice(), m_BindlessLayout);
+	m_DescriptorTable = eastl::make_shared<DescriptorTableManager>(GetRenderer()->GetDevice(), m_BindlessLayout);
 }
 
 bool RaytracingPass::CreateRayTracingPipeline()
@@ -70,10 +66,12 @@ bool RaytracingPass::CreateRayTracingPipeline()
 	pipelineDesc.globalBindingLayouts = { m_BindingLayout, m_BindlessLayout };
 	eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"0" } };
 
+	auto device = GetRenderer()->GetDevice();
+
 	// Compile Libraries
-	auto rayGenLib = ShaderUtils::CompileShaderLibrary(Renderer::GetDevice(), L"data/shaders/raytracing/RayGeneration.hlsl", defines);
-	auto missLib = ShaderUtils::CompileShaderLibrary(Renderer::GetDevice(), L"data/shaders/raytracing/Miss.hlsl", defines);
-	auto hitLib = ShaderUtils::CompileShaderLibrary(Renderer::GetDevice(), L"data/shaders/raytracing/ClosestHit.hlsl", defines);
+	auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/RayGeneration.hlsl", defines);
+	auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Miss.hlsl", defines);
+	auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/ClosestHit.hlsl", defines);
 
 	// Pipeline Shaders
 	pipelineDesc.shaders = {
@@ -95,7 +93,7 @@ bool RaytracingPass::CreateRayTracingPipeline()
 	pipelineDesc.maxPayloadSize = 20;
 	pipelineDesc.allowOpacityMicromaps = true;
 
-	m_RayPipeline = Renderer::GetDevice()->createRayTracingPipeline(pipelineDesc);
+	m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
 	if (!m_RayPipeline)
 		return false;
 
@@ -114,9 +112,11 @@ bool RaytracingPass::CreateComputePipeline()
 {
 	eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"1" } };
 
+	auto device = GetRenderer()->GetDevice();
+
 	winrt::com_ptr<IDxcBlob> rayGenBlob;
 	ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/RayGeneration.hlsl", defines);
-	m_ComputeShader = Renderer::GetDevice()->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
+	m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 	if (!m_ComputeShader)
 		return false;
@@ -126,7 +126,7 @@ bool RaytracingPass::CreateComputePipeline()
 		.addBindingLayout(m_BindingLayout)
 		.addBindingLayout(m_BindlessLayout);
 
-	m_ComputePipeline = Renderer::GetDevice()->createComputePipeline(pipelineDesc);
+	m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 
 	if (!m_ComputePipeline)
 		return false;
@@ -134,18 +134,9 @@ bool RaytracingPass::CreateComputePipeline()
 	return true;
 }
 
-void RaytracingPass::UpdateFrameBuffer(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const
-{
-	m_FrameData->ViewInverse = viewInverse;
-	m_FrameData->ProjInverse = projInverse;
-	m_FrameData->CameraData = cameraData;
-	m_FrameData->NDCToView = NDCToView;
-	m_FrameData->Position = position;
-}
-
 void RaytracingPass::UpdateAccelStructs(nvrhi::ICommandList* commandList)
 {
-	auto* sceneGraph = SceneGraph::GetSingleton();
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	instances.clear();
 	instances.reserve(sceneGraph->instances.size());
@@ -170,7 +161,7 @@ void RaytracingPass::UpdateAccelStructs(nvrhi::ICommandList* commandList)
 		nvrhi::rt::AccelStructDesc tlasDesc;
 		tlasDesc.isTopLevel = true;
 		tlasDesc.topLevelMaxInstances = m_TopLevelInstances;
-		m_TopLevelAS = Renderer::GetDevice()->createAccelStruct(tlasDesc);
+		m_TopLevelAS = GetRenderer()->GetDevice()->createAccelStruct(tlasDesc);
 
 		m_DirtyBindings = true;
 	}
@@ -185,24 +176,23 @@ void RaytracingPass::CheckBindings()
 	if (!m_DirtyBindings)
 		return;
 
+	auto* renderer = GetRenderer();
+
 	nvrhi::BindingSetDesc bindingSetDesc;
 	bindingSetDesc.bindings = {
-		nvrhi::BindingSetItem::ConstantBuffer(0, m_ConstantBuffer),
+		nvrhi::BindingSetItem::ConstantBuffer(0, renderer->GetCameraDataBuffer()),
 		nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_TopLevelAS),
 		nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
-		nvrhi::BindingSetItem::Texture_UAV(0, Renderer::GetSingleton()->m_MainTexture)
+		nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 	};
 
-	m_BindingSet = Renderer::GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+	m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
 	m_DirtyBindings = false;
 }
 
-
 void RaytracingPass::Execute(nvrhi::ICommandList* commandList)
 {
-	commandList->writeBuffer(m_ConstantBuffer, m_FrameData.get(), sizeof(FrameData));
-
 	UpdateAccelStructs(commandList);
 
 	CheckBindings();

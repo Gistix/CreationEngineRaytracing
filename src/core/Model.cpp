@@ -12,7 +12,7 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 		blasDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
 	}
 
-	blas = Renderer::GetDevice()->createAccelStruct(blasDesc);
+	blas = Renderer::GetSingleton()->GetDevice()->createAccelStruct(blasDesc);
 
 	auto& geometries = blasDesc.bottomLevelGeometries;
 

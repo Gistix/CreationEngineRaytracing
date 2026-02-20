@@ -5,7 +5,18 @@
 
 #include "framework/DescriptorTableManager.h"
 
-void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) {
+Scene::Scene()
+{
+	m_SceneGraph = eastl::make_unique<SceneGraph>();
+}
+
+SceneGraph* Scene::GetSceneGraph() const
+{
+	return m_SceneGraph.get();
+}
+
+void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) 
+{
 	auto* refr = form->AsReference();
 
 	auto* baseObject = refr->GetBaseObject();
@@ -44,6 +55,7 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) {
 	}
 }
 
-void Scene::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::NiAVObject* root) {
+void Scene::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::NiAVObject* root) 
+{
 
 }

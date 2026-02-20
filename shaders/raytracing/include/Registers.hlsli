@@ -1,11 +1,11 @@
 #ifndef REGISTERS_HLSLI
 #define REGISTERS_HLSLI
 
-#include "interop/FrameData.hlsli"
+#include "interop/CameraData.hlsli"
 #include "interop/Vertex.hlsli"
 #include "interop/Triangle.hlsli"
 
-ConstantBuffer<FrameData> Frame         : register(b0);
+ConstantBuffer<CameraData> Camera       : register(b0);
 
 RWTexture2D<float4> Output              : register(u0);
 

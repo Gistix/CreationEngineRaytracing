@@ -11,12 +11,12 @@ RayDesc SetupPrimaryRay(uint2 idx, uint2 size)
     screenPos.y = -screenPos.y;
 
     const float4 clip = float4(screenPos, 1.0f, 1.0f);
-    float4 view = mul(Frame.ProjInverse, clip);
+    float4 view = mul(Camera.ProjInverse, clip);
     view /= view.w;
 
     RayDesc ray;
-    ray.Origin = Frame.Position.xyz;
-    ray.Direction = normalize(mul((float3x3)Frame.ViewInverse, view.xyz));
+    ray.Origin = Camera.Position.xyz;
+    ray.Direction = normalize(mul((float3x3)Camera.ViewInverse, view.xyz));
     ray.TMin = 0.1f;
     ray.TMax = 1e30;
     

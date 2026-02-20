@@ -37,6 +37,11 @@ namespace Util
 		return wstr;
 	}
 
+	float3 Float3(RE::NiPoint3 niPoint) 
+	{ 
+		return float3(niPoint.x, niPoint.y, niPoint.z); 
+	}
+
 	float3 Normalize(float3 vector)
 	{
 		vector.Normalize();

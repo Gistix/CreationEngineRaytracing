@@ -1,11 +1,11 @@
-#ifndef FRAMEDATA_HLSL
-#define FRAMEDATA_HLSL
+#ifndef CAMERADATA_HLSL
+#define CAMERADATA_HLSL
 
 //#pragma pack_matrix(row_major)
 
 #include "Interop.h"
 
-INTEROP_STRUCT(FrameData, 16)
+INTEROP_STRUCT(CameraData, 16)
 {
     float4x4 ViewInverse;
     float4x4 ProjInverse;
@@ -14,6 +14,6 @@ INTEROP_STRUCT(FrameData, 16)
     float3 Position;
     uint FrameCount;   
 };
-VALIDATE_CBUFFER(FrameData, 16);
+VALIDATE_CBUFFER(CameraData, 16);
 
 #endif
