@@ -85,7 +85,17 @@ struct Mesh
 
 	void CreateBuffers(nvrhi::ICommandList* commandList, const std::string& name);
 
+	bool UpdateDynamicPosition();
+
+	bool UpdateSkinning();
+
 	UpdateFlags Update();
+
+	bool IsHidden() const;
+
+	bool IsPendingHidden() const;
+
+	bool IsDirtyState() const;
 
 private:
 	// State is pending until BLASRebuild

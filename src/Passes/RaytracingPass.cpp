@@ -137,19 +137,23 @@ bool RaytracingPass::CreateComputePipeline()
 void RaytracingPass::UpdateAccelStructs(nvrhi::ICommandList* commandList)
 {
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	auto& instances = sceneGraph->GetInstances();
 
-	instances.clear();
-	instances.reserve(sceneGraph->instances.size());
+	m_InstanceDescs.clear();
+	m_InstanceDescs.reserve(instances.size());
 
-	for (auto& instance : sceneGraph->instances)
+	for (auto& instance : instances)
 	{
-		instances.push_back(instance->GetInstanceDesc());
+		/*if (!instance->model->blas)
+			continue;*/
+
+		m_InstanceDescs.push_back(instance->GetInstanceDesc());
 	}
 
 	// Compact acceleration structures that are tagged for compaction and have finished executing the original build
 	commandList->compactBottomLevelAccelStructs();
 
-	uint32_t topLevelInstances = static_cast<uint32_t>(instances.size());
+	uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 
 	if (!m_TopLevelAS || topLevelInstances > m_TopLevelInstances - Constants::NUM_INSTANCES_THRESHOLD) {
 		float topLevelInstancesRatio = std::ceil(topLevelInstances / static_cast<float>(Constants::NUM_INSTANCES_STEP));
@@ -167,7 +171,7 @@ void RaytracingPass::UpdateAccelStructs(nvrhi::ICommandList* commandList)
 	}
 
 	commandList->beginMarker("TLAS Update");
-	commandList->buildTopLevelAccelStruct(m_TopLevelAS, instances.data(), instances.size());
+	commandList->buildTopLevelAccelStruct(m_TopLevelAS, m_InstanceDescs.data(), m_InstanceDescs.size());
 	commandList->endMarker();
 }
 

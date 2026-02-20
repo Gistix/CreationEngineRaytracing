@@ -271,17 +271,71 @@ void Mesh::CreateBuffers(nvrhi::ICommandList* commandList, const std::string& na
 		commandList->writeBuffer(buffers.triangleBuffer.Get(), geometry.triangles.data(), size);
 	}
 
-	// Geometry descriptor
-	auto geometryTriangles = nvrhi::rt::GeometryTriangles()
-		.setVertexBuffer(buffers.vertexBuffer)
-		.setVertexFormat(nvrhi::Format::RGB32_FLOAT)
-		.setVertexCount(vertexCount)
-		.setVertexStride(sizeof(Vertex))
-		.setIndexBuffer(buffers.triangleBuffer)
-		.setIndexFormat(nvrhi::Format::R16_FLOAT)
-		.setIndexCount(triangleCount * 3);
+	// Geometry description
+	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
-	geometryDesc = nvrhi::rt::GeometryDesc().setTriangles(geometryTriangles);
+	geometryTriangles.indexBuffer = buffers.triangleBuffer;
+	geometryTriangles.indexOffset = 0;
+	geometryTriangles.indexFormat = nvrhi::Format::R16_UINT;
+	geometryTriangles.indexCount = triangleCount * 3;
+
+	geometryTriangles.vertexBuffer = buffers.vertexBuffer;
+	geometryTriangles.vertexOffset = 0;
+	geometryTriangles.vertexFormat = nvrhi::Format::RGB32_FLOAT;
+	geometryTriangles.vertexStride = sizeof(Vertex);
+	geometryTriangles.vertexCount = vertexCount;
+}
+
+bool Mesh::UpdateDynamicPosition()
+{
+	return false;
+}
+
+bool Mesh::UpdateSkinning()
+{
+	return false;
+}
+
+Mesh::UpdateFlags Mesh::Update()
+{
+	const auto dynamic = flags.any(Mesh::Flags::Dynamic);
+	const auto skinned = flags.any(Mesh::Flags::Skinned);
+
+	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
+	if (dynamic || skinned) {
+		SetPendingState(State::Hidden, bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kHidden));
+	}
+
+	if (IsPendingHidden()) {
+		return Mesh::UpdateFlags::None;
+	}
+
+	auto updateFlags = Mesh::UpdateFlags::None;
+
+	if (dynamic && UpdateDynamicPosition()) {
+		updateFlags |= Mesh::UpdateFlags::Vertices;
+	}
+
+	if (skinned && UpdateSkinning()) {
+		updateFlags |= Mesh::UpdateFlags::Skinning;
+	}
+
+	return updateFlags;
+}
+
+bool Mesh::IsHidden() const
+{
+	return ((state & State::Hidden) != State::None) || ((state & State::DismemberHidden) != State::None);
+}
+
+bool Mesh::IsPendingHidden() const
+{
+	return ((pendingState & State::Hidden) != State::None) || ((pendingState & State::DismemberHidden) != State::None);
+}
+
+bool Mesh::IsDirtyState() const
+{
+	return pendingState != state;
 }
 
 // State is set as pending first, final state is updated after BLAS rebuild call

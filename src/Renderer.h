@@ -47,6 +47,8 @@ class Renderer
 	ID3D12Resource* m_CopyTargetResource = nullptr;
 	nvrhi::TextureHandle m_CopyTargetTexture;
 
+	uint64_t m_FrameIndex = 0;
+
 	uint2 m_RenderSize;
 	uint2 m_PendingRenderSize;
 
@@ -63,6 +65,7 @@ public:
 	{
 		bool UseRayQuery = false;
 		bool ValidationLayer = true;
+		bool VariableUpdateRate = false;
 	} settings;
 
 	static Renderer* GetSingleton()
@@ -77,9 +80,19 @@ public:
 
 	nvrhi::ICommandList* GetCommandList() const { return m_CommandList; }
 
-	auto GetCameraDataBuffer() const { return m_CameraDataBuffer; }
+	inline auto GetCameraDataBuffer() const { return m_CameraDataBuffer; }
 
-	auto GetMainTexture() { return m_MainTexture; }
+	inline auto GetMainTexture() { return m_MainTexture; }
+
+	inline auto GetFrameIndex() const { return m_FrameIndex; }
+
+	inline auto GetCameraData() const { return m_CameraData.get(); }
+
+	static uint GetUpdateInterval(float distance)
+	{
+		float t = std::log2((distance - 25.0f) + 1.0f) * 0.3f;
+		return std::clamp(static_cast<uint>(t), 0u, 30u);
+	}
 
 	void Load();
 

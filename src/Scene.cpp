@@ -5,14 +5,24 @@
 
 #include "framework/DescriptorTableManager.h"
 
-Scene::Scene()
-{
-	m_SceneGraph = eastl::make_unique<SceneGraph>();
-}
-
 SceneGraph* Scene::GetSceneGraph() const
 {
 	return m_SceneGraph.get();
+}
+
+void Scene::Update([[maybe_unused]] nvrhi::ICommandList* commandList)
+{
+	auto sceneGraph = GetSceneGraph();
+
+	for (auto& instance : sceneGraph->GetInstances())
+	{
+		instance->Update();
+	}
+
+	for (auto& [path, model] : sceneGraph->GetModels())
+	{
+		model->Update();
+	}
 }
 
 void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) 
@@ -30,10 +40,14 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 	if (baseObject->IsMarker())
 		return;
 
-	//auto* node = refr->Get3D();
+	auto* node = refr->Get3D();
+
+	if (!node)
+		return;
 
 	if (auto* model = baseObject->As<RE::TESModel>()) {
 		logger::info("[Raytracing] AttachModel - Model: {}", model->model);
+		GetSceneGraph()->CreateModel(refr, model->GetModel(), node);
 		return;
 	}
 

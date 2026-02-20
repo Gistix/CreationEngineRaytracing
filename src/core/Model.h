@@ -6,6 +6,11 @@
 
 struct Model
 {
+	enum class UpdateFlags : uint8_t {
+		Update = 1 << 0,
+		Rebuild = 1 << 1
+	};
+
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
 	nvrhi::rt::AccelStructDesc blasDesc;
@@ -16,11 +21,19 @@ struct Model
 		meshes(eastl::move(meshes))
 	{
 		for (auto& mesh : this->meshes) {
-			flags.set(mesh->flags.get());
+			meshFlags.set(mesh->flags.get());
 			shaderTypes |= mesh->material.shaderType;
 			features |= static_cast<int>(mesh->material.Feature);
 			shaderFlags.set(mesh->material.shaderFlags.get());
 		}
+
+		blasDesc.setDebugName("BLAS")
+			.setIsTopLevel(false);
+
+		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+			blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+		else
+			blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
 	}
 
 	static std::string KeySuffix(RE::NiAVObject* root)
@@ -40,9 +53,9 @@ struct Model
 
 	void ConvertMSN();
 
-	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS BuildFlags() const
+	/*D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS BuildFlags() const
 	{
-		if (flags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 			return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
 
 		return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
@@ -54,7 +67,9 @@ struct Model
 			return BuildFlags();
 
 		return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
-	}
+	}*/
+
+	void Update();
 
 	void BuildBLAS(nvrhi::ICommandList* commandList);
 
@@ -72,9 +87,9 @@ struct Model
 	}
 
 	// Getters
-	auto GetFlags() const
+	auto GetMeshFlags() const
 	{
-		return flags;
+		return meshFlags;
 	}
 
 	uint32_t GetShaderTypes() const
@@ -94,7 +109,8 @@ struct Model
 	}
 
 private:
-	stl::enumeration<Mesh::Flags, uint8_t> flags = Mesh::Flags::None;
+	stl::enumeration<UpdateFlags, uint8_t> m_UpdateFlags;
+	stl::enumeration<Mesh::Flags, uint8_t> meshFlags = Mesh::Flags::None;
 	uint32_t shaderTypes = RE::BSShader::Type::None;
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;

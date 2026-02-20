@@ -26,7 +26,7 @@ class RaytracingPass : public RenderPass
 
 	nvrhi::SamplerHandle m_LinearWrapSampler;
 
-	eastl::vector<nvrhi::rt::InstanceDesc> instances;
+	eastl::vector<nvrhi::rt::InstanceDesc> m_InstanceDescs;
 
 	uint32_t m_TopLevelInstances = 0;
 

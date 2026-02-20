@@ -97,7 +97,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	if (!path || strlen(path) == 0)
 		return;
 
-	if (instanceNodes.find(pRoot) != instanceNodes.end()) {
+	if (m_InstanceNodes.find(pRoot) != m_InstanceNodes.end()) {
 		logger::warn("[RT] CreateModel \"{}\" - Instance/Model for 0x{:08X} already present.", path, reinterpret_cast<uintptr_t>(pRoot));
 		return;
 	}
@@ -105,7 +105,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	auto formID = form->GetFormID();
 
 	// We only need one buffer per model
-	if (models.find(path) != models.end()) {
+	if (m_Models.find(path) != m_Models.end()) {
 		AddInstance(formID, pRoot, path);
 		return;
 	}
@@ -284,16 +284,16 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		auto model = eastl::make_unique<Model>(meshes);
 
 		// Models with these flags cannot be instanced directly
-		if (model->GetFlags().any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		if (model->GetMeshFlags().any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 			modelKey.append(Model::KeySuffix(pRoot).c_str());
 
-		auto [it, emplaced] = models.try_emplace(modelKey, eastl::move(model));
+		auto [it, emplaced] = m_Models.try_emplace(modelKey, eastl::move(model));
 
 		if (emplaced) {
 			if (it->second->ShouldQueueMSNConversion())
-				msnConvertionQueue.emplace_back(modelKey);
+				m_MSNConvertionQueue.emplace_back(modelKey);
 
-			//it->second->BuildBLAS(commandList.get());
+			it->second->BuildBLAS(Renderer::GetSingleton()->GetCommandList());
 
 			AddInstance(formID, pRoot, modelKey);
 
@@ -312,31 +312,31 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 {
 	logger::debug("[RT] AddInstance [0x{:08X}] - {}, Path: {}", formID, node->name, path);
 
-	auto instanceNodeIt = instanceNodes.find(node);
-	if (instanceNodeIt != instanceNodes.end())
+	auto instanceNodeIt = m_InstanceNodes.find(node);
+	if (instanceNodeIt != m_InstanceNodes.end())
 		return;
 
-	auto modelIt = models.find(path);
-	if (modelIt == models.end())
+	auto modelIt = m_Models.find(path);
+	if (modelIt == m_Models.end())
 		return;
 
 
-	auto [it, emplaced] = instanceNodes.try_emplace(node, nullptr);
+	auto [instanceIt, emplaced] = m_InstanceNodes.try_emplace(node, nullptr);
 	if (!emplaced)
 		return;
 
-	auto instance = eastl::make_unique<Instance>(formID, modelIt->second.get());
+	auto instance = eastl::make_unique<Instance>(formID, node, modelIt->second.get());
 
-	if (auto nodesIt = instancesFormIDs.find(formID); nodesIt != instancesFormIDs.end()) {
+	if (auto nodesIt = m_InstancesFormIDs.find(formID); nodesIt != m_InstancesFormIDs.end()) {
 		nodesIt->second.push_back(instance.get());
 	}
 	else {
-		instancesFormIDs.try_emplace(formID, eastl::vector<Instance*>{ instance.get() });
+		m_InstancesFormIDs.try_emplace(formID, eastl::vector<Instance*>{ instance.get() });
 	}
 
-	it->second = instance.get();
+	instanceIt->second = instance.get();
 
-	instances.emplace_back(eastl::move(instance));
+	m_Instances.emplace_back(eastl::move(instance));
 
 	modelIt->second->AddRef();
 }

@@ -13,6 +13,9 @@ struct Instance
 	// Instance form id
 	RE::FormID formID;
 
+	// Node ptr
+	RE::NiAVObject* node;
+
 	// Model ptr
 	Model* model;
 
@@ -20,8 +23,10 @@ struct Instance
 	float3x4 transform;
 
 	// Makes sure we only update once per frame
-	uint64_t lastUpdate = 0;
+	uint64_t m_LastUpdate = 0;
 
+	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : formID(formID), node(node), model(model) { }
+	
 	nvrhi::rt::InstanceDesc GetInstanceDesc() const
 	{
 		nvrhi::rt::InstanceDesc instanceDesc;
@@ -32,4 +37,8 @@ struct Instance
 		memcpy(instanceDesc.transform, transform.m, sizeof(transform.m));
 		return instanceDesc;
 	}
+
+	bool SkipUpdate();
+
+	void Update();
 };

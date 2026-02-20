@@ -2,6 +2,8 @@
 
 #include "Renderer.h"
 #include "Hooks.h"
+#include "Scene.h"
+
 #include "Passes/RaytracingPass.h"
 
 bool Renderer::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
@@ -124,6 +126,8 @@ void Renderer::ExecutePasses()
 	// Get current command list
 	auto commandList = GetCommandList();
 
+	Scene::GetSingleton()->Update(commandList);
+
 	// Update camera data buffer
 	commandList->writeBuffer(m_CameraDataBuffer, m_CameraData.get(), sizeof(CameraData));
 
@@ -153,6 +157,8 @@ void Renderer::WaitExecution()
 {
 	// Wait for the last submitted command list to finish execution before proceeding
 	m_NVRHIDevice->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
+
+	m_FrameIndex++;
 
 	// Run garbage collection to release resources that are no longer in use
 	m_NVRHIDevice->runGarbageCollection();

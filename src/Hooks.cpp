@@ -25,8 +25,8 @@ namespace Hooks
 		float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
 
 		renderer->UpdateCameraData(
-			cameraData.viewMat.Invert().Transpose(),
-			cameraData.projMat.Invert().Transpose(),
+			cameraData.viewMat.Invert(),
+			cameraData.projMat.Invert(),
 			Util::Game::GetClippingData(),
 			float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y),
 			Util::Float3(runtimeData.posAdjust.getEye())

@@ -8,7 +8,10 @@ struct Scene
 {
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
-	Scene();
+	Scene()
+	{
+		m_SceneGraph = eastl::make_unique<SceneGraph>();
+	}
 
 	static Scene* GetSingleton()
 	{
@@ -17,6 +20,8 @@ struct Scene
 	}
 
 	SceneGraph* GetSceneGraph() const;
+
+	void Update(nvrhi::ICommandList* commandList);
 
 	void AttachModel(RE::TESForm* form);
 
