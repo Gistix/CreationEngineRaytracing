@@ -13,6 +13,8 @@ void RaytracingPass::Init()
 		nvrhi::SamplerDesc()
 		.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 		.setAllFilters(true));
+
+	CreatePipeline();
 }
 
 void RaytracingPass::CreatePipeline()
@@ -38,18 +40,6 @@ void RaytracingPass::ResolutionChanged([[maybe_unused]] uint2 resolution)
 
 void RaytracingPass::CreateRootSignature()
 {
-	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
-	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
-	bindlessLayoutDesc.firstSlot = 0;
-	bindlessLayoutDesc.maxCapacity = 4096;
-	bindlessLayoutDesc.registerSpaces = {
-		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
-		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2)
-		//nvrhi::BindingLayoutItem::Texture_SRV(3)
-	};
-
-	m_BindlessLayout = Renderer::GetDevice()->createBindlessLayout(bindlessLayoutDesc);
-
 	nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 	globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
 	globalBindingLayoutDesc.bindings = {
@@ -59,6 +49,17 @@ void RaytracingPass::CreateRootSignature()
 		nvrhi::BindingLayoutItem::Texture_UAV(0)
 	};
 	m_BindingLayout = Renderer::GetDevice()->createBindingLayout(globalBindingLayoutDesc);
+
+	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+	bindlessLayoutDesc.firstSlot = 0;
+	bindlessLayoutDesc.maxCapacity = 4096;
+	bindlessLayoutDesc.registerSpaces = {
+		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
+		nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2)
+		//nvrhi::BindingLayoutItem::Texture_SRV(3)
+	};
+	m_BindlessLayout = Renderer::GetDevice()->createBindlessLayout(bindlessLayoutDesc);
 
 	m_DescriptorTable = eastl::make_shared<DescriptorTableManager>(Renderer::GetDevice(), m_BindlessLayout);
 }
@@ -200,7 +201,7 @@ void RaytracingPass::CheckBindings()
 
 void RaytracingPass::Execute(nvrhi::ICommandList* commandList)
 {
-	commandList->writeBuffer(m_ConstantBuffer.Get(), m_FrameData.get(), sizeof(FrameData));
+	commandList->writeBuffer(m_ConstantBuffer, m_FrameData.get(), sizeof(FrameData));
 
 	UpdateAccelStructs(commandList);
 

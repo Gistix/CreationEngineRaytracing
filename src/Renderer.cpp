@@ -25,12 +25,16 @@ bool Renderer::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* comman
 
 	device = d3d12Device;
 
-	for (size_t i = 0; i < _countof(m_CommandLists); i++)
+	renderPasses.emplace_back(eastl::make_unique<RaytracingPass>());
+
+	for (auto& renderPass : renderPasses)
 	{
-		m_CommandLists[i] = m_NVRHIDevice->createCommandList();
+		renderPass->Init();
 	}
-	
-	m_CommandLists[m_CommandListIndex]->open();
+
+	m_CommandList = m_NVRHIDevice->createCommandList();
+
+	m_CommandList->open();
 
 	return true;
 }
@@ -38,6 +42,11 @@ bool Renderer::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* comman
 void Renderer::SetResolution(uint2 resolution)
 {
 	pendingRenderSize = resolution;
+}
+
+uint2 Renderer::GetResolution()
+{
+	return renderSize;
 }
 
 void Renderer::CheckResolutionResources()
@@ -69,6 +78,8 @@ void Renderer::CheckResolutionResources()
 
 void Renderer::ExecutePasses()
 {
+	CheckResolutionResources();
+
 	// Get current command list
 	auto commandList = GetCommandList();
 
@@ -84,14 +95,8 @@ void Renderer::ExecutePasses()
 	// Execute it
 	m_LastSubmittedInstance = m_NVRHIDevice->executeCommandList(commandList);
 
-	logger::info("Command list index: {}", m_CommandListIndex);
-	logger::info("Submitted command list instance: {}", m_LastSubmittedInstance);
-
-	// Update command list index
-	m_CommandListIndex = (m_CommandListIndex + 1) % 2;
-
-	// Open the next command list
-	GetCommandList()->open();
+	// Open it again, NVRHI handles multiple command lists internally
+	commandList->open();
 }
 
 void Renderer::WaitExecution()
@@ -111,14 +116,6 @@ void Renderer::Load()
 void Renderer::PostPostLoad()
 {
 	Hooks::Install();
-
-	renderPasses.clear();
-	renderPasses.emplace_back(eastl::make_unique<RaytracingPass>());
-
-	for (auto& renderPass : renderPasses)
-	{
-		renderPass->Init();
-	}
 }
 
 void Renderer::DataLoaded()

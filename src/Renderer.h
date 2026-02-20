@@ -39,8 +39,7 @@ struct Renderer
 
 	nvrhi::DeviceHandle m_NVRHIDevice;
 
-	nvrhi::CommandListHandle m_CommandLists[2];
-	uint32_t m_CommandListIndex = 0;
+	nvrhi::CommandListHandle m_CommandList;
 
 	uint64_t m_LastSubmittedInstance = 0;
 
@@ -67,12 +66,14 @@ struct Renderer
 
 	nvrhi::ICommandList* GetCommandList() const
 	{
-		return m_CommandLists[m_CommandListIndex];
+		return m_CommandList;
 	}
 
 	bool Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 
 	void SetResolution(uint2 resolution);
+
+	uint2 GetResolution();
 
 	void CheckResolutionResources();
 

@@ -12,6 +12,18 @@ void ExecutePasses()
 	Renderer::GetSingleton()->ExecutePasses();
 }
 
+void SetResolution(uint32_t width, uint32_t height) {
+	Renderer::GetSingleton()->SetResolution({ width, height });
+}
+
+void GetResolution(uint32_t& width, uint32_t& height)
+{
+	auto resolution = Renderer::GetSingleton()->GetResolution();
+
+	width = resolution.x;
+	height = resolution.y;
+}
+
 void WaitExecution()
 {
 	Renderer::GetSingleton()->WaitExecution();
