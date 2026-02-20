@@ -23,7 +23,7 @@ bool Renderer::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* comman
 		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
 	}
 
-	device = d3d12Device;
+	m_NativeD3D12Device = d3d12Device;
 
 	renderPasses.emplace_back(eastl::make_unique<RaytracingPass>());
 
@@ -41,26 +41,28 @@ bool Renderer::Initialize(ID3D12Device5* d3d12Device, ID3D12CommandQueue* comman
 
 void Renderer::SetResolution(uint2 resolution)
 {
-	pendingRenderSize = resolution;
+	m_PendingRenderSize = resolution;
+
+	logger::info("Resolution set to {}x{}", resolution.x, resolution.y);
 }
 
 uint2 Renderer::GetResolution()
 {
-	return renderSize;
+	return m_RenderSize;
 }
 
 void Renderer::CheckResolutionResources()
 {
-	if (renderSize == pendingRenderSize)
+	if (m_RenderSize == m_PendingRenderSize)
 		return;
 
-	renderSize = pendingRenderSize;
+	m_RenderSize = m_PendingRenderSize;
 
 	// Output Texture
 	{
 		nvrhi::TextureDesc desc;
-		desc.width = renderSize.x;
-		desc.height = renderSize.y;
+		desc.width = m_RenderSize.x;
+		desc.height = m_RenderSize.y;
 		desc.isUAV = true;
 		desc.keepInitialState = true;
 		desc.format = nvrhi::Format::RGBA16_FLOAT;
@@ -72,8 +74,31 @@ void Renderer::CheckResolutionResources()
 
 	for (auto& renderPass : renderPasses)
 	{
-		renderPass->ResolutionChanged(renderSize);
+		renderPass->ResolutionChanged(m_RenderSize);
 	}
+}
+
+void Renderer::SetCopyTarget(ID3D12Resource* target)
+{
+	if (target == m_CopyTargetResource)
+		return;
+
+	m_CopyTargetResource = target;
+
+	auto targetDesc = target->GetDesc();
+
+	nvrhi::TextureDesc desc{};
+	desc.width = static_cast<uint32_t>(targetDesc.Width);
+	desc.height = targetDesc.Height;
+	desc.format = nvrhi::Format::RGBA16_FLOAT;
+	desc.mipLevels = targetDesc.MipLevels;
+	desc.arraySize = targetDesc.DepthOrArraySize;
+	desc.dimension = nvrhi::TextureDimension::Texture2D;
+	desc.initialState = nvrhi::ResourceStates::Common;
+	desc.keepInitialState = true;
+	desc.debugName = "Copy Target Texture";
+
+	m_CopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, target, desc);
 }
 
 void Renderer::ExecutePasses()
@@ -84,11 +109,17 @@ void Renderer::ExecutePasses()
 	auto commandList = GetCommandList();
 
 	// Execute render passes on it
-	for (auto& renderPass: renderPasses)
+	for (auto& renderPass : renderPasses) 
 	{
 		renderPass->Execute(commandList);
 	}
-	
+
+	if (m_CopyTargetTexture) 
+	{
+		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
+		commandList->copyTexture(m_CopyTargetTexture, region, m_MainTexture, region);
+	}
+
 	// Close it
 	commandList->close();
 

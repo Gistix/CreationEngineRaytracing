@@ -6,6 +6,7 @@ extern "C" {
 	CERT_API void SetResolution(uint32_t width, uint32_t height);
 	CERT_API void GetResolution(uint32_t& width, uint32_t& height);
 	CERT_API void WaitExecution();
+	CERT_API void SetCopyTarget(ID3D12Resource* target);
 	CERT_API void AttachModel(RE::TESForm* form);
 	CERT_API void AttachLand(RE::TESForm* form, RE::NiAVObject* root);
 }

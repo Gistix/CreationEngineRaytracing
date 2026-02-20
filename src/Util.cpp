@@ -79,4 +79,12 @@ namespace Util
 
 		return temp;
 	}
+
+	uint2 GetDispatchCount(uint2 resolution, float threads)
+	{
+		uint dispatchX = static_cast<uint>(std::ceil(resolution.x / threads));
+		uint dispatchY = static_cast<uint>(std::ceil(resolution.y / threads));
+
+		return { dispatchX, dispatchY };
+	}
 }

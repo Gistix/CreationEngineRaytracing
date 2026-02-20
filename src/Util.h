@@ -42,4 +42,6 @@ namespace Util
 	};
 
 	DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);
+
+	uint2 GetDispatchCount(uint2 resolution, float threads = 8.0f);
 }

@@ -51,5 +51,7 @@ void Main()
     
     float hit = payload.Hit() ? 1.0f : 0.0f;
     
-    Output[idx] = float4(hit, hit, hit, 1.0f);
+    float2 uv = (idx + 0.5f) / size;
+    
+    Output[idx] = float4(hit, uv, 1.0f);
 }

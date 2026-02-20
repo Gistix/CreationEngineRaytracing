@@ -29,6 +29,11 @@ void WaitExecution()
 	Renderer::GetSingleton()->WaitExecution();
 }
 
+void SetCopyTarget(ID3D12Resource* target)
+{
+	Renderer::GetSingleton()->SetCopyTarget(target);
+}
+
 void AttachModel(RE::TESForm* form)
 {
 	auto* scene = Scene::GetSingleton();

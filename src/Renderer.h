@@ -34,8 +34,8 @@ struct Renderer
 {
 	spdlog::level::level_enum logLevel = spdlog::level::info;
 
-	ID3D12Device5* device;
-	ID3D11Device* d3d11Device;
+	ID3D12Device5* m_NativeD3D12Device;
+	ID3D11Device* m_NativeD3D11Device;
 
 	nvrhi::DeviceHandle m_NVRHIDevice;
 
@@ -45,8 +45,11 @@ struct Renderer
 
 	nvrhi::TextureHandle m_MainTexture;
 
-	uint2 renderSize;
-	uint2 pendingRenderSize;
+	ID3D12Resource* m_CopyTargetResource = nullptr;
+	nvrhi::TextureHandle m_CopyTargetTexture;
+
+	uint2 m_RenderSize;
+	uint2 m_PendingRenderSize;
 
 	eastl::vector<eastl::unique_ptr<IRenderPass>> renderPasses;
 
@@ -64,6 +67,8 @@ struct Renderer
 
 	static auto GetDevice() { return GetSingleton()->m_NVRHIDevice; }
 
+	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
+
 	nvrhi::ICommandList* GetCommandList() const
 	{
 		return m_CommandList;
@@ -76,6 +81,8 @@ struct Renderer
 	uint2 GetResolution();
 
 	void CheckResolutionResources();
+
+	void SetCopyTarget(ID3D12Resource* target);
 
 	void ExecutePasses();
 

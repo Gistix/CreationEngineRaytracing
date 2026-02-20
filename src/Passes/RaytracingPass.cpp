@@ -206,4 +206,30 @@ void RaytracingPass::Execute(nvrhi::ICommandList* commandList)
 	UpdateAccelStructs(commandList);
 
 	CheckBindings();
+
+	auto resolution = Renderer::GetSingleton()->GetResolution();
+
+	if (m_RayPipeline)
+	{
+		nvrhi::rt::State state;
+		state.shaderTable = m_ShaderTable;
+		state.bindings = { m_BindingSet, m_DescriptorTable->GetDescriptorTable() };
+		commandList->setRayTracingState(state);
+
+		nvrhi::rt::DispatchRaysArguments args;
+		args.width = resolution.x;
+		args.height = resolution.y;
+		commandList->dispatchRays(args);
+	}
+	else if (m_ComputePipeline)
+	{
+		nvrhi::ComputeState state;
+		state.pipeline = m_ComputePipeline;
+		state.bindings = { m_BindingSet, m_DescriptorTable->GetDescriptorTable() };
+		commandList->setComputeState(state);
+
+		auto threadGroupSize = Util::GetDispatchCount(resolution);
+
+		commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
+	}
 }
