@@ -1,13 +1,9 @@
 #include "core/Model.h"
 #include "Scene.h"
+#include "Renderer.h"
 
-void Model::BuildBLAS()
+void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 {
-	auto scene = Scene::GetSingleton();
-
-	auto& nvrhiDevice = scene->m_NVRHIDevice;
-	auto& commandList = scene->m_CommandList;
-
 	blasDesc.setDebugName("BLAS")
 		.setIsTopLevel(false);
 
@@ -16,7 +12,7 @@ void Model::BuildBLAS()
 		blasDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
 	}
 
-	blas = nvrhiDevice->createAccelStruct(blasDesc);
+	blas = Renderer::GetDevice()->createAccelStruct(blasDesc);
 
 	auto& geometries = blasDesc.bottomLevelGeometries;
 

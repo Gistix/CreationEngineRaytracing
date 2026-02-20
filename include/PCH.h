@@ -28,21 +28,21 @@ namespace logger = F4SE::log;
 
 #include <xbyak/xbyak.h>
 
+#include <detours/detours.h>
+
 #include <winrt/base.h>
 
 #include <string>
 using namespace std::literals;
 
-namespace stl
-{
-	using namespace SKSE::stl;
-};
+#include "stl.h"
 
 #include <directx/d3d12.h>
 
 #include <nvrhi/d3d12.h>
 #include <nvrhi/nvrhi.h>
 #include <nvrhi/utils.h>
+#include <nvrhi/validation.h>
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -84,6 +84,8 @@ using float4 = DirectX::SimpleMath::Vector4;
 using float3x4 = DirectX::XMFLOAT3X4;
 using float4x4 = DirectX::SimpleMath::Matrix;
 using uint = uint32_t;
+
+#include "Types.h"
 
 #if defined(CERT_EXPORTS)
 #define CERT_API __declspec(dllexport)

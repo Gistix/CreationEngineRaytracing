@@ -11,6 +11,12 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 include(AddCXXFiles)
 add_cxx_files("${PROJECT_NAME}")
 
+configure_file(
+	${CMAKE_CURRENT_SOURCE_DIR}/cmake/Plugin.h.in
+	${CMAKE_CURRENT_BINARY_DIR}/cmake/Plugin.h
+	@ONLY
+)
+
 target_precompile_headers(
 	"${PROJECT_NAME}"
 	PRIVATE

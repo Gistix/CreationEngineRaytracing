@@ -2,6 +2,7 @@
 
 #include "core/Mesh.h"
 
+#include "Renderer.h"
 #include "Util.h"
 
 void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root)
@@ -202,7 +203,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, name, formID);
-			mesh->CreateBuffers(name);
+			mesh->CreateBuffers(Renderer::GetSingleton()->GetCommandList(), name);
 
 			meshes.push_back(eastl::move(mesh));
 		}
@@ -268,7 +269,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, name, formID);
-				mesh->CreateBuffers(name);
+				mesh->CreateBuffers(Renderer::GetSingleton()->GetCommandList(), name);
 
 				meshes.push_back(eastl::move(mesh));
 			}

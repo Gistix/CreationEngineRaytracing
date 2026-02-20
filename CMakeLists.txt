@@ -34,7 +34,7 @@ option(
 # #######################################################################################################################
 # # Add CMake features
 # #######################################################################################################################
-include(Module)
+include(XSEPlugin)
 
 # #######################################################################################################################
 # # Find dependencies
@@ -50,6 +50,9 @@ find_package(cppwinrt CONFIG REQUIRED)
 find_package(directx-dxc CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 
+find_path(DETOURS_INCLUDE_DIRS "detours/detours.h")
+find_library(DETOURS_LIBRARY detours REQUIRED)
+
 target_link_libraries(
 	${PROJECT_NAME}
 	PRIVATE
@@ -63,6 +66,7 @@ target_link_libraries(
 	d3dcompiler.lib
 	nvrhi_d3d12
 	nvrhi
+    ${DETOURS_LIBRARY}
 )
 
 include(NVRHI)
@@ -76,11 +80,11 @@ target_compile_definitions(
 if(AUTO_DEPLOYMENT)
     message(STATUS "Auto deployment enabled. Build output and addons will be copied to ${DEPLOY_DIR}")
 
-    install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${DEPLOY_DIR})
+    install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${DEPLOY_DIR}/SKSE/Plugins)
 
-    install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}> DESTINATION ${DEPLOY_DIR} OPTIONAL)
+    install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}> DESTINATION ${DEPLOY_DIR}/SKSE/Plugins OPTIONAL)
 
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/shaders)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/Shaders)
 
-    install(DIRECTORY ${CMAKE_SOURCE_DIR}/interop/ DESTINATION ${DEPLOY_DIR}/shaders/interop)
+    install(DIRECTORY ${CMAKE_SOURCE_DIR}/interop/ DESTINATION ${DEPLOY_DIR}/Shaders/Interop)
 endif()

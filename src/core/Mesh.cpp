@@ -3,6 +3,7 @@
 #include "ubyte4.hlsli"
 
 #include "Scene.h"
+#include "Renderer.h"
 
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
@@ -234,10 +235,8 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 
 }
 
-void Mesh::CreateBuffers(const std::string& name)
+void Mesh::CreateBuffers(nvrhi::ICommandList* commandList, const std::string& name)
 {
-	auto scene = Scene::GetSingleton();
-
 	// Vertex Buffer
 	{
 		const size_t size = sizeof(Vertex) * vertexCount;
@@ -249,9 +248,9 @@ void Mesh::CreateBuffers(const std::string& name)
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(name + " (Vertex Buffer)");
 
-		buffers.vertexBuffer = scene->m_NVRHIDevice->createBuffer(vertexBufferDesc);
+		buffers.vertexBuffer = Renderer::GetDevice()->createBuffer(vertexBufferDesc);
 
-		scene->m_CommandList->writeBuffer(buffers.vertexBuffer.Get(), geometry.vertices.data(), size);
+		commandList->writeBuffer(buffers.vertexBuffer.Get(), geometry.vertices.data(), size);
 	}
 
 	// Triangle Buffer
@@ -265,9 +264,9 @@ void Mesh::CreateBuffers(const std::string& name)
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(name + " (Triangle Buffer)");
 
-		buffers.triangleBuffer = scene->m_NVRHIDevice->createBuffer(triangleBufferDesc);
+		buffers.triangleBuffer = Renderer::GetDevice()->createBuffer(triangleBufferDesc);
 
-		scene->m_CommandList->writeBuffer(buffers.triangleBuffer.Get(), geometry.triangles.data(), size);
+		commandList->writeBuffer(buffers.triangleBuffer.Get(), geometry.triangles.data(), size);
 	}
 
 	// Geometry descriptor

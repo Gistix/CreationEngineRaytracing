@@ -1,40 +1,20 @@
 #include "API.h"
 #include "Scene.h"
+#include "Renderer.h"
 
-bool Initialize(ID3D12Device5* device, ID3D12CommandQueue* commandQueue)
+bool Initialize(ID3D12Device5* device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
-	auto* scene = Scene::GetSingleton();
-	return scene->Initialize(device, commandQueue);
+	return Renderer::GetSingleton()->Initialize(device, commandQueue, computeCommandQueue, copyCommandQueue);
 }
 
-void SetScreenSize(uint32_t width, uint32_t height)
+void ExecutePasses()
 {
-	auto* scene = Scene::GetSingleton();
-	scene->SetScreenSize(width, height);
-}
-
-void SetupResources()
-{
-	auto* scene = Scene::GetSingleton();
-	scene->SetupResources();
-}
-
-void UpdateFrameBuffer(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position)
-{
-	auto* scene = Scene::GetSingleton();
-	scene->UpdateFrameBuffer(viewInverse, projInverse, cameraData, NDCToView, position);
-}
-
-void Execute()
-{
-	auto* scene = Scene::GetSingleton();
-	scene->Execute();
+	Renderer::GetSingleton()->ExecutePasses();
 }
 
 void WaitExecution()
 {
-	auto* scene = Scene::GetSingleton();
-	scene->WaitExecution();
+	Renderer::GetSingleton()->WaitExecution();
 }
 
 void AttachModel(RE::TESForm* form)

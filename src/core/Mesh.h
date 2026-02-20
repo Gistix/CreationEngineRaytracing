@@ -83,7 +83,7 @@ struct Mesh
 
 	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, const char* name, RE::FormID formID);
 
-	void CreateBuffers(const std::string& name);
+	void CreateBuffers(nvrhi::ICommandList* commandList, const std::string& name);
 
 	UpdateFlags Update();
 
