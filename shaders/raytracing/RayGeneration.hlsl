@@ -3,11 +3,23 @@
 #include "raytracing/include/Payload.hlsli"
 #include "raytracing/include/Geometry.hlsli"
 
+#if USE_RAY_QUERY
+[numthreads(16, 16, 1)]
+void Main(uint2 idx : SV_DispatchThreadID)
+#else
 [shader("raygeneration")]
 void Main()
+#endif
 {
+#if USE_RAY_QUERY
+    uint2 size = Camera.RenderSize;
+    
+    if (any(idx >= size))
+        return;
+#else    
     uint2 idx = DispatchRaysIndex().xy;
     uint2 size = DispatchRaysDimensions().xy;
+#endif
     
     RayDesc ray = SetupPrimaryRay(idx, size);
     
@@ -22,20 +34,20 @@ void Main()
     RayQuery<RAY_FLAG_NONE> rayQuery;
     rayQuery.TraceRayInline(Scene, RAY_FLAG_NONE, 0xFF, ray);
 
-    /*while (rayQuery.Proceed())
+    while (rayQuery.Proceed())
     {
         if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
         {
-            if (considerTransparentMaterial(
+            /*if (considerTransparentMaterial(
                 rayQuery.CandidateInstanceID(),
                 rayQuery.CandidatePrimitiveIndex(),
                 rayQuery.CandidateGeometryIndex(),
                 rayQuery.CandidateTriangleBarycentrics()))
-            {
+            {*/
                 rayQuery.CommitNonOpaqueTriangleHit();
-            }
+            //}
         }
-    }*/
+    }
 
     if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {

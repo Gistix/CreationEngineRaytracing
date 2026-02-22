@@ -46,7 +46,7 @@ namespace Util
 
 	DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);
 
-	uint2 GetDispatchCount(uint2 resolution, float threads = 8.0f);
+	uint2 GetDispatchCount(uint2 resolution, float threads);
 
 	template <typename T>
 	auto CreateStructuredBuffer(nvrhi::IDevice* device, uint32_t maxCapacity, const char* name) {

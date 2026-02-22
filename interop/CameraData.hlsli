@@ -10,7 +10,9 @@ INTEROP_STRUCT(CameraData, 16)
     float4 CameraData;
     float4 NDCToView;
     float3 Position;
-    uint FrameIndex;   
+    uint FrameIndex;
+    uint2 RenderSize;
+    uint2 Pad;
 };
 VALIDATE_CBUFFER(CameraData, 16);
 

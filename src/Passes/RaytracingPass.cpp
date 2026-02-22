@@ -113,7 +113,7 @@ bool RaytracingPass::CreateComputePipeline()
 	auto device = GetRenderer()->GetDevice();
 
 	winrt::com_ptr<IDxcBlob> rayGenBlob;
-	ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/RayGeneration.hlsl", defines);
+	ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/RayGeneration.hlsl", defines, L"cs_6_5");
 	m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 	if (!m_ComputeShader)
@@ -209,8 +209,6 @@ void RaytracingPass::Execute(nvrhi::ICommandList* commandList)
 
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-	//auto descriptorTable = reinterpret_cast<nvrhi::d3d12::DescriptorTable*>(sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable());
-
 	nvrhi::BindingSetVector bindings = { 
 		m_BindingSet, 
 		sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
@@ -239,8 +237,7 @@ void RaytracingPass::Execute(nvrhi::ICommandList* commandList)
 		state.bindings = bindings;
 		commandList->setComputeState(state);
 
-		auto threadGroupSize = Util::GetDispatchCount(resolution);
-
+		auto threadGroupSize = Util::GetDispatchCount(resolution, 16);
 		commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 	}
 }

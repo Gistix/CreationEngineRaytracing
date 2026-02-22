@@ -10,11 +10,11 @@ struct Vertex
 	half2 Texcoord0;
 	half3 Normal;
 	half3 Bitangent;
-	float Handedness; // Kept as float for padding
+	float Handedness;
 #if defined(BAKED_TEXTURES)	// Probably misaligned, but no being used atm
 	ubyte4f Albedo;
-    u16bytef Roughness;
-    u16bytef Metallic;
+    byte16f Roughness;
+    byte16f Metallic;
 #else
 	ubyte4f Color;
 	ubyte4f LandBlend0;

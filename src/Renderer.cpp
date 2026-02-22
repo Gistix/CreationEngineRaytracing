@@ -93,6 +93,8 @@ void Renderer::UpdateCameraData(float4x4 viewInverse, float4x4 projInverse, floa
 	m_CameraData->CameraData = cameraData;
 	m_CameraData->NDCToView = NDCToView;
 	m_CameraData->Position = position;
+	m_CameraData->FrameIndex = m_FrameIndex % UINT_MAX;
+	m_CameraData->RenderSize = m_RenderSize;
 }
 
 void Renderer::SetCopyTarget(ID3D12Resource* target)

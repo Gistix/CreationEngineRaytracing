@@ -64,7 +64,7 @@ public:
 
 	struct Settings
 	{
-		bool UseRayQuery = false;
+		bool UseRayQuery = true;
 		bool ValidationLayer = true;
 		bool VariableUpdateRate = false;
 	} settings;
