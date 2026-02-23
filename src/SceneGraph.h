@@ -3,6 +3,7 @@
 #include "core/Model.h"
 #include "core/Instance.h"
 
+#include "Light.hlsli"
 #include "Mesh.hlsli"
 #include "Instance.hlsli"
 
@@ -23,11 +24,17 @@ class SceneGraph
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
+	eastl::vector<RE::BSLight*> m_Lights;
+
+	uint8_t m_NumActiveLights = 0;
+	eastl::array<LightData, Constants::NUM_LIGHTS_MAX> m_LightData;
+	nvrhi::BufferHandle m_LightBuffer;
+
 	eastl::array<MeshData, Constants::NUM_MESHES_MAX> m_MeshData;
-	nvrhi::BufferHandle m_MeshDataBuffer;
+	nvrhi::BufferHandle m_MeshBuffer;
 
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
-	nvrhi::BufferHandle m_InstanceDataBuffer;
+	nvrhi::BufferHandle m_InstanceBuffer;
 
 	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<TextureReference>> textures;
 
@@ -47,8 +54,9 @@ public:
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
 	inline auto& GetTextureDescriptors() const { return m_TextureDescriptors; }
 
-	inline auto& GetMeshDataBuffer() const { return m_MeshDataBuffer; }
-	inline auto& GetInstanceDataBuffer() const { return m_InstanceDataBuffer; }
+	inline auto& GetLightBuffer() const { return m_LightBuffer; }
+	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
+	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
 	inline auto& GetInstances() const { return m_Instances; }
 
@@ -57,6 +65,9 @@ public:
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);
 	void CreateLandModel(RE::TESObjectLAND* land);
+
+	void AddLight(RE::BSLight* light);
+	void RemoveLight(RE::BSLight* light);
 
 	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Texture2D* d3d11Texture);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);

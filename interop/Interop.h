@@ -6,6 +6,7 @@
 #		define INTEROP_DATA_STRUCT(name, alignment) struct alignas(alignment) name##Data
 #		define INTEROP_DATA_TYPE(name) name##Data
 #		define INTEROP_ROW_MAJOR(type) type
+#		define INTEROP_NAMESPACE(name) namespace name
 
 // -----------------------------------------------------
 // Core constant buffer validation
@@ -53,6 +54,7 @@
 #		define INTEROP_DATA_STRUCT(name, alignment) struct name
 #		define INTEROP_DATA_TYPE(name) name
 #		define INTEROP_ROW_MAJOR(type) row_major type
+#		define INTEROP_NAMESPACE(name)
 
 #       define VALIDATE_CBUFFER(T, EXPECTED_ALIGNMENT)
 #       define VALIDATE_ALIGNMENT(T, EXPECTED_ALIGNMENT)

@@ -8,6 +8,8 @@ namespace Constants
 
 	static constexpr uint32_t MATERIAL_NORMALMAP_ID = 1;
 
+	static constexpr uint32_t NUM_LIGHTS_MAX = 255;
+
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
 	static constexpr uint32_t NUM_MESHES_MAX = 8 * 1024;
 

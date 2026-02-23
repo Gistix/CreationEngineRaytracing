@@ -1,19 +1,26 @@
 #include "SceneGraph.h"
 
+#include "Scene.h"
+
 #include "core/Mesh.h"
 
 #include "Renderer.h"
 #include "Util.h"
+
+#include "Types/CommunityShaders/LightLimitFix.h"
 
 void SceneGraph::Initialize()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	// Mesh Data Buffer
-	m_MeshDataBuffer = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Data Buffer");
+	m_MeshBuffer = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
 
 	// Instance Data Buffer
-	m_InstanceDataBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Data Buffer");
+	m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+
+	// Mesh Data Buffer
+	m_LightBuffer = Util::CreateStructuredBuffer<LightData>(device, Constants::NUM_LIGHTS_MAX, "Light Buffer");
 
 	// Triangle bindless descriptor table
 	{
@@ -59,6 +66,68 @@ void SceneGraph::Initialize()
 
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
+	const auto& lightSettings = Scene::GetSingleton()->settings.LightSettings;
+
+	m_NumActiveLights = 0;
+
+	for (auto& light : m_Lights)
+	{
+		auto niLight = light->light.get();
+
+		if (!niLight)
+			continue;
+
+		if (!Util::Game::IsValidLight(light))
+			continue;
+
+		if (light->IsShadowLight()) 
+		{
+			auto* shadowLight = reinterpret_cast<RE::BSShadowLight*>(light);
+
+			if (shadowLight->GetRuntimeData().maskIndex == 255)
+				continue;
+		}
+
+		auto& runtimeData = niLight->GetLightRuntimeData();
+		
+		auto flags = std::bit_cast<LightLimitFix::LightFlags>(runtimeData.ambient.red);
+
+		if (flags & LightLimitFix::LightFlags::Disabled)
+			continue;
+
+		auto& lightData = m_LightData[m_NumActiveLights];
+
+		lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue);
+
+		lightData.Radius = runtimeData.radius.x;
+
+		if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) < 1e-4 && lightData.Radius < 1e-4)
+			continue;
+
+		auto worldPos = niLight->world.translate;
+
+		lightData.Vector = Util::Float3(worldPos);
+
+		lightData.InvRadius = 1.0f / runtimeData.radius.x;
+
+		lightData.Fade = runtimeData.fade;
+
+		if (lightSettings.LodDimmer)
+			lightData.Fade *= light->lodDimmer;
+
+		lightData.Type = light->pointLight ? LightType::Point : LightType::Directional;
+
+		lightData.Flags = 0;
+
+		if (flags & LightLimitFix::LightFlags::InverseSquare)
+			lightData.Flags |= LightFlags::ISL;
+
+		if (flags & LightLimitFix::LightFlags::Linear)
+			lightData.Flags |= LightFlags::LinearLight;
+
+		m_NumActiveLights++;
+	}
+
 	for (auto& [path, model] : m_Models)
 	{
 		model->Update();
@@ -85,15 +154,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		m_InstanceData[instanceIndex] = {
 			instance->transform,
-			LightData(),
+			InstanceLightData(instance->GatherLights(m_LightData.data(), m_NumActiveLights)),
 			firstMeshIndex
 		};
 
 		instanceIndex++;
 	}
 
-	commandList->writeBuffer(m_MeshDataBuffer, m_MeshData.data(), meshIndex * sizeof(MeshData));
-	commandList->writeBuffer(m_InstanceDataBuffer, m_InstanceData.data(), instanceIndex * sizeof(InstanceData));
+	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), m_NumActiveLights * sizeof(LightData));
+	commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), meshIndex * sizeof(MeshData));
+	commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), instanceIndex * sizeof(InstanceData));
 }
 
 void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root)
@@ -514,4 +584,17 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 	m_Instances.emplace_back(eastl::move(instance));
 
 	modelIt->second->AddRef();
+}
+
+void SceneGraph::AddLight(RE::BSLight* light) 
+{
+	logger::info("AddLight");
+	m_Lights.emplace_back(light);
+}
+
+void SceneGraph::RemoveLight(RE::BSLight* light)
+{
+	logger::info("RemoveLight");
+	if (!m_Lights.empty())
+		m_Lights.erase_first(light);
 }

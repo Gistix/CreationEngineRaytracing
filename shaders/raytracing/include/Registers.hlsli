@@ -6,14 +6,16 @@
 #include "interop/Triangle.hlsli"
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
+#include "interop/Light.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
 
 RWTexture2D<float4> Output              : register(u0);
 
 RaytracingAccelerationStructure Scene   : register(t0);
-StructuredBuffer<Instance> Instances    : register(t1);
-StructuredBuffer<Mesh> Meshes           : register(t2);
+StructuredBuffer<Light> Lighjts         : register(t1);
+StructuredBuffer<Instance> Instances    : register(t2);
+StructuredBuffer<Mesh> Meshes           : register(t3);
 
 StructuredBuffer<Triangle> Triangles[]  : register(t0, space1);
 

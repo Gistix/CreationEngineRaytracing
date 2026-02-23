@@ -12,6 +12,18 @@ struct Scene
 	std::recursive_mutex shareTextureMutex;
 	bool shareTexture = false;
 
+	struct LightSettings
+	{
+		bool LodDimmer = false;
+	};
+
+	struct Settings
+	{
+		bool Enabled = true;
+		bool PathTracing = true;
+		LightSettings LightSettings;
+	} settings;
+
 	Scene()
 	{
 		m_SceneGraph = eastl::make_unique<SceneGraph>();
@@ -32,4 +44,8 @@ struct Scene
 	void AttachModel(RE::TESForm* form);
 
 	void AttachLand(RE::TESForm* form, RE::NiAVObject* root);
+
+	void AddLight(RE::BSLight* light);
+
+	void RemoveLight(const RE::NiPointer<RE::BSLight>& a_light);
 };

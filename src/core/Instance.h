@@ -2,6 +2,10 @@
 
 #include "core/Model.h"
 
+#include "Light.hlsli"
+
+#include "Util.h"
+
 struct Instance
 {
 	enum State : uint8_t
@@ -41,4 +45,23 @@ struct Instance
 	bool SkipUpdate();
 
 	void Update();
+
+	eastl::vector<uint8_t> GatherLights(LightData* lightData, uint8_t numActiveLights) const
+	{
+		eastl::vector<uint8_t> instanceLights;
+
+		float3 center = Util::Float3(node->worldBound.center);
+		float radius = node->worldBound.radius;
+
+		for (uint8_t i = 0; i < numActiveLights; i++) {
+			auto& light = lightData[i];
+
+			if (light.Type == LightType::Point && (center - light.Vector).Length() > radius + light.Radius)
+				continue;
+
+			instanceLights.push_back(i);
+		}
+
+		return instanceLights;
+	}
 };

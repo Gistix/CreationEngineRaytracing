@@ -1,8 +1,8 @@
-#include "RaytracingPass.h"
+#include "PathTracingDI.h"
 #include "Renderer.h"
 #include "Scene.h"
 
-RaytracingPass::RaytracingPass(Renderer* renderer) 
+PathTracingDI::PathTracingDI(Renderer* renderer) 
 	: RenderPass(renderer)
 {
 	m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
@@ -13,7 +13,7 @@ RaytracingPass::RaytracingPass(Renderer* renderer)
 	CreatePipeline();
 }
 
-void RaytracingPass::CreatePipeline()
+void PathTracingDI::CreatePipeline()
 {
 	CreateRootSignature();
 
@@ -29,12 +29,12 @@ void RaytracingPass::CreatePipeline()
 	}
 }
 
-void RaytracingPass::ResolutionChanged([[maybe_unused]] uint2 resolution)
+void PathTracingDI::ResolutionChanged([[maybe_unused]] uint2 resolution)
 {
 	m_DirtyBindings = true;
 }
 
-void RaytracingPass::CreateRootSignature()
+void PathTracingDI::CreateRootSignature()
 {
 	nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 	globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
@@ -50,7 +50,7 @@ void RaytracingPass::CreateRootSignature()
 	m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 }
 
-bool RaytracingPass::CreateRayTracingPipeline()
+bool PathTracingDI::CreateRayTracingPipeline()
 {
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
@@ -107,7 +107,7 @@ bool RaytracingPass::CreateRayTracingPipeline()
 	return true;
 }
 
-bool RaytracingPass::CreateComputePipeline()
+bool PathTracingDI::CreateComputePipeline()
 {
 	eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"1" } };
 
@@ -137,7 +137,7 @@ bool RaytracingPass::CreateComputePipeline()
 	return true;
 }
 
-void RaytracingPass::UpdateAccelStructs(nvrhi::ICommandList* commandList)
+void PathTracingDI::UpdateAccelStructs(nvrhi::ICommandList* commandList)
 {
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 	auto& instances = sceneGraph->GetInstances();
@@ -178,7 +178,7 @@ void RaytracingPass::UpdateAccelStructs(nvrhi::ICommandList* commandList)
 	commandList->endMarker();
 }
 
-void RaytracingPass::CheckBindings()
+void PathTracingDI::CheckBindings()
 {
 	if (!m_DirtyBindings)
 		return;
@@ -203,7 +203,7 @@ void RaytracingPass::CheckBindings()
 	m_DirtyBindings = false;
 }
 
-void RaytracingPass::Execute(nvrhi::ICommandList* commandList)
+void PathTracingDI::Execute(nvrhi::ICommandList* commandList)
 {
 	UpdateAccelStructs(commandList);
 

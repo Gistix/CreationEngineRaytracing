@@ -3,7 +3,7 @@
 
 #include "Interop.h"
 
-struct LightData
+struct InstanceLightData
 {
 	uint Count;
 	uint Data[4];
@@ -27,9 +27,9 @@ struct LightData
     }
 
 #ifdef __cplusplus
-	LightData() = default;
+	InstanceLightData() = default;
 
-	LightData(const eastl::vector<size_t>& ids)
+	InstanceLightData(const eastl::vector<uint8_t>& ids)
 	{
 		StoreIDs(ids);
 	}
@@ -42,14 +42,14 @@ struct LightData
 		Data[group] = (Data[group] & mask) | ((val & 0xFFu) << offset);
 	}
 
-	void StoreIDs(const eastl::vector<size_t>& ids)
+	void StoreIDs(const eastl::vector<uint8_t>& ids)
 	{
-		size_t count = std::min(ids.size(), static_cast<size_t>(16));
-		Count = static_cast<uint32_t>(count);
+		uint32_t count = std::min(static_cast<uint32_t>(ids.size()), 16u);
+		Count = count;
 
-		for (size_t i = 0; i < count; ++i) {
+		for (uint32_t i = 0; i < count; ++i) {
 			uint32_t id = std::min(static_cast<uint32_t>(ids[i]), 255u);
-			SetID(static_cast<uint32_t>(i), id);
+			SetID(i, id);
 		}
 	}
 #endif
@@ -58,7 +58,7 @@ struct LightData
 INTEROP_DATA_STRUCT(Instance, 4)
 {
 	INTEROP_ROW_MAJOR(float3x4) Transform;
-    LightData LightData;
+    InstanceLightData LightData;
 	uint FirstGeometryID;
 };
 VALIDATE_ALIGNMENT(InstanceData, 4);

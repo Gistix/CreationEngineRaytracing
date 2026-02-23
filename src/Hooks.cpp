@@ -51,6 +51,72 @@ namespace Hooks
 
 		return result;
 	}
+
+	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
+	{
+		if (Scene::GetSingleton()->settings.Enabled)
+			return;
+
+		func(cullingProcess, geometry, a_arg2);
+	}
+
+	void BSFadeNodeCuller_AppendVirtual::thunk(RE::BSFadeNodeCuller* culler, RE::BSGeometry& geometry, uint32_t a_arg2)
+	{
+		if (Scene::GetSingleton()->settings.Enabled)
+			return;
+
+		func(culler, geometry, a_arg2);
+	}
+
+	void NiCullingProcess_AppendVirtual::thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
+	{
+		if (Scene::GetSingleton()->settings.Enabled)
+			return;
+
+		func(cullingProcess, geometry, a_arg2);
+	}
+
+	void BSBatchRenderer_RenderPassImmediately::thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags)
+	{
+		// Skip rendering geometry that has been determined to be occluded
+		// Never cull during reflection rendering - reflections need all visible geometry
+		if (Scene::GetSingleton()->settings.Enabled && pass->shader && pass->geometry) {
+			switch (pass->shader->shaderType.get()) {
+			case RE::BSShader::Type::Grass:
+			case RE::BSShader::Type::Sky:
+			case RE::BSShader::Type::Water:
+				break;  // Never cull: batched/infinite/reflections
+			case RE::BSShader::Type::Utility:
+				return;
+				break;
+			case RE::BSShader::Type::Particle:
+			case RE::BSShader::Type::Effect:
+				//return;
+				break;
+			default:  // Lighting, DistantTree, BloodSplatter
+				return;
+				break;
+			}
+		}
+
+		func(pass, technique, alphaTest, renderFlags);
+	}
+
+	RE::BSLight* ShadowSceneNode_AddLight::thunk(RE::ShadowSceneNode* shadowSceneNode, RE::NiLight* light, const RE::ShadowSceneNode::LIGHT_CREATE_PARAMS& params)
+	{
+		auto bsLight = func(shadowSceneNode, light, params);
+
+		Scene::GetSingleton()->AddLight(bsLight);
+
+		return bsLight;
+	}
+
+	void ShadowSceneNode_RemoveLight::thunk(RE::ShadowSceneNode* shadowSceneNode, const RE::NiPointer<RE::BSLight>& light)
+	{
+		Scene::GetSingleton()->RemoveLight(light);
+
+		func(shadowSceneNode, light);
+	}
 #elif defined(FALLOUT4)
 
 #endif
@@ -79,6 +145,15 @@ namespace Hooks
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 		stl::detour_thunk<Main_RenderPlayerView>(REL::RelocationID(35560, 36559));
+
+		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
+		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
+
+		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));
+
+		stl::detour_thunk<ShadowSceneNode_AddLight>(REL::RelocationID(99692, 106326));
+		stl::detour_thunk<ShadowSceneNode_RemoveLight>(REL::RelocationID(99698, 106332));
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
 		stl::detour_thunk<TES_AttachModel>(REL::ID(2192085));

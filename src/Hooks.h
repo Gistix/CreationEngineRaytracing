@@ -20,6 +20,42 @@ namespace Hooks
 		static RE::NiSourceTexture* thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+
+	struct BSCullingProcess_AppendVirtual
+	{
+		static void thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSFadeNodeCuller_AppendVirtual
+	{
+		static void thunk(RE::BSFadeNodeCuller* culler, RE::BSGeometry& geometry, uint32_t a_arg2);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct NiCullingProcess_AppendVirtual
+	{
+		static void thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSBatchRenderer_RenderPassImmediately
+	{
+		static void thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct ShadowSceneNode_AddLight
+	{
+		static RE::BSLight* thunk(RE::ShadowSceneNode* shadowSceneNode, RE::NiLight* light, const RE::ShadowSceneNode::LIGHT_CREATE_PARAMS& params);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct ShadowSceneNode_RemoveLight
+	{
+		static void thunk(RE::ShadowSceneNode* shadowSceneNode, const RE::NiPointer<RE::BSLight>& light);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 #elif defined(FALLOUT4)
 
 #endif

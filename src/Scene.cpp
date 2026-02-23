@@ -84,3 +84,13 @@ void Scene::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::
 {
 
 }
+
+void Scene::AddLight(RE::BSLight* light)
+{
+	GetSceneGraph()->AddLight(light);
+}
+
+void Scene::RemoveLight(const RE::NiPointer<RE::BSLight>& light)
+{
+	GetSceneGraph()->RemoveLight(light.get());
+}
