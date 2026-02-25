@@ -9,9 +9,9 @@ namespace Hooks
 	};
 
 #if defined(SKYRIM)
-	struct Main_RenderPlayerView
+	struct Main_RenderWorld
 	{
-		static void thunk(void* a1, bool a2, bool a3);
+		static void thunk(bool a1);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

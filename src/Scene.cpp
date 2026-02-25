@@ -98,6 +98,26 @@ bool Scene::Initialize(RendererParams rendererParams) {
 	return true;
 }
 
+void Scene::Render()
+{
+	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
+
+	auto cameraData = runtimeData.cameraData.getEye();
+
+	float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
+	float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
+
+	UpdateCameraData(
+		cameraData.viewMat.Invert(),
+		cameraData.projMat.Invert(),
+		Util::Game::GetClippingData(),
+		float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y),
+		Util::Float3(runtimeData.posAdjust.getEye())
+	);
+
+	Renderer::GetSingleton()->ExecutePasses();
+}
+
 void Scene::Update(nvrhi::ICommandList* commandList)
 {
 	GetSceneGraph()->Update(commandList);
