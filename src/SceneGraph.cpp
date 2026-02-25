@@ -565,7 +565,6 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 	if (modelIt == m_Models.end())
 		return;
 
-
 	auto [instanceIt, emplaced] = m_InstanceNodes.try_emplace(node, nullptr);
 	if (!emplaced)
 		return;

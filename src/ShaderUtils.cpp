@@ -66,6 +66,16 @@ namespace ShaderUtils
 		DxcCreateInstance(CLSID_DxcCompilerArgs, IID_PPV_ARGS(&compilerArgs));
 
 		compilerArgs->AddArguments(args, _countof(args));
+
+#if defined(SKYRIM)
+		defines.emplace_back(L"SKYRIM", L"");
+#elif defined(FALLOUT4)
+		defines.emplace_back(L"FALLOUT4", L"");
+#endif
+
+		// Means the game version has been defined
+		defines.emplace_back(L"GAME_DEF", L"");
+
 		compilerArgs->AddDefines(defines.data(), static_cast<uint>(defines.size()));
 
 		winrt::com_ptr<IDxcResult> result;

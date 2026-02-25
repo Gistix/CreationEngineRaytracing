@@ -59,6 +59,7 @@ public:
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
 	inline auto& GetInstances() const { return m_Instances; }
+	inline auto& GetNumActiveLights() const { return m_NumActiveLights; }
 
 	void Update(nvrhi::ICommandList* commandList);
 

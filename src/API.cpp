@@ -45,3 +45,9 @@ void AttachLand(RE::TESForm* form, RE::NiAVObject* root)
 	auto* scene = Scene::GetSingleton();
 	scene->AttachLand(form, root);
 }
+
+void UpdateFeatureData(void* data, uint32_t size)
+{
+	auto* scene = Scene::GetSingleton();
+	scene->UpdateFeatureData(data, size);
+}

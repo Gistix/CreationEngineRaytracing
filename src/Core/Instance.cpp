@@ -1,6 +1,7 @@
 #include "core/Instance.h"
 #include "Util.h"
 #include "Renderer.h"
+#include "Scene.h"
 
 bool Instance::SkipUpdate()
 {
@@ -14,7 +15,7 @@ bool Instance::SkipUpdate()
 
 	const uint64_t delta = frameIndex - m_LastUpdate;
 
-	float3 cameraPosition = renderer->GetCameraData()->Position;
+	float3 cameraPosition = Scene::GetSingleton()->GetCameraData()->Position;
 	float3 instanceCenter = Util::Float3(node->worldBound.center);
 
 	const float distance = Util::Units::GameUnitsToMeters(float3::Distance(cameraPosition, instanceCenter));

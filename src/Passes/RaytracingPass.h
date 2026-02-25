@@ -29,6 +29,10 @@ class RaytracingPass : public RenderPass
 
 	bool m_DirtyBindings = true;
 
+	/*ResourceHandle m_DirectInput;
+	ResourceHandle m_DiffuseOutput;
+	ResourceHandle m_SpecularOutput;*/
+
 public:
 	RaytracingPass(Renderer* renderer);
 

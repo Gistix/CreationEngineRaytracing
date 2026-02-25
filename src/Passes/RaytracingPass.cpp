@@ -2,7 +2,7 @@
 #include "Renderer.h"
 #include "Scene.h"
 
-RaytracingPass::RaytracingPass(Renderer* renderer) 
+RaytracingPass::RaytracingPass(Renderer* renderer)
 	: RenderPass(renderer)
 {
 	m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
@@ -189,7 +189,7 @@ void RaytracingPass::CheckBindings()
 
 	nvrhi::BindingSetDesc bindingSetDesc;
 	bindingSetDesc.bindings = {
-		nvrhi::BindingSetItem::ConstantBuffer(0, renderer->GetCameraDataBuffer()),
+		nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
 		nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_TopLevelAS),
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetLightBuffer()),
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetInstanceBuffer()),

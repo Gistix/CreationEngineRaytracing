@@ -4,7 +4,14 @@
 #include "Hooks.h"
 #include "Scene.h"
 
-#include "Passes/RaytracingPass.h"
+#include "Passes/GIComposite.h"
+
+#include "Renderer/RenderNode.h"
+
+Renderer::Renderer()
+{
+	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
+}
 
 void Renderer::Initialize(RendererParams rendererParams)
 {
@@ -29,14 +36,6 @@ void Renderer::Initialize(RendererParams rendererParams)
 
 	m_NativeD3D11Device = rendererParams.d3d11Device;
 	m_NativeD3D12Device = rendererParams.d3d12Device;
-
-	// Initialize Camera Data Buffer
-	{
-		m_CameraData = eastl::make_unique<CameraData>();
-
-		m_CameraDataBuffer = m_NVRHIDevice->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
-			sizeof(CameraData), "Camera Data", Constants::MAX_CB_VERSIONS));
-	}
 
 	if (m_FormatMapping.empty())
 		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
@@ -118,8 +117,40 @@ void Renderer::InitDefaultTextures()
 
 void Renderer::InitRenderPasses()
 {
+	/*auto main = m_FrameGraph.createTexture(nvrhi::TextureDesc()
+		.setWidth(m_RenderSize.x)
+		.setHeight(m_RenderSize.y)
+		.setIsUAV(true)
+		.setFormat(nvrhi::Format::RGBA16_FLOAT)
+		.setInitialState(nvrhi::ResourceStates::UnorderedAccess)
+		.setDebugName("Main Texture")
+	);
+
+	auto lighting = m_FrameGraph.createTexture({ ... });
+
+	m_FrameGraph.addPass("Raytracing", 
+		[&](PassBuilder& builder)
+		{
+			builder.read(gbuffer);
+			builder.write(lighting);
+		},
+		[&](PassResources& resources)
+		{
+			auto gbufferTex = resources.getTexture(gbuffer);
+			auto lightingTex = resources.getTexture(lighting);
+		});*/
+
+	/*auto main = m_FrameGraph.createTexture(nvrhi::TextureDesc()
+		.setWidth(m_RenderSize.x)
+		.setHeight(m_RenderSize.y)
+		.setIsUAV(true)
+		.setFormat(nvrhi::Format::RGBA16_FLOAT)
+		.setInitialState(nvrhi::ResourceStates::UnorderedAccess)
+		.setDebugName("Main Texture")
+	);
+
 	// Temporarily set up a single raytracing pass, more passes will be added later and in a more dynamic way
-	m_RenderPasses.emplace_back(eastl::make_unique<RaytracingPass>(this));
+	m_RenderPasses.emplace_back(eastl::make_unique<RaytracingPass>(this, m_FrameGraph));*/
 
 	m_CommandList = m_NVRHIDevice->createCommandList();
 
@@ -159,21 +190,7 @@ void Renderer::CheckResolutionResources()
 		m_MainTexture = m_NVRHIDevice->createTexture(desc);
 	}
 
-	for (auto& renderPass : m_RenderPasses)
-	{
-		renderPass->ResolutionChanged(m_RenderSize);
-	}
-}
-
-void Renderer::UpdateCameraData(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const
-{
-	m_CameraData->ViewInverse = viewInverse;
-	m_CameraData->ProjInverse = projInverse;
-	m_CameraData->CameraData = cameraData;
-	m_CameraData->NDCToView = NDCToView;
-	m_CameraData->Position = position;
-	m_CameraData->FrameIndex = m_FrameIndex % UINT_MAX;
-	m_CameraData->RenderSize = m_RenderSize;
+	m_RenderGraph->ResolutionChanged(m_RenderSize);
 }
 
 void Renderer::SetCopyTarget(ID3D12Resource* target)
@@ -208,14 +225,7 @@ void Renderer::ExecutePasses()
 
 	Scene::GetSingleton()->Update(commandList);
 
-	// Update camera data buffer
-	commandList->writeBuffer(m_CameraDataBuffer, m_CameraData.get(), sizeof(CameraData));
-
-	// Execute render passes on it
-	for (auto& renderPass : m_RenderPasses) 
-	{
-		renderPass->Execute(commandList);
-	}
+	m_RenderGraph->Execute(commandList);
 
 	if (m_CopyTargetTexture) 
 	{
@@ -229,7 +239,7 @@ void Renderer::ExecutePasses()
 	// Execute it
 	m_LastSubmittedInstance = m_NVRHIDevice->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
 
-	// Open it again, NVRHI handles multiple command lists internally
+	// Open it again, NVRHI handles multiple command lists internally (or so they say)
 	commandList->open();
 }
 

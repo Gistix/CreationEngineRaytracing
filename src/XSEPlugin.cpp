@@ -1,3 +1,4 @@
+#include "Scene.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Plugin.h"
@@ -94,6 +95,8 @@ bool Load()
 	auto messaging = SKSE::GetMessagingInterface();
 	messaging->RegisterListener("SKSE", MessageHandler);
 
+	// Creates scene and renderer
+	//Scene::GetSingleton();
 	auto* renderer = Renderer::GetSingleton();
 
 	auto log = spdlog::default_logger();

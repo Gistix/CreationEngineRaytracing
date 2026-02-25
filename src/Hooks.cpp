@@ -15,8 +15,6 @@ namespace Hooks
 #if defined(SKYRIM)
 	void Main_RenderPlayerView::thunk(void* a1, bool a2, bool a3)
 	{
-		auto* renderer = Renderer::GetSingleton();
-
 		auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
 		
 		auto cameraData = runtimeData.cameraData.getEye();
@@ -24,7 +22,7 @@ namespace Hooks
 		float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
 		float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
 
-		renderer->UpdateCameraData(
+		Scene::GetSingleton()->UpdateCameraData(
 			cameraData.viewMat.Invert(),
 			cameraData.projMat.Invert(),
 			Util::Game::GetClippingData(),
@@ -32,7 +30,7 @@ namespace Hooks
 			Util::Float3(runtimeData.posAdjust.getEye())
 		);
 
-		renderer->ExecutePasses();
+		Renderer::GetSingleton()->ExecutePasses();
 
 		func(a1, a2, a3);
 	}
@@ -146,11 +144,11 @@ namespace Hooks
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 		stl::detour_thunk<Main_RenderPlayerView>(REL::RelocationID(35560, 36559));
 
-		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
+		/*stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
 		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
 
-		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));
+		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));*/
 
 		stl::detour_thunk<ShadowSceneNode_AddLight>(REL::RelocationID(99692, 106326));
 		stl::detour_thunk<ShadowSceneNode_RemoveLight>(REL::RelocationID(99698, 106332));

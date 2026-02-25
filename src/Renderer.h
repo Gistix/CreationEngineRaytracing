@@ -6,6 +6,8 @@
 #include "Types/RendererParams.h"
 #include "Types/TextureReference.h"
 
+#include "Renderer/RenderGraph.h"
+
 struct MessageCallback : public nvrhi::IMessageCallback
 {
 	static MessageCallback& GetInstance()
@@ -54,10 +56,8 @@ class Renderer
 	uint2 m_RenderSize;
 	uint2 m_PendingRenderSize;
 
-	eastl::unique_ptr<CameraData> m_CameraData;
-	nvrhi::BufferHandle m_CameraDataBuffer;
-
-	eastl::vector<eastl::unique_ptr<RenderPass>> m_RenderPasses;
+	eastl::unique_ptr<RenderGraph> m_RenderGraph;
+	//eastl::vector<eastl::unique_ptr<RenderPass>> m_RenderPasses;
 
 	eastl::unique_ptr<TextureReference> m_WhiteTexture;
 	eastl::unique_ptr<TextureReference> m_GrayTexture;
@@ -76,7 +76,7 @@ public:
 
 	struct Settings
 	{
-		bool UseRayQuery = false;
+		bool UseRayQuery = true;
 		bool ValidationLayer = true;
 		bool VariableUpdateRate = false;
 	} settings;
@@ -87,19 +87,19 @@ public:
 		return &singleton;
 	}
 
+	Renderer();
+
 	auto GetDevice() { return m_NVRHIDevice; }
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
 
 	nvrhi::ICommandList* GetCommandList() const { return m_CommandList; }
 
-	inline auto GetCameraDataBuffer() const { return m_CameraDataBuffer; }
+	RenderGraph* GetRenderGraph() { return m_RenderGraph.get(); }
 
 	inline auto GetMainTexture() { return m_MainTexture; }
 
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
-
-	inline auto GetCameraData() const { return m_CameraData.get(); }
 
 	inline auto& GetWhiteTextureIndex() const { return m_WhiteTexture->descriptorHandle; }
 	inline auto& GetGrayTextureIndex() const { return m_GrayTexture->descriptorHandle; }
@@ -115,6 +115,8 @@ public:
 		float t = std::log2((distance - 25.0f) + 1.0f) * 0.3f;
 		return std::clamp(static_cast<uint>(t), 0u, 30u);
 	}
+
+	uint2 GetRenderSize() const { return m_RenderSize; }
 
 	void Load();
 
@@ -136,8 +138,6 @@ public:
 	uint2 GetResolution();
 
 	void CheckResolutionResources();
-
-	void UpdateCameraData(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const;
 
 	void SetCopyTarget(ID3D12Resource* target);
 

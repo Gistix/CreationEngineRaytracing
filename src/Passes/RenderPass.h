@@ -3,6 +3,8 @@
 #include <PCH.h>
 
 class Renderer;
+class PassResources;
+class FrameGraph;
 
 class RenderPass
 {
@@ -18,7 +20,7 @@ public:
 
     virtual ~RenderPass() = default;
 
-    virtual void CreatePipeline() = 0;
-    virtual void ResolutionChanged(uint2 resolution) = 0;
+    virtual void CreatePipeline() {};
+    virtual void ResolutionChanged([[maybe_unused]] uint2 resolution) {};
     virtual void Execute(nvrhi::ICommandList* commandList) = 0;
 };
