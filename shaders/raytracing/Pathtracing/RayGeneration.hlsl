@@ -31,12 +31,33 @@ void Main()
     uint2 idx = DispatchRaysIndex().xy;
     uint2 size = DispatchRaysDimensions().xy;
 #endif
+
     
-    uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);
+#if defined(SHARC)
+    SharcParameters sharcParameters = GetSharcParameters();
+
+#    if defined(SHARC_UPDATE)
+        uint startIndex = Hash(idx) % 25;
+
+        uint2 blockOrigin = idx * 5;
+
+        uint pixelIndex = (startIndex + Camera.FrameIndex) % 25;
+
+        idx = blockOrigin + uint2(pixelIndex % 5, pixelIndex / 5);
+
+        if (any(idx >= Camera.RenderSize))
+            return;
+
+        size = Camera.RenderSize;
+#   endif
+
+#endif    
     
     RayDesc sourceRay = SetupPrimaryRay(idx, size, Camera);
     
     const float3 sourceDirection = sourceRay.Direction;
+    
+    uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);    
     
     Payload sourcePayload = TraceRayStandard(Scene, sourceRay, randomSeed);
 
@@ -110,11 +131,7 @@ void Main()
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
 #if defined(SHARC) && defined(SHARC_UPDATE)
-        [branch]
-        if (Frame.SHaRC.UpdatePass)
-        {
-            SharcInit(sharcState);
-        }
+        SharcInit(sharcState);
 #endif
         
         surface = sourceSurface;
@@ -181,12 +198,9 @@ void Main()
             float3 brdfWeightOriginal = brdfWeight.diffuse * surface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
 
 #       if defined(SHARC) && defined(SHARC_UPDATE)
-            const bool sharcUpdatePass = Frame.SHaRC.UpdatePass;
+            throughput *= brdfWeightOriginal;
 #       else
-            const bool sharcUpdatePass = false;
-#       endif
-
-            if (j > 0 || sharcUpdatePass) {
+            if (j > 0) {
                 throughput *= brdfWeightOriginal;
             } else {
                 float3 brdfWeightRaw = bsdfSample.weight;
@@ -195,28 +209,24 @@ void Main()
 
                 throughput *= brdfWeightRaw;
             }
+#       endif            
 #   else    // RAW_RADIANCE
             throughput *= bsdfSample.weight;
 #   endif   // !RAW_RADIANCE
 #endif  
             
 #if defined(SHARC) && defined(SHARC_UPDATE)
-            [branch]
-            if (Frame.SHaRC.UpdatePass)
-            {
-                SharcSetThroughput(sharcState, throughput);
-            } else
-#endif
-
+            SharcSetThroughput(sharcState, throughput);
+#else
             if (Raytracing.RussianRoulette == 1)
             {
                 float3 throughputColor;
 
-#if defined(RAW_RADIANCE)
+#   if defined(RAW_RADIANCE)
                 throughputColor = throughput * throughputDelta;
-#else
+#   else
                 throughputColor = throughput;
-#endif
+#   endif
                 const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
                 float rrProb = saturate(0.85 - rrVal);
                 rrProb *= rrProb;
@@ -228,7 +238,8 @@ void Main()
 
                 throughput /= (1.0f - rrProb);
             }
-
+#endif
+            
 #if defined(SHARC)
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
@@ -253,15 +264,10 @@ void Main()
                 float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
 
 #if defined(SHARC) && defined(SHARC_UPDATE)
-                [branch]
-                if (Frame.SHaRC.UpdatePass)
-                {
-                    SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
-                    break;
-                }
-#endif
-
+                SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
+#else
                 sampleRadiance += skyIrradiance * throughput;
+#endif                
                 break;
             }
             
@@ -277,9 +283,7 @@ void Main()
             sharcHitData.emissive = surface.Emissive;
 #   endif // SHARC_SEPARATE_EMISSIVE
 
-            [branch]
-            if (!Frame.SHaRC.UpdatePass)
-            {
+#   if !defined(SHARC_UPDATE)
                 uint gridLevel = HashGridGetLevel(surface.Position, sharcParameters.gridParameters);
                 float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.gridParameters);
                 bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
@@ -297,8 +301,7 @@ void Main()
                     sampleRadiance += sharcRadiance * throughput;
                     break;
                 }
-
-            }
+#   endif // !SHARC_UPDATE
 #endif // SHARC  
             
             brdfContext = BRDFContext::make(surface, -direction);
@@ -319,29 +322,19 @@ void Main()
             sampleRadiance += directRadiance * throughput;
 
 #if defined(SHARC) && defined(SHARC_UPDATE)
-            [branch]
-            if (Frame.SHaRC.UpdatePass)
-            {
-                if (!SharcUpdateHit(sharcParameters, sharcState, sharcHitData, directRadiance, Random(randomSeed)))
-                    return;
+            if (!SharcUpdateHit(sharcParameters, sharcState, sharcHitData, directRadiance, Random(randomSeed)))
+                return;
 
-                throughput = float3(1.0f, 1.0f, 1.0f);
-            } else
+            throughput = float3(1.0f, 1.0f, 1.0f);
+#else
+            sampleRadiance += surface.Emissive * throughput;
 #endif
-            {
-                sampleRadiance += surface.Emissive * throughput;
-            }
         }
 
         radiance += sampleRadiance;
 
 #if defined(SHARC) && defined(SHARC_UPDATE)
-        // SHaRC is single sample only and does not write to texture outputs
-        [branch]
-        if (Frame.SHaRC.UpdatePass)
-        {
-            return;
-        }
+        return;
 #endif
     }
 
