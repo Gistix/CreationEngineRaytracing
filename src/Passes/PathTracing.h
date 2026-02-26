@@ -42,9 +42,9 @@ namespace Pass
 
 		void CreateRootSignature();
 
-		bool CreateRayTracingPipeline();
+		bool CreateRayTracingPipeline(eastl::vector<DxcDefine>& defines);
 
-		bool CreateComputePipeline();
+		bool CreateComputePipeline(eastl::vector<DxcDefine>& defines);
 
 		void CheckBindings();
 

@@ -19,14 +19,25 @@ namespace Pass
 	{
 		CreateRootSignature();
 
+		auto* scene = Scene::GetSingleton();
+		auto& rtSettings = scene->settings.RaytracingSettings;
+
+		const auto bouncesWStr = std::to_wstring(rtSettings.Bounces);
+		const auto samplesWStr = std::to_wstring(rtSettings.SamplesPerPixel);
+
+		eastl::vector<DxcDefine> defines = {
+			{ L"MAX_BOUNCES", bouncesWStr.c_str() },
+			{ L"MAX_SAMPLES", samplesWStr.c_str() },
+		};
+
 		if (GetRenderer()->settings.UseRayQuery)
 		{
-			if (!CreateComputePipeline())
+			if (!CreateComputePipeline(defines))
 				return;
 		}
 		else
 		{
-			if (!CreateRayTracingPipeline())
+			if (!CreateRayTracingPipeline(defines))
 				return;
 		}
 	}
@@ -55,11 +66,11 @@ namespace Pass
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
 
-	bool PathTracing::CreateRayTracingPipeline()
+	bool PathTracing::CreateRayTracingPipeline(eastl::vector<DxcDefine>& defines)
 	{
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-		eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"0" } };
+		defines.emplace_back(L"USE_RAY_QUERY", L"0");
 
 		auto device = GetRenderer()->GetDevice();
 
@@ -112,9 +123,9 @@ namespace Pass
 		return true;
 	}
 
-	bool PathTracing::CreateComputePipeline()
+	bool PathTracing::CreateComputePipeline(eastl::vector<DxcDefine>& defines)
 	{
-		eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"1" } };
+		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
 		auto device = GetRenderer()->GetDevice();
 
