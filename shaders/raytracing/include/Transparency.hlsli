@@ -85,7 +85,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             return true;
     }
     
-    /*if ((material.Feature == Feature::kGlowMap || material.PBRFlags & PBR::Flags::HasEmissive) && material.ShaderFlags & ShaderFlags::kAssumeShadowmask) // only window for now
+    if ((material.Feature == Feature::kGlowMap || material.PBRFlags & PBR::Flags::HasEmissive) && material.ShaderFlags & ShaderFlags::kAssumeShadowmask) // only window for now
     {
         float3 transmittance = 0.0f;
         float3 F0 = 0.04f;
@@ -147,7 +147,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
         transmitanceInOut *= transmittance;
         return false;
-    }*/
+    }
     
     return true;
 }
