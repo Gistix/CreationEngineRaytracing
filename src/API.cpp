@@ -51,3 +51,14 @@ void UpdateFeatureData(void* data, uint32_t size)
 	auto* scene = Scene::GetSingleton();
 	scene->UpdateFeatureData(data, size);
 }
+
+void SetSkyHemisphere(ID3D12Resource* skyHemi)
+{
+	auto* scene = Scene::GetSingleton();
+	scene->SetSkyHemisphere(skyHemi);
+}
+
+float* GetFrameTime()
+{
+	return Renderer::GetSingleton()->GetFrameTime();
+}

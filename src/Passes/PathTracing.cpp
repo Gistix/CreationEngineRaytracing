@@ -45,9 +45,10 @@ namespace Pass
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
+			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
@@ -158,9 +159,10 @@ namespace Pass
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_RaytracingCommon->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_RaytracingCommon->GetTopLevelAS()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetLightBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetInstanceBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetInstanceBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};

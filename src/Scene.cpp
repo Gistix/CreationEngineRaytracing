@@ -218,3 +218,28 @@ void Scene::UpdateFeatureData(void* data, uint32_t size)
 	std::memcpy(m_FeatureData.get(), data, sizeof(FeatureData));
 	m_DirtyFeatureData = true;
 }
+
+void Scene::SetSkyHemisphere(ID3D12Resource* skyHemi)
+{
+	if (skyHemi == m_SkyHemisphereResource)
+		return;
+
+	m_SkyHemisphereResource = skyHemi;
+
+	auto* renderer = Renderer::GetSingleton();
+
+	auto targetDesc = skyHemi->GetDesc();
+
+	nvrhi::TextureDesc desc{};
+	desc.width = static_cast<uint32_t>(targetDesc.Width);
+	desc.height = targetDesc.Height;
+	desc.format = renderer->GetFormat(targetDesc.Format);
+	desc.mipLevels = targetDesc.MipLevels;
+	desc.arraySize = targetDesc.DepthOrArraySize;
+	desc.dimension = nvrhi::TextureDimension::Texture2D;
+	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.keepInitialState = true;
+	desc.debugName = "Copy Target Texture";
+
+	m_SkyHemisphereTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skyHemi, desc);
+}

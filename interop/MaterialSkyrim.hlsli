@@ -63,11 +63,12 @@ namespace Feature
 	static const uint16_t kMultiTexLandLODBlend = 19;
 }
 
-namespace AlphaFlags
+namespace AlphaMode
 {
-	static const uint16_t kOpaque = 0;
-	static const uint16_t kAlphaBlend = (1 << 0);
-	static const uint16_t kAlphaTest = (1 << 1);
+	static const uint16_t None = 0;
+	static const uint16_t Blend = 1;
+	static const uint16_t Test = 2;
+	static const uint16_t Transmission = 3;	
 }
 #endif
 
@@ -78,6 +79,8 @@ INTEROP_DATA_STRUCT(Material, 4)
 	half4 TexCoordOffsetScale0;
 	half4 TexCoordOffsetScale1;
 
+	half AlphaThreshold;	
+	
 	half4 Color0;
 	half4 Color1;
 	half4 Color2;
@@ -85,10 +88,7 @@ INTEROP_DATA_STRUCT(Material, 4)
 	half Scalar0;
 	half Scalar1;
 	half Scalar2;
-	half Scalar3; // For padding
 	
-	uint16_t AlphaFlags;
-
 	// Textures
 	uint16_t Texture0;
 	uint16_t Texture1;
@@ -114,6 +114,7 @@ INTEROP_DATA_STRUCT(Material, 4)
 	uint16_t Texture18;
 	uint16_t Texture19;
 
+	uint16_t AlphaMode;	
     uint16_t ShaderType;
     uint16_t Feature;
     uint16_t PBRFlags;

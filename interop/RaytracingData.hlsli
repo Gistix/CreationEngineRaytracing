@@ -2,6 +2,7 @@
 #define RAYTRACINGDATA_HLSL
 
 #include "Interop.h"
+#include "Interop/Light.hlsli"
 
 INTEROP_STRUCT(RaytracingData, 16)
 {
@@ -10,12 +11,14 @@ INTEROP_STRUCT(RaytracingData, 16)
     uint NumLights;
     uint RussianRoulette;
     float2 Roughness;
-    float2 Metalness;    
+    float2 Metalness;
     float Emissive;
     float Effect;
     float Sky;
+    uint Pad0;
     float3 EmittanceColor;
-    uint2 Pad;
+    uint Pad1; 
+    INTEROP_DATA_TYPE(Light) DirectionalLight;    
 };
 VALIDATE_CBUFFER(RaytracingData, 16);
 

@@ -10,6 +10,10 @@
 #include "include/Surface.hlsli"
 #include "include/SurfaceMaker.hlsli"
 
+#include "include/Lighting.hlsli"
+
+#include "raytracing/include/Transparency.hlsli"
+
 #if USE_RAY_QUERY
 [numthreads(16, 16, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
@@ -42,21 +46,22 @@ void Main()
     sourcePayload.randomSeed = randomSeed;   
     
 #if USE_RAY_QUERY
-    RayQuery<RAY_FLAG_NONE> rayQuery;
+    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> rayQuery;
     rayQuery.TraceRayInline(Scene, RAY_FLAG_NONE, 0xFF, sourceRay);
 
     while (rayQuery.Proceed())
     {
         if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
         {
-            /*if (considerTransparentMaterial(
-                rayQuery.CandidateInstanceID(),
-                rayQuery.CandidatePrimitiveIndex(),
+            if (ConsiderTransparentMaterial(
+                rayQuery.CandidateInstanceIndex(),
                 rayQuery.CandidateGeometryIndex(),
-                rayQuery.CandidateTriangleBarycentrics()))
-            {*/
+                rayQuery.CandidatePrimitiveIndex(),   
+                rayQuery.CandidateTriangleBarycentrics(),
+                randomSeed))
+            {
                 rayQuery.CommitNonOpaqueTriangleHit();
-            //}
+            }
         }
     }
 
@@ -65,17 +70,14 @@ void Main()
         sourcePayload.hitDistance = rayQuery.CommittedRayT();
         sourcePayload.primitiveIndex = rayQuery.CommittedPrimitiveIndex();
         sourcePayload.PackBarycentrics(rayQuery.CommittedTriangleBarycentrics());
-        sourcePayload.PackInstanceGeometryIndex(rayQuery.CommittedInstanceIndex(), rayQuery.CommittedGeometryIndex());    
-      
+        sourcePayload.PackInstanceGeometryIndex(rayQuery.CommittedInstanceIndex(), rayQuery.CommittedGeometryIndex());
     }
 
 #else // !USE_RAY_QUERY    
-    TraceRay(Scene, RAY_FLAG_NONE, 0xFF, 0, 0, 0, sourceRay, sourcePayload);
+    TraceRay(Scene, RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES, 0xFF, 0, 0, 0, sourceRay, sourcePayload);
 #endif
     
     randomSeed = sourcePayload.randomSeed;
-    
-    RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * sourcePayload.hitDistance, Raytracing.PixelConeSpreadAngle);   
     
     if (!sourcePayload.Hit())
     {
@@ -86,6 +88,8 @@ void Main()
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return;
     }
+          
+    RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * sourcePayload.hitDistance, Raytracing.PixelConeSpreadAngle);   
     
     float3 sourcePosition = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
     
@@ -93,6 +97,27 @@ void Main()
     Material sourceMaterial;
     
     Surface sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial);
+
+    BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
     
-    Output[idx] = float4(sourceSurface.Albedo, 0.0f);
+    if (dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) < 0.0f) 
+        sourceSurface.FlipNormal();
+
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);    
+    
+    AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
+    
+    bool isSssPath = false;
+    
+    float3 direct = sourceSurface.Emissive;
+#ifdef SUBSURFACE_SCATTERING
+    if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
+        direct += EvaluateSubsurfaceNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed);
+        isSssPath = true;
+    }
+    else
+#endif
+        direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed);    
+    
+    Output[idx] = float4(direct, 1.0f);
 }

@@ -16,7 +16,7 @@ Model::Model(eastl::string name, RE::NiAVObject* node, eastl::vector<eastl::uniq
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
 
-	blasDesc.setDebugName("BLAS")
+	blasDesc.setDebugName(std::format("{} - BLAS", m_Name))
 		.setIsTopLevel(false);
 
 	if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))

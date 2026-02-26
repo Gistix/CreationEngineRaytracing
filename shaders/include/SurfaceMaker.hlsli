@@ -16,7 +16,7 @@
 #include "include/Surface.hlsli"
 
 #if !defined(GAME_DEF)
-#define SKYRIM
+#   define SKYRIM
 #endif
 
 #if defined(SKYRIM)   
@@ -81,21 +81,27 @@ struct SurfaceMaker
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
         surface.Roughness = PBR::Defaults::Roughness;
         surface.Metallic = PBR::Defaults::Metallic;
+        
         surface.AO = 1.0f;
         surface.F0 = PBR::Defaults::F0;
     
-#       if defined(SKYRIM)
+#   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLandLODBlend)
-        {
             LandMaterial(surface, v0, v1, v2, uvw, normalWS, tangentWS, bitangentWS, material);
-        }
         else
-        {
             DefaultMaterial(surface, v0, v1, v2, uvw, normalWS, tangentWS, bitangentWS, objectToWorld3x3, material);
-        }
-#       else   
-#       endif
+#   else   
+#   endif
    
+        surface.Roughness = PBR::Roughness(surface.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
+        surface.Metallic = Remap(surface.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
+
+        surface.DiffuseAlbedo = surface.Albedo * (1.0f - surface.Metallic);
+
+        surface.F0 = PBR::F0(surface.F0, surface.Albedo, surface.Metallic);
+        surface.IOR = F0toIOR(surface.F0);
+        
+        
         return surface; 
     }  
 #endif

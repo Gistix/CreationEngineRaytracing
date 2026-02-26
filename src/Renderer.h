@@ -57,7 +57,9 @@ class Renderer
 	uint2 m_PendingRenderSize;
 
 	eastl::unique_ptr<RenderGraph> m_RenderGraph;
-	//eastl::vector<eastl::unique_ptr<RenderPass>> m_RenderPasses;
+
+	nvrhi::TimerQueryHandle m_FrameTimer;
+	float m_FrameTime;
 
 	eastl::unique_ptr<TextureReference> m_WhiteTexture;
 	eastl::unique_ptr<TextureReference> m_GrayTexture;
@@ -110,6 +112,19 @@ public:
 
 	static inline auto& GetFormatMapping() { return m_FormatMapping; }
 	
+	inline float* GetFrameTime() { return &m_FrameTime; };
+
+	static inline auto GetFormat(DXGI_FORMAT nativeFormat) 
+	{ 
+		auto it = m_FormatMapping.find(nativeFormat);
+
+		if (it == m_FormatMapping.end()) {
+			return nvrhi::Format::UNKNOWN;
+		}
+
+		return it->second;
+	}
+
 	static uint GetUpdateInterval(float distance)
 	{
 		float t = std::log2((distance - 25.0f) + 1.0f) * 0.3f;

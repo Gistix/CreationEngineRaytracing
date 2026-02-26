@@ -83,6 +83,21 @@ namespace Pass
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
 		m_RaytracingData->EmittanceColor = float3(1.0f, 1.0f, 1.0f);
 
+		auto& shaderManagerState = RE::BSShaderManager::State::GetSingleton();
+
+		// This is probably not the same as 'activeShadowSceneNode'
+		auto* shadowSceneNode = shaderManagerState.shadowSceneNode[0];
+		
+		auto dirLight = skyrim_cast<RE::NiDirectionalLight*>(shadowSceneNode->GetRuntimeData().sunLight->light.get());
+
+		auto direction = Util::Float3(dirLight->GetWorldDirection());
+		direction.Normalize();
+
+		auto& diffuse = dirLight->GetLightRuntimeData().diffuse;
+
+		m_RaytracingData->DirectionalLight.Vector = -direction;
+		m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue) * settings.LightSettings.Directional;
+
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
 		UpdateAccelStructs(commandList);

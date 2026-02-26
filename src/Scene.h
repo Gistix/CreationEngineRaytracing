@@ -27,6 +27,9 @@ struct Scene
 	bool m_DirtyFeatureData = true;
 	nvrhi::BufferHandle m_FeatureBuffer;
 
+	ID3D12Resource* m_SkyHemisphereResource = nullptr;
+	nvrhi::TextureHandle m_SkyHemisphereTexture;
+
 	struct LightSettings
 	{
 		float Directional = 1.0f;
@@ -81,6 +84,8 @@ struct Scene
 
 	inline auto GetFeatureBuffer() const { return m_FeatureBuffer; }
 
+	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
+
 	bool Initialize(RendererParams rendererParams);
 
 	void Render();
@@ -98,4 +103,6 @@ struct Scene
 	void UpdateCameraData(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const;
 
 	void UpdateFeatureData(void* data, uint32_t size);
+
+	void SetSkyHemisphere(ID3D12Resource* skyHemi);
 };

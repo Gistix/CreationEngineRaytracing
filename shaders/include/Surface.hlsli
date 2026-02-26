@@ -32,6 +32,7 @@ struct Surface
     float3 Bitangent;
     float3 FaceNormal;
     float3 Albedo;
+    float Alpha;
     float3 DiffuseAlbedo;
     float Roughness;
     float Metallic;
@@ -90,6 +91,7 @@ struct Surface
         GeomNormal = -GeomNormal;
         FaceNormal = -FaceNormal;
     }
+    
 };
 
 struct BRDFContext {

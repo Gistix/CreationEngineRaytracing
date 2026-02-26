@@ -274,7 +274,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		float4(1.0f, 1.0f, 1.0f, 1.0f)
 	};
 
-	eastl::array<half, 3> scalars;
+	eastl::array<half, 2> scalars;
 	scalars.fill(0.0f);
 
 	eastl::array<half4, 2> texCoordOffsetScales = {
@@ -282,8 +282,10 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		float4(0.0f, 0.0f, 1.0f, 1.0f)
 	};
 
-	Material::AlphaMode alphaFlags = Material::AlphaMode::None;
+	Material::AlphaMode alphaMode = Material::AlphaMode::None;
 	
+	half alphaThreshold = 0.5f;
+
 	eastl::array<Texture, 20> textures;
 	textures.fill(Texture(blackTexture, nullptr));
 
@@ -312,13 +314,13 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 					auto alphaProperty = property->GetRTTI() == niAlphaPropertyRTTI.get() ? reinterpret_cast<RE::NiAlphaProperty*>(property) : nullptr;
 
 					if (alphaProperty && alphaProperty->GetAlphaBlending()) {
-						alphaFlags = Material::AlphaMode::Blend;
+						alphaMode = Material::AlphaMode::Blend;
 					}
-					else if (alphaProperty && alphaProperty->GetAlphaTesting()) {
-						alphaFlags = Material::AlphaMode::Test;
 
-						float alphaScale = (alphaProperty->alphaThreshold / 255.0f) / 0.5f;
-						colors[0].w /= alphaScale;
+					// Alpha Test takes precedence
+					if (alphaProperty && alphaProperty->GetAlphaTesting()) {
+						alphaMode = Material::AlphaMode::Test;
+						alphaThreshold = alphaProperty->alphaThreshold / 255.0f;
 					}
 				}
 
@@ -512,12 +514,20 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		}
 	}
 
+	// Fallback to alpha test if possible
+	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye || shaderFlags & EShaderPropertyFlag::kTwoSided;
+	if (alphaMode == Material::AlphaMode::Blend && !blendMaterial)
+		alphaMode = Material::AlphaMode::Transmission;
+
+	geometryDesc.flags = alphaMode == Material::AlphaMode::None ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
+
 	material = Material(
 		shaderFlags,
 		shaderType,
 		feature,
 		pbrFlags,
-		alphaFlags,
+		alphaMode,
+		alphaThreshold,
 		colors,
 		scalars,
 		texCoordOffsetScales,

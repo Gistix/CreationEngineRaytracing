@@ -53,6 +53,12 @@ Mesh GetMesh(in uint instanceIndex, in uint geometryIndex)
     return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + geometryIndex)];
 }
 
+Mesh GetMesh(in uint instanceIndex, in uint geometryIndex, out Instance instance)
+{
+    instance = GetInstance(instanceIndex);
+    return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + geometryIndex)];
+}
+
 Mesh GetMesh(in Payload payload, out Instance instance)
 {
     instance = GetInstance(payload.InstanceIndex());
@@ -69,9 +75,9 @@ void GetVertices(in uint meshIndex, in uint primitiveIndex, out Vertex v0, out V
     Triangle geomTriangle = GetTriangle(meshIndex, primitiveIndex);
 
     StructuredBuffer<Vertex> vertices = Vertices[NonUniformResourceIndex(meshIndex)];
-    v0 = vertices[geomTriangle.x];
-    v1 = vertices[geomTriangle.y];
-    v2 = vertices[geomTriangle.z];
+    v0 = vertices[NonUniformResourceIndex(geomTriangle.x)];
+    v1 = vertices[NonUniformResourceIndex(geomTriangle.y)];
+    v2 = vertices[NonUniformResourceIndex(geomTriangle.z)];
 }
 
 #endif // GEOMETRY_HLSL

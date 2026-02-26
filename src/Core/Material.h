@@ -22,7 +22,8 @@ struct Material
 	{
 		None = 0,
 		Blend = 1,
-		Test = 2
+		Test = 2,
+		Transmission = 3
 	};
 
 	enum ShaderType : uint16_t
@@ -93,8 +94,10 @@ struct Material
 
 	AlphaMode alphaMode = AlphaMode::None;
 
+	half alphaThreshold;
+
 	eastl::array<half4, 3> Colors;
-	eastl::array<half, 3> Scalars;
+	eastl::array<half, 2> Scalars;
 
 	eastl::array<half4, 2> TexCoordOffsetScale;
 
@@ -205,9 +208,9 @@ struct Material
 	{
 		return MaterialData(
 			TexCoordOffsetScale[0], TexCoordOffsetScale[1],
+			alphaThreshold,
 			Colors[0], Colors[1], Colors[2],
-			Scalars[0], Scalars[1], Scalars[2], 0,
-			static_cast<uint16_t>(alphaMode),
+			Scalars[0], Scalars[1], Scalars[2],
 			GetTextureDescriptorIndex(0),
 			GetTextureDescriptorIndex(1),
 			GetTextureDescriptorIndex(2),
@@ -228,6 +231,7 @@ struct Material
 			GetTextureDescriptorIndex(17),
 			GetTextureDescriptorIndex(18),
 			GetTextureDescriptorIndex(19),
+			static_cast<uint16_t>(alphaMode),
 			GetShaderType(),
 			static_cast<uint16_t>(Feature),
 			PBRFlags.underlying(),

@@ -47,6 +47,8 @@ void Renderer::Initialize(RendererParams rendererParams)
 
 			m_FormatMapping.emplace(nativeFormat, format);
 		}
+
+	m_FrameTimer = GetDevice()->createTimerQuery();
 }
 
 void Renderer::InitDefaultTextures()
@@ -223,6 +225,8 @@ void Renderer::ExecutePasses()
 	// Get current command list
 	auto commandList = GetCommandList();
 
+	commandList->beginTimerQuery(m_FrameTimer);
+
 	Scene::GetSingleton()->Update(commandList);
 
 	m_RenderGraph->Execute(commandList);
@@ -232,6 +236,8 @@ void Renderer::ExecutePasses()
 		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
 		commandList->copyTexture(m_CopyTargetTexture, region, m_MainTexture, region);
 	}
+
+	commandList->endTimerQuery(m_FrameTimer);
 
 	// Close it
 	commandList->close();
@@ -249,6 +255,9 @@ void Renderer::WaitExecution()
 	//m_NVRHIDevice->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
 
 	m_NVRHIDevice->waitForIdle();
+
+	if (m_NVRHIDevice->pollTimerQuery(m_FrameTimer))
+		m_FrameTime = m_NVRHIDevice->getTimerQueryTime(m_FrameTimer) * 1000.0f;
 
 	m_FrameIndex++;
 

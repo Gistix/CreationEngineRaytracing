@@ -3,6 +3,11 @@
 
 #include "include/Utils/MathConstants.hlsli"
 
+inline float Square(float value)
+{
+    return value * value;
+}
+
 inline float Luminance(float3 rgb)
 {
     return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f));

@@ -18,9 +18,10 @@ ConstantBuffer<FeatureData> Features        : register(b2);
 RWTexture2D<float4> Output                  : register(u0);
 
 RaytracingAccelerationStructure Scene       : register(t0);
-StructuredBuffer<Light> Lighjts             : register(t1);
-StructuredBuffer<Instance> Instances        : register(t2);
-StructuredBuffer<Mesh> Meshes               : register(t3);
+Texture2D<float4> SkyHemisphere             : register(t1);
+StructuredBuffer<Light> Lights              : register(t2);
+StructuredBuffer<Instance> Instances        : register(t3);
+StructuredBuffer<Mesh> Meshes               : register(t4);
 
 StructuredBuffer<Triangle> Triangles[]      : register(t0, space1);
 
