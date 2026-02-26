@@ -14,17 +14,32 @@
 
 #include "raytracing/include/Transparency.hlsli"
 
+#define GROUP_TILING
+
+#if defined(GROUP_TILING)
+#   define DXC_STATIC_DISPATCH_GRID_DIM 1
+#   include "include/ThreadGroupTilingX.hlsli"
+#endif
+
+#define GROUP_SIZE (16)
+
 #if USE_RAY_QUERY
-[numthreads(16, 16, 1)]
+[numthreads(GROUP_SIZE, GROUP_SIZE, 1)]
+#   if defined(GROUP_TILING)
+void Main(int2 GTid : SV_GroupThreadID, int2 Gid : SV_GroupID)
+#   else
 void Main(uint2 idx : SV_DispatchThreadID)
+#   endif
 #else
 [shader("raygeneration")]
 void Main()
 #endif
 {
 #if USE_RAY_QUERY
-    uint2 size = Camera.RenderSize;
-    
+    uint2 size = Camera.RenderSize;  
+#   if defined(GROUP_TILING)    
+    uint2 idx = ThreadGroupTilingX((uint2)ceil(size / GROUP_SIZE), GROUP_SIZE.xx, 16, GTid.xy, Gid.xy);
+#   endif
     if (any(idx >= size))
         return;
 #else    
@@ -209,7 +224,7 @@ void Main()
 
                 throughput *= brdfWeightRaw;
             }
-#       endif            
+#       endif
 #   else    // RAW_RADIANCE
             throughput *= bsdfSample.weight;
 #   endif   // !RAW_RADIANCE
