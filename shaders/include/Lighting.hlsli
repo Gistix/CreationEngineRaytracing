@@ -1,8 +1,8 @@
 #ifndef LIGHTING_HLSL
 #define LIGHTING_HLSL
 
-#include "include/Game.hlsli"
-#include "include/BRDF.hlsli"
+#include "include/Common/Game.hlsli"
+#include "include/Common/BRDF.hlsli"
 
 #include "raytracing/Include/AdvancedSettings.hlsli"
 
@@ -134,14 +134,14 @@ float GetLightSampleWeight(Surface surface, Light light)
 }
 
 // Get irradiance for point light without BRDF evaluation
-void GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, out float3 irradiance, out float3 lr, out float dist, inout uint randomSeed)
+int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, out float3 irradiance, out float3 lr, out float dist, inout uint randomSeed)
 {
     if (lightData.Count == 0)
     {
         irradiance = float3(0, 0, 0);
         lr = float3(0, 0, 0);
         dist = 0.0f;
-        return;
+        return -1;
     }
 
     float lightWeight = float(lightData.Count);
@@ -168,11 +168,12 @@ void GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface,
             selectedWeight = weight;
         }
     }
+    
     if (totalWeight == 0.0f)
     {
         irradiance = float3(0, 0, 0);
         lr = float3(0, 0, 0);
-        return;
+        return -1;
     }
 
     float risWeight = (totalWeight / max(selectedWeight, 1e-7f)) / float(candidateCount);
@@ -200,6 +201,12 @@ void GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface,
 
     irradiance = light.Color * light.Fade * atten * lightWeight;
     lr = TangentToWorld(lr, SampleCosineHemisphereScaled(randomSeed, lightSourceAngle));
+    
+#if defined(RIS)
+    return selectedLightID;
+#else
+    return lightID;
+#endif
 }
 
 float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
@@ -207,14 +214,25 @@ float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext b
     float3 lightIrradiance;
     float3 lr;
     float dist;
-    GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
+    
+    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
 
+    if (lightIndex < 0)
+        return 0.0f;
+    
     float3 direct = EvalLight(lr, material, surface, brdfContext, bsdf) * lightIrradiance;
 
     [branch]
     if (any(direct > MIN_DIFFUSE_SHADOW))
     {
-        direct *= TraceRayShadowFinite(Scene, surface, lr, dist, randomSeed);
+        
+#if USE_LIGHT_TLAS    
+#   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
+#else
+#   define LIGHT_TLAS Scene     
+#endif
+        
+        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
     }
     else
     {

@@ -19,6 +19,20 @@ void RenderNode::ResolutionChanged(uint2 resolution)
 	}
 }
 
+void RenderNode::SettingsChanged(const Settings& settings)
+{
+	if (!m_Enabled)
+		return;
+
+	if (m_RenderPass)
+		m_RenderPass->SettingsChanged(settings);
+
+	for (auto& m_ChildPass : m_Children)
+	{
+		m_ChildPass.SettingsChanged(settings);
+	}
+}
+
 void RenderNode::Execute(nvrhi::ICommandList* commandList)
 {
 	if (!m_Enabled)

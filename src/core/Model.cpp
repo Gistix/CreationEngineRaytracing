@@ -40,15 +40,12 @@ void Model::Update()
 	blasGeoms.reserve(meshes.size());*/
 
 	for (auto& mesh : meshes) {
-		auto updateFlags = mesh->Update();
+		auto dirtyFlags = mesh->Update();
 
-		if (mesh->IsDirtyState()) {
-			m_UpdateFlags.set(Model::UpdateFlags::Rebuild);
-		}
+		if (mesh->IsDirtyState())
+			m_DirtyFlags |= DirtyFlags::Visibility;
 
-		if ((updateFlags & Mesh::UpdateFlags::Vertices) != Mesh::UpdateFlags::None || (updateFlags & Mesh::UpdateFlags::Skinning) != Mesh::UpdateFlags::None) {
-			m_UpdateFlags.set(Model::UpdateFlags::Update);
-		}
+		m_DirtyFlags |= dirtyFlags;
 	}
 }
 

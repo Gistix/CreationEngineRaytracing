@@ -2,6 +2,7 @@
 
 #include "core/Model.h"
 #include "core/Instance.h"
+#include "core/Light.h"
 
 #include "Light.hlsli"
 #include "Mesh.hlsli"
@@ -24,9 +25,8 @@ class SceneGraph
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
-	eastl::vector<RE::BSLight*> m_Lights;
+	eastl::vector<Light> m_Lights;
 
-	uint8_t m_NumActiveLights = 0;
 	eastl::array<LightData, Constants::NUM_LIGHTS_MAX> m_LightData;
 	nvrhi::BufferHandle m_LightBuffer;
 
@@ -59,9 +59,11 @@ public:
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
 	inline auto& GetInstances() const { return m_Instances; }
-	inline auto& GetNumActiveLights() const { return m_NumActiveLights; }
+	inline auto& GetLights() { return m_Lights; }
 
 	void Update(nvrhi::ICommandList* commandList);
+	void UpdateLights(nvrhi::ICommandList* commandList);
+	void ClearDirtyStates();
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);

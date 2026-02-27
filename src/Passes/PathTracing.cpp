@@ -4,8 +4,8 @@
 
 namespace Pass
 {
-	PathTracing::PathTracing(Renderer* renderer, RaytracingCommon* raytracingCommon)
-		: RenderPass(renderer), m_RaytracingCommon(raytracingCommon)
+	PathTracing::PathTracing(Renderer* renderer, RaytracingCommon* raytracingCommon, LightTLAS* lightTLAS, SHaRC* sharc)
+		: RenderPass(renderer), m_RaytracingCommon(raytracingCommon), m_LightTLAS(lightTLAS), m_SHaRC(sharc)
 	{
 		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
 			nvrhi::SamplerDesc()
@@ -28,9 +28,14 @@ namespace Pass
 		eastl::vector<DxcDefine> defines = {
 			{ L"MAX_BOUNCES", bouncesWStr.c_str() },
 			{ L"MAX_SAMPLES", samplesWStr.c_str() },
+			{ L"USE_LIGHT_TLAS", L"0" },
+			{ L"SHARC", L"" },
+			{ L"SHARC_UPDATE", L"0" },
+			{ L"SHARC_RESOLVE", L"0" },
+			{ L"SHARC_DEBUG", L"0" }
 		};
 
-		if (GetRenderer()->settings.UseRayQuery)
+		if (GetRenderer()->m_Settings.UseRayQuery)
 		{
 			if (!CreateComputePipeline(defines))
 				return;
@@ -55,11 +60,14 @@ namespace Pass
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
+			nvrhi::BindingLayoutItem::VolatileConstantBuffer(3),
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
@@ -102,7 +110,8 @@ namespace Pass
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
-			sceneGraph->GetTextureDescriptors()->m_Layout
+			sceneGraph->GetTextureDescriptors()->m_Layout,
+			m_LightTLAS->GetBindlessLayout()
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -143,7 +152,8 @@ namespace Pass
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+			.addBindingLayout(m_LightTLAS->GetBindlessLayout());
 
 		m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 
@@ -169,11 +179,14 @@ namespace Pass
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_RaytracingCommon->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
+			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_RaytracingCommon->GetTopLevelAS()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, m_SHaRC->GetResolveBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
@@ -193,7 +206,8 @@ namespace Pass
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			m_LightTLAS->GetLightDescriptorTable()
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetResolution();
@@ -217,7 +231,7 @@ namespace Pass
 			state.bindings = bindings;
 			commandList->setComputeState(state);
 
-			auto threadGroupSize = Util::GetDispatchCount(resolution, 32);
+			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 32);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 	}

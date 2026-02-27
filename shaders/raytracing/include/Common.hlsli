@@ -9,11 +9,11 @@
 #include "include/Common.hlsli"
 
 #ifndef MAX_BOUNCES
-#define     MAX_BOUNCES (1)
+#   define MAX_BOUNCES (2)
 #endif
 
 #ifndef MAX_SAMPLES
-#define     MAX_SAMPLES (1)
+#   define MAX_SAMPLES (1)
 #endif
 
 #define SHADOW_MAX_DEPTH (1)
@@ -31,7 +31,6 @@
 
 #define MIN_DIFFUSE_SHADOW (0.0001f)
 #define MIN_RADIANCE (0.01f)
-#define RR_MIN_BOUNCE (3)
 
 RayDesc SetupPrimaryRay(uint2 idx, uint2 size, CameraData camera)
 {

@@ -13,6 +13,8 @@
 #include "Passes/RaytracedGI.h"
 #include "Passes/GIComposite.h"
 #include "Passes/PathTracing.h"
+#include "Passes/LightTLAS.h"
+#include "Passes/SHaRC.h"
 
 Scene::Scene()
 {
@@ -56,6 +58,16 @@ bool Scene::Initialize(RendererParams rendererParams) {
 	// We split render pass initialization from renderer because of the global descriptors
 	renderer->InitRenderPasses();
 
+	// Camera Data
+	m_CameraData = eastl::make_unique<CameraData>();
+	m_CameraBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
+		sizeof(CameraData), "Camera Data", Constants::MAX_CB_VERSIONS));
+
+	// Feature Data
+	m_FeatureData = eastl::make_unique<FeatureData>();
+	m_FeatureBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
+		sizeof(FeatureData), "Feature Data", Constants::MAX_CB_VERSIONS));
+
 	// Raytracing passes require a 'RaytracingCommon' pass to create and manage the TLAS
 	{
 		m_GlobalIllumination = eastl::make_unique<RenderNode>(true, "Global Illumination", eastl::make_unique<Pass::RaytracingCommon>(renderer));
@@ -71,29 +83,42 @@ bool Scene::Initialize(RendererParams rendererParams) {
 	}
 
 	{
-		m_PathTracing = eastl::make_unique<RenderNode>(true, "Path Tracing", eastl::make_unique<Pass::RaytracingCommon>(renderer));
+		m_PathTracing = eastl::make_unique<RenderNode>(true, "Path Tracing");
+
+		m_PathTracing->AddNode({
+			true,
+			"RaytracingCommon",
+			eastl::make_unique<Pass::RaytracingCommon>(renderer)
+			});
+
+		m_PathTracing->AddNode({
+			true,
+			"LightTLAS",
+			eastl::make_unique<Pass::LightTLAS>(renderer)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"SHaRC",
+			eastl::make_unique<Pass::SHaRC>(
+				renderer,
+				m_PathTracing->GetPass<Pass::RaytracingCommon>(),
+				m_PathTracing->GetPass<Pass::LightTLAS>())
+			});
 
 		m_PathTracing->AddNode({
 			true,
 			"PathTracing",
 			eastl::make_unique<Pass::PathTracing>(
 				renderer,
-				m_PathTracing->GetPass<Pass::RaytracingCommon>())
+				m_PathTracing->GetPass<Pass::RaytracingCommon>(),
+				m_PathTracing->GetPass<Pass::LightTLAS>(),
+				m_PathTracing->GetPass<Pass::SHaRC>())
 			}
 		);
 	}
 
 	renderer->GetRenderGraph()->AttachRootNode(m_PathTracing.get());
-
-	// Camera Data
-	m_CameraData = eastl::make_unique<CameraData>();
-	m_CameraBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
-		sizeof(CameraData), "Camera Data", Constants::MAX_CB_VERSIONS));
-
-	// Feature Data
-	m_FeatureData = eastl::make_unique<FeatureData>();
-	m_FeatureBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
-		sizeof(FeatureData), "Feature Data", Constants::MAX_CB_VERSIONS));
 
 	return true;
 }
@@ -103,20 +128,7 @@ void Scene::Render()
 	if (!m_Settings.Enabled)
 		return;
 
-	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
-
-	auto cameraData = runtimeData.cameraData.getEye();
-
-	float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
-	float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
-
-	UpdateCameraData(
-		cameraData.viewMat.Invert(),
-		cameraData.projMat.Invert(),
-		Util::Game::GetClippingData(),
-		float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y),
-		Util::Float3(runtimeData.posAdjust.getEye())
-	);
+	UpdateCameraData();
 
 	Renderer::GetSingleton()->ExecutePasses();
 }
@@ -134,6 +146,12 @@ void Scene::Update(nvrhi::ICommandList* commandList)
 		m_DirtyFeatureData = false;
 	}
 }
+
+void Scene::ClearDirtyStates()
+{
+	GetSceneGraph()->ClearDirtyStates();
+}
+
 
 void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) 
 {
@@ -193,18 +211,27 @@ void Scene::RemoveLight(const RE::NiPointer<RE::BSLight>& light)
 	GetSceneGraph()->RemoveLight(light.get());
 }
 
-void Scene::UpdateCameraData(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const
+void Scene::UpdateCameraData() const
 {
-	m_CameraData->ViewInverse = viewInverse;
-	m_CameraData->ProjInverse = projInverse;
-	m_CameraData->CameraData = cameraData;
-	m_CameraData->NDCToView = NDCToView;
-	m_CameraData->Position = position;
+	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
+
+	auto cameraData = runtimeData.cameraData.getEye();
+
+	float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
+	float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
+
+	m_CameraData->ViewInverse = cameraData.viewMat.Invert();
+	m_CameraData->ProjInverse = cameraData.projMat.Invert();
+	m_CameraData->CameraData = Util::Game::GetClippingData();
+	m_CameraData->NDCToView = float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y);
+	m_CameraData->Position = Util::Math::Float3(runtimeData.posAdjust.getEye());
 
 	auto* renderer = Renderer::GetSingleton();
 
 	m_CameraData->FrameIndex = renderer->GetFrameIndex() % UINT_MAX;
 	m_CameraData->RenderSize = renderer->GetRenderSize();
+
+	m_CameraData->PositionPrev = Util::Math::Float3(runtimeData.previousPosAdjust.getEye());
 }
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)

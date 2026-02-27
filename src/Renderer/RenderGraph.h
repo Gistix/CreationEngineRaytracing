@@ -38,5 +38,7 @@ public:
 
     void ResolutionChanged(uint2 resolution);
 
+    void SettingsChanged(const Settings& settings);
+
     void Execute(nvrhi::ICommandList* commandList);
 };

@@ -6,6 +6,7 @@
 #include "Utils/Geometry.h"
 #include "Utils/Material.h"
 #include "Utils/Traversal.h"
+#include "Utils/Math.h"
 
 #include "magic_enum_spec.h"
 
@@ -18,10 +19,6 @@ namespace Util
 	std::string WStringToString(const std::wstring& wideString);
 
 	std::wstring StringToWString(const std::string& str);
-
-	float3 Float3(RE::NiPoint3 niPoint);
-
-	float3 Normalize(float3 vector);
 
 	template <typename T>
 	std::string GetFlagsString(auto value)
@@ -45,12 +42,8 @@ namespace Util
 		return flags;
 	};
 
-	DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);
-
-	uint2 GetDispatchCount(uint2 resolution, float threads);
-
 	template <typename T>
-	auto CreateStructuredBuffer(nvrhi::IDevice* device, uint32_t maxCapacity, const char* name) {
+	auto CreateStructuredBuffer(nvrhi::IDevice* device, uint32_t maxCapacity, const char* name, bool uav = false) {
 		auto size = static_cast<uint32_t>(sizeof(T));
 
 		auto bufferDesc = nvrhi::BufferDesc()
@@ -58,6 +51,9 @@ namespace Util
 			.setStructStride(size)
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 			.setDebugName(name);
+
+		if (uav)
+			bufferDesc.setCanHaveUAVs(true);
 
 		return device->createBuffer(bufferDesc);
 	};

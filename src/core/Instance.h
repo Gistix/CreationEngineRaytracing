@@ -6,6 +6,8 @@
 
 #include "Util.h"
 
+#include "DirtyFlags.h"
+
 struct Instance
 {
 	enum State : uint8_t
@@ -23,11 +25,15 @@ struct Instance
 	// Model ptr
 	Model* model;
 
+	RE::NiTransform m_NiTransform;
+
 	// Used for BLAS instance
-	float3x4 transform;
+	float3x4 m_Transform;
 
 	// Makes sure we only update once per frame
 	uint64_t m_LastUpdate = 0;
+
+	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : formID(formID), node(node), model(model) { }
 	
@@ -38,7 +44,7 @@ struct Instance
 		assert(instanceDesc.bottomLevelAS);
 		instanceDesc.instanceMask = 1;
 		instanceDesc.instanceID = 0;
-		memcpy(instanceDesc.transform, transform.m, sizeof(instanceDesc.transform));
+		memcpy(instanceDesc.transform, m_Transform.m, sizeof(instanceDesc.transform));
 		return instanceDesc;
 	}
 
@@ -46,22 +52,7 @@ struct Instance
 
 	void Update();
 
-	eastl::vector<uint8_t> GatherLights(LightData* lightData, uint8_t numActiveLights) const
-	{
-		eastl::vector<uint8_t> instanceLights;
+	auto GetDirtyFlags() const { return m_DirtyFlags; };
 
-		float3 center = Util::Float3(node->worldBound.center);
-		float radius = node->worldBound.radius;
-
-		for (uint8_t i = 0; i < numActiveLights; i++) {
-			auto& light = lightData[i];
-
-			if (light.Type == LightType::Point && (center - light.Vector).Length() > radius + light.Radius)
-				continue;
-
-			instanceLights.push_back(i);
-		}
-
-		return instanceLights;
-	}
+	void ClearDirtyState() { m_DirtyFlags = DirtyFlags::None; };
 };

@@ -111,14 +111,14 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 				std::memcpy(&normalPacked, vtx + normOffset, sizeof(byte4f));
 				auto normal = normalPacked.unpack();
 
-				vertexData.Normal = Util::Normalize({ normal.x, normal.y, normal.z });
+				vertexData.Normal = Util::Math::Normalize({ normal.x, normal.y, normal.z });
 
 				if (hasBitangent) {
 					byte4f bitangentPacked;
 					std::memcpy(&bitangentPacked, vtx + tangOffset, sizeof(byte4f));
 					auto bitangent = bitangentPacked.unpack();
 
-					vertexData.Bitangent = Util::Normalize({ bitangent.x, bitangent.y, bitangent.z });
+					vertexData.Bitangent = Util::Math::Normalize({ bitangent.x, bitangent.y, bitangent.z });
 
 					float3 tangent = { pos.w, normal.w, bitangent.w };
 
@@ -625,7 +625,7 @@ bool Mesh::UpdateSkinning()
 	return false;
 }
 
-Mesh::UpdateFlags Mesh::Update()
+DirtyFlags Mesh::Update()
 {
 	const auto dynamic = flags.any(Mesh::Flags::Dynamic);
 	const auto skinned = flags.any(Mesh::Flags::Skinned);
@@ -635,19 +635,17 @@ Mesh::UpdateFlags Mesh::Update()
 		SetPendingState(State::Hidden, bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kHidden));
 	}
 
-	if (IsPendingHidden()) {
-		return Mesh::UpdateFlags::None;
-	}
+	// Visibility flag is handled by model not by mesh
+	if (IsPendingHidden())
+		return DirtyFlags::None;
 
-	auto updateFlags = Mesh::UpdateFlags::None;
+	auto updateFlags = DirtyFlags::None;
 
-	if (dynamic && UpdateDynamicPosition()) {
-		updateFlags |= Mesh::UpdateFlags::Vertices;
-	}
+	if (dynamic && UpdateDynamicPosition())
+		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning()) {
-		updateFlags |= Mesh::UpdateFlags::Skinning;
-	}
+	if (skinned && UpdateSkinning())
+		updateFlags |= DirtyFlags::Skin;
 
 	return updateFlags;
 }
@@ -757,9 +755,9 @@ void Mesh::CalculateVectors(bool calculateNormal)
 	for (size_t i = 0; i < vertexCount; i++) {
 		auto& v = geometry.vertices[i];
 
-		float3 n = Util::Normalize(calculateNormal ? normals[i] : float3(v.Normal));
+		float3 n = Util::Math::Normalize(calculateNormal ? normals[i] : float3(v.Normal));
 
-		float3 t = Util::Normalize(tangents[i] - n * n.Dot(tangents[i]));
+		float3 t = Util::Math::Normalize(tangents[i] - n * n.Dot(tangents[i]));
 
 		float3 b = n.Cross(t);
 		float sign = (b.Dot(t.Cross(n)) < 0.0f) ? -1.0f : 1.0f;

@@ -76,12 +76,12 @@ class Renderer
 
 public:
 
-	struct Settings
+	struct RendererSettings
 	{
 		bool UseRayQuery = true;
 		bool ValidationLayer = true;
 		bool VariableUpdateRate = false;
-	} settings;
+	} m_Settings;
 
 	static Renderer* GetSingleton()
 	{
@@ -149,6 +149,8 @@ public:
 	void InitRenderPasses();
 
 	void SetResolution(uint2 resolution);
+
+	void SettingsChanged(const Settings& settings);
 
 	uint2 GetResolution();
 

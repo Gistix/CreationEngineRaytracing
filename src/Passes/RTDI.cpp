@@ -19,7 +19,7 @@ namespace Pass
 	{
 		CreateRootSignature();
 
-		if (GetRenderer()->settings.UseRayQuery)
+		if (GetRenderer()->m_Settings.UseRayQuery)
 		{
 			if (!CreateComputePipeline())
 				return;
@@ -206,7 +206,7 @@ namespace Pass
 			state.bindings = bindings;
 			commandList->setComputeState(state);
 
-			auto threadGroupSize = Util::GetDispatchCount(resolution, 16);
+			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 16);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 	}

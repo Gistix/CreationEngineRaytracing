@@ -53,69 +53,79 @@ void SceneGraph::Initialize()
 		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
 		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
 		bindlessLayoutDesc.firstSlot = 0;
-		bindlessLayoutDesc.maxCapacity = Constants::NUM_TEXTURES_MIN;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_TEXTURES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
 			nvrhi::BindingLayoutItem::Texture_SRV(3).setSize(UINT_MAX)
 		};
 
 		m_TextureDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
-
-
 }
 
-void SceneGraph::Update(nvrhi::ICommandList* commandList)
+void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 {
 	const auto& lightSettings = Scene::GetSingleton()->m_Settings.LightSettings;
 
-	m_NumActiveLights = 0;
+	auto m_NumLights = m_Lights.size();
 
-	for (auto& light : m_Lights)
+	for (size_t i = 0; i < m_NumLights; i++)
 	{
-		auto niLight = light->light.get();
+		auto& light = m_Lights[i];
 
-		if (!niLight)
-			continue;
+		auto* bsLight = light.m_Light;
 
-		if (!Util::Game::IsValidLight(light))
-			continue;
+		auto niLight = bsLight->light.get();
 
-		if (light->IsShadowLight()) 
+		/*if (!niLight)
+			continue;*/
+
+		light.m_Active = true;
+
+		if (!Util::Game::IsValidLight(bsLight))
+			light.m_Active = false;
+
+		if (bsLight->IsShadowLight())
 		{
-			auto* shadowLight = reinterpret_cast<RE::BSShadowLight*>(light);
+			auto* shadowLight = reinterpret_cast<RE::BSShadowLight*>(bsLight);
 
 			if (shadowLight->GetRuntimeData().maskIndex == 255)
-				continue;
+				light.m_Active = false;
 		}
 
 		auto& runtimeData = niLight->GetLightRuntimeData();
-		
+
 		auto flags = std::bit_cast<LightLimitFix::LightFlags>(runtimeData.ambient.red);
 
 		if (flags & LightLimitFix::LightFlags::Disabled)
-			continue;
+			light.m_Active = false;
 
-		auto& lightData = m_LightData[m_NumActiveLights];
+		// Write light data
+		auto& lightData = m_LightData[i];
 
 		lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue) * lightSettings.Point;
 
 		lightData.Radius = runtimeData.radius.x;
 
-		if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) < 1e-4 && lightData.Radius < 1e-4)
-			continue;
+		if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) < 1e-4 || lightData.Radius < 1e-4)
+			light.m_Active = false;
+
+		if (light.m_Active)
+			light.UpdateInstances();
+		else
+			light.m_Instances.clear();
 
 		auto worldPos = niLight->world.translate;
 
-		lightData.Vector = Util::Float3(worldPos);
+		lightData.Vector = Util::Math::Float3(worldPos);
 
 		lightData.InvRadius = 1.0f / runtimeData.radius.x;
 
 		lightData.Fade = runtimeData.fade;
 
 		if (lightSettings.LodDimmer)
-			lightData.Fade *= light->lodDimmer;
+			lightData.Fade *= bsLight->lodDimmer;
 
-		lightData.Type = light->pointLight ? LightType::Point : LightType::Directional;
+		lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
 
 		lightData.Flags = 0;
 
@@ -124,9 +134,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		if (flags & LightLimitFix::LightFlags::Linear)
 			lightData.Flags |= LightFlags::LinearLight;
-
-		m_NumActiveLights++;
 	}
+
+	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), m_NumLights * sizeof(LightData));
+}
+
+void SceneGraph::Update(nvrhi::ICommandList* commandList)
+{
+	UpdateLights(commandList);
 
 	for (auto& [path, model] : m_Models)
 	{
@@ -135,6 +150,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	uint32_t meshIndex = 0;
 	uint32_t instanceIndex = 0;
+
+	eastl::vector<uint8_t> lights;
+	lights.reserve(Constants::NUM_LIGHTS_MAX);
 
 	for (auto& instance : m_Instances)
 	{
@@ -152,18 +170,42 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (meshIndex == firstMeshIndex)
 			continue;
 
+		lights.clear();
+
+		for (uint8_t i = 0; i < m_Lights.size(); i++)
+		{
+			auto& light = m_Lights[i];
+
+			if (light.m_Instances.find(instance.get()) == light.m_Instances.end())
+				continue;
+
+			lights.push_back(i);
+		}
+
 		m_InstanceData[instanceIndex] = {
-			instance->transform,
-			InstanceLightData(instance->GatherLights(m_LightData.data(), m_NumActiveLights)),
+			instance->m_Transform,
+			InstanceLightData(lights),
 			firstMeshIndex
 		};
 
 		instanceIndex++;
 	}
 
-	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), m_NumActiveLights * sizeof(LightData));
 	commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), meshIndex * sizeof(MeshData));
 	commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), instanceIndex * sizeof(InstanceData));
+}
+
+void SceneGraph::ClearDirtyStates()
+{
+	for (auto& [path, model] : m_Models)
+	{
+		model->ClearDirtyState();
+	}
+
+	for (auto& instance : m_Instances)
+	{
+		instance->ClearDirtyState();
+	}
 }
 
 void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root)
@@ -430,7 +472,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			flags |= Mesh::Flags::Dynamic;
 
 		float3x4 localToRoot;
-		XMStoreFloat3x4(&localToRoot, Util::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+		XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
@@ -592,5 +634,9 @@ void SceneGraph::AddLight(RE::BSLight* light)
 
 void SceneGraph::RemoveLight(RE::BSLight* light)
 {
-	m_Lights.erase_first(light);
+	m_Lights.erase(
+		eastl::remove_if(m_Lights.begin(), m_Lights.end(),
+			[light](const Light& x) { return x.m_Light == light; }),
+		m_Lights.end()
+	);
 }

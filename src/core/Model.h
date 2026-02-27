@@ -3,16 +3,12 @@
 #include <PCH.h>
 
 #include "Mesh.h"
+#include "DirtyFlags.h"
 
 class SceneGraph;
 
 struct Model
 {
-	enum class UpdateFlags : uint8_t {
-		Update = 1 << 0,
-		Rebuild = 1 << 1
-	};
-
 	eastl::string m_Name;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
@@ -97,8 +93,17 @@ struct Model
 		return shaderFlags;
 	}
 
+	auto GetDirtyFlags() const
+	{
+		return m_DirtyFlags;
+	}
+
+	void ClearDirtyState() 
+	{ 
+		m_DirtyFlags = DirtyFlags::None;
+	}
 private:
-	stl::enumeration<UpdateFlags, uint8_t> m_UpdateFlags;
+	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 	stl::enumeration<Mesh::Flags, uint8_t> meshFlags = Mesh::Flags::None;
 	uint32_t shaderTypes = RE::BSShader::Type::None;
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);

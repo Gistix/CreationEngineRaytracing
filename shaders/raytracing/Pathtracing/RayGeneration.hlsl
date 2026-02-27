@@ -14,17 +14,20 @@
 
 #include "raytracing/include/Transparency.hlsli"
 
-#define GROUP_TILING
+#include "Raytracing/Include/SHARC/Sharc.hlsli"
+#include "Raytracing/Include/SHARC/SHaRCHelper.hlsli"
 
 #if defined(GROUP_TILING)
 #   define DXC_STATIC_DISPATCH_GRID_DIM 1
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
-#define GROUP_SIZE (32)
+#ifndef THREAD_GROUP_SIZE
+#define THREAD_GROUP_SIZE (32)
+#endif
 
 #if USE_RAY_QUERY
-[numthreads(GROUP_SIZE, GROUP_SIZE, 1)]
+[numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 #   if defined(GROUP_TILING)
 void Main(uint2 GTid : SV_GroupThreadID, uint2 Gid : SV_GroupID)
 #   else
@@ -38,7 +41,7 @@ void Main()
 #if USE_RAY_QUERY
     uint2 size = Camera.RenderSize;  
 #   if defined(GROUP_TILING)    
-    uint2 idx = ThreadGroupTilingX((uint2)ceil(size / GROUP_SIZE), GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
+    uint2 idx = ThreadGroupTilingX((uint2)ceil(size / THREAD_GROUP_SIZE), THREAD_GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
 #   endif
     if (any(idx >= size))
         return;
@@ -50,7 +53,7 @@ void Main()
 #if defined(SHARC)
     SharcParameters sharcParameters = GetSharcParameters();
 
-#    if defined(SHARC_UPDATE)
+#    if SHARC_UPDATE
         uint startIndex = Hash(idx) % 25;
 
         uint2 blockOrigin = idx * 5;
@@ -77,11 +80,9 @@ void Main()
 
     if (!sourcePayload.Hit())
     {
-#if defined(SHARC) && defined(SHARC_UPDATE)
-        return;
-#endif
-        
+#if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#endif     
         return;
     }
           
@@ -107,6 +108,13 @@ void Main()
     
     float3 direct = sourceSurface.Emissive;
     
+ #if defined(SHARC) && SHARC_DEBUG
+    HashGridParameters gridParameters = GetSharcGridParameters();
+
+    Output[idx] = float4(HashGridDebugColoredHash(sourceSurface.Position, sourceSurface.GeomNormal, gridParameters), 1);
+    return;
+#endif     
+    
 #ifdef SUBSURFACE_SCATTERING
     if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
         direct += EvaluateSubsurfaceNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed);
@@ -114,7 +122,7 @@ void Main()
     }
     else
 #endif
-        direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed);    
+        direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed);      
     
     float3 direction;
     MonteCarlo::BRDFWeight brdfWeight;
@@ -144,7 +152,7 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
-#if defined(SHARC) && defined(SHARC_UPDATE)
+#if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif
         
@@ -211,7 +219,7 @@ void Main()
 #   if defined(RAW_RADIANCE)
             float3 brdfWeightOriginal = brdfWeight.diffuse * surface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
 
-#       if defined(SHARC) && defined(SHARC_UPDATE)
+#       if defined(SHARC) && SHARC_UPDATE
             throughput *= brdfWeightOriginal;
 #       else
             if (j > 0) {
@@ -229,7 +237,7 @@ void Main()
 #   endif   // !RAW_RADIANCE
 #endif  
             
-#if defined(SHARC) && defined(SHARC_UPDATE)
+#if defined(SHARC) && SHARC_UPDATE
             SharcSetThroughput(sharcState, throughput);
 #else
             if (Raytracing.RussianRoulette == 1)
@@ -277,7 +285,7 @@ void Main()
             {
                 float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
 
-#if defined(SHARC) && defined(SHARC_UPDATE)
+#if defined(SHARC) && SHARC_UPDATE
                 SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
 #else
                 sampleRadiance += skyIrradiance * throughput;
@@ -291,30 +299,35 @@ void Main()
 
 #if defined(SHARC)
             sharcHitData.positionWorld = surface.Position;
-            sharcHitData.normalWorld = faceNormalOriented;
+            sharcHitData.normalWorld = surface.GeomNormal;
 
 #   if SHARC_SEPARATE_EMISSIVE
             sharcHitData.emissive = surface.Emissive;
 #   endif // SHARC_SEPARATE_EMISSIVE
 
-#   if !defined(SHARC_UPDATE)
-                uint gridLevel = HashGridGetLevel(surface.Position, sharcParameters.gridParameters);
-                float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.gridParameters);
-                bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
+#   if !SHARC_UPDATE
+            uint gridLevel = HashGridGetLevel(surface.Position, sharcParameters.gridParameters);
+            float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.gridParameters);
+            bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
+            
+            const bool oldValidHit = isValidHit;
+            
+            if (isValidHit) {
+                materialRoughnessPrev = min(materialRoughnessPrev, 0.99f);
+                float a2 = materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev;
+                float footprint = payload.hitDistance * sqrt(0.5f * a2 / max(1.0f - a2, DIV_EPSILON));
+                isValidHit &= footprint > voxelSize;
+            }
 
-                if (isValidHit) {
-                    materialRoughnessPrev = min(materialRoughnessPrev, 0.99f);
-                    float a2 = materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev;
-                    float footprint = payload.hitDistance * sqrt(0.5f * a2 / max(1.0f - a2, DIV_EPSILON));
-                    isValidHit &= footprint > voxelSize;
-                }
-
-                float3 sharcRadiance;
-                if (isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
-                {
-                    sampleRadiance += sharcRadiance * throughput;
-                    break;
-                }
+            //Output[idx] = float4(oldValidHit ? 1.0f : 0.0f, isValidHit ? 1.0f : 0.0f, 0.0f, 1.0f);
+            //return;
+            
+            float3 sharcRadiance;
+            if (isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
+            {
+                sampleRadiance += sharcRadiance * throughput;
+                break;
+            }
 #   endif // !SHARC_UPDATE
 #endif // SHARC  
             
@@ -332,10 +345,13 @@ void Main()
             }
             else
 #endif
+            { 
                 directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed);
+            }
+            
             sampleRadiance += directRadiance * throughput;
 
-#if defined(SHARC) && defined(SHARC_UPDATE)
+#if defined(SHARC) && SHARC_UPDATE
             if (!SharcUpdateHit(sharcParameters, sharcState, sharcHitData, directRadiance, Random(randomSeed)))
                 return;
 
@@ -347,15 +363,17 @@ void Main()
 
         radiance += sampleRadiance;
 
-#if defined(SHARC) && defined(SHARC_UPDATE)
+#if defined(SHARC) && SHARC_UPDATE
         return;
 #endif
     }
 
     radiance /= MAX_SAMPLES;        
-    
+ 
     //const float2 envBRDF = BRDF::EnvBRDFApproxHirvonen(sourceSurface.Roughness, sourceBRDFContext.NdotV);
     //const float3 specularAlbedo = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
 
+#if !(defined(SHARC) && SHARC_UPDATE)
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
+#endif    
 }

@@ -60,6 +60,8 @@ struct Scene
 
 	void Update(nvrhi::ICommandList* commandList);
 
+	void ClearDirtyStates();
+
 	void AttachModel(RE::TESForm* form);
 
 	void AttachLand(RE::TESForm* form, RE::NiAVObject* root);
@@ -68,7 +70,7 @@ struct Scene
 
 	void RemoveLight(const RE::NiPointer<RE::BSLight>& a_light);
 
-	void UpdateCameraData(float4x4 viewInverse, float4x4 projInverse, float4 cameraData, float4 NDCToView, float3 position) const;
+	void UpdateCameraData() const;
 
 	void UpdateFeatureData(void* data, uint32_t size);
 

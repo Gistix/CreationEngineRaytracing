@@ -28,7 +28,7 @@ void Renderer::Initialize(RendererParams rendererParams)
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
 
-	if (settings.ValidationLayer)
+	if (m_Settings.ValidationLayer)
 	{
 		nvrhi::DeviceHandle nvrhiValidationLayer = nvrhi::validation::createValidationLayer(m_NVRHIDevice);
 		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
@@ -195,6 +195,11 @@ void Renderer::CheckResolutionResources()
 	m_RenderGraph->ResolutionChanged(m_RenderSize);
 }
 
+void Renderer::SettingsChanged(const Settings& settings)
+{
+	m_RenderGraph->SettingsChanged(settings);
+}
+
 void Renderer::SetCopyTarget(ID3D12Resource* target)
 {
 	if (target == m_CopyTargetResource)
@@ -227,9 +232,13 @@ void Renderer::ExecutePasses()
 
 	commandList->beginTimerQuery(m_FrameTimer);
 
+	logger::trace("Renderer::ExecutePasses - Frame {}", m_FrameIndex);
+
 	Scene::GetSingleton()->Update(commandList);
 
 	m_RenderGraph->Execute(commandList);
+
+	Scene::GetSingleton()->ClearDirtyStates();
 
 	if (m_CopyTargetTexture) 
 	{

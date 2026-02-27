@@ -12,7 +12,10 @@ INTEROP_STRUCT(CameraData, 16)
     float3 Position;
     uint FrameIndex;
     uint2 RenderSize;
-    uint2 Pad;
+    uint2 Pad0;
+    float3 PositionPrev;
+    uint Pad1;
+    
 };
 VALIDATE_CBUFFER(CameraData, 16);
 

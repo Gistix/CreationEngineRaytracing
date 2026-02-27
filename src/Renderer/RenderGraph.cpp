@@ -22,6 +22,12 @@ void RenderGraph::ResolutionChanged(uint2 resolution)
 		m_RootNode->ResolutionChanged(resolution);
 }
 
+void RenderGraph::SettingsChanged(const Settings& settings)
+{
+	if (m_RootNode)
+		m_RootNode->SettingsChanged(settings);
+}
+
 void RenderGraph::Execute(nvrhi::ICommandList* commandList)
 {
 	if (m_RootNode)

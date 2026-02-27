@@ -1,6 +1,10 @@
 #ifndef COMMON_HLSLI
 #define COMMON_HLSLI
 
+#include "Include/Common/Game.hlsli"
+
+#define M_TO_GAME_UNIT (1.0f / (GAME_UNIT_TO_M))
+
 #define DIV_EPSILON (1e-4f)
 #define LAND_MIN_WEIGHT (0.01f)
 

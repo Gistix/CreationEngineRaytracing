@@ -73,7 +73,7 @@ namespace Pass
 		m_RaytracingData->PixelConeSpreadAngle = std::atan((2.0f / cameraData.projMat.m[1][1]) / GetRenderer()->GetRenderSize().y);
 		m_RaytracingData->TexLODBias = settings.RaytracingSettings.TexLODBias;
 
-		m_RaytracingData->NumLights = sceneGraph->GetNumActiveLights();
+		m_RaytracingData->NumLights = static_cast<uint32_t>(sceneGraph->GetLights().size());
 		m_RaytracingData->RussianRoulette = settings.RaytracingSettings.RussianRoulette;
 		m_RaytracingData->Roughness = settings.MaterialSettings.Roughness;
 		m_RaytracingData->Metalness = settings.MaterialSettings.Metalness;
@@ -90,7 +90,7 @@ namespace Pass
 		
 		auto dirLight = skyrim_cast<RE::NiDirectionalLight*>(shadowSceneNode->GetRuntimeData().sunLight->light.get());
 
-		auto direction = Util::Float3(dirLight->GetWorldDirection());
+		auto direction = Util::Math::Float3(dirLight->GetWorldDirection());
 		direction.Normalize();
 
 		auto& diffuse = dirLight->GetLightRuntimeData().diffuse;

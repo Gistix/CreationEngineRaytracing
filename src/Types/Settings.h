@@ -28,6 +28,15 @@ struct MaterialSettings
 	float2 Metalness = { 0.0f, 1.0f };
 };
 
+struct SHaRCSettings
+{
+	float SceneScale = 1.0f;
+	int AccumFrameNum = 10;
+	int StaleFrameNum = 64;
+	float RadianceScale = 1e3f;
+	bool AntifireflyFilter = true;
+};
+
 struct DebugSettings
 {
 	bool PathTracingCull = false;
@@ -41,5 +50,6 @@ struct Settings
 	LightingSettings LightingSettings;
 	RaytracingSettings RaytracingSettings;
 	MaterialSettings MaterialSettings;
+	SHaRCSettings SHaRCSettings;
 	DebugSettings DebugSettings;
 };

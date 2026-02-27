@@ -5,6 +5,7 @@
 #include "magic_enum/magic_enum.hpp"
 
 #include "Core/Mesh.h"
+#include "Core/DirtyFlags.h"
 
 namespace magic_enum::customize
 {
@@ -40,6 +41,12 @@ namespace magic_enum::customize
 
 	template <>
 	struct enum_range<Mesh::Flags>
+	{
+		static constexpr bool is_flags = true;
+	};
+
+	template <>
+	struct enum_range<DirtyFlags>
 	{
 		static constexpr bool is_flags = true;
 	};

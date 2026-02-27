@@ -9,6 +9,8 @@
 #include "Util.h"
 
 #include "RaytracingCommon.h"
+#include "LightTLAS.h"
+#include "SHaRC.h"
 
 namespace Pass
 {
@@ -26,6 +28,8 @@ namespace Pass
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
 		RaytracingCommon* m_RaytracingCommon;
+		LightTLAS* m_LightTLAS;
+		SHaRC* m_SHaRC;
 
 		bool m_DirtyBindings = true;
 
@@ -34,7 +38,7 @@ namespace Pass
 		ResourceHandle m_SpecularOutput;*/
 
 	public:
-		PathTracing(Renderer* renderer, RaytracingCommon* raytracingCommon);
+		PathTracing(Renderer* renderer, RaytracingCommon* raytracingCommon, LightTLAS* lightTLAS, SHaRC* sharc);
 
 		virtual void CreatePipeline() override;
 

@@ -31,17 +31,37 @@ public:
 	}
 
 	template<typename T>
-	T* GetPass()
+	T* GetImmediatePass()
 	{
 		static_assert(eastl::is_base_of_v<RenderPass, T>,
 			"T must derive from RenderPass");
 
+		if (!m_RenderPass)
+			return nullptr;
+
 		return dynamic_cast<T*>(m_RenderPass.get());
+	}
+
+	template<typename T>
+	T* GetPass()
+	{
+		if (auto* pass = GetImmediatePass<T>())
+			return pass;
+
+		for (auto& child : m_Children)
+		{
+			if (auto* childPass = child.GetPass<T>())
+				return childPass;
+		}
+
+		return nullptr;
 	}
 
 	void AddNode(RenderNode renderNode);
 
 	void ResolutionChanged(uint2 resolution);
+
+	void SettingsChanged(const Settings& settings);
 
 	void Execute(nvrhi::ICommandList* commandList);
 };

@@ -13,6 +13,8 @@
 
 #include "Mesh.hlsli"
 
+#include "DirtyFlags.h"
+
 class SceneGraph;
 
 struct Mesh
@@ -25,13 +27,6 @@ struct Mesh
 		Landscape = 1 << 3,
 		Static = 1 << 4,
 		DoubleSidedGeom = 1 << 5
-	};
-
-	enum class UpdateFlags : uint8_t
-	{
-		None = 0,
-		Vertices = 1 << 0,
-		Skinning = 1 << 1
 	};
 
 	enum class State : uint8_t
@@ -100,7 +95,7 @@ struct Mesh
 
 	bool UpdateSkinning();
 
-	UpdateFlags Update();
+	DirtyFlags Update();
 
 	bool IsHidden() const;
 
@@ -122,5 +117,4 @@ private:
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Mesh::Flags);
-DEFINE_ENUM_FLAG_OPERATORS(Mesh::UpdateFlags);
 DEFINE_ENUM_FLAG_OPERATORS(Mesh::State);
