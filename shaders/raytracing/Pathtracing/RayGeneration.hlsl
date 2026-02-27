@@ -319,9 +319,6 @@ void Main()
                 isValidHit &= footprint > voxelSize;
             }
 
-            //Output[idx] = float4(oldValidHit ? 1.0f : 0.0f, isValidHit ? 1.0f : 0.0f, 0.0f, 1.0f);
-            //return;
-            
             float3 sharcRadiance;
             if (isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
             {
