@@ -125,7 +125,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 #endif
             
 #if defined(EXP_VANILLA_PBR_METALLIC)               
-            Metallic = CalcMetallic(Albedo, specularity, roughnessFromShininess);
+            surface.Metallic = CalcMetallic(surface.Albedo, specularity, roughnessFromShininess);
 #endif
             
 #if defined(EXP_VANILLA_PBR_ROUGHNESS)
