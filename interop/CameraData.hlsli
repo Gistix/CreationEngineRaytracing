@@ -11,8 +11,8 @@ INTEROP_STRUCT(CameraData, 16)
     float4 NDCToView;
     float3 Position;
     uint FrameIndex;
+    uint2 ScreenSize;
     uint2 RenderSize;
-    uint2 Pad0;
     float3 PositionPrev;
     uint Pad1;
     float4x4 ViewProj;

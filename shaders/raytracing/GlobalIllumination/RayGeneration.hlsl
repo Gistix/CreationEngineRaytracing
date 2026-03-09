@@ -72,6 +72,9 @@ void Main()
     
     const float2 uv = float2(idx + 0.5f) / size;
 
+    // If the game has dynamic resolution enabled the textures will not cover the entire extent
+    const float2 dynamicUV = float2(idx + 0.5f) / Camera.ScreenSize;   
+    
     const float depth = Depth.SampleLevel(DefaultSampler, uv, 0) * DEPTH_SCALE;
 
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
@@ -106,7 +109,7 @@ void Main()
     const float3 geometryNormalWS = normalize(ViewToWorldVector(geometryNormalVS, Camera.ViewInverse));    
     
     const float metalness = normalMetalnessAO.z;
-    const float ao = 1.0f;    
+    const float ao = 1.0f;
     
     const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
     const float3 positionCS = ViewToWorldPosition(positionVS, Camera.ViewInverse);

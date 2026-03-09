@@ -293,6 +293,7 @@ void Scene::UpdateCameraData() const
 	auto* renderer = Renderer::GetSingleton();
 
 	m_CameraData->FrameIndex = renderer->GetFrameIndex() % UINT_MAX;
+	m_CameraData->ScreenSize = renderer->GetResolution();
 	m_CameraData->RenderSize = renderer->GetDynamicResolution();
 
 	m_CameraData->PositionPrev = Util::Math::Float3(runtimeData.previousPosAdjust.getEye());
