@@ -13,13 +13,6 @@ namespace Hooks
 	}
 
 #if defined(SKYRIM)
-	void Main_RenderWorld::thunk(bool a1)
-	{
-		Scene::GetSingleton()->Render();
-
-		func(a1);
-	};
-
 	RE::NiSourceTexture* CreateTextureFromDDS::thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5)
 	{
 		auto* scene = Scene::GetSingleton();
@@ -158,8 +151,6 @@ namespace Hooks
 		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605, 0x0));
 
 		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951, 0x0));
-
-		stl::detour_thunk<Main_RenderWorld>(REL::RelocationID(100424, 107142));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);

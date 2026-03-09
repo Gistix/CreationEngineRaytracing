@@ -81,7 +81,6 @@ class Renderer
 
 	void InitGBufferOutput();
 	void InitRR();
-	void SetRenderTargets(ID3D12Resource*, ID3D12Resource*, ID3D12Resource*);
 
 public:
 	struct GBufferOutput
@@ -217,15 +216,17 @@ public:
 		return m_RenderTargets.get();
 	}
 
+	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
+
 	void Load();
 
 	void PostPostLoad();
 
 	void DataLoaded();
 
-	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName);
+	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format);
 
-	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName);
+	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format);
 
 	void SetLogLevel(spdlog::level::level_enum a_level = spdlog::level::info);
 	spdlog::level::level_enum GetLogLevel();

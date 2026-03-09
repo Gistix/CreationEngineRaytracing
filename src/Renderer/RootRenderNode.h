@@ -11,6 +11,8 @@ class RootRenderNode : public IRenderNode
 
 public:
 
+	bool HasRenderNode() const { return !m_Children.empty(); }
+
 	template<typename T>
 	T* GetPass()
 	{

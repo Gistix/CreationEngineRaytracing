@@ -29,7 +29,7 @@ RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer     : regist
 RWTexture2D<float3>                         DiffuseOutput               : register(u0);
 RWTexture2D<float3>                         SpecularOutput              : register(u1);
 #   else
-RWTexture2D<float3>                         Output                      : register(u0);
+RWTexture2D<float4>                         Output                      : register(u0);
 #endif
 
 #   if defined(DLSS_RR)
@@ -60,7 +60,7 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
 StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
 Texture2D<float4>                           Textures[]                  : register(t0, space3);
-RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space4);
+//RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space4);
 
 SamplerState                                DefaultSampler              : register(s0);
 

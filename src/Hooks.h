@@ -9,12 +9,6 @@ namespace Hooks
 	};
 
 #if defined(SKYRIM)
-	struct Main_RenderWorld
-	{
-		static void thunk(bool a1);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct CreateTextureFromDDS
 	{
 		static RE::NiSourceTexture* thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5);

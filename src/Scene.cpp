@@ -349,6 +349,8 @@ void Scene::UpdateSettings(Settings settings)
 
 	auto currentMode = settings.GeneralSettings.Mode;
 
-	if (currentMode != previousMode)
+	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
+
+	if (currentMode != previousMode || !rootNode->HasRenderNode())
 		UpdateMode(currentMode, previousMode);
 }

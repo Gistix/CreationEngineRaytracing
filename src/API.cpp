@@ -7,7 +7,12 @@ bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12Co
 	return Scene::GetSingleton()->Initialize(RendererParams(d3d11Device, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue));
 }
 
-void ExecutePasses()
+void Update()
+{
+	Scene::GetSingleton()->UpdateCameraData();
+}
+
+void Execute()
 {
 	Renderer::GetSingleton()->ExecutePasses();
 }
@@ -86,4 +91,9 @@ void GetRRInput(ID3D12Resource*& diffuseAlbedo, ID3D12Resource*& specularAlbedo,
 		normalRoughness = nullptr;
 		specularHitDistance = nullptr;
 	}
+}
+
+void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
+{
+	Renderer::GetSingleton()->SetRenderTargets(albedo, normalRoughness, gnmao);
 }

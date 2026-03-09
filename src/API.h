@@ -4,7 +4,8 @@
 
 extern "C" {
 	CERT_API bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
-	CERT_API void ExecutePasses();
+	CERT_API void Update();
+	CERT_API void Execute();
 	CERT_API void SetResolution(uint32_t width, uint32_t height);
 	CERT_API void GetResolution(uint32_t& width, uint32_t& height);
 	CERT_API void WaitExecution();
@@ -16,4 +17,5 @@ extern "C" {
 	CERT_API float* GetFrameTime();
 	CERT_API void UpdateSettings(Settings);
 	CERT_API void GetRRInput(ID3D12Resource*& diffuseAlbedo, ID3D12Resource*& specularAlbedo, ID3D12Resource*& normalRoughness, ID3D12Resource*& specularHitDistance);
+	CERT_API void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
 }

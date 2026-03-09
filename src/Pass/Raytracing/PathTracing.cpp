@@ -34,7 +34,8 @@ namespace Pass
 			{ L"SHARC_RESOLVE", L"0" },
 			{ L"SHARC_DEBUG", L"0" },
 			{ L"DEBUG_TRACE_HEATMAP", L"0" },
-			{ L"EXP_VANILLA_PBR_ROUGHNESS", L"1" }
+			{ L"EXP_VANILLA_PBR_ROUGHNESS", L"0" },
+			{ L"EXP_VANILLA_PBR_METALLIC", L"0" }
 		};
 
 		if (GetRenderer()->m_Settings.UseRayQuery)

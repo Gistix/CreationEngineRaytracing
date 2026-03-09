@@ -1,4 +1,4 @@
-#include "raytracing/RaytracedGI/Registers.hlsli"
+#include "raytracing/GlobalIllumination/Registers.hlsli"
 
 #include "include/Common.hlsli"
 #include "raytracing/include/Common.hlsli"
@@ -85,7 +85,7 @@ void Main()
         SpecularOutput[idx] = float3(0.0f, 0.0f, 0.0f);   
         
 #   else
-        Output[idx] = float3(0.0f, 0.0f, 0.0f);  
+        Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);  
 #   endif        
 
 #   if defined(DLSS_RR)
@@ -384,7 +384,7 @@ void Main()
     DiffuseOutput[idx] = float3(isSpecular ? 0.0f : radiance);
     SpecularOutput[idx] = float3(isSpecular ? radiance * specularAlbedo : 0.0f);
 #   else
-    Output[idx] = radiance;   
+    Output[idx] = float4(radiance, 1.0f);   
 #   endif
     
 #   if defined(DLSS_RR) 
