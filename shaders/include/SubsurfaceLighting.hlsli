@@ -72,7 +72,7 @@ float3 evalSingleScatteringTransmission(
 
                 Instance sampleInstance;
                 Material sampleMaterial;
-                Surface sampleSurface = Surface(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleMaterial);
+                Surface sampleSurface = SurfaceMaker::make(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleMaterial);
 
                 const float3 sampleGeometryNormal = sampleSurface.FaceNormal;
                 const float3 sampleShadingNormal = sampleSurface.Normal;
@@ -150,7 +150,7 @@ float3 evalSingleScatteringTransmission(
 
                 Instance scatterInstance;
                 Material scatterMaterial;
-                Surface scatterSurface = Surface(scatterLocalPosition, scatteringPayload, scatteringDirection, rayCone, scatterInstance, scatterMaterial);
+                Surface scatterSurface = SurfaceMaker::make(scatterLocalPosition, scatteringPayload, scatteringDirection, rayCone, scatterInstance, scatterMaterial);
 
                 const float3 scatteringSampleGeometryNormal = scatterSurface.FaceNormal;
 
@@ -278,7 +278,7 @@ float3 EvaluateSubsurfaceNEE(
                 const float3 sampleLocalPosition = subsurfaceSample.samplePosition + samplePayload.hitDistance * (-subsurfaceInteraction.normal);
                 Instance sampleInstance;
                 Material sampleMaterial;
-                Surface sampleSurface = Surface(sampleLocalPosition, samplePayload, -subsurfaceInteraction.normal, rayCone, sampleInstance, sampleMaterial);
+                Surface sampleSurface = SurfaceMaker::make(sampleLocalPosition, samplePayload, -subsurfaceInteraction.normal, rayCone, sampleInstance, sampleMaterial);
                 if (sampleSurface.SubsurfaceData.HasSubsurface == 0)
                 {
                     continue;

@@ -19,7 +19,10 @@
 #include "include/SurfaceMaker.hlsli"
 
 #include "include/Lighting.hlsli"
-#include "include/SubsurfaceLighting.hlsli"
+
+#ifdef SUBSURFACE_SCATTERING
+#   include "include/SubsurfaceLighting.hlsli"
+#endif
 
 #include "raytracing/include/Transparency.hlsli"
 
