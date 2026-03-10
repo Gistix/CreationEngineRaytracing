@@ -242,10 +242,10 @@ float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext b
     return direct;
 }
 
-float3 EvaluateDirectRadiance(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvaluateDirectRadiance(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isBounce)
 {
-    float3 radiance = EvalDirectionalLight(material, surface, brdfContext, bsdf, randomSeed);
-    radiance += EvalPointLight(material, surface, brdfContext, instance.LightData, bsdf, randomSeed);
+    float3 radiance = EvalDirectionalLight(material, surface, brdfContext, bsdf, randomSeed) * (isBounce ? Raytracing.Directional : 1.0f);
+    radiance += EvalPointLight(material, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isBounce ? Raytracing.Point : 1.0f);
 
     return radiance;
 }

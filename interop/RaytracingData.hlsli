@@ -15,9 +15,9 @@ INTEROP_STRUCT(RaytracingData, 16)
     float Emissive;
     float Effect;
     float Sky;
-    uint Pad0;
+    float Directional;
     float3 EmittanceColor;
-    uint Pad1; 
+    float Point; 
     INTEROP_DATA_TYPE(Light) DirectionalLight;    
 };
 VALIDATE_CBUFFER(RaytracingData, 16);

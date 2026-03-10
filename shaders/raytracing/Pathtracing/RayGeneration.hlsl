@@ -19,6 +19,7 @@
 #include "include/SurfaceMaker.hlsli"
 
 #include "include/Lighting.hlsli"
+#include "include/SubsurfaceLighting.hlsli"
 
 #include "raytracing/include/Transparency.hlsli"
 
@@ -159,7 +160,7 @@ void Main()
     }
     else
 #endif
-        direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed);      
+        direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);      
     
     float3 direction;
     MonteCarlo::BRDFWeight brdfWeight;
@@ -380,7 +381,7 @@ void Main()
             else
 #endif
             { 
-                directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed);
+                directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
             }
             
             sampleRadiance += directRadiance * throughput;

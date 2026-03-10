@@ -102,7 +102,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 		// Write light data
 		auto& lightData = m_LightData[i];
 
-		lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue) * lightSettings.Point;
+		lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue);
 
 		lightData.Radius = runtimeData.radius.x;
 

@@ -83,6 +83,9 @@ namespace Pass
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
 		m_RaytracingData->EmittanceColor = float3(1.0f, 1.0f, 1.0f);
 
+		m_RaytracingData->Directional = settings.LightSettings.Directional;
+		m_RaytracingData->Point = settings.LightSettings.Point;
+
 		auto& shaderManagerState = RE::BSShaderManager::State::GetSingleton();
 
 		// This is probably not the same as 'activeShadowSceneNode'
@@ -96,7 +99,7 @@ namespace Pass
 		auto& diffuse = dirLight->GetLightRuntimeData().diffuse;
 
 		m_RaytracingData->DirectionalLight.Vector = -direction;
-		m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue) * settings.LightSettings.Directional;
+		m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue);
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
