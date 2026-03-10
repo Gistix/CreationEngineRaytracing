@@ -275,19 +275,24 @@ void Scene::RemoveLight(const RE::NiPointer<RE::BSLight>& light)
 
 void Scene::UpdateCameraData() const
 {
+	auto test = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
+
 	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
 
 	auto cameraData = runtimeData.cameraData.getEye();
-
-	float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
-	float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
 
 	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
 
 	m_CameraData->ViewInverse = cameraData.viewMat.Invert();
 	m_CameraData->ProjInverse = cameraData.projMat.Invert();
+
 	m_CameraData->CameraData = Util::Game::GetClippingData();
+
+	float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
+	float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
+
 	m_CameraData->NDCToView = float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y);
+
 	m_CameraData->Position = Util::Math::Float3(runtimeData.posAdjust.getEye());
 
 	auto* renderer = Renderer::GetSingleton();
@@ -298,8 +303,11 @@ void Scene::UpdateCameraData() const
 
 	m_CameraData->PositionPrev = Util::Math::Float3(runtimeData.previousPosAdjust.getEye());
 
+	// Used by raster gbuffer
 	m_CameraData->ViewProj = cameraData.viewProjMatrixUnjittered;
 	m_CameraData->PrevViewProj = cameraData.previousViewProjMatrixUnjittered;
+
+	m_CameraData->Jitter = renderer->GetJitter();
 }
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)

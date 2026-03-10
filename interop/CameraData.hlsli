@@ -14,10 +14,12 @@ INTEROP_STRUCT(CameraData, 16)
     uint2 ScreenSize;
     uint2 RenderSize;
     float3 PositionPrev;
-    uint Pad1;
+    uint Pad0;
     float4x4 ViewProj;
     float4x4 PrevViewProj;
     float4x4 PrevViewInverse;
+    float2 Jitter;
+    uint2 Pad1;
 };
 VALIDATE_CBUFFER(CameraData, 16);
 

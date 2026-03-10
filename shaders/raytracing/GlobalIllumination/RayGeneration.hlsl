@@ -75,8 +75,10 @@ void Main()
     // If the game has dynamic resolution enabled the textures will not cover the entire extent
     const float2 dynamicUV = float2(idx + 0.5f) / Camera.ScreenSize;   
     
-    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUV, 0) * DEPTH_SCALE;
+    const float2 dynamicUVUnjittered = dynamicUV - (Camera.Jitter / Camera.ScreenSize);
 
+    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
+    
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
     [branch]
@@ -129,7 +131,7 @@ void Main()
     Surface sourceSurface = SurfaceMaker::make(positionWS, geometryNormalWS, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
-    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);    
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     
     
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
 
@@ -387,7 +389,7 @@ void Main()
     DiffuseOutput[idx] = float3(isSpecular ? 0.0f : radiance);
     SpecularOutput[idx] = float3(isSpecular ? radiance * specularAlbedo : 0.0f);
 #   else
-    Output[idx] = float4(radiance, 1.0f);   
+    Output[idx] = float4(radiance, 1.0f);
 #   endif
     
 #   if defined(DLSS_RR) 

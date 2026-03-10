@@ -61,6 +61,8 @@ class Renderer
 
 	float2 m_DynamicResolutionRatio;
 
+	float2 m_Jitter;
+
 	eastl::unique_ptr<RenderGraph> m_RenderGraph;
 
 	nvrhi::TimerQueryHandle m_FrameTimer;
@@ -167,6 +169,10 @@ public:
 
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
 
+	inline auto GetJitter() const { return m_Jitter; }
+
+	inline auto UpdateJitter(float2 jitter) { return m_Jitter = jitter; }
+
 	inline auto& GetWhiteTextureIndex() const { return m_WhiteTexture->descriptorHandle; }
 	inline auto& GetGrayTextureIndex() const { return m_GrayTexture->descriptorHandle; }
 	inline auto& GetNormalTextureIndex() const { return m_NormalTexture->descriptorHandle; }
@@ -224,9 +230,9 @@ public:
 
 	void DataLoaded();
 
-	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format);
+	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
 
-	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format);
+	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState);
 
 	void SetLogLevel(spdlog::level::level_enum a_level = spdlog::level::info);
 	spdlog::level::level_enum GetLogLevel();
@@ -248,4 +254,6 @@ public:
 	void ExecutePasses();
 
 	void WaitExecution();
+
+	void PostExecution();
 };

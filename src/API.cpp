@@ -34,6 +34,11 @@ void WaitExecution()
 	Renderer::GetSingleton()->WaitExecution();
 }
 
+void PostExecution()
+{
+	Renderer::GetSingleton()->PostExecution();
+}
+
 void SetCopyTarget(ID3D12Resource* target)
 {
 	Renderer::GetSingleton()->SetCopyTarget(target);
@@ -96,4 +101,9 @@ void GetRRInput(ID3D12Resource*& diffuseAlbedo, ID3D12Resource*& specularAlbedo,
 void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
 {
 	Renderer::GetSingleton()->SetRenderTargets(albedo, normalRoughness, gnmao);
+}
+
+void UpdateJitter(float2 jitter)
+{
+	Renderer::GetSingleton()->UpdateJitter(jitter);
 }

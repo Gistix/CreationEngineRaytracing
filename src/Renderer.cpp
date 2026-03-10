@@ -16,7 +16,7 @@ Renderer::Renderer()
 nvrhi::ITexture* Renderer::GetDepthTexture() {
 	if (!m_DepthTexture) {
 		auto& depthStencils = RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils;
-		m_DepthTexture = ShareTexture(depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture, "Depth", nvrhi::Format::D24S8);
+		m_DepthTexture = ShareTexture(depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::DepthWrite);
 	}
 
 	return m_DepthTexture;
@@ -216,9 +216,9 @@ void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRo
 	if (!m_RenderTargets)
 		m_RenderTargets = eastl::make_unique<RenderTargets>();
 
-	m_RenderTargets->albedo = CreateHandleForNativeTexture(albedo, "Albedo RenderTarget", nvrhi::Format::UNKNOWN);
-	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget", nvrhi::Format::UNKNOWN);
-	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget", nvrhi::Format::UNKNOWN);
+	m_RenderTargets->albedo = CreateHandleForNativeTexture(albedo, "Albedo RenderTarget");
+	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget");
+	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget");
 }
 
 void Renderer::SetResolution(uint2 resolution)
@@ -280,7 +280,7 @@ void Renderer::SetCopyTarget(ID3D12Resource* target)
 	desc.mipLevels = targetDesc.MipLevels;
 	desc.arraySize = targetDesc.DepthOrArraySize;
 	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::Common;
+	desc.initialState = nvrhi::ResourceStates::ShaderResource;
 	desc.keepInitialState = true;
 	desc.debugName = "Copy Target Texture";
 
@@ -329,6 +329,11 @@ void Renderer::WaitExecution()
 
 	GetDevice()->waitForIdle();
 
+	PostExecution();
+}
+
+void Renderer::PostExecution()
+{
 	if (GetDevice()->pollTimerQuery(m_FrameTimer))
 		m_FrameTime = m_NVRHIDevice->getTimerQueryTime(m_FrameTimer) * 1000.0f;
 
@@ -353,7 +358,7 @@ void Renderer::DataLoaded()
 
 }
 
-nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format)
+nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
 {
 	D3D12_RESOURCE_DESC nativeTexDesc = nativeResource->GetDesc();
 
@@ -373,14 +378,18 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
 		.setFormat(format)
-		.setInitialState(nvrhi::ResourceStates::ShaderResource)
 		.setKeepInitialState(true)
 		.setDebugName(debugName);
+
+	if (resourceState == nvrhi::ResourceStates::Unknown)
+		textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
+	else
+		textureDesc.setInitialState(resourceState);
 
 	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeResource, textureDesc);
 }
 
-nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN)
+nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown)
 {
 	D3D11_TEXTURE2D_DESC desc;
 	d3d11Texture->GetDesc(&desc);
@@ -400,7 +409,7 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 
 	CloseHandle(sharedHandle);
 
-	return CreateHandleForNativeTexture(d3d12Resource, std::format("{} [Shared Texture]", debugName).c_str(), format);
+	return CreateHandleForNativeTexture(d3d12Resource, std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
 }
 
 void Renderer::SetLogLevel(spdlog::level::level_enum a_level)
