@@ -64,8 +64,6 @@ namespace Pass::Raytracing
 
 	void GlobalIllumination::CreatePipeline()
 	{
-		logger::info("GlobalIllumination::CreatePipeline - Denoiser: {}", magic_enum::enum_name(Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser));
-
 		if (GetRenderer()->m_Settings.UseRayQuery)
 			CreateComputePipeline();
 		else
