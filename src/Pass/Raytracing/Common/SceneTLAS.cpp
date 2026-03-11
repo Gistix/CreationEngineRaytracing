@@ -86,20 +86,18 @@ namespace Pass
 		m_RaytracingData->Directional = settings.LightSettings.Directional;
 		m_RaytracingData->Point = settings.LightSettings.Point;
 
-		auto& shaderManagerState = RE::BSShaderManager::State::GetSingleton();
+		// Directional Light
+		{
+			auto dirLight = skyrim_cast<RE::NiDirectionalLight*>(RE::DrawWorld::GetSingleton().mainShadowSceneNode->GetRuntimeData().sunLight->light.get());
 
-		// This is probably not the same as 'activeShadowSceneNode'
-		auto* shadowSceneNode = shaderManagerState.shadowSceneNode[0];
-		
-		auto dirLight = skyrim_cast<RE::NiDirectionalLight*>(shadowSceneNode->GetRuntimeData().sunLight->light.get());
+			auto direction = Util::Math::Float3(dirLight->GetWorldDirection());
+			direction.Normalize();
 
-		auto direction = Util::Math::Float3(dirLight->GetWorldDirection());
-		direction.Normalize();
+			auto& diffuse = dirLight->GetLightRuntimeData().diffuse;
 
-		auto& diffuse = dirLight->GetLightRuntimeData().diffuse;
-
-		m_RaytracingData->DirectionalLight.Vector = -direction;
-		m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue);
+			m_RaytracingData->DirectionalLight.Vector = -direction;
+			m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue);
+		}
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 

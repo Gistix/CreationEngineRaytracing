@@ -32,7 +32,7 @@ namespace Pass
 
 		uint8_t lightIndex = 0;
 
-		for (auto& light : sceneGraph->GetLights())
+		for (auto& [bsLight, light] : sceneGraph->GetLights())
 		{
 			light.UpdateTLAS(commandList);
 

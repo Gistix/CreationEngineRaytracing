@@ -75,10 +75,6 @@ struct Scene
 
 	void AttachLand(RE::TESForm* form, RE::NiAVObject* root);
 
-	void AddLight(RE::BSLight* light);
-
-	void RemoveLight(const RE::NiPointer<RE::BSLight>& a_light);
-
 	void UpdateCameraData() const;
 
 	void UpdateFeatureData(void* data, uint32_t size);

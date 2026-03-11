@@ -6,7 +6,6 @@ namespace Util
 	{
 		float4 GetClippingData();
 
-		bool IsValidLight(RE::BSLight* a_light);
 		bool IsGlobalLight(RE::BSLight* a_light);
 	}
 

@@ -64,24 +64,46 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 {
+	// Update Light Vector
+	{
+		auto& mainSSNRuntimeData = RE::DrawWorld::GetSingleton().mainShadowSceneNode->GetRuntimeData();
+
+		m_TempActiveLights.clear();
+		m_TempActiveLights.reserve(mainSSNRuntimeData.activeLights.size() + mainSSNRuntimeData.activeShadowLights.size());
+
+		auto collectLights = [&](const auto& lights) {
+			for (auto& activeLight : lights)
+			{
+				auto* ptr = activeLight.get();
+
+				m_TempActiveLights.insert(ptr);
+				m_Lights.try_emplace(ptr, ptr);
+			}
+			};
+
+		collectLights(mainSSNRuntimeData.activeLights);
+		collectLights(mainSSNRuntimeData.activeShadowLights);
+
+		for (auto it = m_Lights.begin(); it != m_Lights.end(); )
+		{
+			if (!m_TempActiveLights.contains(it->first))
+				it = m_Lights.erase(it);
+			else
+				++it;
+		}
+	}
+
 	const auto& lightSettings = Scene::GetSingleton()->m_Settings.LightSettings;
 
-	auto m_NumLights = m_Lights.size();
+	int numLights = 0;
 
-	for (size_t i = 0; i < m_NumLights; i++)
+	for (auto& [bsLight, light] : m_Lights)
 	{
-		auto& light = m_Lights[i];
-
-		auto* bsLight = light.m_Light;
+		light.m_Active = true;
 
 		auto niLight = bsLight->light.get();
 
-		/*if (!niLight)
-			continue;*/
-
-		light.m_Active = true;
-
-		if (!Util::Game::IsValidLight(bsLight))
+		if (niLight->GetFlags().any(RE::NiAVObject::Flag::kHidden))
 			light.m_Active = false;
 
 		if (bsLight->IsShadowLight())
@@ -99,44 +121,48 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 		if (flags & LightLimitFix::LightFlags::Disabled)
 			light.m_Active = false;
 
-		// Write light data
-		auto& lightData = m_LightData[i];
+		// Update Light Data
+		{
+			auto& lightData = m_LightData[numLights];
 
-		lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue);
+			lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue);
 
-		lightData.Radius = runtimeData.radius.x;
+			lightData.Radius = runtimeData.radius.x;
 
-		if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) < 1e-4 || lightData.Radius < 1e-4)
-			light.m_Active = false;
+			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) < 1e-4 || lightData.Radius < 1e-4)
+				light.m_Active = false;
 
-		if (light.m_Active)
-			light.UpdateInstances();
-		else
-			light.m_Instances.clear();
+			if (light.m_Active)
+				light.UpdateInstances();
+			else
+				light.m_Instances.clear();
 
-		auto worldPos = niLight->world.translate;
+			auto worldPos = niLight->world.translate;
 
-		lightData.Vector = Util::Math::Float3(worldPos);
+			lightData.Vector = Util::Math::Float3(worldPos);
 
-		lightData.InvRadius = 1.0f / runtimeData.radius.x;
+			lightData.InvRadius = 1.0f / runtimeData.radius.x;
 
-		lightData.Fade = runtimeData.fade;
+			lightData.Fade = runtimeData.fade;
 
-		if (lightSettings.LodDimmer)
-			lightData.Fade *= bsLight->lodDimmer;
+			if (lightSettings.LodDimmer)
+				lightData.Fade *= bsLight->lodDimmer;
 
-		lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
+			lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
 
-		lightData.Flags = 0;
+			lightData.Flags = 0;
 
-		if (flags & LightLimitFix::LightFlags::InverseSquare)
-			lightData.Flags |= LightFlags::ISL;
+			if (flags & LightLimitFix::LightFlags::InverseSquare)
+				lightData.Flags |= LightFlags::ISL;
 
-		if (flags & LightLimitFix::LightFlags::Linear)
-			lightData.Flags |= LightFlags::LinearLight;
+			if (flags & LightLimitFix::LightFlags::Linear)
+				lightData.Flags |= LightFlags::LinearLight;
+
+			numLights++;
+		}
 	}
 
-	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), m_NumLights * sizeof(LightData));
+	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), numLights * sizeof(LightData));
 }
 
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
@@ -172,14 +198,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		lights.clear();
 
-		for (uint8_t i = 0; i < m_Lights.size(); i++)
-		{
-			auto& light = m_Lights[i];
+		uint8_t lightIndex = 0;
 
+		for (auto& [bsLight, light] : m_Lights)
+		{
 			if (light.m_Instances.find(instance.get()) == light.m_Instances.end())
 				continue;
 
-			lights.push_back(i);
+			lights.push_back(lightIndex);
+
+			lightIndex++;
 		}
 
 		m_InstanceData[instanceIndex] = {
@@ -650,18 +678,4 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 	m_Instances.emplace_back(eastl::move(instance));
 
 	modelIt->second->AddRef();
-}
-
-void SceneGraph::AddLight(RE::BSLight* light) 
-{
-	m_Lights.emplace_back(light);
-}
-
-void SceneGraph::RemoveLight(RE::BSLight* light)
-{
-	m_Lights.erase(
-		eastl::remove_if(m_Lights.begin(), m_Lights.end(),
-			[light](const Light& x) { return x.m_Light == light; }),
-		m_Lights.end()
-	);
 }

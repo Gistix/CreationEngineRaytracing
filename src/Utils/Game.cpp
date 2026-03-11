@@ -22,11 +22,6 @@ namespace Util
 			return cameraData;
 		}
 
-		bool IsValidLight(RE::BSLight* a_light)
-		{
-			return a_light && !a_light->light->GetFlags().any(RE::NiAVObject::Flag::kHidden);
-		}
-
 		bool IsGlobalLight(RE::BSLight* a_light)
 		{
 			return !(a_light->portalStrict || !a_light->portalGraph);

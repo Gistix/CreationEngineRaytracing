@@ -247,30 +247,18 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 
 			// Third Person
 			//rt.CreateActorModel(player, name, player->Get3D(false));
-			logger::info("[Raytracing] AttachModel - Player: {}", player->GetName());
 			return;
 		}
 	}
 
 	if (auto* actor = refr->As<RE::Actor>()) {
 		//rt.CreateActorModel(actor, actor->GetName(), pNiAVObject);
-		logger::info("[Raytracing] AttachModel - Actor: {}", actor->GetName());
 	}
 }
 
 void Scene::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::NiAVObject* root) 
 {
 
-}
-
-void Scene::AddLight(RE::BSLight* light)
-{
-	GetSceneGraph()->AddLight(light);
-}
-
-void Scene::RemoveLight(const RE::NiPointer<RE::BSLight>& light)
-{
-	GetSceneGraph()->RemoveLight(light.get());
 }
 
 void Scene::UpdateCameraData() const

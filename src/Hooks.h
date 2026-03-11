@@ -50,18 +50,6 @@ namespace Hooks
 		static void thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
-
-	struct ShadowSceneNode_AddLight
-	{
-		static RE::BSLight* thunk(RE::ShadowSceneNode* shadowSceneNode, RE::NiLight* light, const RE::ShadowSceneNode::LIGHT_CREATE_PARAMS& params);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct ShadowSceneNode_RemoveLight
-	{
-		static void thunk(RE::ShadowSceneNode* shadowSceneNode, const RE::NiPointer<RE::BSLight>& light);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
 #elif defined(FALLOUT4)
 
 #endif

@@ -103,23 +103,6 @@ namespace Hooks
 
 		func(pass, technique, alphaTest, renderFlags);
 	}
-
-	RE::BSLight* ShadowSceneNode_AddLight::thunk(RE::ShadowSceneNode* shadowSceneNode, RE::NiLight* light, const RE::ShadowSceneNode::LIGHT_CREATE_PARAMS& params)
-	{
-		auto bsLight = func(shadowSceneNode, light, params);
-
-		Scene::GetSingleton()->AddLight(bsLight);
-
-		return bsLight;
-	}
-
-	void ShadowSceneNode_RemoveLight::thunk(RE::ShadowSceneNode* shadowSceneNode, const RE::NiPointer<RE::BSLight>& light)
-	{
-		Scene::GetSingleton()->RemoveLight(light);
-
-		func(shadowSceneNode, light);
-	}
-
 #elif defined(FALLOUT4)
 
 #endif
@@ -156,10 +139,7 @@ namespace Hooks
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
 		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
 
-		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));
-
-		stl::detour_thunk<ShadowSceneNode_AddLight>(REL::RelocationID(99692, 106326));
-		stl::detour_thunk<ShadowSceneNode_RemoveLight>(REL::RelocationID(99698, 106332));
+		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));;
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
 		stl::detour_thunk<TES_At77777tachModel>(REL::ID(2192085));

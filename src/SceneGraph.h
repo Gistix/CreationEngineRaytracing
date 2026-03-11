@@ -12,6 +12,9 @@
 #include "Types/BindlessTable.h"
 #include "Types/TextureReference.h"
 
+#include <eastl/vector_set.h>
+#include <eastl/unordered_set.h>
+
 class SceneGraph
 {
 	eastl::unordered_map<RE::BSDismemberSkinInstance*, eastl::vector<Mesh*>> dismemberReferences;
@@ -25,7 +28,8 @@ class SceneGraph
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
-	eastl::vector<Light> m_Lights;
+	eastl::unordered_set<RE::BSLight*> m_TempActiveLights;
+	eastl::map<RE::BSLight*, Light> m_Lights;
 
 	eastl::array<LightData, Constants::NUM_LIGHTS_MAX> m_LightData;
 	nvrhi::BufferHandle m_LightBuffer;
@@ -68,9 +72,6 @@ public:
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);
 	void CreateLandModel(RE::TESObjectLAND* land);
-
-	void AddLight(RE::BSLight* light);
-	void RemoveLight(RE::BSLight* light);
 
 	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Texture2D* d3d11Texture);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);
