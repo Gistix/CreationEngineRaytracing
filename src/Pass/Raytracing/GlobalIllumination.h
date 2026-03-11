@@ -9,6 +9,7 @@
 #include "Util.h"
 
 #include "Pass/Raytracing/Common/SceneTLAS.h"
+#include "Pass/Raytracing/Common/SHaRC.h"
 
 namespace Pass::Raytracing
 {
@@ -26,25 +27,26 @@ namespace Pass::Raytracing
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
 		SceneTLAS* m_SceneTLAS;
+		SHaRC* m_SHaRC;
 
 		bool m_DirtyBindings = true;
 
-		/*ResourceHandle m_DirectInput;
-		ResourceHandle m_DiffuseOutput;
-		ResourceHandle m_SpecularOutput;*/
+		eastl::vector<ShaderDefine> m_Defines;
 
 	public:
-		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS);
+		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc);
 
 		virtual void CreatePipeline() override;
 
 		virtual void ResolutionChanged(uint2 resolution) override;
 
-		void CreateRootSignature();
+		virtual void SettingsChanged(const Settings& settings) override;
 
-		bool CreateRayTracingPipeline();
+		void CreateBindingLayout();
 
-		bool CreateComputePipeline();
+		void CreateRayTracingPipeline();
+
+		void CreateComputePipeline();
 
 		void CheckBindings();
 

@@ -97,22 +97,21 @@ public:
 	// GBuffer output from raster pass
 	eastl::unique_ptr<GBufferOutput> m_GBufferOutput;
 
+	// Diffuse albedo and normal roughness comes from RenderTargets (which are created externaly)
 	struct RayReconstructionInput
 	{
 		nvrhi::TextureHandle diffuseAlbedo = nullptr;
 		nvrhi::TextureHandle specularAlbedo = nullptr;
-		nvrhi::TextureHandle normalRoughness = nullptr;
 		nvrhi::TextureHandle specularHitDistance = nullptr;
 	};
 
-	// Inputs used by DLSS Ray Reconstruction
 	eastl::unique_ptr<RayReconstructionInput> m_RayReconstructionInput;
 
 	struct RenderTargets
 	{
 		nvrhi::TextureHandle albedo = nullptr;
-#if defined(SKYRIM)
 		nvrhi::TextureHandle normalRoughness = nullptr;
+#if defined(SKYRIM)
 		nvrhi::TextureHandle gnmao = nullptr;
 #endif
 	};
@@ -223,6 +222,8 @@ public:
 	}
 
 	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
+
+	void SetDiffuseAlbedo(ID3D12Resource* diffuseAlbedo);
 
 	void Load();
 

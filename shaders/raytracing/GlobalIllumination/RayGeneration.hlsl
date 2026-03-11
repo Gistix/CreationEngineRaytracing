@@ -95,7 +95,7 @@ void Main()
 
 #   if defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-        SpecularHitDist[idx] = RAY_TMAX;
+        SpecularHitDistance[idx] = RAY_TMAX;
 #   endif
 #endif
         return;

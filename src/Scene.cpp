@@ -59,12 +59,29 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
+			"LightTLAS",
+			eastl::make_unique<Pass::LightTLAS>(renderer)
+			});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"SHaRC",
+			eastl::make_unique<Pass::SHaRC>(
+				renderer,
+				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
+				m_GlobalIllumination->GetPass<Pass::LightTLAS>()
+			)
+			});
+
+		m_GlobalIllumination->AddNode({
+			true,
 			"GlobalIllumination",
 			eastl::make_unique<Pass::Raytracing::GlobalIllumination>(
 				renderer,
-				m_GlobalIllumination->GetPass<Pass::SceneTLAS>())
-			}
-		);
+				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
+				m_GlobalIllumination->GetPass<Pass::SHaRC>()
+			)			
+		});
 	}
 
 	return m_GlobalIllumination.get();

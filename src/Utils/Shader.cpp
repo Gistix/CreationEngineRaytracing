@@ -23,6 +23,9 @@ namespace Util
 			if (sharc)
 				defines.emplace_back(L"SHARC", L"");
 
+			if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+				defines.emplace_back(L"DLSS_RR", L"1");
+			
 			return defines;
 		}
 

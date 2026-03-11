@@ -195,16 +195,8 @@ void Renderer::InitRR()
 	desc.mipLevels = 1;
 
 	desc.format = nvrhi::Format::R11G11B10_FLOAT;
-	desc.debugName = "RR Diffuse Albedo";
-	m_RayReconstructionInput->diffuseAlbedo = device->createTexture(desc);
-
-	desc.format = nvrhi::Format::R11G11B10_FLOAT;
 	desc.debugName = "RR Specular Albedo";
 	m_RayReconstructionInput->specularAlbedo = device->createTexture(desc);
-
-	desc.format = nvrhi::Format::RGBA8_SNORM;
-	desc.debugName = "RR Normal Roughness";
-	m_RayReconstructionInput->normalRoughness = device->createTexture(desc);
 
 	desc.format = nvrhi::Format::R32_FLOAT;
 	desc.debugName = "RR Specular Hit Distance";
@@ -217,8 +209,13 @@ void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRo
 		m_RenderTargets = eastl::make_unique<RenderTargets>();
 
 	m_RenderTargets->albedo = CreateHandleForNativeTexture(albedo, "Albedo RenderTarget");
-	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget");
+	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
 	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget");
+}
+
+void Renderer::SetDiffuseAlbedo(ID3D12Resource* diffuseAlbedo)
+{
+	GetRRInput()->diffuseAlbedo = CreateHandleForNativeTexture(diffuseAlbedo, "Diffuse Albedo RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
 }
 
 void Renderer::SetResolution(uint2 resolution)
@@ -383,7 +380,11 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 
 	if (resourceState == nvrhi::ResourceStates::Unknown)
 		textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
-	else
+	else if (resourceState == nvrhi::ResourceStates::UnorderedAccess) {
+		textureDesc.
+			setInitialState(nvrhi::ResourceStates::UnorderedAccess).
+			setIsUAV(true);
+	} else
 		textureDesc.setInitialState(resourceState);
 
 	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeResource, textureDesc);

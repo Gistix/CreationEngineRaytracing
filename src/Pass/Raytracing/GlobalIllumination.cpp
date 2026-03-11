@@ -4,31 +4,18 @@
 
 namespace Pass::Raytracing
 {
-	GlobalIllumination::GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS)
-		: RenderPass(renderer), m_SceneTLAS(sceneTLAS)
+	GlobalIllumination::GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc)
+		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
 	{
 		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, false);
+
+		CreateBindingLayout();
 		CreatePipeline();
-	}
-
-	void GlobalIllumination::CreatePipeline()
-	{
-		CreateRootSignature();
-
-		if (GetRenderer()->m_Settings.UseRayQuery)
-		{
-			if (!CreateComputePipeline())
-				return;
-		}
-		else
-		{
-			if (!CreateRayTracingPipeline())
-				return;
-		}
 	}
 
 	void GlobalIllumination::ResolutionChanged([[maybe_unused]] uint2 resolution)
@@ -36,7 +23,18 @@ namespace Pass::Raytracing
 		m_DirtyBindings = true;
 	}
 
-	void GlobalIllumination::CreateRootSignature()
+	void GlobalIllumination::SettingsChanged(const Settings& settings)
+	{
+		auto defines = Util::Shader::GetRaytracingDefines(settings, true, false);
+
+		if (defines != m_Defines) {
+			m_Defines = defines;
+			CreatePipeline();
+			m_DirtyBindings = true;
+		}
+	}
+
+	void GlobalIllumination::CreateBindingLayout()
 	{
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
@@ -44,6 +42,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
+			nvrhi::BindingLayoutItem::VolatileConstantBuffer(3),
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
@@ -53,17 +52,30 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(6),
 			nvrhi::BindingLayoutItem::Texture_SRV(7),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(9),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
 			nvrhi::BindingLayoutItem::Sampler(0),
-			nvrhi::BindingLayoutItem::Texture_UAV(0)
+			nvrhi::BindingLayoutItem::Texture_UAV(0),
+			nvrhi::BindingLayoutItem::Texture_UAV(2),
+			nvrhi::BindingLayoutItem::Texture_UAV(3)
 		};
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
 
-	bool GlobalIllumination::CreateRayTracingPipeline()
+	void GlobalIllumination::CreatePipeline()
 	{
-		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+		logger::info("GlobalIllumination::CreatePipeline - Denoiser: {}", magic_enum::enum_name(Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser));
 
-		eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"0" } };
+		if (GetRenderer()->m_Settings.UseRayQuery)
+			CreateComputePipeline();
+		else
+			CreateRayTracingPipeline();
+	}
+
+	void GlobalIllumination::CreateRayTracingPipeline()
+	{
+		auto defines = Util::Shader::GetDXCDefines(m_Defines);
+		defines.emplace_back(L"USE_RAY_QUERY", L"0");
 
 		auto device = GetRenderer()->GetDevice();
 
@@ -71,6 +83,7 @@ namespace Pass::Raytracing
 		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/RaytracedGI/RayGeneration.hlsl", defines);
 		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/RaytracedGI/Miss.hlsl", defines);
 		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/RaytracedGI/ClosestHit.hlsl", defines);
+		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/PathTracing/AnyHit.hlsl", defines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
 
@@ -84,12 +97,14 @@ namespace Pass::Raytracing
 			{
 				"HitGroup",
 				hitLib->getShader("Main", nvrhi::ShaderType::ClosestHit),
-				nullptr,  // any hit
+				anyHitLib->getShader("Main", nvrhi::ShaderType::AnyHit),
 				nullptr,  // intersection
 				nullptr,  // binding layout
 				false     // isProceduralPrimitive
 			}
 		};
+
+		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		pipelineDesc.globalBindingLayouts = {
 			m_BindingLayout,
@@ -103,22 +118,25 @@ namespace Pass::Raytracing
 
 		m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
 		if (!m_RayPipeline)
-			return false;
+			return;
 
-		m_ShaderTable = m_RayPipeline->createShaderTable();
+		auto shaderTableDesc = nvrhi::rt::ShaderTableDesc()
+			.enableCaching(3)
+			.setDebugName("Shader Table");
+
+		m_ShaderTable = m_RayPipeline->createShaderTable(shaderTableDesc);
 		if (!m_ShaderTable)
-			return false;
+			return;
 
-		m_ShaderTable->setRayGenerationShader("RayGen");  // matches exportName above
-		m_ShaderTable->addMissShader("Miss");            // see note below
+		m_ShaderTable->setRayGenerationShader("RayGen");
+		m_ShaderTable->addMissShader("Miss");
 		m_ShaderTable->addHitGroup("HitGroup");
-
-		return true;
 	}
 
-	bool GlobalIllumination::CreateComputePipeline()
+	void GlobalIllumination::CreateComputePipeline()
 	{
-		eastl::vector<DxcDefine> defines = { { L"USE_RAY_QUERY", L"1" } };
+		auto defines = Util::Shader::GetDXCDefines(m_Defines);
+		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
 		auto device = GetRenderer()->GetDevice();
 
@@ -127,7 +145,7 @@ namespace Pass::Raytracing
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
-			return false;
+			return;
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
@@ -138,12 +156,7 @@ namespace Pass::Raytracing
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
 
-		m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
-
-		if (!m_ComputePipeline)
-			return false;
-
-		return true;
+		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
 
 	void GlobalIllumination::CheckBindings()
@@ -159,11 +172,14 @@ namespace Pass::Raytracing
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
+		auto* rrInput = renderer->GetRRInput();
+
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
+			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
@@ -173,8 +189,12 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(6, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(7, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->gnmao),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(9, m_SHaRC->GetResolveBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
-			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
+			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
+			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
+			nvrhi::BindingSetItem::Texture_UAV(3, rrInput->specularHitDistance)
 		};
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);

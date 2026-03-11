@@ -45,10 +45,6 @@ namespace Pass
 
 		eastl::vector<ShaderDefine> m_Defines;
 
-		/*ResourceHandle m_DirectInput;
-		ResourceHandle m_DiffuseOutput;
-		ResourceHandle m_SpecularOutput;*/
-
 	public:
 		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, LightTLAS* lightTLAS, SHaRC* sharc);
 

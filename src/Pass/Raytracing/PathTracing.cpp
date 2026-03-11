@@ -163,7 +163,7 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 			.addBindingLayout(m_LightTLAS->GetBindlessLayout());
 
-		m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
+		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
 
 	void PathTracing::CheckBindings()
@@ -176,6 +176,8 @@ namespace Pass
 		auto* scene = Scene::GetSingleton();
 
 		auto* sceneGraph = scene->GetSceneGraph();
+
+		auto* rts = renderer->GetRenderTargets();
 
 		auto* rrInput = renderer->GetRRInput();
 
@@ -196,7 +198,7 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(1, rrInput->diffuseAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
-			nvrhi::BindingSetItem::Texture_UAV(3, rrInput->normalRoughness),
+			nvrhi::BindingSetItem::Texture_UAV(3, rts->normalRoughness),
 			nvrhi::BindingSetItem::Texture_UAV(4, rrInput->specularHitDistance)
 		};
 

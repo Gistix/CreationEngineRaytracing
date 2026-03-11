@@ -50,10 +50,10 @@ Texture2D<snorm float4>                     NormalRoughness             : regist
 Texture2D<unorm float4>                     GNMAO                       : register(t8); // MASKS2 - Geometry normals (Encoded) + metalness/AO (Packed)
 
 #if defined(SHARC)
-StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t5);
+StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t9);
 
 #   if !SHARC_UPDATE
-StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t6);
+StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t10);
 #   endif
 #endif
 
