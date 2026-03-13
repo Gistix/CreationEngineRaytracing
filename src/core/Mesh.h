@@ -56,8 +56,6 @@ struct Mesh
 	{
 		nvrhi::BufferHandle vertexBuffer;
 		nvrhi::BufferHandle triangleBuffer;
-		DescriptorHandle vertexBufferDescriptor;
-		DescriptorHandle triangleBufferDescriptor;
 	} buffers;
 
 	nvrhi::rt::GeometryDesc geometryDesc;
