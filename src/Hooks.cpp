@@ -1,6 +1,5 @@
 #include "Hooks.h"
 #include "Renderer.h"
-#include "Scene.h"
 #include "Util.h"
 
 namespace Hooks
@@ -10,6 +9,33 @@ namespace Hooks
 		func(tes, refr, cell, queuedTree, a5, a6);
 
 		Scene::GetSingleton()->AttachModel(refr);
+	}
+
+	void Release3DRelatedData::thunk(RE::TESObjectREFR* refr)
+	{
+		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(refr, true);
+
+		func(refr);
+	}
+
+
+	void Actor_Set3D::thunk(RE::Actor* a_actor, RE::NiAVObject* a_object, bool a_queue3DTasks)
+	{
+		if (!a_object)
+			Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(a_actor, true);
+
+		func(a_actor, a_object, a_queue3DTasks);
+	}
+
+	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
+	{
+		if (oThis && oThis->rendererTexture) {
+			if (auto resource = oThis->rendererTexture->texture) {
+				Scene::GetSingleton()->GetSceneGraph()->ReleaseTexture(reinterpret_cast<ID3D11Texture2D*>(resource));
+			}
+		}
+
+		func(oThis);
 	}
 
 #if defined(SKYRIM)
@@ -118,17 +144,29 @@ namespace Hooks
 
 		D3D11_TEXTURE2D_DESC descCopy = *pDesc;
 
-		if (scene->shareTexture && !(pDesc->MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE)) {
+		if (scene->shareTexture && !(pDesc->MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE))
 			descCopy.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
-		}
 
 		return func(This, &descCopy, pInitialData, ppTexture2D);
 	}
 
 	void Install()
 	{
+		stl::write_vfunc<0x6B, Release3DRelatedData>(RE::VTABLE_TESObjectREFR[0]);
+
+		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
+
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
+		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
+
+		// Destructors to remove instances (not models)
+		{
+			stl::write_vfunc<0x0, Destructor<RE::NiNode>>(RE::VTABLE_NiNode[0]);
+			stl::write_vfunc<0x0, Destructor<RE::BSFadeNode>>(RE::VTABLE_BSFadeNode[0]);
+			stl::write_vfunc<0x0, Destructor<RE::BSFadeNode>>(RE::VTABLE_BSLeafAnimNode[0]);
+		}
+
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 
 		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605, 0x0));
@@ -142,7 +180,7 @@ namespace Hooks
 		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));;
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
-		stl::detour_thunk<TES_At77777tachModel>(REL::ID(2192085));
+		stl::detour_thunk<TES_AttachModel>(REL::ID(2192085));
 #	endif
 #endif
 		logger::info("[Raytracing] Installed hooks");

@@ -77,7 +77,6 @@ struct Mesh
 		UpdateDismember(dismemberVisible);
 	}
 
-
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
 
 	void CalculateVectors(bool calculateNormal);

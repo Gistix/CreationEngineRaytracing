@@ -2,12 +2,14 @@
 #include "Util.h"
 #include "SceneGraph.h"
 
+#include "Hooks.h"
+#include "Events.h"
+
 #include "framework/DescriptorTableManager.h"
 
 #include "Renderer.h"
 
 #include "Renderer/RenderNode.h"
-#include "Pass/RaytracingPass.h"
 
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "Pass/Raytracing/Common/LightTLAS.h"
@@ -22,21 +24,35 @@
 Scene::Scene()
 {
 	m_SceneGraph = eastl::make_unique<SceneGraph>();
+}
 
-	m_FeatureData = eastl::make_unique<FeatureData>();
-	//auto* renderer = Renderer::GetSingleton();
+void Scene::Load()
+{
 
-	/*m_GlobalIllumination = eastl::make_unique<RenderNode>(
-		true, "Global Illumination", nullptr, {
-			{ true, "RTGI", new RaytracingPass(renderer) },
-			{ false, "Composite", new GICompositePass(renderer) }
-		});*/
+}
 
-	//m_GlobalIllumination = eastl::make_unique<RenderNode>(true, "Global Illumination");
-	//m_GlobalIllumination->AddNode({ true, "RTGI", new RaytracingPass(renderer) });
-	//m_GlobalIllumination->AddNode({ false, "Composite", new GICompositePass(renderer) });
+void Scene::PostPostLoad()
+{
+	Hooks::Install();
+	Events::Register();
+}
 
-	//renderer->GetRenderGraph()->AttachRootNode(m_GlobalIllumination.get());
+void Scene::DataLoaded()
+{
+
+}
+
+void Scene::SetLogLevel(spdlog::level::level_enum a_level)
+{
+	logLevel = a_level;
+	spdlog::set_level(logLevel);
+	spdlog::flush_on(logLevel);
+	logger::info("Log Level set to {} ({})", magic_enum::enum_name(logLevel), magic_enum::enum_integer(logLevel));
+}
+
+spdlog::level::level_enum Scene::GetLogLevel()
+{
+	return logLevel;
 }
 
 SceneGraph* Scene::GetSceneGraph() const
@@ -55,23 +71,16 @@ RenderNode* Scene::GetGlobalIllumination()
 			true,
 			"SceneTLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
-			});
-
-		m_GlobalIllumination->AddNode({
-			true,
-			"LightTLAS",
-			eastl::make_unique<Pass::LightTLAS>(renderer)
-			});
+		});
 
 		m_GlobalIllumination->AddNode({
 			true,
 			"SHaRC",
 			eastl::make_unique<Pass::SHaRC>(
 				renderer,
-				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
-				m_GlobalIllumination->GetPass<Pass::LightTLAS>()
+				m_GlobalIllumination->GetPass<Pass::SceneTLAS>()
 			)
-			});
+		});
 
 		m_GlobalIllumination->AddNode({
 			true,
@@ -98,23 +107,16 @@ RenderNode* Scene::GetPathTracing()
 			true,
 			"RaytracingCommon",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
-			});
-
-		m_PathTracing->AddNode({
-			true,
-			"LightTLAS",
-			eastl::make_unique<Pass::LightTLAS>(renderer)
-			});
+		});
 
 		m_PathTracing->AddNode({
 			true,
 			"SHaRC",
 			eastl::make_unique<Pass::SHaRC>(
 				renderer,
-				m_PathTracing->GetPass<Pass::SceneTLAS>(),
-				m_PathTracing->GetPass<Pass::LightTLAS>()
+				m_PathTracing->GetPass<Pass::SceneTLAS>()
 			)
-			});
+		});
 
 		m_PathTracing->AddNode({
 			true,
@@ -122,10 +124,9 @@ RenderNode* Scene::GetPathTracing()
 			eastl::make_unique<Pass::PathTracing>(
 				renderer,
 				m_PathTracing->GetPass<Pass::SceneTLAS>(),
-				m_PathTracing->GetPass<Pass::LightTLAS>(),
 				m_PathTracing->GetPass<Pass::SHaRC>()
 			)
-			});
+		});
 	}
 
 	return m_PathTracing.get();
@@ -219,11 +220,11 @@ void Scene::Update(nvrhi::ICommandList* commandList)
 	// Update camera data buffer
 	commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
 
-	if (m_DirtyFeatureData)
-	{
+	/*if (m_DirtyFeatureData)
+	{*/
 		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
-		m_DirtyFeatureData = false;
-	}
+		/*m_DirtyFeatureData = false;
+	}*/
 }
 
 void Scene::ClearDirtyStates()
@@ -260,7 +261,7 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 	if (Util::IsPlayer(refr)) {
 		if (auto* player = reinterpret_cast<RE::PlayerCharacter*>(refr)) {
 			// First Person
-			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), pNiAVObject);
+			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), node);
 
 			// Third Person
 			//rt.CreateActorModel(player, name, player->Get3D(false));
@@ -269,7 +270,7 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 	}
 
 	if (auto* actor = refr->As<RE::Actor>()) {
-		//rt.CreateActorModel(actor, actor->GetName(), pNiAVObject);
+		GetSceneGraph()->CreateActorModel(actor, actor->GetName(), node);
 	}
 }
 

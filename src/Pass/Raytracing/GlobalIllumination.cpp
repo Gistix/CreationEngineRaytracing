@@ -14,6 +14,8 @@ namespace Pass::Raytracing
 
 		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, false);
 
+		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
 		CreateBindingLayout();
 		CreatePipeline();
 	}
@@ -39,6 +41,7 @@ namespace Pass::Raytracing
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
 		globalBindingLayoutDesc.bindings = {
+			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -54,7 +57,6 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(9),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
-			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
 			nvrhi::BindingLayoutItem::Texture_UAV(3)
@@ -78,9 +80,9 @@ namespace Pass::Raytracing
 		auto device = GetRenderer()->GetDevice();
 
 		// Compile Libraries
-		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/RaytracedGI/RayGeneration.hlsl", defines);
-		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/RaytracedGI/Miss.hlsl", defines);
-		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/RaytracedGI/ClosestHit.hlsl", defines);
+		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines);
+		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/Miss.hlsl", defines);
+		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/ClosestHit.hlsl", defines);
 		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/PathTracing/AnyHit.hlsl", defines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
@@ -174,11 +176,12 @@ namespace Pass::Raytracing
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
+			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()),
-			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS()),
+			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetInstanceBuffer()),
@@ -189,7 +192,6 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->gnmao),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(9, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetHashEntriesBuffer()),
-			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(3, rrInput->specularHitDistance)

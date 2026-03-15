@@ -43,8 +43,8 @@ class Renderer
 	nvrhi::DeviceHandle m_NVRHIDevice;
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
-	nvrhi::CommandListHandle m_ComputeCommandList = nullptr;
-	nvrhi::CommandListHandle m_CopyCommandList = nullptr;
+	//nvrhi::CommandListHandle m_ComputeCommandList = nullptr;
+	//nvrhi::CommandListHandle m_CopyCommandList = nullptr;
 
 	uint64_t m_LastSubmittedInstance = 0;
 
@@ -78,8 +78,6 @@ class Renderer
 #endif
 
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
-
-	spdlog::level::level_enum logLevel = spdlog::level::info;
 
 	void InitGBufferOutput();
 	void InitRR();
@@ -137,26 +135,18 @@ public:
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
 
-	nvrhi::ICommandList* GetComputeCommandList() {
-		if (!m_ComputeCommandList)
-			m_ComputeCommandList = GetDevice()->createCommandList(
-				nvrhi::CommandListParameters()
-				.setQueueType(nvrhi::CommandQueue::Compute)
-				.setEnableImmediateExecution(false) // Enables usage in other threads
-			);
-
-		return m_ComputeCommandList;
+	nvrhi::CommandListHandle GetComputeCommandList() const {
+		return GetDevice()->createCommandList(
+			nvrhi::CommandListParameters()
+			.setQueueType(nvrhi::CommandQueue::Compute)
+		);
 	}
 
-	nvrhi::ICommandList* GetCopyCommandList() {
-		if (!m_CopyCommandList)
-			m_CopyCommandList = GetDevice()->createCommandList(
-				nvrhi::CommandListParameters()
-				.setQueueType(nvrhi::CommandQueue::Copy)
-				.setEnableImmediateExecution(false) // Enables usage in other threads
-			);
-
-		return m_CopyCommandList;
+	nvrhi::CommandListHandle GetCopyCommandList() const {
+		return GetDevice()->createCommandList(
+			nvrhi::CommandListParameters()
+			.setQueueType(nvrhi::CommandQueue::Copy)
+		);
 	}
 	//nvrhi::ICommandList* GetCommandList() const { return m_CommandList; }
 	
@@ -225,18 +215,9 @@ public:
 
 	void SetDiffuseAlbedo(ID3D12Resource* diffuseAlbedo);
 
-	void Load();
-
-	void PostPostLoad();
-
-	void DataLoaded();
-
 	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
 
 	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState);
-
-	void SetLogLevel(spdlog::level::level_enum a_level = spdlog::level::info);
-	spdlog::level::level_enum GetLogLevel();
 
 	void Initialize(RendererParams parameters);
 

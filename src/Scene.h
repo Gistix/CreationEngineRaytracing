@@ -14,6 +14,8 @@
 
 struct Scene
 {
+	std::shared_mutex m_SceneMutex;
+
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
 	std::recursive_mutex shareTextureMutex;
@@ -35,7 +37,18 @@ struct Scene
 
 	Settings m_Settings;
 
+	spdlog::level::level_enum logLevel = spdlog::level::info;
+
 	Scene();
+
+	void Load();
+
+	void PostPostLoad();
+
+	void DataLoaded();
+
+	void SetLogLevel(spdlog::level::level_enum a_level = spdlog::level::info);
+	spdlog::level::level_enum GetLogLevel();
 
 	static Scene* GetSingleton()
 	{

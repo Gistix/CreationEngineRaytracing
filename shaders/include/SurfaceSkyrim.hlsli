@@ -8,6 +8,8 @@
 
 #include "include/Utils/VanillaToPBR.hlsli"
 
+#include "interop/Material.hlsli"
+
 #define LIGHTINGSETTINGS Raytracing
 #define HAIRSETTINGS Features.HairSpecular
 

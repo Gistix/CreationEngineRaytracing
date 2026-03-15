@@ -1,10 +1,42 @@
 #pragma once
 
+#include "Scene.h"
+
 namespace Hooks
 {
 	struct TES_AttachModel
 	{
 		static void thunk(RE::TES* a1, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct Release3DRelatedData
+	{
+		static void thunk(RE::TESObjectREFR* oThis);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct Actor_Set3D
+	{
+		static void thunk(RE::Actor* oThis, RE::NiAVObject* a_object, bool a_queue3DTasks = true);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct NiSourceTexture_Destructor
+	{
+		static void thunk(RE::NiSourceTexture* oThis);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	template <typename T>
+	struct Destructor
+	{
+		static void thunk(T* oThis)
+		{
+			Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis);
+
+			func(oThis);
+		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

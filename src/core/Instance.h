@@ -38,6 +38,10 @@ struct Instance
 
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : formID(formID), node(node), model(model) { }
 	
+	void SetDetached(bool detach);
+
+	bool IsDetached() const;
+
 	nvrhi::rt::InstanceDesc GetInstanceDesc() const
 	{
 		nvrhi::rt::InstanceDesc instanceDesc;
@@ -45,7 +49,7 @@ struct Instance
 		assert(instanceDesc.bottomLevelAS);
 		instanceDesc.instanceMask = 1;
 		instanceDesc.instanceID = 0;
-		memcpy(instanceDesc.transform, m_Transform.m, sizeof(instanceDesc.transform));
+		memcpy(instanceDesc.transform, m_Transform.f, sizeof(float[12]));
 		return instanceDesc;
 	}
 
@@ -56,4 +60,7 @@ struct Instance
 	auto GetDirtyFlags() const { return m_DirtyFlags; };
 
 	void ClearDirtyState() { m_DirtyFlags = DirtyFlags::None; };
+
+private:
+	bool m_Detached = false;
 };

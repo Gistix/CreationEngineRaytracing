@@ -103,6 +103,8 @@ struct Material
 
 	eastl::array<Texture, 20> Textures;
 
+	bool missingPBREmissiveColor;
+
 	ShaderFlags GetShaderFlags() const
 	{
 		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
@@ -208,8 +210,8 @@ struct Material
 	{
 		return MaterialData(
 			TexCoordOffsetScale[0], TexCoordOffsetScale[1],
-			alphaThreshold,
 			Colors[0], Colors[1], Colors[2],
+			alphaThreshold,
 			Scalars[0], Scalars[1], Scalars[2],
 			GetTextureDescriptorIndex(0),
 			GetTextureDescriptorIndex(1),

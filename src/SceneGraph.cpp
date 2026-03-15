@@ -11,6 +11,8 @@
 
 void SceneGraph::Initialize()
 {
+	m_CurrentAccumulator = { REL::RelocationID(527650, 414600) };
+
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	// Mesh Data Buffer
@@ -20,7 +22,7 @@ void SceneGraph::Initialize()
 	m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 
 	// Mesh Data Buffer
-	m_LightBuffer = Util::CreateStructuredBuffer<LightData>(device, Constants::NUM_LIGHTS_MAX, "Light Buffer");
+	m_LightBuffer = Util::CreateStructuredBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
 
 	// Triangle bindless descriptor table
 	{
@@ -64,22 +66,25 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 {
+	//auto& mainSSNRuntimeData = RE::DrawWorld::GetSingleton().mainShadowSceneNode->GetRuntimeData();
+	auto& mainSSNRuntimeData = RE::BSShaderManager::State::GetSingleton().shadowSceneNode[0]->GetRuntimeData();
+
+	//auto accumulator = *m_CurrentAccumulator.get();
+	//auto& mainSSNRuntimeData = accumulator->GetRuntimeData().activeShadowSceneNode->GetRuntimeData();
+
 	// Update Light Vector
 	{
-		auto& mainSSNRuntimeData = RE::DrawWorld::GetSingleton().mainShadowSceneNode->GetRuntimeData();
-
 		m_TempActiveLights.clear();
 		m_TempActiveLights.reserve(mainSSNRuntimeData.activeLights.size() + mainSSNRuntimeData.activeShadowLights.size());
 
 		auto collectLights = [&](const auto& lights) {
-			for (auto& activeLight : lights)
+			for (const auto& activeLight : lights)
 			{
 				auto* ptr = activeLight.get();
-
 				m_TempActiveLights.insert(ptr);
 				m_Lights.try_emplace(ptr, ptr);
 			}
-			};
+		};
 
 		collectLights(mainSSNRuntimeData.activeLights);
 		collectLights(mainSSNRuntimeData.activeShadowLights);
@@ -95,11 +100,12 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 	const auto& lightSettings = Scene::GetSingleton()->m_Settings.LightSettings;
 
-	int numLights = 0;
+	uint numLights = 0;
 
 	for (auto& [bsLight, light] : m_Lights)
 	{
 		light.m_Active = true;
+		light.m_Index = static_cast<uint8_t>(numLights);
 
 		auto niLight = bsLight->light.get();
 
@@ -129,17 +135,16 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Radius = runtimeData.radius.x;
 
-			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) < 1e-4 || lightData.Radius < 1e-4)
+			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) <= 1e-4 || lightData.Radius <= 1e-4)
 				light.m_Active = false;
+
+			// Clear instances
+			light.m_Instances.clear();
 
 			if (light.m_Active)
 				light.UpdateInstances();
-			else
-				light.m_Instances.clear();
 
-			auto worldPos = niLight->world.translate;
-
-			lightData.Vector = Util::Math::Float3(worldPos);
+			lightData.Vector = Util::Math::Float3(niLight->world.translate);
 
 			lightData.InvRadius = 1.0f / runtimeData.radius.x;
 
@@ -157,8 +162,13 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			if (flags & LightLimitFix::LightFlags::Linear)
 				lightData.Flags |= LightFlags::LinearLight;
+		}
 
-			numLights++;
+		numLights++;
+
+		if (numLights >= Constants::LIGHTS_MAX) {
+			logger::error("SceneGraph::UpdateLights - Number of lights {} exceeds the maximum of {}", numLights, Constants::LIGHTS_MAX);
+			break;
 		}
 	}
 
@@ -177,8 +187,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	uint32_t meshIndex = 0;
 	uint32_t instanceIndex = 0;
 
-	eastl::vector<uint8_t> lights;
-	lights.reserve(Constants::NUM_LIGHTS_MAX);
+	eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
 	for (auto& instance : m_Instances)
 	{
@@ -196,23 +205,25 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (meshIndex == firstMeshIndex)
 			continue;
 
-		lights.clear();
-
-		uint8_t lightIndex = 0;
+		uint8_t numLights = 0u;
 
 		for (auto& [bsLight, light] : m_Lights)
 		{
 			if (light.m_Instances.find(instance.get()) == light.m_Instances.end())
 				continue;
 
-			lights.push_back(lightIndex);
+			lights[numLights] = light.m_Index;
+			numLights++;
 
-			lightIndex++;
+			if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
+				logger::error("SceneGraph::Update - Number of lights per instance of {} exceeds the maximum of {}", numLights, Constants::INSTANCE_LIGHTS_MAX);
+				break;
+			}
 		}
 
 		m_InstanceData[instanceIndex] = {
 			instance->m_Transform,
-			InstanceLightData(lights),
+			InstanceLightData(lights.data(), numLights),
 			firstMeshIndex
 		};
 
@@ -320,19 +331,114 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	}
 }
 
-eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Texture2D* d3d11Texture)
+void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 {
-	if (!d3d11Texture)
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	logger::debug("SceneGraph::ReleaseTexture - 0x{:08X}", reinterpret_cast<uintptr_t>(texture));
+
+	m_Textures.erase(texture);
+}
+
+void SceneGraph::RemoveInstance(RE::NiAVObject* node)
+{
+	auto instanceNodeIt = m_InstanceNodes.find(node);
+
+	if (instanceNodeIt == m_InstanceNodes.end())
+		return;
+
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	auto& instance = instanceNodeIt->second;
+
+	instance->model->Release();
+
+	m_InstanceNodes.erase(instanceNodeIt);
+
+	m_InstancesFormIDs.erase(instance->formID);
+
+	// Removes the original instance, all pointers past this point are invalid
+	auto instIt = eastl::find_if(
+		m_Instances.begin(),
+		m_Instances.end(),
+		[&](auto& x) { return x.get() == instance; });
+
+	if (instIt != m_Instances.end())
+		m_Instances.erase(instIt);
+}
+
+void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
+{
+	auto instanceFormIDsIt = m_InstancesFormIDs.find(form->GetFormID());
+
+	// No instance to remove
+	if (instanceFormIDsIt == m_InstancesFormIDs.end())
+		return;
+
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	//auto renderer = Renderer::GetSingleton();
+
+	// A single form can hold multiple model instances
+	for (auto& instance : instanceFormIDsIt->second) {
+		m_InstanceNodes.erase(instance->node);
+
+		auto refCount = instance->model->Release();
+
+		if (refCount <= 0 && releaseModel) {
+			logger::info("SceneGraph::RemoveInstance - {}", instance->model->m_Name);
+			m_Models.erase(instance->model->m_Name);
+
+			/*auto modelIt = m_Models.find(instance->model->m_Name);
+
+			if (modelIt != m_Models.end()) {
+				// Only necessary due to 'compactBottomLevelAccelStructs', this is freed after the frame completes
+				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
+
+				m_Models.erase(modelIt);
+			}*/
+		}
+
+		// Removes the original instance, all pointers past this point are invalid
+		auto instIt = eastl::find_if(
+			m_Instances.begin(),
+			m_Instances.end(),
+			[&](auto& x) { return x.get() == instance; });
+
+		if (instIt != m_Instances.end())
+			m_Instances.erase(instIt);
+	}
+
+	m_InstancesFormIDs.erase(instanceFormIDsIt);
+}
+
+void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
+{
+	auto instanceFormIDsIt = m_InstancesFormIDs.find(form->GetFormID());
+
+	if (instanceFormIDsIt == m_InstancesFormIDs.end())
+		return;
+
+	for (auto& instance : instanceFormIDsIt->second) {
+		instance->SetDetached(detached);
+	}
+}
+
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource)
+{
+	if (!d3d11Resource)
 		return nullptr;
 
-	if (auto refIt = textures.find(d3d11Texture); refIt != textures.end())
+	auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+
+	if (auto refIt = m_Textures.find(d3d11Texture); refIt != m_Textures.end())
 		return refIt->second->descriptorHandle;
 
 	winrt::com_ptr<IDXGIResource> dxgiResource;
-	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
 
 	if (FAILED(hr)) {
-		logger::error("[RT] GetTextureRegister - Failed to query interface.");
+		logger::error("SceneGraph::GetTextureRegister - Failed to query interface.");
 		return nullptr;
 	}
 
@@ -343,21 +449,17 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Textu
 		D3D11_TEXTURE2D_DESC desc;
 		d3d11Texture->GetDesc(&desc);
 
-		logger::debug("[RT] GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
+		logger::debug("SceneGraph::GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
 		return nullptr;
 	}
 
 	auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
 
-	auto device = Renderer::GetSingleton()->GetDevice();
-
 	winrt::com_ptr<ID3D12Resource> d3d12Texture;
-	hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Texture.put()));
-
-	CloseHandle(sharedHandle);
+	hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Texture));
 
 	if (FAILED(hr)) {
-		logger::error("[RT] GetTextureRegister - Failed to open shared handle.");
+		logger::error("SceneGraph::GetTextureRegister - Failed to open shared handle.");
 		return nullptr;
 	}
 
@@ -366,38 +468,33 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Textu
 		return nullptr;
 	}
 
+
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Texture->GetDesc();
 
 	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
 
 	if (formatIt == Renderer::GetFormatMapping().end()) {
-		logger::error("[RT] GetTextureRegister - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
+		logger::error("SceneGraph::GetTextureRegister - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
 		return nullptr;
 	}
 
-	auto textureDesc = nvrhi::TextureDesc()
+	auto& textureDesc = nvrhi::TextureDesc()
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
 		.setFormat(formatIt->second)
 		.setInitialState(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Shared Texture [?]");
 
-	auto textureHandle = device->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, d3d12Texture.get(), textureDesc);
+	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Texture.get()), textureDesc);
 
-	auto [it, emplaced] = textures.try_emplace(d3d11Texture, nullptr);
+	auto [it, emplaced] = m_Textures.try_emplace(d3d11Texture, nullptr);
 
 	if (emplaced) {
 		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
-
-		auto& descriptorHandle = it->second->descriptorHandle;
-
-		//textureHandle->getDesc().debugName = std::format("Shared Texture [{}]", descriptorHandle->Get());
-
-		return descriptorHandle;
+		return it->second->descriptorHandle;
 	}
-	else {
-		logger::error("[RT] GetTextureRegister - TextureReference emplace failed.");
-	}
+	else
+		logger::error("SceneGraph::GetTextureRegister - TextureReference emplace failed.");
 
 	return nullptr;
 }
@@ -421,6 +518,8 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	}
 
 	auto formID = form->GetFormID();
+
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	// We only need one buffer per model
 	if (m_Models.find(path) != m_Models.end()) {
@@ -607,14 +706,14 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			if (modelPtr->ShouldQueueMSNConversion())
 				m_MSNConvertionQueue.emplace_back(modelName);
 
+			logger::debug("SceneGraph::CreateModelInternal - {}", modelName);
+
 			// Copy Command
-			auto* copyCommandList = Renderer::GetSingleton()->GetCopyCommandList();
+			auto copyCommandList = Renderer::GetSingleton()->GetCopyCommandList();
 			copyCommandList->open();
-			copyCommandList->setEnableAutomaticBarriers(false);
 
 			modelPtr->CreateBuffers(this, copyCommandList);
 
-			copyCommandList->setEnableAutomaticBarriers(true);
 			copyCommandList->close();
 
 			auto device = Renderer::GetSingleton()->GetDevice();
@@ -622,18 +721,20 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			auto copySubmittedInstance = device->executeCommandList(copyCommandList, nvrhi::CommandQueue::Copy);
 
 			// Compute Command
-			auto* computeCommandList = Renderer::GetSingleton()->GetComputeCommandList();
+			auto computeCommandList = Renderer::GetSingleton()->GetComputeCommandList();
 			computeCommandList->open();
-			computeCommandList->setEnableAutomaticBarriers(false);
 
 			modelPtr->BuildBLAS(computeCommandList);
 
-			computeCommandList->setEnableAutomaticBarriers(true);
+			//computeCommandList->compactBottomLevelAccelStructs();
+
 			computeCommandList->close();
 
 			device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, copySubmittedInstance);
 
 			device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
+
+			device->waitForIdle();
 
 			AddInstance(formID, pRoot, modelName);
 
@@ -650,20 +751,25 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path)
 {
-	logger::debug("[RT] AddInstance [0x{:08X}] - {}, Path: {}", formID, node->name, path);
+	logger::debug("SceneGraph::AddInstance [0x{:08X}] - {}, Path: {}", formID, node->name, path);
 
 	auto instanceNodeIt = m_InstanceNodes.find(node);
-	if (instanceNodeIt != m_InstanceNodes.end())
+	if (instanceNodeIt != m_InstanceNodes.end()) {
+		logger::warn("SceneGraph::AddInstance - Instance already exists: {}", path);
 		return;
+	}
 
 	auto modelIt = m_Models.find(path);
-	if (modelIt == m_Models.end())
+	if (modelIt == m_Models.end()) {
+		logger::warn("SceneGraph::AddInstance - Model already exists: {}", path);
 		return;
+	}
 
 	auto [instanceIt, emplaced] = m_InstanceNodes.try_emplace(node, nullptr);
-	if (!emplaced)
+	if (!emplaced) {
+		logger::warn("SceneGraph::AddInstance - Emplace failed: {}", path);
 		return;
-
+	}
 	auto instance = eastl::make_unique<Instance>(formID, node, modelIt->second.get());
 
 	if (auto nodesIt = m_InstancesFormIDs.find(formID); nodesIt != m_InstancesFormIDs.end()) {
@@ -678,4 +784,13 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 	m_Instances.emplace_back(eastl::move(instance));
 
 	modelIt->second->AddRef();
+}
+
+void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
+{
+	while (!m_ReleasedData.empty() && m_ReleasedData.front().frameIndex <= frameIndex) {
+		auto& front = m_ReleasedData.front();
+		logger::info("SceneGraph::RunGarbageCollection - {}, Is Compacted: {}", front.model->m_Name, front.model->blas->isCompacted());
+		m_ReleasedData.pop_front();
+	}
 }

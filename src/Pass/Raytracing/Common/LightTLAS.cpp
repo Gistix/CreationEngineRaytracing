@@ -10,7 +10,7 @@ namespace Pass
 		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
 		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
 		bindlessLayoutDesc.firstSlot = 0;
-		bindlessLayoutDesc.maxCapacity = Constants::NUM_LIGHTS_MAX;
+		bindlessLayoutDesc.maxCapacity = Constants::LIGHTS_MAX;
 		bindlessLayoutDesc.registerSpaces = {
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(4).setSize(UINT_MAX)
 		};
@@ -20,9 +20,9 @@ namespace Pass
 		m_BindlessLayout = device->createBindlessLayout(bindlessLayoutDesc);
 		m_DescriptorTable = device->createDescriptorTable(m_BindlessLayout);
 
-		if (m_DescriptorTable->getCapacity() < Constants::NUM_LIGHTS_MAX)
+		if (m_DescriptorTable->getCapacity() < Constants::LIGHTS_MAX)
 		{
-			device->resizeDescriptorTable(m_DescriptorTable, Constants::NUM_LIGHTS_MAX);
+			device->resizeDescriptorTable(m_DescriptorTable, Constants::LIGHTS_MAX);
 		}
 	}
 

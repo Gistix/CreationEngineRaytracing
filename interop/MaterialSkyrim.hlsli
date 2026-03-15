@@ -79,12 +79,12 @@ INTEROP_DATA_STRUCT(Material, 4)
 	half4 TexCoordOffsetScale0;
 	half4 TexCoordOffsetScale1;
 
-	half AlphaThreshold;	
-	
 	half4 Color0;
 	half4 Color1;
 	half4 Color2;
 
+	half AlphaThreshold;
+	
 	half Scalar0;
 	half Scalar1;
 	half Scalar2;

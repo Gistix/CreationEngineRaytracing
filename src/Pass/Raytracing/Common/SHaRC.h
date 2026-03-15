@@ -44,11 +44,10 @@ namespace Pass
 		nvrhi::BufferHandle m_ResolveBuffer;
 
 		SceneTLAS* m_SceneTLAS;
-		LightTLAS* m_LightTLAS;
 
 		bool m_DirtyBindings = true;
 	public:
-		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS, LightTLAS* lightTLAS);
+		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS);
 
 		auto GetSHaRCConstantBuffer() { return m_SHaRCBuffer; }
 		auto GetHashEntriesBuffer() { return m_HashEntriesBuffer; }

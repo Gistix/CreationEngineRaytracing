@@ -12,6 +12,8 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
 		CreatePipeline();
 	}
 
@@ -204,7 +206,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
-			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS()),
+			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),

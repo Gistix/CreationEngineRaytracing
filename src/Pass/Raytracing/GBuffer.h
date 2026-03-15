@@ -12,9 +12,11 @@
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
 
+#include "Events/ITLASUpdateListener.h"
+
 namespace Pass::Raytracing
 {
-	class GBuffer : public RenderPass
+	class GBuffer : public RenderPass, ITLASUpdateListener
 	{
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::rt::PipelineHandle m_RayPipeline;
@@ -35,6 +37,11 @@ namespace Pass::Raytracing
 
 	public:
 		GBuffer(Renderer* renderer, SceneTLAS* m_SceneTLAS);
+
+		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
+		{
+			m_DirtyBindings = true;
+		}
 
 		virtual void CreatePipeline() override;
 

@@ -6,8 +6,8 @@
 
 namespace Pass
 {
-	SHaRC::SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS, LightTLAS* lightTLAS)
-		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_LightTLAS(lightTLAS)
+	SHaRC::SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS)
+		: RenderPass(renderer), m_SceneTLAS(sceneTLAS)
 	{
 		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
 			nvrhi::SamplerDesc()
@@ -37,8 +37,9 @@ namespace Pass
 		auto device = GetRenderer()->GetDevice();
 
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
-		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
+		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
 		globalBindingLayoutDesc.bindings = {
+			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -49,7 +50,6 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
-			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
@@ -85,8 +85,7 @@ namespace Pass
 			.addBindingLayout(m_UpdatePass.m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-			.addBindingLayout(m_LightTLAS->GetBindlessLayout());
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
 
 		m_UpdatePass.m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 	}
@@ -150,17 +149,17 @@ namespace Pass
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
+			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRCBuffer),
-			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS()),
+			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, m_ResolveBuffer),
-			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)
@@ -197,8 +196,7 @@ namespace Pass
 				m_UpdatePass.m_BindingSet,
 				sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-				m_LightTLAS->GetLightDescriptorTable()
+				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
 			};
 			commandList->setComputeState(state);
 

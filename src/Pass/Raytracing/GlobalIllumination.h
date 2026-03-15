@@ -11,9 +11,11 @@
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
 
+#include "Events/ITLASUpdateListener.h"
+
 namespace Pass::Raytracing
 {
-	class GlobalIllumination : public RenderPass
+	class GlobalIllumination : public RenderPass, ITLASUpdateListener
 	{
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::rt::PipelineHandle m_RayPipeline;
@@ -35,6 +37,11 @@ namespace Pass::Raytracing
 
 	public:
 		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc);
+
+		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
+		{
+			m_DirtyBindings = true;
+		}
 
 		virtual void CreatePipeline() override;
 

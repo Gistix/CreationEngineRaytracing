@@ -69,7 +69,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* message)
 	case SKSE::MessagingInterface::kPostPostLoad:
 	{
 		if (errors.empty()) {
-			Renderer::GetSingleton()->PostPostLoad();
+			Scene::GetSingleton()->PostPostLoad();
 		}
 
 		break;
@@ -82,7 +82,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* message)
 		}
 
 		if (errors.empty()) {
-			Renderer::GetSingleton()->DataLoaded();
+			Scene::GetSingleton()->DataLoaded();
 		}
 
 		break;
@@ -96,11 +96,10 @@ bool Load()
 	messaging->RegisterListener("SKSE", MessageHandler);
 
 	// Creates scene and renderer
-	//Scene::GetSingleton();
-	auto* renderer = Renderer::GetSingleton();
+	auto* scene = Scene::GetSingleton();
 
 	auto log = spdlog::default_logger();
-	log->set_level(renderer->GetLogLevel());
+	log->set_level(scene->GetLogLevel());
 
 	const std::array requiredDLLs = {
 		L"Data/SKSE/Plugins/EngineFixes.dll",
@@ -117,7 +116,7 @@ bool Load()
 	}
 
 	if (errors.empty()) {
-		renderer->Load();
+		scene->Load();
 	}
 
 	return true;

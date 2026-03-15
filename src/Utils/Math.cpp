@@ -28,6 +28,11 @@ namespace Util
 			return float3(niPoint.x, niPoint.y, niPoint.z);
 		}
 
+		float3 Float3(RE::Color niColor)
+		{
+			return float3(niColor.red, niColor.green, niColor.blue);
+		}
+
 		float3 Normalize(float3 vector)
 		{
 			vector.Normalize();
