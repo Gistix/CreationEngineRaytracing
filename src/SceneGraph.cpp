@@ -386,7 +386,7 @@ void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
 		auto refCount = instance->model->Release();
 
 		if (refCount <= 0 && releaseModel) {
-			logger::info("SceneGraph::RemoveInstance - {}", instance->model->m_Name);
+			logger::trace("SceneGraph::RemoveInstance - {}", instance->model->m_Name);
 			m_Models.erase(instance->model->m_Name);
 
 			/*auto modelIt = m_Models.find(instance->model->m_Name);
