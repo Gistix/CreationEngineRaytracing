@@ -23,20 +23,20 @@ float3 EffectToLinear(float3 color)
 
 float3 LightToLinear(float3 color)
 {
-    return pow(abs(color), LLSETTINGS.lightGamma);
+    return pow(abs(color), (LLON ? LLSETTINGS.lightGamma : 2.2f));
 }
 
 float3 PointLightToLinear(float3 color, bool isLinear)
 {
-    float mult = LLON ? LLSETTINGS.pointLightMult : POINT_LIGHT_MULTIPLIER;    
-    float3 finalColor = (isLinear && LLON) ? color : LightToLinear(color);    
+    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : POINT_LIGHT_MULTIPLIER;   
+    float3 finalColor = (isLinear && LLON) ? color : LightToLinear(color);
     return finalColor * mult;
 }
 
 float3 DirLightToLinear(float3 color)
 {
-    float mult = LLON ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : DIRECTIONAL_LIGHT_MULTIPLIER;   
-    float3 finalColor = (LLSETTINGS.isDirLightLinear && LLON) ? color : LightToLinear(color);  
+    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : DIRECTIONAL_LIGHT_MULTIPLIER;
+    float3 finalColor = (LLSETTINGS.isDirLightLinear && LLON) ? color : LightToLinear(color);
     return finalColor * mult;
 }
 
