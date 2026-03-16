@@ -17,9 +17,11 @@ struct Model
 
 	nvrhi::rt::AccelStructHandle blas;
 
-	Model(eastl::string name, RE::NiAVObject* node, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
+
+	void BuildBLAS(nvrhi::ICommandList* commandList);
 
 	static std::string KeySuffix(RE::NiAVObject* root)
 	{
@@ -55,8 +57,6 @@ struct Model
 	}*/
 
 	void Update();
-
-	void BuildBLAS(nvrhi::ICommandList* commandList);
 
 	bool UpdateBLAS();
 
@@ -102,6 +102,11 @@ struct Model
 	{ 
 		m_DirtyFlags = DirtyFlags::None;
 	}
+
+	float3 GetExternalEmittance()
+	{
+		return m_EmittanceColor ? *m_EmittanceColor : float3(1.0f, 1.0f, 1.0f);
+	}
 private:
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 	stl::enumeration<Mesh::Flags, uint8_t> meshFlags = Mesh::Flags::None;
@@ -109,4 +114,7 @@ private:
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	eastl::atomic<int> refCount{ 0 };
+
+	// XEMI - This is used to control window emission in day/night tod
+	float3* m_EmittanceColor = nullptr;
 };

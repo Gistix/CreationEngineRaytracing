@@ -43,22 +43,6 @@ namespace Pass
 		m_RaytracingData->Effect = settings.LightingSettings.Effect;
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
 
-		auto tes = RE::TES::GetSingleton();
-		auto worldSpace = tes->GetRuntimeData2().worldSpace;
-
-		if (worldSpace != nullptr) {
-			auto tesDataHandler = RE::TESDataHandler::GetSingleton();
-			for (auto& region : *tesDataHandler->regionList)
-			{
-				if (region->worldSpace == worldSpace) {
-					m_RaytracingData->EmittanceColor = Util::Math::Float3(region->emittanceColor);
-					break;
-				}
-			}
-		}
-		else
-			m_RaytracingData->EmittanceColor = float3(1.0f, 1.0f, 1.0f);
-
 		m_RaytracingData->Directional = settings.LightSettings.Directional;
 		m_RaytracingData->Point = settings.LightSettings.Point;
 

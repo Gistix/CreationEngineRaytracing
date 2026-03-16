@@ -206,11 +206,19 @@ struct Material
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
 
-	MaterialData GetData() const
+	MaterialData GetData(float3 externalEmittance) const
 	{
+		half4 emissive = Colors[1];
+
+		if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kExternalEmittance)) {
+			emissive.x = externalEmittance.x;
+			emissive.y = externalEmittance.y;
+			emissive.z = externalEmittance.z;
+		}
+
 		return MaterialData(
 			TexCoordOffsetScale[0], TexCoordOffsetScale[1],
-			Colors[0], Colors[1], Colors[2],
+			Colors[0], emissive, Colors[2],
 			alphaThreshold,
 			Scalars[0], Scalars[1], Scalars[2],
 			GetTextureDescriptorIndex(0),

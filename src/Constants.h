@@ -2,11 +2,16 @@
 
 namespace Constants
 {
+	namespace Material
+	{
+		static constexpr uint32_t EMISSIVE_COLOR = 1;
+
+		static constexpr uint32_t NORMALMAP_TEXTURE = 1;
+	}
+
 	static constexpr uint32_t MAX_CB_VERSIONS = 16;
 
 	static constexpr uint32_t PLAYER_REFR_FORMID = 0x00000014;
-
-	static constexpr uint32_t MATERIAL_NORMALMAP_ID = 1;
 
 	static constexpr uint32_t LIGHTS_MAX = 255;
 	static constexpr uint32_t INSTANCE_LIGHTS_MAX = 16;

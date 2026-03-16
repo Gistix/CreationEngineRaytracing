@@ -114,7 +114,6 @@ namespace Pass::Raster
 			m_RaytracingData->Emissive = settings.LightingSettings.Emissive;
 			m_RaytracingData->Effect = settings.LightingSettings.Effect;
 			m_RaytracingData->Sky = settings.LightingSettings.Sky;
-			m_RaytracingData->EmittanceColor = float3(1.0f, 1.0f, 1.0f);
 
 			commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 		}

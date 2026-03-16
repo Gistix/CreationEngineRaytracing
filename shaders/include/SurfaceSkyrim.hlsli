@@ -58,7 +58,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         }
 
         surface.Albedo = albedo.rgb * vertexColor.rgb;
-        surface.Emissive = emissive * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * LIGHTINGSETTINGS.Emissive * EmitColorMult();
+        surface.Emissive = emissive * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         surface.Roughness = saturate(rmaos.x * material.RoughnessScale());
         surface.Metallic = saturate(rmaos.y);
         surface.AO = rmaos.z;
@@ -162,11 +162,11 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             {
                 windowAlpha = glow;
             }
-            surface.Emissive = GlowToLinear(glow) * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * LIGHTINGSETTINGS.Emissive * EmitColorMult();
+            surface.Emissive = GlowToLinear(glow) * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         }
         else
         {
-            surface.Emissive = surface.Albedo * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * LIGHTINGSETTINGS.Emissive * EmitColorMult();
+            surface.Emissive = surface.Albedo * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         }
 
         [branch]
@@ -287,12 +287,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         surface.Roughness = max(surface.Roughness, 0.08f); // prevent delta transmission
         surface.SpecTrans = 1.0f;
     }
-        
-    [branch]
-    if (material.ShaderFlags & ShaderFlags::kExternalEmittance)
-    {
-        surface.Emissive *= LIGHTINGSETTINGS.EmittanceColor;
-    }
+
 #endif
 
 #if defined(DEBUG_NONORMALMAP)

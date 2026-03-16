@@ -1,8 +1,8 @@
-#include "core/Model.h"
+#include "Core/Model.h"
 #include "Scene.h"
 #include "Renderer.h"
 
-Model::Model(eastl::string name, RE::NiAVObject* node, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
+Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
 	m_Name(name), meshes(eastl::move(meshes))
 {
 	for (auto& mesh : this->meshes) {
@@ -23,6 +23,11 @@ Model::Model(eastl::string name, RE::NiAVObject* node, eastl::vector<eastl::uniq
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 	else
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+
+	auto* refr = form->AsReference();
+
+	if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>())
+		m_EmittanceColor = reinterpret_cast<float3*>(&extra->source->As<RE::TESRegion>()->emittanceColor);
 }
 
 void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)

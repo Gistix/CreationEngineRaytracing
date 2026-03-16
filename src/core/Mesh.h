@@ -99,7 +99,7 @@ struct Mesh
 
 	bool IsDirtyState() const;
 
-	MeshData GetData() const;
+	MeshData GetData(float3 externalEmittance) const;
 private:
 	// State is pending until BLASRebuild
 	State pendingState = State::None;

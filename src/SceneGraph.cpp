@@ -195,9 +195,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		uint32_t firstMeshIndex = meshIndex;
 
-		for (auto& mesh : instance->model->meshes)
+		auto* model = instance->model;
+
+		float3 externalEmittance = model->GetExternalEmittance();
+
+		for (auto& mesh : model->meshes)
 		{
-			m_MeshData[meshIndex] = mesh->GetData();
+			m_MeshData[meshIndex] = mesh->GetData(externalEmittance);
 			meshIndex++;
 		}
 
@@ -516,7 +520,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		logger::warn("[RT] CreateModel \"{}\" - Instance/Model for 0x{:08X} already present.", path, reinterpret_cast<uintptr_t>(pRoot));
 		return;
 	}
-
+	
 	auto formID = form->GetFormID();
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
@@ -694,7 +698,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		});
 
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
-		auto model = eastl::make_unique<Model>(path, pRoot, meshes);
+		auto model = eastl::make_unique<Model>(path, pRoot, form, meshes);
 
 		auto& modelName = model->m_Name;
 
