@@ -14,9 +14,11 @@
 
 #include "Types/ShaderDefine.h"
 
+#include "Events/ITLASUpdateListener.h"
+
 namespace Pass
 {
-	class PathTracing : public RenderPass
+	class PathTracing : public RenderPass, ITLASUpdateListener
 	{
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::rt::PipelineHandle m_RayPipeline;
@@ -30,7 +32,7 @@ namespace Pass
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
 		SceneTLAS* m_SceneTLAS;
-		LightTLAS* m_LightTLAS;
+
 		SHaRC* m_SHaRC;
 
 		bool m_DirtyBindings = true;
@@ -46,7 +48,12 @@ namespace Pass
 		eastl::vector<ShaderDefine> m_Defines;
 
 	public:
-		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, LightTLAS* lightTLAS, SHaRC* sharc);
+		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);
+
+		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
+		{
+			m_DirtyBindings = true;
+		}
 
 		virtual void ResolutionChanged(uint2 resolution) override;
 

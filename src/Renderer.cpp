@@ -1,7 +1,6 @@
 #include <PCH.h>
-
-#include "Renderer.h"
 #include "Hooks.h"
+#include "Renderer.h"
 #include "Scene.h"
 
 #include "Pass/GIComposite.h"
@@ -34,6 +33,7 @@ void Renderer::Initialize(RendererParams rendererParams)
 	deviceDesc.pComputeCommandQueue = rendererParams.computeCommandQueue;
 	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
 	deviceDesc.aftermathEnabled = true;
+	deviceDesc.logBufferLifetime = false;
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
 
@@ -286,6 +286,12 @@ void Renderer::SetCopyTarget(ID3D12Resource* target)
 
 void Renderer::ExecutePasses()
 {
+	auto* scene = Scene::GetSingleton();
+
+	scene->m_SceneMutex.lock_shared();
+
+	logger::trace("Renderer::ExecutePasses - Begin");
+
 	auto& stateRuntime = RE::BSGraphics::State::GetSingleton()->GetRuntimeData();
 
 	m_DynamicResolutionRatio = { stateRuntime.dynamicResolutionWidthRatio, stateRuntime.dynamicResolutionHeightRatio };
@@ -298,11 +304,11 @@ void Renderer::ExecutePasses()
 
 	m_CommandList->beginTimerQuery(m_FrameTimer);
 
-	Scene::GetSingleton()->Update(m_CommandList);
+	scene->Update(m_CommandList);
 
 	m_RenderGraph->Execute(m_CommandList);
 
-	Scene::GetSingleton()->ClearDirtyStates();
+	scene->ClearDirtyStates();
 
 	if (m_CopyTargetTexture) 
 	{
@@ -317,6 +323,8 @@ void Renderer::ExecutePasses()
 
 	// Execute it
 	m_LastSubmittedInstance = GetDevice()->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+
+	logger::trace("Renderer::ExecutePasses - End");
 }
 
 void Renderer::WaitExecution()
@@ -338,21 +346,14 @@ void Renderer::PostExecution()
 
 	// Run garbage collection to release resources that are no longer in use
 	GetDevice()->runGarbageCollection();
-}
 
-void Renderer::Load()
-{
+	auto* scene = Scene::GetSingleton();
 
-}
+	scene->GetSceneGraph()->RunGarbageCollection(m_FrameIndex);
 
-void Renderer::PostPostLoad()
-{
-	Hooks::Install();
-}
+	logger::trace("Renderer::ExecutePasses - Post");
 
-void Renderer::DataLoaded()
-{
-
+	scene->m_SceneMutex.unlock_shared();
 }
 
 nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
@@ -395,8 +396,8 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	D3D11_TEXTURE2D_DESC desc;
 	d3d11Texture->GetDesc(&desc);
 
-	IDXGIResource1* dxgiResource;
-	d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+	winrt::com_ptr<IDXGIResource1> dxgiResource;
+	d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
 
 	HANDLE sharedHandle = nullptr;
 
@@ -405,23 +406,10 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	ID3D12Resource* d3d12Resource;
-	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Resource));
+	winrt::com_ptr<ID3D12Resource> d3d12Resource;
+	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
 
 	CloseHandle(sharedHandle);
 
-	return CreateHandleForNativeTexture(d3d12Resource, std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
-}
-
-void Renderer::SetLogLevel(spdlog::level::level_enum a_level)
-{
-	logLevel = a_level;
-	spdlog::set_level(logLevel);
-	spdlog::flush_on(logLevel);
-	logger::info("Log Level set to {} ({})", magic_enum::enum_name(logLevel), magic_enum::enum_integer(logLevel));
-}
-
-spdlog::level::level_enum Renderer::GetLogLevel()
-{
-	return logLevel;
+	return CreateHandleForNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
 }

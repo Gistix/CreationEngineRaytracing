@@ -56,8 +56,6 @@ struct Mesh
 	{
 		nvrhi::BufferHandle vertexBuffer;
 		nvrhi::BufferHandle triangleBuffer;
-		DescriptorHandle vertexBufferDescriptor;
-		DescriptorHandle triangleBufferDescriptor;
 	} buffers;
 
 	nvrhi::rt::GeometryDesc geometryDesc;
@@ -78,7 +76,6 @@ struct Mesh
 	{
 		UpdateDismember(dismemberVisible);
 	}
-
 
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
 
@@ -102,7 +99,7 @@ struct Mesh
 
 	bool IsDirtyState() const;
 
-	MeshData GetData() const;
+	MeshData GetData(float3 externalEmittance) const;
 private:
 	// State is pending until BLASRebuild
 	State pendingState = State::None;

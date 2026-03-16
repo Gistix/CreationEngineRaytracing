@@ -16,7 +16,7 @@ INTEROP_STRUCT(RaytracingData, 16)
     float Effect;
     float Sky;
     float Directional;
-    float3 EmittanceColor;
+    uint3 Pad;
     float Point; 
     INTEROP_DATA_TYPE(Light) DirectionalLight;    
 };

@@ -29,9 +29,13 @@ struct InstanceLightData
 #ifdef __cplusplus
 	InstanceLightData() = default;
 
-	InstanceLightData(const eastl::vector<uint8_t>& ids)
+	InstanceLightData(uint8_t* ids, uint8_t numLights)
 	{
-		StoreIDs(ids);
+		Count = numLights;
+
+		for (uint8_t i = 0; i < numLights; ++i) {
+			SetID(i, ids[i]);
+		}
 	}
 
 	void SetID(uint index, uint val)
@@ -40,17 +44,6 @@ struct InstanceLightData
 		uint offset = GetOffset(index);
 		uint mask = ~(0xFFu << offset);
 		Data[group] = (Data[group] & mask) | ((val & 0xFFu) << offset);
-	}
-
-	void StoreIDs(const eastl::vector<uint8_t>& ids)
-	{
-		uint32_t count = std::min(static_cast<uint32_t>(ids.size()), 16u);
-		Count = count;
-
-		for (uint32_t i = 0; i < count; ++i) {
-			uint32_t id = std::min(static_cast<uint32_t>(ids[i]), 255u);
-			SetID(i, id);
-		}
 	}
 #endif
 };

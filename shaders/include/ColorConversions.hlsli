@@ -2,12 +2,14 @@
 #define COLOR_CONVERSIONS_COMMON_HLSLI
 
 #include "interop/SharedData.hlsli"
+#include "Utils/MathConstants.hlsli"
 
 #define LLSETTINGS Features.LinearLighting
 #define LLON LLSETTINGS.enableLinearLighting
 
 // Light multiplier to match vanilla raster
-#define LIGHT_MULTIPLIER (1.0f)
+#define DIRECTIONAL_LIGHT_MULTIPLIER (K_4PI)
+#define POINT_LIGHT_MULTIPLIER (K_PI)
 
 float3 ColorToLinear(float3 color)
 {
@@ -26,14 +28,14 @@ float3 LightToLinear(float3 color)
 
 float3 PointLightToLinear(float3 color, bool isLinear)
 {
-    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : LIGHT_MULTIPLIER;   
+    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : POINT_LIGHT_MULTIPLIER;   
     float3 finalColor = (isLinear && LLON) ? color : LightToLinear(color);
     return finalColor * mult;
 }
 
 float3 DirLightToLinear(float3 color)
 {
-    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : LIGHT_MULTIPLIER;
+    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : DIRECTIONAL_LIGHT_MULTIPLIER;
     float3 finalColor = (LLSETTINGS.isDirLightLinear && LLON) ? color : LightToLinear(color);
     return finalColor * mult;
 }

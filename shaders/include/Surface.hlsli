@@ -15,6 +15,8 @@ struct Subsurface
 
 struct Surface
 {
+    bool Primary;
+    
     float3 Position;
     float3 GeomNormal;
     float3 GeomTangent;

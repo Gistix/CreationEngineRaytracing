@@ -246,7 +246,7 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 	if (modelSpaceNormalMap)
 		result = sceneGraph->GetMSNormalMapDescriptor(this, niPointer->rendererTexture);
 	else
-		result = sceneGraph->GetTextureDescriptor(reinterpret_cast<ID3D11Texture2D*>(niPointer->rendererTexture->texture));
+		result = sceneGraph->GetTextureDescriptor(niPointer->rendererTexture->texture);
 
 	if (!result)
 		return Texture(defaultDescHandle, nullptr);
@@ -294,6 +294,8 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	RE::BSShaderMaterial::Feature feature = RE::BSShaderMaterial::Feature::kNone;
 	stl::enumeration<PBRShaderFlags, uint32_t> pbrFlags;
 
+	bool missingPBREmissiveColor = false;
+
 	{
 		auto* property = geometryRuntimeData.properties[State::kProperty].get();
 
@@ -324,7 +326,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 					}
 				}
 
-				colors[1] = {
+				colors[Constants::Material::EMISSIVE_COLOR] = {
 					lightingShaderProp->emissiveColor->red,
 					lightingShaderProp->emissiveColor->green,
 					lightingShaderProp->emissiveColor->blue,
@@ -373,9 +375,13 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 						const auto* lightingPBRMaterial = static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
 
 						textures[0] = GetTexture(lightingPBRMaterial->diffuseTexture, grayTexture);
-						textures[Constants::MATERIAL_NORMALMAP_ID] = GetTexture(lightingPBRMaterial->normalTexture, normalTexture);
+						textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingPBRMaterial->normalTexture, normalTexture);
 						textures[2] = GetTexture(lightingPBRMaterial->emissiveTexture, blackTexture);
 						textures[3] = GetTexture(lightingPBRMaterial->rmaosTexture, rmaosTexture);
+
+						// If emissive texture is set but kOwnEmit flag is missing the game has eaten up emissive color *here*
+						// It will however be available during render updates where we will fetch it and set this back to false
+						missingPBREmissiveColor = (textures[2].defaultTexture != nullptr && shaderFlags.none(EShaderPropertyFlag::kOwnEmit));
 
 						scalars[0] = lightingPBRMaterial->GetRoughnessScale();
 						scalars[1] = lightingPBRMaterial->GetSpecularLevel();
@@ -385,7 +391,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 						if (pbrFlags & PBRShaderFlags::Subsurface) {
 							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
 
-							auto sssColor = lightingPBRMaterial->GetSubsurfaceColor();
+							auto& sssColor = lightingPBRMaterial->GetSubsurfaceColor();
 							colors[2] = { sssColor.red, sssColor.green, sssColor.blue, 1.0f };
 							scalars[2] = lightingPBRMaterial->GetSubsurfaceOpacity();
 						}
@@ -405,7 +411,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
 
 							bool isModelSpaceNormalMap = shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals);
-							textures[Constants::MATERIAL_NORMALMAP_ID] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
+							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
 
 							if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 								if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
@@ -434,25 +440,19 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							if (feature == Feature::kGlowMap) {
 								if (const auto* lightingGlowMaterial = skyrim_cast<RE::BSLightingShaderMaterialGlowmap*>(shaderMaterial)) {
 									if (lightingShaderProp->flags.none(EShaderPropertyFlag::kOwnEmit)) {
-										colors[1].x = 1.0f;
-										colors[1].y = 1.0f;
-										colors[1].z = 1.0f;
+										colors[Constants::Material::EMISSIVE_COLOR].x = 1.0f;
+										colors[Constants::Material::EMISSIVE_COLOR].y = 1.0f;
+										colors[Constants::Material::EMISSIVE_COLOR].z = 1.0f;
 									}
 
 									textures[2] = GetTexture(lightingGlowMaterial->glowTexture, blackTexture);
 								}
-							}
-							else if (lightingShaderProp->flags.none(EShaderPropertyFlag::kOwnEmit)) {
-								colors[1].x = 0.0f;
-								colors[1].y = 0.0f;
-								colors[1].z = 0.0f;
 							}
 
 							// Hair
 							if (feature == Feature::kHairTint) {
 								if (const auto* lightingHairTintMaterial = skyrim_cast<RE::BSLightingShaderMaterialHairTint*>(shaderMaterial)) {
 									colors[0].x = lightingHairTintMaterial->tintColor.red;
-
 									colors[0].y = lightingHairTintMaterial->tintColor.green;
 									colors[0].z = lightingHairTintMaterial->tintColor.blue;
 
@@ -500,7 +500,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 				shaderType = RE::BSShader::Type::Effect;
 
 				if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->material)) {
-					colors[1] = {
+					colors[Constants::Material::EMISSIVE_COLOR] = {
 						effectMaterial->baseColor.red,
 						effectMaterial->baseColor.green,
 						effectMaterial->baseColor.blue,
@@ -531,7 +531,8 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		colors,
 		scalars,
 		texCoordOffsetScales,
-		textures);
+		textures,
+		missingPBREmissiveColor);
 }
 
 void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
@@ -540,43 +541,48 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 	bool updatable = (flags & Flags::Dynamic) || (flags & Flags::Skinned);
 
+	logger::debug("Mesh::CreateBuffers - {}", m_Name);
+
 	// Vertex Buffer
 	{
 		const size_t size = sizeof(Vertex) * vertexCount;
 
-		auto vertexBufferDesc = nvrhi::BufferDesc()
+		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexCount, size);
+
+		auto& vertexBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
 			.setStructStride(sizeof(Vertex))
-			.setIsVertexBuffer(true)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::VertexBuffer)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(std::format("{} (Vertex Buffer)", m_Name.c_str()));
 
 		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
 
-		commandList->writeBuffer(buffers.vertexBuffer.Get(), geometry.vertices.data(), size);
+		commandList->writeBuffer(buffers.vertexBuffer, geometry.vertices.data(), size);
 	}
 
 	// Triangle Buffer
 	{
 		const size_t size = sizeof(Triangle) * triangleCount;
 
-		auto triangleBufferDesc = nvrhi::BufferDesc()
+		logger::debug("Mesh::CreateBuffers - Triangle Count: {}, Buffer Size: {}", triangleCount, size);
+
+		auto& triangleBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
 			.setStructStride(sizeof(Triangle))
-			.setIsIndexBuffer(true)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::IndexBuffer)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(std::format("{} (Triangle Buffer)", m_Name.c_str()));
 
 		buffers.triangleBuffer = device->createBuffer(triangleBufferDesc);
 
-		commandList->writeBuffer(buffers.triangleBuffer.Get(), geometry.triangles.data(), size);
+		commandList->writeBuffer(buffers.triangleBuffer, geometry.triangles.data(), size);
 	}
 
 	{
 		// Create SRV binding for triangles
 		auto triangleBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(0, buffers.triangleBuffer);
+
 		// Register descriptor, get handle with heap and writes the SRV
 		m_DescriptorHandle = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(triangleBindingSet);
 	}
@@ -640,6 +646,21 @@ DirtyFlags Mesh::Update()
 
 	auto updateFlags = DirtyFlags::None;
 
+	if (material.missingPBREmissiveColor) {
+		auto* effect = bsGeometryPtr->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
+
+		if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(effect)) {
+			if (lightingShaderProp->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kOwnEmit)) {
+				material.Colors[Constants::Material::EMISSIVE_COLOR].x = lightingShaderProp->emissiveColor->red;
+				material.Colors[Constants::Material::EMISSIVE_COLOR].y = lightingShaderProp->emissiveColor->green;
+				material.Colors[Constants::Material::EMISSIVE_COLOR].z = lightingShaderProp->emissiveColor->blue;
+
+				material.missingPBREmissiveColor = false;
+				updateFlags |= DirtyFlags::Material;
+			}
+		}
+	}
+
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
 
@@ -649,10 +670,10 @@ DirtyFlags Mesh::Update()
 	return updateFlags;
 }
 
-MeshData Mesh::GetData() const
+MeshData Mesh::GetData(float3 externalEmittance) const
 {
 	return MeshData(
-		material.GetData(),
+		material.GetData(externalEmittance),
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
 		{0, 0},
 		localToRoot

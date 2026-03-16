@@ -3,6 +3,16 @@
 #include "Renderer.h"
 #include "Scene.h"
 
+void Instance::SetDetached(bool detached)
+{
+	m_Detached = detached;
+}
+
+bool Instance::IsDetached() const
+{
+	return m_Detached;
+}
+
 bool Instance::SkipUpdate()
 {
 	auto* renderer = Renderer::GetSingleton();

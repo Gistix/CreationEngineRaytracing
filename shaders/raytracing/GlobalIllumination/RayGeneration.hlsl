@@ -306,7 +306,7 @@ void Main()
             
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
 
-            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material);
+            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
 
 #if defined(SHARC)
             sharcHitData.positionWorld = surface.Position;

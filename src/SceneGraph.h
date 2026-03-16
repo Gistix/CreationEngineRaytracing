@@ -11,6 +11,7 @@
 #include "Constants.h"
 #include "Types/BindlessTable.h"
 #include "Types/TextureReference.h"
+#include "Types/ReleasedData.h"
 
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
@@ -22,31 +23,43 @@ class SceneGraph
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 
-	// Root node ptr, Instance data
-	eastl::vector<eastl::unique_ptr<Instance>> m_Instances;
+	eastl::deque<ReleasedData> m_ReleasedData;
 
+	// Root node ptr, Instance data
+	eastl::vector<Instance*> m_InstanceQueueAdd;
+	eastl::vector<Instance*> m_InstancesQueueRemove;
+
+	eastl::vector<eastl::unique_ptr<Instance>> m_Instances;
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
 	eastl::unordered_set<RE::BSLight*> m_TempActiveLights;
 	eastl::map<RE::BSLight*, Light> m_Lights;
 
-	eastl::array<LightData, Constants::NUM_LIGHTS_MAX> m_LightData;
+	eastl::array<LightData, Constants::LIGHTS_MAX> m_LightData;
 	nvrhi::BufferHandle m_LightBuffer;
 
+	// Material
+	eastl::array<MaterialData, Constants::NUM_MESHES_MAX> m_MaterialData;
+	nvrhi::BufferHandle m_MaterialBuffer;
+
+	// Mesh
 	eastl::array<MeshData, Constants::NUM_MESHES_MAX> m_MeshData;
 	nvrhi::BufferHandle m_MeshBuffer;
 
+	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	nvrhi::BufferHandle m_InstanceBuffer;
 
-	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<TextureReference>> textures;
+	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<TextureReference>> m_Textures;
 
 	eastl::deque<eastl::string> m_MSNConvertionQueue;
 	
 	eastl::unique_ptr<BindlessTable> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
 	eastl::unique_ptr<BindlessTable> m_TextureDescriptors;
+
+	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
 	void CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path);
@@ -73,6 +86,16 @@ public:
 	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);
 	void CreateLandModel(RE::TESObjectLAND* land);
 
-	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Texture2D* d3d11Texture);
+	void ReleaseTexture(ID3D11Texture2D* texture);
+
+	void RemoveInstance(RE::NiAVObject* node);
+
+	void RemoveInstance(RE::TESForm* form, bool releaseModel);
+
+	void SetInstanceDetached(RE::TESForm* form, bool detached);
+
+	void RunGarbageCollection(uint64_t frameIndex);
+
+	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);
 };

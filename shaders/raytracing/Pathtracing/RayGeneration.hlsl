@@ -127,7 +127,7 @@ void Main()
     Instance sourceInstance;
     Material sourceMaterial;
 
-    Surface sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial);
+    Surface sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial, true);
 
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
     
@@ -336,7 +336,7 @@ void Main()
             
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
 
-            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material);
+            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
 
 #if defined(SHARC)
             sharcHitData.positionWorld = surface.Position;

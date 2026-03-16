@@ -8,6 +8,7 @@
 #include "ShaderUtils.h"
 #include "framework/DescriptorTableManager.h"
 #include "Util.h"
+#include "Types/TopLevelAS.h"
 
 namespace Pass
 {
@@ -16,18 +17,12 @@ namespace Pass
 		eastl::unique_ptr<RaytracingData> m_RaytracingData;
 		nvrhi::BufferHandle m_RaytracingBuffer;
 
-		nvrhi::rt::AccelStructHandle m_TopLevelAS;
-
-		eastl::vector<nvrhi::rt::InstanceDesc> m_InstanceDescs;
-
-		uint32_t m_TopLevelInstances = 0;
+		TopLevelAS m_TopLevelAS;
 	public:
 		SceneTLAS(Renderer* renderer);
 
-		void UpdateAccelStructs(nvrhi::ICommandList* commandList);
-
 		nvrhi::IBuffer* GetRaytracingBuffer();
-		nvrhi::rt::IAccelStruct* GetTopLevelAS();
+		TopLevelAS& GetTopLevelAS();
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};

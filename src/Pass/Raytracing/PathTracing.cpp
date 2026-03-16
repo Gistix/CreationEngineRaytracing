@@ -4,8 +4,8 @@
 
 namespace Pass
 {
-	PathTracing::PathTracing(Renderer* renderer, SceneTLAS* sceneTLAS, LightTLAS* lightTLAS, SHaRC* sharc)
-		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_LightTLAS(lightTLAS), m_SHaRC(sharc)
+	PathTracing::PathTracing(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc)
+		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
 	{
 		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
 			nvrhi::SamplerDesc()
@@ -13,6 +13,8 @@ namespace Pass
 			.setAllFilters(true));
 
 		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, false);
+
+		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
 		CreateBindingLayout();
 		CreatePipeline();
@@ -37,8 +39,9 @@ namespace Pass
 	void PathTracing::CreateBindingLayout()
 	{
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
-		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
+		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
 		globalBindingLayoutDesc.bindings = {
+			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -51,7 +54,6 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
 			nvrhi::BindingLayoutItem::Texture_SRV(7),
-			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
@@ -112,8 +114,7 @@ namespace Pass
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
-			sceneGraph->GetTextureDescriptors()->m_Layout,
-			m_LightTLAS->GetBindlessLayout()
+			sceneGraph->GetTextureDescriptors()->m_Layout
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -161,8 +162,7 @@ namespace Pass
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-			.addBindingLayout(m_LightTLAS->GetBindlessLayout());
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
@@ -184,11 +184,12 @@ namespace Pass
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
+			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()),
-			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS()),
+			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetInstanceBuffer()),
@@ -196,7 +197,6 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(7, scene->GetPhysicalSkyTrLUTTexture()),
-			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(1, rrInput->diffuseAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
@@ -224,8 +224,7 @@ namespace Pass
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			m_LightTLAS->GetLightDescriptorTable()
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
