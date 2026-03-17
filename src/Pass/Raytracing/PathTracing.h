@@ -35,18 +35,9 @@ namespace Pass
 
 		SHaRC* m_SHaRC;
 
-		bool m_DirtyBindings = true;
-
-		struct RayReconstructionInputs
-		{
-			nvrhi::TextureHandle diffuseAlbedoTexture;
-			nvrhi::TextureHandle specularAlbedoTexture;
-			nvrhi::TextureHandle normalRoughnessTexture;
-			nvrhi::TextureHandle specularHitDistTexture;
-		};
-
 		eastl::vector<ShaderDefine> m_Defines;
 
+		bool m_DirtyBindings = true;
 	public:
 		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);
 

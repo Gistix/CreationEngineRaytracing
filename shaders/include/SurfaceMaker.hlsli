@@ -29,11 +29,11 @@ struct SurfaceMaker
 {
 
 #if !defined(RASTER)
-    static Surface make(float3 position, Payload payload, float3 rayDir, RayCone rayCone, out Instance instance, out Material material, bool Primary)
+    static Surface make(float3 position, Payload payload, float3 rayDir, RayCone rayCone, out Instance instance, out Material material, bool primary)
     { 
         Surface surface;         
 
-        surface.Primary = Primary;
+        surface.Primary = primary;
         
         surface.Position = position;
         surface.SubsurfaceData = (Subsurface)0;

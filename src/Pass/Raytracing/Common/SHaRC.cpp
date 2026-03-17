@@ -28,8 +28,28 @@ namespace Pass
 		m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
+		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, true);
+		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
 		SetupUpdate();
 		SetupResolve();
+	}
+
+	void SHaRC::SettingsChanged(const Settings& settings)
+	{
+		m_SHaRCData->SceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
+		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
+		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
+		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
+		m_SHaRCData->AntifireflyFilter = settings.SHaRCSettings.AntifireflyFilter ? 1 : 0;
+
+		auto defines = Util::Shader::GetRaytracingDefines(settings, true, true);
+
+		if (defines != m_Defines) {
+			m_Defines = defines;
+			SetupUpdate();
+			m_DirtyBindings = true;
+		}
 	}
 
 	void SHaRC::SetupUpdate()
@@ -58,21 +78,13 @@ namespace Pass
 		m_UpdatePass.m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 
 		auto* scene = Scene::GetSingleton();
-		auto& rtSettings = scene->m_Settings.RaytracingSettings;
+
+		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 
 		const auto threadGroupSizeWStr = std::to_wstring(UPDATE_THREAD_GROUP_SIZE);
-		const auto bouncesWStr = std::to_wstring(rtSettings.Bounces);
-		const auto samplesWStr = std::to_wstring(rtSettings.SamplesPerPixel);
+		defines.emplace_back(L"THREAD_GROUP_SIZE", threadGroupSizeWStr.c_str());
 
-		eastl::vector<DxcDefine> defines = {
-			{ L"THREAD_GROUP_SIZE", threadGroupSizeWStr.c_str() },
-			{ L"MAX_BOUNCES", bouncesWStr.c_str() },
-			{ L"MAX_SAMPLES", samplesWStr.c_str() },
-			{ L"USE_RAY_QUERY", L"1" },
-			{ L"SHARC", L"" },
-			{ L"SHARC_UPDATE", L"1" },
-			{ L"SHARC_RESOLVE", L"0" }
-		};
+		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
 		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
@@ -168,15 +180,6 @@ namespace Pass
 		m_UpdatePass.m_BindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_UpdatePass.m_BindingLayout);
 
 		m_DirtyBindings = false;
-	}
-
-	void SHaRC::SettingsChanged(const Settings& settings)
-	{
-		m_SHaRCData->SceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
-		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
-		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
-		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
-		m_SHaRCData->AntifireflyFilter = settings.SHaRCSettings.AntifireflyFilter ? 1 : 0;
 	}
 
 	void SHaRC::Execute(nvrhi::ICommandList* commandList)

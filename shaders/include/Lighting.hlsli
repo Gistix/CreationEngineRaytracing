@@ -173,6 +173,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     {
         irradiance = float3(0, 0, 0);
         lr = float3(0, 0, 0);
+        dist = 0.0f;    
         return -1;
     }
 

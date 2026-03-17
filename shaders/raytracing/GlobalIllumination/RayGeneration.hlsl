@@ -12,6 +12,10 @@
 
 #include "include/Lighting.hlsli"
 
+#ifdef SUBSURFACE_SCATTERING
+#include "raytracing/include/SubsurfaceLighting.hlsli"
+#endif
+
 #include "raytracing/include/Transparency.hlsli"
 
 #include "Raytracing/Include/SHARC/Sharc.hlsli"
@@ -348,7 +352,7 @@ void Main()
             float3 directRadiance = 0.0f;
 #ifdef SUBSURFACE_SCATTERING
             if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                directRadiance += EvaluateSubsurfaceNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed);
+                directRadiance += EvaluateSubsurfaceNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
                 isSssPath = true;
             }
             else

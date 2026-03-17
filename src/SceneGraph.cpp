@@ -152,7 +152,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 		}
 	}
 
-	const auto& lightSettings = Scene::GetSingleton()->m_Settings.LightSettings;
+	const auto& lightingSettings = Scene::GetSingleton()->m_Settings.LightingSettings;
 
 	uint numLights = 0;
 
@@ -204,7 +204,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Fade = runtimeData.fade;
 
-			if (lightSettings.LodDimmer)
+			if (lightingSettings.LodDimmer)
 				lightData.Fade *= bsLight->lodDimmer;
 
 			lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;

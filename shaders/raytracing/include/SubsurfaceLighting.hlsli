@@ -23,6 +23,8 @@
 #include "Raytracing/Include/Materials/SubsurfaceScattering.hlsli"
 #include "Raytracing/Include/Materials/Transmission.hlsli"
 
+#define SSS_SETTINGS Raytracing.SubSurfaceScattering
+
 float3 evalSingleScatteringTransmission(
     const Surface sourceSurface,
     const BRDFContext sourceBRDFContext,
@@ -46,22 +48,13 @@ float3 evalSingleScatteringTransmission(
         float thickness = 0.0f;
         float3 backPosition;
         {
-            Payload payload;
-            payload.hitDistance = -1.0f;
-            payload.primitiveIndex = 0;
-            payload.PackBarycentrics(float2(0.0f, 0.0f));
-            payload.PackInstanceGeometryIndex(0, 0);
-            payload.randomSeed = randomSeed;
-
             RayDesc transmissionRay;
             transmissionRay.Origin = OffsetRay(hitPos, -sourceSurface.FaceNormal);
             transmissionRay.Direction = refractedRayDirection;
             transmissionRay.TMin = 0.0f;
             transmissionRay.TMax = RAY_TMAX;
 
-            const uint rayFlags = RAY_FLAG_FORCE_OPAQUE;
-            TraceRay(Scene, rayFlags, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, transmissionRay, payload);
-            randomSeed = payload.randomSeed;
+            Payload payload = TraceRayOpaque(Scene, transmissionRay, randomSeed);
 
             thickness = payload.hitDistance;
             backPosition = transmissionRay.Origin + thickness * transmissionRay.Direction;
@@ -72,7 +65,7 @@ float3 evalSingleScatteringTransmission(
 
                 Instance sampleInstance;
                 Material sampleMaterial;
-                Surface sampleSurface = SurfaceMaker::make(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleMaterial);
+                Surface sampleSurface = SurfaceMaker::make(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleMaterial, false);
 
                 const float3 sampleGeometryNormal = sampleSurface.FaceNormal;
                 const float3 sampleShadingNormal = sampleSurface.Normal;
@@ -133,16 +126,7 @@ float3 evalSingleScatteringTransmission(
             scatteringRay.TMin = 0.0f;
             scatteringRay.TMax = RAY_TMAX;
 
-            Payload scatteringPayload;
-            scatteringPayload.hitDistance = -1.0f;
-            scatteringPayload.primitiveIndex = 0;
-            scatteringPayload.PackBarycentrics(float2(0.0f, 0.0f));
-            scatteringPayload.PackInstanceGeometryIndex(0, 0);
-            scatteringPayload.randomSeed = randomSeed;
-
-            const uint rayFlags = RAY_FLAG_FORCE_OPAQUE;
-            TraceRay(Scene, rayFlags, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, scatteringRay, scatteringPayload);
-            randomSeed = scatteringPayload.randomSeed;
+            Payload scatteringPayload = TraceRayOpaque(Scene, scatteringRay, randomSeed);
 
             if (scatteringPayload.Hit())
             {
@@ -150,7 +134,7 @@ float3 evalSingleScatteringTransmission(
 
                 Instance scatterInstance;
                 Material scatterMaterial;
-                Surface scatterSurface = SurfaceMaker::make(scatterLocalPosition, scatteringPayload, scatteringDirection, rayCone, scatterInstance, scatterMaterial);
+                Surface scatterSurface = SurfaceMaker::make(scatterLocalPosition, scatteringPayload, scatteringDirection, rayCone, scatterInstance, scatterMaterial, false);
 
                 const float3 scatteringSampleGeometryNormal = scatterSurface.FaceNormal;
 
@@ -198,7 +182,8 @@ float3 EvaluateSubsurfaceNEE(
     const Instance instance,
     const Payload initialPayload,
     RayCone rayCone,
-    inout uint randomSeed)
+    inout uint randomSeed,
+    const bool primary)
 {
     SubsurfaceMaterialData subsurfaceMaterialData = CreateDefaultSubsurfaceMaterialData();
     subsurfaceMaterialData.transmissionColor = surface.SubsurfaceData.TransmissionColor;
@@ -206,11 +191,11 @@ float3 EvaluateSubsurfaceNEE(
     subsurfaceMaterialData.scale = surface.SubsurfaceData.Scale;
     subsurfaceMaterialData.g = surface.SubsurfaceData.Anisotropy;
 
-    if (Frame.SSSMaterialOverride) {
-        subsurfaceMaterialData.transmissionColor = Frame.OverrideSSSTransmissionColor;
-        subsurfaceMaterialData.scatteringColor = Frame.OverrideSSSScatteringColor;
-        subsurfaceMaterialData.scale = Frame.OverrideSSSScale;
-        subsurfaceMaterialData.g = Frame.OverrideSSSAnisotropy;
+    if (SSS_SETTINGS.MaterialOverride) {
+        subsurfaceMaterialData.transmissionColor = SSS_SETTINGS.TransmissionColorOverride;
+        subsurfaceMaterialData.scatteringColor = SSS_SETTINGS.ScatteringColorOverride;
+        subsurfaceMaterialData.scale = SSS_SETTINGS.ScaleOverride;
+        subsurfaceMaterialData.g = SSS_SETTINGS.AnisotropyOverride;
     }
 
     const float3 geometryNormal = surface.FaceNormal;
@@ -238,17 +223,17 @@ float3 EvaluateSubsurfaceNEE(
     {
         const float3 centerSpecularF0 = surface.F0;
         const float3 diffuseAlbedo = surface.DiffuseAlbedo;
-        subsurfaceMaterialData.transmissionColor = Frame.SSSMaterialOverride ? subsurfaceMaterialData.transmissionColor : diffuseAlbedo;
+        subsurfaceMaterialData.transmissionColor = SSS_SETTINGS.MaterialOverride ? subsurfaceMaterialData.transmissionColor : diffuseAlbedo;
 
         const float3 cameraUp = float3(
-            Frame.ViewInverse[0][0],
-            Frame.ViewInverse[1][0],
-            Frame.ViewInverse[2][0]);
+            Camera.ViewInverse[0][0],
+            Camera.ViewInverse[1][0],
+            Camera.ViewInverse[2][0]);
 
         const float3 cameraDirection = float3(
-            Frame.ViewInverse[0][2],
-            Frame.ViewInverse[1][2],
-            Frame.ViewInverse[2][2]);
+            Camera.ViewInverse[0][2],
+            Camera.ViewInverse[1][2],
+            Camera.ViewInverse[2][2]);
 
         if (Random(randomSeed) < 0.5f)
         {
@@ -259,15 +244,15 @@ float3 EvaluateSubsurfaceNEE(
 
         uint effectiveSample = 0;
 
-        for (uint sssSampleIndex = 0; sssSampleIndex < Frame.SSSSampleCount; ++sssSampleIndex)
+        for (uint sssSampleIndex = 0; sssSampleIndex < SSS_SETTINGS.SampleCount; ++sssSampleIndex)
         {
             SubsurfaceSample subsurfaceSample;
 
             const float2 rand2 = float2(Random(randomSeed), Random(randomSeed));
             EvalBurleyDiffusionProfile(subsurfaceMaterialData,
                                       subsurfaceInteraction,
-                                      Frame.SSSMaxSampleRadius,
-                                      Frame.EnableSssTransmission && false, // disable normalization
+                                      SSS_SETTINGS.MaxSampleRadius,
+                                      SSS_SETTINGS.EnableTransmission && false, // disable normalization
                                       rand2,
                                       subsurfaceSample);
 
@@ -278,7 +263,7 @@ float3 EvaluateSubsurfaceNEE(
                 const float3 sampleLocalPosition = subsurfaceSample.samplePosition + samplePayload.hitDistance * (-subsurfaceInteraction.normal);
                 Instance sampleInstance;
                 Material sampleMaterial;
-                Surface sampleSurface = SurfaceMaker::make(sampleLocalPosition, samplePayload, -subsurfaceInteraction.normal, rayCone, sampleInstance, sampleMaterial);
+                Surface sampleSurface = SurfaceMaker::make(sampleLocalPosition, samplePayload, -subsurfaceInteraction.normal, rayCone, sampleInstance, sampleMaterial, primary);
                 if (sampleSurface.SubsurfaceData.HasSubsurface == 0)
                 {
                     continue;
@@ -315,10 +300,10 @@ float3 EvaluateSubsurfaceNEE(
             }
         }
 
-        radiance /= (float)Frame.SSSSampleCount;
+        radiance /= (float)SSS_SETTINGS.SampleCount;
     }
 
-    if (Frame.EnableSssTransmission)
+    if (SSS_SETTINGS.EnableTransmission)
     {
         radiance += max(evalSingleScatteringTransmission(
             surface,

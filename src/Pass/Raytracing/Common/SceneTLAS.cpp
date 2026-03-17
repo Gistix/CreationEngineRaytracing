@@ -32,19 +32,18 @@ namespace Pass
 
 		auto cameraData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData().cameraData.getEye();
 		m_RaytracingData->PixelConeSpreadAngle = std::atan((2.0f / cameraData.projMat.m[1][1]) / GetRenderer()->GetDynamicResolution().y);
-		m_RaytracingData->TexLODBias = settings.RaytracingSettings.TexLODBias;
+		m_RaytracingData->TexLODBias = settings.AdvancedSettings.TexLODBias;
 
 		m_RaytracingData->NumLights = static_cast<uint32_t>(sceneGraph->GetLights().size());
 		m_RaytracingData->RussianRoulette = settings.RaytracingSettings.RussianRoulette;
 		m_RaytracingData->Roughness = settings.MaterialSettings.Roughness;
 		m_RaytracingData->Metalness = settings.MaterialSettings.Metalness;
 
+		m_RaytracingData->Directional = settings.LightingSettings.Directional;
+		m_RaytracingData->Point = settings.LightingSettings.Point;
 		m_RaytracingData->Emissive = settings.LightingSettings.Emissive;
 		m_RaytracingData->Effect = settings.LightingSettings.Effect;
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
-
-		m_RaytracingData->Directional = settings.LightSettings.Directional;
-		m_RaytracingData->Point = settings.LightSettings.Point;
 
 		// Directional Light
 		{
@@ -58,6 +57,21 @@ namespace Pass
 
 			m_RaytracingData->DirectionalLight.Vector = -direction;
 			m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue);
+		}
+
+		// SSS
+		{
+			auto& sssSettings = settings.AdvancedSettings.SSSSettings;
+			auto& sssData = m_RaytracingData->SubSurfaceScattering;
+
+			sssData.SampleCount = sssSettings.SampleCount;
+			sssData.MaxSampleRadius = sssSettings.MaxSampleRadius;
+			sssData.EnableTransmission = sssSettings.EnableTransmission;
+			sssData.MaterialOverride = sssSettings.MaterialOverride;
+			sssData.TransmissionColorOverride = sssSettings.OverrideTransmissionColor;
+			sssData.ScatteringColorOverride = sssSettings.OverrideScatteringColor;
+			sssData.ScaleOverride = sssSettings.OverrideScale;
+			sssData.AnisotropyOverride = sssSettings.OverrideAnisotropy;
 		}
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));

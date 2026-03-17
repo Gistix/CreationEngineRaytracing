@@ -311,7 +311,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     [branch]
     if (material.Feature == Feature::kHairTint && HAIRSETTINGS.Enabled) {
         surface.Roughness = 1.0f - saturate(HAIRSETTINGS.HairGlossiness * 0.01f);
-        Albedo = saturate(Albedo * HAIRSETTINGS.BaseColorMult);
+        surface.Albedo = saturate(surface.Albedo * HAIRSETTINGS.BaseColorMult);
         [branch]
         if (material.ShaderFlags & ShaderFlags::kBackLighting) {
             Texture2D hairFlowMapTexture = Textures[NonUniformResourceIndex(material.SpecularTexture())];
@@ -325,15 +325,15 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 [branch]
                 if (sampledHairFlow2D.x > 0.0 || sampledHairFlow2D.y > 0.0) {
                     float3 sampledHairFlow = float3(sampledHairFlow2D * 2.0f - 1.0f, 0.0f);
-                    float3x3 tbn = float3x3(Tangent, Bitangent, Normal);
+                    float3x3 tbn = float3x3(surface.Tangent, surface.Bitangent, surface.Normal);
                     float3 hairRootDirection = normalize(mul(sampledHairFlow, tbn));
                         
                     // Re-orthogonalize T and B to N and the new hair root direction
-                    hairRootDirection = normalize(hairRootDirection - Normal * dot(hairRootDirection, Normal));
-                    Bitangent = hairRootDirection;
+                    hairRootDirection = normalize(hairRootDirection - surface.Normal * dot(hairRootDirection, surface.Normal));
+                    surface.Bitangent = hairRootDirection;
                         
-                    float hairHandedness = (dot(cross(Normal, Tangent), Bitangent) < 0.0f) ? -1.0f : 1.0f;
-                    Tangent = normalize(cross(Bitangent, Normal)) * hairHandedness;
+                    float hairHandedness = (dot(cross(surface.Normal, surface.Tangent), surface.Bitangent) < 0.0f) ? -1.0f : 1.0f;
+                    surface.Tangent = normalize(cross(surface.Bitangent, surface.Normal)) * hairHandedness;
                 }
             }
         }

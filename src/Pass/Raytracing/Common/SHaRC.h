@@ -14,9 +14,11 @@
 
 #include "Interop/SHaRCData.hlsli"
 
+#include "Events/ITLASUpdateListener.h"
+
 namespace Pass
 {
-	class SHaRC : public RenderPass
+	class SHaRC : public RenderPass, ITLASUpdateListener
 	{		
 		static constexpr uint UPDATE_THREAD_GROUP_SIZE = 16;
 		static constexpr uint RESOLVE_LINEAR_BLOCK_SIZE = 256;
@@ -45,9 +47,16 @@ namespace Pass
 
 		SceneTLAS* m_SceneTLAS;
 
+		eastl::vector<ShaderDefine> m_Defines;
+
 		bool m_DirtyBindings = true;
 	public:
 		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS);
+
+		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
+		{
+			m_DirtyBindings = true;
+		}
 
 		auto GetSHaRCConstantBuffer() { return m_SHaRCBuffer; }
 		auto GetHashEntriesBuffer() { return m_HashEntriesBuffer; }
