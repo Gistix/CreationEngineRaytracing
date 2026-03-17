@@ -106,7 +106,7 @@ void Main(uint3 DTid : SV_DispatchThreadID)
         float3x3 boneMatrixRot = (float3x3)boneMatrix;
 
         vertex.Normal = (half3) normalize(mul(boneMatrixRot, vertex.Normal));
-        vertex.Bitangent = (half3) normalize(mul(boneMatrixRot, vertex.Bitangent));
+        vertex.Tangent = (half3) normalize(mul(boneMatrixRot, vertex.Tangent));
     }
 
     vertex.Position = position;

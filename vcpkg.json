@@ -17,6 +17,7 @@
 		"directx-dxc",
 		"eastl",
 		"magic-enum",
+		"mikktspace",
 		"detours",
 		"nlohmann-json",
 		"xbyak",

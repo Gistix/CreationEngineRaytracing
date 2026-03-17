@@ -13,7 +13,7 @@
 #define LIGHTINGSETTINGS Raytracing
 #define HAIRSETTINGS Features.HairSpecular
 
-void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Material material)
+void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Material material)
 {
     float mipLevel = surface.MipLevel;
 
@@ -298,8 +298,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
     float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
 
-    float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
-
     NormalMap(
         normal,
         handedness,
@@ -356,14 +354,12 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         }
     }
 
-    void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Material material)
+    void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, in float handedness, float4 landBlend0, float4 landBlend1, in Material material)
     {
         float mipLevel = surface.MipLevel;
     
         Texture2D overlayTexture = Textures[NonUniformResourceIndex(material.OverlayTexture())];
         Texture2D noiseTexture = Textures[NonUniformResourceIndex(material.NoiseTexture())];
-
-        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
 
 	// Normalise blend weights
         float totalWeight = landBlend0.x + landBlend0.y + landBlend0.z +

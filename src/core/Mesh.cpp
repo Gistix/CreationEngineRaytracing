@@ -9,6 +9,8 @@
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 
+#include "Utils/CalcTangents.h"
+
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
 	auto vertexDesc = rendererData->vertexDesc;
@@ -16,7 +18,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	vertexFlags = vertexDesc.GetFlags();
 
 	bool hasNormal = vertexFlags & RE::BSGraphics::Vertex::VF_NORMAL;
-	bool hasBitangent = vertexFlags & RE::BSGraphics::Vertex::VF_TANGENT;
+	bool hasTangent = vertexFlags & RE::BSGraphics::Vertex::VF_TANGENT;
 
 	// Vertices
 	{
@@ -113,22 +115,22 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 
 				vertexData.Normal = Util::Math::Normalize({ normal.x, normal.y, normal.z });
 
-				if (hasBitangent) {
-					byte4f bitangentPacked;
-					std::memcpy(&bitangentPacked, vtx + tangOffset, sizeof(byte4f));
-					auto bitangent = bitangentPacked.unpack();
+				if (hasTangent) {
+					byte4f tangentPacked;
+					std::memcpy(&tangentPacked, vtx + tangOffset, sizeof(byte4f));
+					auto tangent = tangentPacked.unpack();
 
-					vertexData.Bitangent = Util::Math::Normalize({ bitangent.x, bitangent.y, bitangent.z });
+					vertexData.Tangent = Util::Math::Normalize({ tangent.x, tangent.y, tangent.z });
 
-					float3 tangent = { pos.w, normal.w, bitangent.w };
+					float3 bitangent = { pos.w, normal.w, tangent.w };
 
 					if (!hasPosition) {
-						tangent.x = std::sqrt(std::max(0.0f, 1.0f - tangent.y * tangent.y - tangent.z * tangent.z));
+						bitangent.x = std::sqrt(std::max(0.0f, 1.0f - bitangent.y * bitangent.y - bitangent.z * bitangent.z));
 					}
 
-					vertexData.Handedness = (tangent.x * (vertexData.Bitangent.y * vertexData.Normal.z - vertexData.Bitangent.z * vertexData.Normal.y) +
-						tangent.y * (vertexData.Bitangent.z * vertexData.Normal.x - vertexData.Bitangent.x * vertexData.Normal.z) +
-						tangent.z * (vertexData.Bitangent.x * vertexData.Normal.y - vertexData.Bitangent.y * vertexData.Normal.x)) < 0 ?
+					vertexData.Handedness = (tangent.x * (vertexData.Tangent.y * vertexData.Normal.z - vertexData.Tangent.z * vertexData.Normal.y) +
+						bitangent.y * (vertexData.Tangent.z * vertexData.Normal.x - vertexData.Tangent.x * vertexData.Normal.z) +
+						bitangent.z * (vertexData.Tangent.x * vertexData.Normal.y - vertexData.Tangent.y * vertexData.Normal.x)) < 0 ?
 						-1.0f : 1.0f;
 				}
 			}
@@ -229,8 +231,12 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		triangleCount = triangleCountIn;
 	}
 
-	if (!hasNormal || !hasBitangent) {
-		CalculateVectors(!hasNormal);
+	if (!hasNormal)
+		CalculateNormals();
+
+	if (!hasTangent) {
+		Util::CalcTangents::GetSingleton()->calc(this);
+
 	}
 }
 
@@ -411,7 +417,11 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
 
 							bool isModelSpaceNormalMap = shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals);
-							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
+
+							if (isModelSpaceNormalMap)
+								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(nullptr, normalTexture, isModelSpaceNormalMap);
+							else
+								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
 
 							if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 								if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
@@ -840,15 +850,10 @@ void Mesh::UpdateState()
 	state = pendingState;
 }
 
-void Mesh::CalculateVectors(bool calculateNormal)
+void Mesh::CalculateNormals()
 {
 	eastl::vector<float3> normals;
-
-	if (calculateNormal)
-		normals.resize(vertexCount, float3(0, 0, 0));
-
-	eastl::vector<float3> tangents;
-	tangents.resize(vertexCount, float3(0, 0, 0));
+	normals.resize(vertexCount, float3(0, 0, 0));
 
 	// Loop over triangles
 	for (auto& t : geometry.triangles) {
@@ -860,59 +865,18 @@ void Mesh::CalculateVectors(bool calculateNormal)
 		float3 pos1 = v1.Position;
 		float3 pos2 = v2.Position;
 
-		half2 uv0 = v0.Texcoord0;
-		half2 uv1 = v1.Texcoord0;
-		half2 uv2 = v2.Texcoord0;
-
 		float3 deltaPos1 = pos1 - pos0;
 		float3 deltaPos2 = pos2 - pos0;
 
-		// Optionaly compute normals
-		if (calculateNormal) {
-			float3 faceNormal = deltaPos1.Cross(deltaPos2);
+		float3 faceNormal = deltaPos1.Cross(deltaPos2);
 
-			normals[t.x] += faceNormal;
-			normals[t.y] += faceNormal;
-			normals[t.z] += faceNormal;
-		}
-
-		// Compute UV deltas
-		float2 deltaUV1 = uv1 - uv0;
-		float2 deltaUV2 = uv2 - uv0;
-
-		float det = deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x;
-
-		if (fabs(det) < 1e-8f)
-			continue;
-
-		float r = 1.0f / det;
-
-		float3 tangent = r * (deltaUV2.y * deltaPos1 - deltaUV1.y * deltaPos2);
-
-
-		// Accumulate per-vertex
-		tangents[t.x] += tangent;
-		tangents[t.y] += tangent;
-		tangents[t.z] += tangent;
+		normals[t.x] += faceNormal;
+		normals[t.y] += faceNormal;
+		normals[t.z] += faceNormal;
 	}
 
 	// Normalize and orthogonalize
 	for (size_t i = 0; i < vertexCount; i++) {
-		auto& v = geometry.vertices[i];
-
-		float3 n = Util::Math::Normalize(calculateNormal ? normals[i] : float3(v.Normal));
-
-		float3 t = Util::Math::Normalize(tangents[i] - n * n.Dot(tangents[i]));
-
-		float3 b = n.Cross(t);
-		float sign = (b.Dot(t.Cross(n)) < 0.0f) ? -1.0f : 1.0f;
-		b *= sign;
-
-		if (calculateNormal)
-			v.Normal = n;
-
-		v.Bitangent = b;
-
-		v.Handedness = sign;
+		geometry.vertices[i].Normal = Util::Math::Normalize(normals[i]);
 	}
 }

@@ -9,7 +9,7 @@ struct Vertex
 	float3 Position;
 	half2 Texcoord0;
 	half3 Normal;
-	half3 Bitangent;
+	half3 Tangent;
 	float Handedness;
 #if defined(BAKED_TEXTURES)	// Probably misaligned, but no being used atm
 	ubyte4f Albedo;

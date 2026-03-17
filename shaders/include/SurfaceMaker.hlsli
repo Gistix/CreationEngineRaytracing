@@ -63,9 +63,11 @@ struct SurfaceMaker
         float3 normal1 = FlipIfOpposite(v1.Normal, objectSpaceFlatNormal);
         float3 normal2 = FlipIfOpposite(v2.Normal, objectSpaceFlatNormal);
 
+        float handedness = Interpolate(v0.Handedness, v1.Handedness, v2.Handedness, uvw);
+        
         float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(normal0, normal1, normal2, uvw)));
-        float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
-        float3 tangentWS = cross(bitangentWS, normalWS) * Interpolate(v0.Handedness, v1.Handedness, v2.Handedness, uvw);        
+        float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
+        float3 bitangentWS = cross(tangentWS, normalWS) * handedness;        
         
         float4 vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
 
@@ -95,11 +97,11 @@ struct SurfaceMaker
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
             
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, material);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
         }
         else
         {
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, material);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
         }
 #   else   
 #   endif
@@ -147,11 +149,13 @@ struct SurfaceMaker
         surface.AO = 1.0f;
         surface.F0 = PBR::Defaults::F0;
     
+        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
+        
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLandLODBlend)
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, material);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
         else
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, material);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
 #   else   
 #   endif
    
