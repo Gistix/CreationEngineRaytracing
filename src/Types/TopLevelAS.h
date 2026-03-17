@@ -40,13 +40,19 @@ public:
 		m_InstanceDescs.clear();
 		m_InstanceDescs.reserve(instances.size());
 
+		commandList->beginMarker("BLAS Update");
+
 		for (auto& instance : instances)
 		{
 			/*if (!instance->model->blas)
 				continue;*/
 
+			instance->model->UpdateBLAS(commandList);
+
 			m_InstanceDescs.push_back(instance->GetInstanceDesc());
 		}
+
+		commandList->endMarker();
 
 		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 

@@ -19,8 +19,8 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	blasDesc.setDebugName(std::format("{} - BLAS", m_Name))
 		.setIsTopLevel(false);
 
-	if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowUpdate;
 	else
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
 
@@ -64,4 +64,23 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 	blas = Renderer::GetSingleton()->GetDevice()->createAccelStruct(blasDesc);
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+}
+
+void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
+{
+	if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		return;
+
+	if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin))
+		return;
+
+	auto blasUpdateDesc = nvrhi::rt::AccelStructDesc()
+		.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::PerformUpdate)
+		.setIsTopLevel(false);
+
+	for (size_t i = 0; i < meshes.size(); i++) {
+		blasUpdateDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
+	}
+
+	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasUpdateDesc);
 }

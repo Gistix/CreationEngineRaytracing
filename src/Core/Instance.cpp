@@ -45,7 +45,7 @@ void Instance::Update()
 	if (memcmp(&m_NiTransform, &node->world, sizeof(RE::NiTransform)) != 0)
 		m_DirtyFlags |= DirtyFlags::Transform;
 
-	m_DirtyFlags |= model->GetDirtyFlags();
+	m_DirtyFlags |= model->GetDirtyFlags().get();
 
 	if (m_DirtyFlags != DirtyFlags::None)
 		logger::trace("Instance::Update - {}: {}", model->m_Name, Util::GetFlagsString<DirtyFlags>(static_cast<uint8_t>(m_DirtyFlags)));

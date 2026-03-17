@@ -160,12 +160,8 @@ namespace Hooks
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
 
-		// Destructors to remove instances (not models)
-		{
-			stl::write_vfunc<0x0, Destructor<RE::NiNode>>(RE::VTABLE_NiNode[0]);
-			stl::write_vfunc<0x0, Destructor<RE::BSFadeNode>>(RE::VTABLE_BSFadeNode[0]);
-			stl::write_vfunc<0x0, Destructor<RE::BSFadeNode>>(RE::VTABLE_BSLeafAnimNode[0]);
-		}
+		// Destructor to remove instances (not models)
+		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));
 
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 

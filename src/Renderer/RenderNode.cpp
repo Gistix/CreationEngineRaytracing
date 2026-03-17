@@ -38,8 +38,11 @@ void RenderNode::Execute(nvrhi::ICommandList* commandList)
 	if (!m_Enabled)
 		return;
 
-	if (m_RenderPass)
+	if (m_RenderPass) {
+		commandList->beginMarker(std::format("{} - Pass", m_Name.c_str()).c_str());
 		m_RenderPass->Execute(commandList);
+		commandList->endMarker();
+	}
 
 	for (auto& child : m_Children)
 	{

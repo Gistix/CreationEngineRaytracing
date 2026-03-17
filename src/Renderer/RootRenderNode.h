@@ -18,7 +18,7 @@ public:
 	{
 		for (auto& child : m_Children)
 		{
-			if (auto* childPass = child.GetPass<T>())
+			if (auto* childPass = child->GetPass<T>())
 				return childPass;
 		}
 

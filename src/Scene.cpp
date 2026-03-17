@@ -11,6 +11,7 @@
 
 #include "Renderer/RenderNode.h"
 
+#include "Pass/Raytracing/Common/Skinning.h"
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
@@ -69,6 +70,12 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
+			"Skinning",
+			eastl::make_unique<Pass::Skinning>(renderer)
+			});
+
+		m_GlobalIllumination->AddNode({
+			true,
 			"SceneTLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});
@@ -102,6 +109,12 @@ RenderNode* Scene::GetPathTracing()
 		auto* renderer = Renderer::GetSingleton();
 
 		m_PathTracing = eastl::make_unique<RenderNode>(true, "Path Tracing");
+
+		m_PathTracing->AddNode({
+			true,
+			"Skinning",
+			eastl::make_unique<Pass::Skinning>(renderer)
+			});
 
 		m_PathTracing->AddNode({
 			true,

@@ -3,11 +3,18 @@
 struct BindlessTable
 {
 	nvrhi::BindingLayoutHandle m_Layout;
-	eastl::shared_ptr<DescriptorTableManager> m_DescriptorTable;
+	nvrhi::DescriptorTableHandle m_DescriptorTable;
 
 	BindlessTable(nvrhi::DeviceHandle device, nvrhi::BindlessLayoutDesc desc, bool resizeToMaxCapacity)
 	{
 		m_Layout = device->createBindlessLayout(desc);
-		m_DescriptorTable = eastl::make_shared<DescriptorTableManager>(device, m_Layout, resizeToMaxCapacity);
+		
+		{
+			m_DescriptorTable = device->createDescriptorTable(m_Layout);
+
+			auto bindlessDesc = m_Layout->getBindlessDesc();
+			if (resizeToMaxCapacity && m_DescriptorTable->getCapacity() < bindlessDesc->maxCapacity)
+				device->resizeDescriptorTable(m_DescriptorTable, bindlessDesc->maxCapacity);
+		}
 	}
 };

@@ -54,9 +54,14 @@ struct Mesh
 
 	struct MeshBuffers
 	{
+		nvrhi::BufferHandle dynamicPositionBuffer;
 		nvrhi::BufferHandle vertexBuffer;
+		nvrhi::BufferHandle vertexCopyBuffer;
 		nvrhi::BufferHandle triangleBuffer;
+		nvrhi::BufferHandle skinningBuffer;
 	} buffers;
+
+	eastl::vector<float3x4> m_BoneMatrices;
 
 	nvrhi::rt::GeometryDesc geometryDesc;
 
@@ -68,6 +73,8 @@ struct Mesh
 
 	// DismemberSkinInstance slot
 	uint16_t slot;
+
+	uint32_t frameID;
 
 	DescriptorHandle m_DescriptorHandle;
 
@@ -88,6 +95,8 @@ struct Mesh
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
 	bool UpdateDynamicPosition();
+
+	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
 	bool UpdateSkinning();
 

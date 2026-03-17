@@ -58,7 +58,7 @@ struct Model
 
 	void Update();
 
-	bool UpdateBLAS();
+	void UpdateBLAS(nvrhi::ICommandList* commandList);
 
 	void AddRef()
 	{
@@ -108,7 +108,7 @@ struct Model
 		return m_EmittanceColor ? *m_EmittanceColor : float3(1.0f, 1.0f, 1.0f);
 	}
 private:
-	DirtyFlags m_DirtyFlags = DirtyFlags::None;
+	stl::enumeration<DirtyFlags, uint8_t> m_DirtyFlags = DirtyFlags::None;
 	stl::enumeration<Mesh::Flags, uint8_t> meshFlags = Mesh::Flags::None;
 	uint32_t shaderTypes = RE::BSShader::Type::None;
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);

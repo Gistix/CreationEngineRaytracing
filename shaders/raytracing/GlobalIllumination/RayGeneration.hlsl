@@ -77,7 +77,7 @@ void Main()
     
     const float2 dynamicUVUnjittered = dynamicUV - (Camera.Jitter / Camera.ScreenSize);
 
-    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
+    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0) * DEPTH_SCALE;
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 

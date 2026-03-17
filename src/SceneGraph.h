@@ -9,6 +9,7 @@
 #include "Instance.hlsli"
 
 #include "Constants.h"
+#include "Types/BindlessTableManager.h"
 #include "Types/BindlessTable.h"
 #include "Types/TextureReference.h"
 #include "Types/ReleasedData.h"
@@ -55,9 +56,15 @@ class SceneGraph
 
 	eastl::deque<eastl::string> m_MSNConvertionQueue;
 	
-	eastl::unique_ptr<BindlessTable> m_TriangleDescriptors;
+	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
-	eastl::unique_ptr<BindlessTable> m_TextureDescriptors;
+
+	eastl::unique_ptr<BindlessTable> m_DynamicVertexDescriptors;
+	eastl::unique_ptr<BindlessTable> m_SkinningDescriptors;
+	eastl::unique_ptr<BindlessTable> m_VertexCopyDescriptors;
+	eastl::unique_ptr<BindlessTable> m_VertexWriteDescriptors;
+
+	eastl::unique_ptr<BindlessTableManager> m_TextureDescriptors;
 
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
@@ -70,6 +77,11 @@ public:
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
 	inline auto& GetTextureDescriptors() const { return m_TextureDescriptors; }
+
+	inline auto& GetDynamicVertexDescriptors() const { return m_DynamicVertexDescriptors; }
+	inline auto& GetSkinningDescriptors() const { return m_SkinningDescriptors; }
+	inline auto& GetVertexCopyDescriptors() const { return m_VertexCopyDescriptors; }
+	inline auto& GetVertexWriteDescriptors() const { return m_VertexWriteDescriptors; }
 
 	inline auto& GetLightBuffer() const { return m_LightBuffer; }
 	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }

@@ -236,7 +236,7 @@ namespace Pass::Raytracing
 		nvrhi::BindingSetVector bindings = {
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 

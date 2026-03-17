@@ -539,27 +539,9 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	bool updatable = (flags & Flags::Dynamic) || (flags & Flags::Skinned);
+	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned);
 
 	logger::debug("Mesh::CreateBuffers - {}", m_Name);
-
-	// Vertex Buffer
-	{
-		const size_t size = sizeof(Vertex) * vertexCount;
-
-		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexCount, size);
-
-		auto& vertexBufferDesc = nvrhi::BufferDesc()
-			.setByteSize(size)
-			.setStructStride(sizeof(Vertex))
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-			.setIsAccelStructBuildInput(true)
-			.setDebugName(std::format("{} (Vertex Buffer)", m_Name.c_str()));
-
-		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
-
-		commandList->writeBuffer(buffers.vertexBuffer, geometry.vertices.data(), size);
-	}
 
 	// Triangle Buffer
 	{
@@ -577,22 +559,99 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		buffers.triangleBuffer = device->createBuffer(triangleBufferDesc);
 
 		commandList->writeBuffer(buffers.triangleBuffer, geometry.triangles.data(), size);
+
+		{
+			// Create SRV binding for triangles
+			auto triangleBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(0, buffers.triangleBuffer);
+			// Register descriptor, get handle within heap and writes the SRV
+			m_DescriptorHandle = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(triangleBindingSet);
+		}
 	}
 
-	{
-		// Create SRV binding for triangles
-		auto triangleBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(0, buffers.triangleBuffer);
+	auto descriptorIndex = m_DescriptorHandle.Get();
 
-		// Register descriptor, get handle with heap and writes the SRV
-		m_DescriptorHandle = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(triangleBindingSet);
+	if (flags.all(Flags::Dynamic)) {
+		const size_t size = sizeof(float4) * vertexCount;
+
+		logger::debug("Mesh::CreateBuffers - Dynamic Buffer Size: {}", size);
+
+		auto& dynamicBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(float4))
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Dynamic Position Buffer)", m_Name.c_str()));
+
+		buffers.dynamicPositionBuffer = device->createBuffer(dynamicBufferDesc);
+
+		UpdateUploadDynamicBuffers(commandList);
+
+		{
+			auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.dynamicPositionBuffer);
+			device->writeDescriptorTable(sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable, bindingSet);
+		}
+
 	}
 
+	// Vertex Buffer
 	{
-		// Set vertex to same slot (they have different spaces)
-		auto vertexBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(m_DescriptorHandle.Get(), buffers.vertexBuffer);
+		const size_t size = sizeof(Vertex) * vertexCount;
 
-		// Write vertex SRV
-		device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(), vertexBindingSet);
+		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexCount, size);
+
+		auto& vertexBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(Vertex))
+			.setCanHaveUAVs(updatable)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setIsAccelStructBuildInput(true)
+			.setDebugName(std::format("{} (Vertex Buffer)", m_Name.c_str()));
+
+		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
+
+		commandList->writeBuffer(buffers.vertexBuffer, geometry.vertices.data(), size);
+
+		auto vertexBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexBuffer);
+		device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable, vertexBindingSet);
+
+		if (updatable) {
+			auto uavBindingSet = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.vertexBuffer);
+			device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable, uavBindingSet);
+		}
+	}
+
+	// Vertex Copy
+	if (updatable) {
+		const size_t size = sizeof(Vertex) * vertexCount;
+
+		auto& vertexCopyBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(Vertex))
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Vertex Copy Buffer)", m_Name.c_str()));
+
+		buffers.vertexCopyBuffer = device->createBuffer(vertexCopyBufferDesc);
+
+		commandList->writeBuffer(buffers.vertexCopyBuffer, geometry.vertices.data(), size);
+
+		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexCopyBuffer);
+		device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable, bindingSet);
+	}
+
+	if (flags.all(Flags::Skinned)) {
+		const size_t size = sizeof(Skinning) * vertexCount;
+
+		auto& skinningBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(Skinning))
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Skinning Buffer)", m_Name.c_str()));
+
+		buffers.skinningBuffer = device->createBuffer(skinningBufferDesc);
+
+		commandList->writeBuffer(buffers.skinningBuffer, geometry.skinning.data(), size);
+
+		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
+		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
 	}
 
 	// Updatable geometry is already in root space
@@ -622,12 +681,79 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
-	return false;
+	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr);
+	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
+
+	if (!runtimeData.dynamicData)
+		return false;
+
+	auto& dataSize = runtimeData.dataSize;
+
+	// Is this even a possibility?
+	if (dataSize == 0)
+		return false;
+
+	runtimeData.lock.Lock();
+
+	// Has dynamic position changed?
+	if (std::memcmp(geometry.dynamicPosition.data(), runtimeData.dynamicData, dataSize) == 0) {
+		runtimeData.lock.Unlock();
+		return false;
+	}
+
+	std::memcpy(geometry.dynamicPosition.data(), runtimeData.dynamicData, dataSize);
+	runtimeData.lock.Unlock();
+
+	return true;
+}
+
+void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
+{
+	if (flags.none(Flags::Dynamic))
+		return;
+
+	commandList->writeBuffer(buffers.dynamicPositionBuffer, geometry.dynamicPosition.data(), sizeof(float4) * vertexCount);
 }
 
 bool Mesh::UpdateSkinning()
 {
-	return false;
+	// Update Bone matrices
+	auto& skinInstance = bsGeometryPtr->GetGeometryRuntimeData().skinInstance;
+
+	// RaceMenu crash fix
+	if (!skinInstance || !skinInstance.get())
+		return false;
+
+	// Only update if the game has updated the matrices
+	if (frameID == skinInstance->frameID)
+		return false;
+
+	// UBE crash fix
+	if (skinInstance->numMatrices == 0 || !skinInstance->boneMatrices)
+		return false;
+
+	if (m_BoneMatrices.empty())
+		m_BoneMatrices.resize(skinInstance->numMatrices);
+
+	float3x4* boneMatricesArray = reinterpret_cast<float3x4*>(skinInstance->boneMatrices);
+
+	auto* rootParent = skinInstance->rootParent;
+
+	// UBE crash fix
+	if (!rootParent)
+		return false;
+
+	auto delta = skinInstance->frameID - frameID;
+
+	auto skinRootInverse = Util::Math::GetXMFromNiTransform(delta > 1 ? rootParent->previousWorld.Invert() : rootParent->world.Invert());
+
+	frameID = skinInstance->frameID;
+
+	for (uint i = 0; i < skinInstance->numMatrices; i++) {
+		XMStoreFloat3x4(&m_BoneMatrices[i], XMMatrixMultiply(XMLoadFloat3x4(&boneMatricesArray[i]), skinRootInverse));
+	}
+
+	return true;
 }
 
 DirtyFlags Mesh::Update()
@@ -636,9 +762,8 @@ DirtyFlags Mesh::Update()
 	const auto skinned = flags.any(Mesh::Flags::Skinned);
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
-	if (dynamic || skinned) {
+	if (dynamic || skinned)
 		SetPendingState(State::Hidden, bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kHidden));
-	}
 
 	// Visibility flag is handled by model not by mesh
 	if (IsPendingHidden())

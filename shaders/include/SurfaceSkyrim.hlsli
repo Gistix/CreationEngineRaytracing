@@ -82,9 +82,9 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         }
         else if ((material.PBRFlags & PBR::Flags::Subsurface) && (material.ShaderFlags & ShaderFlags::kTwoSided))
         {
-        // Two sided subsurface - for leaves and thin objects
+            // Two sided subsurface - for leaves and thin objects
             Texture2D subsurfaceTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];
-        // Just use simple diffuse transmission for thin objects
+            // Just use simple diffuse transmission for thin objects
             float4 subsurfaceColor = subsurfaceTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
             float thickness = subsurfaceColor.a * material.SubsurfaceScale();
             surface.TransmissionColor = subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb;
