@@ -44,18 +44,6 @@ void SetCopyTarget(ID3D12Resource* target)
 	Renderer::GetSingleton()->SetCopyTarget(target);
 }
 
-void AttachModel(RE::TESForm* form)
-{
-	auto* scene = Scene::GetSingleton();
-	scene->AttachModel(form);
-}
-
-void AttachLand(RE::TESForm* form, RE::NiAVObject* root)
-{
-	auto* scene = Scene::GetSingleton();
-	scene->AttachLand(form, root);
-}
-
 void UpdateFeatureData(void* data, uint32_t size)
 {
 	auto* scene = Scene::GetSingleton();
