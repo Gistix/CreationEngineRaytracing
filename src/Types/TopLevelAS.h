@@ -44,8 +44,8 @@ public:
 
 		for (auto& instance : instances)
 		{
-			/*if (!instance->model->blas)
-				continue;*/
+			if (instance->IsHidden())
+				continue;
 
 			instance->model->UpdateBLAS(commandList);
 

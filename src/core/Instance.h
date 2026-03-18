@@ -12,8 +12,9 @@ struct Instance
 {
 	enum State : uint8_t
 	{
-		Hidden = 1 << 0,
-		Detached = 1 << 1
+		None = 0,
+		Detached = 1 << 0,
+		FirstPersonHidden = 1 << 1
 	};
 
 	// Instance form id
@@ -34,6 +35,10 @@ struct Instance
 	// Makes sure we only update once per frame
 	uint64_t m_LastUpdate = 0;
 
+	uint32_t m_TLASInstanceID = 0;
+
+	stl::enumeration<State> m_State = State::None;
+
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : formID(formID), node(node), model(model) { }
@@ -42,25 +47,24 @@ struct Instance
 
 	bool IsDetached() const;
 
+	bool IsHidden() const;
+
 	nvrhi::rt::InstanceDesc GetInstanceDesc() const
 	{
 		nvrhi::rt::InstanceDesc instanceDesc;
 		instanceDesc.bottomLevelAS = model->blas;
 		assert(instanceDesc.bottomLevelAS);
 		instanceDesc.instanceMask = 1;
-		instanceDesc.instanceID = 0;
+		instanceDesc.instanceID = m_TLASInstanceID;
 		memcpy(instanceDesc.transform, m_Transform.f, sizeof(float[12]));
 		return instanceDesc;
 	}
 
 	bool SkipUpdate();
 
-	void Update();
+	void Update(uint32_t tlasInstanceID);
 
 	auto GetDirtyFlags() const { return m_DirtyFlags; };
 
 	void ClearDirtyState() { m_DirtyFlags = DirtyFlags::None; };
-
-private:
-	bool m_Detached = false;
 };

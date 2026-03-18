@@ -247,7 +247,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	for (auto& instance : m_Instances)
 	{
-		instance->Update();
+		instance->Update(instanceIndex);
+
+		if (instance->IsHidden())
+			continue;
 
 		uint32_t firstMeshIndex = meshIndex;
 

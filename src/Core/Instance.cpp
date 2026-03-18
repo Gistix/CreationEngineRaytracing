@@ -5,12 +5,16 @@
 
 void Instance::SetDetached(bool detached)
 {
-	m_Detached = detached;
+	m_State.set(detached, State::Detached);
 }
 
 bool Instance::IsDetached() const
 {
-	return m_Detached;
+	return m_State.all(State::Detached);
+}
+bool Instance::IsHidden() const
+{
+	return m_State.any(State::Detached, State::FirstPersonHidden);
 }
 
 bool Instance::SkipUpdate()
@@ -40,8 +44,21 @@ bool Instance::SkipUpdate()
 	return false;
 }
 
-void Instance::Update()
+void Instance::Update(uint32_t tlasInstanceID)
 {
+	// TODO: Update logic for first person model support (both shares the same form id of the player)
+	if (Util::IsPlayerFormID(formID)) {
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		m_State.set(!player->Is3rdPersonVisible(), State::FirstPersonHidden);
+	}
+
+	if (IsHidden())
+		return;
+
+	// Instance has already been updated this frame
+	if (SkipUpdate())
+		return;
+
 	if (memcmp(&m_NiTransform, &node->world, sizeof(RE::NiTransform)) != 0)
 		m_DirtyFlags |= DirtyFlags::Transform;
 
@@ -56,7 +73,5 @@ void Instance::Update()
 
 	m_NiTransform = node->world;
 
-	// Instance has already been updated this frame
-	if (SkipUpdate())
-		return;
+	m_TLASInstanceID = tlasInstanceID;
 }
