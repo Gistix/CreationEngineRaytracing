@@ -24,10 +24,14 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	else
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
 
-	auto* refr = form->AsReference();
+	if (meshFlags.none(Mesh::Flags::Landscape))
+	{
+		auto* refr = form->AsReference();
 
-	if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>())
-		m_EmittanceColor = reinterpret_cast<float3*>(&extra->source->As<RE::TESRegion>()->emittanceColor);
+		if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
+			m_EmittanceColor = reinterpret_cast<float3*>(&extra->source->As<RE::TESRegion>()->emittanceColor);
+		}
+	}
 }
 
 void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
