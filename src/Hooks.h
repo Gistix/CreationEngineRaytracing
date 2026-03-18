@@ -22,6 +22,12 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct TESObjectLAND_Attach3D
+	{
+		static void thunk(RE::TESObjectLAND* oThis, bool a2);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct NiSourceTexture_Destructor
 	{
 		static void thunk(RE::NiSourceTexture* oThis);

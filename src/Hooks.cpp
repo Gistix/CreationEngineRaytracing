@@ -27,6 +27,13 @@ namespace Hooks
 		func(a_actor, a_object, a_queue3DTasks);
 	}
 
+	void TESObjectLAND_Attach3D::thunk(RE::TESObjectLAND* oThis, bool a2)
+	{
+		func(oThis, a2);
+
+		Scene::GetSingleton()->AttachLand(oThis);
+	};
+
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 		if (oThis && oThis->rendererTexture) {
@@ -159,6 +166,7 @@ namespace Hooks
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
+		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
 
 		// Destructor to remove instances (not models)
 		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));

@@ -273,11 +273,12 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 
 	if (Util::IsPlayer(refr)) {
 		if (auto* player = reinterpret_cast<RE::PlayerCharacter*>(refr)) {
+			auto name = player->GetName();
 			// First Person
 			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), node);
 
 			// Third Person
-			//rt.CreateActorModel(player, name, player->Get3D(false));
+			GetSceneGraph()->CreateActorModel(player, name, player->Get3D(false));
 			return;
 		}
 	}
@@ -287,9 +288,12 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 	}
 }
 
-void Scene::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::NiAVObject* root) 
+void Scene::AttachLand(RE::TESObjectLAND* land)
 {
+	if (!land)
+		return;
 
+	GetSceneGraph()->CreateLandModel(land);
 }
 
 void Scene::UpdateCameraData() const
