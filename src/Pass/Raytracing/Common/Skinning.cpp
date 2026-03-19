@@ -8,8 +8,8 @@ namespace Pass
 		: RenderPass(renderer)
 	{
 		auto device = renderer->GetDevice();
-		m_VertexUpdateBuffer = Util::CreateStructuredBuffer<MeshData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
-		m_BoneMatrixBuffer = Util::CreateStructuredBuffer<MeshData>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer");
+		m_VertexUpdateBuffer = Util::CreateStructuredBuffer<VertexUpdateData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
+		m_BoneMatrixBuffer = Util::CreateStructuredBuffer<float3x4>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer");
 
 		CreateBindingLayout();
 		CreatePipeline();
