@@ -727,20 +727,18 @@ struct StandardBSDF
 
         float3 wiLocal = surface.ToLocal(wi);
         float3 woLocal = surface.ToLocal(wo);
-#if defined(PATH_TRACING)
-#   if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
+#if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
         if (material.Feature == Feature::kHairTint)
         {
             HairChiangBSDF bsdf = HairChiangBSDF::make(wi, surface);
             return bsdf.Eval(wiLocal, woLocal);
         } else
-#   elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
+#elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
         if (material.Feature == Feature::kHairTint)
         {
             HairFarFieldBCSDF bsdf = HairFarFieldBCSDF::make(wi, surface);
             return bsdf.Eval(wiLocal, woLocal);
         } else
-#   endif
 #endif
         {
             DefaultBSDF bsdf = DefaultBSDF::make(N, wi, surface, isEnter);
@@ -761,8 +759,7 @@ struct StandardBSDF
 
         float3 wiLocal = surface.ToLocal(wi);
         
-#if defined(PATH_TRACING)
-#   if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
+#if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
         if (material.Feature == Feature::kHairTint)
         {
             HairChiangBSDF bsdf = HairChiangBSDF::make(wi, surface);
@@ -773,7 +770,7 @@ struct StandardBSDF
             result.wo = surface.FromLocal(woLocal);
             return valid;
         } else
-#   elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
+#elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
         if (material.Feature == Feature::kHairTint)
         {
             HairFarFieldBCSDF bsdf = HairFarFieldBCSDF::make(wi, surface);
@@ -786,7 +783,6 @@ struct StandardBSDF
             result.wo = surface.FromLocal(woLocal);
             return valid;
         } else
-#   endif
 #endif
         {
             DefaultBSDF bsdf = DefaultBSDF::make(N, wi, surface, isEnter);
