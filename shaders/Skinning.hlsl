@@ -28,21 +28,6 @@ namespace DirtyFlags
     static const uint Vertex = (1 << 2);
 }
 
-float3x4 GetBoneTransformMatrix2(Skinning skinning, float3 pivot, uint boneOffset)
-{
-    float3x4 pivotMatrix = transpose(float4x3(0.0.xxx, 0.0.xxx, 0.0.xxx, pivot));
-
-	float3x4 boneMatrix1 = BoneMatrices[boneOffset + skinning.GetBone(0)].World;
-	float3x4 boneMatrix2 = BoneMatrices[boneOffset + skinning.GetBone(1)].World;
-	float3x4 boneMatrix3 = BoneMatrices[boneOffset + skinning.GetBone(2)].World;
-	float3x4 boneMatrix4 = BoneMatrices[boneOffset + skinning.GetBone(3)].World;
-
-	return (boneMatrix1 - pivotMatrix) * skinning.weight[0] +
-		   (boneMatrix2 - pivotMatrix) * skinning.weight[1] +
-		   (boneMatrix3 - pivotMatrix) * skinning.weight[2] +
-		   (boneMatrix4 - pivotMatrix) * skinning.weight[3];
-}
-
 float3x4 GetBoneTransformMatrix(Skinning skinning, uint boneOffset)
 {
 	float3x4 boneMatrix1 = BoneMatrices[boneOffset + skinning.GetBone(0)].World;
