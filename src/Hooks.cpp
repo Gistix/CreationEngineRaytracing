@@ -6,7 +6,12 @@ namespace Hooks
 {
 	void TES_AttachModel::thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
 	{
+		logger::info("TES::AttachModel - 0x{:08X}", refr->GetFormID());
+
 		func(tes, refr, cell, queuedTree, a5, a6);
+
+		if (auto* node = refr->Get3D())
+			logger::info("TES::AttachModel - 0x{:08X} {}", reinterpret_cast<uintptr_t>(node), node->name);
 
 		Scene::GetSingleton()->AttachModel(refr);
 	}
@@ -31,18 +36,52 @@ namespace Hooks
 	{
 		func(oThis, a2);
 
+		logger::info("TESObjectLAND::Attach3D - 0x{:08X}", oThis->GetFormID());
+
 		Scene::GetSingleton()->AttachLand(oThis);
 	};
+
+	void TESObjectLAND_Detach3D::thunk(RE::TESObjectLAND* oThis)
+	{
+		func(oThis);
+
+		logger::info("TESObjectLAND::Detach3D - 0x{:08X}", oThis->GetFormID());
+
+		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
+	};
+
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 		if (oThis && oThis->rendererTexture) {
 			if (auto resource = oThis->rendererTexture->texture) {
+				logger::info("NiSourceTexture::Destructor");
 				Scene::GetSingleton()->GetSceneGraph()->ReleaseTexture(reinterpret_cast<ID3D11Texture2D*>(resource));
 			}
 		}
 
 		func(oThis);
+	}
+
+	void ShadowSceneNode_AttachObject::thunk(RE::ShadowSceneNode* a_shadowSceneNode, RE::NiAVObject* a_object)
+	{
+		logger::info("ShadowSceneNode::AttachObject - 0x{:08X} {}", reinterpret_cast<uintptr_t>(a_object), a_object->name);
+
+		func(a_shadowSceneNode, a_object);
+	}
+
+	void ShadowSceneNode_DetachObject::thunk(RE::ShadowSceneNode* a_shadowSceneNode, RE::NiAVObject* a_object, bool a3, bool a4)
+	{
+		logger::info("ShadowSceneNode::DetachObject - 0x{:08X} {}, {}, {}", reinterpret_cast<uintptr_t>(a_object), a_object->name, a3, a4);
+
+		func(a_shadowSceneNode, a_object, a3, a4);
+	}
+
+	void TESObjectCELL_AddRefr::thunk(RE::TESObjectCELL* a_cell, RE::TESObjectREFR* a_refr, RE::NiNode* a_node)
+	{
+		logger::info("TESObjectCELL::AddRefr - 0x{:08X} {} {}", a_refr->formID, a_refr->GetName(), a_node ? a_node->name.c_str() : "N/A" );
+
+		func(a_cell, a_refr, a_node);
 	}
 
 #if defined(SKYRIM)
@@ -163,10 +202,17 @@ namespace Hooks
 
 		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
 
+		//stl::detour_thunk<ShadowSceneNode_AttachObject>(REL::RelocationID(99696, 106330));
+		//stl::detour_thunk<ShadowSceneNode_DetachObject>(REL::RelocationID(99705, 106339));
+
+		//stl::detour_thunk<TESObjectCELL_AddRefr>(REL::RelocationID(19003, 19411));
+		
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
+
+		//stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
 
 		// Destructor to remove instances (not models)
 		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));

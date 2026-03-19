@@ -74,7 +74,7 @@ struct Mesh
 	// DismemberSkinInstance slot
 	uint16_t slot;
 
-	uint32_t frameID;
+	uint32_t m_FrameID;
 
 	DescriptorHandle m_DescriptorHandle;
 

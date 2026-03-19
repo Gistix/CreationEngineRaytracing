@@ -28,6 +28,12 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct TESObjectLAND_Detach3D
+	{
+		static void thunk(RE::TESObjectLAND* oThis);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct NiSourceTexture_Destructor
 	{
 		static void thunk(RE::NiSourceTexture* oThis);
@@ -43,6 +49,24 @@ namespace Hooks
 
 			func(oThis);
 		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct ShadowSceneNode_AttachObject
+	{
+		static void thunk(RE::ShadowSceneNode* oThis, RE::NiAVObject* a_object);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct ShadowSceneNode_DetachObject
+	{
+		static void thunk(RE::ShadowSceneNode* oThis, RE::NiAVObject* a_object, bool a3, bool a4);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct TESObjectCELL_AddRefr
+	{
+		static void thunk(RE::TESObjectCELL* a_cell, RE::TESObjectREFR* a_refr, RE::NiNode* a_node);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

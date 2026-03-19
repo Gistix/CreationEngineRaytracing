@@ -14,7 +14,8 @@ struct Instance
 	{
 		None = 0,
 		Detached = 1 << 0,
-		FirstPersonHidden = 1 << 1
+		FirstPersonHidden = 1 << 1,
+		DistanceHidden = 1 << 2
 	};
 
 	// Instance form id

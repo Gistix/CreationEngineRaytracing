@@ -734,8 +734,17 @@ bool Mesh::UpdateSkinning()
 	if (!skinInstance || !skinInstance.get())
 		return false;
 
+	const auto frameID = skinInstance->frameID;
+
+	if (frameID == Constants::INVALID_FRAME_ID)
+		return false;
+
+	//if (bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kNoAnimSyncZ, RE::NiAVObject::Flag::kNoAnimSyncS))
+	//	return false;
+	//logger::info("Mesh::UpdateSkinning - Flags: {}, {}", Util::GetFlagsString<RE::NiAVObject::Flag>(bsGeometryPtr->GetFlags().underlying()), m_Name);
+
 	// Only update if the game has updated the matrices
-	if (frameID == skinInstance->frameID)
+	if (m_FrameID == frameID)
 		return false;
 
 	// UBE crash fix
@@ -753,11 +762,11 @@ bool Mesh::UpdateSkinning()
 	if (!rootParent)
 		return false;
 
-	auto delta = skinInstance->frameID - frameID;
+	auto delta = frameID - m_FrameID;
 
 	auto skinRootInverse = Util::Math::GetXMFromNiTransform(delta > 1 ? rootParent->previousWorld.Invert() : rootParent->world.Invert());
 
-	frameID = skinInstance->frameID;
+	m_FrameID = frameID;
 
 	for (uint i = 0; i < skinInstance->numMatrices; i++) {
 		XMStoreFloat3x4(&m_BoneMatrices[i], XMMatrixMultiply(XMLoadFloat3x4(&boneMatricesArray[i]), skinRootInverse));
