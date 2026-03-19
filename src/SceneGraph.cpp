@@ -488,7 +488,11 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	if (instanceFormIDsIt == m_InstancesFormIDs.end())
 		return;
 
+	logger::info("SceneGraph::SetInstanceDetached - Detaching {}", detached);
+
 	for (auto& instance : instanceFormIDsIt->second) {
+		logger::info("	SceneGraph::SetInstanceDetached - {}", instance->model->m_Name.c_str());
+
 		instance->SetDetached(detached);
 	}
 }
@@ -667,8 +671,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
 
-		float3x4 localToRoot;
-		XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+
+		float3x4 localToRoot{};
+
+		// Some plants have parts with geometry world position of [0, 0, 0]
+		if (pGeometry->world.translate != RE::NiPoint3::Zero())
+			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+
 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
