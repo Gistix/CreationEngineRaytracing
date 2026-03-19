@@ -11,6 +11,7 @@
 
 #include "Renderer/RenderNode.h"
 
+#include "Pass/Raytracing/Common/Skinning.h"
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
@@ -34,12 +35,11 @@ void Scene::Load()
 void Scene::PostPostLoad()
 {
 	Hooks::Install();
-	Events::Register();
 }
 
 void Scene::DataLoaded()
 {
-
+	Events::Register();
 }
 
 void Scene::SetLogLevel(spdlog::level::level_enum a_level)
@@ -66,6 +66,12 @@ RenderNode* Scene::GetGlobalIllumination()
 		auto* renderer = Renderer::GetSingleton();
 
 		m_GlobalIllumination = eastl::make_unique<RenderNode>(true, "Global Illumination");
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"Skinning",
+			eastl::make_unique<Pass::Skinning>(renderer)
+			});
 
 		m_GlobalIllumination->AddNode({
 			true,
@@ -102,6 +108,12 @@ RenderNode* Scene::GetPathTracing()
 		auto* renderer = Renderer::GetSingleton();
 
 		m_PathTracing = eastl::make_unique<RenderNode>(true, "Path Tracing");
+
+		m_PathTracing->AddNode({
+			true,
+			"Skinning",
+			eastl::make_unique<Pass::Skinning>(renderer)
+			});
 
 		m_PathTracing->AddNode({
 			true,
@@ -260,11 +272,12 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 
 	if (Util::IsPlayer(refr)) {
 		if (auto* player = reinterpret_cast<RE::PlayerCharacter*>(refr)) {
+			auto name = player->GetName();
 			// First Person
 			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), node);
 
 			// Third Person
-			//rt.CreateActorModel(player, name, player->Get3D(false));
+			GetSceneGraph()->CreateActorModel(player, name, player->Get3D(false));
 			return;
 		}
 	}
@@ -274,9 +287,12 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 	}
 }
 
-void Scene::AttachLand([[maybe_unused]] RE::TESForm* form, [[maybe_unused]] RE::NiAVObject* root) 
+void Scene::AttachLand(RE::TESObjectLAND* land)
 {
+	if (!land)
+		return;
 
+	GetSceneGraph()->CreateLandModel(land);
 }
 
 void Scene::UpdateCameraData() const

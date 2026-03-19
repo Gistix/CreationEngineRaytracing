@@ -54,9 +54,14 @@ struct Mesh
 
 	struct MeshBuffers
 	{
+		nvrhi::BufferHandle dynamicPositionBuffer;
 		nvrhi::BufferHandle vertexBuffer;
+		nvrhi::BufferHandle vertexCopyBuffer;
 		nvrhi::BufferHandle triangleBuffer;
+		nvrhi::BufferHandle skinningBuffer;
 	} buffers;
+
+	eastl::vector<float3x4> m_BoneMatrices;
 
 	nvrhi::rt::GeometryDesc geometryDesc;
 
@@ -69,6 +74,8 @@ struct Mesh
 	// DismemberSkinInstance slot
 	uint16_t slot;
 
+	uint32_t m_FrameID;
+
 	DescriptorHandle m_DescriptorHandle;
 
 	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, bool dismemberVisible = true, uint16_t slot = 0) :
@@ -79,7 +86,7 @@ struct Mesh
 
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
 
-	void CalculateVectors(bool calculateNormal);
+	void CalculateNormals();
 
 	Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap);
 
@@ -88,6 +95,8 @@ struct Mesh
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
 	bool UpdateDynamicPosition();
+
+	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
 	bool UpdateSkinning();
 

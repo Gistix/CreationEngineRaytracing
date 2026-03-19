@@ -51,6 +51,7 @@ find_path(CLIB_UTIL_INCLUDE_DIRS "ClibUtil/utils.hpp")
 find_package(cppwinrt CONFIG REQUIRED)
 find_package(directx-dxc CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(mikktspace CONFIG REQUIRED)
 
 find_path(DETOURS_INCLUDE_DIRS "detours/detours.h")
 find_library(DETOURS_LIBRARY detours REQUIRED)
@@ -65,6 +66,7 @@ target_link_libraries(
 	d3d12.lib
 	magic_enum::magic_enum
     xbyak::xbyak
+    mikktspace::mikktspace
 	d3dcompiler.lib
 	nvrhi_d3d12
 	nvrhi

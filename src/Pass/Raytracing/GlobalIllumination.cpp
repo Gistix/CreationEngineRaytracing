@@ -82,9 +82,9 @@ namespace Pass::Raytracing
 
 		// Compile Libraries
 		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines);
-		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/Miss.hlsl", defines);
-		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/ClosestHit.hlsl", defines);
-		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/PathTracing/AnyHit.hlsl", defines);
+		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", defines);
+		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", defines);
+		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", defines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
 
@@ -213,7 +213,7 @@ namespace Pass::Raytracing
 		nvrhi::BindingSetVector bindings = {
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 

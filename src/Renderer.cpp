@@ -106,12 +106,12 @@ void Renderer::InitDefaultTextures()
 	commandList->beginTrackingTextureState(m_RMAOSTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 	commandList->beginTrackingTextureState(m_DetailTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 
-	commandList->writeTexture(m_WhiteTexture->texture, 0, 0, &white, 0);
-	commandList->writeTexture(m_GrayTexture->texture, 0, 0, &gray, 0);
-	commandList->writeTexture(m_NormalTexture->texture, 0, 0, &normal, 0);
-	commandList->writeTexture(m_BlackTexture->texture, 0, 0, &black, 0);
-	commandList->writeTexture(m_RMAOSTexture->texture, 0, 0, &rmaos, 0);
-	commandList->writeTexture(m_DetailTexture->texture, 0, 0, &detail, 0);
+	commandList->writeTexture(m_WhiteTexture->texture, 0, 0, white, 4);
+	commandList->writeTexture(m_GrayTexture->texture, 0, 0, gray, 4);
+	commandList->writeTexture(m_NormalTexture->texture, 0, 0, normal, 4);
+	commandList->writeTexture(m_BlackTexture->texture, 0, 0, black, 4);
+	commandList->writeTexture(m_RMAOSTexture->texture, 0, 0, rmaos, 4);
+	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
 
 	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::ShaderResource);
 	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::ShaderResource);

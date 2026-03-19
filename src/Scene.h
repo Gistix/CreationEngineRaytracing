@@ -89,7 +89,7 @@ struct Scene
 
 	void AttachModel(RE::TESForm* form);
 
-	void AttachLand(RE::TESForm* form, RE::NiAVObject* root);
+	void AttachLand(RE::TESObjectLAND* land);
 
 	void UpdateCameraData() const;
 

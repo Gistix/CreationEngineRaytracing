@@ -47,6 +47,14 @@ struct Payload
     }
 
     bool Hit() { return hitDistance > 0.0f; }
+    
+    void PackAll(in BuiltInTriangleIntersectionAttributes attribs)
+    {
+        hitDistance = RayTCurrent();
+        primitiveIndex = PrimitiveIndex();
+        PackBarycentrics(attribs.barycentrics);
+        PackInstanceGeometryIndex(InstanceID(), GeometryIndex());       
+    }
 };
 
 #endif // PAYLOAD_HLSL

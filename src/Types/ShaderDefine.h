@@ -4,6 +4,11 @@ struct ShaderDefine {
 	eastl::wstring name;
 	eastl::wstring value;
 
+	ShaderDefine(const wchar_t* name) : name(name)
+	{
+		this->value = L"";
+	}
+
 	ShaderDefine(const wchar_t* name, int value) : name(name)
 	{
 		// Workaround since eastl::to_string throws unresolved externals error

@@ -9,6 +9,8 @@
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 
+#include "Utils/CalcTangents.h"
+
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
 	auto vertexDesc = rendererData->vertexDesc;
@@ -16,7 +18,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	vertexFlags = vertexDesc.GetFlags();
 
 	bool hasNormal = vertexFlags & RE::BSGraphics::Vertex::VF_NORMAL;
-	bool hasBitangent = vertexFlags & RE::BSGraphics::Vertex::VF_TANGENT;
+	bool hasTangent = vertexFlags & RE::BSGraphics::Vertex::VF_TANGENT;
 
 	// Vertices
 	{
@@ -113,22 +115,22 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 
 				vertexData.Normal = Util::Math::Normalize({ normal.x, normal.y, normal.z });
 
-				if (hasBitangent) {
-					byte4f bitangentPacked;
-					std::memcpy(&bitangentPacked, vtx + tangOffset, sizeof(byte4f));
-					auto bitangent = bitangentPacked.unpack();
+				if (hasTangent) {
+					byte4f tangentPacked;
+					std::memcpy(&tangentPacked, vtx + tangOffset, sizeof(byte4f));
+					auto tangent = tangentPacked.unpack();
 
-					vertexData.Bitangent = Util::Math::Normalize({ bitangent.x, bitangent.y, bitangent.z });
+					vertexData.Tangent = Util::Math::Normalize({ tangent.x, tangent.y, tangent.z });
 
-					float3 tangent = { pos.w, normal.w, bitangent.w };
+					float3 bitangent = { pos.w, normal.w, tangent.w };
 
 					if (!hasPosition) {
-						tangent.x = std::sqrt(std::max(0.0f, 1.0f - tangent.y * tangent.y - tangent.z * tangent.z));
+						bitangent.x = std::sqrt(std::max(0.0f, 1.0f - bitangent.y * bitangent.y - bitangent.z * bitangent.z));
 					}
 
-					vertexData.Handedness = (tangent.x * (vertexData.Bitangent.y * vertexData.Normal.z - vertexData.Bitangent.z * vertexData.Normal.y) +
-						tangent.y * (vertexData.Bitangent.z * vertexData.Normal.x - vertexData.Bitangent.x * vertexData.Normal.z) +
-						tangent.z * (vertexData.Bitangent.x * vertexData.Normal.y - vertexData.Bitangent.y * vertexData.Normal.x)) < 0 ?
+					vertexData.Handedness = (tangent.x * (vertexData.Tangent.y * vertexData.Normal.z - vertexData.Tangent.z * vertexData.Normal.y) +
+						bitangent.y * (vertexData.Tangent.z * vertexData.Normal.x - vertexData.Tangent.x * vertexData.Normal.z) +
+						bitangent.z * (vertexData.Tangent.x * vertexData.Normal.y - vertexData.Tangent.y * vertexData.Normal.x)) < 0 ?
 						-1.0f : 1.0f;
 				}
 			}
@@ -229,8 +231,12 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		triangleCount = triangleCountIn;
 	}
 
-	if (!hasNormal || !hasBitangent) {
-		CalculateVectors(!hasNormal);
+	if (!hasNormal)
+		CalculateNormals();
+
+	if (!hasTangent) {
+		Util::CalcTangents::GetSingleton()->calc(this);
+
 	}
 }
 
@@ -411,7 +417,11 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
 
 							bool isModelSpaceNormalMap = shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals);
-							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
+
+							if (isModelSpaceNormalMap)
+								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(nullptr, normalTexture, isModelSpaceNormalMap);
+							else
+								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
 
 							if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 								if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
@@ -539,27 +549,9 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	bool updatable = (flags & Flags::Dynamic) || (flags & Flags::Skinned);
+	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned);
 
 	logger::debug("Mesh::CreateBuffers - {}", m_Name);
-
-	// Vertex Buffer
-	{
-		const size_t size = sizeof(Vertex) * vertexCount;
-
-		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexCount, size);
-
-		auto& vertexBufferDesc = nvrhi::BufferDesc()
-			.setByteSize(size)
-			.setStructStride(sizeof(Vertex))
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-			.setIsAccelStructBuildInput(true)
-			.setDebugName(std::format("{} (Vertex Buffer)", m_Name.c_str()));
-
-		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
-
-		commandList->writeBuffer(buffers.vertexBuffer, geometry.vertices.data(), size);
-	}
 
 	// Triangle Buffer
 	{
@@ -577,22 +569,99 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		buffers.triangleBuffer = device->createBuffer(triangleBufferDesc);
 
 		commandList->writeBuffer(buffers.triangleBuffer, geometry.triangles.data(), size);
+
+		{
+			// Create SRV binding for triangles
+			auto triangleBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(0, buffers.triangleBuffer);
+			// Register descriptor, get handle within heap and writes the SRV
+			m_DescriptorHandle = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(triangleBindingSet);
+		}
 	}
 
-	{
-		// Create SRV binding for triangles
-		auto triangleBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(0, buffers.triangleBuffer);
+	auto descriptorIndex = m_DescriptorHandle.Get();
 
-		// Register descriptor, get handle with heap and writes the SRV
-		m_DescriptorHandle = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(triangleBindingSet);
+	if (flags.all(Flags::Dynamic)) {
+		const size_t size = sizeof(float4) * vertexCount;
+
+		logger::debug("Mesh::CreateBuffers - Dynamic Buffer Size: {}", size);
+
+		auto& dynamicBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(float4))
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Dynamic Position Buffer)", m_Name.c_str()));
+
+		buffers.dynamicPositionBuffer = device->createBuffer(dynamicBufferDesc);
+
+		UpdateUploadDynamicBuffers(commandList);
+
+		{
+			auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.dynamicPositionBuffer);
+			device->writeDescriptorTable(sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable, bindingSet);
+		}
+
 	}
 
+	// Vertex Buffer
 	{
-		// Set vertex to same slot (they have different spaces)
-		auto vertexBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(m_DescriptorHandle.Get(), buffers.vertexBuffer);
+		const size_t size = sizeof(Vertex) * vertexCount;
 
-		// Write vertex SRV
-		device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(), vertexBindingSet);
+		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexCount, size);
+
+		auto& vertexBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(Vertex))
+			.setCanHaveUAVs(updatable)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setIsAccelStructBuildInput(true)
+			.setDebugName(std::format("{} (Vertex Buffer)", m_Name.c_str()));
+
+		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
+
+		commandList->writeBuffer(buffers.vertexBuffer, geometry.vertices.data(), size);
+
+		auto vertexBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexBuffer);
+		device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable, vertexBindingSet);
+
+		if (updatable) {
+			auto uavBindingSet = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.vertexBuffer);
+			device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable, uavBindingSet);
+		}
+	}
+
+	// Vertex Copy
+	if (updatable) {
+		const size_t size = sizeof(Vertex) * vertexCount;
+
+		auto& vertexCopyBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(Vertex))
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Vertex Copy Buffer)", m_Name.c_str()));
+
+		buffers.vertexCopyBuffer = device->createBuffer(vertexCopyBufferDesc);
+
+		commandList->writeBuffer(buffers.vertexCopyBuffer, geometry.vertices.data(), size);
+
+		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexCopyBuffer);
+		device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable, bindingSet);
+	}
+
+	if (flags.all(Flags::Skinned)) {
+		const size_t size = sizeof(Skinning) * vertexCount;
+
+		auto& skinningBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(sizeof(Skinning))
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Skinning Buffer)", m_Name.c_str()));
+
+		buffers.skinningBuffer = device->createBuffer(skinningBufferDesc);
+
+		commandList->writeBuffer(buffers.skinningBuffer, geometry.skinning.data(), size);
+
+		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
+		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
 	}
 
 	// Updatable geometry is already in root space
@@ -622,12 +691,88 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
-	return false;
+	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr);
+	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
+
+	if (!runtimeData.dynamicData)
+		return false;
+
+	auto& dataSize = runtimeData.dataSize;
+
+	// Is this even a possibility?
+	if (dataSize == 0)
+		return false;
+
+	runtimeData.lock.Lock();
+
+	// Has dynamic position changed?
+	if (std::memcmp(geometry.dynamicPosition.data(), runtimeData.dynamicData, dataSize) == 0) {
+		runtimeData.lock.Unlock();
+		return false;
+	}
+
+	std::memcpy(geometry.dynamicPosition.data(), runtimeData.dynamicData, dataSize);
+	runtimeData.lock.Unlock();
+
+	return true;
+}
+
+void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
+{
+	if (flags.none(Flags::Dynamic))
+		return;
+
+	commandList->writeBuffer(buffers.dynamicPositionBuffer, geometry.dynamicPosition.data(), sizeof(float4) * vertexCount);
 }
 
 bool Mesh::UpdateSkinning()
 {
-	return false;
+	// Update Bone matrices
+	auto& skinInstance = bsGeometryPtr->GetGeometryRuntimeData().skinInstance;
+
+	// RaceMenu crash fix
+	if (!skinInstance || !skinInstance.get())
+		return false;
+
+	const auto frameID = skinInstance->frameID;
+
+	if (frameID == Constants::INVALID_FRAME_ID)
+		return false;
+
+	//if (bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kNoAnimSyncZ, RE::NiAVObject::Flag::kNoAnimSyncS))
+	//	return false;
+	//logger::info("Mesh::UpdateSkinning - Flags: {}, {}", Util::GetFlagsString<RE::NiAVObject::Flag>(bsGeometryPtr->GetFlags().underlying()), m_Name);
+
+	// Only update if the game has updated the matrices
+	if (m_FrameID == frameID)
+		return false;
+
+	// UBE crash fix
+	if (skinInstance->numMatrices == 0 || !skinInstance->boneMatrices)
+		return false;
+
+	if (m_BoneMatrices.empty())
+		m_BoneMatrices.resize(skinInstance->numMatrices);
+
+	float3x4* boneMatricesArray = reinterpret_cast<float3x4*>(skinInstance->boneMatrices);
+
+	auto* rootParent = skinInstance->rootParent;
+
+	// UBE crash fix
+	if (!rootParent)
+		return false;
+
+	auto delta = frameID - m_FrameID;
+
+	auto skinRootInverse = Util::Math::GetXMFromNiTransform(delta > 1 ? rootParent->previousWorld.Invert() : rootParent->world.Invert());
+
+	m_FrameID = frameID;
+
+	for (uint i = 0; i < skinInstance->numMatrices; i++) {
+		XMStoreFloat3x4(&m_BoneMatrices[i], XMMatrixMultiply(XMLoadFloat3x4(&boneMatricesArray[i]), skinRootInverse));
+	}
+
+	return true;
 }
 
 DirtyFlags Mesh::Update()
@@ -636,9 +781,8 @@ DirtyFlags Mesh::Update()
 	const auto skinned = flags.any(Mesh::Flags::Skinned);
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
-	if (dynamic || skinned) {
+	if (dynamic || skinned)
 		SetPendingState(State::Hidden, bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kHidden));
-	}
 
 	// Visibility flag is handled by model not by mesh
 	if (IsPendingHidden())
@@ -715,15 +859,10 @@ void Mesh::UpdateState()
 	state = pendingState;
 }
 
-void Mesh::CalculateVectors(bool calculateNormal)
+void Mesh::CalculateNormals()
 {
 	eastl::vector<float3> normals;
-
-	if (calculateNormal)
-		normals.resize(vertexCount, float3(0, 0, 0));
-
-	eastl::vector<float3> tangents;
-	tangents.resize(vertexCount, float3(0, 0, 0));
+	normals.resize(vertexCount, float3(0, 0, 0));
 
 	// Loop over triangles
 	for (auto& t : geometry.triangles) {
@@ -735,59 +874,18 @@ void Mesh::CalculateVectors(bool calculateNormal)
 		float3 pos1 = v1.Position;
 		float3 pos2 = v2.Position;
 
-		half2 uv0 = v0.Texcoord0;
-		half2 uv1 = v1.Texcoord0;
-		half2 uv2 = v2.Texcoord0;
-
 		float3 deltaPos1 = pos1 - pos0;
 		float3 deltaPos2 = pos2 - pos0;
 
-		// Optionaly compute normals
-		if (calculateNormal) {
-			float3 faceNormal = deltaPos1.Cross(deltaPos2);
+		float3 faceNormal = deltaPos1.Cross(deltaPos2);
 
-			normals[t.x] += faceNormal;
-			normals[t.y] += faceNormal;
-			normals[t.z] += faceNormal;
-		}
-
-		// Compute UV deltas
-		float2 deltaUV1 = uv1 - uv0;
-		float2 deltaUV2 = uv2 - uv0;
-
-		float det = deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x;
-
-		if (fabs(det) < 1e-8f)
-			continue;
-
-		float r = 1.0f / det;
-
-		float3 tangent = r * (deltaUV2.y * deltaPos1 - deltaUV1.y * deltaPos2);
-
-
-		// Accumulate per-vertex
-		tangents[t.x] += tangent;
-		tangents[t.y] += tangent;
-		tangents[t.z] += tangent;
+		normals[t.x] += faceNormal;
+		normals[t.y] += faceNormal;
+		normals[t.z] += faceNormal;
 	}
 
 	// Normalize and orthogonalize
 	for (size_t i = 0; i < vertexCount; i++) {
-		auto& v = geometry.vertices[i];
-
-		float3 n = Util::Math::Normalize(calculateNormal ? normals[i] : float3(v.Normal));
-
-		float3 t = Util::Math::Normalize(tangents[i] - n * n.Dot(tangents[i]));
-
-		float3 b = n.Cross(t);
-		float sign = (b.Dot(t.Cross(n)) < 0.0f) ? -1.0f : 1.0f;
-		b *= sign;
-
-		if (calculateNormal)
-			v.Normal = n;
-
-		v.Bitangent = b;
-
-		v.Handedness = sign;
+		geometry.vertices[i].Normal = Util::Math::Normalize(normals[i]);
 	}
 }

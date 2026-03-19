@@ -19,15 +19,19 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	blasDesc.setDebugName(std::format("{} - BLAS", m_Name))
 		.setIsTopLevel(false);
 
-	if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowUpdate;
 	else
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
 
-	auto* refr = form->AsReference();
+	if (meshFlags.none(Mesh::Flags::Landscape))
+	{
+		auto* refr = form->AsReference();
 
-	if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>())
-		m_EmittanceColor = reinterpret_cast<float3*>(&extra->source->As<RE::TESRegion>()->emittanceColor);
+		if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
+			m_EmittanceColor = reinterpret_cast<float3*>(&extra->source->As<RE::TESRegion>()->emittanceColor);
+		}
+	}
 }
 
 void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
@@ -64,4 +68,23 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 	blas = Renderer::GetSingleton()->GetDevice()->createAccelStruct(blasDesc);
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+}
+
+void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
+{
+	if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		return;
+
+	if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin))
+		return;
+
+	auto blasUpdateDesc = nvrhi::rt::AccelStructDesc()
+		.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::PerformUpdate)
+		.setIsTopLevel(false);
+
+	for (size_t i = 0; i < meshes.size(); i++) {
+		blasUpdateDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
+	}
+
+	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasUpdateDesc);
 }

@@ -9,6 +9,8 @@
 
 #include "Types/CommunityShaders/LightLimitFix.h"
 
+#include "Pass/Raytracing/Common/Skinning.h"
+
 void SceneGraph::Initialize()
 {
 	m_CurrentAccumulator = { REL::RelocationID(527650, 414600) };
@@ -34,7 +36,7 @@ void SceneGraph::Initialize()
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
 		};
 
-		m_TriangleDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+		m_TriangleDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
 	}
 
 	// Vertex bindless descriptor table
@@ -60,7 +62,59 @@ void SceneGraph::Initialize()
 			nvrhi::BindingLayoutItem::Texture_SRV(3).setSize(UINT_MAX)
 		};
 
-		m_TextureDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+		m_TextureDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
+	}
+
+	// Dynamic Vertex bindless descriptor table
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
+		};
+
+		m_DynamicVertexDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
+	// Skinning descriptor table
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3).setSize(UINT_MAX)
+		};
+
+		m_SkinningDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
+	// Vertex copy descriptor table
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2).setSize(UINT_MAX)
+		};
+
+		m_VertexCopyDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
+	// Vertex write descriptor table
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0).setSize(UINT_MAX)
+		};
+
+		m_VertexWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
 }
 
@@ -98,7 +152,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 		}
 	}
 
-	const auto& lightSettings = Scene::GetSingleton()->m_Settings.LightSettings;
+	const auto& lightingSettings = Scene::GetSingleton()->m_Settings.LightingSettings;
 
 	uint numLights = 0;
 
@@ -150,7 +204,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Fade = runtimeData.fade;
 
-			if (lightSettings.LodDimmer)
+			if (lightingSettings.LodDimmer)
 				lightData.Fade *= bsLight->lodDimmer;
 
 			lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
@@ -187,11 +241,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	uint32_t meshIndex = 0;
 	uint32_t instanceIndex = 0;
 
+	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
+
 	eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
 	for (auto& instance : m_Instances)
 	{
-		instance->Update();
+		instance->Update(instanceIndex);
+
+		if (instance->IsHidden())
+			continue;
 
 		uint32_t firstMeshIndex = meshIndex;
 
@@ -199,8 +258,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		float3 externalEmittance = model->GetExternalEmittance();
 
+		auto dirtyFlags = model->GetDirtyFlags();
+
 		for (auto& mesh : model->meshes)
-		{
+		{		
+			if (skinningPass && dirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
+				skinningPass->QueueUpdate(dirtyFlags.get(), mesh.get());
+			}
+
 			m_MeshData[meshIndex] = mesh->GetData(externalEmittance);
 			meshIndex++;
 		}
@@ -423,7 +488,11 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	if (instanceFormIDsIt == m_InstancesFormIDs.end())
 		return;
 
+	logger::info("SceneGraph::SetInstanceDetached - Detaching {}", detached);
+
 	for (auto& instance : instanceFormIDsIt->second) {
+		logger::info("	SceneGraph::SetInstanceDetached - {}", instance->model->m_Name.c_str());
+
 		instance->SetDetached(detached);
 	}
 }
@@ -602,8 +671,12 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
 
-		float3x4 localToRoot;
-		XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+
+		float3x4 localToRoot{};
+
+		// Some plants have parts with geometry world position of [0, 0, 0]
+		if (pGeometry->world.translate != RE::NiPoint3::Zero())
+			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
@@ -628,6 +701,10 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			meshes.push_back(eastl::move(mesh));
 		}
 		else if (auto* skinInstance = geometryRuntimeData.skinInstance.get()) {  // Skinned
+			// Skinned trees have wrong bone matrices and are causing a device removal due to out of bounds vertices
+			if (formType == RE::FormType::Tree)
+				return RE::BSVisit::BSVisitControl::kContinue;
+
 			auto& skinPartition = skinInstance->skinPartition;
 
 			if (!skinPartition) {

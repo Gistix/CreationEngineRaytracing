@@ -9,7 +9,7 @@
 
 // Light multiplier to match vanilla raster
 #define DIRECTIONAL_LIGHT_MULTIPLIER (K_4PI)
-#define POINT_LIGHT_MULTIPLIER (K_PI)
+#define POINT_LIGHT_MULTIPLIER (1.0f) // K_PI
 
 float3 ColorToLinear(float3 color)
 {
@@ -62,7 +62,7 @@ float3 LLTrueLinearToGamma(float3 color)
 
 float3 EmitColorToLinear(float3 color)
 {
-    return LLON ? (pow(abs(color), LLSETTINGS.emitColorGamma)) : color;
+    return pow(abs(color), LLON ? LLSETTINGS.emitColorGamma : 2.2f);
 }
 
 float EmitColorMult()
