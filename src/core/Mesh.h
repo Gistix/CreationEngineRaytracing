@@ -42,7 +42,7 @@ struct Mesh
 	uint triangleCount = 0;
 	RE::BSGraphics::Vertex::Flags vertexFlags;
 
-	RE::BSGeometry* bsGeometryPtr = nullptr;
+	RE::NiPointer<RE::BSGeometry> bsGeometryPtr;
 
 	struct MeshGeometry
 	{
