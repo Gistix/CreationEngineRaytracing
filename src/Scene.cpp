@@ -35,12 +35,11 @@ void Scene::Load()
 void Scene::PostPostLoad()
 {
 	Hooks::Install();
-	Events::Register();
 }
 
 void Scene::DataLoaded()
 {
-
+	Events::Register();
 }
 
 void Scene::SetLogLevel(spdlog::level::level_enum a_level)
