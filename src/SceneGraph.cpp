@@ -678,7 +678,6 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		if (pGeometry->world.translate != RE::NiPoint3::Zero())
 			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
-
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
 
@@ -702,6 +701,10 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			meshes.push_back(eastl::move(mesh));
 		}
 		else if (auto* skinInstance = geometryRuntimeData.skinInstance.get()) {  // Skinned
+			// Skinned trees have wrong bone matrices and are causing a device removal due to out of bounds vertices
+			if (formType == RE::FormType::Tree)
+				return RE::BSVisit::BSVisitControl::kContinue;
+
 			auto& skinPartition = skinInstance->skinPartition;
 
 			if (!skinPartition) {
