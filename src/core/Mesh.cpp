@@ -31,7 +31,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 			static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ RE::BSDynamicTriShape::Ni_RTTI };
 
 			if (bsGeometryPtr->GetRTTI() == dynamicTriShapeRTTI.get()) {
-				auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr);
+				auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 
 				if (pDynamicTriShape) {
 					auto& dynTriShapeRuntime = pDynamicTriShape->GetDynamicTrishapeRuntimeData();
@@ -691,7 +691,10 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
-	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr);
+	if (!bsGeometryPtr)
+		return false;
+
+	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
 	if (!runtimeData.dynamicData)
@@ -727,6 +730,9 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 
 bool Mesh::UpdateSkinning()
 {
+	if (!bsGeometryPtr)
+		return false;
+
 	// Update Bone matrices
 	auto& skinInstance = bsGeometryPtr->GetGeometryRuntimeData().skinInstance;
 
@@ -795,6 +801,9 @@ DirtyFlags Mesh::Update()
 {
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
+
+	if (!bsGeometryPtr)
+		return DirtyFlags::None;
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
 	if (dynamic || skinned)
