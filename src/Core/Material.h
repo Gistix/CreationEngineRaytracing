@@ -103,8 +103,6 @@ struct Material
 
 	eastl::array<Texture, 20> Textures;
 
-	bool missingPBREmissiveColor;
-
 	ShaderFlags GetShaderFlags() const
 	{
 		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
@@ -211,9 +209,16 @@ struct Material
 		half4 emissive = Colors[1];
 
 		if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kExternalEmittance)) {
-			emissive.x = externalEmittance.x;
-			emissive.y = externalEmittance.y;
-			emissive.z = externalEmittance.z;
+			if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kOwnEmit)) {
+				emissive.x *= externalEmittance.x;
+				emissive.y *= externalEmittance.y;
+				emissive.z *= externalEmittance.z;
+			}
+			else {
+				emissive.x = externalEmittance.x;
+				emissive.y = externalEmittance.y;
+				emissive.z = externalEmittance.z;
+			}
 		}
 
 		return MaterialData(

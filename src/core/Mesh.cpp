@@ -306,8 +306,6 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	RE::BSShaderMaterial::Feature feature = RE::BSShaderMaterial::Feature::kNone;
 	stl::enumeration<PBRShaderFlags, uint32_t> pbrFlags;
 
-	bool missingPBREmissiveColor = false;
-
 	{
 		auto* property = geometryRuntimeData.properties[State::kProperty].get();
 
@@ -389,10 +387,6 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 						textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingPBRMaterial->normalTexture, normalTexture);
 						textures[2] = GetTexture(lightingPBRMaterial->emissiveTexture, blackTexture);
 						textures[3] = GetTexture(lightingPBRMaterial->rmaosTexture, rmaosTexture);
-
-						// If emissive texture is set but kOwnEmit flag is missing the game has eaten up emissive color *here*
-						// It will however be available during render updates where we will fetch it and set this back to false
-						missingPBREmissiveColor = (textures[2].defaultTexture != nullptr && shaderFlags.none(EShaderPropertyFlag::kOwnEmit));
 
 						scalars[0] = lightingPBRMaterial->GetRoughnessScale();
 						scalars[1] = lightingPBRMaterial->GetSpecularLevel();
@@ -548,8 +542,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		colors,
 		scalars,
 		texCoordOffsetScales,
-		textures,
-		missingPBREmissiveColor);
+		textures);
 }
 
 void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
@@ -821,21 +814,6 @@ DirtyFlags Mesh::Update()
 		return DirtyFlags::None;
 
 	auto updateFlags = DirtyFlags::None;
-
-	if (material.missingPBREmissiveColor) {
-		auto* effect = bsGeometryPtr->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
-
-		if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(effect)) {
-			if (lightingShaderProp->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kOwnEmit)) {
-				material.Colors[Constants::Material::EMISSIVE_COLOR].x = lightingShaderProp->emissiveColor->red;
-				material.Colors[Constants::Material::EMISSIVE_COLOR].y = lightingShaderProp->emissiveColor->green;
-				material.Colors[Constants::Material::EMISSIVE_COLOR].z = lightingShaderProp->emissiveColor->blue;
-
-				material.missingPBREmissiveColor = false;
-				updateFlags |= DirtyFlags::Material;
-			}
-		}
-	}
 
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
