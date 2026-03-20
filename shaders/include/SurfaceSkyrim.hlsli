@@ -263,14 +263,14 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     }
 
     [branch]
-    if (material.AlphaMode != AlphaMode::None)
+    if (material.AlphaFlags != AlphaFlags::None)
     {
         [branch]
         if ((material.ShaderFlags & ShaderFlags::kVertexAlpha) && !(material.ShaderFlags & ShaderFlags::kTreeAnim))
             alpha *= vertexColor.a;
 
         [branch]
-        if (material.AlphaMode == AlphaMode::Transmission)
+        if (material.AlphaFlags == AlphaFlags::Transmission)
         {
             surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);
             surface.Albedo *= alpha;

@@ -294,7 +294,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		float4(0.0f, 0.0f, 1.0f, 1.0f)
 	};
 
-	Material::AlphaMode alphaMode = Material::AlphaMode::None;
+	Material::AlphaFlags alphaFlags = Material::AlphaFlags::None;
 	
 	half alphaThreshold = 0.5f;
 
@@ -328,12 +328,11 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 					auto alphaProperty = property->GetRTTI() == niAlphaPropertyRTTI.get() ? reinterpret_cast<RE::NiAlphaProperty*>(property) : nullptr;
 
 					if (alphaProperty && alphaProperty->GetAlphaBlending()) {
-						alphaMode = Material::AlphaMode::Blend;
+						alphaFlags |= Material::AlphaFlags::Blend;
 					}
 
-					// Alpha Test takes precedence
 					if (alphaProperty && alphaProperty->GetAlphaTesting()) {
-						alphaMode = Material::AlphaMode::Test;
+						alphaFlags |= Material::AlphaFlags::Test;
 						alphaThreshold = alphaProperty->alphaThreshold / 255.0f;
 					}
 				}
@@ -532,17 +531,19 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 
 	// Fallback to alpha test if possible
 	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye || shaderFlags & EShaderPropertyFlag::kTwoSided;
-	if (alphaMode == Material::AlphaMode::Blend && !blendMaterial)
-		alphaMode = Material::AlphaMode::Transmission;
+	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
+		alphaFlags &= ~Material::AlphaFlags::Blend;
+		alphaFlags |= Material::AlphaFlags::Transmission;
+	}
 
-	geometryDesc.flags = alphaMode == Material::AlphaMode::None ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
+	geometryDesc.flags = (alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 
 	material = Material(
 		shaderFlags,
 		shaderType,
 		feature,
 		pbrFlags,
-		alphaMode,
+		alphaFlags,
 		alphaThreshold,
 		colors,
 		scalars,

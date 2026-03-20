@@ -18,12 +18,12 @@ struct Material
 	static constexpr uint MAX_LAND_TEXTURES = 5u;
 	static constexpr uint MAX_PBRLAND_TEXTURES = 6u;
 
-	enum class AlphaMode : uint8_t
+	enum class AlphaFlags : uint8_t
 	{
 		None = 0,
-		Blend = 1,
-		Test = 2,
-		Transmission = 3
+		Blend = 1 << 0,
+		Test = 1 << 1,
+		Transmission = 1 << 2
 	};
 
 	enum ShaderType : uint16_t
@@ -92,7 +92,7 @@ struct Material
 	RE::BSShaderMaterial::Feature Feature;
 	stl::enumeration<PBRShaderFlags, uint16_t> PBRFlags;
 
-	AlphaMode alphaMode = AlphaMode::None;
+	AlphaFlags alphaFlags = AlphaFlags::None;
 
 	half alphaThreshold;
 
@@ -241,7 +241,7 @@ struct Material
 			GetTextureDescriptorIndex(17),
 			GetTextureDescriptorIndex(18),
 			GetTextureDescriptorIndex(19),
-			static_cast<uint16_t>(alphaMode),
+			static_cast<uint16_t>(alphaFlags),
 			GetShaderType(),
 			static_cast<uint16_t>(Feature),
 			PBRFlags.underlying(),
@@ -249,4 +249,4 @@ struct Material
 	}
 };
 
-DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaMode);
+DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);
