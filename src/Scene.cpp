@@ -251,7 +251,6 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 
 	auto* baseObject = refr->GetBaseObject();
 
-	//auto flags = baseObject->GetFormFlags();
 	RE::FormType type = baseObject->GetFormType();
 
 	if (type == RE::FormType::IdleMarker)

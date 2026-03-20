@@ -66,4 +66,14 @@ namespace Util
 		*outX = x;
 		*outY = y;
 	}
+
+	std::string Format(float3x4 matrix)
+	{
+		return std::format("{}, {}, {}", matrix.m[0], matrix.m[1], matrix.m[2]);
+	}
+
+	std::string Format(float4x4 matrix)
+	{
+		return std::format("{}, {}, {}, {}", matrix.m[0], matrix.m[1], matrix.m[2], matrix.m[3]);
+	}
 }

@@ -404,8 +404,6 @@ void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 {
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
-	logger::debug("SceneGraph::ReleaseTexture - 0x{:08X}", reinterpret_cast<uintptr_t>(texture));
-
 	m_Textures.erase(texture);
 }
 
@@ -446,7 +444,7 @@ void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
-	//auto renderer = Renderer::GetSingleton();
+	auto renderer = Renderer::GetSingleton();
 
 	// A single form can hold multiple model instances
 	for (auto& instance : instanceFormIDsIt->second) {
@@ -455,17 +453,17 @@ void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
 		auto refCount = instance->model->Release();
 
 		if (refCount <= 0 && releaseModel) {
-			logger::trace("SceneGraph::RemoveInstance - {}", instance->model->m_Name);
-			m_Models.erase(instance->model->m_Name);
+			logger::info("SceneGraph::RemoveInstance - {}", instance->model->m_Name);
+			//m_Models.erase(instance->model->m_Name);
 
-			/*auto modelIt = m_Models.find(instance->model->m_Name);
+			auto modelIt = m_Models.find(instance->model->m_Name);
 
 			if (modelIt != m_Models.end()) {
 				// Only necessary due to 'compactBottomLevelAccelStructs', this is freed after the frame completes
 				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
 
 				m_Models.erase(modelIt);
-			}*/
+			}
 		}
 
 		// Removes the original instance, all pointers past this point are invalid
@@ -614,6 +612,12 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	logger::debug("[RT] CreateModel - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
 
 	auto formType = form->GetFormType();
+	auto baseFormType = formType;
+
+	if (auto* refr = form->AsReference()) {
+		if (auto* baseObject = refr->GetBaseObject())
+			baseFormType = baseObject->GetFormType();
+	}
 
 	auto rootWorldInverse = pRoot->world.Invert();
 
@@ -665,7 +669,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		auto flags = Mesh::Flags::None;
 
 		// Landscape needs special handling of triangles
-		if (formType == RE::FormType::Land)
+		if (baseFormType == RE::FormType::Land)
 			flags |= Mesh::Flags::Landscape;
 
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
@@ -693,7 +697,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
 
-			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, true, 0);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, formID);
@@ -702,7 +706,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		}
 		else if (auto* skinInstance = geometryRuntimeData.skinInstance.get()) {  // Skinned
 			// Skinned trees have wrong bone matrices and are causing a device removal due to out of bounds vertices
-			if (formType == RE::FormType::Tree)
+			if (baseFormType == RE::FormType::Tree)
 				return RE::BSVisit::BSVisitControl::kContinue;
 
 			auto& skinPartition = skinInstance->skinPartition;
@@ -786,8 +790,6 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			if (modelPtr->ShouldQueueMSNConversion())
 				m_MSNConvertionQueue.emplace_back(modelName);
-
-			logger::debug("SceneGraph::CreateModelInternal - {}", modelName);
 
 			// Copy Command
 			auto copyCommandList = Renderer::GetSingleton()->GetCopyCommandList();

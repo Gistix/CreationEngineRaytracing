@@ -9,7 +9,7 @@ namespace Pass
 	{
 		auto device = renderer->GetDevice();
 		m_VertexUpdateBuffer = Util::CreateStructuredBuffer<VertexUpdateData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
-		m_BoneMatrixBuffer = Util::CreateStructuredBuffer<float3x4>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer");
+		m_BoneMatrixBuffer = Util::CreateStructuredBuffer<BoneMatrix>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer");
 
 		CreateBindingLayout();
 		CreatePipeline();
@@ -18,7 +18,7 @@ namespace Pass
 	void Skinning::CreateBindingLayout()
 	{
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
-		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
+		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1)
@@ -58,7 +58,7 @@ namespace Pass
 			QueuedMesh(updateFlags, mesh->m_Name));
 	}
 
-	bool Skinning::PrepareResources(nvrhi::ICommandList* commandList, uint32_t& numShapes, uint32_t& numVertices)
+	bool Skinning::PrepareResources(nvrhi::ICommandList* commandList, uint32_t& numMeshes, uint32_t& numVertices)
 	{
 		if (queuedMeshes.empty())
 			return false;
@@ -67,19 +67,24 @@ namespace Pass
 		uint32_t boneMatrixIndex = 0;
 
 		for (auto& [mesh, queuedMesh] : queuedMeshes) {
-			if (shapeIndex >= MAX_GEOMETRY) {
-				logger::critical("[RT] SkinningPipeline::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_GEOMETRY);
+			if (shapeIndex >= MAX_GEOMETRY - 1) {
+				logger::critical("SkinningPipeline::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_GEOMETRY);
 				break;
 			}
 
-			if (boneMatrixIndex >= MAX_BONE_MATRICES) {
-				logger::critical("[RT] SkinningPipeline::PrepareResources - Exceeded maximum bone matrices limit of {}", MAX_BONE_MATRICES);
-				break;
-			}
+			const bool skinUpdate = (queuedMesh.updateFlags & DirtyFlags::Skin) != DirtyFlags::None;
 
 			numVertices = std::max(numVertices, mesh->vertexCount);
+			uint32_t numBoneMatrices = skinUpdate ? static_cast<uint32_t>(mesh->m_BoneMatrices.size()) : 0;
 
-			m_VertexUpdateData[shapeIndex] = VertexUpdateData(mesh->m_DescriptorHandle.Get(), static_cast<uint32_t>(queuedMesh.updateFlags), mesh->vertexCount, boneMatrixIndex, mesh->flags.underlying());
+			m_VertexUpdateData[shapeIndex] = VertexUpdateData(
+				mesh->m_DescriptorHandle.Get(),
+				static_cast<uint32_t>(queuedMesh.updateFlags),
+				mesh->vertexCount,
+				boneMatrixIndex,
+				mesh->flags.underlying(),
+				numBoneMatrices);
+
 			shapeIndex++;
 
 			// Dynamic TriShapes
@@ -87,8 +92,16 @@ namespace Pass
 				mesh->UpdateUploadDynamicBuffers(commandList);
 
 			// Skinning - This is a bit more involved
-			if ((queuedMesh.updateFlags & DirtyFlags::Skin) != DirtyFlags::None) {
-				const auto numBoneMatrices = static_cast<uint32_t>(mesh->m_BoneMatrices.size());
+			if (skinUpdate) {
+				if (numBoneMatrices > MAX_BONE_MATRICES - boneMatrixIndex) {
+					logger::critical(
+						"SkinningPipeline::PrepareResources - Bone matrix upload for '{}' would exceed the maximum of {} (offset {}, count {})",
+						queuedMesh.path,
+						MAX_BONE_MATRICES,
+						boneMatrixIndex,
+						numBoneMatrices);
+					break;
+				}
 
 				std::memcpy(m_BoneMatrixData.data() + boneMatrixIndex, mesh->m_BoneMatrices.data(), sizeof(float3x4) * numBoneMatrices);
 				boneMatrixIndex += numBoneMatrices;
@@ -96,9 +109,9 @@ namespace Pass
 		}
 
 		commandList->writeBuffer(m_VertexUpdateBuffer, m_VertexUpdateData.data(), sizeof(VertexUpdateData) * shapeIndex);
-		commandList->writeBuffer(m_BoneMatrixBuffer, m_BoneMatrixData.data(), sizeof(float3x4) * boneMatrixIndex);
+		commandList->writeBuffer(m_BoneMatrixBuffer, m_BoneMatrixData.data(), sizeof(BoneMatrix) * boneMatrixIndex);
 
-		numShapes = shapeIndex;
+		numMeshes = shapeIndex;
 
 		return true;
 	}
@@ -128,10 +141,10 @@ namespace Pass
 	{
 		CheckBindings();
 
-		uint32_t count = 0;
+		uint32_t numMeshes = 0;
 		uint32_t vertexCount = 0;
 
-		if (!PrepareResources(commandList, count, vertexCount))
+		if (!PrepareResources(commandList, numMeshes, vertexCount))
 			return;
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
@@ -150,7 +163,7 @@ namespace Pass
 		commandList->setComputeState(state);
 
 		auto vertexGroups = Util::Math::DivideRoundUp(vertexCount, 32u);
-		commandList->dispatch(count, vertexGroups);
+		commandList->dispatch(numMeshes, vertexGroups);
 
 		ClearQueue();
 	}

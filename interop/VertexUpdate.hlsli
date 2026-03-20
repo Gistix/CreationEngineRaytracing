@@ -3,14 +3,14 @@
 
 #include "Interop.h"
 
-struct VertexUpdateData
+INTEROP_STRUCT(VertexUpdateData, 4)
 {
 	uint index;
 	uint updateFlags;
 	uint vertexCount;
     uint boneOffset;
 	uint shapeFlags;
-	uint3 pad0;	
+	uint numMatrices;
 };
 VALIDATE_ALIGNMENT(VertexUpdateData, 4);
 

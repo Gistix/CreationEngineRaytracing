@@ -83,7 +83,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 
 		float3 min(FLT_MAX), max(-FLT_MAX);
 
-		for (uint16_t i = 0; i < vertexCountIn; i++) {
+		for (uint32_t i = 0; i < vertexCountIn; i++) {
 			uint8_t* vtx = rendererData->rawVertexData + i * vertexSize;
 
 			Vertex vertexData{};
@@ -751,10 +751,10 @@ bool Mesh::UpdateSkinning()
 	if (skinInstance->numMatrices == 0 || !skinInstance->boneMatrices)
 		return false;
 
-	if (m_BoneMatrices.empty())
+	if (m_BoneMatrices.empty() || skinInstance->numMatrices != m_BoneMatrices.size())
 		m_BoneMatrices.resize(skinInstance->numMatrices);
 
-	float3x4* boneMatricesArray = reinterpret_cast<float3x4*>(skinInstance->boneMatrices);
+	//float3x4* boneMatricesArray = reinterpret_cast<float3x4*>(skinInstance->boneMatrices);
 
 	auto* rootParent = skinInstance->rootParent;
 
@@ -762,14 +762,30 @@ bool Mesh::UpdateSkinning()
 	if (!rootParent)
 		return false;
 
-	auto delta = frameID - m_FrameID;
-
-	auto skinRootInverse = Util::Math::GetXMFromNiTransform(delta > 1 ? rootParent->previousWorld.Invert() : rootParent->world.Invert());
-
 	m_FrameID = frameID;
 
-	for (uint i = 0; i < skinInstance->numMatrices; i++) {
-		XMStoreFloat3x4(&m_BoneMatrices[i], XMMatrixMultiply(XMLoadFloat3x4(&boneMatricesArray[i]), skinRootInverse));
+	auto skinRoot = rootParent->world;
+
+	static auto identity = RE::NiTransform();
+
+	// If skin transform is identity it will break skinning
+	if (skinRoot == identity)
+		return false;
+
+	auto skinRootInverse = Util::Math::GetXMFromNiTransform(skinRoot.Invert());
+
+	auto* skinData = skinInstance->skinData.get();
+
+	if (skinInstance->numMatrices != skinData->bones) {
+		logger::info("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
+	}
+
+	for (uint i = 0; i < skinData->bones; i++) {
+		auto boneData = skinData->boneData[i];
+		auto boneWorld = *skinInstance->boneWorldTransforms[i];
+
+		auto boneMatrix = boneWorld * boneData.skinToBone; //  skinData->rootParentToSkin * boneWorld * boneData.skinToBone;
+		XMStoreFloat3x4(&m_BoneMatrices[i], XMMatrixMultiply(Util::Math::GetXMFromNiTransform(boneMatrix), skinRootInverse));
 	}
 
 	return true;
@@ -777,8 +793,8 @@ bool Mesh::UpdateSkinning()
 
 DirtyFlags Mesh::Update()
 {
-	const auto dynamic = flags.any(Mesh::Flags::Dynamic);
-	const auto skinned = flags.any(Mesh::Flags::Skinned);
+	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
+	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
 	if (dynamic || skinned)

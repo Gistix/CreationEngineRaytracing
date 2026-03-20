@@ -6,12 +6,7 @@ namespace Hooks
 {
 	void TES_AttachModel::thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
 	{
-		logger::info("TES::AttachModel - 0x{:08X}", refr->GetFormID());
-
 		func(tes, refr, cell, queuedTree, a5, a6);
-
-		if (auto* node = refr->Get3D())
-			logger::info("TES::AttachModel - 0x{:08X} {}", reinterpret_cast<uintptr_t>(node), node->name);
 
 		Scene::GetSingleton()->AttachModel(refr);
 	}
@@ -36,16 +31,12 @@ namespace Hooks
 	{
 		func(oThis, a2);
 
-		logger::info("TESObjectLAND::Attach3D - 0x{:08X}", oThis->GetFormID());
-
 		Scene::GetSingleton()->AttachLand(oThis);
 	};
 
 	void TESObjectLAND_Detach3D::thunk(RE::TESObjectLAND* oThis)
 	{
 		func(oThis);
-
-		logger::info("TESObjectLAND::Detach3D - 0x{:08X}", oThis->GetFormID());
 
 		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
 	};
@@ -55,7 +46,6 @@ namespace Hooks
 	{
 		if (oThis && oThis->rendererTexture) {
 			if (auto resource = oThis->rendererTexture->texture) {
-				logger::info("NiSourceTexture::Destructor");
 				Scene::GetSingleton()->GetSceneGraph()->ReleaseTexture(reinterpret_cast<ID3D11Texture2D*>(resource));
 			}
 		}
