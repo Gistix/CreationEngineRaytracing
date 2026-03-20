@@ -294,7 +294,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		float4(0.0f, 0.0f, 1.0f, 1.0f)
 	};
 
-	Material::AlphaMode alphaMode = Material::AlphaMode::None;
+	Material::AlphaFlags alphaFlags = Material::AlphaFlags::None;
 	
 	half alphaThreshold = 0.5f;
 
@@ -305,8 +305,6 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	RE::BSShaderMaterial::Feature feature = RE::BSShaderMaterial::Feature::kNone;
 	stl::enumeration<PBRShaderFlags, uint32_t> pbrFlags;
-
-	bool missingPBREmissiveColor = false;
 
 	{
 		auto* property = geometryRuntimeData.properties[State::kProperty].get();
@@ -328,12 +326,11 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 					auto alphaProperty = property->GetRTTI() == niAlphaPropertyRTTI.get() ? reinterpret_cast<RE::NiAlphaProperty*>(property) : nullptr;
 
 					if (alphaProperty && alphaProperty->GetAlphaBlending()) {
-						alphaMode = Material::AlphaMode::Blend;
+						alphaFlags |= Material::AlphaFlags::Blend;
 					}
 
-					// Alpha Test takes precedence
 					if (alphaProperty && alphaProperty->GetAlphaTesting()) {
-						alphaMode = Material::AlphaMode::Test;
+						alphaFlags |= Material::AlphaFlags::Test;
 						alphaThreshold = alphaProperty->alphaThreshold / 255.0f;
 					}
 				}
@@ -390,10 +387,6 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 						textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingPBRMaterial->normalTexture, normalTexture);
 						textures[2] = GetTexture(lightingPBRMaterial->emissiveTexture, blackTexture);
 						textures[3] = GetTexture(lightingPBRMaterial->rmaosTexture, rmaosTexture);
-
-						// If emissive texture is set but kOwnEmit flag is missing the game has eaten up emissive color *here*
-						// It will however be available during render updates where we will fetch it and set this back to false
-						missingPBREmissiveColor = (textures[2].defaultTexture != nullptr && shaderFlags.none(EShaderPropertyFlag::kOwnEmit));
 
 						scalars[0] = lightingPBRMaterial->GetRoughnessScale();
 						scalars[1] = lightingPBRMaterial->GetSpecularLevel();
@@ -532,23 +525,24 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 
 	// Fallback to alpha test if possible
 	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye || shaderFlags & EShaderPropertyFlag::kTwoSided;
-	if (alphaMode == Material::AlphaMode::Blend && !blendMaterial)
-		alphaMode = Material::AlphaMode::Transmission;
+	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
+		alphaFlags &= ~Material::AlphaFlags::Blend;
+		alphaFlags |= Material::AlphaFlags::Transmission;
+	}
 
-	geometryDesc.flags = alphaMode == Material::AlphaMode::None ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
+	geometryDesc.flags = (alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 
 	material = Material(
 		shaderFlags,
 		shaderType,
 		feature,
 		pbrFlags,
-		alphaMode,
+		alphaFlags,
 		alphaThreshold,
 		colors,
 		scalars,
 		texCoordOffsetScales,
-		textures,
-		missingPBREmissiveColor);
+		textures);
 }
 
 void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
@@ -820,21 +814,6 @@ DirtyFlags Mesh::Update()
 		return DirtyFlags::None;
 
 	auto updateFlags = DirtyFlags::None;
-
-	if (material.missingPBREmissiveColor) {
-		auto* effect = bsGeometryPtr->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get();
-
-		if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(effect)) {
-			if (lightingShaderProp->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kOwnEmit)) {
-				material.Colors[Constants::Material::EMISSIVE_COLOR].x = lightingShaderProp->emissiveColor->red;
-				material.Colors[Constants::Material::EMISSIVE_COLOR].y = lightingShaderProp->emissiveColor->green;
-				material.Colors[Constants::Material::EMISSIVE_COLOR].z = lightingShaderProp->emissiveColor->blue;
-
-				material.missingPBREmissiveColor = false;
-				updateFlags |= DirtyFlags::Material;
-			}
-		}
-	}
 
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;

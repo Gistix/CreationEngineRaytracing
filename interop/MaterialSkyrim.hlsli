@@ -63,12 +63,12 @@ namespace Feature
 	static const uint16_t kMultiTexLandLODBlend = 19;
 }
 
-namespace AlphaMode
+namespace AlphaFlags
 {
 	static const uint16_t None = 0;
-	static const uint16_t Blend = 1;
-	static const uint16_t Test = 2;
-	static const uint16_t Transmission = 3;	
+	static const uint16_t Blend = (1 << 0);
+	static const uint16_t Test = (1 << 1);
+	static const uint16_t Transmission = (1 << 2);	
 }
 #endif
 
@@ -114,7 +114,7 @@ INTEROP_DATA_STRUCT(Material, 4)
 	uint16_t Texture18;
 	uint16_t Texture19;
 
-	uint16_t AlphaMode;	
+	uint16_t AlphaFlags;	
     uint16_t ShaderType;
     uint16_t Feature;
     uint16_t PBRFlags;

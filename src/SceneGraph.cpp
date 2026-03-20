@@ -8,6 +8,7 @@
 #include "Util.h"
 
 #include "Types/CommunityShaders/LightLimitFix.h"
+#include "Types/CommunityShaders/ISLCommon.h"
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
@@ -211,8 +212,14 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Flags = 0;
 
-			if (flags & LightLimitFix::LightFlags::InverseSquare)
+			if (flags & LightLimitFix::LightFlags::InverseSquare) {
 				lightData.Flags |= LightFlags::ISL;
+
+				auto* extData = ISLCommon::RuntimeLightDataExt::Get(niLight);
+
+				lightData.FadeZone = 1.f / (lightData.Radius * std::clamp(ISLCommon::FadeZoneBase * lightData.InvRadius, 0.f, 1.f));
+				lightData.SizeBias = ISLCommon::ScaledUnitsSq * extData->size * extData->size * 0.5f;
+			}
 
 			if (flags & LightLimitFix::LightFlags::Linear)
 				lightData.Flags |= LightFlags::LinearLight;

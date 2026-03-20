@@ -100,7 +100,7 @@ PixelOut MainPS(in VertexOut i)
     
     Material material = mesh.Material;
     
-    if (material.AlphaMode == AlphaMode::Test && surface.Alpha < material.AlphaThreshold)
+    if (material.AlphaFlags & AlphaFlags::Test && surface.Alpha < material.AlphaThreshold)
         discard;
     
     o.Albedo = float4(surface.Albedo, 1.0f);

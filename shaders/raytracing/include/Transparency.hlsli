@@ -30,13 +30,13 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
         alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
 
     [branch]
-    if (material.AlphaMode == AlphaMode::Test)
+    if (material.AlphaFlags & AlphaFlags::Test)
     {
         if (alpha < material.AlphaThreshold)
             return false;
     }
     
-    if (material.AlphaMode == AlphaMode::Blend)
+    if (material.AlphaFlags & AlphaFlags::Blend)
     {
         float rnd = Random(randomSeed);
         if (alpha < rnd)
@@ -68,15 +68,15 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
 
     [branch]
-    if (material.AlphaMode == AlphaMode::Test)
+    if (material.AlphaFlags & AlphaFlags::Test)
     {
         if (alpha < material.AlphaThreshold)
             return false;
         else
-            return true;    
+            return true;
     }
     
-    if (material.AlphaMode == AlphaMode::Blend)
+    if (material.AlphaFlags & AlphaFlags::Blend)
     {
         float rnd = Random(randomSeed);
         if (rnd > alpha)
