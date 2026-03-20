@@ -58,4 +58,7 @@ namespace Util
 
 		return device->createBuffer(bufferDesc);
 	};
+
+	std::string Format(float3x4 matrix);
+	std::string Format(float4x4 matrix);
 }

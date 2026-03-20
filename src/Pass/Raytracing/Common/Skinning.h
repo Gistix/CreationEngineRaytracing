@@ -9,6 +9,7 @@
 #include "Util.h"
 
 #include "Interop/VertexUpdate.hlsli"
+#include "Interop/BoneMatrix.hlsli"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
 
@@ -34,7 +35,7 @@ namespace Pass
 		nvrhi::BufferHandle m_BoneMatrixBuffer;
 
 		eastl::array<VertexUpdateData, MAX_GEOMETRY> m_VertexUpdateData;
-		eastl::array<float3x4, MAX_BONE_MATRICES> m_BoneMatrixData;
+		eastl::array<BoneMatrix, MAX_BONE_MATRICES> m_BoneMatrixData;
 
 		struct QueuedMesh
 		{

@@ -1,11 +1,7 @@
 #include "Interop/Vertex.hlsli"
 #include "Interop/VertexUpdate.hlsli"
 #include "Interop/Skinning.hlsli"
-
-struct BoneMatrix
-{
-    row_major float3x4 World;
-};
+#include "Interop/BoneMatrix.hlsli"
 
 StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
 StructuredBuffer<BoneMatrix> BoneMatrices               : register(t1);
@@ -83,7 +79,12 @@ void Main(uint3 DTid : SV_DispatchThreadID)
     if (updateData.updateFlags & DirtyFlags::Skin)
     {
         Skinning skinning = MeshSkinning[shapeIndex][vertexIndex];
-
+        
+        uint maxBone = max(skinning.GetBone(0), max(skinning.GetBone(1), max(skinning.GetBone(2), skinning.GetBone(3))));
+        
+        if (maxBone >= updateData.numMatrices)
+            return;     
+        
         float3x4 boneMatrix = GetBoneTransformMatrix(skinning, updateData.boneOffset);
 
         position = mul(boneMatrix, float4(position, 1.0f));
