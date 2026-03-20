@@ -215,16 +215,10 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 			if (flags & LightLimitFix::LightFlags::InverseSquare) {
 				lightData.Flags |= LightFlags::ISL;
 
-				static constexpr float Scale = 0.8f;
-				static constexpr float MetresToUnits = 70.f;
-				static constexpr float MetresToUnitsSq = MetresToUnits * MetresToUnits;
-				static constexpr float ScaledUnitsSq = Scale * MetresToUnitsSq;
-				static constexpr float FadeZoneBase = 4.5f * Scale * MetresToUnits;
-
 				auto* extData = ISLCommon::RuntimeLightDataExt::Get(niLight);
 
-				lightData.FadeZone = 1.f / (lightData.Radius * std::clamp(FadeZoneBase * lightData.InvRadius, 0.f, 1.f));
-				lightData.SizeBias = ScaledUnitsSq * extData->size * extData->size * 0.5f;
+				lightData.FadeZone = 1.f / (lightData.Radius * std::clamp(ISLCommon::FadeZoneBase * lightData.InvRadius, 0.f, 1.f));
+				lightData.SizeBias = ISLCommon::ScaledUnitsSq * extData->size * extData->size * 0.5f;
 			}
 
 			if (flags & LightLimitFix::LightFlags::Linear)
