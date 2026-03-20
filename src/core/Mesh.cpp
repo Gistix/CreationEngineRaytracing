@@ -231,6 +231,9 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		else {
 			geometry.triangles.resize(triangleCountIn);
 			std::memcpy(geometry.triangles.data(), rendererData->rawIndexData, sizeof(Triangle) * triangleCountIn);
+
+			if (HasDoubleSidedGeom())
+				flags.set(Mesh::Flags::DoubleSidedGeom);
 		}
 
 		triangleCount = triangleCountIn;
@@ -239,10 +242,8 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	if (!hasNormal)
 		CalculateNormals();
 
-	if (!hasTangent) {
+	if (!hasTangent)
 		Util::CalcTangents::GetSingleton()->calc(this);
-
-	}
 }
 
 Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap = false)
