@@ -13,11 +13,11 @@ struct Model
 
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
-	nvrhi::rt::AccelStructDesc blasDesc;
-
 	nvrhi::rt::AccelStructHandle blas;
 
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+
+	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool update);
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 

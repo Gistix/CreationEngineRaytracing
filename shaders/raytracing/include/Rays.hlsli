@@ -10,6 +10,8 @@
 
 #include "raytracing/include/Transparency.hlsli"
 
+#define RAY_FLAGS (RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
+
 Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
 {
     Payload payload;
@@ -20,7 +22,7 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
     payload.randomSeed = randomSeed;
 
 #if USE_RAY_QUERY
-    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_FORCE_OPAQUE> rayQuery;
+    RayQuery<RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, 0xFF, ray);
 
     while (rayQuery.Proceed())
@@ -47,7 +49,7 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
         payload.PackInstanceGeometryIndex(rayQuery.CommittedInstanceIndex(), rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(Scene, RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_FORCE_OPAQUE, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    TraceRay(Scene, RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
  #endif
     
     randomSeed = payload.randomSeed;
@@ -65,7 +67,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
     payload.randomSeed = randomSeed;
 
 #if USE_RAY_QUERY
-    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> rayQuery;
+    RayQuery<RAY_FLAGS> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, 0xFF, ray);
 
     while (rayQuery.Proceed())
@@ -92,7 +94,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
         payload.PackInstanceGeometryIndex(rayQuery.CommittedInstanceIndex(), rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(Scene, RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    TraceRay(Scene, RAY_FLAGS, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
  #endif
     
     randomSeed = payload.randomSeed;
@@ -115,7 +117,7 @@ float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, fl
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
 
 #if USE_RAY_QUERY
-    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> rayQuery;
+    RayQuery<RAY_FLAGS> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, 0xFF, ray);
 
     while (rayQuery.Proceed())
@@ -142,7 +144,7 @@ float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, fl
         shadowPayload.transmission = float3(0.0f, 0.0f, 0.0f);
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(scene, RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES, 0xFF, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
+    TraceRay(scene, RAY_FLAGS | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xFF, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
  #endif
     
     randomSeed = shadowPayload.randomSeed;
@@ -164,7 +166,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
 
 #if USE_RAY_QUERY
-    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> rayQuery;
+    RayQuery<RAY_FLAGS> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, 0xFF, ray);
 
     while (rayQuery.Proceed())
@@ -191,7 +193,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
         shadowPayload.transmission = float3(0.0f, 0.0f, 0.0f);
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(scene, RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES, 0xFF, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
+    TraceRay(scene, RAY_FLAGS | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xFF, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
  #endif
     
     randomSeed = shadowPayload.randomSeed;

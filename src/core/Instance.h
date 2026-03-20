@@ -52,12 +52,16 @@ struct Instance
 
 	nvrhi::rt::InstanceDesc GetInstanceDesc() const
 	{
-		nvrhi::rt::InstanceDesc instanceDesc;
-		instanceDesc.bottomLevelAS = model->blas;
-		assert(instanceDesc.bottomLevelAS);
-		instanceDesc.instanceMask = 1;
-		instanceDesc.instanceID = m_TLASInstanceID;
-		memcpy(instanceDesc.transform, m_Transform.f, sizeof(float[12]));
+		auto instanceDesc = nvrhi::rt::InstanceDesc()
+			.setInstanceMask(1)
+			.setInstanceID(m_TLASInstanceID)
+			.setTransform(m_Transform.f)
+			.setBLAS(model->blas);
+
+		// Culling adds additional overhead but some geometry (like vanilla hair) has duplicated double sided faces (as opposed of using the kTwoSided shader flag)
+		// Without culling this means we would render 4 faces (original back and front + other side of back and other side of front)
+		instanceDesc.flags = model->GetMeshFlags().all(Mesh::Flags::DoubleSidedGeom) ? nvrhi::rt::InstanceFlags::None : nvrhi::rt::InstanceFlags::TriangleCullDisable;
+
 		return instanceDesc;
 	}
 

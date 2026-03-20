@@ -16,14 +16,6 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
 
-	blasDesc.setDebugName(std::format("{} - BLAS", m_Name))
-		.setIsTopLevel(false);
-
-	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowUpdate;
-	else
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
-
 	if (meshFlags.none(Mesh::Flags::Landscape))
 	{
 		auto* refr = form->AsReference();
@@ -32,6 +24,21 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 			m_EmittanceColor = reinterpret_cast<float3*>(&extra->source->As<RE::TESRegion>()->emittanceColor);
 		}
 	}
+}
+
+nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
+{
+	auto blasDesc = nvrhi::rt::AccelStructDesc()
+		.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace)
+		.setIsTopLevel(false)
+		.setDebugName(std::format("{} - BLAS", m_Name));
+
+	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		blasDesc.buildFlags |= (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
+	else
+		blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+
+	return blasDesc;
 }
 
 void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
@@ -43,11 +50,6 @@ void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLi
 
 void Model::Update()
 {
-	/*auto& blasGeoms = blasDesc.bottomLevelGeometries;
-
-	blasGeoms.clear();
-	blasGeoms.reserve(meshes.size());*/
-
 	for (auto& mesh : meshes) {
 		auto dirtyFlags = mesh->Update();
 
@@ -60,6 +62,8 @@ void Model::Update()
 
 void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 {
+	auto blasDesc = MakeBLASDesc(false);
+
 	// Initial build with all shapes, visible or not, so the scratch buffer can be sized to fit all geometry
 	for (size_t i = 0; i < meshes.size(); i++) {
 		blasDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
@@ -78,13 +82,11 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 	if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin))
 		return;
 
-	auto blasUpdateDesc = nvrhi::rt::AccelStructDesc()
-		.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::PerformUpdate)
-		.setIsTopLevel(false);
+	auto blasDesc = MakeBLASDesc(true);
 
 	for (size_t i = 0; i < meshes.size(); i++) {
-		blasUpdateDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
+		blasDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
 	}
 
-	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasUpdateDesc);
+	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
 }
