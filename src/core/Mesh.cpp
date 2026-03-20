@@ -113,25 +113,30 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 				std::memcpy(&normalPacked, vtx + normOffset, sizeof(byte4f));
 				auto normal = normalPacked.unpack();
 
-				vertexData.Normal = Util::Math::Normalize({ normal.x, normal.y, normal.z });
+				float3 N = Util::Math::Normalize({ normal.x, normal.y, normal.z });
+				vertexData.Normal = N;
 
 				if (hasTangent) {
-					byte4f tangentPacked;
-					std::memcpy(&tangentPacked, vtx + tangOffset, sizeof(byte4f));
-					auto tangent = tangentPacked.unpack();
+					byte4f bitangentPacked;
+					std::memcpy(&bitangentPacked, vtx + tangOffset, sizeof(byte4f));
+					auto bitangent = bitangentPacked.unpack();
 
-					vertexData.Tangent = Util::Math::Normalize({ tangent.x, tangent.y, tangent.z });
+					float3 B = { bitangent.x, bitangent.y, bitangent.z };
+					B = Util::Math::Normalize(B - N * N.Dot(B));
 
-					float3 bitangent = { pos.w, normal.w, tangent.w };
+					float3 T = { pos.w, normal.w, bitangent.w };
 
+					// Dynamic TriShapes (Blendshape/Morphtarget) do not have vertex position
 					if (!hasPosition) {
-						bitangent.x = std::sqrt(std::max(0.0f, 1.0f - bitangent.y * bitangent.y - bitangent.z * bitangent.z));
+						float sign = B.Cross(N).x < 0 ? -1.0f : 1.0f;
+						T.x = std::sqrt(std::max(0.0f, 1.0f - bitangent.y * bitangent.y - bitangent.z * bitangent.z)) * sign;
 					}
 
-					vertexData.Handedness = (tangent.x * (vertexData.Tangent.y * vertexData.Normal.z - vertexData.Tangent.z * vertexData.Normal.y) +
-						bitangent.y * (vertexData.Tangent.z * vertexData.Normal.x - vertexData.Tangent.x * vertexData.Normal.z) +
-						bitangent.z * (vertexData.Tangent.x * vertexData.Normal.y - vertexData.Tangent.y * vertexData.Normal.x)) < 0 ?
-						-1.0f : 1.0f;
+					T = Util::Math::Normalize(T - N * N.Dot(T));
+
+					vertexData.Tangent = Util::Math::Normalize(T);
+
+					vertexData.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
 				}
 			}
 
