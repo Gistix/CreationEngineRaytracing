@@ -8,6 +8,7 @@
 #include "Util.h"
 
 #include "Types/CommunityShaders/LightLimitFix.h"
+#include "Types/CommunityShaders/ISLCommon.h"
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
@@ -154,6 +155,8 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 	const auto& lightingSettings = Scene::GetSingleton()->m_Settings.LightingSettings;
 
+	logger::info("SceneGraph::UpdateLights - Lights {}", m_Lights.size());
+
 	uint numLights = 0;
 
 	for (auto& [bsLight, light] : m_Lights)
@@ -211,11 +214,28 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Flags = 0;
 
-			if (flags & LightLimitFix::LightFlags::InverseSquare)
+			if (flags & LightLimitFix::LightFlags::InverseSquare) {
 				lightData.Flags |= LightFlags::ISL;
+
+				static constexpr float Scale = 0.8f;
+				static constexpr float MetresToUnits = 70.f;
+				static constexpr float MetresToUnitsSq = MetresToUnits * MetresToUnits;
+				static constexpr float ScaledUnitsSq = Scale * MetresToUnitsSq;
+				static constexpr float FadeZoneBase = 4.5f * Scale * MetresToUnits;
+
+				auto* extData = ISLCommon::RuntimeLightDataExt::Get(niLight);
+
+				lightData.FadeZone = 1.f / (lightData.Radius * std::clamp(FadeZoneBase * lightData.InvRadius, 0.f, 1.f));
+				lightData.SizeBias = ScaledUnitsSq * extData->size * extData->size * 0.5f;
+			}
 
 			if (flags & LightLimitFix::LightFlags::Linear)
 				lightData.Flags |= LightFlags::LinearLight;
+
+			logger::info("SceneGraph::UpdateLights - Light[{}], FadeZone {}, SizeBias {}", 
+				light.m_Index,
+				lightData.FadeZone,
+				lightData.SizeBias);
 		}
 
 		numLights++;
