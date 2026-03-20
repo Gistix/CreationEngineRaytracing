@@ -112,7 +112,7 @@ float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, fl
     ray.TMax = SHADOW_RAY_TMAX;
 
     ShadowPayload shadowPayload;
-    shadowPayload.missed = 1.0f;
+    shadowPayload.missed = 0.0f;
     shadowPayload.randomSeed = randomSeed;
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
 
@@ -138,10 +138,9 @@ float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, fl
         }
     }
 
-    if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+    if (rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
     {
-        shadowPayload.missed = 0.0f;
-        shadowPayload.transmission = float3(0.0f, 0.0f, 0.0f);
+        shadowPayload.missed = 1.0f;
     }
 #else // !USE_RAY_QUERY    
     TraceRay(scene, RAY_FLAGS | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xFF, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
@@ -161,7 +160,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
     ray.TMax = tmax;
 
     ShadowPayload shadowPayload;
-    shadowPayload.missed = 1.0f;
+    shadowPayload.missed = 0.0f;
     shadowPayload.randomSeed = randomSeed;
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
 
@@ -187,10 +186,9 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
         }
     }
 
-    if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+    if (rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
     {
-        shadowPayload.missed = 0.0f;
-        shadowPayload.transmission = float3(0.0f, 0.0f, 0.0f);
+        shadowPayload.missed = 1.0f;
     }
 #else // !USE_RAY_QUERY    
     TraceRay(scene, RAY_FLAGS | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, 0xFF, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
