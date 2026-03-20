@@ -155,8 +155,6 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 	const auto& lightingSettings = Scene::GetSingleton()->m_Settings.LightingSettings;
 
-	logger::info("SceneGraph::UpdateLights - Lights {}", m_Lights.size());
-
 	uint numLights = 0;
 
 	for (auto& [bsLight, light] : m_Lights)
@@ -231,11 +229,6 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			if (flags & LightLimitFix::LightFlags::Linear)
 				lightData.Flags |= LightFlags::LinearLight;
-
-			logger::info("SceneGraph::UpdateLights - Light[{}], FadeZone {}, SizeBias {}", 
-				light.m_Index,
-				lightData.FadeZone,
-				lightData.SizeBias);
 		}
 
 		numLights++;
