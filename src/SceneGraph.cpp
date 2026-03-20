@@ -217,6 +217,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 				auto* extData = ISLCommon::RuntimeLightDataExt::Get(niLight);
 
+				lightData.Fade *= 4.0f;
 				lightData.FadeZone = 1.f / (lightData.Radius * std::clamp(ISLCommon::FadeZoneBase * lightData.InvRadius, 0.f, 1.f));
 				lightData.SizeBias = ISLCommon::ScaledUnitsSq * extData->size * extData->size * 0.5f;
 			}
