@@ -13,8 +13,8 @@ namespace Constants
 
 	static constexpr uint32_t PLAYER_REFR_FORMID = 0x00000014;
 
-	static constexpr uint32_t LIGHTS_MAX = 4095;
-	static constexpr uint32_t INSTANCE_LIGHTS_MAX = 64;
+	static constexpr uint32_t LIGHTS_MAX = 256;
+	static constexpr uint32_t INSTANCE_LIGHTS_MAX = 32;
 
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
 	static constexpr uint32_t NUM_MESHES_MAX = 8 * 1024;
