@@ -527,7 +527,9 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye || shaderFlags & EShaderPropertyFlag::kTwoSided;
 	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
 		alphaFlags &= ~Material::AlphaFlags::Blend;
-		alphaFlags |= Material::AlphaFlags::Transmission;
+
+		if (alphaThreshold > FLT_EPSILON)
+			alphaFlags |= Material::AlphaFlags::Test;
 	}
 
 	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
