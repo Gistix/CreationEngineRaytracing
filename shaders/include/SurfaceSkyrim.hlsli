@@ -270,11 +270,12 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             alpha *= vertexColor.a;
 
         [branch]
-        if (material.AlphaFlags == AlphaFlags::Transmission)
+        if (material.AlphaFlags & AlphaFlags::Transmission)
         {
             surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);
             surface.Albedo *= alpha;
             surface.SpecTrans = 1.0f;
+            surface.IsThinSurface = (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
         }    
     }
 
