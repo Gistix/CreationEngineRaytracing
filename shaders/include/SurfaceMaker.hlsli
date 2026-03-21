@@ -39,6 +39,7 @@ struct SurfaceMaker
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
+        surface.IsThinSurface = false;
 
         Mesh mesh = GetMesh(payload, instance);
 
@@ -128,6 +129,7 @@ struct SurfaceMaker
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
+        surface.IsThinSurface = false;
 
         Material material = mesh.Material;
 
@@ -180,6 +182,7 @@ struct SurfaceMaker
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
+        surface.IsThinSurface = false;
 
         surface.Position = position;
 

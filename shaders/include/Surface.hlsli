@@ -37,6 +37,7 @@ struct Surface
     Subsurface SubsurfaceData;
     float DiffTrans;
     float SpecTrans;
+    bool IsThinSurface;
 
 #if defined(FULL_MATERIAL)
     float3 SubsurfaceColor;

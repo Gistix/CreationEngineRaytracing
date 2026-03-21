@@ -461,7 +461,7 @@ struct DefaultBSDF
 
     void __init(float3 N, float3 V, Surface surface, bool isEnter = true)
     {
-        bool isThinSurface = false; // Not used currently
+        bool isThinSurface = surface.IsThinSurface;
 
         float3 transmissionAlbedo = surface.TransmissionColor;
         float surfaceRoughness = saturate(surface.Roughness);
