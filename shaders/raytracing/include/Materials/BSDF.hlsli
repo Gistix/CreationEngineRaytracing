@@ -17,6 +17,8 @@
 #define HAIR_MODE_CHIANG_BSDF 1
 #define HAIR_MODE_FARFIELD_BCSDF 2
 
+#define USE_DELTALOBES 0
+
 // Minimum cos(theta) for the incident and outgoing vectors.
 // Some BSDF functions are not robust for cos(theta) == 0.0,
 // so using a small epsilon for consistency.
@@ -531,7 +533,7 @@ struct DefaultBSDF
     {
         float surfaceRoughness = saturate(surface.Roughness);
         float alpha = surfaceRoughness * surfaceRoughness;
-        bool isDelta = alpha < kMinGGXAlpha;
+        bool isDelta = (alpha < kMinGGXAlpha && USE_DELTALOBES != 0);
 
         float diffTrans = surface.DiffTrans;
         float specTrans = surface.SpecTrans;

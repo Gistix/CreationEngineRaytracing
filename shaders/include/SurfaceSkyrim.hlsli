@@ -223,13 +223,14 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         if (material.ShaderFlags & ShaderFlags::kRefraction) // As glass
         {
             surface.Albedo = float3(0.0f, 0.0f, 0.0f);
-            surface.Roughness = 0.08f;
+            surface.Roughness = 0.0f;
             surface.Emissive = float3(0.0f, 0.0f, 0.0f);
             surface.F0 = 0.04f;
             surface.Metallic = 0.0f;
             surface.TransmissionColor = 1.0f;
             surface.SpecTrans = 1.0f;
             surface.IsThinSurface = true;
+            alpha = 0.0f;
         }
     }
     else if (material.ShaderType == ShaderType::Effect)
@@ -289,7 +290,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.Albedo *= alpha;
             surface.Metallic *= alpha;
             surface.SpecTrans = 1.0f;
-            surface.IsThinSurface = (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+            surface.IsThinSurface |= (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
         }    
     }
 
@@ -299,7 +300,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         surface.TransmissionColor = windowAlpha;
         surface.Albedo *= 1.0f - windowAlpha;
         surface.Emissive *= 0;
-        surface.Roughness = max(surface.Roughness, 0.08f); // prevent delta transmission
         surface.SpecTrans = 1.0f;
     }
 
