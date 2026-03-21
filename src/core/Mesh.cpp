@@ -524,12 +524,11 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	}
 
 	// Fallback to alpha test if possible
-	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye || shaderFlags & EShaderPropertyFlag::kTwoSided;
+	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
 	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
 		alphaFlags &= ~Material::AlphaFlags::Blend;
 
-		if (alphaThreshold > FLT_EPSILON)
-			alphaFlags |= Material::AlphaFlags::Test;
+		alphaFlags |= Material::AlphaFlags::Transmission;  // I want them to behave like glass for now
 	}
 
 	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
