@@ -150,6 +150,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
             surface.Albedo = lerp(surface.Albedo, envColor, envMask);
             surface.Metallic = envMask;
+            surface.Roughness = max(lerp(surface.Roughness, 0.0f, envMask), 0.08f);
         }
 
         [branch]
@@ -217,7 +218,20 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
         }
-            
+
+        [branch]
+        if (material.ShaderFlags & ShaderFlags::kRefraction) // As glass
+        {
+            surface.Albedo = float3(0.0f, 0.0f, 0.0f);
+            surface.Roughness = 0.0f;
+            surface.Emissive = float3(0.0f, 0.0f, 0.0f);
+            surface.F0 = 0.04f;
+            surface.Metallic = 0.0f;
+            surface.TransmissionColor = 1.0f;
+            surface.SpecTrans = 1.0f;
+            surface.IsThinSurface = true;
+            alpha = 0.0f;
+        }
     }
     else if (material.ShaderType == ShaderType::Effect)
     {
@@ -274,8 +288,13 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         {
             surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);
             surface.Albedo *= alpha;
+            surface.Metallic *= alpha;
             surface.SpecTrans = 1.0f;
-            surface.IsThinSurface = (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+            surface.IsThinSurface |= (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+            if (material.ShaderType != ShaderType::TruePBR)
+            {
+                surface.Roughness = 0.0f;
+            }
         }    
     }
 
@@ -285,7 +304,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         surface.TransmissionColor = windowAlpha;
         surface.Albedo *= 1.0f - windowAlpha;
         surface.Emissive *= 0;
-        surface.Roughness = max(surface.Roughness, 0.08f); // prevent delta transmission
         surface.SpecTrans = 1.0f;
     }
 

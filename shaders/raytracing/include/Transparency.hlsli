@@ -72,8 +72,6 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     {
         if (alpha < material.AlphaThreshold)
             return false;
-        else
-            return true;
     }
     
     if (material.AlphaFlags & AlphaFlags::Blend)
@@ -81,8 +79,53 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         float rnd = Random(randomSeed);
         if (rnd > alpha)
             return false;
+    }
+    
+    if (((material.AlphaFlags & AlphaFlags::Transmission)) || (material.ShaderFlags & ShaderFlags::kRefraction))
+    {
+        float3 transmittance = 1.0f;
+        [branch]
+        if (material.ShaderFlags & ShaderFlags::kRefraction)
+        {
+            transmittance = 1.0f; // fully transparent glass
+        }
         else
-            return true;
+        {
+            float3 baseColor = Textures[NonUniformResourceIndex(material.BaseTexture())].SampleLevel(DefaultSampler, texCoord, 0).rgb;
+            baseColor *= material.BaseColor().rgb;
+            transmittance = lerp(float3(1.0f, 1.0f, 1.0f), baseColor, alpha);
+        }
+
+        float3 F0 = 0.04f;
+
+        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+
+        float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
+        float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
+        float3 bitangentWS = cross(tangentWS, normalWS) * Interpolate(v0.Handedness, v1.Handedness, v2.Handedness, uvw);
+
+        Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
+        float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
+
+        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
+
+        float3 Normal, Tangent, Bitangent;
+
+        NormalMap(
+                normal,
+                handedness,
+                normalWS, tangentWS, bitangentWS,
+                Normal, Tangent, Bitangent
+            );
+
+        float3 viewDir = -normalize(direction);
+        float NdotV = abs(dot(Normal, viewDir));
+
+        float3 F = BRDF::F_Schlick(F0, NdotV);
+        transmittance *= (1.0f - F) / (1.0f + F);
+
+        transmitanceInOut *= transmittance;
+        return false;
     }
     
     if ((material.Feature == Feature::kGlowMap || material.PBRFlags & PBR::Flags::HasEmissive) && material.ShaderFlags & ShaderFlags::kAssumeShadowmask) // only window for now
