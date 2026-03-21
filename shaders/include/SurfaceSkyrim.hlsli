@@ -291,6 +291,10 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.Metallic *= alpha;
             surface.SpecTrans = 1.0f;
             surface.IsThinSurface |= (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+            if (material.ShaderType != ShaderType::TruePBR)
+            {
+                surface.Roughness = 0.0f;
+            }
         }    
     }
 

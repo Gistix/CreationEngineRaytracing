@@ -72,8 +72,6 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     {
         if (alpha < material.AlphaThreshold)
             return false;
-        else
-            return true;
     }
     
     if (material.AlphaFlags & AlphaFlags::Blend)
@@ -81,11 +79,9 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         float rnd = Random(randomSeed);
         if (rnd > alpha)
             return false;
-        else
-            return true;
     }
     
-    if (((material.AlphaFlags & AlphaFlags::Transmission) && (material.ShaderFlags & ShaderFlags::kTwoSided)) || (material.ShaderFlags & ShaderFlags::kRefraction))
+    if (((material.AlphaFlags & AlphaFlags::Transmission)) || (material.ShaderFlags & ShaderFlags::kRefraction))
     {
         float3 transmittance = 1.0f;
         [branch]
