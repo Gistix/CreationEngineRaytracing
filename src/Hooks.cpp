@@ -41,7 +41,6 @@ namespace Hooks
 		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
 	};
 
-
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 		if (oThis && oThis->rendererTexture) {
