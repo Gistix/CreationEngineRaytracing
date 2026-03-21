@@ -530,6 +530,10 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		alphaFlags |= Material::AlphaFlags::Transmission;
 	}
 
+	// Attempt to clear up fake positives
+	if (shaderFlags.all(EShaderPropertyFlag::kTwoSided))
+		flags.reset(Mesh::Flags::DoubleSidedGeom);
+
 	geometryDesc.flags = (alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 
 	material = Material(
