@@ -530,6 +530,14 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		alphaFlags |= Material::AlphaFlags::Transmission;
 	}
 
+	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
+	// so the any-hit shader can compute transmittance for shadow rays
+	bool isWindow = (feature == Feature::kGlowMap || (pbrFlags & PBRShaderFlags::HasEmissive)) &&
+	                shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask);
+	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
+		alphaFlags |= Material::AlphaFlags::Transmission;
+	}
+
 	// Attempt to clear up fake positives
 	if (shaderFlags.all(EShaderPropertyFlag::kTwoSided))
 		flags.reset(Mesh::Flags::DoubleSidedGeom);
