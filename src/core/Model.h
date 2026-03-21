@@ -15,6 +15,8 @@ struct Model
 
 	nvrhi::rt::AccelStructHandle blas;
 
+	uint64_t m_LastBLASUpdate = 0;
+
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool update);
