@@ -531,6 +531,11 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		alphaFlags |= Material::AlphaFlags::Transmission;  // I want them to behave like glass for now
 	}
 
+	// Refraction materials: treat as transmission (glass)
+	if (shaderFlags.any(EShaderPropertyFlag::kRefraction) && alphaFlags == Material::AlphaFlags::None) {
+		alphaFlags |= Material::AlphaFlags::Transmission;
+	}
+
 	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
 	// so the any-hit shader can compute transmittance for shadow rays
 	bool isWindow = (feature == Feature::kGlowMap || (pbrFlags & PBRShaderFlags::HasEmissive)) &&
