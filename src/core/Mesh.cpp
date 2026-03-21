@@ -527,7 +527,8 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye || shaderFlags & EShaderPropertyFlag::kTwoSided;
 	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
 		alphaFlags &= ~Material::AlphaFlags::Blend;
-		alphaFlags |= Material::AlphaFlags::Transmission;
+
+		alphaFlags |= Material::AlphaFlags::Transmission;  // I want them to behave like glass for now
 	}
 
 	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
@@ -537,6 +538,10 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
 		alphaFlags |= Material::AlphaFlags::Transmission;
 	}
+
+	// Attempt to clear up fake positives
+	if (shaderFlags.all(EShaderPropertyFlag::kTwoSided))
+		flags.reset(Mesh::Flags::DoubleSidedGeom);
 
 	geometryDesc.flags = (alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 

@@ -58,9 +58,9 @@ struct Instance
 			.setTransform(m_Transform.f)
 			.setBLAS(model->blas);
 
-		// Culling adds additional overhead but some geometry (like vanilla hair) has duplicated double sided faces (as opposed of using the kTwoSided shader flag)
+		// Culling adds additional overhead but some geometry (like vanilla hair) has duplicated double sided faces (as opposed to using the kTwoSided shader flag)
 		// Without culling this means we would render 4 faces (original back and front + other side of back and other side of front)
-		instanceDesc.flags = model->GetMeshFlags().all(Mesh::Flags::DoubleSidedGeom) ? nvrhi::rt::InstanceFlags::None : nvrhi::rt::InstanceFlags::TriangleCullDisable;
+		instanceDesc.setFlags(model->GetMeshFlags().all(Mesh::Flags::DoubleSidedGeom) ? nvrhi::rt::InstanceFlags::None : nvrhi::rt::InstanceFlags::TriangleCullDisable);
 
 		return instanceDesc;
 	}

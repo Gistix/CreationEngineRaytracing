@@ -6,7 +6,7 @@
 struct InstanceLightData
 {
 	uint Count;
-	uint Data[4];
+	uint Data[8];
 
     uint GetGroup(uint index)
     {
