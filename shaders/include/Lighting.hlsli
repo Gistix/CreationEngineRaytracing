@@ -24,6 +24,20 @@ static const float ISL_SCALED_UNITS_SQ = ISL_SCALE * ISL_METRES_TO_UNITS_SQ;
 #define DIRECTIONAL_LIGHT Raytracing.DirectionalLight
 #define SKY_HEMI SkyHemisphere
 
+float ShadowTerminatorTerm(float3 L, float3 N, float3 Ns)
+{
+	// Disney terminator softening:
+	// "Taming the Shadow Terminator"
+	// Matt Jen-Yuan Chiang, Yining Karl Li, and Brent Burley
+	// SIGGRAPH 2019 Talks
+	// https://www.yiningkarlli.com/projects/shadowterminator.html
+	const float NoL = saturate(dot(N, L));
+	const float NgoL = saturate(dot(Ns, L));
+	const float NgoN = saturate(dot(Ns, N));
+	const float G = saturate(NgoL / (NoL * NgoN + 1e-6));
+	return G + G * (G - G * G); // smooth
+}
+
 float2 EvalHemiUV(float3 dir)
 {
     dir.z = max(dir.z, 0.0f);
@@ -69,7 +83,7 @@ float3 EvalLight(in float3 l, in Material material, in Surface surface, in BRDFC
 #if LIGHTEVAL_MODE == LIGHTEVAL_MODE_DIFFUSE
     return EvalDiffuse(l, surface, brdfContext);
 #else
-    float4 bsdfEval = bsdf.Eval(brdfContext, material, surface, l);
+    float4 bsdfEval = bsdf.Eval(brdfContext, material, surface, l) * ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal);
     return bsdfEval.xyz;
 #endif
 }
