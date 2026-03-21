@@ -423,6 +423,7 @@ void SceneGraph::RemoveInstance(RE::NiAVObject* node)
 		return;
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+	std::unique_lock releaseLock(m_ReleaseDataMutex);
 
 	auto& instance = instanceNodeIt->second;
 
@@ -879,9 +880,15 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 
 void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
 {
-	while (!m_ReleasedData.empty() && m_ReleasedData.front().frameIndex <= frameIndex) {
-		auto& front = m_ReleasedData.front();
-		logger::info("SceneGraph::RunGarbageCollection - {}, Is Compacted: {}", front.model->m_Name, front.model->blas->isCompacted());
-		m_ReleasedData.pop_front();
+	std::shared_lock lock(m_ReleaseDataMutex);
+
+	for (auto it = m_ReleasedData.begin(); it != m_ReleasedData.end(); ) {
+		if (it->frameIndex < frameIndex - 1 && it->model->m_LastBLASUpdate < frameIndex - 1) {
+			logger::debug("SceneGraph::RunGarbageCollection - Frame Index {}, Last Update {}, {}", it->frameIndex, it->model->m_LastBLASUpdate, it->model->m_Name);
+			it = m_ReleasedData.erase(it);
+		}
+		else {
+			++it;
+		}
 	}
 }

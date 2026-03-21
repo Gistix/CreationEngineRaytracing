@@ -69,9 +69,13 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 		blasDesc.addBottomLevelGeometry(meshes[i]->geometryDesc);
 	}
 
-	blas = Renderer::GetSingleton()->GetDevice()->createAccelStruct(blasDesc);
+	auto* renderer = Renderer::GetSingleton();
+
+	blas = renderer->GetDevice()->createAccelStruct(blasDesc);
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+
+	m_LastBLASUpdate = renderer->GetFrameIndex();
 }
 
 void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
@@ -89,4 +93,6 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 	}
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+
+	m_LastBLASUpdate = Renderer::GetSingleton()->GetFrameIndex();
 }

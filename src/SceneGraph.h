@@ -19,12 +19,14 @@
 
 class SceneGraph
 {
+	std::shared_mutex m_ReleaseDataMutex;
+
 	eastl::unordered_map<RE::BSDismemberSkinInstance*, eastl::vector<Mesh*>> dismemberReferences;
 
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 
-	eastl::deque<ReleasedData> m_ReleasedData;
+	eastl::vector<ReleasedData> m_ReleasedData;
 
 	// Root node ptr, Instance data
 	eastl::vector<Instance*> m_InstanceQueueAdd;
@@ -77,7 +79,6 @@ public:
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
 	inline auto& GetTextureDescriptors() const { return m_TextureDescriptors; }
-
 	inline auto& GetDynamicVertexDescriptors() const { return m_DynamicVertexDescriptors; }
 	inline auto& GetSkinningDescriptors() const { return m_SkinningDescriptors; }
 	inline auto& GetVertexCopyDescriptors() const { return m_VertexCopyDescriptors; }
