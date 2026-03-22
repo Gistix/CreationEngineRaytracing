@@ -18,7 +18,7 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
 
-	if (meshFlags.none(Mesh::Flags::Landscape))
+	if (meshFlags.none(Mesh::Flags::Landscape, Mesh::Flags::Water))
 	{
 		auto* refr = form->AsReference();
 

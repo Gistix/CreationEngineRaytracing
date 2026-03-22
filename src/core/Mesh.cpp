@@ -520,6 +520,38 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 					textures[2] = GetTexture(effectMaterial->greyscaleTexture, blackTexture);
 				}
 			}
+
+			if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(effect)) {
+				shaderType = RE::BSShader::Type::Water;
+
+				if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material)) {
+					colors[0] = {
+						waterMaterial->shallowWaterColor.red,
+						waterMaterial->shallowWaterColor.green,
+						waterMaterial->shallowWaterColor.blue,
+						1.0f
+					};
+
+					colors[1] = {
+						waterMaterial->deepWaterColor.red,
+						waterMaterial->deepWaterColor.green,
+						waterMaterial->deepWaterColor.blue,
+						waterMaterial->deepWaterColor.alpha
+					};
+
+					colors[2] = {
+						waterMaterial->reflectionColor.red,
+						waterMaterial->reflectionColor.green,
+						waterMaterial->reflectionColor.blue,
+						waterMaterial->reflectionColor.alpha
+					};
+
+					textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
+					textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
+					textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
+					textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
+				}
+			}
 		}
 	}
 

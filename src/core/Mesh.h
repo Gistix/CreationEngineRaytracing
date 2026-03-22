@@ -28,7 +28,8 @@ struct Mesh
 		Skinned = 1 << 2,
 		Landscape = 1 << 3,
 		Static = 1 << 4,
-		DoubleSidedGeom = 1 << 5
+		DoubleSidedGeom = 1 << 5,
+		Water = 1 << 6
 	};
 
 	enum class State : uint8_t

@@ -41,6 +41,20 @@ namespace Hooks
 		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
 	};
 
+	void TESWaterSystem_AddWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural)
+	{
+		func(a_waterSystem, a_waterObj, a_waterType, a_waterHeight, a_multiBoundShape, a_noDisplacement, a_isProcedural);
+
+		Scene::GetSingleton()->GetSceneGraph()->CreateWaterModel(a_waterType, a_waterObj);
+	};
+
+	void TESWaterSystem_RemoveWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj)
+	{
+		func(a_waterSystem, a_waterObj);
+
+		//Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
+	};
+
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 		if (oThis && oThis->rendererTexture) {
@@ -141,10 +155,20 @@ namespace Hooks
 
 	void BSBatchRenderer_RenderPassImmediately::thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags)
 	{
+		if (!pass->shader) {
+			func(pass, technique, alphaTest, renderFlags);
+			return;
+		}
+
+		auto shaderType = pass->shader->shaderType.get();
+
+		if (shaderType == RE::BSShader::Type::Water)
+			return;
+
 		// Skip rendering geometry that has been determined to be occluded
 		// Never cull during reflection rendering - reflections need all visible geometry
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && pass->shader && pass->geometry) {
-			switch (pass->shader->shaderType.get()) {
+		if (Scene::GetSingleton()->ApplyPathTracingCull() && pass->shader) {
+			switch (shaderType) {
 			case RE::BSShader::Type::Grass:
 			case RE::BSShader::Type::Sky:
 			case RE::BSShader::Type::Water:
@@ -199,12 +223,15 @@ namespace Hooks
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
-		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
-
-		//stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
 
 		// Destructor to remove instances (not models)
 		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));
+
+		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
+		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
+
+		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
+		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 

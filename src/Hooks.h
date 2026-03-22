@@ -34,6 +34,18 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct TESWaterSystem_AddWater
+	{
+		static void thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct TESWaterSystem_RemoveWater
+	{
+		static void thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct NiSourceTexture_Destructor
 	{
 		static void thunk(RE::NiSourceTexture* oThis);
