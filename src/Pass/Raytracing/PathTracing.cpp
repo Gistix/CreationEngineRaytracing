@@ -54,6 +54,7 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
 			nvrhi::BindingLayoutItem::Texture_SRV(7),
+			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),

@@ -41,6 +41,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
     float alpha = 1.0f;
     
+    bool skinEnabled = false;
     [branch]
     if (material.ShaderType == ShaderType::TruePBR)
     {
@@ -192,7 +193,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.Albedo = float3(1.01171875f, 0.99609375f, 1.01171875f) * (surface.Albedo * surface.Albedo + tintColor);
         }
 
-        bool skinEnabled = false;
         [branch]
         if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kFaceGenRGBTint)
         {
@@ -347,7 +347,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
         float3 detailNormal = float3(SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy, 0.5f);
         detailNormal = (detailNormal * 2.0 - 1.0) * SKINSETTINGS.skinDetailParams.z;
-        normal = normalize(ReorientNormal(detailNormal, normal).xy, normal.z);
+        normal = normalize(float3(ReorientNormal(detailNormal, normal).xy, normal.z));
     }
 #endif
 

@@ -72,7 +72,7 @@ struct Scene
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
 	inline nvrhi::ITexture* GetPhysicalSkyTrLUTTexture() const { return m_PhysicalSkyTrLUTTexture; }
-	inline nvrhi::ITexture* GetSkinDetailNormalTexture() const { return m_SkinDetailNormalTexture; }
+	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
 
 	RenderNode* GetGlobalIllumination();
 

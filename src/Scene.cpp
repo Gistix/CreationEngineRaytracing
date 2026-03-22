@@ -399,6 +399,13 @@ void Scene::SetPhysicalSkyTrLUT(ID3D12Resource* trLut)
 	m_PhysicalSkyTrLUTTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, trLut, desc);
 }
 
+nvrhi::ITexture* Scene::GetSkinDetailNormalTexture() const
+{
+	if (m_SkinDetailNormalTexture)
+		return m_SkinDetailNormalTexture;
+	return Renderer::GetSingleton()->GetNormalTexture();
+}
+
 void Scene::SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
 {
 	if (skinDetailNormal == m_SkinDetailNormalResource)
