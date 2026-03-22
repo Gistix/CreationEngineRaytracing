@@ -169,7 +169,7 @@ INTEROP_DATA_STRUCT(Material, 4)
 
     uint16_t EnvMaskTexture()
     {
-		return Texture4;
+		return Texture5;
 	}
 
 	// Vanilla - FaceGen
