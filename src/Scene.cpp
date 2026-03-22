@@ -369,6 +369,36 @@ void Scene::SetSkyHemisphere(ID3D12Resource* skyHemi)
 	m_SkyHemisphereTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skyHemi, desc);
 }
 
+void Scene::SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
+{
+	if (skinDetailNormal == m_SkinDetailNormalResource)
+		return;
+
+	m_SkinDetailNormalResource = skinDetailNormal;
+
+	if (!skinDetailNormal) {
+		m_SkinDetailNormalTexture = nullptr;
+		return;
+	}
+
+	auto* renderer = Renderer::GetSingleton();
+
+	auto targetDesc = skinDetailNormal->GetDesc();
+
+	nvrhi::TextureDesc desc{};
+	desc.width = static_cast<uint32_t>(targetDesc.Width);
+	desc.height = targetDesc.Height;
+	desc.format = renderer->GetFormat(targetDesc.Format);
+	desc.mipLevels = targetDesc.MipLevels;
+	desc.arraySize = targetDesc.DepthOrArraySize;
+	desc.dimension = nvrhi::TextureDimension::Texture2D;
+	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.keepInitialState = true;
+	desc.debugName = "Skin Detail Normal Texture";
+
+	m_SkinDetailNormalTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skinDetailNormal, desc);
+}
+
 void Scene::UpdateSettings(Settings settings)
 {
 	auto previousMode = m_Settings.GeneralSettings.Mode;
