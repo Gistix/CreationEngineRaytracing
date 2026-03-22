@@ -273,6 +273,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	auto& grayTexture = renderer->GetGrayTextureIndex();
 	auto& normalTexture = renderer->GetNormalTextureIndex();
 	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& whiteTexture = renderer->GetWhiteTextureIndex();
 	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
 	auto& detailTexture = renderer->GetDetailTextureIndex();
 
@@ -286,7 +287,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		float4(1.0f, 1.0f, 1.0f, 1.0f)
 	};
 
-	eastl::array<half, 2> scalars;
+	eastl::array<half, 3> scalars;
 	scalars.fill(0.0f);
 
 	eastl::array<half4, 2> texCoordOffsetScales = {
@@ -399,6 +400,16 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							auto& sssColor = lightingPBRMaterial->GetSubsurfaceColor();
 							colors[2] = { sssColor.red, sssColor.green, sssColor.blue, 1.0f };
 							scalars[2] = lightingPBRMaterial->GetSubsurfaceOpacity();
+						}
+
+						if (pbrFlags & PBRShaderFlags::TwoLayer) {
+							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, whiteTexture);
+							textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
+
+							auto& coatColor = lightingPBRMaterial->GetSubsurfaceColor();
+							float coatStrength = lightingPBRMaterial->GetSubsurfaceOpacity();
+							colors[2] = { coatColor.red, coatColor.green, coatColor.blue, coatStrength };
+							scalars[2] = lightingPBRMaterial->coatRoughness;
 						}
 
 						// Enforce TruePBR flag
