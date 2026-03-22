@@ -27,19 +27,17 @@ namespace Hooks
 		func(a_actor, a_object, a_queue3DTasks);
 	}
 
-	void TESObjectLAND_Attach3D::thunk(RE::TESObjectLAND* oThis, bool a2)
+	void BGSTerrainBlock_Attach::thunk(RE::BGSTerrainBlock* block)
 	{
-		func(oThis, a2);
+		func(block);
 
-		Scene::GetSingleton()->AttachLand(oThis);
-	};
+		Scene::GetSingleton()->AttachTerrainBlock(block);
+	}
 
-	void TESObjectLAND_Detach3D::thunk(RE::TESObjectLAND* oThis)
+	void BGSTerrainBlock_Detach::thunk(RE::BGSTerrainBlock* block)
 	{
-		func(oThis);
-
-		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
-	};
+		func(block);
+	}
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
@@ -199,12 +197,12 @@ namespace Hooks
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
-		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
-
-		//stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
 
 		// Destructor to remove instances (not models)
 		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));
+
+		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
+		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
 
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 

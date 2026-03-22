@@ -286,12 +286,14 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 	}
 }
 
-void Scene::AttachLand(RE::TESObjectLAND* land)
+void Scene::AttachTerrainBlock(RE::BGSTerrainBlock* block)
 {
-	if (!land)
+	if (!block)
 		return;
 
-	GetSceneGraph()->CreateLandModel(land);
+	logger::info("Scene::AttachTerrainBlock - Vertex Count {}, Triangle Count {}", block->land->GetTrishapeRuntimeData().vertexCount, block->land->GetTrishapeRuntimeData().triangleCount);
+
+	GetSceneGraph()->CreateLandModel(block);
 }
 
 void Scene::UpdateCameraData() const

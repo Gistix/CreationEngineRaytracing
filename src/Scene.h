@@ -86,7 +86,7 @@ struct Scene
 
 	void AttachModel(RE::TESForm* form);
 
-	void AttachLand(RE::TESObjectLAND* land);
+	void AttachTerrainBlock(RE::BGSTerrainBlock* terrainBlock);
 
 	void UpdateCameraData() const;
 

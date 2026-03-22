@@ -22,15 +22,15 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct TESObjectLAND_Attach3D
+	struct BGSTerrainBlock_Attach
 	{
-		static void thunk(RE::TESObjectLAND* oThis, bool a2);
+		static void thunk(RE::BGSTerrainBlock* block);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct TESObjectLAND_Detach3D
+	struct BGSTerrainBlock_Detach
 	{
-		static void thunk(RE::TESObjectLAND* oThis);
+		static void thunk(RE::BGSTerrainBlock* block);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

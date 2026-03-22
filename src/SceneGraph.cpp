@@ -366,32 +366,42 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVOb
 	});
 }
 
-void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
+void SceneGraph::CreateLandModel(RE::BGSTerrainBlock* block)
 {
-	auto* cell = land->parentCell;
+	auto* terrainNode = block->node;
 
-	if (!cell->IsExteriorCell())
+	logger::info("SceneGraph::CreateLandModel - {}", std::format("Landscape_{}_{}", terrainNode->baseCellX, terrainNode->baseCellY).c_str());
+
+	auto* tes = RE::TES::GetSingleton();
+	auto* cell = tes->gridCells->GetCell(terrainNode->baseCellX / 4, terrainNode->baseCellY / 4);
+
+	logger::info("SceneGraph::CreateLandModel - Cell 0x{:08X}", cell ? cell->GetFormID() : 0);
+
+	/*auto* worldSpace = terrainNode->terrain;
+
+	auto it = worldSpace->cellMap.find(RE::CellID(terrainNode->baseCellX, terrainNode->baseCellY));
+
+	if (it == worldSpace->cellMap.end())
 		return;
 
-	auto& runtimeData = cell->GetRuntimeData();
+	auto* cell = it->second;*/
 
-	auto* exteriorData = runtimeData.cellData.exterior;
+	//if (!cell)
 
-	auto* loadedData = land->loadedData;
+	//auto* cell = tes->GetCell(block->land->world.translate);
 
-	if (!loadedData || !loadedData->mesh)
-		return;
+	//logger::info("SceneGraph::CreateLandModel - Cell 0x{:08X}", cell ? cell->GetFormID() : 0);
 
-	logger::trace("[RT] TESObjectLAND_Attach3D - {}", std::format("Landscape_{}_{}", exteriorData->cellX, exteriorData->cellY).c_str());
-
-	for (uint i = 0; i < 4; i++) {
+	/*for (uint i = 0; i < 4; i++) {
 		auto mesh = loadedData->mesh[i];
 
 		if (!mesh)
 			continue;
 
 		CreateModelInternal(land, std::format("Landscape_{}_{}_Quad_{}", exteriorData->cellX, exteriorData->cellY, i).c_str(), mesh);
-	}
+	}*/
+
+	//CreateModelInternal(land, std::format("Landscape_{}_{}", terrainNode->baseCellX, terrainNode->baseCellY).c_str(), block->land);
 }
 
 void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
