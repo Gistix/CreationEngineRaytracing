@@ -72,12 +72,15 @@ namespace Pass
 				break;
 			}
 
+			const bool vertexUpdate = (queuedMesh.updateFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 			const bool skinUpdate = (queuedMesh.updateFlags & DirtyFlags::Skin) != DirtyFlags::None;
 
 			numVertices = std::max(numVertices, mesh->vertexCount);
 			uint32_t numBoneMatrices = skinUpdate ? static_cast<uint32_t>(mesh->m_BoneMatrices.size()) : 0;
 
-			m_VertexUpdateData[shapeIndex] = VertexUpdateData(
+			auto& vertexUpdateData = m_VertexUpdateData[shapeIndex];
+
+			vertexUpdateData = VertexUpdateData(
 				mesh->m_DescriptorHandle.Get(),
 				static_cast<uint32_t>(queuedMesh.updateFlags),
 				mesh->vertexCount,
@@ -88,7 +91,7 @@ namespace Pass
 			shapeIndex++;
 
 			// Dynamic TriShapes
-			if ((queuedMesh.updateFlags & DirtyFlags::Vertex) != DirtyFlags::None)
+			if (vertexUpdate)
 				mesh->UpdateUploadDynamicBuffers(commandList);
 
 			// Skinning - This is a bit more involved

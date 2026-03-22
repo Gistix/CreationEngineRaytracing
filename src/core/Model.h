@@ -15,6 +15,8 @@ struct Model
 
 	nvrhi::rt::AccelStructHandle blas;
 
+	uint64_t m_LastUpdate = 0;
+
 	uint64_t m_LastBLASUpdate = 0;
 
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
@@ -60,6 +62,8 @@ struct Model
 
 	void Update();
 
+	void SetData(MeshData* meshData, uint32_t& index);
+
 	void UpdateBLAS(nvrhi::ICommandList* commandList);
 
 	void AddRef()
@@ -88,7 +92,6 @@ struct Model
 	{
 		return features;
 	}
-
 
 	auto GetShaderFlags() const
 	{

@@ -2,6 +2,8 @@
 #include "Scene.h"
 #include "Renderer.h"
 
+#include "Pass/Raytracing/Common/Skinning.h"
+
 Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
 	m_Name(name), meshes(eastl::move(meshes))
 {
@@ -50,13 +52,39 @@ void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLi
 
 void Model::Update()
 {
+	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+
+	if (m_LastUpdate == frameIndex)
+		return;
+
+	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
+
 	for (auto& mesh : meshes) {
 		auto dirtyFlags = mesh->Update();
 
-		if (mesh->IsDirtyState())
+		bool vertexUpdate = (dirtyFlags & DirtyFlags::Vertex) != DirtyFlags::None;
+		bool skinUpdate = (dirtyFlags & DirtyFlags::Skin) != DirtyFlags::None;
+
+		if (skinningPass && (vertexUpdate || skinUpdate)) {
+			skinningPass->QueueUpdate(dirtyFlags, mesh.get());
+		}
+
+		if (mesh->IsPendingHidden())
 			m_DirtyFlags |= DirtyFlags::Visibility;
 
 		m_DirtyFlags |= dirtyFlags;
+	}
+
+	m_LastUpdate = frameIndex;
+}
+
+void Model::SetData(MeshData* meshData, uint32_t& index)
+{
+	float3 externalEmittance = GetExternalEmittance();
+
+	for (auto& mesh : meshes) {
+		meshData[index] = mesh->GetData(externalEmittance);
+		index++;
 	}
 }
 

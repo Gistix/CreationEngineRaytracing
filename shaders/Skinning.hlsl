@@ -56,7 +56,7 @@ float3x3 GetBoneRSMatrix(Skinning skinning, uint boneOffset)
 }
 
 [numthreads(1, 32, 1)]
-void Main(uint3 DTid : SV_DispatchThreadID)
+void Main(uint2 DTid : SV_DispatchThreadID)
 {
     const uint meshIndex = DTid.x;
     const uint vertexIndex = DTid.y;

@@ -771,15 +771,6 @@ bool Mesh::UpdateSkinning()
 	if (m_FrameID == frameID)
 		return false;
 
-	// UBE crash fix
-	if (skinInstance->numMatrices == 0 || !skinInstance->boneMatrices)
-		return false;
-
-	if (m_BoneMatrices.empty() || skinInstance->numMatrices != m_BoneMatrices.size())
-		m_BoneMatrices.resize(skinInstance->numMatrices);
-
-	//float3x4* boneMatricesArray = reinterpret_cast<float3x4*>(skinInstance->boneMatrices);
-
 	auto* rootParent = skinInstance->rootParent;
 
 	// UBE crash fix
@@ -796,13 +787,21 @@ bool Mesh::UpdateSkinning()
 	if (skinRoot == identity)
 		return false;
 
-	auto skinRootInverse = Util::Math::GetXMFromNiTransform(skinRoot.Invert());
-
 	auto* skinData = skinInstance->skinData.get();
 
-	if (skinInstance->numMatrices != skinData->bones) {
-		logger::info("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
-	}
+	if (!skinData)
+		return false;
+
+	if (skinInstance->numMatrices != skinData->bones)
+		logger::warn("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
+
+	if (skinData->bones == 0)
+		return false;
+
+	auto skinRootInverse = Util::Math::GetXMFromNiTransform(skinRoot.Invert());
+
+	if (m_BoneMatrices.empty() || skinData->bones != m_BoneMatrices.size())
+		m_BoneMatrices.resize(skinData->bones);
 
 	for (uint i = 0; i < skinData->bones; i++) {
 		auto boneData = skinData->boneData[i];
