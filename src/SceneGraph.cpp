@@ -382,7 +382,7 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	if (!loadedData || !loadedData->mesh)
 		return;
 
-	logger::info("SceneGraph::CreateLandModel - {}", std::format("Landscape_{}_{}", exteriorData->cellX, exteriorData->cellY).c_str());
+	logger::trace("[RT] TESObjectLAND_Attach3D - {}", std::format("Landscape_{}_{}", exteriorData->cellX, exteriorData->cellY).c_str());
 
 	for (uint i = 0; i < 4; i++) {
 		auto mesh = loadedData->mesh[i];
@@ -394,21 +394,6 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	}
 }
 
-
-void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
-{
-	if (!water)
-		return;
-
-	if (!object)
-		return;
-
-	auto path = std::format("Water_0x{:08X}", reinterpret_cast<uintptr_t>(object));
-
-	logger::info("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
-
-	CreateModelInternal(water, path.c_str(), object);
-}
 void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 {
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
@@ -660,10 +645,9 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(effect) != nullptr;
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect) != nullptr;
-		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(effect) != nullptr;
 
 		// Only lighting and effect shader for now
-		if (!isLightingShader && !isEffectShader && !isWaterShader) {
+		if (!isLightingShader && !isEffectShader) {
 			logger::warn("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Unsupported shader type: {}", effect->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
@@ -683,8 +667,6 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		// Landscape needs special handling of triangles
 		if (baseFormType == RE::FormType::Land)
 			flags |= Mesh::Flags::Landscape;
-		else if (baseFormType == RE::FormType::Water)
-			flags |= Mesh::Flags::Water;
 
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;

@@ -53,7 +53,7 @@ void Instance::Update(uint32_t tlasInstanceID)
 		m_State.set(!player->Is3rdPersonVisible(), State::FirstPersonHidden);
 	}
 
-	if (model->GetMeshFlags().none(Mesh::Flags::Landscape, Mesh::Flags::Water) && !IsDetached())
+	if (model->GetMeshFlags().none(Mesh::Flags::Landscape) && !IsDetached())
 	{
 		auto distance = player->Get3D(false)->world.translate.GetDistance(node->world.translate);
 		bool hide = distance > 40000;

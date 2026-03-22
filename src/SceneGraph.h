@@ -98,7 +98,6 @@ public:
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);
 	void CreateLandModel(RE::TESObjectLAND* land);
-	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 
 	void ReleaseTexture(ID3D11Texture2D* texture);
 
