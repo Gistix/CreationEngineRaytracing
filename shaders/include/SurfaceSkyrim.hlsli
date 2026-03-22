@@ -253,10 +253,16 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 surface.Roughness = SKINSETTINGS.skinParams.x;
                 surface.F0 = SKINSETTINGS.skinParams2.zzz;
 
+                // Skin coat layer (second specular lobe)
+                surface.CoatStrength = SKINSETTINGS.skinParams2.x;
+                surface.CoatRoughness = SKINSETTINGS.skinParams.y;
+                surface.CoatF0 = float3(0.04, 0.04, 0.04);
+
                 if (hasValidRFAOS)
                 {
                     float4 rfaos = rfaosTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
                     surface.Roughness = rfaos.x * SKINSETTINGS.physicalParams.x;
+                    surface.CoatRoughness = rfaos.x * SKINSETTINGS.physicalParams.y;
                     surface.F0 = 0.08 * rfaos.w * SKINSETTINGS.physicalParams.z;
                     surface.AO = rfaos.z;
                 }
@@ -392,6 +398,14 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         normalWS, tangentWS, bitangentWS,
         surface.Normal, surface.Tangent, surface.Bitangent
     );
+
+    // Skin coat shares the base surface normal
+    if (skinEnabled)
+    {
+        surface.CoatNormal = surface.Normal;
+        surface.CoatTangent = surface.Tangent;
+        surface.CoatBitangent = surface.Bitangent;
+    }
 #endif
 
     // Hair flowmap processing
