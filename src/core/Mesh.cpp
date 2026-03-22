@@ -497,6 +497,18 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 									colors[0].z = lightingFacegenTintMaterial->tintColor.blue;
 								}
 							}
+
+							if (feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint) {
+								// Load rfaos texture from textureSet's kEnvironment slot (populated by Community Shaders Skin feature)
+								if (auto* textureSet = lightingBaseMaterial->textureSet.get()) {
+									const char* rfaosPath = textureSet->GetTexturePath(RE::BSTextureSet::Texture::kEnvironment);
+									if (rfaosPath && rfaosPath[0] != '\0') {
+										RE::NiPointer<RE::NiSourceTexture> rfaosTexture;
+										textureSet->SetTexture(RE::BSTextureSet::Texture::kEnvironment, rfaosTexture);
+										textures[6] = GetTexture(rfaosTexture, blackTexture);
+									}
+								}
+							}
 						}
 					}
 				}

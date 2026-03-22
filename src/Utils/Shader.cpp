@@ -12,6 +12,7 @@ namespace Util
 				{ L"SHARC_UPDATE", sharcUpdate ? L"1" : L"0" },
 				{ L"SHARC_RESOLVE", L"0" },
 				{ L"SHARC_DEBUG", L"0" },
+				{ L"SKIN_DETAIL_NORMAL", L"1" },
 				{ L"DEBUG_TRACE_HEATMAP", L"0" },
 				{ L"ALT_PBR_CONV_ROUGHNESS", L"0" },
 				{ L"ALT_PBR_CONV_METALLIC", L"0" }

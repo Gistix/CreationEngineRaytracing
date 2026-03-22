@@ -34,6 +34,8 @@ struct Scene
 
 	ID3D12Resource* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
+	ID3D12Resource* m_SkinDetailNormalResource = nullptr;
+	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
 	Settings m_Settings;
 
@@ -67,6 +69,7 @@ struct Scene
 	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.DebugSettings.PathTracingCull; };
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
+	inline nvrhi::ITexture* GetSkinDetailNormalTexture() const { return m_SkinDetailNormalTexture; }
 
 	RenderNode* GetGlobalIllumination();
 
@@ -93,6 +96,7 @@ struct Scene
 	void UpdateFeatureData(void* data, uint32_t size);
 
 	void SetSkyHemisphere(ID3D12Resource* skyHemi);
+	void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
 
 	void UpdateSettings(Settings settings);
 };

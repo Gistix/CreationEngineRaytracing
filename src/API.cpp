@@ -56,6 +56,12 @@ void SetSkyHemisphere(ID3D12Resource* skyHemi)
 	scene->SetSkyHemisphere(skyHemi);
 }
 
+void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
+{
+	auto* scene = Scene::GetSingleton();
+	scene->SetSkinDetailNormal(skinDetailNormal);
+}
+
 float* GetFrameTime()
 {
 	return Renderer::GetSingleton()->GetFrameTime();
