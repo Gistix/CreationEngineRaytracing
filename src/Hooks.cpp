@@ -162,12 +162,8 @@ namespace Hooks
 
 		auto shaderType = pass->shader->shaderType.get();
 
-		auto* scene = Scene::GetSingleton();
-
-		if (scene->IsPathTracingActive()) {
-			if (shaderType == RE::BSShader::Type::Water)
-				return;
-		}
+		if (shaderType == RE::BSShader::Type::Water)
+			return;
 
 		// Skip rendering geometry that has been determined to be occluded
 		// Never cull during reflection rendering - reflections need all visible geometry
