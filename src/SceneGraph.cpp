@@ -241,15 +241,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
 
-	for (auto& [path, model] : m_Models)
-	{
-		model->Update();
-	}
-
 	uint32_t meshIndex = 0;
 	uint32_t instanceIndex = 0;
-
-	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
 
 	eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
@@ -260,24 +253,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (instance->IsHidden())
 			continue;
 
+		// Update if applicabe and queue skinning/dynamic update
+		instance->model->Update();
+
 		uint32_t firstMeshIndex = meshIndex;
 
-		auto* model = instance->model;
-
-		float3 externalEmittance = model->GetExternalEmittance();
-
-		auto dirtyFlags = model->GetDirtyFlags();
-
-		for (auto& mesh : model->meshes)
-		{		
-			if (skinningPass && dirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
-				skinningPass->QueueUpdate(dirtyFlags.get(), mesh.get());
-			}
-
-			m_MeshData[meshIndex] = mesh->GetData(externalEmittance);
-			meshIndex++;
-		}
-
+		// Get mesh data
+		instance->model->SetData(m_MeshData.data(), meshIndex);
+		
 		// No visible shape in instance
 		if (meshIndex == firstMeshIndex)
 			continue;
@@ -292,7 +275,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			lights[numLights] = light.m_Index;
 			numLights++;
 
-			if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
+			if (numLights > Constants::INSTANCE_LIGHTS_MAX) {
 				logger::error("SceneGraph::Update - Number of lights per instance of {} exceeds the maximum of {}", numLights, Constants::INSTANCE_LIGHTS_MAX);
 				break;
 			}
@@ -307,8 +290,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		instanceIndex++;
 	}
 
-	commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), meshIndex * sizeof(MeshData));
-	commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), instanceIndex * sizeof(InstanceData));
+	if (meshIndex > 0)
+		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), meshIndex * sizeof(MeshData));
+
+	if (instanceIndex > 0)
+		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), instanceIndex * sizeof(InstanceData));
 }
 
 void SceneGraph::ClearDirtyStates()
@@ -468,9 +454,10 @@ void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
 			auto modelIt = m_Models.find(instance->model->m_Name);
 
 			if (modelIt != m_Models.end()) {
-				// Only necessary due to 'compactBottomLevelAccelStructs', this is freed after the frame completes
+				// Add to safe-release vector
 				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
 
+				// Erase from list
 				m_Models.erase(modelIt);
 			}
 		}
@@ -715,8 +702,8 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		}
 		else if (auto* skinInstance = geometryRuntimeData.skinInstance.get()) {  // Skinned
 			// Skinned trees have wrong bone matrices and are causing a device removal due to out of bounds vertices
-			if (baseFormType == RE::FormType::Tree)
-				return RE::BSVisit::BSVisitControl::kContinue;
+			//if (baseFormType == RE::FormType::Tree)
+			//	return RE::BSVisit::BSVisitControl::kContinue;
 
 			auto& skinPartition = skinInstance->skinPartition;
 

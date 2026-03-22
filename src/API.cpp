@@ -7,7 +7,7 @@ bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12Co
 	return Scene::GetSingleton()->Initialize(RendererParams(d3d11Device, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue));
 }
 
-void Update()
+void UpdateCamera()
 {
 	Scene::GetSingleton()->UpdateCameraData();
 }
