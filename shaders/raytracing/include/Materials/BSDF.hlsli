@@ -495,7 +495,8 @@ struct DefaultBSDF
         diffuseTransmission.albedo = transmissionAlbedo;
 
         float alpha = surfaceRoughness * surfaceRoughness;
-        if (alpha < kMinGGXAlpha && USE_DELTALOBES != 0) alpha = 0.f;
+        if (alpha < kMinGGXAlpha)
+            alpha = USE_DELTALOBES != 0 ? 0.f : kMinGGXAlpha;
 
         uint activeLobes = (uint)LobeType::DiffuseReflection | (uint)LobeType::SpecularReflection;
         if (transmissionAlbedo.r > 0.f || transmissionAlbedo.g > 0.f || transmissionAlbedo.b > 0.f)
@@ -535,7 +536,8 @@ struct DefaultBSDF
             specularReflection.albedo *= layerAttenuation;
 
             float coatAlpha = surface.CoatRoughness * surface.CoatRoughness;
-            if (coatAlpha < kMinGGXAlpha && USE_DELTALOBES != 0) coatAlpha = 0.0;
+            if (coatAlpha < kMinGGXAlpha)
+                coatAlpha = USE_DELTALOBES != 0 ? 0.0 : kMinGGXAlpha;
 
             coatReflection.albedo = coatF0;
             coatReflection.alpha = coatAlpha;
