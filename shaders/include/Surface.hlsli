@@ -39,13 +39,17 @@ struct Surface
     float SpecTrans;
     bool IsThinSurface;
 
-#if defined(FULL_MATERIAL)
-    float3 SubsurfaceColor;
-    float Thickness;
     float3 CoatColor;
     float CoatStrength;
     float CoatRoughness;
     float3 CoatF0;
+    float3 CoatNormal;
+    float3 CoatTangent;
+    float3 CoatBitangent;
+
+#if defined(FULL_MATERIAL)
+    float3 SubsurfaceColor;
+    float Thickness;
     float3 FuzzColor;
     float FuzzWeight;
     float GlintScreenSpaceScale;
@@ -77,6 +81,22 @@ struct Surface
     float3 FromLocal(float3 v)
     {
         return Mul(v);
+    }
+
+    float3 CoatToLocal(float3 v)
+    {
+        return float3(
+            dot(v, CoatTangent),
+            dot(v, CoatBitangent),
+            dot(v, CoatNormal)
+        );
+    }
+
+    float3 CoatFromLocal(float3 v)
+    {
+        return CoatTangent * v.x +
+               CoatBitangent * v.y +
+               CoatNormal * v.z;
     }
 
     void FlipNormal()

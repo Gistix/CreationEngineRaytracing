@@ -158,8 +158,13 @@ void Main()
     
 #if defined(SUBSURFACE_SCATTERING)
     if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
-        direct += EvaluateSubsurfaceNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
+        direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
         isSssPath = true;
+        // Specular uses the standard path with diffuse suppressed
+        Surface specSurface = sourceSurface;
+        specSurface.DiffuseAlbedo = 0;
+        StandardBSDF specBsdf = StandardBSDF::make(specSurface, true);
+        direct += EvaluateDirectRadiance(sourceMaterial, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, false);
     }
     else
 #endif
@@ -378,8 +383,13 @@ void Main()
             float3 directRadiance = 0.0f;
 #ifdef SUBSURFACE_SCATTERING
             if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                directRadiance += EvaluateSubsurfaceNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
+                directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
                 isSssPath = true;
+                // Specular uses the standard path with diffuse suppressed
+                Surface specSurface = surface;
+                specSurface.DiffuseAlbedo = 0;
+                StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
+                directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
             }
             else
 #endif
