@@ -99,8 +99,10 @@ struct SurfaceMaker
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
             
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
-        }
-        else
+        } else if (material.ShaderType == ShaderType::Water)
+        {
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);          
+        } else
         {
             DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
         }

@@ -546,6 +546,10 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 						waterMaterial->reflectionColor.alpha
 					};
 
+					scalars[0] = waterMaterial->amplitudeA[0];
+					scalars[1] = waterMaterial->amplitudeA[0];
+					scalars[2] = waterMaterial->amplitudeA[0];
+
 					textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
 					textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
 					textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
@@ -553,6 +557,10 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 				}
 			}
 		}
+	}
+
+	if (shaderType == RE::BSShader::Type::Water) {
+		alphaFlags = Material::AlphaFlags::Transmission;
 	}
 
 	// Fallback to alpha test if possible
