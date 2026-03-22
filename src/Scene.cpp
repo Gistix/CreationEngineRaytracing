@@ -369,6 +369,13 @@ void Scene::SetSkyHemisphere(ID3D12Resource* skyHemi)
 	m_SkyHemisphereTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skyHemi, desc);
 }
 
+nvrhi::ITexture* Scene::GetSkinDetailNormalTexture() const
+{
+	if (m_SkinDetailNormalTexture)
+		return m_SkinDetailNormalTexture;
+	return Renderer::GetSingleton()->GetNormalTexture();
+}
+
 void Scene::SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
 {
 	if (skinDetailNormal == m_SkinDetailNormalResource)

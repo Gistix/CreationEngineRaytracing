@@ -69,7 +69,7 @@ struct Scene
 	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.DebugSettings.PathTracingCull; };
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
-	inline nvrhi::ITexture* GetSkinDetailNormalTexture() const { return m_SkinDetailNormalTexture; }
+	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
 
 	RenderNode* GetGlobalIllumination();
 

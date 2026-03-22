@@ -57,6 +57,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(9),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
+			nvrhi::BindingLayoutItem::Texture_SRV(12),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
 			nvrhi::BindingLayoutItem::Texture_UAV(3)
