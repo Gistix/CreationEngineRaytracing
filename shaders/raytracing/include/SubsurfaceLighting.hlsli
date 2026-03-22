@@ -175,7 +175,7 @@ float3 evalSingleScatteringTransmission(
     return radiance;
 }
 
-float3 EvaluateSubsurfaceNEE(
+float3 EvaluateSubsurfaceDiffuseNEE(
     const Surface surface,
     const BRDFContext brdfContext,
     const Material material,
@@ -314,28 +314,6 @@ float3 EvaluateSubsurfaceNEE(
             subsurfaceInteraction,
             rayCone,
             randomSeed), 0.0f);
-    }
-
-    // Evaluate microfacet specular reflection at the surface
-    {
-        const bool transition = dot(vectorToLight, geometryNormal) < 0.0f;
-        const float3 shadowHitPosOffset = surface.Position;
-        const float3 shadowV = brdfContext.ViewDirection;
-        // Cast shadow ray towards the selected light
-        const float3 lightVisibility = TraceRayShadowFinite(Scene, surface, vectorToLight, lightDistance, randomSeed);
-
-        if (any(lightVisibility > 0.0f))
-        {
-            const float3 lightRadiance = irradiance * lightVisibility;
-            const float alpha = max(surface.Roughness * surface.Roughness, 0.01f);
-            float3 bsdf = evalMicrofacet(brdfContext.ViewDirection, vectorToLight, surface.Normal, alpha);
-            float3 halfVector = normalize(brdfContext.ViewDirection + vectorToLight);
-            float VdotH = saturate(dot(brdfContext.ViewDirection, halfVector));
-            float3 F = evalFresnelSchlick(surface.F0, VdotH);
-            bsdf *= F;
-
-            radiance += max(bsdf * lightRadiance, 0.0f);
-        }
     }
 
     return radiance;
