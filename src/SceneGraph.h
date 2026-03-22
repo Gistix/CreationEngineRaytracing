@@ -56,8 +56,27 @@ class SceneGraph
 
 	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<TextureReference>> m_Textures;
 
-	eastl::deque<eastl::string> m_MSNConvertionQueue;
-	
+	// MSN (Model Space Normal) conversion
+	struct ConvertedNormalMap
+	{
+		nvrhi::TextureHandle sourceTexture;       // DX12 handle for shared DX11 MSN source
+		nvrhi::TextureHandle convertedTexture;    // DX12 render target for converted tangent-space normal
+		eastl::unique_ptr<TextureReference> textureRef;
+		bool converted = false;
+	};
+
+	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<ConvertedNormalMap>> m_NormalMaps;
+	eastl::unordered_map<DescriptorIndex, ID3D11Texture2D*> m_MSNAllocationMap;
+
+	nvrhi::ShaderHandle m_MSNVertexShader;
+	nvrhi::ShaderHandle m_MSNPixelShader;
+	nvrhi::BindingLayoutHandle m_MSNBindingLayout;
+	nvrhi::SamplerHandle m_MSNSampler;
+	nvrhi::GraphicsPipelineHandle m_MSNGraphicsPipeline;
+	bool m_MSNPipelineInitialized = false;
+
+	void InitMSNPipeline();
+
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
 
@@ -111,4 +130,6 @@ public:
 
 	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);
+
+	void ConvertMSN(Model* model, nvrhi::ICommandList* commandList);
 };
