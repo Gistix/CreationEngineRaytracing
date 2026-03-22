@@ -183,6 +183,11 @@ INTEROP_DATA_STRUCT(Material, 4)
 		return Texture5;
 	}
 
+	uint16_t RFAOSTexture()
+	{
+		return Texture6;
+	}
+
 	// Landscape
 	half2 TexOffset()
     {

@@ -194,6 +194,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(9, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(11, scene->GetPhysicalSkyTrLUTTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(12, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(3, rrInput->specularHitDistance)

@@ -62,6 +62,12 @@ void SetPhysicalSkyTrLUT(ID3D12Resource* trLut)
 	scene->SetPhysicalSkyTrLUT(trLut);
 }
 
+void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
+{
+	auto* scene = Scene::GetSingleton();
+	scene->SetSkinDetailNormal(skinDetailNormal);
+}
+
 float* GetFrameTime()
 {
 	return Renderer::GetSingleton()->GetFrameTime();

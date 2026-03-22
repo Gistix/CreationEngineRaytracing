@@ -214,6 +214,20 @@ struct PhysSkyData
 static_assert(sizeof(PhysSkyData) % 16 == 0);
 #endif
 
+struct SkinData
+{
+    float4 skinParams;
+    float4 skinParams2;
+    float4 skinDetailParams;
+    float4 sssParams;
+    float4 fuzzParams;
+    float4 physicalParams;
+    float4 wetParams;
+};
+#ifdef __cplusplus
+static_assert(sizeof(SkinData) % 16 == 0);
+#endif
+
 INTEROP_STRUCT(FeatureData, 16)
 {
     CPMSettings ExtendedMaterial;
@@ -223,6 +237,7 @@ INTEROP_STRUCT(FeatureData, 16)
     ExtendedTranslucencySettings ExtendedTranslucency;
     LinearLightingSettings LinearLighting;
     PhysSkyData PhysicalSky;
+    SkinData Skin;
 };
 VALIDATE_CBUFFER(FeatureData, 16);
 

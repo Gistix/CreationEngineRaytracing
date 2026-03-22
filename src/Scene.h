@@ -36,6 +36,8 @@ struct Scene
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
 	ID3D12Resource* m_PhysicalSkyTrLUTResource = nullptr;
 	nvrhi::TextureHandle m_PhysicalSkyTrLUTTexture;
+	ID3D12Resource* m_SkinDetailNormalResource = nullptr;
+	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
 	Settings m_Settings;
 
@@ -70,6 +72,7 @@ struct Scene
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
 	inline nvrhi::ITexture* GetPhysicalSkyTrLUTTexture() const { return m_PhysicalSkyTrLUTTexture; }
+	inline nvrhi::ITexture* GetSkinDetailNormalTexture() const { return m_SkinDetailNormalTexture; }
 
 	RenderNode* GetGlobalIllumination();
 
@@ -97,6 +100,7 @@ struct Scene
 
 	void SetSkyHemisphere(ID3D12Resource* skyHemi);
 	void SetPhysicalSkyTrLUT(ID3D12Resource* trLut);
+	void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
 
 	void UpdateSettings(Settings settings);
 };

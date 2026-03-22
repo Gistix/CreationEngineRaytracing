@@ -56,6 +56,7 @@ StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : regist
 StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t10);
 #   endif
 #endif
+Texture2D<float4>                           SkinDetailNormal            : register(t12);
 
 Texture2D<float4>                           PhysicalSkyTrLUT            : register(t11);
 

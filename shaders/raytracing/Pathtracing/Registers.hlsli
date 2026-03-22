@@ -50,6 +50,7 @@ StructuredBuffer<Vertex>                    Vertices[]                  : regist
 Texture2D<float4>                           Textures[]                  : register(t0, space3);
 RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space4);
 Texture2D<float4>                           PhysicalSkyTrLUT            : register(t7);
+Texture2D<float4>                           SkinDetailNormal            : register(t8); 
 
 SamplerState                                DefaultSampler              : register(s0);
 
