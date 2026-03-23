@@ -282,6 +282,10 @@ namespace Hooks
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
 		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
 
+		// Water
+		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
+		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
+
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 
 		auto createFlowMapRel = REL::RelocationID(31234, 32031).address() + REL::Relocate(0x7E, 0xF8);
