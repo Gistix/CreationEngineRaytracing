@@ -757,9 +757,10 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(effect) != nullptr;
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect) != nullptr;
+		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(effect) != nullptr;
 
 		// Only lighting and effect shader for now
-		if (!isLightingShader && !isEffectShader) {
+		if (!isLightingShader && !isEffectShader && !isWaterShader) {
 			logger::warn("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Unsupported shader type: {}", effect->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
