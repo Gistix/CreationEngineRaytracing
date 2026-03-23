@@ -327,6 +327,11 @@ void Scene::UpdateCameraData() const
 	m_CameraData->PrevViewProj = cameraData.previousViewProjMatrixUnjittered;
 
 	m_CameraData->Jitter = renderer->GetJitter();
+
+	auto cameraWorldPos = runtimeData.posAdjust.getEye();
+	auto* tes = RE::TES::GetSingleton();
+	auto* cell = tes ? tes->GetCell(cameraWorldPos) : nullptr;
+	m_CameraData->IsUnderwater = (cell && cameraWorldPos.z < tes->GetWaterHeight(cameraWorldPos, cell)) ? 1 : 0;
 }
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)
