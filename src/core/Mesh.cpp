@@ -428,10 +428,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 
 							bool isModelSpaceNormalMap = shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals);
 
-							if (isModelSpaceNormalMap)
-								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(nullptr, normalTexture, isModelSpaceNormalMap);
-							else
-								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
+							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
 
 							if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 								if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {

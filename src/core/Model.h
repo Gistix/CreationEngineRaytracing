@@ -42,8 +42,6 @@ struct Model
 		return false;
 	}
 
-	void ConvertMSN();
-
 	/*D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS BuildFlags() const
 	{
 		if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
