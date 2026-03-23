@@ -104,6 +104,7 @@ struct AdvancedSettings
 struct DebugSettings
 {
 	bool PathTracingCull = false;
+	bool EnableWater = false;
 };
 
 struct Settings

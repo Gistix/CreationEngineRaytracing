@@ -28,7 +28,8 @@ struct Mesh
 		Skinned = 1 << 2,
 		Landscape = 1 << 3,
 		Static = 1 << 4,
-		DoubleSidedGeom = 1 << 5
+		DoubleSidedGeom = 1 << 5,
+		Water = 1 << 6
 	};
 
 	enum class State : uint8_t
@@ -159,7 +160,7 @@ struct Mesh
 
 	Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap);
 
-	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::FormID formID);
+	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form);
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
@@ -177,7 +178,7 @@ struct Mesh
 
 	bool IsDirtyState() const;
 
-	MeshData GetData(float3 externalEmittance) const;
+	MeshData GetData(const float3 externalEmittance, const float4* waterTexScroll) const;
 private:
 	// State is pending until BLASRebuild
 	State pendingState = State::None;

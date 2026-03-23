@@ -39,6 +39,11 @@ struct Scene
 	ID3D12Resource* m_SkinDetailNormalResource = nullptr;
 	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
+	int32_t* g_FlowMapSize = nullptr;
+	float4* g_DisplacementCellTexCoordOffset = nullptr;
+	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
+	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
+
 	Settings m_Settings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
@@ -67,6 +72,8 @@ struct Scene
 	inline auto GetCameraBuffer() const { return m_CameraBuffer; }
 
 	inline auto GetFeatureBuffer() const { return m_FeatureBuffer; }
+
+	inline bool IsPathTracingActive() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing; };
 
 	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.DebugSettings.PathTracingCull; };
 
