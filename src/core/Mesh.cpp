@@ -927,14 +927,15 @@ DirtyFlags Mesh::Update()
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
 	if (dynamic || skinned)
-		SetPendingState(State::Hidden, bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kHidden));
+		m_PendingState.set(bsGeometryPtr->GetFlags().all(RE::NiAVObject::Flag::kHidden), State::Hidden);
 
-	// Store states
+	// Store previous hidden state
 	bool wasHidden = IsHidden();
 
-	// Update them
-	UpdateState();
+	// Update states
+	m_State = m_PendingState;
 
+	// Current hiddent state
 	bool isHidden = IsHidden();
 
 	// Becomes hidden this frame
@@ -972,33 +973,12 @@ MeshData Mesh::GetData(const float3 externalEmittance, const float4* waterTexScr
 
 bool Mesh::IsHidden() const
 {
-	return ((state & State::Hidden) != State::None) || ((state & State::DismemberHidden) != State::None);
+	return m_State.any(State::Hidden,State::DismemberHidden);
 }
 
-bool Mesh::IsDirtyState() const
+void Mesh::UpdateDismember(bool visible)
 {
-	return pendingState != state;
-}
-
-// State is set as pending first, final state is updated after BLAS rebuild call
-void Mesh::SetPendingState(State stateIn, bool activate)
-{
-	if (activate)
-		pendingState |= stateIn;
-	else
-		pendingState &= ~stateIn;
-}
-
-void Mesh::UpdateDismember(bool enable)
-{
-	SetPendingState(State::DismemberHidden, !enable);
-}
-
-// Updates state from pending
-void Mesh::UpdateState()
-{
-	state = pendingState;
-	pendingState = Mesh::State::None;
+	m_PendingState.set(!visible, State::DismemberHidden);
 }
 
 void Mesh::CalculateNormals()

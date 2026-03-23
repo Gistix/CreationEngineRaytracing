@@ -873,9 +873,9 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, dismemberPartition.editorVisible, dismemberPartition.slot, dismemberSkinInstance);
 
 				// Diabolical Part II
-				if (emplacedDismemberRef)
+				if (emplacedDismemberRef)				
 					it->second[i] = mesh.get();
-
+	
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, form);
 
@@ -914,15 +914,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			modelPtr->BuildBLAS(computeCommandList);
 
-			//computeCommandList->compactBottomLevelAccelStructs();
+			computeCommandList->compactBottomLevelAccelStructs();
 
 			computeCommandList->close();
 
 			device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, copySubmittedInstance);
 
-			device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
-
-			device->waitForIdle();
+			auto computeSubmittedInstance = device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
 
 			// MSN Conversion - must happen after buffers are uploaded and GPU is idle
 			if (modelPtr->ShouldQueueMSNConversion()) {
@@ -933,9 +931,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				ConvertMSN(modelPtr, graphicsCommandList);
 
 				graphicsCommandList->close();
+
+				device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Compute, computeSubmittedInstance);
+
 				device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
-				device->waitForIdle();
 			}
+
+			device->waitForIdle();
 
 			AddInstance(formID, pRoot, modelName);
 
