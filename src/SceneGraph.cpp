@@ -395,7 +395,6 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	}
 }
 
-
 void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
 {
 	if (!Scene::GetSingleton()->m_Settings.DebugSettings.EnableWater)
@@ -413,6 +412,7 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 
 	CreateModelInternal(water, path.c_str(), object);
 }
+
 void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 {
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
