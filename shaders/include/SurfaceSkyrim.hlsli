@@ -395,18 +395,64 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 #endif
     }
 
-    float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, float mipLevel)
+void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Material material)
+{
+    const float mipLevel = surface.MipLevel;
+
+    surface.Albedo = float3(1.0f, 1.0f, 1.0f);
+    surface.Roughness = 0.0f;
+    surface.Metallic = 0.0f;
+    surface.F0 = 0.05f;
+    surface.IOR = 1.33f;
+ 
+    Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
+    Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
+    Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
+
+    float2 normalScroll0 = material.Vector0.xy;
+    float2 normalScroll1 = material.Vector0.zw;
+    float2 normalScroll2 = material.Vector1.xy;
+    
+    const float scale = 0.001f;
+    
+    float normalsScale0 = scale * material.Vector1.z;
+    float normalsScale1 = scale * material.Vector1.w;
+    float normalsScale2 = scale * material.Vector2.x;
+    
+    float2 normal0TexCoord = (texCoord0 / normalsScale0) + normalScroll0;
+    float2 normal1TexCoord = (texCoord0 / normalsScale1) + normalScroll1;
+    float2 normal2TexCoord = (texCoord0 / normalsScale2) + normalScroll2;
+    
+    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normal0TexCoord, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
+    float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normal1TexCoord, mipLevel).xyz * 2.0 - 1.0;
+    float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normal2TexCoord, mipLevel).xyz * 2.0 - 1.0;
+
+    surface.Normal = normalize(
+        float3(0, 0, 1) +
+        material.Scalar0 * normals1 +
+        material.Scalar1 * normals2 +
+        material.Scalar2 * normals3
+    );
+    
+    surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
+    surface.Bitangent = cross(surface.Normal, surface.Tangent) * handedness;
+    
+    surface.TransmissionColor = material.Color0.rgb;  
+    surface.SpecTrans = 1.0f;    
+}
+
+float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, float mipLevel)
+{
+    if (weight > LAND_MIN_WEIGHT)
     {
-        if (weight > LAND_MIN_WEIGHT)
-        {
-            Texture2D texture = Textures[NonUniformResourceIndex(textureIndex)];
-            return texture.SampleLevel(DefaultSampler, texcoord, mipLevel) * weight;
-        }
-        else
-        {
-            return float4(0.0f, 0.0f, 0.0f, 0.0f);
-        }
+        Texture2D texture = Textures[NonUniformResourceIndex(textureIndex)];
+        return texture.SampleLevel(DefaultSampler, texcoord, mipLevel) * weight;
     }
+    else
+    {
+        return float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+}
 
     void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, in float handedness, float4 landBlend0, float4 landBlend1, in Material material)
     {

@@ -35,6 +35,11 @@ struct Scene
 	ID3D12Resource* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
 
+	int32_t* g_FlowMapSize = nullptr;
+	float4* g_DisplacementCellTexCoordOffset = nullptr;
+	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
+	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
+
 	Settings m_Settings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
