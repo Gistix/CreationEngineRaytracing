@@ -21,6 +21,8 @@ INTEROP_STRUCT(CameraData, 16)
     float2 Jitter;
     uint IsUnderwater;
     uint Pad1;
+    float3 UnderwaterAbsorption;
+    uint Pad2;
 };
 VALIDATE_CBUFFER(CameraData, 16);
 
