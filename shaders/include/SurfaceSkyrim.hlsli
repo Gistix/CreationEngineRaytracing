@@ -402,7 +402,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.Albedo = float3(1.0f, 1.0f, 1.0f);
     surface.Roughness = 0.0f;
     surface.Metallic = 0.0f;
-    surface.F0 = 0.05f;
+    surface.F0 = 0.02f;
     surface.IOR = 1.33f;
  
     Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
