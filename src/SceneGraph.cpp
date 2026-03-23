@@ -6,6 +6,7 @@
 
 #include "Renderer.h"
 #include "Util.h"
+#include "ShaderUtils.h"
 
 #include "Types/CommunityShaders/LightLimitFix.h"
 #include "Types/CommunityShaders/ISLCommon.h"
@@ -566,9 +567,97 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 	return nullptr;
 }
 
-eastl::shared_ptr<DescriptorHandle> SceneGraph::GetMSNormalMapDescriptor([[maybe_unused]] Mesh* mesh, [[maybe_unused]] RE::BSGraphics::Texture* texture)
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetMSNormalMapDescriptor([[maybe_unused]] Mesh* mesh, RE::BSGraphics::Texture* texture)
 {
-	return nullptr;
+	auto* d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(texture->texture);
+
+	if (auto refIt = m_NormalMaps.find(d3d11Texture); refIt != m_NormalMaps.end()) {
+		return refIt->second->textureRef->descriptorHandle;
+	}
+
+	auto [it, emplaced] = m_NormalMaps.emplace(d3d11Texture, eastl::make_unique<ConvertedNormalMap>());
+
+	if (!emplaced) {
+		logger::warn("[RT] GetMSNormalMapDescriptor - NormalMap emplace failed.");
+		return nullptr;
+	}
+
+	auto* normalMap = it->second.get();
+
+	D3D11_TEXTURE2D_DESC desc;
+	d3d11Texture->GetDesc(&desc);
+
+	// Share the DX11 MSN source texture to DX12
+	{
+		winrt::com_ptr<IDXGIResource> dxgiResource;
+		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+
+		if (FAILED(hr)) {
+			logger::error("[RT] GetMSNormalMapDescriptor - Failed to query interface for source.");
+			m_NormalMaps.erase(it);
+			return nullptr;
+		}
+
+		HANDLE sharedHandle = nullptr;
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+
+		if (FAILED(hr) || !sharedHandle) {
+			logger::error("[RT] GetMSNormalMapDescriptor - Failed to get shared handle for source.");
+			m_NormalMaps.erase(it);
+			return nullptr;
+		}
+
+		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
+
+		winrt::com_ptr<ID3D12Resource> d3d12Texture;
+		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Texture));
+
+		if (FAILED(hr) || !d3d12Texture) {
+			logger::error("[RT] GetMSNormalMapDescriptor - Failed to open shared handle for source.");
+			m_NormalMaps.erase(it);
+			return nullptr;
+		}
+
+		D3D12_RESOURCE_DESC nativeTexDesc = d3d12Texture->GetDesc();
+		auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
+
+		if (formatIt == Renderer::GetFormatMapping().end()) {
+			logger::error("[RT] GetMSNormalMapDescriptor - Unmapped source format: {}", magic_enum::enum_name(nativeTexDesc.Format));
+			m_NormalMaps.erase(it);
+			return nullptr;
+		}
+
+		normalMap->sourceTexture = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(
+			nvrhi::ObjectTypes::D3D12_Resource,
+			nvrhi::Object(d3d12Texture.get()),
+			nvrhi::TextureDesc()
+				.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
+				.setHeight(nativeTexDesc.Height)
+				.setFormat(formatIt->second)
+				.setInitialState(nvrhi::ResourceStates::ShaderResource)
+				.setDebugName("MSN Source Texture"));
+	}
+
+	// Create DX12 render target for the converted normal map
+	{
+		auto device = Renderer::GetSingleton()->GetDevice();
+
+		normalMap->convertedTexture = device->createTexture(
+			nvrhi::TextureDesc()
+				.setWidth(desc.Width)
+				.setHeight(desc.Height)
+				.setFormat(nvrhi::Format::R10G10B10A2_UNORM)
+				.setInitialState(nvrhi::ResourceStates::ShaderResource)
+				.setKeepInitialState(true)
+				.setIsRenderTarget(true)
+				.setDebugName("Converted MSN Texture"));
+
+		normalMap->textureRef = eastl::make_unique<TextureReference>(normalMap->convertedTexture, m_TextureDescriptors->m_DescriptorTable.get());
+
+		m_MSNAllocationMap.emplace(normalMap->textureRef->descriptorHandle->Get(), d3d11Texture);
+	}
+
+	return normalMap->textureRef->descriptorHandle;
 }
 
 void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
@@ -784,9 +873,6 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		if (emplaced) {
 			auto* modelPtr = it->second.get();
 
-			if (modelPtr->ShouldQueueMSNConversion())
-				m_MSNConvertionQueue.emplace_back(modelName);
-
 			// Copy Command
 			auto copyCommandList = Renderer::GetSingleton()->GetCopyCommandList();
 			copyCommandList->open();
@@ -814,6 +900,19 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
 
 			device->waitForIdle();
+
+			// MSN Conversion - must happen after buffers are uploaded and GPU is idle
+			if (modelPtr->ShouldQueueMSNConversion()) {
+				auto graphicsCommandList = device->createCommandList(
+					nvrhi::CommandListParameters().setQueueType(nvrhi::CommandQueue::Graphics));
+				graphicsCommandList->open();
+
+				ConvertMSN(modelPtr, graphicsCommandList);
+
+				graphicsCommandList->close();
+				device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
+				device->waitForIdle();
+			}
 
 			AddInstance(formID, pRoot, modelName);
 
@@ -877,5 +976,135 @@ void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
 		else {
 			++it;
 		}
+	}
+}
+
+void SceneGraph::InitMSNPipeline()
+{
+	if (m_MSNPipelineInitialized)
+		return;
+
+	auto device = Renderer::GetSingleton()->GetDevice();
+
+	// Compile shaders
+	winrt::com_ptr<IDxcBlob> vertexBlob, pixelBlob;
+	ShaderUtils::CompileShader(vertexBlob, L"data/shaders/ModelSpaceToTangent.hlsl", {}, L"vs_6_5", L"MainVS");
+	ShaderUtils::CompileShader(pixelBlob, L"data/shaders/ModelSpaceToTangent.hlsl", {}, L"ps_6_5", L"MainPS");
+
+	m_MSNVertexShader = device->createShader({ nvrhi::ShaderType::Vertex, "", "MainVS" }, vertexBlob->GetBufferPointer(), vertexBlob->GetBufferSize());
+	m_MSNPixelShader = device->createShader({ nvrhi::ShaderType::Pixel, "", "MainPS" }, pixelBlob->GetBufferPointer(), pixelBlob->GetBufferSize());
+
+	// Create sampler
+	m_MSNSampler = device->createSampler(
+		nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
+			.setAllFilters(true));
+
+	// Create binding layout for MSN pass
+	auto bindingLayoutDesc = nvrhi::BindingLayoutDesc()
+		.setVisibility(nvrhi::ShaderType::All)
+		.addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(uint32_t)))
+		.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))
+		.addItem(nvrhi::BindingLayoutItem::Sampler(0));
+
+	m_MSNBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+
+	m_MSNPipelineInitialized = true;
+}
+
+void SceneGraph::ConvertMSN(Model* model, nvrhi::ICommandList* commandList)
+{
+	InitMSNPipeline();
+
+	auto device = Renderer::GetSingleton()->GetDevice();
+
+	// Group meshes by their converted normal map (descriptor index)
+	eastl::unordered_map<DescriptorIndex, eastl::vector<Mesh*>> msnGroups;
+
+	for (auto& mesh : model->meshes) {
+		if (mesh->material.shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals))
+			continue;
+
+		auto descHandle = mesh->material.Textures[Constants::Material::NORMALMAP_TEXTURE].texture.lock();
+		if (!descHandle)
+			continue;
+
+		auto key = descHandle->Get();
+		msnGroups[key].push_back(mesh.get());
+	}
+
+	for (auto& [allocationIdx, meshes] : msnGroups) {
+		auto msnIt = m_MSNAllocationMap.find(allocationIdx);
+		if (msnIt == m_MSNAllocationMap.end())
+			continue;
+
+		auto normalMapIt = m_NormalMaps.find(msnIt->second);
+		if (normalMapIt == m_NormalMaps.end())
+			continue;
+
+		auto* normalMap = normalMapIt->second.get();
+
+		if (normalMap->converted)
+			continue;
+
+		// Create framebuffer for this render target
+		auto framebuffer = device->createFramebuffer(
+			nvrhi::FramebufferDesc().addColorAttachment(normalMap->convertedTexture));
+
+		const auto& fbinfo = framebuffer->getFramebufferInfo();
+
+		// Create pipeline lazily (all converted textures share R10G10B10A2_UNORM)
+		if (!m_MSNGraphicsPipeline) {
+			nvrhi::GraphicsPipelineDesc pipelineDesc;
+			pipelineDesc.VS = m_MSNVertexShader;
+			pipelineDesc.PS = m_MSNPixelShader;
+			pipelineDesc.primType = nvrhi::PrimitiveType::TriangleList;
+			pipelineDesc.bindingLayouts = {
+				m_MSNBindingLayout,
+				m_TriangleDescriptors->m_Layout,
+				m_VertexDescriptors->m_Layout
+			};
+			pipelineDesc.renderState.depthStencilState.depthTestEnable = false;
+			pipelineDesc.renderState.rasterState.setCullNone();
+
+			m_MSNGraphicsPipeline = device->createGraphicsPipeline(pipelineDesc, fbinfo);
+		}
+
+		// Create binding set with the source MSN texture
+		nvrhi::BindingSetDesc bindingSetDesc;
+		bindingSetDesc.bindings = {
+			nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)),
+			nvrhi::BindingSetItem::Texture_SRV(0, normalMap->sourceTexture),
+			nvrhi::BindingSetItem::Sampler(0, m_MSNSampler)
+		};
+		auto bindingSet = device->createBindingSet(bindingSetDesc, m_MSNBindingLayout);
+
+		// Clear RT to flat normal (0.5, 0.5, 1.0, 1.0)
+		commandList->clearTextureFloat(normalMap->convertedTexture, nvrhi::AllSubresources, nvrhi::Color(0.5f, 0.5f, 1.0f, 1.0f));
+
+		for (auto* mesh : meshes) {
+			uint32_t geometryIdx = mesh->m_DescriptorHandle.Get();
+
+			nvrhi::GraphicsState state;
+			state.pipeline = m_MSNGraphicsPipeline;
+			state.framebuffer = framebuffer;
+			state.bindings = {
+				bindingSet,
+				m_TriangleDescriptors->m_DescriptorTable->GetDescriptorTable(),
+				m_VertexDescriptors->m_DescriptorTable
+			};
+			state.viewport.addViewportAndScissorRect(fbinfo.getViewport());
+
+			commandList->setGraphicsState(state);
+			commandList->setPushConstants(&geometryIdx, sizeof(geometryIdx));
+
+			nvrhi::DrawArguments args;
+			args.vertexCount = mesh->triangleCount * 3;
+			args.instanceCount = 1;
+			commandList->draw(args);
+		}
+
+		normalMap->converted = true;
+		m_MSNAllocationMap.erase(allocationIdx);
 	}
 }
