@@ -194,7 +194,7 @@ namespace Hooks
 
 		auto* scene = Scene::GetSingleton();
 
-		if (scene->IsPathTracingActive()) {
+		if (scene->IsPathTracingActive() && scene->m_Settings.DebugSettings.EnableWater) {
 			if (shaderType == RE::BSShader::Type::Water)
 				return;
 		}
