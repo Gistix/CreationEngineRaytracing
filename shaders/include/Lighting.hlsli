@@ -123,6 +123,11 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
 
     // Sun angular radius is ~0.00465 radians (~0.266 degrees)
     float cosSunDisk = cos(0.00465f);
+#if defined(PHYSICAL_SKY_TRLUT)
+    if (Features.PhysicalSky.enabled && Features.PhysicalSky.sunDiskCos > 0.0f)
+        cosSunDisk = Features.PhysicalSky.sunDiskCos;
+#endif
+
     lr = TangentToWorld(lr, SampleConeUniform(randomSeed, cosSunDisk));
 }
 
