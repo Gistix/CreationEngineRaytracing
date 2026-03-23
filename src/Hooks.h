@@ -89,6 +89,18 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct CreateFlowMapSE
+	{
+		static void* thunk(void* a1, int a2, int a3, void* a4);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct CreateFlowMapAE
+	{
+		static void* thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct CreateRenderTarget_PlayerFaceGenTint
 	{
 		static void thunk(RE::BSGraphics::Renderer* oThis, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties);

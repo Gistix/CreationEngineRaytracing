@@ -103,6 +103,36 @@ namespace Hooks
 		return result;
 	}
 
+	void* CreateFlowMapSE::thunk(void* a1, int a2, int a3, void* a4)
+	{
+		auto* scene = Scene::GetSingleton();
+
+		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
+
+		scene->shareTexture = true;
+
+		auto* result = func(a1, a2, a3, a4);
+
+		scene->shareTexture = false;
+
+		return result;
+	}
+
+	void* CreateFlowMapAE::thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7)
+	{
+		auto* scene = Scene::GetSingleton();
+
+		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
+
+		scene->shareTexture = true;
+
+		auto* result = func(a1, a2, a3, a4, a5, a6, a7);
+
+		scene->shareTexture = false;
+
+		return result;
+	}
+	
 	void CreateRenderTarget_PlayerFaceGenTint::thunk(RE::BSGraphics::Renderer* oThis, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties)
 	{
 		auto* scene = Scene::GetSingleton();
@@ -239,9 +269,15 @@ namespace Hooks
 
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 
-		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605, 0x0));
+		auto createFlowMapRel = REL::RelocationID(31234, 32031).address() + REL::Relocate(0x7E, 0xF8);
+		if (REL::Module::IsSE())
+			stl::write_thunk_call<CreateFlowMapSE>(createFlowMapRel);
+		else
+			stl::write_thunk_call<CreateFlowMapAE>(createFlowMapRel);
 
-		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951, 0x0));
+		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605));
+
+		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
@@ -253,7 +289,6 @@ namespace Hooks
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
-
 
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
