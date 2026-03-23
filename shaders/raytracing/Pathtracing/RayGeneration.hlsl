@@ -219,7 +219,7 @@ void Main()
 
         // Water volume tracking for Beer-Lambert absorption
         bool insideWaterVolume = Camera.IsUnderwater != 0;
-        float3 waterVolumeAbsorption = (insideWaterVolume && any(sourceSurface.VolumeAbsorption > 0.0f)) ? sourceSurface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
+        float3 waterVolumeAbsorption = insideWaterVolume ? Camera.UnderwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
         
 #if defined(RAW_RADIANCE)
         float3 throughputDelta = float3(1.0f, 1.0f, 1.0f);
@@ -433,9 +433,9 @@ void Main()
 
 #if !(defined(SHARC) && SHARC_UPDATE)
     // Apply primary ray water absorption when camera is underwater
-    if (Camera.IsUnderwater != 0 && any(sourceSurface.VolumeAbsorption > 0.0f))
+    if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
     {
-        float3 primaryWaterAttenuation = exp(-sourceSurface.VolumeAbsorption * sourcePayload.hitDistance);
+        float3 primaryWaterAttenuation = exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
         direct *= primaryWaterAttenuation;
         radiance *= primaryWaterAttenuation;
     }
