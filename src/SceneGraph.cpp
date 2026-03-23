@@ -657,7 +657,7 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetMSNormalMapDescriptor([[maybe
 				.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 				.setHeight(nativeTexDesc.Height)
 				.setFormat(formatIt->second)
-				.setInitialState(nvrhi::ResourceStates::ShaderResource)
+				.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 				.setDebugName("MSN Source Texture"));
 	}
 
