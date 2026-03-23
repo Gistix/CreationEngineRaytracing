@@ -99,6 +99,8 @@ struct Material
 	eastl::array<half4, 3> Colors;
 	eastl::array<half, 3> Scalars;
 
+	eastl::array<half4, 4> Vectors;
+
 	eastl::array<half4, 2> TexCoordOffsetScale;
 
 	eastl::array<Texture, 20> Textures;
@@ -204,54 +206,7 @@ struct Material
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
 
-	MaterialData GetData(float3 externalEmittance) const
-	{
-		half4 emissive = Colors[1];
-
-		if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kExternalEmittance)) {
-			if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kOwnEmit)) {
-				emissive.x *= externalEmittance.x;
-				emissive.y *= externalEmittance.y;
-				emissive.z *= externalEmittance.z;
-			}
-			else {
-				emissive.x = externalEmittance.x;
-				emissive.y = externalEmittance.y;
-				emissive.z = externalEmittance.z;
-			}
-		}
-
-		return MaterialData(
-			TexCoordOffsetScale[0], TexCoordOffsetScale[1],
-			Colors[0], emissive, Colors[2],
-			alphaThreshold,
-			Scalars[0], Scalars[1], Scalars[2],
-			GetTextureDescriptorIndex(0),
-			GetTextureDescriptorIndex(1),
-			GetTextureDescriptorIndex(2),
-			GetTextureDescriptorIndex(3),
-			GetTextureDescriptorIndex(4),
-			GetTextureDescriptorIndex(5),
-			GetTextureDescriptorIndex(6),
-			GetTextureDescriptorIndex(7),
-			GetTextureDescriptorIndex(8),
-			GetTextureDescriptorIndex(9),
-			GetTextureDescriptorIndex(10),
-			GetTextureDescriptorIndex(11),
-			GetTextureDescriptorIndex(12),
-			GetTextureDescriptorIndex(13),
-			GetTextureDescriptorIndex(14),
-			GetTextureDescriptorIndex(15),
-			GetTextureDescriptorIndex(16),
-			GetTextureDescriptorIndex(17),
-			GetTextureDescriptorIndex(18),
-			GetTextureDescriptorIndex(19),
-			static_cast<uint16_t>(alphaFlags),
-			GetShaderType(),
-			static_cast<uint16_t>(Feature),
-			PBRFlags.underlying(),
-			static_cast<uint32_t>(GetShaderFlags()));
-	}
+	MaterialData GetData(float3 externalEmittance) const;
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);

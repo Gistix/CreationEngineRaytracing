@@ -410,9 +410,11 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
     Texture2D normals04Texture = Textures[NonUniformResourceIndex(material.Texture3)];
     
-    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
-    float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz * 2.0 - 1.0;
-    float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz * 2.0 - 1.0;
+    float3 normalsScale = 0.001f * material.Vector0.xyz;
+    
+    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, texCoord0 / normalsScale.x, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
+    float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, texCoord0 / normalsScale.y, mipLevel).xyz * 2.0 - 1.0;
+    float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, texCoord0 / normalsScale.z, mipLevel).xyz * 2.0 - 1.0;
 
     surface.Normal = normalize(
         float3(0, 0, 1) +

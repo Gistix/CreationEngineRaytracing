@@ -290,6 +290,13 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	eastl::array<half, 3> scalars;
 	scalars.fill(0.0f);
 
+	eastl::array<half4, 4> vectors = {
+		float4(1.0f, 1.0f, 1.0f, 1.0f),
+		float4(1.0f, 1.0f, 1.0f, 1.0f),
+		float4(1.0f, 1.0f, 1.0f, 1.0f),
+		float4(1.0f, 1.0f, 1.0f, 1.0f)
+	};
+
 	eastl::array<half4, 2> texCoordOffsetScales = {
 		float4(0.0f, 0.0f, 1.0f, 1.0f),
 		float4(0.0f, 0.0f, 1.0f, 1.0f)
@@ -557,9 +564,26 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 						waterMaterial->reflectionColor.alpha
 					};
 
+					// NormalsAmplitude
 					scalars[0] = waterMaterial->amplitudeA[0];
-					scalars[1] = waterMaterial->amplitudeA[0];
-					scalars[2] = waterMaterial->amplitudeA[0];
+					scalars[1] = waterMaterial->amplitudeA[1];
+					scalars[2] = waterMaterial->amplitudeA[2];
+
+					// NormalsScale 
+					vectors[0] = {
+						waterMaterial->uvScaleA[0],
+						waterMaterial->uvScaleA[1],
+						waterMaterial->uvScaleA[2],
+						0.0f
+					};
+
+					// CellTexCoordOffset 
+					vectors[2] = {
+						static_cast<float>(waterShaderProp->flowX),
+						static_cast<float>(waterShaderProp->flowY),
+						static_cast<float>(waterShaderProp->cellX),
+						static_cast<float>(waterShaderProp->cellY)
+					};
 
 					textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
 					textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
@@ -610,6 +634,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		alphaThreshold,
 		colors,
 		scalars,
+		vectors,
 		texCoordOffsetScales,
 		textures);
 }
