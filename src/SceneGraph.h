@@ -21,7 +21,7 @@ class SceneGraph
 {
 	std::shared_mutex m_ReleaseDataMutex;
 
-	eastl::unordered_map<RE::BSDismemberSkinInstance*, eastl::vector<Mesh*>> dismemberReferences;
+	eastl::unordered_map<RE::BSDismemberSkinInstance*, eastl::vector<Mesh*>> m_DismemberReferences;
 
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
@@ -29,9 +29,6 @@ class SceneGraph
 	eastl::vector<ReleasedData> m_ReleasedData;
 
 	// Root node ptr, Instance data
-	eastl::vector<Instance*> m_InstanceQueueAdd;
-	eastl::vector<Instance*> m_InstancesQueueRemove;
-
 	eastl::vector<eastl::unique_ptr<Instance>> m_Instances;
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
@@ -110,6 +107,8 @@ public:
 	inline auto& GetInstances() const { return m_Instances; }
 	inline auto& GetLights() { return m_Lights; }
 
+	inline auto& GetDismemberReferences() { return m_DismemberReferences; }
+
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
 	void ClearDirtyStates();
@@ -117,12 +116,11 @@ public:
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);
 	void CreateLandModel(RE::TESObjectLAND* land);
-	void  CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
+	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 
+	void EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance);
 	void ReleaseTexture(ID3D11Texture2D* texture);
-
 	void RemoveInstance(RE::NiAVObject* node);
-
 	void RemoveInstance(RE::TESForm* form, bool releaseModel);
 
 	void SetInstanceDetached(RE::TESForm* form, bool detached);

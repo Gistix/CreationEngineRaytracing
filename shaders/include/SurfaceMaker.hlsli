@@ -108,6 +108,10 @@ struct SurfaceMaker
             
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
         }
+        else if (material.ShaderType == ShaderType::Water)
+        {
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);
+        }
         else
         {
             DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);

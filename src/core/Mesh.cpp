@@ -11,6 +11,12 @@
 
 #include "Utils/CalcTangents.h"
 
+Mesh::~Mesh()
+{
+	if (m_BSDismemberPtr)
+		Scene::GetSingleton()->GetSceneGraph()->EraseDismemberReference(m_BSDismemberPtr);
+}
+
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
 	auto vertexDesc = rendererData->vertexDesc;
@@ -935,11 +941,27 @@ DirtyFlags Mesh::Update()
 	if (dynamic || skinned)
 		SetPendingState(State::Hidden, bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kHidden));
 
-	// Visibility flag is handled by model not by mesh
-	if (IsPendingHidden())
+	// Store states
+	bool wasHidden = IsHidden();
+
+	// Update them
+	UpdateState();
+
+	bool isHidden = IsHidden();
+
+	// Becomes hidden this frame
+	if (!wasHidden && isHidden)
+		return DirtyFlags::Visibility;
+
+	// Nothing to update
+	if (wasHidden && isHidden)
 		return DirtyFlags::None;
 
 	auto updateFlags = DirtyFlags::None;
+
+	// Becomes visible this frame
+	if (wasHidden && !isHidden)
+		updateFlags |= DirtyFlags::Visibility;
 
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
@@ -965,11 +987,6 @@ bool Mesh::IsHidden() const
 	return ((state & State::Hidden) != State::None) || ((state & State::DismemberHidden) != State::None);
 }
 
-bool Mesh::IsPendingHidden() const
-{
-	return ((pendingState & State::Hidden) != State::None) || ((pendingState & State::DismemberHidden) != State::None);
-}
-
 bool Mesh::IsDirtyState() const
 {
 	return pendingState != state;
@@ -993,6 +1010,7 @@ void Mesh::UpdateDismember(bool enable)
 void Mesh::UpdateState()
 {
 	state = pendingState;
+	pendingState = Mesh::State::None;
 }
 
 void Mesh::CalculateNormals()
