@@ -173,6 +173,28 @@ struct DiffuseTransmissionLambert
     }
 };
 
+// Cheap polynomial approximation to single the average energy compensation for multiple bounces
+// Ems = (1-Ess) / Ess
+float EmsApprox(float r2, float NdV)
+{
+    float r4 = r2 * r2;
+    
+    float nv0 = 0.2 * r2;
+    float nv1 = 0.32 * r2 + 1.94 * r4;
+    
+    return lerp(nv0, nv1, NdV);
+}
+
+float3 MultiScatterSpecularApprox(float alpha, float NdV, float3 F0)
+{    
+	// Multiple scattering
+    float Ems = EmsApprox(alpha, NdV);
+    
+    // Turquin's cheap MS approximation
+    // https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf
+    return 1 + F0 * Ems;
+}
+
 struct SpecularReflectionMicrofacet // : IBxDF
 {
     float3 albedo;      ///< Specular albedo.
@@ -196,7 +218,10 @@ struct SpecularReflectionMicrofacet // : IBxDF
         float D = evalNdfGGX(alpha, h.z);
         float G = evalMaskingSmithGGXCorrelated(alpha, wi.z, wo.z);
         float3 F = evalFresnelSchlick(albedo, 1.f, wiDotH);
-        return F * D * G * 0.25f / wi.z;
+        
+        float3 ms = MultiScatterSpecularApprox(alpha, wi.z, albedo);
+
+        return ms * F * (D * G * 0.25f / wi.z);
     }
 
     bool SampleBSDF(const float3 wi, out float3 wo, out float pdf, out float3 weight, out uint lobe, out float lobeP, const float4 preGeneratedSample)
