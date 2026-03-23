@@ -34,6 +34,18 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct TESWaterSystem_AddWater
+	{
+		static void thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct TESWaterSystem_RemoveWater
+	{
+		static void thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct NiSourceTexture_Destructor
 	{
 		static void thunk(RE::NiSourceTexture* oThis);
@@ -67,6 +79,12 @@ namespace Hooks
 	struct TESObjectCELL_AddRefr
 	{
 		static void thunk(RE::TESObjectCELL* a_cell, RE::TESObjectREFR* a_refr, RE::NiNode* a_node);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSDismemberSkinInstance_UpdateDismemberPartion
+	{
+		static void thunk(RE::BSDismemberSkinInstance* oThis, std::uint16_t a_slot, bool a_enable);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

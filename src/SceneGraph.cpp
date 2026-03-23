@@ -413,6 +413,11 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	CreateModelInternal(water, path.c_str(), object);
 }
 
+void SceneGraph::EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance)
+{
+	m_DismemberReferences.erase(dismemberSkinInstance);
+}
+
 void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 {
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
@@ -808,10 +813,6 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			meshes.push_back(eastl::move(mesh));
 		}
 		else if (auto* skinInstance = geometryRuntimeData.skinInstance.get()) {  // Skinned
-			// Skinned trees have wrong bone matrices and are causing a device removal due to out of bounds vertices
-			//if (baseFormType == RE::FormType::Tree)
-			//	return RE::BSVisit::BSVisitControl::kContinue;
-
 			auto& skinPartition = skinInstance->skinPartition;
 
 			if (!skinPartition) {
@@ -833,11 +834,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			eastl::vector<RE::BSDismemberSkinInstance::Data> dismemberData(skinNumPartitions, { true, false, 0 });
 
-			decltype(dismemberReferences.begin()) it;
+			RE::BSDismemberSkinInstance* dismemberSkinInstance = nullptr;
+
+			decltype(m_DismemberReferences.begin()) it;
 			bool emplacedDismemberRef = false;
 
 			if (skinInstance->GetRTTI() == dismemberRTTI.get()) {
-				auto* dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
+				dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
 
 				auto& dismemberRuntime = dismemberSkinInstance->GetRuntimeData();
 
@@ -848,7 +851,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 				std::memcpy(dismemberData.data(), dismemberRuntime.partitions, dismemberNumPartitions * sizeof(RE::BSDismemberSkinInstance::Data));
 
-				eastl::tie(it, emplacedDismemberRef) = dismemberReferences.try_emplace(dismemberSkinInstance, eastl::vector<Mesh*>(skinNumPartitions));
+				eastl::tie(it, emplacedDismemberRef) = m_DismemberReferences.try_emplace(dismemberSkinInstance, eastl::vector<Mesh*>(skinNumPartitions));
 			}
 
 			for (size_t i = 0; i < skinPartition->partitions.size(); i++) {
@@ -865,7 +868,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				if (partition.bonesPerVertex > 0)
 					flags |= Mesh::Flags::Skinned;
 
-				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, dismemberPartition.editorVisible, dismemberPartition.slot);
+				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, dismemberPartition.editorVisible, dismemberPartition.slot, dismemberSkinInstance);
 
 				// Diabolical Part II
 				if (emplacedDismemberRef)
@@ -879,7 +882,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		}
 
 		return RE::BSVisit::BSVisitControl::kContinue;
-		});
+	});
 
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
 		auto model = eastl::make_unique<Model>(path, pRoot, form, meshes);

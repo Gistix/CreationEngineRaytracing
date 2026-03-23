@@ -47,6 +47,9 @@ struct Mesh
 
 	RE::NiPointer<RE::BSGeometry> bsGeometryPtr;
 
+	// Used as key to dismember refr map
+	RE::BSDismemberSkinInstance* m_BSDismemberPtr = nullptr;
+
 	struct MeshGeometry
 	{
 		eastl::vector<float4> dynamicPosition;
@@ -81,11 +84,13 @@ struct Mesh
 
 	DescriptorHandle m_DescriptorHandle;
 
-	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, bool dismemberVisible = true, uint16_t slot = 0) :
-		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), slot(slot)
+	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, bool dismemberVisible = true, uint16_t slot = 0, RE::BSDismemberSkinInstance* bsDismemberPtr = nullptr) :
+		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), slot(slot), m_BSDismemberPtr(bsDismemberPtr)
 	{
 		UpdateDismember(dismemberVisible);
 	}
+
+	~Mesh();
 
 	bool HasDoubleSidedGeom()
 	{
@@ -179,14 +184,14 @@ struct Mesh
 	bool IsDirtyState() const;
 
 	MeshData GetData(const float3 externalEmittance, const float4* waterTexScroll) const;
+
+	void UpdateDismember(bool enable);
 private:
 	// State is pending until BLASRebuild
 	State pendingState = State::None;
 	State state = State::None;
 
 	void SetPendingState(State stateIn, bool activate);
-
-	void UpdateDismember(bool enable);
 
 	void UpdateState();
 };
