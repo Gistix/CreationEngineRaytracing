@@ -780,10 +780,11 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		// Landscape needs special handling of triangles
 		if (baseFormType == RE::FormType::Land)
 			flags |= Mesh::Flags::Landscape;
+		else if (baseFormType == RE::FormType::Water)
+			flags |= Mesh::Flags::Water;
 
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
-
 
 		float3x4 localToRoot{};
 
