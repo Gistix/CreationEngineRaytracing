@@ -97,7 +97,7 @@ struct Material
 	half alphaThreshold;
 
 	eastl::array<half4, 3> Colors;
-	eastl::array<half, 2> Scalars;
+	eastl::array<half, 3> Scalars;
 
 	eastl::array<half4, 2> TexCoordOffsetScale;
 

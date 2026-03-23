@@ -14,6 +14,8 @@
 #include "raytracing/include/Materials/HairChiangBSDF.hlsli"
 #include "raytracing/include/Materials/HairFarFieldBCSDF.hlsli"
 
+#include "raytracing/include/Common.hlsli"
+
 #define HAIR_MODE_CHIANG_BSDF 1
 #define HAIR_MODE_FARFIELD_BCSDF 2
 
@@ -452,14 +454,34 @@ struct DefaultBSDF
     DiffuseTransmissionLambert diffuseTransmission;
     SpecularReflectionMicrofacet specularReflection;
     SpecularReflectionTransmissionMicrofacet specularReflectionTransmission;
+    SpecularReflectionMicrofacet coatReflection;
 
     float diffTrans;                        ///< Mix between diffuse BRDF and diffuse BTDF.
     float specTrans;                        ///< Mix between dielectric BRDF and specular BSDF.
+    float coatStrength;                     ///< Coat layer coverage.
+    float3 coatLocalN;                      ///< Coat normal in base tangent frame.
 
     float pDiffuseReflection;               ///< Probability for sampling the diffuse BRDF.
     float pDiffuseTransmission;             ///< Probability for sampling the diffuse BTDF.
     float pSpecularReflection;              ///< Probability for sampling the specular BRDF.
     float pSpecularReflectionTransmission;  ///< Probability for sampling the specular BSDF.
+    float pCoatReflection;                  ///< Probability for sampling the coat specular BRDF.
+
+    // Transform a base-local vector to coat-local frame.
+    float3 toCoatLocal(float3 v)
+    {
+        float3 coatT, coatB;
+        CreateOrthonormalBasis(coatLocalN, coatT, coatB);
+        return float3(dot(v, coatT), dot(v, coatB), dot(v, coatLocalN));
+    }
+
+    // Transform a coat-local vector to base-local frame.
+    float3 fromCoatLocal(float3 v)
+    {
+        float3 coatT, coatB;
+        CreateOrthonormalBasis(coatLocalN, coatT, coatB);
+        return coatT * v.x + coatB * v.y + coatLocalN * v.z;
+    }
 
     void __init(float3 N, float3 V, Surface surface, bool isEnter = true)
     {
@@ -473,7 +495,8 @@ struct DefaultBSDF
         diffuseTransmission.albedo = transmissionAlbedo;
 
         float alpha = surfaceRoughness * surfaceRoughness;
-        if (alpha < kMinGGXAlpha && USE_DELTALOBES != 0) alpha = 0.f;
+        if (alpha < kMinGGXAlpha)
+            alpha = USE_DELTALOBES != 0 ? 0.f : kMinGGXAlpha;
 
         uint activeLobes = (uint)LobeType::DiffuseReflection | (uint)LobeType::SpecularReflection;
         if (transmissionAlbedo.r > 0.f || transmissionAlbedo.g > 0.f || transmissionAlbedo.b > 0.f)
@@ -498,6 +521,41 @@ struct DefaultBSDF
         diffTrans = surface.DiffTrans;
         specTrans = surface.SpecTrans;
 
+        // Coat layer: independent specular lobe with energy-conserving base attenuation
+        float coatWeight = 0;
+        coatStrength = 0;
+        if (surface.CoatStrength > 0.0f)
+        {
+            coatStrength = surface.CoatStrength;
+            float3 coatF0 = surface.CoatF0;
+            float NdotV = saturate(dot(N, V));
+            float3 coatFresnel = evalFresnelSchlick(coatF0, 1.f, NdotV);
+            float3 layerAttenuation = 1.0 - coatFresnel * coatStrength;
+
+            diffuseReflection.albedo *= layerAttenuation;
+            specularReflection.albedo *= layerAttenuation;
+
+            float coatAlpha = surface.CoatRoughness * surface.CoatRoughness;
+            if (coatAlpha < kMinGGXAlpha)
+                coatAlpha = USE_DELTALOBES != 0 ? 0.0 : kMinGGXAlpha;
+
+            coatReflection.albedo = coatF0;
+            coatReflection.alpha = coatAlpha;
+            coatReflection.activeLobes = (uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection;
+
+            coatWeight = Luminance(coatFresnel) * coatStrength;
+
+            // Coat normal in base tangent frame
+            coatLocalN = surface.ToLocal(surface.CoatNormal);
+        }
+        else
+        {
+            coatReflection.albedo = 0;
+            coatReflection.alpha = 0;
+            coatReflection.activeLobes = 0;
+            coatLocalN = float3(0, 0, 1);
+        }
+
         float surfaceMetallic = surface.Metallic;
         float metallicBRDF = surfaceMetallic * (1.f - specTrans);
         float dielectricBSDF = (1.f - surfaceMetallic) * (1.f - specTrans);
@@ -510,8 +568,9 @@ struct DefaultBSDF
         pDiffuseTransmission = (activeLobes & (uint)LobeType::DiffuseTransmission) ? diffuseWeight * dielectricBSDF * diffTrans : 0.f;
         pSpecularReflection = (activeLobes & ((uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection)) ? specularWeight * (metallicBRDF + dielectricBSDF) : 0.f;
         pSpecularReflectionTransmission = (activeLobes & ((uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection | (uint)LobeType::SpecularTransmission | (uint)LobeType::DeltaTransmission)) ? specularBSDF : 0.f;
+        pCoatReflection = coatWeight;
 
-        float normFactor = pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission;
+        float normFactor = pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission + pCoatReflection;
         if (normFactor > 0.f)
         {
             normFactor = 1.f / normFactor;
@@ -519,6 +578,7 @@ struct DefaultBSDF
             pDiffuseTransmission *= normFactor;
             pSpecularReflection *= normFactor;
             pSpecularReflectionTransmission *= normFactor;
+            pCoatReflection *= normFactor;
         }
     }
 
@@ -556,6 +616,7 @@ struct DefaultBSDF
         if (pDiffuseTransmission > 0.f) diffuse += (1.f - specTrans) * diffTrans * diffuseTransmission.Eval(wi, wo);
         if (pSpecularReflection > 0.f) specular += (1.f - specTrans) * specularReflection.Eval(wi, wo);
         if (pSpecularReflectionTransmission > 0.f) specular += specTrans * (specularReflectionTransmission.Eval(wi, wo));   // <- do we want to consider transmission as specular? this depends entirely on denoiser - should ask RR folks
+        if (pCoatReflection > 0.f) specular += coatStrength * coatReflection.Eval(toCoatLocal(wi), toCoatLocal(wo));
 
         return float4(diffuse+specular, Average(specular)); // use average instead of sum to avoid hitting fp16 ceiling early
     }
@@ -581,6 +642,7 @@ struct DefaultBSDF
             lobeP *= pDiffuseReflection;
             if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
             if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
+            if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
         }
         else if (uSelect < pDiffuseReflection + pDiffuseTransmission)
         {
@@ -600,8 +662,9 @@ struct DefaultBSDF
             lobeP *= pSpecularReflection;
             if (pDiffuseReflection > 0.f) pdf += pDiffuseReflection * diffuseReflection.EvalPdf(wi, wo);
             if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
+            if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
         }
-        else if (pSpecularReflectionTransmission > 0.f)
+        else if (uSelect < pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission)
         {
             valid = specularReflectionTransmission.SampleBSDF(wi, wo, pdf, weight, lobe, lobeP, preGeneratedSample);
             weight /= pSpecularReflectionTransmission;
@@ -611,6 +674,21 @@ struct DefaultBSDF
             if (pDiffuseReflection > 0.f) pdf += pDiffuseReflection * diffuseReflection.EvalPdf(wi, wo);
             if (pDiffuseTransmission > 0.f) pdf += pDiffuseTransmission * diffuseTransmission.EvalPdf(wi, wo);
             if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
+            if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
+        }
+        else if (pCoatReflection > 0.f)
+        {
+            float3 wiCoat = toCoatLocal(wi);
+            float3 woCoat;
+            valid = coatReflection.SampleBSDF(wiCoat, woCoat, pdf, weight, lobe, lobeP, preGeneratedSample);
+            wo = fromCoatLocal(woCoat);
+            weight /= pCoatReflection;
+            weight *= coatStrength;
+            pdf *= pCoatReflection;
+            lobeP *= pCoatReflection;
+            if (pDiffuseReflection > 0.f) pdf += pDiffuseReflection * diffuseReflection.EvalPdf(wi, wo);
+            if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
+            if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
         }
 
         if( !valid || (lobe & (uint)LobeType::Delta) != 0 )
@@ -626,12 +704,13 @@ struct DefaultBSDF
         if (pDiffuseTransmission > 0.f) pdf += pDiffuseTransmission * diffuseTransmission.EvalPdf(wi, wo);
         if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
         if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
+        if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
         return pdf;
     }
 
     void EvalDeltaLobes(const float3 wi, out DeltaLobe deltaLobes[cMaxDeltaLobes], out int deltaLobeCount, out float nonDeltaPart)  // wi is in local space
     {
-        deltaLobeCount = 2;             // currently - will be 1 more if we add clear coat :)
+        deltaLobeCount = 3;
         for (int i = 0; i < deltaLobeCount; i++)
             deltaLobes[i] = DeltaLobe::make(); // init to zero
 
@@ -640,9 +719,11 @@ struct DefaultBSDF
             nonDeltaPart += pSpecularReflection;
         if ( specularReflectionTransmission.alpha > 0 ) // if roughness > 0, lobe is not delta
             nonDeltaPart += pSpecularReflectionTransmission;
+        if ( coatReflection.alpha > 0 ) // if coat roughness > 0, lobe is not delta
+            nonDeltaPart += pCoatReflection;
 
         // no spec reflection or transmission? delta lobes are zero (we can just return, already initialized to 0)!
-        if ( (pSpecularReflection+pSpecularReflectionTransmission) == 0 )    
+        if ( (pSpecularReflection+pSpecularReflectionTransmission+pCoatReflection) == 0 )    
             return;
 
         // note, deltaReflection here represents both this.specularReflection and this.specularReflectionTransmission's
@@ -702,10 +783,21 @@ struct DefaultBSDF
             }
         }
 
+        // Coat delta reflection lobe.
+        DeltaLobe deltaCoatReflection = DeltaLobe::make();
+        if (coatStrength > 0 && coatReflection.alpha == 0 && coatReflection.hasLobe(LobeType::DeltaReflection))
+        {
+            float3 wiCoat = toCoatLocal(wi);
+            deltaCoatReflection.transmission = false;
+            deltaCoatReflection.dir = fromCoatLocal(float3(-wiCoat.x, -wiCoat.y, wiCoat.z));
+            deltaCoatReflection.probability = pCoatReflection;
+            deltaCoatReflection.thp = coatStrength * evalFresnelSchlick(coatReflection.albedo, 1.f, wiCoat.z);
+        }
+
         // Lobes are by convention in this order, and the index must match BSDFSample::getDeltaLobeIndex() as well as the UI.
-        // When we add clearcoat it goes after deltaReflection and so on.
         deltaLobes[0] = deltaTransmission;
         deltaLobes[1] = deltaReflection;
+        deltaLobes[2] = deltaCoatReflection;
     }
 };
 

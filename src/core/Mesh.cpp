@@ -273,6 +273,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 	auto& grayTexture = renderer->GetGrayTextureIndex();
 	auto& normalTexture = renderer->GetNormalTextureIndex();
 	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& whiteTexture = renderer->GetWhiteTextureIndex();
 	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
 	auto& detailTexture = renderer->GetDetailTextureIndex();
 
@@ -286,7 +287,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		float4(1.0f, 1.0f, 1.0f, 1.0f)
 	};
 
-	eastl::array<half, 2> scalars;
+	eastl::array<half, 3> scalars;
 	scalars.fill(0.0f);
 
 	eastl::array<half4, 2> texCoordOffsetScales = {
@@ -401,6 +402,16 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							scalars[2] = lightingPBRMaterial->GetSubsurfaceOpacity();
 						}
 
+						if (pbrFlags & PBRShaderFlags::TwoLayer) {
+							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, whiteTexture);
+							textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
+
+							auto& coatColor = lightingPBRMaterial->GetSubsurfaceColor();
+							float coatStrength = lightingPBRMaterial->GetSubsurfaceOpacity();
+							colors[2] = { coatColor.red, coatColor.green, coatColor.blue, coatStrength };
+							scalars[2] = lightingPBRMaterial->coatRoughness;
+						}
+
 						// Enforce TruePBR flag
 						shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
 					}
@@ -417,10 +428,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 
 							bool isModelSpaceNormalMap = shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals);
 
-							if (isModelSpaceNormalMap)
-								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(nullptr, normalTexture, isModelSpaceNormalMap);
-							else
-								textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
+							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
 
 							if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 								if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {

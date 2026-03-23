@@ -245,6 +245,27 @@ INTEROP_DATA_STRUCT(Material, 4)
 		return Color2;
 	}
 
+	// True PBR - Coat (TwoLayer)
+	half4 CoatColor()
+	{
+		return Color2;  // .rgb = coat color, .a = coat strength
+	}
+
+	half CoatRoughness()
+	{
+		return Scalar2;
+	}
+
+	uint16_t CoatColorTexture()
+	{
+		return Texture6;  // RGB = coat color, A = coat strength
+	}
+
+	uint16_t CoatNormalTexture()
+	{
+		return Texture7;  // RGB = coat normal, A = coat roughness
+	}
+
 #ifndef __cplusplus
 	float2 TexCoord(float2 texCoord)
     {

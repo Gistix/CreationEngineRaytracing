@@ -90,6 +90,41 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.TransmissionColor = subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb;
             surface.DiffTrans = 1 - thickness;
         }
+
+        // Coat (TwoLayer)
+        if (material.PBRFlags & PBR::Flags::TwoLayer)
+        {
+            half4 coatColorParam = material.CoatColor();
+            surface.CoatColor = coatColorParam.rgb;
+            surface.CoatStrength = coatColorParam.a;
+            surface.CoatRoughness = material.CoatRoughness();
+            surface.CoatF0 = float3(0.04, 0.04, 0.04);
+
+            if (material.PBRFlags & PBR::Flags::HasFeatureTexture0)
+            {
+                Texture2D coatColorTexture = Textures[NonUniformResourceIndex(material.CoatColorTexture())];
+                float4 sampledCoat = coatColorTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+                surface.CoatColor *= sampledCoat.rgb;
+                surface.CoatStrength *= sampledCoat.a;
+            }
+
+            if (material.PBRFlags & PBR::Flags::HasFeatureTexture1)
+            {
+                Texture2D coatNormalTexture = Textures[NonUniformResourceIndex(material.CoatNormalTexture())];
+                float4 sampledCoatNormal = coatNormalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+                surface.CoatRoughness *= sampledCoatNormal.a;
+
+                if (material.PBRFlags & PBR::Flags::CoatNormal)
+                {
+                    NormalMap(
+                        sampledCoatNormal.xyz,
+                        handedness,
+                        normalWS, tangentWS, bitangentWS,
+                        surface.CoatNormal, surface.CoatTangent, surface.CoatBitangent
+                    );
+                }
+            }
+        }
     }
     else if (material.ShaderType == ShaderType::Lighting)
     {
