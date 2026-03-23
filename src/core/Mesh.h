@@ -87,7 +87,10 @@ struct Mesh
 	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, bool dismemberVisible = true, uint16_t slot = 0, RE::BSDismemberSkinInstance* bsDismemberPtr = nullptr) :
 		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), slot(slot), m_BSDismemberPtr(bsDismemberPtr)
 	{
-		UpdateDismember(dismemberVisible);
+		if (!dismemberVisible) {
+			m_State.set(State::DismemberHidden);
+			m_PendingState.set(State::DismemberHidden);
+		}
 	}
 
 	~Mesh();
@@ -179,17 +182,13 @@ struct Mesh
 
 	bool IsHidden() const;
 
-	bool IsDirtyState() const;
-
 	MeshData GetData(const float3 externalEmittance, const float4* waterTexScroll) const;
 
 	void UpdateDismember(bool enable);
 private:
 	// State is pending until BLASRebuild
-	State pendingState = State::None;
-	State state = State::None;
-
-	void SetPendingState(State stateIn, bool activate);
+	stl::enumeration<State, uint8_t> m_PendingState = State::None;
+	stl::enumeration<State, uint8_t> m_State = State::None;
 
 	void UpdateState();
 };

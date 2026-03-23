@@ -53,7 +53,7 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     return true;
 }
 
-bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed, in float3 direction, inout float3 transmitanceInOut)
+bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed, in float3 direction, float hitDistance, inout float3 transmitanceInOut)
 {
     Instance instance;
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
@@ -80,11 +80,10 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         Surface surface = (Surface)0;
         WaterMaterial(surface, texCoord, tangentWS, bitangentWS, handedness, material);
         
-        float3 transmittance = lerp(float3(1.0f, 1.0f, 1.0f), surface.TransmissionColor, 0.8f);
-        
-        float3 viewDir = -normalize(direction);
-        float NdotV = abs(dot(surface.Normal, viewDir));
+        float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
 
+        float3 viewDir = -normalize(direction);
+        float NdotV = max(abs(dot(surface.Normal, viewDir)), 0.01f);
         float3 F = BRDF::F_Schlick(surface.F0, NdotV);
         transmittance *= (1.0f - F) / (1.0f + F);
 

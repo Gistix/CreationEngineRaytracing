@@ -184,6 +184,10 @@ void Main()
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
         float materialRoughnessPrev = 0.0f;
         bool isEnter = true;
+
+        // Water volume tracking for Beer-Lambert absorption
+        bool insideWaterVolume = false;
+        float3 waterVolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         
 #if defined(RAW_RADIANCE)
         float3 throughputDelta = float3(1.0f, 1.0f, 1.0f);
@@ -217,11 +221,12 @@ void Main()
 
             throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
 
-            // Update isEnter state when transmission occurs
-            if (hasTransmission) {
-                isEnter = !isEnter;
-            } else {
-                isEnter = dot(direction, faceNormalOriented) >= 0.0f;
+            // Track water volume entry/exit on transmission
+            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
+            {
+                // isEnter (front face) + transmission = entering volume
+                insideWaterVolume = isEnter;
+                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
@@ -292,6 +297,12 @@ void Main()
             payload = TraceRayStandard(Scene, ray, randomSeed);
             
             rayCone = rayCone.propagateDistance(payload.hitDistance);
+
+            // Apply Beer-Lambert volume absorption for water
+            if (insideWaterVolume)
+            {
+                throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
+            }
             
             if (isSpecular)
                 specHitDist += payload.hitDistance;
@@ -344,7 +355,8 @@ void Main()
 #endif // SHARC  
             
             brdfContext = BRDFContext::make(surface, -direction);
-            if (dot(surface.FaceNormal, brdfContext.ViewDirection) < 0.0f) surface.FlipNormal();
+            isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+            if (!isEnter) surface.FlipNormal();
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
             bsdf = StandardBSDF::make(surface, isEnter);

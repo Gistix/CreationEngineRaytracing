@@ -19,7 +19,8 @@ INTEROP_STRUCT(CameraData, 16)
     float4x4 PrevViewProj;
     float4x4 PrevViewInverse;
     float2 Jitter;
-    uint2 Pad1;
+    uint IsUnderwater;
+    uint Pad1;
 };
 VALIDATE_CBUFFER(CameraData, 16);
 

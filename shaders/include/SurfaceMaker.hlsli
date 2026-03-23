@@ -86,6 +86,7 @@ struct SurfaceMaker
         surface.Albedo = float3(1.0f, 1.0f, 1.0f);
         surface.Emissive = float3(0.0f, 0.0f, 0.0f);
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         surface.Roughness = PBR::Defaults::Roughness;
         surface.Metallic = PBR::Defaults::Metallic;
         
@@ -157,6 +158,7 @@ struct SurfaceMaker
         surface.Albedo = float3(1.0f, 1.0f, 1.0f);
         surface.Emissive = float3(0.0f, 0.0f, 0.0f);
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         surface.Roughness = PBR::Defaults::Roughness;
         surface.Metallic = PBR::Defaults::Metallic;
         
@@ -222,6 +224,7 @@ struct SurfaceMaker
         surface.Albedo = albedo;
 #   endif
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         surface.Emissive = emissive * Raytracing.Emissive;
         
         surface.Roughness = PBR::Roughness(roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);

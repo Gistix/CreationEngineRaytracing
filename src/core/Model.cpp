@@ -118,8 +118,10 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 {
 	auto blasDesc = MakeBLASDesc(false);
 
-	// Initial build with all shapes, visible or not, so the scratch buffer can be sized to fit all geometry
 	for (auto& mesh: meshes) {
+		if (mesh->IsHidden())
+			continue;
+
 		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}
 
