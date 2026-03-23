@@ -266,7 +266,7 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 	return Texture(result, defaultDescHandle.get());
 }
 
-void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, [[maybe_unused]] RE::FormID formID)
+void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form)
 {
 	auto* renderer = Renderer::GetSingleton();
 
@@ -491,7 +491,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							// FaceGen
 							if (feature == Feature::kFaceGen) {
 								if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {
-									if (Util::IsPlayerFormID(formID)) {
+									if (Util::IsPlayer(form)) {
 										auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
 
 										auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptor(
@@ -569,16 +569,40 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 					scalars[1] = waterMaterial->amplitudeA[1];
 					scalars[2] = waterMaterial->amplitudeA[2];
 
-					// NormalsScale 
-					vectors[0] = {
-						waterMaterial->uvScaleA[0],
-						waterMaterial->uvScaleA[1],
-						waterMaterial->uvScaleA[2],
-						0.0f
-					};
+					if (form->GetFormType() == RE::FormType::Water) {
+						auto* waterForm = form->As<RE::TESWaterForm>();
+						auto& shaderData = waterForm->data;
+
+						auto getNormalScroll = [&](uint32_t i, half& x, half& y) {
+							float dirRad = shaderData.noiseWindDirectionA[i] * std::numbers::pi_v<float> / 180.0f;
+
+							// "Correct" is cos sin but it doesn't scroll the right direction
+							auto scroll = float2(std::sin(dirRad), std::cos(dirRad)) * shaderData.noiseWindSpeedA[i];
+
+							x = scroll.x;
+							y = scroll.y;
+						};
+
+						// NormalsScroll0
+						getNormalScroll(0, vectors[0].x, vectors[0].y);
+						getNormalScroll(1, vectors[0].z, vectors[0].w);
+
+						// NormalsScroll1
+						getNormalScroll(2, vectors[1].x, vectors[1].y);
+					}
+
+					// NormalsScale
+					vectors[1].z = waterMaterial->uvScaleA[0];
+					vectors[1].w = waterMaterial->uvScaleA[1];
+					vectors[2].x = waterMaterial->uvScaleA[2];
+
+					// ObjectUV
+					vectors[2].y = 0.0f;
+					vectors[2].z = 0.0f;
+					vectors[2].w = 0.0f;
 
 					// CellTexCoordOffset 
-					vectors[2] = {
+					vectors[3] = {
 						static_cast<float>(waterShaderProp->flowX),
 						static_cast<float>(waterShaderProp->flowY),
 						static_cast<float>(waterShaderProp->cellX),
@@ -917,10 +941,10 @@ DirtyFlags Mesh::Update()
 	return updateFlags;
 }
 
-MeshData Mesh::GetData(float3 externalEmittance) const
+MeshData Mesh::GetData(const float3 externalEmittance, const float4* waterTexScroll) const
 {
 	return MeshData(
-		material.GetData(externalEmittance),
+		material.GetData(externalEmittance, waterTexScroll),
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
 		{0, 0},
 		localToRoot

@@ -18,12 +18,26 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
 
+	if (meshFlags.all(Mesh::Flags::Water))
+	{
+		if (form->GetFormType() == RE::FormType::Water) {
+			auto* waterForm = form->As<RE::TESWaterForm>();
+
+			m_WaterTexScroll[0] = reinterpret_cast<float4*>(&waterForm->texScroll[0]);
+			m_WaterTexScroll[1] = reinterpret_cast<float4*>(&waterForm->texScroll[1]);
+			m_WaterTexScroll[2] = reinterpret_cast<float4*>(&waterForm->texScroll[2]);
+
+			m_HasWaterTexScroll = true;
+		}
+	}
+
 	if (meshFlags.none(Mesh::Flags::Landscape, Mesh::Flags::Water))
 	{
 		auto* refr = form->AsReference();
 
 		if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
-			m_EmittanceColor = reinterpret_cast<float3*>(&extra->source->As<RE::TESRegion>()->emittanceColor);
+			auto* tesRegion = extra->source->As<RE::TESRegion>();
+			m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
 		}
 	}
 }
@@ -82,8 +96,20 @@ void Model::SetData(MeshData* meshData, uint32_t& index)
 {
 	float3 externalEmittance = GetExternalEmittance();
 
+	float4 waterTexScroll[3] = {
+		{ 1.0f, 1.0f, 1.0f, 1.0f },
+		{ 1.0f, 1.0f, 1.0f, 1.0f },
+		{ 1.0f, 1.0f, 1.0f, 1.0f }
+	};
+
+	if (m_HasWaterTexScroll) {
+		waterTexScroll[0] = -(*m_WaterTexScroll[0]);
+		waterTexScroll[1] = -(*m_WaterTexScroll[1]);
+		waterTexScroll[2] = -(*m_WaterTexScroll[2]);
+	}
+
 	for (auto& mesh : meshes) {
-		meshData[index] = mesh->GetData(externalEmittance);
+		meshData[index] = mesh->GetData(externalEmittance, waterTexScroll);
 		index++;
 	}
 }

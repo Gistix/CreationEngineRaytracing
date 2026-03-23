@@ -382,7 +382,7 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	if (!loadedData || !loadedData->mesh)
 		return;
 
-	logger::info("SceneGraph::CreateLandModel - {}", std::format("Landscape_{}_{}", exteriorData->cellX, exteriorData->cellY).c_str());
+	logger::debug("SceneGraph::CreateLandModel - {}", std::format("Landscape_{}_{}", exteriorData->cellX, exteriorData->cellY).c_str());
 
 	for (uint i = 0; i < 4; i++) {
 		auto mesh = loadedData->mesh[i];
@@ -405,7 +405,7 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 
 	auto path = std::format("Water_0x{:08X}", reinterpret_cast<uintptr_t>(object));
 
-	logger::info("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
+	logger::debug("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
 
 	CreateModelInternal(water, path.c_str(), object);
 }
@@ -714,7 +714,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, true, 0);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
-			mesh->BuildMaterial(geometryRuntimeData, formID);
+			mesh->BuildMaterial(geometryRuntimeData, form);
 
 			meshes.push_back(eastl::move(mesh));
 		}
@@ -783,7 +783,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 					it->second[i] = mesh.get();
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
-				mesh->BuildMaterial(geometryRuntimeData, formID);
+				mesh->BuildMaterial(geometryRuntimeData, form);
 
 				meshes.push_back(eastl::move(mesh));
 			}

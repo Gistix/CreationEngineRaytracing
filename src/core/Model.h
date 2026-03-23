@@ -122,4 +122,7 @@ private:
 
 	// XEMI - This is used to control window emission in day/night tod
 	float3* m_EmittanceColor = nullptr;
+
+	bool m_HasWaterTexScroll = false;
+	const float4* m_WaterTexScroll[3];
 };

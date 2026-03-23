@@ -1,8 +1,9 @@
 #include "Core/Material.h"
 
 #include "Scene.h"
+#include "Renderer.h"
 
-MaterialData Material::GetData(float3 externalEmittance) const
+MaterialData Material::GetData(const float3 externalEmittance, const float4* waterTexScroll) const
 {
 	auto color1 = Colors[1];
 
@@ -19,16 +20,31 @@ MaterialData Material::GetData(float3 externalEmittance) const
 		}
 	}
 
+	auto vector0 = Vectors[0];
 	auto vector1 = Vectors[1];
+	auto vector2 = Vectors[2];
 
 	if (shaderType == RE::BSShader::Type::Water)
 	{
 		auto* scene = Scene::GetSingleton();
 
+		float frameIndex = static_cast<float>(Renderer::GetSingleton()->GetFrameIndex()) * 0.01f;
+
+		// NormalsScroll0
+		vector0.x *= frameIndex * waterTexScroll[0].x;
+		vector0.y *= frameIndex * waterTexScroll[0].y;
+
+		vector0.z *= frameIndex * waterTexScroll[1].x;
+		vector0.w *= frameIndex * waterTexScroll[1].y;
+
+		// NormalsScroll1
+		vector1.x *= frameIndex * waterTexScroll[2].x;
+		vector1.y *= frameIndex * waterTexScroll[2].y;
+
 		// ObjectUV
-		vector1.x = static_cast<float>(*scene->g_FlowMapSize);
-		vector1.y = scene->g_DisplacementMeshFlowCellOffset->x, 
-		vector1.z = scene->g_DisplacementMeshFlowCellOffset->y;
+		vector2.y = static_cast<float>(*scene->g_FlowMapSize);
+		vector2.z = scene->g_DisplacementMeshFlowCellOffset->x, 
+		vector2.w = scene->g_DisplacementMeshFlowCellOffset->y;
 	}
 
 	return MaterialData(
@@ -36,7 +52,7 @@ MaterialData Material::GetData(float3 externalEmittance) const
 		Colors[0], color1, Colors[2],
 		alphaThreshold,
 		Scalars[0], Scalars[1], Scalars[2],
-		Vectors[0], vector1, Vectors[2],
+		vector0, vector1, vector2, Vectors[3],
 		GetTextureDescriptorIndex(0),
 		GetTextureDescriptorIndex(1),
 		GetTextureDescriptorIndex(2),

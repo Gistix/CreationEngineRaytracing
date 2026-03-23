@@ -408,13 +408,24 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
     Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
     Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
-    Texture2D normals04Texture = Textures[NonUniformResourceIndex(material.Texture3)];
+
+    float2 normalScroll0 = material.Vector0.xy;
+    float2 normalScroll1 = material.Vector0.zw;
+    float2 normalScroll2 = material.Vector1.xy;
     
-    float3 normalsScale = 0.001f * material.Vector0.xyz;
+    const float scale = 0.001f;
     
-    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, texCoord0 / normalsScale.x, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
-    float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, texCoord0 / normalsScale.y, mipLevel).xyz * 2.0 - 1.0;
-    float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, texCoord0 / normalsScale.z, mipLevel).xyz * 2.0 - 1.0;
+    float normalsScale0 = scale * material.Vector1.z;
+    float normalsScale1 = scale * material.Vector1.w;
+    float normalsScale2 = scale * material.Vector2.x;
+    
+    float2 normal0TexCoord = (texCoord0 / normalsScale0) + normalScroll0;
+    float2 normal1TexCoord = (texCoord0 / normalsScale1) + normalScroll1;
+    float2 normal2TexCoord = (texCoord0 / normalsScale2) + normalScroll2;
+    
+    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normal0TexCoord, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
+    float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normal1TexCoord, mipLevel).xyz * 2.0 - 1.0;
+    float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normal2TexCoord, mipLevel).xyz * 2.0 - 1.0;
 
     surface.Normal = normalize(
         float3(0, 0, 1) +

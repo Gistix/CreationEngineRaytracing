@@ -206,7 +206,7 @@ struct Material
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
 
-	MaterialData GetData(float3 externalEmittance) const;
+	MaterialData GetData(const float3 externalEmittance, const float4* waterTexScroll) const;
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);
