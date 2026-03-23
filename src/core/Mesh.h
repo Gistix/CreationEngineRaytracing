@@ -179,8 +179,6 @@ struct Mesh
 
 	bool IsHidden() const;
 
-	bool IsPendingHidden() const;
-
 	bool IsDirtyState() const;
 
 	MeshData GetData(const float3 externalEmittance, const float4* waterTexScroll) const;
