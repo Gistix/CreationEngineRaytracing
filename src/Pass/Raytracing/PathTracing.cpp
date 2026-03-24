@@ -27,6 +27,8 @@ namespace Pass
 
 	void PathTracing::SettingsChanged(const Settings& settings)
 	{
+		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
+
 		auto defines = Util::Shader::GetRaytracingDefines(settings, true, false);
 
 		if (defines != m_Defines) {

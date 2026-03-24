@@ -441,7 +441,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     // The absorption coefficient is derived from the game's water color at a reference depth.
     static const float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0;
     float3 waterColor = saturate(material.Color0.rgb);
-    surface.VolumeAbsorption = -log(max(waterColor, 1e-4)) / WATER_ABSORPTION_REFERENCE_DEPTH;
+    surface.VolumeAbsorption = -log(max(waterColor, 1e-4)) / WATER_ABSORPTION_REFERENCE_DEPTH * Raytracing.WaterAbsorptionScale;
     surface.TransmissionColor = float3(1.0f, 1.0f, 1.0f);
     surface.SpecTrans = 1.0f;
 }

@@ -44,6 +44,7 @@ namespace Pass
 		m_RaytracingData->Emissive = settings.LightingSettings.Emissive;
 		m_RaytracingData->Effect = settings.LightingSettings.Effect;
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
+		m_RaytracingData->WaterAbsorptionScale = settings.WaterSettings.AbsorptionScale;
 
 		// Directional Light
 		{
