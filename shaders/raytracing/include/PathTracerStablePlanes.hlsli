@@ -41,6 +41,8 @@ struct StablePlaneExplorationPayload
     uint    vertexIndex;
     float3x3 imageXform;        // accumulated virtual-position transform
     float   roughnessAccum;     // accumulated roughness along the path
+    bool    insideWaterVolume;   // inside a water volume after leaving the fork surface
+    float3  waterVolumeAbsorption; // Beer-Lambert absorption coefficient
 
     void Pack(out uint4 packed[5])
     {
@@ -52,10 +54,11 @@ struct StablePlaneExplorationPayload
             PackTwoFp32ToFp16(imageXform[0], imageXform[1]),
             asuint(roughnessAccum)
         );
-        // Store imageXform row 2 as fp16 (3 floats → 2 uint halves)
+        // Store imageXform row 2 as fp16 (3 floats → 2 uint halves) + water volume state
         packed[4] = uint4(
             Fp32ToFp16(float4(imageXform[2], 0)),
-            0, 0
+            (insideWaterVolume ? 1u : 0u) | (f32tof16(clamp(waterVolumeAbsorption.x, 0, HLF_MAX)) << 16),
+            f32tof16(clamp(waterVolumeAbsorption.y, 0, HLF_MAX)) | (f32tof16(clamp(waterVolumeAbsorption.z, 0, HLF_MAX)) << 16)
         );
     }
 
@@ -78,6 +81,11 @@ struct StablePlaneExplorationPayload
         p.roughnessAccum    = asfloat(packed[3].w);
         float4 row2ext      = Fp16ToFp32(packed[4].xy);
         p.imageXform[2]     = row2ext.xyz;
+        p.insideWaterVolume     = (packed[4].z & 1u) != 0;
+        p.waterVolumeAbsorption = float3(
+            f16tof32(packed[4].z >> 16),
+            f16tof32(packed[4].w & 0xFFFF),
+            f16tof32(packed[4].w >> 16));
         return p;
     }
 };
@@ -152,7 +160,11 @@ StablePlaneExplorationPayload SplitDeltaPath(
     const float prevSceneLength,
     const float3x3 prevImageXform,
     const float prevRoughnessAccum,
-    const float3 incomingDir)    // direction towards surface (not view dir)
+    const float3 incomingDir,    // direction towards surface (not view dir)
+    const bool prevInsideWater,
+    const float3 prevWaterAbsorption,
+    const bool isEnterSurface,
+    const float3 surfaceVolumeAbsorption)
 {
     StablePlaneExplorationPayload payload;
 
@@ -167,6 +179,18 @@ StablePlaneExplorationPayload SplitDeltaPath(
 
     // Update imageXform for this bounce
     payload.imageXform = UpdateImageXform(prevImageXform, incomingDir, lobe.dir, faceNormal, lobe.transmission != 0);
+
+    // Compute water volume state for the forked path
+    if (lobe.transmission != 0 && any(surfaceVolumeAbsorption > 0.0f))
+    {
+        payload.insideWaterVolume     = isEnterSurface;
+        payload.waterVolumeAbsorption = isEnterSurface ? surfaceVolumeAbsorption : float3(0, 0, 0);
+    }
+    else
+    {
+        payload.insideWaterVolume     = prevInsideWater;
+        payload.waterVolumeAbsorption = prevWaterAbsorption;
+    }
 
     return payload;
 }
@@ -245,6 +269,8 @@ struct StablePlanesHitResult
     uint        nextVertexIndex;
     float3x3    nextImageXform;
     float       nextRoughnessAccum;
+    bool        nextInsideWater;     // water volume state for next segment
+    float3      nextWaterAbsorption; // Beer-Lambert absorption for next segment
 };
 
 StablePlanesHitResult StablePlanesHandleHit(
@@ -266,7 +292,9 @@ StablePlanesHitResult StablePlanesHandleHit(
     const StandardBSDF bsdf,
     const bool isDominant,
     const Instance instance,
-    inout uint randomSeed)
+    inout uint randomSeed,
+    const bool insideWaterVolume,
+    const float3 waterVolumeAbsorption)
 {
     StablePlanesHitResult result;
     result.continueTracing   = false;
@@ -277,6 +305,13 @@ StablePlanesHitResult StablePlanesHandleHit(
     result.nextVertexIndex   = vertexIndex;
     result.nextImageXform    = imageXform;
     result.nextRoughnessAccum = roughnessAccum;
+    result.nextInsideWater    = insideWaterVolume;
+    result.nextWaterAbsorption = waterVolumeAbsorption;
+
+    // Pack water state for stable plane storage
+    uint waterFlags = (insideWaterVolume ? 1u : 0u) | (f32tof16(clamp(waterVolumeAbsorption.x, 0, HLF_MAX)) << 16);
+    uint waterCounters = f32tof16(clamp(waterVolumeAbsorption.y, 0, HLF_MAX)) | (f32tof16(clamp(waterVolumeAbsorption.z, 0, HLF_MAX)) << 16);
+    bool isEnterSurface = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0;
 
     // Compute motion vector for this hit surface
     // virtualWorldPos is the point along the camera ray at accumulated scene distance
@@ -301,7 +336,7 @@ StablePlanesHitResult StablePlanesHandleHit(
             throughput, computedMV,
             surface.Roughness, surface.Normal,
             surface.DiffuseAlbedo.xxx, surface.F0,
-            isDominant, 0, 0
+            isDominant, waterFlags, waterCounters
         );
         if (isDominant)
             MotionVectors[pixelPos] = float4(computedMV, 0);
@@ -351,7 +386,7 @@ StablePlanesHitResult StablePlanesHandleHit(
             throughput, computedMV,
             surface.Roughness, surface.Normal,
             diffBSDFEstimate, specBSDFEstimate,
-            isDominant, 0, 0
+            isDominant, waterFlags, waterCounters
         );
         if (isDominant)
             MotionVectors[pixelPos] = float4(computedMV, 0);
@@ -393,6 +428,13 @@ StablePlanesHitResult StablePlanesHandleHit(
             result.nextVertexIndex      = vertexIndex + 1;
             result.nextImageXform       = UpdateImageXform(imageXform, -rayDir, deltaLobes[lobeIdx].dir, faceNormal, deltaLobes[lobeIdx].transmission != 0);
             result.nextRoughnessAccum   = roughnessAccum;
+
+            // Update water volume state for continuing delta lobe
+            if (deltaLobes[lobeIdx].transmission != 0 && any(surface.VolumeAbsorption > 0.0f))
+            {
+                result.nextInsideWater     = isEnterSurface;
+                result.nextWaterAbsorption = isEnterSurface ? surface.VolumeAbsorption : float3(0, 0, 0);
+            }
         }
         else
         {
@@ -405,7 +447,8 @@ StablePlanesHitResult StablePlanesHandleHit(
                 StablePlaneExplorationPayload forkPayload = SplitDeltaPath(
                     surface.Position, faceNormal, deltaLobes[lobeIdx], lobeIdx,
                     stableBranchID, vertexIndex, throughput, motionVectors,
-                    totalSceneLength, imageXform, roughnessAccum, -rayDir
+                    totalSceneLength, imageXform, roughnessAccum, -rayDir,
+                    insideWaterVolume, waterVolumeAbsorption, isEnterSurface, surface.VolumeAbsorption
                 );
 
                 uint4 packed[5];
@@ -426,7 +469,7 @@ StablePlanesHitResult StablePlanesHandleHit(
             throughput, computedMV,
             surface.Roughness, surface.Normal,
             max(surface.DiffuseAlbedo, 0.04), max(surface.F0, 0.04),
-            isDominant, 0, 0
+            isDominant, waterFlags, waterCounters
         );
         if (isDominant)
             MotionVectors[pixelPos] = float4(computedMV, 0);
@@ -470,6 +513,8 @@ float2 FirstHitFromVBuffer(
     inout float3 throughput,
     out float sceneLength,
     out uint vertexIndex,
+    out bool outInsideWaterVolume,
+    out float3 outWaterVolumeAbsorption,
     const StablePlanesContext ctx,
     const uint2 pixelPos,
     const uint basePlaneIndex)
@@ -485,6 +530,10 @@ float2 FirstHitFromVBuffer(
 
     float3 thp, dummy;
     UnpackTwoFp32ToFp16(sp.PackedThpAndMVs, thp, dummy);
+
+    // Load water volume state stored during BUILD pass
+    outInsideWaterVolume = sp.GetInsideWaterVolume();
+    outWaterVolumeAbsorption = sp.GetWaterVolumeAbsorption();
 
     bool isMiss = !isfinite(sceneLength);
 
