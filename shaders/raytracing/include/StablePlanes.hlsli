@@ -172,19 +172,23 @@ struct StablePlane
     float   GetRoughness()              { return f16tof32(VertexIndexAndRoughness & 0xFFFF); }
     uint    GetVertexIndex()            { return VertexIndexAndRoughness >> 16; }
 
-    float3  GetNoisyRadiance()          { return Fp16ToFp32(PackedNoisyRadianceAndSpecAvg).xyz; }
-    float4  GetNoisyRadianceAndSpecRA() { return Fp16ToFp32(PackedNoisyRadianceAndSpecAvg).xyzw; }
+    // Noisy radiance is stored with sqrt encoding to extend fp16 dynamic range.
+    // Raw fp16 max is 65504; with sqrt encoding, effective max is 65504^2 ≈ 4.3 billion.
+    float3  GetNoisyRadiance()          { float4 s = Fp16ToFp32(PackedNoisyRadianceAndSpecAvg); return (s * s).xyz; }
+    float4  GetNoisyRadianceAndSpecRA() { float4 s = Fp16ToFp32(PackedNoisyRadianceAndSpecAvg); return s * s; }
 
     // Diff/spec split heuristic: uses specular average fraction
     float3  GetNoisyDiffRadiance()
     {
-        float4 l = Fp16ToFp32(PackedNoisyRadianceAndSpecAvg);
+        float4 s = Fp16ToFp32(PackedNoisyRadianceAndSpecAvg);
+        float4 l = s * s; // sqrt-decode
         float totalAvg = Average3(l.rgb);
         return l.rgb * saturate(1.0 - (l.a * kSpecHeuristicBoost) / (totalAvg + 1e-12)).xxx;
     }
     float3  GetNoisySpecRadiance()
     {
-        float4 l = Fp16ToFp32(PackedNoisyRadianceAndSpecAvg);
+        float4 s = Fp16ToFp32(PackedNoisyRadianceAndSpecAvg);
+        float4 l = s * s; // sqrt-decode
         float totalAvg = Average3(l.rgb);
         return l.rgb * saturate((l.a * kSpecHeuristicBoost) / (totalAvg + 1e-12)).xxx;
     }
@@ -458,10 +462,10 @@ struct StablePlanesContext
         const uint2 existingRadiancePacked = StablePlanesUAV[address].PackedNoisyRadianceAndSpecAvg;
         if (existingRadiancePacked.x != 0 || existingRadiancePacked.y != 0)
         {
-            float4 existingRadiance = Fp16ToFp32(existingRadiancePacked);
-            accumRadiance.rgba += existingRadiance.rgba;
+            float4 existingSqrt = Fp16ToFp32(existingRadiancePacked);
+            accumRadiance.rgba += existingSqrt * existingSqrt; // sqrt-decode existing
         }
-        StablePlanesUAV[address].PackedNoisyRadianceAndSpecAvg = Fp32ToFp16(accumRadiance);
+        StablePlanesUAV[address].PackedNoisyRadianceAndSpecAvg = Fp32ToFp16(sqrt(max(accumRadiance, 0))); // sqrt-encode
 
         pathL = float4(0, 0, 0, 0);
     }
