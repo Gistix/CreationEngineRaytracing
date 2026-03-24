@@ -132,8 +132,12 @@ void Main()
         spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, kEnvironmentMapSceneDistance);
         return;
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-        // FILL: sky miss was already handled in BUILD, just output the stable radiance
-        Output[idx] = float4(LLTrueLinearToGamma(spCtx.GetAllRadiance(idx, true)), 1.0f);
+        // FILL: primary ray missed — output transparent like REFERENCE mode
+        Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
+        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
+        NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        SpecularHitDistance[idx] = RAY_TMAX;
         return;
 #else
         // REFERENCE: original behavior
@@ -202,7 +206,8 @@ void Main()
             spCtx, idx, buildPlaneIndex, buildVertexIndex, buildBranchID,
             Camera.Position.xyz, sourceDirection, sourcePayload.hitDistance,
             buildSceneLength, buildThp, buildMVs, buildImageXform, buildRoughnessAccum,
-            sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant);
+            sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant,
+            sourceInstance, randomSeed);
 
         // If delta-only surface, continue tracing the primary lobe
         while (hitResult.continueTracing)
@@ -240,7 +245,8 @@ void Main()
                 spCtx, idx, buildPlaneIndex, hitResult.nextVertexIndex, hitResult.nextBranchID,
                 hitResult.nextRayOrigin, hitResult.nextRayDir, buildPayload.hitDistance,
                 buildSceneLength, hitResult.nextThp, buildMVs, hitResult.nextImageXform,
-                hitResult.nextRoughnessAccum, buildSurface, buildBrdfCtx, buildBsdf, buildIsDominant);
+                hitResult.nextRoughnessAccum, buildSurface, buildBrdfCtx, buildBsdf, buildIsDominant,
+                buildInstance, randomSeed);
         }
 
         // Explore forked paths (planes 1, 2, ...)
@@ -289,7 +295,8 @@ void Main()
                     spCtx, idx, buildPlaneIndex, ep.vertexIndex, ep.stableBranchID,
                     ep.rayOrigin, ep.rayDir, expPayload.hitDistance,
                     expSceneLength, ep.throughput, ep.motionVectors, ep.imageXform,
-                    ep.roughnessAccum, expSurface, expBrdfCtx, expBsdf, buildIsDominant);
+                    ep.roughnessAccum, expSurface, expBrdfCtx, expBsdf, buildIsDominant,
+                    expInstance, randomSeed);
 
                 while (expHitResult.continueTracing)
                 {
@@ -326,7 +333,8 @@ void Main()
                         spCtx, idx, buildPlaneIndex, expHitResult.nextVertexIndex, expHitResult.nextBranchID,
                         expHitResult.nextRayOrigin, expHitResult.nextRayDir, contPayload.hitDistance,
                         expSceneLength, expHitResult.nextThp, ep.motionVectors, expHitResult.nextImageXform,
-                        expHitResult.nextRoughnessAccum, contSurface, contBrdfCtx, contBsdf, buildIsDominant);
+                        expHitResult.nextRoughnessAccum, contSurface, contBrdfCtx, contBsdf, buildIsDominant,
+                        contInstance, randomSeed);
                 }
             }
 

@@ -264,7 +264,9 @@ StablePlanesHitResult StablePlanesHandleHit(
     const Surface surface,
     const BRDFContext brdfContext,
     const StandardBSDF bsdf,
-    const bool isDominant)
+    const bool isDominant,
+    const Instance instance,
+    inout uint randomSeed)
 {
     StablePlanesHitResult result;
     result.continueTracing   = false;
@@ -356,7 +358,15 @@ StablePlanesHitResult StablePlanesHandleHit(
         return result;
     }
 
-    // Pure delta surface: fork paths for each active lobe
+    // Pure delta surface: evaluate delta lobe lighting (sun/point light reflections)
+    // This is deterministic and noise-free; FILL pass won't visit this surface.
+    {
+        float3 deltaLighting = EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, vertexIndex > 1);
+        if (any(deltaLighting > 0))
+            ctx.AccumulateStableRadiance(pixelPos, deltaLighting * throughput);
+    }
+
+    // Fork paths for each active lobe
     // The first active lobe continues on the current path (reuse the current planeIndex)
     // Additional lobes get forked to empty planes
 
