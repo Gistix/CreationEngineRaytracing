@@ -211,7 +211,8 @@ void Main()
             const bool hasTransmission = false;
 #else            
             bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed);
-            isSpecular = bsdfSample.isLobe(LobeType::Specular);
+            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
+            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
             if (isValid)
@@ -233,7 +234,7 @@ void Main()
 #   if defined(RAW_RADIANCE)
             brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
 #   endif
-            brdfWeight.specular = bsdfSample.isLobe(LobeType::SpecularReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+            brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             
 #   if defined(RAW_RADIANCE)
@@ -361,21 +362,35 @@ void Main()
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
             bsdf = StandardBSDF::make(surface, isEnter);
 
+            // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
+            const uint bounceLobes = bsdf.GetLobes(surface);
+            const bool bounceHasNonDeltaLobes = (bounceLobes & (uint)LobeType::NonDelta) != 0;
+            const bool bounceHasDeltaLobes = (bounceLobes & (uint)LobeType::Delta) != 0;
+            
+            if (bounceHasNonDeltaLobes)
+            {
 #ifdef SUBSURFACE_SCATTERING
-            if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
-                isSssPath = true;
-                // Specular uses the standard path with diffuse suppressed
-                Surface specSurface = surface;
-                specSurface.DiffuseAlbedo = 0;
-                StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
-            }
-            else
+                if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
+                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
+                    isSssPath = true;
+                    // Specular uses the standard path with diffuse suppressed
+                    Surface specSurface = surface;
+                    specSurface.DiffuseAlbedo = 0;
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
+                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
+                }
+                else
 #endif
-            { 
-                directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                { 
+                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                }
+            }
+            
+            // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
+            if (bounceHasDeltaLobes)
+            {
+                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
             }
             
             sampleRadiance += directRadiance * throughput;

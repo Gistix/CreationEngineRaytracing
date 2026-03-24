@@ -157,19 +157,38 @@ void Main()
     return;
 #endif     
     
+    // Handle direct lighting, with special treatment for delta lobes.
+    // For non-delta lobes: standard NEE (EvaluateDirectRadiance) evaluates BSDF at sampled light directions.
+    // For delta lobes: EvalDeltaLobeLighting checks if delta reflection/refraction directions fall within
+    // each light source's solid angle, providing correct mirror reflections of analytical lights.
+    {
+        const uint sourceLobes = sourceBSDF.GetLobes(sourceSurface);
+        const bool sourceHasNonDeltaLobes = (sourceLobes & (uint)LobeType::NonDelta) != 0;
+        const bool sourceHasDeltaLobes = (sourceLobes & (uint)LobeType::Delta) != 0;
+        
+        if (sourceHasNonDeltaLobes)
+        {
 #if defined(SUBSURFACE_SCATTERING)
-    if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
-        direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
-        isSssPath = true;
-        // Specular uses the standard path with diffuse suppressed
-        Surface specSurface = sourceSurface;
-        specSurface.DiffuseAlbedo = 0;
-        StandardBSDF specBsdf = StandardBSDF::make(specSurface, true);
-        direct += EvaluateDirectRadiance(sourceMaterial, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, false);
-    }
-    else
+            if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
+                direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
+                isSssPath = true;
+                // Specular uses the standard path with diffuse suppressed
+                Surface specSurface = sourceSurface;
+                specSurface.DiffuseAlbedo = 0;
+                StandardBSDF specBsdf = StandardBSDF::make(specSurface, true);
+                direct += EvaluateDirectRadiance(sourceMaterial, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, false);
+            }
+            else
 #endif
-        direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);      
+                direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);
+        }
+        
+        // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
+        if (sourceHasDeltaLobes)
+        {
+            direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);
+        }
+    }
     
     float3 direction;
     MonteCarlo::BRDFWeight brdfWeight;
@@ -243,7 +262,8 @@ void Main()
             const bool hasTransmission = false;
 #else            
             bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed);
-            isSpecular = bsdfSample.isLobe(LobeType::Specular);
+            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
+            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
             if (isValid)
@@ -265,7 +285,7 @@ void Main()
 #   if defined(RAW_RADIANCE)
             brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
 #   endif
-            brdfWeight.specular = bsdfSample.isLobe(LobeType::SpecularReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+            brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             
 #   if defined(RAW_RADIANCE)
@@ -393,21 +413,35 @@ void Main()
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
             bsdf = StandardBSDF::make(surface, isEnter);
 
+            // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
+            const uint bounceLobes = bsdf.GetLobes(surface);
+            const bool bounceHasNonDeltaLobes = (bounceLobes & (uint)LobeType::NonDelta) != 0;
+            const bool bounceHasDeltaLobes = (bounceLobes & (uint)LobeType::Delta) != 0;
+            
+            if (bounceHasNonDeltaLobes)
+            {
 #ifdef SUBSURFACE_SCATTERING
-            if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
-                isSssPath = true;
-                // Specular uses the standard path with diffuse suppressed
-                Surface specSurface = surface;
-                specSurface.DiffuseAlbedo = 0;
-                StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
-            }
-            else
+                if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
+                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
+                    isSssPath = true;
+                    // Specular uses the standard path with diffuse suppressed
+                    Surface specSurface = surface;
+                    specSurface.DiffuseAlbedo = 0;
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
+                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
+                }
+                else
 #endif
-            { 
-                directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                { 
+                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                }
+            }
+            
+            // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
+            if (bounceHasDeltaLobes)
+            {
+                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
             }
             
             sampleRadiance += directRadiance * throughput;

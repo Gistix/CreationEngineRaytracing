@@ -19,7 +19,7 @@
 #define HAIR_MODE_CHIANG_BSDF 1
 #define HAIR_MODE_FARFIELD_BCSDF 2
 
-#define USE_DELTALOBES 0
+#define USE_DELTALOBES 1
 
 // Minimum cos(theta) for the incident and outgoing vectors.
 // Some BSDF functions are not robust for cos(theta) == 0.0,
@@ -523,7 +523,7 @@ struct DefaultBSDF
         if (alpha < kMinGGXAlpha)
             alpha = USE_DELTALOBES != 0 ? 0.f : kMinGGXAlpha;
 
-        uint activeLobes = (uint)LobeType::DiffuseReflection | (uint)LobeType::SpecularReflection;
+        uint activeLobes = (uint)LobeType::DiffuseReflection | (uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection;
         if (transmissionAlbedo.r > 0.f || transmissionAlbedo.g > 0.f || transmissionAlbedo.b > 0.f)
         {
             activeLobes |= (uint)LobeType::DiffuseTransmission | (uint)LobeType::SpecularTransmission | (uint)LobeType::DeltaTransmission;
