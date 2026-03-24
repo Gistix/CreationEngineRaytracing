@@ -318,9 +318,16 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
         {
             float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Vector, Features.CloudShadows.Opacity);
             float3 sunDir = DIRECTIONAL_LIGHT.Vector;
+#if defined(PHYSICAL_SKY_TRLUT)
+            irradiance *= SamplePhysicalSkyTransmittance(sunDir);
+#endif
 
             // Sun angular radius ~0.00465 radians. Check if delta direction is within the sun disk.
             float cosSunDisk = cos(0.00465f);
+#if defined(PHYSICAL_SKY_TRLUT)
+            if (Features.PhysicalSky.enabled && Features.PhysicalSky.sunDiskCos > 0.0f)
+                cosSunDisk = Features.PhysicalSky.sunDiskCos;
+#endif
             float cosDelta = dot(deltaDir, sunDir);
 
             if (cosDelta >= cosSunDisk)
