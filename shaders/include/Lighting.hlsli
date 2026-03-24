@@ -296,7 +296,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
                 // Standard NEE uses this with cone sampling where PDF = 1/ω_sun, so E_sun = L_sun × ω_sun works out.
                 // But a delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
                 // Convert: L_sun = E_sun / ω_sun, where ω_sun = 2π(1-cosSunDisk).
-                float sunSolidAngle = 2.0f * PI * (1.0f - cosSunDisk);
+                float sunSolidAngle = 2.0f * K_PI * (1.0f - cosSunDisk);
                 float3 contribution = deltaThroughput * irradiance / sunSolidAngle * (isBounce ? Raytracing.Directional : 1.0f);
                 
                 contribution *= TraceRayShadow(Scene, surface, deltaDir, randomSeed);
