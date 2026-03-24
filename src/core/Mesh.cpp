@@ -11,6 +11,12 @@
 
 #include "Utils/CalcTangents.h"
 
+Mesh::~Mesh()
+{
+	if (m_BSDismemberPtr)
+		Scene::GetSingleton()->GetSceneGraph()->EraseDismemberReference(m_BSDismemberPtr);
+}
+
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
 	auto vertexDesc = rendererData->vertexDesc;
@@ -266,7 +272,7 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 	return Texture(result, defaultDescHandle.get());
 }
 
-void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, [[maybe_unused]] RE::FormID formID)
+void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form)
 {
 	auto* renderer = Renderer::GetSingleton();
 
@@ -289,6 +295,13 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 
 	eastl::array<half, 3> scalars;
 	scalars.fill(0.0f);
+
+	eastl::array<half4, 4> vectors = {
+		float4(1.0f, 1.0f, 1.0f, 1.0f),
+		float4(1.0f, 1.0f, 1.0f, 1.0f),
+		float4(1.0f, 1.0f, 1.0f, 1.0f),
+		float4(1.0f, 1.0f, 1.0f, 1.0f)
+	};
 
 	eastl::array<half4, 2> texCoordOffsetScales = {
 		float4(0.0f, 0.0f, 1.0f, 1.0f),
@@ -481,7 +494,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 							// FaceGen
 							if (feature == Feature::kFaceGen) {
 								if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {
-									if (Util::IsPlayerFormID(formID)) {
+									if (Util::IsPlayer(form)) {
 										auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
 
 										auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptor(
@@ -528,7 +541,88 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 					textures[2] = GetTexture(effectMaterial->greyscaleTexture, blackTexture);
 				}
 			}
+
+			if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(effect)) {
+				shaderType = RE::BSShader::Type::Water;
+
+				if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material)) {
+					colors[0] = {
+						waterMaterial->shallowWaterColor.red,
+						waterMaterial->shallowWaterColor.green,
+						waterMaterial->shallowWaterColor.blue,
+						1.0f
+					};
+
+					colors[1] = {
+						waterMaterial->deepWaterColor.red,
+						waterMaterial->deepWaterColor.green,
+						waterMaterial->deepWaterColor.blue,
+						waterMaterial->deepWaterColor.alpha
+					};
+
+					colors[2] = {
+						waterMaterial->reflectionColor.red,
+						waterMaterial->reflectionColor.green,
+						waterMaterial->reflectionColor.blue,
+						waterMaterial->reflectionColor.alpha
+					};
+
+					// NormalsAmplitude
+					scalars[0] = waterMaterial->amplitudeA[0];
+					scalars[1] = waterMaterial->amplitudeA[1];
+					scalars[2] = waterMaterial->amplitudeA[2];
+
+					if (form->GetFormType() == RE::FormType::Water) {
+						auto* waterForm = form->As<RE::TESWaterForm>();
+						auto& shaderData = waterForm->data;
+
+						auto getNormalScroll = [&](uint32_t i, half& x, half& y) {
+							float dirRad = shaderData.noiseWindDirectionA[i] * std::numbers::pi_v<float> / 180.0f;
+
+							// "Correct" is cos sin but it doesn't scroll the right direction
+							auto scroll = float2(std::sin(dirRad), std::cos(dirRad)) * shaderData.noiseWindSpeedA[i];
+
+							x = scroll.x;
+							y = scroll.y;
+						};
+
+						// NormalsScroll0
+						getNormalScroll(0, vectors[0].x, vectors[0].y);
+						getNormalScroll(1, vectors[0].z, vectors[0].w);
+
+						// NormalsScroll1
+						getNormalScroll(2, vectors[1].x, vectors[1].y);
+					}
+
+					// NormalsScale
+					vectors[1].z = waterMaterial->uvScaleA[0];
+					vectors[1].w = waterMaterial->uvScaleA[1];
+					vectors[2].x = waterMaterial->uvScaleA[2];
+
+					// ObjectUV
+					vectors[2].y = 0.0f;
+					vectors[2].z = 0.0f;
+					vectors[2].w = 0.0f;
+
+					// CellTexCoordOffset 
+					vectors[3] = {
+						static_cast<float>(waterShaderProp->flowX),
+						static_cast<float>(waterShaderProp->flowY),
+						static_cast<float>(waterShaderProp->cellX),
+						static_cast<float>(waterShaderProp->cellY)
+					};
+
+					textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
+					textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
+					textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
+					textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
+				}
+			}
 		}
+	}
+
+	if (shaderType == RE::BSShader::Type::Water) {
+		alphaFlags = Material::AlphaFlags::Transmission;
 	}
 
 	// Fallback to alpha test if possible
@@ -567,6 +661,7 @@ void Mesh::BuildMaterial([[maybe_unused]] const RE::BSGeometry::GEOMETRY_RUNTIME
 		alphaThreshold,
 		colors,
 		scalars,
+		vectors,
 		texCoordOffsetScales,
 		textures);
 }
@@ -832,13 +927,30 @@ DirtyFlags Mesh::Update()
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
 	if (dynamic || skinned)
-		SetPendingState(State::Hidden, bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kHidden));
+		m_PendingState.set(bsGeometryPtr->GetFlags().all(RE::NiAVObject::Flag::kHidden), State::Hidden);
 
-	// Visibility flag is handled by model not by mesh
-	if (IsPendingHidden())
+	// Store previous hidden state
+	bool wasHidden = IsHidden();
+
+	// Update states
+	m_State = m_PendingState;
+
+	// Current hiddent state
+	bool isHidden = IsHidden();
+
+	// Becomes hidden this frame
+	if (!wasHidden && isHidden)
+		return DirtyFlags::Visibility;
+
+	// Nothing to update
+	if (wasHidden && isHidden)
 		return DirtyFlags::None;
 
 	auto updateFlags = DirtyFlags::None;
+
+	// Becomes visible this frame
+	if (wasHidden && !isHidden)
+		updateFlags |= DirtyFlags::Visibility;
 
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
@@ -849,10 +961,10 @@ DirtyFlags Mesh::Update()
 	return updateFlags;
 }
 
-MeshData Mesh::GetData(float3 externalEmittance) const
+MeshData Mesh::GetData(const float3 externalEmittance, const float4* waterTexScroll) const
 {
 	return MeshData(
-		material.GetData(externalEmittance),
+		material.GetData(externalEmittance, waterTexScroll),
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
 		{0, 0},
 		localToRoot
@@ -861,37 +973,12 @@ MeshData Mesh::GetData(float3 externalEmittance) const
 
 bool Mesh::IsHidden() const
 {
-	return ((state & State::Hidden) != State::None) || ((state & State::DismemberHidden) != State::None);
+	return m_State.any(State::Hidden,State::DismemberHidden);
 }
 
-bool Mesh::IsPendingHidden() const
+void Mesh::UpdateDismember(bool visible)
 {
-	return ((pendingState & State::Hidden) != State::None) || ((pendingState & State::DismemberHidden) != State::None);
-}
-
-bool Mesh::IsDirtyState() const
-{
-	return pendingState != state;
-}
-
-// State is set as pending first, final state is updated after BLAS rebuild call
-void Mesh::SetPendingState(State stateIn, bool activate)
-{
-	if (activate)
-		pendingState |= stateIn;
-	else
-		pendingState &= ~stateIn;
-}
-
-void Mesh::UpdateDismember(bool enable)
-{
-	SetPendingState(State::DismemberHidden, !enable);
-}
-
-// Updates state from pending
-void Mesh::UpdateState()
-{
-	state = pendingState;
+	m_PendingState.set(!visible, State::DismemberHidden);
 }
 
 void Mesh::CalculateNormals()

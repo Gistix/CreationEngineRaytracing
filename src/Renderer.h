@@ -114,6 +114,18 @@ public:
 #endif
 	};
 
+	// Stable Planes resources for path decomposition
+	struct StablePlanesResources
+	{
+		nvrhi::TextureHandle header = nullptr;          // R32_UINT, 2DArray, 4 slices: [0-2]=BranchIDs, [3]=firstHitRayLength|dominantIndex
+		nvrhi::BufferHandle  buffer = nullptr;           // StructuredBuffer<StablePlane>, stride=80, count=3*W*H
+		nvrhi::TextureHandle stableRadiance = nullptr;   // RGBA16_FLOAT, 2D: noise-free emissive along delta paths
+	};
+	eastl::unique_ptr<StablePlanesResources> m_StablePlanes;
+
+	// PT Motion Vectors output (RGBA16_FLOAT, written by BUILD pass)
+	nvrhi::TextureHandle m_PTMotionVectors;
+
 	eastl::unique_ptr<RenderTargets> m_RenderTargets;
 
 	struct RendererSettings
@@ -210,6 +222,15 @@ public:
 
 		return m_RenderTargets.get();
 	}
+
+	auto GetStablePlanes() {
+		if (!m_StablePlanes)
+			InitStablePlanes();
+
+		return m_StablePlanes.get();
+	}
+
+	void InitStablePlanes();
 
 	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
 

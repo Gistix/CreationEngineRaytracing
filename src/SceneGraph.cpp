@@ -383,7 +383,7 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	if (!loadedData || !loadedData->mesh)
 		return;
 
-	logger::trace("[RT] TESObjectLAND_Attach3D - {}", std::format("Landscape_{}_{}", exteriorData->cellX, exteriorData->cellY).c_str());
+	logger::debug("SceneGraph::CreateLandModel - {}", std::format("Landscape_{}_{}", exteriorData->cellX, exteriorData->cellY).c_str());
 
 	for (uint i = 0; i < 4; i++) {
 		auto mesh = loadedData->mesh[i];
@@ -393,6 +393,29 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 
 		CreateModelInternal(land, std::format("Landscape_{}_{}_Quad_{}", exteriorData->cellX, exteriorData->cellY, i).c_str(), mesh);
 	}
+}
+
+void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
+{
+	if (!Scene::GetSingleton()->m_Settings.DebugSettings.EnableWater)
+		return;
+
+	if (!water)
+		return;
+
+	if (!object)
+		return;
+
+	auto path = std::format("Water_0x{:08X}", reinterpret_cast<uintptr_t>(object));
+
+	logger::debug("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
+
+	CreateModelInternal(water, path.c_str(), object);
+}
+
+void SceneGraph::EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance)
+{
+	m_DismemberReferences.erase(dismemberSkinInstance);
 }
 
 void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
@@ -634,7 +657,7 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetMSNormalMapDescriptor([[maybe
 				.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 				.setHeight(nativeTexDesc.Height)
 				.setFormat(formatIt->second)
-				.setInitialState(nvrhi::ResourceStates::ShaderResource)
+				.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 				.setDebugName("MSN Source Texture"));
 	}
 
@@ -734,9 +757,10 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(effect) != nullptr;
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect) != nullptr;
+		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(effect) != nullptr;
 
 		// Only lighting and effect shader for now
-		if (!isLightingShader && !isEffectShader) {
+		if (!isLightingShader && !isEffectShader && !isWaterShader) {
 			logger::warn("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Unsupported shader type: {}", effect->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
@@ -756,10 +780,11 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		// Landscape needs special handling of triangles
 		if (baseFormType == RE::FormType::Land)
 			flags |= Mesh::Flags::Landscape;
+		else if (baseFormType == RE::FormType::Water)
+			flags |= Mesh::Flags::Water;
 
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
-
 
 		float3x4 localToRoot{};
 
@@ -785,15 +810,11 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, true, 0);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
-			mesh->BuildMaterial(geometryRuntimeData, formID);
+			mesh->BuildMaterial(geometryRuntimeData, form);
 
 			meshes.push_back(eastl::move(mesh));
 		}
 		else if (auto* skinInstance = geometryRuntimeData.skinInstance.get()) {  // Skinned
-			// Skinned trees have wrong bone matrices and are causing a device removal due to out of bounds vertices
-			//if (baseFormType == RE::FormType::Tree)
-			//	return RE::BSVisit::BSVisitControl::kContinue;
-
 			auto& skinPartition = skinInstance->skinPartition;
 
 			if (!skinPartition) {
@@ -815,11 +836,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			eastl::vector<RE::BSDismemberSkinInstance::Data> dismemberData(skinNumPartitions, { true, false, 0 });
 
-			decltype(dismemberReferences.begin()) it;
+			RE::BSDismemberSkinInstance* dismemberSkinInstance = nullptr;
+
+			decltype(m_DismemberReferences.begin()) it;
 			bool emplacedDismemberRef = false;
 
 			if (skinInstance->GetRTTI() == dismemberRTTI.get()) {
-				auto* dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
+				dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
 
 				auto& dismemberRuntime = dismemberSkinInstance->GetRuntimeData();
 
@@ -830,7 +853,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 				std::memcpy(dismemberData.data(), dismemberRuntime.partitions, dismemberNumPartitions * sizeof(RE::BSDismemberSkinInstance::Data));
 
-				eastl::tie(it, emplacedDismemberRef) = dismemberReferences.try_emplace(dismemberSkinInstance, eastl::vector<Mesh*>(skinNumPartitions));
+				eastl::tie(it, emplacedDismemberRef) = m_DismemberReferences.try_emplace(dismemberSkinInstance, eastl::vector<Mesh*>(skinNumPartitions));
 			}
 
 			for (size_t i = 0; i < skinPartition->partitions.size(); i++) {
@@ -847,21 +870,21 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				if (partition.bonesPerVertex > 0)
 					flags |= Mesh::Flags::Skinned;
 
-				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, dismemberPartition.editorVisible, dismemberPartition.slot);
+				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, dismemberPartition.editorVisible, dismemberPartition.slot, dismemberSkinInstance);
 
 				// Diabolical Part II
-				if (emplacedDismemberRef)
+				if (emplacedDismemberRef)				
 					it->second[i] = mesh.get();
-
+	
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
-				mesh->BuildMaterial(geometryRuntimeData, formID);
+				mesh->BuildMaterial(geometryRuntimeData, form);
 
 				meshes.push_back(eastl::move(mesh));
 			}
 		}
 
 		return RE::BSVisit::BSVisitControl::kContinue;
-		});
+	});
 
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
 		auto model = eastl::make_unique<Model>(path, pRoot, form, meshes);
@@ -891,15 +914,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			modelPtr->BuildBLAS(computeCommandList);
 
-			//computeCommandList->compactBottomLevelAccelStructs();
+			computeCommandList->compactBottomLevelAccelStructs();
 
 			computeCommandList->close();
 
 			device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, copySubmittedInstance);
 
-			device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
-
-			device->waitForIdle();
+			auto computeSubmittedInstance = device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
 
 			// MSN Conversion - must happen after buffers are uploaded and GPU is idle
 			if (modelPtr->ShouldQueueMSNConversion()) {
@@ -910,9 +931,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				ConvertMSN(modelPtr, graphicsCommandList);
 
 				graphicsCommandList->close();
+
+				device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Compute, computeSubmittedInstance);
+
 				device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
-				device->waitForIdle();
 			}
+
+			device->waitForIdle();
 
 			AddInstance(formID, pRoot, modelName);
 

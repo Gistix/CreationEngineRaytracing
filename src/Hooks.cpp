@@ -41,6 +41,20 @@ namespace Hooks
 		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
 	};
 
+	void TESWaterSystem_AddWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural)
+	{
+		func(a_waterSystem, a_waterObj, a_waterType, a_waterHeight, a_multiBoundShape, a_noDisplacement, a_isProcedural);
+
+		Scene::GetSingleton()->GetSceneGraph()->CreateWaterModel(a_waterType, a_waterObj);
+	};
+
+	void TESWaterSystem_RemoveWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj)
+	{
+		func(a_waterSystem, a_waterObj);
+
+		//Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
+	};
+
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 		if (oThis && oThis->rendererTexture) {
@@ -73,6 +87,23 @@ namespace Hooks
 		func(a_cell, a_refr, a_node);
 	}
 
+	void BSDismemberSkinInstance_UpdateDismemberPartion::thunk(RE::BSDismemberSkinInstance* oThis, std::uint16_t a_slot, bool a_enable)
+	{
+		func(oThis, a_slot, a_enable);
+
+		auto& dismemberReferences = Scene::GetSingleton()->GetSceneGraph()->GetDismemberReferences();
+
+		if (auto it = dismemberReferences.find(oThis); it != dismemberReferences.end()) {
+			for (auto& mesh : it->second) {
+				if (a_slot == mesh->slot) {
+					logger::debug("BSDismemberSkinInstance::UpdateDismemberPartion {} {} - 0x{:08X} 0x{:08X}", a_slot, a_enable, reinterpret_cast<uintptr_t>(oThis), reinterpret_cast<uintptr_t>(mesh));
+					mesh->UpdateDismember(a_enable);
+					break;
+				}
+			}
+		}
+	}
+
 #if defined(SKYRIM)
 	RE::NiSourceTexture* CreateTextureFromDDS::thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5)
 	{
@@ -89,6 +120,36 @@ namespace Hooks
 		return result;
 	}
 
+	void* CreateFlowMapSE::thunk(void* a1, int a2, int a3, void* a4)
+	{
+		auto* scene = Scene::GetSingleton();
+
+		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
+
+		scene->shareTexture = true;
+
+		auto* result = func(a1, a2, a3, a4);
+
+		scene->shareTexture = false;
+
+		return result;
+	}
+
+	void* CreateFlowMapAE::thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7)
+	{
+		auto* scene = Scene::GetSingleton();
+
+		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
+
+		scene->shareTexture = true;
+
+		auto* result = func(a1, a2, a3, a4, a5, a6, a7);
+
+		scene->shareTexture = false;
+
+		return result;
+	}
+	
 	void CreateRenderTarget_PlayerFaceGenTint::thunk(RE::BSGraphics::Renderer* oThis, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties)
 	{
 		auto* scene = Scene::GetSingleton();
@@ -141,6 +202,20 @@ namespace Hooks
 
 	void BSBatchRenderer_RenderPassImmediately::thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags)
 	{
+		if (!pass->shader) {
+			func(pass, technique, alphaTest, renderFlags);
+			return;
+		}
+
+		auto shaderType = pass->shader->shaderType.get();
+
+		auto* scene = Scene::GetSingleton();
+
+		if (scene->IsPathTracingActive() && scene->m_Settings.DebugSettings.EnableWater) {
+			if (shaderType == RE::BSShader::Type::Water)
+				return;
+		}
+
 		// Skip rendering geometry that has been determined to be occluded
 		// Never cull during reflection rendering - reflections need all visible geometry
 		if (Scene::GetSingleton()->ApplyPathTracingCull() && pass->shader && pass->geometry) {
@@ -199,24 +274,44 @@ namespace Hooks
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
-		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
-
-		//stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
 
 		// Destructor to remove instances (not models)
 		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));
 
+		// Landscape
+		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
+		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
+
+		// Water
+		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
+		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
+
 		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 
-		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605, 0x0));
+		auto createFlowMapRel = REL::RelocationID(31234, 32031).address() + REL::Relocate(0x7E, 0xF8);
+		if (REL::Module::IsSE())
+			stl::write_thunk_call<CreateFlowMapSE>(createFlowMapRel);
+		else
+			stl::write_thunk_call<CreateFlowMapAE>(createFlowMapRel);
 
-		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951, 0x0));
+		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605));
+
+		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951));
+
+		// Updates Shape dismember state
+		stl::detour_thunk<BSDismemberSkinInstance_UpdateDismemberPartion>(REL::RelocationID(15576, 15753));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
 		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
 
-		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));;
+		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));
+
+		auto* scene = Scene::GetSingleton();
+		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
+		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
+		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
+
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
 		stl::detour_thunk<TES_AttachModel>(REL::ID(2192085));

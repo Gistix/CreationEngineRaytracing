@@ -89,6 +89,11 @@ INTEROP_DATA_STRUCT(Material, 4)
 	half Scalar1;
 	half Scalar2;
 	
+	half4 Vector0;
+	half4 Vector1;
+	half4 Vector2;
+	half4 Vector3;
+	
 	// Textures
 	uint16_t Texture0;
 	uint16_t Texture1;
