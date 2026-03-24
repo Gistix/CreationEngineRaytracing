@@ -11,6 +11,11 @@
 #define DIRECTIONAL_LIGHT_MULTIPLIER (K_4PI)
 #define POINT_LIGHT_MULTIPLIER (1.0f) // K_PI
 
+float3 ColorToGamma(float3 color)
+{
+    return pow(abs(color), 1.0f / (LLON ? LLSETTINGS.colorGamma : 2.2f));
+}
+
 float3 ColorToLinear(float3 color)
 {
     return pow(abs(color), (LLON ? LLSETTINGS.colorGamma : 2.2f));
@@ -47,7 +52,12 @@ float3 GlowToLinear(float3 color)
 
 float3 VanillaDiffuseColor(float3 color)
 {
-    return saturate(ColorToLinear(color) * LLSETTINGS.vanillaDiffuseColorMult);
+    return ColorToLinear(color) * LLSETTINGS.vanillaDiffuseColorMult;
+}
+
+float3 VanillaDiffuseColorGamma(float3 color)
+{
+    return ColorToGamma(color / LLSETTINGS.vanillaDiffuseColorMult);
 }
 
 float3 LLGammaToTrueLinear(float3 color)

@@ -172,6 +172,18 @@ struct StablePlane
     float   GetRoughness()              { return f16tof32(VertexIndexAndRoughness & 0xFFFF); }
     uint    GetVertexIndex()            { return VertexIndexAndRoughness >> 16; }
 
+    // --- Water volume state accessors (packed in FlagsAndVertexIndex + PackedCounters) ---
+    // FlagsAndVertexIndex: bit 0 = insideWaterVolume, bits 16-31 = fp16(absorption.x)
+    // PackedCounters:      bits 0-15 = fp16(absorption.y), bits 16-31 = fp16(absorption.z)
+    bool    GetInsideWaterVolume()      { return (FlagsAndVertexIndex & 1u) != 0; }
+    float3  GetWaterVolumeAbsorption()
+    {
+        return float3(
+            f16tof32(FlagsAndVertexIndex >> 16),
+            f16tof32(PackedCounters & 0xFFFF),
+            f16tof32(PackedCounters >> 16));
+    }
+
     // Noisy radiance is stored with sqrt encoding to extend fp16 dynamic range.
     // Raw fp16 max is 65504; with sqrt encoding, effective max is 65504^2 ≈ 4.3 billion.
     float3  GetNoisyRadiance()          { float4 s = Fp16ToFp32(PackedNoisyRadianceAndSpecAvg); return (s * s).xyz; }
@@ -472,6 +484,9 @@ struct StablePlanesContext
 #endif // FILL
 
     // --- Get all radiance (stable + noisy from all planes) ---
+    // Stable radiance is pre-weighted by throughput during BUILD.
+    // Noisy radiance must be weighted by each plane's stored throughput
+    // (which includes delta lobe weights and water absorption along the path).
     float3 GetAllRadiance(uint2 pixelPos, bool includeNoisy)
     {
         float3 pathL = LoadStableRadiance(pixelPos);
@@ -481,7 +496,10 @@ struct StablePlanesContext
             {
                 if (GetBranchID(pixelPos, i) == cStablePlaneInvalidBranchID)
                     continue;
-                pathL += StablePlanesUAV[PixelToAddress(pixelPos, i)].GetNoisyRadiance();
+                StablePlane sp = StablePlanesUAV[PixelToAddress(pixelPos, i)];
+                float3 thp, dummy;
+                UnpackTwoFp32ToFp16(sp.PackedThpAndMVs, thp, dummy);
+                pathL += sp.GetNoisyRadiance() * thp;
             }
         }
         return pathL;

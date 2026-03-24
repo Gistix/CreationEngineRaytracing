@@ -126,8 +126,12 @@ void Main()
         spCtx.StartPixel(idx);
         float3 skyRad = SampleSky(SkyHemisphere, sourceDirection) * Raytracing.Sky;
         float3x3 identityMat = float3x3(1,0,0, 0,1,0, 0,0,1);
+        // Attenuate sky by water absorption when camera is underwater
+        float3 buildMissThp = float3(1,1,1);
+        if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
+            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
         StablePlanesHandleMiss(spCtx, idx, 0, 1, 1 /* sentinel branchID */,
-            Camera.Position.xyz, sourceDirection, float3(1,1,1), float3(0,0,0),
+            Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
             identityMat, skyRad, true);
         spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, kEnvironmentMapSceneDistance);
         return;
@@ -201,13 +205,22 @@ void Main()
         float buildRoughnessAccum = 0;
         bool buildIsDominant = true;
 
+        // Water volume tracking for BUILD pass (Beer-Lambert absorption along delta paths)
+        bool buildInsideWater = Camera.IsUnderwater != 0;
+        float3 buildWaterAbsorption = buildInsideWater ? Camera.UnderwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
+
+        // Apply primary ray water absorption
+        if (buildInsideWater)
+            buildThp *= exp(-buildWaterAbsorption * sourcePayload.hitDistance);
+
         // Handle the primary surface through StablePlanesHandleHit
         StablePlanesHitResult hitResult = StablePlanesHandleHit(
             spCtx, idx, buildPlaneIndex, buildVertexIndex, buildBranchID,
             Camera.Position.xyz, sourceDirection, sourcePayload.hitDistance,
             buildSceneLength, buildThp, buildMVs, buildImageXform, buildRoughnessAccum,
             sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant,
-            sourceInstance, randomSeed);
+            sourceInstance, randomSeed,
+            buildInsideWater, buildWaterAbsorption);
 
         // If delta-only surface, continue tracing the primary lobe
         while (hitResult.continueTracing)
@@ -220,6 +233,10 @@ void Main()
 
             Payload buildPayload = TraceRayStandard(Scene, buildRay, randomSeed);
             buildSceneLength += buildPayload.hitDistance;
+
+            // Apply water absorption for this delta path segment
+            if (hitResult.nextInsideWater)
+                hitResult.nextThp *= exp(-hitResult.nextWaterAbsorption * buildPayload.hitDistance);
 
             if (!buildPayload.Hit())
             {
@@ -246,7 +263,8 @@ void Main()
                 hitResult.nextRayOrigin, hitResult.nextRayDir, buildPayload.hitDistance,
                 buildSceneLength, hitResult.nextThp, buildMVs, hitResult.nextImageXform,
                 hitResult.nextRoughnessAccum, buildSurface, buildBrdfCtx, buildBsdf, buildIsDominant,
-                buildInstance, randomSeed);
+                buildInstance, randomSeed,
+                hitResult.nextInsideWater, hitResult.nextWaterAbsorption);
         }
 
         // Explore forked paths (planes 1, 2, ...)
@@ -270,6 +288,10 @@ void Main()
 
             Payload expPayload = TraceRayStandard(Scene, expRay, randomSeed);
             expSceneLength += expPayload.hitDistance;
+
+            // Apply water absorption for exploration segment
+            if (ep.insideWaterVolume)
+                ep.throughput *= exp(-ep.waterVolumeAbsorption * expPayload.hitDistance);
 
             if (!expPayload.Hit())
             {
@@ -296,7 +318,8 @@ void Main()
                     ep.rayOrigin, ep.rayDir, expPayload.hitDistance,
                     expSceneLength, ep.throughput, ep.motionVectors, ep.imageXform,
                     ep.roughnessAccum, expSurface, expBrdfCtx, expBsdf, buildIsDominant,
-                    expInstance, randomSeed);
+                    expInstance, randomSeed,
+                    ep.insideWaterVolume, ep.waterVolumeAbsorption);
 
                 while (expHitResult.continueTracing)
                 {
@@ -308,6 +331,10 @@ void Main()
 
                     Payload contPayload = TraceRayStandard(Scene, contRay, randomSeed);
                     expSceneLength += contPayload.hitDistance;
+
+                    // Apply water absorption for this continuation segment
+                    if (expHitResult.nextInsideWater)
+                        expHitResult.nextThp *= exp(-expHitResult.nextWaterAbsorption * contPayload.hitDistance);
 
                     if (!contPayload.Hit())
                     {
@@ -334,7 +361,8 @@ void Main()
                         expHitResult.nextRayOrigin, expHitResult.nextRayDir, contPayload.hitDistance,
                         expSceneLength, expHitResult.nextThp, ep.motionVectors, expHitResult.nextImageXform,
                         expHitResult.nextRoughnessAccum, contSurface, contBrdfCtx, contBsdf, buildIsDominant,
-                        contInstance, randomSeed);
+                        contInstance, randomSeed,
+                        expHitResult.nextInsideWater, expHitResult.nextWaterAbsorption);
                 }
             }
 
@@ -351,12 +379,14 @@ void Main()
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     StablePlaneFillState fillState;
     float4 fillPathL = float4(0,0,0,0);
+    bool fillInsideWater = false;
+    float3 fillWaterAbsorption = float3(0.0f, 0.0f, 0.0f);
     {
         float3 fillRayOrigin, fillRayDir, fillThp;
         float fillSceneLength;
         uint fillVertexIndex;
         float2 fillTMinMax = FirstHitFromVBuffer(fillState, fillRayOrigin, fillRayDir, fillThp,
-            fillSceneLength, fillVertexIndex, spCtx, idx, 0);
+            fillSceneLength, fillVertexIndex, fillInsideWater, fillWaterAbsorption, spCtx, idx, 0);
 
         if (fillTMinMax.x < 0)
         {
@@ -497,8 +527,13 @@ void Main()
         bool isEnter = sourceIsEnter;
 
         // Water volume tracking for Beer-Lambert absorption
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+        bool insideWaterVolume = fillInsideWater;
+        float3 waterVolumeAbsorption = fillWaterAbsorption;
+#else
         bool insideWaterVolume = Camera.IsUnderwater != 0;
         float3 waterVolumeAbsorption = insideWaterVolume ? Camera.UnderwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
+#endif
         
 #if defined(RAW_RADIANCE)
         float3 throughputDelta = float3(1.0f, 1.0f, 1.0f);
