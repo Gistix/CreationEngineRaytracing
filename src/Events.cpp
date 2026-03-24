@@ -20,19 +20,46 @@ namespace Events
 		return RE::BSEventNotifyControl::kContinue;
 	}
 
+	RE::BSEventNotifyControl Events::TESCellAttachDetachEventHandler::ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
+	{
+		if (!a_event)
+			return RE::BSEventNotifyControl::kContinue;
+
+		auto* eventRef = a_event->reference.get();
+		
+		logger::trace("TESCellAttachDetachEventHandler::ProcessEvent - 0x{:08X}, Attached {} to 0x{:08X}", eventRef->GetFormID(), a_event->attached, eventRef->parentCell ? eventRef->parentCell->GetFormID() : 0);
+
+		Scene::GetSingleton()->GetSceneGraph()->SetInstanceDetached(eventRef, !a_event->attached);
+
+		return RE::BSEventNotifyControl::kContinue;
+	}
+
+	RE::BSEventNotifyControl Events::TESMoveAttachDetachEventHandler::ProcessEvent(const RE::TESMoveAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESMoveAttachDetachEvent>*)
+	{
+		if (!a_event)
+			return RE::BSEventNotifyControl::kContinue;
+
+		auto* eventRef = a_event->movedRef.get();
+
+		logger::trace("TESMoveAttachDetachEventHandler::ProcessEvent - 0x{:08X}, Cell Attached {} to 0x{:08X}", eventRef->GetFormID(), a_event->isCellAttached, eventRef->parentCell ? eventRef->parentCell->GetFormID() : 0);
+
+		if (a_event->isCellAttached)
+			Scene::GetSingleton()->GetSceneGraph()->SetInstanceDetached(eventRef, false);
+
+		return RE::BSEventNotifyControl::kContinue;
+	}
+
 	RE::BSEventNotifyControl Events::CellAttachDetachEventHandler::ProcessEvent(const RE::CellAttachDetachEvent* a_event, RE::BSTEventSource<RE::CellAttachDetachEvent>*)
 	{
-		bool attaching = a_event->status == RE::CellAttachDetachEvent::Status::StartAttach;
+		bool attached = a_event->status == RE::CellAttachDetachEvent::Status::FinishAttach;
 		bool detaching = a_event->status == RE::CellAttachDetachEvent::Status::StartDetach;
 
-		if (!attaching && !detaching)
+		logger::trace("CellAttachDetachEventHandler::ProcessEvent - 0x{:08X}, Status {}", a_event->cell->GetFormID(), magic_enum::enum_name(a_event->status));
+
+		if (!attached && !detaching)
 			return RE::BSEventNotifyControl::kContinue;
 
 		auto& runtimeData = a_event->cell->GetRuntimeData();
-
-		for (auto& reference : runtimeData.references) {
-			Scene::GetSingleton()->GetSceneGraph()->SetInstanceDetached(reference.get(), detaching);
-		}
 
 		auto* land = runtimeData.cellLand;
 
@@ -47,8 +74,16 @@ namespace Events
 	void Register()
 	{
 #if defined(SKYRIM)
-		CellAttachDetachEventHandler::Register();
 		TESObjectLoadedEventHandler::Register();
+
+		// Reference event, also fired when the cell event fires
+		TESCellAttachDetachEventHandler::Register();
+
+		// Reference moved between cells
+		TESMoveAttachDetachEventHandler::Register();
+
+		// Cell event (inside/outside transitions detaches entire cells)
+		CellAttachDetachEventHandler::Register();
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
 

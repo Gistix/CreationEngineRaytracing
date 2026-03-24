@@ -506,7 +506,7 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	if (instanceFormIDsIt == m_InstancesFormIDs.end())
 		return;
 
-	logger::debug("SceneGraph::SetInstanceDetached - Detaching {}", detached);
+	logger::debug("SceneGraph::SetInstanceDetached - Detaching {}, 0x{:08X}", detached, form->GetFormID());
 
 	for (auto& instance : instanceFormIDsIt->second) {
 		logger::debug("	SceneGraph::SetInstanceDetached - {}", instance->model->m_Name.c_str());
