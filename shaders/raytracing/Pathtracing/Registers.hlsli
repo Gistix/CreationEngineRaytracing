@@ -1,6 +1,8 @@
 #ifndef REGISTERS_HLSLI
 #define REGISTERS_HLSLI
 
+#include "raytracing/include/StablePlanes.hlsli"
+
 #include "interop/CameraData.hlsli"
 #include "interop/RaytracingData.hlsli"
 #include "interop/SharedData.hlsli"
@@ -30,6 +32,14 @@ RWTexture2D<float3>                         SpecularAlbedo              : regist
 RWTexture2D<float4>                         NormalRoughness             : register(u3);
 RWTexture2D<float>                          SpecularHitDistance         : register(u4);
 #endif
+
+// Stable Planes UAVs (always declared, used when PATH_TRACER_MODE != REFERENCE)
+RWTexture2DArray<uint>                      StablePlanesHeaderUAV       : register(u5);
+RWStructuredBuffer<StablePlane>             StablePlanesBufferUAV       : register(u6);
+RWTexture2D<float4>                         StableRadianceUAV           : register(u7);
+
+// PT Motion Vectors output (written by BUILD pass for dominant plane)
+RWTexture2D<float4>                         MotionVectors               : register(u8);
 
 RaytracingAccelerationStructure             Scene                       : register(t0);
 Texture2D<float4>                           SkyHemisphere               : register(t1);

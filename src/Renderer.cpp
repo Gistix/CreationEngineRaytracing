@@ -203,6 +203,72 @@ void Renderer::InitRR()
 	m_RayReconstructionInput->specularHitDistance = device->createTexture(desc);
 }
 
+void Renderer::InitStablePlanes()
+{
+	m_StablePlanes = eastl::make_unique<StablePlanesResources>();
+
+	auto device = GetDevice();
+	const uint width = m_RenderSize.x;
+	const uint height = m_RenderSize.y;
+	constexpr uint stablePlaneCount = 3;
+
+	// StablePlanesHeader: R32_UINT, 2DArray with 4 slices
+	// Slices 0-2: BranchIDs per plane, Slice 3: firstHitRayLength | dominantIndex
+	{
+		nvrhi::TextureDesc desc;
+		desc.dimension = nvrhi::TextureDimension::Texture2DArray;
+		desc.width = width;
+		desc.height = height;
+		desc.arraySize = 4;
+		desc.format = nvrhi::Format::R32_UINT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "StablePlanesHeader";
+		m_StablePlanes->header = device->createTexture(desc);
+	}
+
+	// StablePlanesBuffer: StructuredBuffer<StablePlane>, stride=80 bytes, count=3*W*H
+	{
+		nvrhi::BufferDesc desc;
+		desc.byteSize = stablePlaneCount * width * height * 80;
+		desc.structStride = 80;
+		desc.canHaveUAVs = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "StablePlanesBuffer";
+		m_StablePlanes->buffer = device->createBuffer(desc);
+	}
+
+	// StableRadiance: RGBA16_FLOAT, 2D - noise-free emissive along delta paths
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "StableRadiance";
+		m_StablePlanes->stableRadiance = device->createTexture(desc);
+	}
+
+	logger::info("Stable Planes resources created ({}x{}, {} planes)", width, height, stablePlaneCount);
+
+	// PT MotionVectors: RGBA16_FLOAT, written by BUILD pass for dominant plane MV output
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "PT MotionVectors";
+		m_PTMotionVectors = device->createTexture(desc);
+	}
+}
+
 void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
 {
 	if (!m_RenderTargets)

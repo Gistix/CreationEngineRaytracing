@@ -27,6 +27,8 @@ namespace Pass
 
 	void PathTracing::SettingsChanged(const Settings& settings)
 	{
+		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
+
 		auto defines = Util::Shader::GetRaytracingDefines(settings, true, false);
 
 		if (defines != m_Defines) {
@@ -57,7 +59,13 @@ namespace Pass
 			nvrhi::BindingLayoutItem::Texture_UAV(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
 			nvrhi::BindingLayoutItem::Texture_UAV(3),
-			nvrhi::BindingLayoutItem::Texture_UAV(4)
+			nvrhi::BindingLayoutItem::Texture_UAV(4),
+			// Stable Planes UAVs
+			nvrhi::BindingLayoutItem::Texture_UAV(5),           // StablePlanesHeader (RWTexture2DArray<uint>)
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(6),  // StablePlanesBuffer (RWStructuredBuffer<StablePlane>)
+			nvrhi::BindingLayoutItem::Texture_UAV(7),           // StableRadiance (RWTexture2D<float4>)
+			// PT Motion Vectors output
+			nvrhi::BindingLayoutItem::Texture_UAV(8)            // MotionVectors (RWTexture2D<float4>)
 		};
 
 #if defined(NVAPI)
@@ -69,28 +77,27 @@ namespace Pass
 
 	void PathTracing::CreatePipeline()
 	{
-		if (GetRenderer()->m_Settings.UseRayQuery)
+		if (GetRenderer()->m_Settings.UseRayQuery) {
 			CreateComputePipeline();
-		else
+		} else {
 			CreateRayTracingPipeline();
+		}
 	}
 
-	void PathTracing::CreateRayTracingPipeline()
+	void PathTracing::CreateRayTracingPipelineForMode(int mode, nvrhi::rt::PipelineHandle& outPipeline, nvrhi::rt::ShaderTableHandle& outShaderTable)
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"0");
+		defines.emplace_back(L"PATH_TRACER_MODE", mode == 1 ? L"1" : (mode == 2 ? L"2" : L"0"));
 
 		auto device = GetRenderer()->GetDevice();
 
-		// Compile Libraries
 		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines);
 		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", defines);
 		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", defines);
 		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", defines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
-
-		// Pipeline Shaders
 		pipelineDesc.shaders = {
 			{ "RayGen", rayGenLib->getShader("Main", nvrhi::ShaderType::RayGeneration), nullptr },
 			{ "Miss", missLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr }
@@ -101,14 +108,11 @@ namespace Pass
 				"HitGroup",
 				hitLib->getShader("Main", nvrhi::ShaderType::ClosestHit),
 				anyHitLib->getShader("Main", nvrhi::ShaderType::AnyHit),
-				nullptr,  // intersection
-				nullptr,  // binding layout
-				false     // isProceduralPrimitive
+				nullptr, nullptr, false
 			}
 		};
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
 		pipelineDesc.globalBindingLayouts = {
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
@@ -123,47 +127,68 @@ namespace Pass
 		pipelineDesc.hlslExtensionsUAV = 127;
 #endif
 
-		m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
-		if (!m_RayPipeline)
+		outPipeline = device->createRayTracingPipeline(pipelineDesc);
+		if (!outPipeline)
 			return;
 
 		auto shaderTableDesc = nvrhi::rt::ShaderTableDesc()
 			.enableCaching(3)
 			.setDebugName("Shader Table");
 
-		m_ShaderTable = m_RayPipeline->createShaderTable(shaderTableDesc);
-		if (!m_ShaderTable)
+		outShaderTable = outPipeline->createShaderTable(shaderTableDesc);
+		if (!outShaderTable)
 			return;
 
-		m_ShaderTable->setRayGenerationShader("RayGen");
-		m_ShaderTable->addMissShader("Miss");
-		m_ShaderTable->addHitGroup("HitGroup");
+		outShaderTable->setRayGenerationShader("RayGen");
+		outShaderTable->addMissShader("Miss");
+		outShaderTable->addHitGroup("HitGroup");
 	}
 
-	void PathTracing::CreateComputePipeline()
+	void PathTracing::CreateRayTracingPipeline()
+	{
+		// Reference mode (mode 0)
+		CreateRayTracingPipelineForMode(0, m_RayPipeline, m_ShaderTable);
+		// BUILD mode (mode 1)
+		CreateRayTracingPipelineForMode(1, m_BuildRayPipeline, m_BuildShaderTable);
+		// FILL mode (mode 2)
+		CreateRayTracingPipelineForMode(2, m_FillRayPipeline, m_FillShaderTable);
+	}
+
+	void PathTracing::CreateComputePipelineForMode(int mode, nvrhi::ShaderHandle& outShader, nvrhi::ComputePipelineHandle& outPipeline)
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
+		defines.emplace_back(L"PATH_TRACER_MODE", mode == 1 ? L"1" : (mode == 2 ? L"2" : L"0"));
 
 		auto device = GetRenderer()->GetDevice();
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
 		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
-		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
+		outShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
-		if (!m_ComputeShader)
+		if (!outShader)
 			return;
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
-			.setComputeShader(m_ComputeShader)
+			.setComputeShader(outShader)
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
 
-		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+		outPipeline = device->createComputePipeline(pipelineDesc);
+	}
+
+	void PathTracing::CreateComputePipeline()
+	{
+		// Reference mode (mode 0)
+		CreateComputePipelineForMode(0, m_ComputeShader, m_ComputePipeline);
+		// BUILD mode (mode 1)
+		CreateComputePipelineForMode(1, m_BuildComputeShader, m_BuildComputePipeline);
+		// FILL mode (mode 2)
+		CreateComputePipelineForMode(2, m_FillComputeShader, m_FillComputePipeline);
 	}
 
 	void PathTracing::CheckBindings()
@@ -180,6 +205,8 @@ namespace Pass
 		auto* rts = renderer->GetRenderTargets();
 
 		auto* rrInput = renderer->GetRRInput();
+
+		auto* sp = renderer->GetStablePlanes();
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -199,7 +226,13 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_UAV(1, rrInput->diffuseAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(3, rts->normalRoughness),
-			nvrhi::BindingSetItem::Texture_UAV(4, rrInput->specularHitDistance)
+			nvrhi::BindingSetItem::Texture_UAV(4, rrInput->specularHitDistance),
+			// Stable Planes UAVs
+			nvrhi::BindingSetItem::Texture_UAV(5, sp->header),
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(6, sp->buffer),
+			nvrhi::BindingSetItem::Texture_UAV(7, sp->stableRadiance),
+			// PT Motion Vectors output
+			nvrhi::BindingSetItem::Texture_UAV(8, renderer->m_PTMotionVectors)
 		};
 
 		
@@ -212,10 +245,10 @@ namespace Pass
 		m_DirtyBindings = false;
 	}
 
-	void PathTracing::Execute(nvrhi::ICommandList* commandList)
+	void PathTracing::ExecuteDispatch(nvrhi::ICommandList* commandList,
+		nvrhi::rt::PipelineHandle rayPipeline, nvrhi::rt::ShaderTableHandle shaderTable,
+		nvrhi::ComputePipelineHandle computePipeline)
 	{
-		CheckBindings();
-
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
@@ -227,10 +260,10 @@ namespace Pass
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
 
-		if (m_RayPipeline)
+		if (rayPipeline)
 		{
 			nvrhi::rt::State state;
-			state.shaderTable = m_ShaderTable;
+			state.shaderTable = shaderTable;
 			state.bindings = bindings;
 			commandList->setRayTracingState(state);
 
@@ -239,15 +272,32 @@ namespace Pass
 			args.height = resolution.y;
 			commandList->dispatchRays(args);
 		}
-		else if (m_ComputePipeline)
+		else if (computePipeline)
 		{
 			nvrhi::ComputeState state;
-			state.pipeline = m_ComputePipeline;
+			state.pipeline = computePipeline;
 			state.bindings = bindings;
 			commandList->setComputeState(state);
 
 			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 32);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
+		}
+	}
+
+	void PathTracing::Execute(nvrhi::ICommandList* commandList)
+	{
+		CheckBindings();
+
+		if (m_UseStablePlanes)
+		{
+			// Two-pass stable planes: BUILD then FILL
+			ExecuteDispatch(commandList, m_BuildRayPipeline, m_BuildShaderTable, m_BuildComputePipeline);
+			ExecuteDispatch(commandList, m_FillRayPipeline, m_FillShaderTable, m_FillComputePipeline);
+		}
+		else
+		{
+			// Reference mode: single pass
+			ExecuteDispatch(commandList, m_RayPipeline, m_ShaderTable, m_ComputePipeline);
 		}
 	}
 }
