@@ -267,6 +267,19 @@ void Renderer::InitStablePlanes()
 		desc.debugName = "PT MotionVectors";
 		m_PTMotionVectors = device->createTexture(desc);
 	}
+
+	// PT Depth: R32_FLOAT, clip-space depth output
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::R32_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "PT Depth";
+		m_PTDepth = device->createTexture(desc);
+	}
 }
 
 void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
@@ -350,6 +363,50 @@ void Renderer::SetCopyTarget(ID3D12Resource* target)
 	m_CopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, target, desc);
 }
 
+void Renderer::SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget)
+{
+	if (depthTarget == m_PTDepthCopyTargetResource && mvTarget == m_PTMVCopyTargetResource)
+		return;
+
+	if (depthTarget) {
+		m_PTDepthCopyTargetResource = depthTarget;
+		auto targetDesc = depthTarget->GetDesc();
+		nvrhi::TextureDesc desc{};
+		desc.width = static_cast<uint32_t>(targetDesc.Width);
+		desc.height = targetDesc.Height;
+		desc.format = nvrhi::Format::R32_FLOAT;
+		desc.mipLevels = targetDesc.MipLevels;
+		desc.arraySize = targetDesc.DepthOrArraySize;
+		desc.dimension = nvrhi::TextureDimension::Texture2D;
+		desc.initialState = nvrhi::ResourceStates::ShaderResource;
+		desc.keepInitialState = true;
+		desc.debugName = "PT Depth Copy Target";
+		m_PTDepthCopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, depthTarget, desc);
+	} else {
+		m_PTDepthCopyTargetResource = nullptr;
+		m_PTDepthCopyTargetTexture = nullptr;
+	}
+
+	if (mvTarget) {
+		m_PTMVCopyTargetResource = mvTarget;
+		auto targetDesc = mvTarget->GetDesc();
+		nvrhi::TextureDesc desc{};
+		desc.width = static_cast<uint32_t>(targetDesc.Width);
+		desc.height = targetDesc.Height;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.mipLevels = targetDesc.MipLevels;
+		desc.arraySize = targetDesc.DepthOrArraySize;
+		desc.dimension = nvrhi::TextureDimension::Texture2D;
+		desc.initialState = nvrhi::ResourceStates::ShaderResource;
+		desc.keepInitialState = true;
+		desc.debugName = "PT MV Copy Target";
+		m_PTMVCopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, mvTarget, desc);
+	} else {
+		m_PTMVCopyTargetResource = nullptr;
+		m_PTMVCopyTargetTexture = nullptr;
+	}
+}
+
 void Renderer::ExecutePasses()
 {
 	auto* scene = Scene::GetSingleton();
@@ -380,6 +437,12 @@ void Renderer::ExecutePasses()
 	{
 		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
 		m_CommandList->copyTexture(m_CopyTargetTexture, region, m_MainTexture, region);
+
+		if (m_PTDepthCopyTargetTexture && m_PTDepth)
+			m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_PTDepth, region);
+
+		if (m_PTMVCopyTargetTexture && m_PTMotionVectors)
+			m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_PTMotionVectors, region);
 	}
 
 	m_CommandList->endTimerQuery(m_FrameTimer);

@@ -21,6 +21,40 @@
 #include "raytracing/include/StablePlanes.hlsli"
 #include "raytracing/include/Materials/BSDF.hlsli"
 
+// ============================================================================
+// Motion Vector computation (shared by all path tracer modes)
+// ============================================================================
+// Computes screen-space motion vector from a pair of world-space positions.
+// Returns float3(normalizedDisplacementXY, viewDepthDelta).
+// Output matches the game's MotionBlur::GetSSMotionVector format:
+//   float2(-0.5, 0.5) * (currNDC - prevNDC)  (normalized, NOT pixel space).
+// Uses Camera.ViewProj (current, unjittered) and Camera.PrevViewProj (previous, unjittered).
+
+float3 computeMotionVector(float3 posW, float3 prevPosW)
+{
+    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
+    clipPos.xyz /= clipPos.w;
+
+    float4 prevClipPos = mul(float4(prevPosW, 1.0), Camera.PrevViewProj);
+    prevClipPos.xyz /= prevClipPos.w;
+
+    float3 motion;
+    motion.xy = (prevClipPos.xy - clipPos.xy) * float2(0.5, -0.5);
+    motion.z = prevClipPos.w - clipPos.w;
+    return motion;
+}
+
+// ============================================================================
+// Clip-space depth computation (shared by all path tracer modes)
+// ============================================================================
+// Returns clip-space depth (clipPos.z / clipPos.w) for a world-space position.
+
+float computeClipDepth(float3 posW)
+{
+    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
+    return clipPos.z / clipPos.w;
+}
+
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
 
 // ============================================================================
@@ -89,27 +123,6 @@ struct StablePlaneExplorationPayload
         return p;
     }
 };
-
-// ============================================================================
-// Motion Vector computation
-// ============================================================================
-// Computes 2.5D screen-space motion vector from a pair of world-space positions.
-// Returns float3(pixelDisplacementXY, viewDepthDelta).
-// Uses Camera.ViewProj (current, unjittered) and Camera.PrevViewProj (previous, unjittered).
-
-float3 computeMotionVector(float3 posW, float3 prevPosW)
-{
-    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
-    clipPos.xyz /= clipPos.w;
-
-    float4 prevClipPos = mul(float4(prevPosW, 1.0), Camera.PrevViewProj);
-    prevClipPos.xyz /= prevClipPos.w;
-
-    float3 motion;
-    motion.xy = (prevClipPos.xy - clipPos.xy) * float2(0.5, -0.5) * Camera.RenderSize;
-    motion.z = prevClipPos.w - clipPos.w;
-    return motion;
-}
 
 // ============================================================================
 // imageXform computation helpers
@@ -239,9 +252,12 @@ void StablePlanesHandleMiss(
         /* packedCounters */ 0
     );
 
-    // Write dominant plane MV to global output
+    // Write dominant plane MV and Depth to global output
     if (isDominant)
+    {
         MotionVectors[pixelPos] = float4(skyMV, 0);
+        Depth[pixelPos] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
+    }
 
     // Accumulate sky radiance as stable (noise-free) radiance
     ctx.AccumulateStableRadiance(pixelPos, skyRadiance * throughput);
@@ -339,7 +355,10 @@ StablePlanesHitResult StablePlanesHandleHit(
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
+        {
             MotionVectors[pixelPos] = float4(computedMV, 0);
+            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+        }
         return result;
     }
 
@@ -389,7 +408,10 @@ StablePlanesHitResult StablePlanesHandleHit(
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
+        {
             MotionVectors[pixelPos] = float4(computedMV, 0);
+            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+        }
         return result;
     }
 
@@ -472,7 +494,10 @@ StablePlanesHitResult StablePlanesHandleHit(
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
+        {
             MotionVectors[pixelPos] = float4(computedMV, 0);
+            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+        }
     }
 
     return result;

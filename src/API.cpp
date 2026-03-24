@@ -96,3 +96,8 @@ void UpdateJitter(float2 jitter)
 {
 	Renderer::GetSingleton()->UpdateJitter(jitter);
 }
+
+void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget)
+{
+	Renderer::GetSingleton()->SetPTOutputTargets(depthTarget, mvTarget);
+}
