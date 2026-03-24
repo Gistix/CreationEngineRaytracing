@@ -23,6 +23,42 @@ namespace Events
 		}
 	};
 
+	class TESCellAttachDetachEventHandler : public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
+	{
+	public:
+		virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*);
+
+		static bool Register()
+		{
+			static TESCellAttachDetachEventHandler singleton;
+
+			auto scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
+			scriptEventSourceHolder->GetEventSource<RE::TESCellAttachDetachEvent>()->AddEventSink(&singleton);
+
+			logger::info("Events::Registered {}", typeid(singleton).name());
+
+			return true;
+		}
+	};
+	
+	class TESMoveAttachDetachEventHandler : public RE::BSTEventSink<RE::TESMoveAttachDetachEvent>
+	{
+	public:
+		virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESMoveAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESMoveAttachDetachEvent>*);
+
+		static bool Register()
+		{
+			static TESMoveAttachDetachEventHandler singleton;
+
+			auto scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
+			scriptEventSourceHolder->GetEventSource<RE::TESMoveAttachDetachEvent>()->AddEventSink(&singleton);
+
+			logger::info("Events::Registered {}", typeid(singleton).name());
+
+			return true;
+		}
+	};
+
 	class CellAttachDetachEventHandler : public RE::BSTEventSink<RE::CellAttachDetachEvent>
 	{
 	public:
