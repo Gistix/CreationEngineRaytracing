@@ -287,24 +287,18 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
             float3 sunDir = DIRECTIONAL_LIGHT.Vector;
 
             // Sun angular radius ~0.00465 radians. Check if delta direction is within the sun disk.
-            static const float cosSunDisk = cos(0.00465f);
+            float cosSunDisk = cos(0.00465f);
             float cosDelta = dot(deltaDir, sunDir);
 
             if (cosDelta >= cosSunDisk)
             {
-                // Delta direction is within the sun disk. The contribution is the delta throughput
-                // times the irradiance, normalized by the sun's solid angle (matching the cone sampling PDF).
-                // Since GetDirectionalLightIrradiance uses uniform cone sampling with PDF = 1/(2*pi*(1-cosSunDisk)),
-                // the irradiance is already set up so that EvalLight * irradiance integrates correctly.
-                // For the delta case, we need: deltaThroughput * irradiance / (sun's solid angle PDF) 
-                // However, since we're checking a specific delta direction against the cone, and the irradiance
-                // in GetDirectionalLightIrradiance is the raw sun intensity (not divided by solid angle),
-                // we use the raw irradiance directly - the delta function "picks out" the full intensity.
-                float3 contribution = deltaThroughput * irradiance * (isBounce ? Raytracing.Directional : 1.0f);
+                // irradiance = E_sun (total flux/area from the sun).
+                // Standard NEE uses this with cone sampling where PDF = 1/ω_sun, so E_sun = L_sun × ω_sun works out.
+                // But a delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
+                // Convert: L_sun = E_sun / ω_sun, where ω_sun = 2π(1-cosSunDisk).
+                float sunSolidAngle = 2.0f * PI * (1.0f - cosSunDisk);
+                float3 contribution = deltaThroughput * irradiance / sunSolidAngle * (isBounce ? Raytracing.Directional : 1.0f);
                 
-                // Trace shadow ray in delta direction to check occlusion
-                float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
-                bool isTransmission = deltaLobes[i].transmission;
                 contribution *= TraceRayShadow(Scene, surface, deltaDir, randomSeed);
                 
                 totalRadiance += contribution;
