@@ -177,14 +177,9 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         [branch]
         if (material.ShaderFlags & ShaderFlags::kEnvMap || material.ShaderFlags & ShaderFlags::kEyeReflect)
         {
-            Texture2D envTexture = Textures[NonUniformResourceIndex(material.EnvTexture())];
             Texture2D envMaskTexture = Textures[NonUniformResourceIndex(material.EnvMaskTexture())];
-
-            float3 envColor = ColorToLinear(envTexture.SampleLevel(DefaultSampler, texCoord0, 15).rgb);
             float envMask = envMaskTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
 
-            surface.Albedo = lerp(surface.Albedo, envColor, envMask);
-            surface.Metallic = envMask;
             surface.Roughness = max(lerp(surface.Roughness, 0.0f, envMask), 0.08f);
         }
 
