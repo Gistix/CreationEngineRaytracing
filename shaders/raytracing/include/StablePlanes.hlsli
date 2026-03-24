@@ -92,7 +92,7 @@ float4 Fp16ToFp32(uint2 d)
 
 float2 OctWrap(float2 v)
 {
-    return (1.0 - abs(v.yx)) * (v.xy >= 0.0 ? 1.0.xx : -1.0.xx);
+    return (1.0 - abs(v.yx)) * select(v.xy >= 0.0, 1.0.xx, -1.0.xx);
 }
 
 float2 OctEncode(float3 n)
@@ -108,7 +108,7 @@ float3 OctDecode(float2 f)
     f = f * 2.0 - 1.0;
     float3 n = float3(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
     float t = saturate(-n.z);
-    n.xy += (n.xy >= 0.0 ? -t.xx : t.xx);
+    n.xy += select(n.xy >= 0.0, -t.xx, t.xx);
     return normalize(n);
 }
 

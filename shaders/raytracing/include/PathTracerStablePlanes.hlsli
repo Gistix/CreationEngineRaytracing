@@ -21,6 +21,8 @@
 #include "raytracing/include/StablePlanes.hlsli"
 #include "raytracing/include/Materials/BSDF.hlsli"
 
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
+
 // ============================================================================
 // BUILD Pass Exploration Payload
 // ============================================================================
@@ -296,7 +298,7 @@ StablePlanesHitResult StablePlanesHandleHit(
             totalSceneLength, hitDistance,
             throughput, computedMV,
             surface.Roughness, surface.Normal,
-            surface.DiffuseAlbedo.xxx, float3(surface.F0, surface.F0, surface.F0),
+            surface.DiffuseAlbedo.xxx, surface.F0,
             isDominant, 0, 0
         );
         if (isDominant)
@@ -338,7 +340,7 @@ StablePlanesHitResult StablePlanesHandleHit(
     {
         // Compute BSDF estimates for the denoiser
         float3 diffBSDFEstimate = max(surface.DiffuseAlbedo, 0.04);
-        float3 specBSDFEstimate = max(float3(surface.F0, surface.F0, surface.F0), 0.04);
+        float3 specBSDFEstimate = max(surface.F0, 0.04);
 
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
@@ -413,7 +415,7 @@ StablePlanesHitResult StablePlanesHandleHit(
             totalSceneLength, hitDistance,
             throughput, computedMV,
             surface.Roughness, surface.Normal,
-            max(surface.DiffuseAlbedo, 0.04), max(float3(surface.F0, surface.F0, surface.F0), 0.04),
+            max(surface.DiffuseAlbedo, 0.04), max(surface.F0, 0.04),
             isDominant, 0, 0
         );
         if (isDominant)
@@ -422,6 +424,8 @@ StablePlanesHitResult StablePlanesHandleHit(
 
     return result;
 }
+
+#endif // PATH_TRACER_MODE_BUILD_STABLE_PLANES
 
 // ============================================================================
 // FILL Pass Helpers
