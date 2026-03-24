@@ -81,6 +81,27 @@ struct StablePlaneExplorationPayload
 };
 
 // ============================================================================
+// Motion Vector computation
+// ============================================================================
+// Computes 2.5D screen-space motion vector from a pair of world-space positions.
+// Returns float3(pixelDisplacementXY, viewDepthDelta).
+// Uses Camera.ViewProj (current, unjittered) and Camera.PrevViewProj (previous, unjittered).
+
+float3 computeMotionVector(float3 posW, float3 prevPosW)
+{
+    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
+    clipPos.xyz /= clipPos.w;
+
+    float4 prevClipPos = mul(float4(prevPosW, 1.0), Camera.PrevViewProj);
+    prevClipPos.xyz /= prevClipPos.w;
+
+    float3 motion;
+    motion.xy = (prevClipPos.xy - clipPos.xy) * float2(0.5, -0.5) * Camera.RenderSize;
+    motion.z = prevClipPos.w - clipPos.w;
+    return motion;
+}
+
+// ============================================================================
 // imageXform computation helpers
 // ============================================================================
 
@@ -169,8 +190,11 @@ void StablePlanesHandleMiss(
     const bool isDominant)
 {
     // Compute virtual motion vectors for sky hit:
-    // Use a very distant virtual position along the ray, transformed by imageXform
+    // Use a very distant virtual position along the ray
     float3 virtualWorldPos = rayOrigin + rayDir * kEnvironmentMapSceneDistance;
+    // Sky has no object motion, MV comes purely from camera movement
+    float3 skyMV = computeMotionVector(virtualWorldPos, virtualWorldPos);
+
     // For sky, normal doesn't matter much, use the ray direction
     float3 planeNormal = -rayDir;
 
@@ -179,7 +203,7 @@ void StablePlanesHandleMiss(
         rayOrigin, rayDir, stableBranchID,
         /* sceneLength */ 1.0 / 0.0,  // +inf for sky miss
         /* rayTCurrent */ kEnvironmentMapSceneDistance,
-        throughput, motionVectors,
+        throughput, skyMV,
         /* roughness */ 1.0,          // sky = fully rough for denoiser
         planeNormal,
         /* diffBSDFEstimate */ float3(1,1,1),
@@ -188,6 +212,10 @@ void StablePlanesHandleMiss(
         /* flagsAndVertexIndex */ 0,
         /* packedCounters */ 0
     );
+
+    // Write dominant plane MV to global output
+    if (isDominant)
+        MotionVectors[pixelPos] = float4(skyMV, 0);
 
     // Accumulate sky radiance as stable (noise-free) radiance
     ctx.AccumulateStableRadiance(pixelPos, skyRadiance * throughput);
@@ -246,6 +274,12 @@ StablePlanesHitResult StablePlanesHandleHit(
     result.nextImageXform    = imageXform;
     result.nextRoughnessAccum = roughnessAccum;
 
+    // Compute motion vector for this hit surface
+    // virtualWorldPos is the point along the camera ray at accumulated scene distance
+    float3 virtualWorldPos = rayOrigin + rayDir * totalSceneLength;
+    // No per-object motion currently, MV is purely from camera movement
+    float3 computedMV = computeMotionVector(virtualWorldPos, virtualWorldPos);
+
     // Accumulate emissive along the delta path (this is noise-free, deterministic)
     float3 emissive = surface.Emissive;
     if (any(emissive > 0))
@@ -260,11 +294,13 @@ StablePlanesHitResult StablePlanesHandleHit(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, motionVectors,
+            throughput, computedMV,
             surface.Roughness, surface.Normal,
             surface.DiffuseAlbedo.xxx, float3(surface.F0, surface.F0, surface.F0),
             isDominant, 0, 0
         );
+        if (isDominant)
+            MotionVectors[pixelPos] = float4(computedMV, 0);
         return result;
     }
 
@@ -308,11 +344,13 @@ StablePlanesHitResult StablePlanesHandleHit(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, motionVectors,
+            throughput, computedMV,
             surface.Roughness, surface.Normal,
             diffBSDFEstimate, specBSDFEstimate,
             isDominant, 0, 0
         );
+        if (isDominant)
+            MotionVectors[pixelPos] = float4(computedMV, 0);
         return result;
     }
 
@@ -373,11 +411,13 @@ StablePlanesHitResult StablePlanesHandleHit(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, motionVectors,
+            throughput, computedMV,
             surface.Roughness, surface.Normal,
             max(surface.DiffuseAlbedo, 0.04), max(float3(surface.F0, surface.F0, surface.F0), 0.04),
             isDominant, 0, 0
         );
+        if (isDominant)
+            MotionVectors[pixelPos] = float4(computedMV, 0);
     }
 
     return result;

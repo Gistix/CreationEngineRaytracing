@@ -123,6 +123,9 @@ public:
 	};
 	eastl::unique_ptr<StablePlanesResources> m_StablePlanes;
 
+	// PT Motion Vectors output (RGBA16_FLOAT, written by BUILD pass)
+	nvrhi::TextureHandle m_PTMotionVectors;
+
 	eastl::unique_ptr<RenderTargets> m_RenderTargets;
 
 	struct RendererSettings

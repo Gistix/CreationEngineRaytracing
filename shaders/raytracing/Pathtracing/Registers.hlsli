@@ -38,6 +38,9 @@ RWTexture2DArray<uint>                      StablePlanesHeaderUAV       : regist
 RWStructuredBuffer<StablePlane>             StablePlanesBufferUAV       : register(u6);
 RWTexture2D<float4>                         StableRadianceUAV           : register(u7);
 
+// PT Motion Vectors output (written by BUILD pass for dominant plane)
+RWTexture2D<float4>                         MotionVectors               : register(u8);
+
 RaytracingAccelerationStructure             Scene                       : register(t0);
 Texture2D<float4>                           SkyHemisphere               : register(t1);
 StructuredBuffer<Light>                     Lights                      : register(t2);

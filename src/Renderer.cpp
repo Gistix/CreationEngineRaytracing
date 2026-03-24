@@ -253,6 +253,19 @@ void Renderer::InitStablePlanes()
 	}
 
 	logger::info("Stable Planes resources created ({}x{}, {} planes)", width, height, stablePlaneCount);
+
+	// PT MotionVectors: RGBA16_FLOAT, written by BUILD pass for dominant plane MV output
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "PT MotionVectors";
+		m_PTMotionVectors = device->createTexture(desc);
+	}
 }
 
 void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)

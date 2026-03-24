@@ -61,7 +61,9 @@ namespace Pass
 			// Stable Planes UAVs
 			nvrhi::BindingLayoutItem::Texture_UAV(5),           // StablePlanesHeader (RWTexture2DArray<uint>)
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(6),  // StablePlanesBuffer (RWStructuredBuffer<StablePlane>)
-			nvrhi::BindingLayoutItem::Texture_UAV(7)            // StableRadiance (RWTexture2D<float4>)
+			nvrhi::BindingLayoutItem::Texture_UAV(7),           // StableRadiance (RWTexture2D<float4>)
+			// PT Motion Vectors output
+			nvrhi::BindingLayoutItem::Texture_UAV(8)            // MotionVectors (RWTexture2D<float4>)
 		};
 
 #if defined(NVAPI)
@@ -226,7 +228,9 @@ namespace Pass
 			// Stable Planes UAVs
 			nvrhi::BindingSetItem::Texture_UAV(5, sp->header),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(6, sp->buffer),
-			nvrhi::BindingSetItem::Texture_UAV(7, sp->stableRadiance)
+			nvrhi::BindingSetItem::Texture_UAV(7, sp->stableRadiance),
+			// PT Motion Vectors output
+			nvrhi::BindingSetItem::Texture_UAV(8, renderer->m_PTMotionVectors)
 		};
 
 		

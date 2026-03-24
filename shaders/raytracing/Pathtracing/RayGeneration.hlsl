@@ -191,7 +191,7 @@ void Main()
         uint buildVertexIndex = 1;          // camera=0, first hit=1
         uint buildBranchID = 1;             // sentinel bit
         float3 buildThp = float3(1,1,1);
-        float3 buildMVs = float3(0,0,0);   // TODO: compute motion vectors from previous frame
+        float3 buildMVs = float3(0,0,0);   // Initial placeholder; actual MV computed inside StablePlanesHandleHit/Miss
         float buildSceneLength = sourcePayload.hitDistance;
         float3x3 buildImageXform = float3x3(1,0,0, 0,1,0, 0,0,1);
         float buildRoughnessAccum = 0;
