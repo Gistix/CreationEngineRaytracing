@@ -344,10 +344,11 @@ void Scene::UpdateCameraData() const
 				std::clamp(shallowColor.green / 255.0f, 0.0f, 1.0f),
 				std::clamp(shallowColor.blue / 255.0f, 0.0f, 1.0f));
 			static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;
+			float absorptionScale = m_Settings.WaterSettings.AbsorptionScale;
 			m_CameraData->UnderwaterAbsorption = float3(
-				-std::log(std::max(waterColor.x, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH,
-				-std::log(std::max(waterColor.y, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH,
-				-std::log(std::max(waterColor.z, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH);
+				-std::log(std::max(waterColor.x, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH * absorptionScale,
+				-std::log(std::max(waterColor.y, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH * absorptionScale,
+				-std::log(std::max(waterColor.z, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH * absorptionScale);
 		}
 	}
 }

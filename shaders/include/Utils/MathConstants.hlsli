@@ -65,7 +65,9 @@
 #define HLF_EPSILON         9.765625e-04F           // smallest such that 1.0+HLF_EPSILON != 1.0
 #define HLF_HAS_SUBNORM     1                       // type does support subnormal numbers
 #define HLF_MANT_DIG        11
+#ifndef HLF_MAX
 #define HLF_MAX             6.5504e+4F              // max value
+#endif
 #define HLF_MAX_EXP         16                      // max binary exponent
 #define HLF_MIN             6.097555160522461e-05F  // min normalized positive value
 #define HLF_MIN_EXP         (-14)                   // min binary exponent

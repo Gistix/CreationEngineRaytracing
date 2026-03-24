@@ -435,6 +435,12 @@ void Main()
             direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);
         }
     }
+
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+    // Accumulate primary surface direct lighting into the stable plane's noisy radiance
+    if (any(direct > 0))
+        fillPathL += float4(direct, 0);
+#endif
     
     float3 direction;
     MonteCarlo::BRDFWeight brdfWeight;
@@ -658,7 +664,15 @@ void Main()
             float3 sharcRadiance;
             if (isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
             {
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
+                {
+                    float specAvg = isSpecular ? Color::RGBToLuminance(sharcRadiance * throughput) : 0;
+                    fillPathL += float4(sharcRadiance * throughput, specAvg);
+                }
+#else
                 sampleRadiance += sharcRadiance * throughput;
+#endif
                 break;
             }
 #   endif // !SHARC_UPDATE

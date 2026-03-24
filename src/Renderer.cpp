@@ -216,6 +216,7 @@ void Renderer::InitStablePlanes()
 	// Slices 0-2: BranchIDs per plane, Slice 3: firstHitRayLength | dominantIndex
 	{
 		nvrhi::TextureDesc desc;
+		desc.dimension = nvrhi::TextureDimension::Texture2DArray;
 		desc.width = width;
 		desc.height = height;
 		desc.arraySize = 4;
