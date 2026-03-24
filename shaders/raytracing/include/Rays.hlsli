@@ -131,6 +131,7 @@ float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, fl
                 rayQuery.CandidateTriangleBarycentrics(),
                 randomSeed,
                 direction,
+                rayQuery.CandidateTriangleRayT(),
                 shadowPayload.transmission))
             {
                 rayQuery.CommitNonOpaqueTriangleHit();
@@ -179,6 +180,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
                 rayQuery.CandidateTriangleBarycentrics(),
                 randomSeed,
                 direction,
+                rayQuery.CandidateTriangleRayT(),
                 shadowPayload.transmission))
             {
                 rayQuery.CommitNonOpaqueTriangleHit();

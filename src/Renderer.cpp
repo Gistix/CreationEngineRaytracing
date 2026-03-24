@@ -347,6 +347,16 @@ void Renderer::PostExecution()
 	// Run garbage collection to release resources that are no longer in use
 	GetDevice()->runGarbageCollection();
 
+	// Flush pending BLAS compactions before destroying any models,
+	// otherwise stale IDs in asBuildsCompleted can reference freed entries in RTXMU
+	{
+		auto computeCommandList = GetComputeCommandList();
+		computeCommandList->open();
+		computeCommandList->compactBottomLevelAccelStructs();
+		computeCommandList->close();
+		GetDevice()->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
+	}
+
 	auto* scene = Scene::GetSingleton();
 
 	scene->GetSceneGraph()->RunGarbageCollection(m_FrameIndex);

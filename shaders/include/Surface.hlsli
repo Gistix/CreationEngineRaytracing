@@ -34,6 +34,7 @@ struct Surface
     float3 F0;
     float IOR;
     float3 TransmissionColor;
+    float3 VolumeAbsorption;
     Subsurface SubsurfaceData;
     float DiffTrans;
     float SpecTrans;

@@ -402,7 +402,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.Albedo = float3(1.0f, 1.0f, 1.0f);
     surface.Roughness = 0.0f;
     surface.Metallic = 0.0f;
-    surface.F0 = 0.05f;
+    surface.F0 = 0.02f;
     surface.IOR = 1.33f;
  
     Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
@@ -437,8 +437,13 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
     surface.Bitangent = cross(surface.Normal, surface.Tangent) * handedness;
     
-    surface.TransmissionColor = material.Color0.rgb;  
-    surface.SpecTrans = 1.0f;    
+    // Distance-based absorption via Beer-Lambert law instead of flat surface tint.
+    // The absorption coefficient is derived from the game's water color at a reference depth.
+    static const float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0;
+    float3 waterColor = saturate(material.Color0.rgb);
+    surface.VolumeAbsorption = -log(max(waterColor, 1e-4)) / WATER_ABSORPTION_REFERENCE_DEPTH;
+    surface.TransmissionColor = float3(1.0f, 1.0f, 1.0f);
+    surface.SpecTrans = 1.0f;
 }
 
 float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, float mipLevel)

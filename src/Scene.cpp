@@ -327,6 +327,29 @@ void Scene::UpdateCameraData() const
 	m_CameraData->PrevViewProj = cameraData.previousViewProjMatrixUnjittered;
 
 	m_CameraData->Jitter = renderer->GetJitter();
+
+	auto cameraWorldPos = runtimeData.posAdjust.getEye();
+	auto* tes = RE::TES::GetSingleton();
+	auto* cell = tes ? tes->GetCell(cameraWorldPos) : nullptr;
+	m_CameraData->IsUnderwater = (cell && cameraWorldPos.z < tes->GetWaterHeight(cameraWorldPos, cell)) ? 1 : 0;
+
+	// Compute underwater absorption from the current water type
+	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
+	if (m_CameraData->IsUnderwater) {
+		auto* waterSystem = RE::TESWaterSystem::GetSingleton();
+		if (waterSystem && waterSystem->currentWaterType) {
+			auto& shallowColor = waterSystem->currentWaterType->data.shallowWaterColor;
+			float3 waterColor = float3(
+				std::clamp(shallowColor.red / 255.0f, 0.0f, 1.0f),
+				std::clamp(shallowColor.green / 255.0f, 0.0f, 1.0f),
+				std::clamp(shallowColor.blue / 255.0f, 0.0f, 1.0f));
+			static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;
+			m_CameraData->UnderwaterAbsorption = float3(
+				-std::log(std::max(waterColor.x, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH,
+				-std::log(std::max(waterColor.y, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH,
+				-std::log(std::max(waterColor.z, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH);
+		}
+	}
 }
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)
