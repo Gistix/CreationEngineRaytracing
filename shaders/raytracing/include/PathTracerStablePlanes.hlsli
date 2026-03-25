@@ -29,13 +29,16 @@
 // Output matches the game's MotionBlur::GetSSMotionVector format:
 //   float2(-0.5, 0.5) * (currNDC - prevNDC)  (normalized, NOT pixel space).
 // Uses Camera.ViewProj (current, unjittered) and Camera.PrevViewProj (previous, unjittered).
+//
+// IMPORTANT: Camera.ViewProj / PrevViewProj expect camera-relative positions
+// (world position minus CameraPosAdjust), matching the game's raster pipeline.
 
 float3 computeMotionVector(float3 posW, float3 prevPosW)
 {
-    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
+    float4 clipPos = mul(float4(posW - Camera.Position, 1.0), Camera.ViewProj);
     clipPos.xyz /= clipPos.w;
 
-    float4 prevClipPos = mul(float4(prevPosW, 1.0), Camera.PrevViewProj);
+    float4 prevClipPos = mul(float4(prevPosW - Camera.PositionPrev, 1.0), Camera.PrevViewProj);
     prevClipPos.xyz /= prevClipPos.w;
 
     float3 motion;
@@ -51,7 +54,7 @@ float3 computeMotionVector(float3 posW, float3 prevPosW)
 
 float computeClipDepth(float3 posW)
 {
-    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
+    float4 clipPos = mul(float4(posW - Camera.Position, 1.0), Camera.ViewProj);
     return clipPos.z / clipPos.w;
 }
 
