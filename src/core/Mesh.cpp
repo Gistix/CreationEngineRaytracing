@@ -317,6 +317,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 	RE::BSShader::Type shaderType = RE::BSShader::Type::None;
 	REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	REX::EnumSet<RE::BSWaterShaderProperty::WaterFlag, std::uint32_t> waterShaderFlags;
 	RE::BSShaderMaterial::Feature feature = RE::BSShaderMaterial::Feature::kNone;
 	stl::enumeration<PBRShaderFlags, uint32_t> pbrFlags;
 
@@ -550,6 +551,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 			if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(effect)) {
 				shaderType = RE::BSShader::Type::Water;
+				waterShaderFlags = waterShaderProp->waterFlags;
 
 				if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material)) {
 					colors[0] = {
@@ -660,6 +662,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 	material = Material(
 		shaderFlags,
+		waterShaderFlags,
 		shaderType,
 		feature,
 		pbrFlags,
