@@ -86,6 +86,7 @@ struct SurfaceMaker
         surface.Albedo = float3(1.0f, 1.0f, 1.0f);
         surface.Emissive = float3(0.0f, 0.0f, 0.0f);
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         surface.Roughness = PBR::Defaults::Roughness;
         surface.Metallic = PBR::Defaults::Metallic;
         
@@ -107,6 +108,10 @@ struct SurfaceMaker
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
             
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
+        }
+        else if (material.ShaderType == ShaderType::Water)
+        {
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);
         }
         else
         {
@@ -153,6 +158,7 @@ struct SurfaceMaker
         surface.Albedo = float3(1.0f, 1.0f, 1.0f);
         surface.Emissive = float3(0.0f, 0.0f, 0.0f);
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         surface.Roughness = PBR::Defaults::Roughness;
         surface.Metallic = PBR::Defaults::Metallic;
         
@@ -218,6 +224,7 @@ struct SurfaceMaker
         surface.Albedo = albedo;
 #   endif
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         surface.Emissive = emissive * Raytracing.Emissive;
         
         surface.Roughness = PBR::Roughness(roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);

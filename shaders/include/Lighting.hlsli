@@ -257,6 +257,97 @@ float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext b
     return direct;
 }
 
+// Evaluate analytical lights for delta lobes specifically.
+// For delta (perfect mirror/glass) surfaces, the standard bsdf.Eval() returns 0 for any light direction.
+// Instead, we use EvalDeltaLobes to get the exact reflection/refraction directions and check whether
+// each delta direction falls within a light source's solid angle. If so, we contribute the delta lobe's
+// throughput multiplied by the light irradiance. This correctly handles sun glints, point light
+// reflections in mirrors, etc.
+float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance,
+                              in StandardBSDF bsdf, inout uint randomSeed, bool isBounce)
+{
+    DeltaLobe deltaLobes[cMaxDeltaLobes];
+    int deltaLobeCount;
+    float nonDeltaPart;
+    bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
+
+    float3 totalRadiance = 0.0f;
+
+    for (int i = 0; i < deltaLobeCount; i++)
+    {
+        if (deltaLobes[i].probability <= 0.0f)
+            continue;
+
+        float3 deltaDir = deltaLobes[i].dir;
+        float3 deltaThroughput = deltaLobes[i].thp;
+
+        // --- Directional Light (Sun) ---
+        {
+            float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Vector, Features.CloudShadows.Opacity);
+            float3 sunDir = DIRECTIONAL_LIGHT.Vector;
+
+            // Sun angular radius ~0.00465 radians. Check if delta direction is within the sun disk.
+            float cosSunDisk = cos(0.00465f);
+            float cosDelta = dot(deltaDir, sunDir);
+
+            if (cosDelta >= cosSunDisk)
+            {
+                // irradiance = E_sun (total flux/area from the sun).
+                // Standard NEE uses this with cone sampling where PDF = 1/ω_sun, so E_sun = L_sun × ω_sun works out.
+                // But a delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
+                // Convert: L_sun = E_sun / ω_sun, where ω_sun = 2π(1-cosSunDisk).
+                float sunSolidAngle = 2.0f * K_PI * (1.0f - cosSunDisk);
+                float3 contribution = deltaThroughput * irradiance / sunSolidAngle * (isBounce ? Raytracing.Directional : 1.0f);
+                
+                contribution *= TraceRayShadow(Scene, surface, deltaDir, randomSeed);
+                
+                totalRadiance += contribution;
+            }
+        }
+
+        // --- Point Lights ---
+        if (instance.LightData.Count > 0)
+        {
+            // Evaluate delta lobe against each visible point light (using the same RIS selection as standard NEE)
+            float3 lightIrradiance;
+            float3 lr;
+            float dist;
+            int lightIndex = GetPointLightIrradiance(instance.LightData, surface, lightIrradiance, lr, dist, randomSeed);
+            
+            if (lightIndex >= 0)
+            {
+                // Compute the angular size of this light as seen from the surface
+                Light light = Lights[lightIndex];
+                float lightSourceAngle = 0.005f;
+                float distM = dist * GAME_UNIT_TO_M;
+                GetAttenuation(light, distM, lightSourceAngle);
+                
+                // Check if delta direction is within the light's angular extent
+                float3 dirToLight = normalize(light.Vector - surface.Position);
+                float cosAngle = cos(lightSourceAngle);
+                float cosDelta = dot(deltaDir, dirToLight);
+                
+                if (cosDelta >= cosAngle)
+                {
+                    float3 contribution = deltaThroughput * lightIrradiance * (isBounce ? Raytracing.Point : 1.0f);
+                    
+                    // Shadow ray toward the light
+#if USE_LIGHT_TLAS    
+#   define DELTA_LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
+#else
+#   define DELTA_LIGHT_TLAS Scene     
+#endif
+                    contribution *= TraceRayShadowFinite(DELTA_LIGHT_TLAS, surface, deltaDir, dist, randomSeed);
+                    
+                    totalRadiance += contribution;
+                }
+            }
+        }
+    }
+
+    return totalRadiance;
+}
+
 float3 EvaluateDirectRadiance(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isBounce)
 {
     float3 radiance = EvalDirectionalLight(material, surface, brdfContext, bsdf, randomSeed) * (isBounce ? Raytracing.Directional : 1.0f);

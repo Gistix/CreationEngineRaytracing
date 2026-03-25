@@ -84,10 +84,12 @@ struct Material
 		kTwoSided = 1 << 16,
 		kAssumeShadowmask = 1 << 17,
 		kBackLighting = 1 << 18,
-		kTreeAnim = 1 << 19
+		kTreeAnim = 1 << 19,
+		kSoftLighting = 1 << 20
 	};
 
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	REX::EnumSet<RE::BSWaterShaderProperty::WaterFlag, std::uint32_t> waterShaderFlags;
 	RE::BSShader::Type shaderType;
 	RE::BSShaderMaterial::Feature Feature;
 	stl::enumeration<PBRShaderFlags, uint16_t> PBRFlags;
@@ -99,12 +101,17 @@ struct Material
 	eastl::array<half4, 3> Colors;
 	eastl::array<half, 3> Scalars;
 
+	eastl::array<half4, 4> Vectors;
+
 	eastl::array<half4, 2> TexCoordOffsetScale;
 
 	eastl::array<Texture, 20> Textures;
 
-	ShaderFlags GetShaderFlags() const
+	uint32_t GetShaderFlags() const
 	{
+		if (GetShaderType() == ShaderType::Water)
+			return waterShaderFlags.underlying();
+
 		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 
 		auto shaderFlagsLocal = ShaderFlags::None;
@@ -189,7 +196,11 @@ struct Material
 			shaderFlagsLocal |= ShaderFlags::kTreeAnim;
 		}
 
-		return shaderFlagsLocal;
+		if (shaderFlags.any(EShaderPropertyFlag::kSoftLighting)) {
+			shaderFlagsLocal |= ShaderFlags::kSoftLighting;
+		}
+
+		return static_cast<uint32_t>(shaderFlagsLocal);
 	}
 
 	uint16_t GetTextureDescriptorIndex(uint32_t index) const
@@ -204,54 +215,7 @@ struct Material
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
 
-	MaterialData GetData(float3 externalEmittance) const
-	{
-		half4 emissive = Colors[1];
-
-		if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kExternalEmittance)) {
-			if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kOwnEmit)) {
-				emissive.x *= externalEmittance.x;
-				emissive.y *= externalEmittance.y;
-				emissive.z *= externalEmittance.z;
-			}
-			else {
-				emissive.x = externalEmittance.x;
-				emissive.y = externalEmittance.y;
-				emissive.z = externalEmittance.z;
-			}
-		}
-
-		return MaterialData(
-			TexCoordOffsetScale[0], TexCoordOffsetScale[1],
-			Colors[0], emissive, Colors[2],
-			alphaThreshold,
-			Scalars[0], Scalars[1], Scalars[2],
-			GetTextureDescriptorIndex(0),
-			GetTextureDescriptorIndex(1),
-			GetTextureDescriptorIndex(2),
-			GetTextureDescriptorIndex(3),
-			GetTextureDescriptorIndex(4),
-			GetTextureDescriptorIndex(5),
-			GetTextureDescriptorIndex(6),
-			GetTextureDescriptorIndex(7),
-			GetTextureDescriptorIndex(8),
-			GetTextureDescriptorIndex(9),
-			GetTextureDescriptorIndex(10),
-			GetTextureDescriptorIndex(11),
-			GetTextureDescriptorIndex(12),
-			GetTextureDescriptorIndex(13),
-			GetTextureDescriptorIndex(14),
-			GetTextureDescriptorIndex(15),
-			GetTextureDescriptorIndex(16),
-			GetTextureDescriptorIndex(17),
-			GetTextureDescriptorIndex(18),
-			GetTextureDescriptorIndex(19),
-			static_cast<uint16_t>(alphaFlags),
-			GetShaderType(),
-			static_cast<uint16_t>(Feature),
-			PBRFlags.underlying(),
-			static_cast<uint32_t>(GetShaderFlags()));
-	}
+	MaterialData GetData(const float3 externalEmittance, const float4* waterTexScroll) const;
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);

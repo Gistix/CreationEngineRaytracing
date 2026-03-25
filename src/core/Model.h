@@ -42,22 +42,6 @@ struct Model
 		return false;
 	}
 
-	/*D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS BuildFlags() const
-	{
-		if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
-			return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
-
-		return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-	}
-
-	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS UpdateFlags(bool rebuild) const
-	{
-		if (rebuild)
-			return BuildFlags();
-
-		return D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
-	}*/
-
 	void Update();
 
 	void SetData(MeshData* meshData, uint32_t& index);
@@ -120,4 +104,7 @@ private:
 
 	// XEMI - This is used to control window emission in day/night tod
 	float3* m_EmittanceColor = nullptr;
+
+	bool m_HasWaterTexScroll = false;
+	const float4* m_WaterTexScroll[3];
 };

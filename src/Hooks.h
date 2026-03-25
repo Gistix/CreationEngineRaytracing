@@ -34,6 +34,18 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct TESWaterSystem_AddWater
+	{
+		static void thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct TESWaterSystem_RemoveWater
+	{
+		static void thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct NiSourceTexture_Destructor
 	{
 		static void thunk(RE::NiSourceTexture* oThis);
@@ -70,10 +82,28 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BSDismemberSkinInstance_UpdateDismemberPartion
+	{
+		static void thunk(RE::BSDismemberSkinInstance* oThis, std::uint16_t a_slot, bool a_enable);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 #if defined(SKYRIM)
 	struct CreateTextureFromDDS
 	{
 		static RE::NiSourceTexture* thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct CreateFlowMapSE
+	{
+		static void* thunk(void* a1, int a2, int a3, void* a4);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct CreateFlowMapAE
+	{
+		static void* thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

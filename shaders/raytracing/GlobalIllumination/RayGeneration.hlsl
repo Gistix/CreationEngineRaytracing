@@ -139,7 +139,8 @@ void Main()
     
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
 
-    uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
+    uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);
+    InitSobolSampler(idx, size, Camera.FrameIndex);
     
     bool isSssPath = false;
 
@@ -184,6 +185,10 @@ void Main()
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
         float materialRoughnessPrev = 0.0f;
         bool isEnter = true;
+
+        // Water volume tracking for Beer-Lambert absorption
+        bool insideWaterVolume = false;
+        float3 waterVolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
         
 #if defined(RAW_RADIANCE)
         float3 throughputDelta = float3(1.0f, 1.0f, 1.0f);
@@ -192,6 +197,7 @@ void Main()
         [loop]
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
+            SobolNextBounce();
             BSDFSample bsdfSample;
             
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
@@ -207,7 +213,8 @@ void Main()
             const bool hasTransmission = false;
 #else            
             bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed);
-            isSpecular = bsdfSample.isLobe(LobeType::Specular);
+            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
+            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
             if (isValid)
@@ -217,18 +224,19 @@ void Main()
 
             throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
 
-            // Update isEnter state when transmission occurs
-            if (hasTransmission) {
-                isEnter = !isEnter;
-            } else {
-                isEnter = dot(direction, faceNormalOriented) >= 0.0f;
+            // Track water volume entry/exit on transmission
+            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
+            {
+                // isEnter (front face) + transmission = entering volume
+                insideWaterVolume = isEnter;
+                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
 #   if defined(RAW_RADIANCE)
             brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
 #   endif
-            brdfWeight.specular = bsdfSample.isLobe(LobeType::SpecularReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+            brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             
 #   if defined(RAW_RADIANCE)
@@ -292,6 +300,12 @@ void Main()
             payload = TraceRayStandard(Scene, ray, randomSeed);
             
             rayCone = rayCone.propagateDistance(payload.hitDistance);
+
+            // Apply Beer-Lambert volume absorption for water
+            if (insideWaterVolume)
+            {
+                throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
+            }
             
             if (isSpecular)
                 specHitDist += payload.hitDistance;
@@ -344,26 +358,41 @@ void Main()
 #endif // SHARC  
             
             brdfContext = BRDFContext::make(surface, -direction);
-            if (dot(surface.FaceNormal, brdfContext.ViewDirection) < 0.0f) surface.FlipNormal();
+            isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+            if (!isEnter) surface.FlipNormal();
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
             bsdf = StandardBSDF::make(surface, isEnter);
 
+            // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
+            const uint bounceLobes = bsdf.GetLobes(surface);
+            const bool bounceHasNonDeltaLobes = (bounceLobes & (uint)LobeType::NonDelta) != 0;
+            const bool bounceHasDeltaLobes = (bounceLobes & (uint)LobeType::Delta) != 0;
+            
+            if (bounceHasNonDeltaLobes)
+            {
 #ifdef SUBSURFACE_SCATTERING
-            if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
-                isSssPath = true;
-                // Specular uses the standard path with diffuse suppressed
-                Surface specSurface = surface;
-                specSurface.DiffuseAlbedo = 0;
-                StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
-            }
-            else
+                if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
+                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
+                    isSssPath = true;
+                    // Specular uses the standard path with diffuse suppressed
+                    Surface specSurface = surface;
+                    specSurface.DiffuseAlbedo = 0;
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
+                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
+                }
+                else
 #endif
-            { 
-                directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                { 
+                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                }
+            }
+            
+            // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
+            if (bounceHasDeltaLobes)
+            {
+                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
             }
             
             sampleRadiance += directRadiance * throughput;

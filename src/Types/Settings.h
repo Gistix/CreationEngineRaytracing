@@ -101,9 +101,16 @@ struct AdvancedSettings
 	SSSSettings SSSSettings;
 };
 
+struct WaterSettings
+{
+	float AbsorptionScale = 1.0f;
+};
+
 struct DebugSettings
 {
 	bool PathTracingCull = false;
+	bool EnableWater = false;
+	bool StablePlanes = true;
 };
 
 struct Settings
@@ -115,5 +122,6 @@ struct Settings
 	MaterialSettings MaterialSettings;
 	SHaRCSettings SHaRCSettings;
 	AdvancedSettings AdvancedSettings;
+	WaterSettings WaterSettings;
 	DebugSettings DebugSettings;
 };
