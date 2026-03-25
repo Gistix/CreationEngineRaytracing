@@ -48,7 +48,7 @@ namespace Feature
 	static const uint16_t kGlowMap = 2;
 	static const uint16_t kParallax = 3;
 	static const uint16_t kFaceGen = 4;
-	static const uint16_t kFaceGenRGBTint = 5;
+	static const uint16_t kSkinTint = 5;
 	static const uint16_t kHairTint = 6;
 	static const uint16_t kParallaxOcc = 7;
 	static const uint16_t kMultiTexLand = 8;
