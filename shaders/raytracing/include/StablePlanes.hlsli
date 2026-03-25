@@ -484,9 +484,9 @@ struct StablePlanesContext
 #endif // FILL
 
     // --- Get all radiance (stable + noisy from all planes) ---
-    // Stable radiance is pre-weighted by throughput during BUILD.
-    // Noisy radiance must be weighted by each plane's stored throughput
-    // (which includes delta lobe weights and water absorption along the path).
+    // Noisy radiance is stored with full path throughput already baked in
+    // (FILL starts with throughput = plane's stored thp), so no per-plane
+    // thp multiplication needed here — matching RTXPT's GetAllRadiance.
     float3 GetAllRadiance(uint2 pixelPos, bool includeNoisy)
     {
         float3 pathL = LoadStableRadiance(pixelPos);
@@ -496,10 +496,7 @@ struct StablePlanesContext
             {
                 if (GetBranchID(pixelPos, i) == cStablePlaneInvalidBranchID)
                     continue;
-                StablePlane sp = StablePlanesUAV[PixelToAddress(pixelPos, i)];
-                float3 thp, dummy;
-                UnpackTwoFp32ToFp16(sp.PackedThpAndMVs, thp, dummy);
-                pathL += sp.GetNoisyRadiance() * thp;
+                pathL += StablePlanesUAV[PixelToAddress(pixelPos, i)].GetNoisyRadiance();
             }
         }
         return pathL;
