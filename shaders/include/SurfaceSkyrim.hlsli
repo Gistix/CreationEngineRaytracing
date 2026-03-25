@@ -200,34 +200,42 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.Emissive = surface.Albedo * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         }
 
-        [branch]
-        if (material.Feature == Feature::kFaceGen)
-        {          
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+        const bool faceGen = material.Feature == Feature::kFaceGen;
+        const bool skinTint = material.Feature == Feature::kFaceGenRGBTint;
+        
+         [branch]
+        if (faceGen || skinTint)
+        {
+            float3 rawTintColor;
             
-            Texture2D detailTexture = Textures[NonUniformResourceIndex(material.DetailTexture())];
-            float3 detailColor = detailTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
-            detailColor = float3(3.984375, 3.984375, 3.984375) * (float3(0.00392156886, 0, 0.00392156886) + detailColor);
+            [branch]
+            if (faceGen)
+            {          
+                float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            
+                Texture2D detailTexture = Textures[NonUniformResourceIndex(material.DetailTexture())];
+                float3 detailColor = detailTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
+                detailColor = float3(3.984375, 3.984375, 3.984375) * (float3(0.00392156886, 0, 0.00392156886) + detailColor);
                
-            Texture2D tintTexture = Textures[NonUniformResourceIndex(material.TintTexture())];
-            float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
-            tintColor = tintColor * gammaAlbedo * 2.0f;
-            tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor);
+                Texture2D tintTexture = Textures[NonUniformResourceIndex(material.TintTexture())];
+                float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * 2.0f;
+                rawTintColor = tintColor;
+                tintColor = tintColor * gammaAlbedo;
+                tintColor = tintColor - tintColor * gammaAlbedo;
+                surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor) * 2.0f;
                 
-        }
-        else if (material.Feature == Feature::kFaceGenRGBTint)
-        {
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            }
+            else if (skinTint)
+            {
+                float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
             
-            float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;
-            tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor));
-        }
+                float3 tintColor = material.BaseColor().rgb * 2.0f;               
+                rawTintColor = tintColor;
+                tintColor = tintColor * gammaAlbedo;               
+                tintColor = tintColor - tintColor * gammaAlbedo;
+                surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor)) * 2.0f;
+            }
 
-        [branch]
-        if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kFaceGenRGBTint)
-        {
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
             surface.SubsurfaceData.HasSubsurface = 1;
@@ -235,8 +243,19 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
             // Typical skin values
             surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
-            surface.SubsurfaceData.TransmissionColor = surface.Albedo;
-            surface.SubsurfaceData.Scale = 1.f;
+            
+            float3 sssColor;           
+            if (material.ShaderFlags & ShaderFlags::kSoftLighting)
+            {
+                Texture2D sssTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];               
+                sssColor = sssTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
+                sssColor *= rawTintColor;
+            }
+            else
+                sssColor = surface.Albedo;
+            
+            surface.SubsurfaceData.TransmissionColor = sssColor;
+            surface.SubsurfaceData.Scale = 15.f;
         }
 
         [branch]
@@ -251,7 +270,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             // Typical eye values
             surface.SubsurfaceData.ScatteringColor = float3(1.0f, 0.8f, 0.6f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
-            surface.SubsurfaceData.Scale = 1.f;
+            surface.SubsurfaceData.Scale = 15.f;
         }
 
         [branch]

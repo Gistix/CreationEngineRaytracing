@@ -458,6 +458,11 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								scalars[0] = Util::Material::ShininessToRoughness(lightingBaseMaterial->specularPower);
 							}
 
+							// SSS color
+							if (lightingShaderProp->flags.all(EShaderPropertyFlag::kSoftLighting)) {								
+								textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
+							}
+
 							// Envmap
 							if (feature == Feature::kEnvironmentMap || feature == Feature::kEye) {
 								if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial)) {
@@ -490,6 +495,8 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								}
 							}
 
+							//							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
+
 							// FaceGen
 							if (feature == Feature::kFaceGen) {
 								if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {
@@ -509,7 +516,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								}
 							}
 
-							// FaceGen RGB Tint
+							// Skin Tint
 							if (feature == Feature::kFaceGenRGBTint) {
 								if (const auto* lightingFacegenTintMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegenTint*>(shaderMaterial)) {
 									colors[0].x = lightingFacegenTintMaterial->tintColor.red;
