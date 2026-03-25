@@ -84,7 +84,8 @@ struct Material
 		kTwoSided = 1 << 16,
 		kAssumeShadowmask = 1 << 17,
 		kBackLighting = 1 << 18,
-		kTreeAnim = 1 << 19
+		kTreeAnim = 1 << 19,
+		kSoftLighting = 1 << 20
 	};
 
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
@@ -189,6 +190,10 @@ struct Material
 
 		if (shaderFlags.any(EShaderPropertyFlag::kTreeAnim)) {
 			shaderFlagsLocal |= ShaderFlags::kTreeAnim;
+		}
+
+		if (shaderFlags.any(EShaderPropertyFlag::kSoftLighting)) {
+			shaderFlagsLocal |= ShaderFlags::kSoftLighting;
 		}
 
 		return shaderFlagsLocal;
