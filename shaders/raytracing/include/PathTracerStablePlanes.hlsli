@@ -412,16 +412,23 @@ StablePlanesHitResult StablePlanesHandleHit(
     }
 
     // Pure delta surface: evaluate delta lobe lighting (sun/point light reflections)
-    // This is deterministic and noise-free; FILL pass won't visit this surface.
+    // This is deterministic and noise-free, captured in stable radiance.
+    // FILL pass skips delta lighting for pure delta primary surfaces to avoid double-counting.
     {
         float3 deltaLighting = EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, vertexIndex > 1);
         if (any(deltaLighting > 0))
             ctx.AccumulateStableRadiance(pixelPos, deltaLighting * throughput);
     }
 
-    // Fork paths for each active lobe
-    // The first active lobe continues on the current path (reuse the current planeIndex)
-    // Additional lobes get forked to empty planes
+    // Fork paths for each active lobe.
+    // On plane 0 with 2+ delta lobes (e.g. water: transmission + reflection),
+    // we store the delta surface itself as plane 0's base and fork ALL lobes
+    // to child planes. The FILL pass will start from the delta surface and
+    // randomly select a branch via BSDF sampling, naturally filling all children.
+    // On plane 0 with exactly 1 delta lobe (PSR: e.g. pure mirror), we continue
+    // that lobe on the current path as primary surface replacement.
+    // On other planes, we always continue the first lobe.
+    bool canReuseCurrent = (planeIndex != 0) || (activeDeltaLobes == 1);
 
     // Find empty planes for forking
     int availableCount = 0;
@@ -435,7 +442,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         if (!any(deltaLobes[lobeIdx].thp > 0))
             continue;
 
-        if (lobeIdx == firstActiveLobe)
+        if (canReuseCurrent && lobeIdx == firstActiveLobe)
         {
             // First active lobe: continue on current path
             result.continueTracing      = true;
@@ -456,7 +463,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
         else
         {
-            // Additional lobes: fork to empty plane if available
+            // Fork to empty plane
             if (forkedCount < availableCount)
             {
                 int targetPlane = availablePlanes[forkedCount];
@@ -473,13 +480,15 @@ StablePlanesHitResult StablePlanesHandleHit(
                 forkPayload.Pack(packed);
                 ctx.StoreExplorationStart(pixelPos, targetPlane, packed);
             }
-            // else: no more free planes, discard this lobe
         }
     }
 
-    // If no lobe continued (shouldn't happen, but safety), store as base surface
+    // If path did not continue (plane 0 multi-fork, or no lobes), store as base
     if (!result.continueTracing)
     {
+        // When multi-forking on plane 0 (canReuseCurrent=false), the delta surface
+        // should NOT be dominant — the first child plane will become dominant instead.
+        bool storeAsDominant = isDominant && canReuseCurrent;
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
@@ -487,9 +496,9 @@ StablePlanesHitResult StablePlanesHandleHit(
             throughput, computedMV,
             surface.Roughness, surface.Normal,
             max(surface.DiffuseAlbedo, 0.04), max(surface.F0, 0.04),
-            isDominant, waterFlags, waterCounters
+            storeAsDominant, waterFlags, waterCounters
         );
-        if (isDominant)
+        if (storeAsDominant)
         {
             MotionVectors[pixelPos] = float4(computedMV, 0);
             Depth[pixelPos] = computeClipDepth(virtualWorldPos);

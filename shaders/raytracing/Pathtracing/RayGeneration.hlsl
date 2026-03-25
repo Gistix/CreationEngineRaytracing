@@ -239,6 +239,9 @@ void Main()
             sourceInstance, randomSeed,
             buildInsideWater, buildWaterAbsorption);
 
+        // When plane 0 stored a delta base (multi-fork), dominant status transfers to first child
+        bool childNeedsDominant = buildIsDominant && !hitResult.continueTracing;
+
         // If delta-only surface, continue tracing the primary lobe
         while (hitResult.continueTracing)
         {
@@ -293,7 +296,8 @@ void Main()
             StablePlaneExplorationPayload ep = StablePlaneExplorationPayload::Unpack(expPacked);
 
             buildPlaneIndex = nextExplorePlane;
-            buildIsDominant = false;
+            buildIsDominant = childNeedsDominant;
+            childNeedsDominant = false; // only the first child becomes dominant
 
             float expSceneLength = ep.sceneLength;
 
@@ -398,6 +402,7 @@ void Main()
     float4 fillPathL = float4(0,0,0,0);
     bool fillInsideWater = false;
     float3 fillWaterAbsorption = float3(0.0f, 0.0f, 0.0f);
+    float3 fillPlaneThp = float3(1.0f, 1.0f, 1.0f); // plane's stored throughput, used as initial bounce throughput
     {
         float3 fillRayOrigin, fillRayDir, fillThp;
         float fillSceneLength;
@@ -437,15 +442,32 @@ void Main()
         if (!sourceIsEnter) sourceSurface.FlipNormal();
         AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);
         sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);
+        fillPlaneThp = fillThp;
     }
 
-    // Update GBuffer with the stable plane's base surface data (used by DLSS-RR)
-    DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+    // Update GBuffer with the stable plane's base surface data (used by DLSS-RR).
+    // Diffuse/normal follow the dominant plane, but specular albedo stays on the first plane.
+    uint dominantPlane = spCtx.LoadDominantIndex(idx);
+    if (dominantPlane != 0)
+    {
+        StablePlane domSP = spCtx.LoadStablePlane(idx, dominantPlane);
+        float domRoughness = domSP.GetRoughness();
+        float3 domNormal = domSP.GetNormal();
+        float3 domDiffEst, domSpecEst;
+        UnpackTwoFp32ToFp16(domSP.DenoiserPackedBSDFEstimate, domDiffEst, domSpecEst);
+        DiffuseAlbedo[idx] = domDiffEst;
+        NormalRoughness[idx] = float4(domNormal, domRoughness);
+    }
+    else
+    {
+        DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+        NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
+    }
+
     {
         const float2 envBRDF2 = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
     }
-    NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
 
     // In FILL mode, emissive along delta paths was captured in BUILD → skip to avoid double-counting
     direct = 0;
@@ -484,17 +506,19 @@ void Main()
                 direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);
         }
         
-        // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
-        if (sourceHasDeltaLobes)
+        // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights.
+        // Skip for pure delta surfaces — their delta lighting was captured in BUILD's stable radiance.
+        if (sourceHasDeltaLobes && sourceHasNonDeltaLobes)
         {
             direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);
         }
     }
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-    // Accumulate primary surface direct lighting into the stable plane's noisy radiance
+    // Accumulate primary surface direct lighting with plane throughput baked in
+    // (GetAllRadiance no longer multiplies by stored thp)
     if (any(direct > 0))
-        fillPathL += float4(direct, 0);
+        fillPathL += float4(direct * fillPlaneThp, 0);
 #endif
     
     float3 direction;
@@ -539,7 +563,11 @@ void Main()
         payload = sourcePayload;
         
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+        float3 throughput = fillPlaneThp; // start with plane's delta path throughput
+#else
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
+#endif
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
 
@@ -778,11 +806,17 @@ void Main()
             }
             
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-            // In FILL mode: accumulate lighting to fillPathL (skipping if on stable branch)
-            if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
+            // NEE/direct radiance: always accumulated (not captured in BUILD)
+            if (any(directRadiance > 0))
             {
-                float specAvg = isSpecular ? Color::RGBToLuminance((directRadiance + surface.Emissive) * throughput) : 0;
-                fillPathL += float4((directRadiance + surface.Emissive) * throughput, specAvg);
+                float specAvg = isSpecular ? Color::RGBToLuminance(directRadiance * throughput) : 0;
+                fillPathL += float4(directRadiance * throughput, specAvg);
+            }
+            // Emissive: gated by OnBranch (BUILD already captured emissive along delta paths)
+            if (!fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
+            {
+                float specAvg = isSpecular ? Color::RGBToLuminance(surface.Emissive * throughput) : 0;
+                fillPathL += float4(surface.Emissive * throughput, specAvg);
             }
 #elif defined(SHARC) && SHARC_UPDATE
             sampleRadiance += directRadiance * throughput;
