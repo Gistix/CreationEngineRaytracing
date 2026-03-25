@@ -317,6 +317,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 	RE::BSShader::Type shaderType = RE::BSShader::Type::None;
 	REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	REX::EnumSet<RE::BSWaterShaderProperty::WaterFlag, std::uint32_t> waterShaderFlags;
 	RE::BSShaderMaterial::Feature feature = RE::BSShaderMaterial::Feature::kNone;
 	stl::enumeration<PBRShaderFlags, uint32_t> pbrFlags;
 
@@ -458,6 +459,11 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								scalars[0] = Util::Material::ShininessToRoughness(lightingBaseMaterial->specularPower);
 							}
 
+							// SSS color
+							if (lightingShaderProp->flags.all(EShaderPropertyFlag::kSoftLighting)) {								
+								textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
+							}
+
 							// Envmap
 							if (feature == Feature::kEnvironmentMap || feature == Feature::kEye) {
 								if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial)) {
@@ -490,6 +496,8 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								}
 							}
 
+							//							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
+
 							// FaceGen
 							if (feature == Feature::kFaceGen) {
 								if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {
@@ -509,7 +517,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								}
 							}
 
-							// FaceGen RGB Tint
+							// Skin Tint
 							if (feature == Feature::kFaceGenRGBTint) {
 								if (const auto* lightingFacegenTintMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegenTint*>(shaderMaterial)) {
 									colors[0].x = lightingFacegenTintMaterial->tintColor.red;
@@ -543,6 +551,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 			if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(effect)) {
 				shaderType = RE::BSShader::Type::Water;
+				waterShaderFlags = waterShaderProp->waterFlags;
 
 				if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material)) {
 					colors[0] = {
@@ -653,6 +662,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 	material = Material(
 		shaderFlags,
+		waterShaderFlags,
 		shaderType,
 		feature,
 		pbrFlags,

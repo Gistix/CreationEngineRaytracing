@@ -213,20 +213,20 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
             tintColor = tintColor * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor);
+            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor) * 2.0f;
                 
         }
-        else if (material.Feature == Feature::kFaceGenRGBTint)
+        else if (material.Feature == Feature::kSkinTint)
         {
             float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
             
-            float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;
+            float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;               
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor));
-        }
-
-        [branch]
-        if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kFaceGenRGBTint)
+            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor)) * 2.0f;
+        }        
+        
+         [branch]
+        if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint)
         {
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
@@ -237,10 +237,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
-        }
-
-        [branch]
-        if (material.Feature == Feature::kEye)
+        } else if (material.Feature == Feature::kEye)
         {
             surface.Roughness = 0.08f;
             surface.F0 = 0.02776f;
@@ -252,6 +249,15 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.ScatteringColor = float3(1.0f, 0.8f, 0.6f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
+        } else if (material.ShaderFlags & ShaderFlags::kSoftLighting)
+        {
+            surface.SubsurfaceData.HasSubsurface = 1;
+            surface.SubsurfaceData.Anisotropy = -0.5f;
+
+            Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];          
+            surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
+            surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+            surface.SubsurfaceData.Scale = 1.f;            
         }
 
         [branch]
