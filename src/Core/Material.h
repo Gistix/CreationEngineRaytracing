@@ -89,6 +89,7 @@ struct Material
 	};
 
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	REX::EnumSet<RE::BSWaterShaderProperty::WaterFlag, std::uint32_t> waterShaderFlags;
 	RE::BSShader::Type shaderType;
 	RE::BSShaderMaterial::Feature Feature;
 	stl::enumeration<PBRShaderFlags, uint16_t> PBRFlags;
@@ -106,8 +107,11 @@ struct Material
 
 	eastl::array<Texture, 20> Textures;
 
-	ShaderFlags GetShaderFlags() const
+	uint32_t GetShaderFlags() const
 	{
+		if (GetShaderType() == ShaderType::Water)
+			return waterShaderFlags.underlying();
+
 		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 
 		auto shaderFlagsLocal = ShaderFlags::None;
@@ -196,7 +200,7 @@ struct Material
 			shaderFlagsLocal |= ShaderFlags::kSoftLighting;
 		}
 
-		return shaderFlagsLocal;
+		return static_cast<uint32_t>(shaderFlagsLocal);
 	}
 
 	uint16_t GetTextureDescriptorIndex(uint32_t index) const

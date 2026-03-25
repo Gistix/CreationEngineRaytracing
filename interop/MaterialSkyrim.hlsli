@@ -41,6 +41,15 @@ namespace ShaderFlags
 	static const uint kSoftLighting = (1 << 20);	
 }
 
+namespace WaterShaderFlags
+{
+	static const uint kUnderwater = (1 << 5);
+	static const uint kUseReflections = (1 << 6);
+	static const uint kUseCubemapReflections = (1 << 14);
+	static const uint kEnableFlowmap = (1 << 15);
+	static const uint kBlendNormals = (1 << 16);	
+}
+
 namespace Feature
 {
 	static const uint16_t kDefault = 0;
