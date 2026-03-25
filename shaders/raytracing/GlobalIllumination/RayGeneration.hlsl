@@ -139,8 +139,7 @@ void Main()
     
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
 
-    uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);
-    InitSobolSampler(idx, size, Camera.FrameIndex);
+    uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
     bool isSssPath = false;
 
@@ -197,7 +196,6 @@ void Main()
         [loop]
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
-            SobolNextBounce();
             BSDFSample bsdfSample;
             
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            

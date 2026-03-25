@@ -89,7 +89,6 @@ void Main()
     const float3 sourceDirection = sourceRay.Direction;
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);
-    InitSobolSampler(idx, size, Camera.FrameIndex);
     
 #if !(defined(SHARC) && SHARC_UPDATE) && DEBUG_TRACE_HEATMAP       
     uint startTime = NvGetSpecial( NV_SPECIALOP_GLOBAL_TIMER_LO );
@@ -651,7 +650,6 @@ void Main()
         [loop]
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
-            SobolNextBounce();
             BSDFSample bsdfSample;
             
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
