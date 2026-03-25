@@ -25,36 +25,29 @@
 // Motion Vector computation (shared by all path tracer modes)
 // ============================================================================
 // Computes screen-space motion vector from a pair of world-space positions.
-// Returns float3(normalizedDisplacementXY, viewDepthDelta).
-// Output matches the game's MotionBlur::GetSSMotionVector format:
-//   float2(-0.5, 0.5) * (currNDC - prevNDC)  (normalized, NOT pixel space).
-// Uses Camera.ViewProj (current, unjittered) and Camera.PrevViewProj (previous, unjittered).
-//
-// IMPORTANT: Camera.ViewProj / PrevViewProj expect camera-relative positions
-// (world position minus CameraPosAdjust), matching the game's raster pipeline.
 
 float3 computeMotionVector(float3 posW, float3 prevPosW)
 {
-    float4 clipPos = mul(float4(posW - Camera.Position, 1.0), Camera.ViewProj);
-    clipPos.xyz /= clipPos.w;
+    float4 currClip = mul(float4(posW, 1.0), Camera.ViewProj);
+    float4 prevClip = mul(float4(prevPosW, 1.0), Camera.PrevViewProj);
 
-    float4 prevClipPos = mul(float4(prevPosW - Camera.PositionPrev, 1.0), Camera.PrevViewProj);
-    prevClipPos.xyz /= prevClipPos.w;
+    float3 currNDC = currClip.xyz / currClip.w;
+    float3 prevNDC = prevClip.xyz / prevClip.w;
 
-    float3 motion;
-    motion.xy = (prevClipPos.xy - clipPos.xy) * float2(0.5, -0.5);
-    motion.z = prevClipPos.w - clipPos.w;
-    return motion;
+    float3 motion = currNDC - prevNDC;
+    return motion * float3(0.5f, -0.5f, 1.0f);
 }
 
 // ============================================================================
 // Clip-space depth computation (shared by all path tracer modes)
 // ============================================================================
-// Returns clip-space depth (clipPos.z / clipPos.w) for a world-space position.
+// Returns NDC depth (clipPos.z / clipPos.w) in [0, 1] range for a world-space
+// position, matching the standard DirectX depth buffer convention used by
+// Skyrim's raster pipeline (see Utility.hlsl: SV_POSITION → positionCS.z/w).
 
 float computeClipDepth(float3 posW)
 {
-    float4 clipPos = mul(float4(posW - Camera.Position, 1.0), Camera.ViewProj);
+    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
     return clipPos.z / clipPos.w;
 }
 
