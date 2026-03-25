@@ -77,5 +77,5 @@ MaterialData Material::GetData(const float3 externalEmittance, const float4* wat
 		GetShaderType(),
 		static_cast<uint16_t>(Feature),
 		PBRFlags.underlying(),
-		static_cast<uint32_t>(GetShaderFlags()));
+		GetShaderFlags());
 }

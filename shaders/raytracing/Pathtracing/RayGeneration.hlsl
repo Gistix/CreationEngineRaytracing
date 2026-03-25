@@ -89,6 +89,7 @@ void Main()
     const float3 sourceDirection = sourceRay.Direction;
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);
+    InitSobolSampler(idx, size, Camera.FrameIndex);
     
 #if !(defined(SHARC) && SHARC_UPDATE) && DEBUG_TRACE_HEATMAP       
     uint startTime = NvGetSpecial( NV_SPECIALOP_GLOBAL_TIMER_LO );
@@ -142,6 +143,8 @@ void Main()
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
         SpecularHitDistance[idx] = RAY_TMAX;
+        MotionVectors[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
         return;
 #else
         // REFERENCE: original behavior
@@ -151,7 +154,12 @@ void Main()
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);    
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
         SpecularHitDistance[idx] = RAY_TMAX;            
-#endif     
+#endif
+        {
+            float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
+            MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
+            Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
+        }
         return;
 #endif
     }
@@ -180,7 +188,16 @@ void Main()
     const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
     SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
     NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);   
-#endif       
+#endif
+
+    // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
+    {
+        float3 hitPosW = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
+        MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPosW), 0);
+        Depth[idx] = computeClipDepth(hitPosW);
+    }
+#endif     
     
     bool isSssPath = false;
     
@@ -542,6 +559,7 @@ void Main()
         [loop]
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
+            SobolNextBounce();
             BSDFSample bsdfSample;
             
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
