@@ -64,6 +64,9 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     float3 uvw = GetBary(barycentrics);
 
     Material material = mesh.Material;
+
+    if (material.ShaderType == ShaderType::Effect)
+        return false;
     
     float2 texCoord = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 

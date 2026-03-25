@@ -173,6 +173,66 @@ void Main()
 
     Surface sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial, true);
 
+    // Pass through Effect materials on primary ray: accumulate emissive, don't interact
+    float3 primaryEffectEmissive = float3(0, 0, 0);
+    [loop]
+    for (uint effectPrimPass = 0; effectPrimPass < 16 && sourceMaterial.ShaderType == ShaderType::Effect; effectPrimPass++)
+    {
+        primaryEffectEmissive += sourceSurface.Emissive;
+
+        float3 fn = dot(sourceDirection, sourceSurface.FaceNormal) <= 0.0f ? sourceSurface.FaceNormal : -sourceSurface.FaceNormal;
+        sourceRay.Origin = OffsetRay(sourceSurface.Position, fn, true);
+        sourceRay.Direction = sourceDirection;
+        sourceRay.TMin = 0.0f;
+        sourceRay.TMax = RAY_TMAX;
+
+        sourcePayload = TraceRayStandard(Scene, sourceRay, randomSeed);
+
+        if (!sourcePayload.Hit())
+            break;
+
+        sourcePosition = sourceRay.Origin + sourceDirection * sourcePayload.hitDistance;
+        sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * length(sourcePosition - Camera.Position.xyz), Raytracing.PixelConeSpreadAngle);
+        sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial, true);
+    }
+
+    // Effect pass-through ended in sky miss
+    if (!sourcePayload.Hit())
+    {
+        float3 skyRadiance = SampleSky(SkyHemisphere, sourceDirection) * Raytracing.Sky + primaryEffectEmissive;
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
+        spCtx.StartPixel(idx);
+        float3x3 identityMat = float3x3(1,0,0, 0,1,0, 0,0,1);
+        float3 buildMissThp = float3(1,1,1);
+        if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
+            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
+        StablePlanesHandleMiss(spCtx, idx, 0, 1, 1,
+            Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
+            identityMat, skyRadiance, true);
+        spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, kEnvironmentMapSceneDistance);
+        return;
+#elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+        Output[idx] = float4(LLTrueLinearToGamma(spCtx.GetAllRadiance(idx, true)), 1.0f);
+        return;
+#else
+    #if !(defined(SHARC) && SHARC_UPDATE)
+        Output[idx] = float4(LLTrueLinearToGamma(skyRadiance), 1.0f);
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
+        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
+        NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        SpecularHitDistance[idx] = RAY_TMAX;
+    #endif
+        {
+            float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
+            MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
+            Depth[idx] = 1;
+        }
+        return;
+#endif
+    }
+
+    float primarySceneDistance = length(sourcePosition - Camera.Position.xyz);
+
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
 
     bool sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
@@ -193,7 +253,7 @@ void Main()
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
     {
-        float3 hitPosW = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
+        float3 hitPosW = sourcePosition;
         MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPosW), 0);
         Depth[idx] = computeClipDepth(hitPosW);
     }
@@ -201,7 +261,7 @@ void Main()
     
     bool isSssPath = false;
     
-    float3 direct = sourceSurface.Emissive;
+    float3 direct = sourceSurface.Emissive + primaryEffectEmissive;
 
     // =========================================================================
     // BUILD MODE: Deterministic delta path exploration
@@ -209,7 +269,11 @@ void Main()
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
     {
         spCtx.StartPixel(idx);
-        spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, sourcePayload.hitDistance);
+        spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, primarySceneDistance);
+
+        // Accumulate Effect emissive from primary pass-through into stable radiance
+        if (any(primaryEffectEmissive > 0))
+            spCtx.AccumulateStableRadiance(idx, primaryEffectEmissive);
 
         // Initial BUILD state for plane 0
         uint buildPlaneIndex = 0;
@@ -217,7 +281,7 @@ void Main()
         uint buildBranchID = 1;             // sentinel bit
         float3 buildThp = float3(1,1,1);
         float3 buildMVs = float3(0,0,0);   // Initial placeholder; actual MV computed inside StablePlanesHandleHit/Miss
-        float buildSceneLength = sourcePayload.hitDistance;
+        float buildSceneLength = primarySceneDistance;
         float3x3 buildImageXform = float3x3(1,0,0, 0,1,0, 0,0,1);
         float buildRoughnessAccum = 0;
         bool buildIsDominant = true;
@@ -727,6 +791,59 @@ void Main()
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
 
             surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
+
+            // Pass through Effect materials in bounce: accumulate emissive, continue ray unchanged
+            bool effectMiss = false;
+            [loop]
+            for (uint effectBouncePass = 0; effectBouncePass < 16 && material.ShaderType == ShaderType::Effect; effectBouncePass++)
+            {
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
+                {
+                    float specAvg = isSpecular ? Color::RGBToLuminance(surface.Emissive * throughput) : 0;
+                    fillPathL += float4(surface.Emissive * throughput, specAvg);
+                }
+#else
+                sampleRadiance += surface.Emissive * throughput;
+#endif
+                float3 fn = dot(direction, surface.FaceNormal) <= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+                ray.Origin = OffsetRay(surface.Position, fn, true);
+                ray.Direction = direction;
+                ray.TMin = 0.0f;
+                ray.TMax = RAY_TMAX;
+
+                payload = TraceRayStandard(Scene, ray, randomSeed);
+                rayCone = rayCone.propagateDistance(payload.hitDistance);
+
+                if (insideWaterVolume)
+                    throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
+
+                if (!payload.Hit())
+                {
+                    effectMiss = true;
+                    break;
+                }
+
+                localPosition = ray.Origin + direction * payload.hitDistance;
+                surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
+            }
+
+            if (effectMiss)
+            {
+                float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
+#if defined(SHARC) && SHARC_UPDATE
+                SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
+#elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
+                {
+                    float specAvg = isSpecular ? Color::RGBToLuminance(skyIrradiance * throughput) : 0;
+                    fillPathL += float4(skyIrradiance * throughput, specAvg);
+                }
+#else
+                sampleRadiance += skyIrradiance * throughput;
+#endif
+                break;
+            }
 
 #if defined(SHARC)
             sharcHitData.positionWorld = surface.Position;
