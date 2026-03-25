@@ -60,7 +60,6 @@ void Main()
     RayDesc ray = SetupPrimaryRay(viewDir, Camera);
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);
-    InitSobolSampler(idx, size, Camera.FrameIndex);
     
 #if DEBUG_TRACE_HEATMAP       
     uint startTime = NvGetSpecial( NV_SPECIALOP_GLOBAL_TIMER_LO );

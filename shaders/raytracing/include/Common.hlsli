@@ -82,18 +82,10 @@ uint PCGHash(uint seed)
     return (word >> 22u) ^ word;
 }
 
-#include "raytracing/include/OwenScrambling.hlsli"
-
 float Random(inout uint seed)
 {
-    // Advance PCG seed (used for payload transmission to hit shaders)
     seed = PCGHash(seed);
-    // When Sobol sampler is active (RayGen context), return low-discrepancy sample
-    if (g_SobolActive)
-    {
-        return g_SobolSampler.Next();
-    }
-    return float(seed) / 4294967296.0;
+    return float(seed) / 4294967296.0; // Divide by 2^32
 }
 
 float ComputeRayConeTriangleLODValue(in Vertex v0, in Vertex v1, in Vertex v2, float3x3 world)
