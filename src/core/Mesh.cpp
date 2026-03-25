@@ -533,7 +533,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 									if (rfaosPath && rfaosPath[0] != '\0') {
 										RE::NiPointer<RE::NiSourceTexture> rfaosTexture;
 										textureSet->SetTexture(RE::BSTextureSet::Texture::kEnvironment, rfaosTexture);
-										textures[6] = GetTexture(rfaosTexture, blackTexture);
+										textures[7] = GetTexture(rfaosTexture, blackTexture);
 									}
 								}
 							}
