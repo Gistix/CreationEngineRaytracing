@@ -65,7 +65,9 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(6),  // StablePlanesBuffer (RWStructuredBuffer<StablePlane>)
 			nvrhi::BindingLayoutItem::Texture_UAV(7),           // StableRadiance (RWTexture2D<float4>)
 			// PT Motion Vectors output
-			nvrhi::BindingLayoutItem::Texture_UAV(8)            // MotionVectors (RWTexture2D<float4>)
+			nvrhi::BindingLayoutItem::Texture_UAV(8),            // MotionVectors (RWTexture2D<float4>)
+			// PT Depth output
+			nvrhi::BindingLayoutItem::Texture_UAV(9)             // Depth (RWTexture2D<float>)
 		};
 
 #if defined(NVAPI)
@@ -232,7 +234,9 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(6, sp->buffer),
 			nvrhi::BindingSetItem::Texture_UAV(7, sp->stableRadiance),
 			// PT Motion Vectors output
-			nvrhi::BindingSetItem::Texture_UAV(8, renderer->m_PTMotionVectors)
+			nvrhi::BindingSetItem::Texture_UAV(8, renderer->m_PTMotionVectors),
+			// PT Depth output
+			nvrhi::BindingSetItem::Texture_UAV(9, renderer->m_PTDepth)
 		};
 
 		
