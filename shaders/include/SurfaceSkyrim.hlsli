@@ -177,14 +177,9 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         [branch]
         if (material.ShaderFlags & ShaderFlags::kEnvMap || material.ShaderFlags & ShaderFlags::kEyeReflect)
         {
-            Texture2D envTexture = Textures[NonUniformResourceIndex(material.EnvTexture())];
             Texture2D envMaskTexture = Textures[NonUniformResourceIndex(material.EnvMaskTexture())];
-
-            float3 envColor = ColorToLinear(envTexture.SampleLevel(DefaultSampler, texCoord0, 15).rgb);
             float envMask = envMaskTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
 
-            surface.Albedo = lerp(surface.Albedo, envColor, envMask);
-            surface.Metallic = envMask;
             surface.Roughness = max(lerp(surface.Roughness, 0.0f, envMask), 0.08f);
         }
 
@@ -207,51 +202,62 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
         [branch]
         if (material.Feature == Feature::kFaceGen)
-        {
+        {          
+            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            
             Texture2D detailTexture = Textures[NonUniformResourceIndex(material.DetailTexture())];
             float3 detailColor = detailTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
             detailColor = float3(3.984375, 3.984375, 3.984375) * (float3(0.00392156886, 0, 0.00392156886) + detailColor);
-
+               
             Texture2D tintTexture = Textures[NonUniformResourceIndex(material.TintTexture())];
             float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
-            tintColor = tintColor * surface.Albedo * 2.0f;
-            tintColor = tintColor - tintColor * surface.Albedo;
-            surface.Albedo = (surface.Albedo * surface.Albedo + tintColor) * detailColor;
+            tintColor = tintColor * gammaAlbedo * 2.0f;
+            tintColor = tintColor - tintColor * gammaAlbedo;
+            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor) * 2.0f;
                 
         }
-        else if (material.Feature == Feature::kFaceGenRGBTint)
+        else if (material.Feature == Feature::kSkinTint)
         {
-            float3 tintColor = material.BaseColor().rgb * surface.Albedo * 2.0f;
-            tintColor = tintColor - tintColor * surface.Albedo;
-            surface.Albedo = float3(1.01171875f, 0.99609375f, 1.01171875f) * (surface.Albedo * surface.Albedo + tintColor);
-        }
-
-        [branch]
-        if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kFaceGenRGBTint)
+            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            
+            float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;               
+            tintColor = tintColor - tintColor * gammaAlbedo;
+            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor)) * 2.0f;
+        }        
+        
+         [branch]
+        if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint)
         {
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
 
-        // Typical skin values
+            // Typical skin values
             surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
-        }
-
-        [branch]
-        if (material.Feature == Feature::kEye)
+        } else if (material.Feature == Feature::kEye)
         {
             surface.Roughness = 0.08f;
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
-        // Typical eye values
+            
+            // Typical eye values
             surface.SubsurfaceData.ScatteringColor = float3(1.0f, 0.8f, 0.6f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
+        } else if (material.ShaderFlags & ShaderFlags::kSoftLighting)
+        {
+            surface.SubsurfaceData.HasSubsurface = 1;
+            surface.SubsurfaceData.Anisotropy = -0.5f;
+
+            Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];          
+            surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
+            surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+            surface.SubsurfaceData.Scale = 1.f;            
         }
 
         [branch]
@@ -302,7 +308,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
         float3 baseColorLinear = EffectToLinear(baseColor);
 
-    //Albedo = baseColorLinear; // This breaks sharc
+        //Albedo = baseColorLinear; // This breaks sharc
         surface.Albedo = 0;
         surface.Emissive = baseColorLinear * LIGHTINGSETTINGS.Effect;
     }
@@ -405,35 +411,131 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.F0 = 0.02f;
     surface.IOR = 1.33f;
  
-    Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
-    Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
-    Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
-
-    float2 normalScroll0 = material.Vector0.xy;
-    float2 normalScroll1 = material.Vector0.zw;
-    float2 normalScroll2 = material.Vector1.xy;
+    const bool hasFlowMap = material.ShaderFlags & WaterShaderFlags::kEnableFlowmap;
+    const bool hasBlendNormals = material.ShaderFlags & WaterShaderFlags::kBlendNormals;
+    const bool hasNormalTexcoord = material.ShaderFlags & WaterShaderFlags::kVertexUV;
+    
+    const bool hasWading = true;
+    
+    const bool hasVertexColor = false;
     
     const float scale = 0.001f;
     
-    float normalsScale0 = scale * material.Vector1.z;
-    float normalsScale1 = scale * material.Vector1.w;
-    float normalsScale2 = scale * material.Vector2.x;
+    float2 normalScroll1 = material.Vector0.xy;
+    float2 normalScroll2 = material.Vector0.zw;
+    float2 normalScroll3 = material.Vector1.xy;
     
-    float2 normal0TexCoord = (texCoord0 / normalsScale0) + normalScroll0;
-    float2 normal1TexCoord = (texCoord0 / normalsScale1) + normalScroll1;
-    float2 normal2TexCoord = (texCoord0 / normalsScale2) + normalScroll2;
+    float3 normalsScale = float3(material.Vector1.z, material.Vector1.w, material.Vector2.x);
     
-    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normal0TexCoord, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
-    float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normal1TexCoord, mipLevel).xyz * 2.0 - 1.0;
-    float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normal2TexCoord, mipLevel).xyz * 2.0 - 1.0;
+    float3 objectUV = material.Vector2.yzw;
 
-    surface.Normal = normalize(
-        float3(0, 0, 1) +
-        material.Scalar0 * normals1 +
-        material.Scalar1 * normals2 +
-        material.Scalar2 * normals3
-    );
+    float4 cellTexCoordOffset = material.Vector3;
     
+    float2 posAdjust = surface.Position.xy;
+    
+    float2 scrollAdjust1 = float2(0.0f, 0.0f);
+    float2 scrollAdjust2 = float2(0.0f, 0.0f);
+    float2 scrollAdjust3 = float2(0.0f, 0.0f);
+    
+    if (hasNormalTexcoord)
+    {
+        float3 scaledNormals = normalsScale * scale;
+
+        scrollAdjust1 = texCoord0.xy / scaledNormals.xx;
+        scrollAdjust2 = texCoord0.xy / scaledNormals.yy;
+        scrollAdjust3 = texCoord0.xy / scaledNormals.zz;
+    } else
+    {
+        scrollAdjust1 = posAdjust.xy / normalsScale.xx;
+        scrollAdjust2 = posAdjust.xy / normalsScale.yy;
+        scrollAdjust3 = posAdjust.xy / normalsScale.zz;        
+    }
+
+    float2 normalCoord1 = float2(0.0f, 0.0f);
+    float2 normalCoord2 = float2(0.0f, 0.0f);
+    float2 normalCoord3 = float2(0.0f, 0.0f);    
+    
+    if (!hasFlowMap)
+    {
+        normalCoord1 = normalScroll1 + scrollAdjust1;
+        normalCoord2 = normalScroll2 + scrollAdjust2;
+        normalCoord3 = normalScroll3 + scrollAdjust3;
+    }
+
+    /*float4 flowCoord = float4(0.0f, 0.0f, 0.0f, 0.0f);
+     
+    if (hasFlowMap)
+    {
+        if (!hasBlendNormals)
+        {
+            normalCoord2 = 0.0;
+            normalCoord3 = 0.0;
+        }
+
+        if (!hasNormalTexcoord)
+        {
+            flowCoord = 0.0;
+        }
+        else if (hasWading)
+        {
+            flowCoord.xy =
+                ((-0.5 + texCoord0.xy) * 0.1 + cellTexCoordOffset.xy) +
+                float2(cellTexCoordOffset.z,
+                       -cellTexCoordOffset.w + objectUV.x) / objectUV.xx;
+
+            flowCoord.zw = -0.25 + (texCoord0.xy * 0.5 + objectUV.yz);
+        }
+        else
+        {
+            flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
+            flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
+        }
+    }
+    else
+    {
+        //flowCoord.z = worldViewPos.w;
+        flowCoord.w = 0.0;
+
+        if (hasWading || hasVertexColor)
+        {
+            flowCoord = 0.0;
+
+            if (hasNormalTexcoord)
+            {
+                flowCoord.xy = texCoord0.xy;
+            }
+
+            if (hasVertexColor)
+            {
+                //flowCoord.z = input.Color.w;
+            }
+        }
+    }*/
+    
+    Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
+    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 + float3(-1, -1, -2);    
+    
+    if ((hasFlowMap && hasBlendNormals) || !hasFlowMap)
+    {             
+        Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
+        Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
+    
+        float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
+        float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
+
+        surface.Normal = normalize(
+            float3(0, 0, 1) +
+            material.Scalar0 * normals1 +
+            material.Scalar1 * normals2 +
+            material.Scalar2 * normals3
+        );        
+    } else
+    {
+        surface.Normal = normalize(
+            float3(0, 0, 1) + normals1
+        ); 
+    }
+  
     surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
     surface.Bitangent = cross(surface.Normal, surface.Tangent) * handedness;
     
@@ -459,7 +561,7 @@ float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, fl
     }
 }
 
-    void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, in float handedness, float4 landBlend0, float4 landBlend1, in Material material)
+void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, in float handedness, float4 landBlend0, float4 landBlend1, in Material material)
 {
     float mipLevel = surface.MipLevel;
     

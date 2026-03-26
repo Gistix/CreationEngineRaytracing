@@ -84,10 +84,34 @@ struct Material
 		kTwoSided = 1 << 16,
 		kAssumeShadowmask = 1 << 17,
 		kBackLighting = 1 << 18,
-		kTreeAnim = 1 << 19
+		kTreeAnim = 1 << 19,
+		kSoftLighting = 1 << 20
+	};
+
+	enum class WaterShaderFlags : uint32_t
+	{
+		kNone = 0,
+		kDisplacement = 1 << 0,
+		kLod = 1 << 1,
+		kDepth = 1 << 2,
+		kActorInWater = 1 << 3,
+		kActorMovingInWater = 1 << 4,
+		kUnderwater = 1 << 5,
+		kUseReflections = 1 << 6,
+		kRefractions = 1 << 7,
+		kVertexUV = 1 << 8,
+		kVertexAlphaDepth = 1 << 9,
+		kProcedural = 1 << 10,
+		kFog = 1 << 11,
+		kUpdateConstants = 1 << 12,
+		kCubemap = 1 << 13,
+		kUseCubemapReflections = 1 << 14,
+		kEnableFlowmap = 1 << 15,
+		kBlendNormals = 1 << 16
 	};
 
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
 	RE::BSShader::Type shaderType;
 	RE::BSShaderMaterial::Feature Feature;
 	stl::enumeration<PBRShaderFlags, uint16_t> PBRFlags;
@@ -105,8 +129,11 @@ struct Material
 
 	eastl::array<Texture, 20> Textures;
 
-	ShaderFlags GetShaderFlags() const
+	uint32_t GetShaderFlags() const
 	{
+		if (GetShaderType() == ShaderType::Water)
+			return waterShaderFlags.underlying();
+
 		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 
 		auto shaderFlagsLocal = ShaderFlags::None;
@@ -191,7 +218,11 @@ struct Material
 			shaderFlagsLocal |= ShaderFlags::kTreeAnim;
 		}
 
-		return shaderFlagsLocal;
+		if (shaderFlags.any(EShaderPropertyFlag::kSoftLighting)) {
+			shaderFlagsLocal |= ShaderFlags::kSoftLighting;
+		}
+
+		return static_cast<uint32_t>(shaderFlagsLocal);
 	}
 
 	uint16_t GetTextureDescriptorIndex(uint32_t index) const
@@ -206,7 +237,9 @@ struct Material
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
 
-	MaterialData GetData(const float3 externalEmittance, const float4* waterTexScroll) const;
+	void UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty);
+
+	MaterialData GetData(const float3 externalEmittance, RE::BSShaderProperty* shaderProperty);
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);

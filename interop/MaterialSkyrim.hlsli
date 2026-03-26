@@ -37,7 +37,34 @@ namespace ShaderFlags
 	static const uint kTwoSided = (1 << 16);
 	static const uint kAssumeShadowmask = (1 << 17);
 	static const uint kBackLighting = (1 << 18);
-	static const uint kTreeAnim = (1 << 19);	
+	static const uint kTreeAnim = (1 << 19);
+	static const uint kSoftLighting = (1 << 20);	
+}
+
+namespace WaterShaderFlags
+{
+	static const uint kNone = 0;
+	
+	static const uint kDisplacement = (1 << 0);
+	static const uint kLod = (1 << 1);
+	static const uint kDepth = (1 << 2);
+	static const uint kActorInWater = (1 << 3);
+	static const uint kActorMovingInWater = (1 << 4);		
+	
+	static const uint kUnderwater = (1 << 5);
+	static const uint kUseReflections = (1 << 6);
+	
+	static const uint kRefractions = (1 << 7);
+	static const uint kVertexUV = (1 << 8);
+	static const uint kVertexAlphaDepth = (1 << 9);
+	static const uint kProcedural = (1 << 10);
+	static const uint kFog = (1 << 11);		
+	static const uint kUpdateConstants = (1 << 12);
+	static const uint kCubemap = (1 << 13);
+	
+	static const uint kUseCubemapReflections = (1 << 14);
+	static const uint kEnableFlowmap = (1 << 15);
+	static const uint kBlendNormals = (1 << 16);
 }
 
 namespace Feature
@@ -47,7 +74,7 @@ namespace Feature
 	static const uint16_t kGlowMap = 2;
 	static const uint16_t kParallax = 3;
 	static const uint16_t kFaceGen = 4;
-	static const uint16_t kFaceGenRGBTint = 5;
+	static const uint16_t kSkinTint = 5;
 	static const uint16_t kHairTint = 6;
 	static const uint16_t kParallaxOcc = 7;
 	static const uint16_t kMultiTexLand = 8;

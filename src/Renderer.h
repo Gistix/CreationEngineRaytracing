@@ -54,6 +54,11 @@ class Renderer
 	ID3D12Resource* m_CopyTargetResource = nullptr;
 	nvrhi::TextureHandle m_CopyTargetTexture;
 
+	ID3D12Resource* m_PTDepthCopyTargetResource = nullptr;
+	nvrhi::TextureHandle m_PTDepthCopyTargetTexture;
+	ID3D12Resource* m_PTMVCopyTargetResource = nullptr;
+	nvrhi::TextureHandle m_PTMVCopyTargetTexture;
+
 	uint64_t m_FrameIndex = 0;
 
 	uint2 m_RenderSize;
@@ -125,6 +130,9 @@ public:
 
 	// PT Motion Vectors output (RGBA16_FLOAT, written by BUILD pass)
 	nvrhi::TextureHandle m_PTMotionVectors;
+
+	// PT Depth output (R32_FLOAT, clip-space depth)
+	nvrhi::TextureHandle m_PTDepth;
 
 	eastl::unique_ptr<RenderTargets> m_RenderTargets;
 
@@ -253,6 +261,8 @@ public:
 	uint2 GetDynamicResolution();
 
 	void SetCopyTarget(ID3D12Resource* target);
+
+	void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 
 	void ExecutePasses();
 
