@@ -35,7 +35,11 @@ struct Scene
 	ID3D12Resource* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
 
+	ID3D12Resource* m_FlowMapResource = nullptr;
+	nvrhi::TextureHandle m_FlowMapTexture;
+
 	int32_t* g_FlowMapSize = nullptr;
+	RE::NiPointer<RE::NiSourceTexture>* g_FlowMapSourceTex = nullptr;
 	float4* g_DisplacementCellTexCoordOffset = nullptr;
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
 	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
@@ -74,6 +78,8 @@ struct Scene
 	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.DebugSettings.PathTracingCull; };
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
+
+	nvrhi::ITexture* GetFlowMapTexture();
 
 	RenderNode* GetGlobalIllumination();
 
