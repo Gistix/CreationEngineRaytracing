@@ -417,7 +417,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     const bool hasBlendNormals = (material.ShaderFlags & WaterShaderFlags::kBlendNormals) != 0;
     const bool hasNormalTexcoord = (material.ShaderFlags & WaterShaderFlags::kVertexUV) != 0;
     
-    const bool hasWading = true;
+    const bool hasWading = false;
     
     const bool hasVertexColor = false;
     
@@ -476,14 +476,14 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         
         float reflectionColorW = 1.0f;
         
-        FlowmapData flowData1 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll1 + scrollAdjust1);         
-        normalCoord1 = (flowData1.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData1.color.w), 0));
+        FlowmapData flowData1 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll1);         
+        normalCoord1 = (flowData1.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData1.color.w), 0)) + scrollAdjust1;
   
-        FlowmapData flowData2 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll2 + scrollAdjust2);         
-        normalCoord2 = (flowData2.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData2.color.w), 0));
+        FlowmapData flowData2 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll2);         
+        normalCoord2 = (flowData2.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData2.color.w), 0)) + scrollAdjust2;
         
-        FlowmapData flowData3 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll3 + scrollAdjust3);         
-        normalCoord3 = (flowData3.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData3.color.w), 0));       
+        FlowmapData flowData3 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll3);         
+        normalCoord3 = (flowData3.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData3.color.w), 0)) + scrollAdjust3;       
     } else
     {
         normalCoord1 = normalScroll1 + scrollAdjust1;
