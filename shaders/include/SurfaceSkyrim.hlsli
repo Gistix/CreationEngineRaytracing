@@ -411,35 +411,135 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.F0 = 0.02f;
     surface.IOR = 1.33f;
  
-    Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
-    Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
-    Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
+    const bool hasFlowMap = material.ShaderFlags & WaterShaderFlags::kEnableFlowmap;
+    const bool hasBlendNormals = material.ShaderFlags & WaterShaderFlags::kBlendNormals;
 
-    float2 normalScroll0 = material.Vector0.xy;
-    float2 normalScroll1 = material.Vector0.zw;
-    float2 normalScroll2 = material.Vector1.xy;
+    const bool hasNormalTexcoord = material.ShaderFlags & WaterShaderFlags::kVertexUV;
+    const bool hasWading = true;
+    
+    const bool hasVertexColor = false;
     
     const float scale = 0.001f;
     
-    float normalsScale0 = scale * material.Vector1.z;
-    float normalsScale1 = scale * material.Vector1.w;
-    float normalsScale2 = scale * material.Vector2.x;
+    float2 normalScroll1 = material.Vector0.xy;
+    float2 normalScroll2 = material.Vector0.zw;
+    float2 normalScroll3 = material.Vector1.xy;
     
-    float2 normal0TexCoord = (texCoord0 / normalsScale0) + normalScroll0;
-    float2 normal1TexCoord = (texCoord0 / normalsScale1) + normalScroll1;
-    float2 normal2TexCoord = (texCoord0 / normalsScale2) + normalScroll2;
+    float3 normalsScale = float3(material.Vector1.z, material.Vector1.w, material.Vector2.x);
     
-    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normal0TexCoord, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
-    float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normal1TexCoord, mipLevel).xyz * 2.0 - 1.0;
-    float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normal2TexCoord, mipLevel).xyz * 2.0 - 1.0;
+    float3 objectUV = material.Vector2.yzw;
 
-    surface.Normal = normalize(
-        float3(0, 0, 1) +
-        material.Scalar0 * normals1 +
-        material.Scalar1 * normals2 +
-        material.Scalar2 * normals3
-    );
+    float4 cellTexCoordOffset = material.Vector3;
     
+    float2 posAdjust = surface.Position.xy;
+    
+    float2 scrollAdjust1 = posAdjust.xy / normalsScale.xx;
+    float2 scrollAdjust2 = posAdjust.xy / normalsScale.yy;
+    float2 scrollAdjust3 = posAdjust.xy / normalsScale.zz;
+    
+    if (objectUV.x != 0)
+    {
+        if (hasNormalTexcoord)
+        {
+            float3 scaledNormals = normalsScale * scale;
+
+            scrollAdjust1 = texCoord0.xy / scaledNormals.xx;
+            scrollAdjust2 = texCoord0.xy / scaledNormals.yy;
+            scrollAdjust3 = texCoord0.xy / scaledNormals.zz;
+        }
+        else
+        {
+            scrollAdjust1 = 0.0;
+            scrollAdjust2 = 0.0;
+            scrollAdjust3 = 0.0;
+        }
+    }
+    
+    float2 normalCoord1 = float2(0.0f, 0.0f);
+    float2 normalCoord2 = float2(0.0f, 0.0f);
+    float2 normalCoord3 = float2(0.0f, 0.0f);    
+    
+    if (!hasFlowMap)
+    {
+        normalCoord1 = normalScroll1 + scrollAdjust1;
+        normalCoord2 = normalScroll2 + scrollAdjust2;
+        normalCoord3 = normalScroll3 + scrollAdjust3;
+    }
+
+    float4 flowCoord = float4(0.0f, 0.0f, 0.0f, 0.0f);
+     
+    if (hasFlowMap)
+    {
+        if (!hasBlendNormals)
+        {
+            normalCoord2 = 0.0;
+            normalCoord3 = 0.0;
+        }
+
+        if (!hasNormalTexcoord)
+        {
+            flowCoord = 0.0;
+        }
+        else if (hasWading)
+        {
+            flowCoord.xy =
+                ((-0.5 + texCoord0.xy) * 0.1 + cellTexCoordOffset.xy) +
+                float2(cellTexCoordOffset.z,
+                       -cellTexCoordOffset.w + objectUV.x) / objectUV.xx;
+
+            flowCoord.zw = -0.25 + (texCoord0.xy * 0.5 + objectUV.yz);
+        }
+        else
+        {
+            flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
+            flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
+        }
+    }
+    else
+    {
+        //flowCoord.z = worldViewPos.w;
+        flowCoord.w = 0.0;
+
+        if (hasWading || hasVertexColor)
+        {
+            flowCoord = 0.0;
+
+            if (hasNormalTexcoord)
+            {
+                flowCoord.xy = texCoord0.xy;
+            }
+
+            if (hasVertexColor)
+            {
+                //flowCoord.z = input.Color.w;
+            }
+        }
+    }
+    
+    Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
+    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 + float3(-1, -1, -2);    
+    
+    if ((hasFlowMap && hasBlendNormals) || !hasFlowMap)
+    {             
+        Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
+        Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
+    
+        float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
+        float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
+
+        surface.Normal = normalize(
+            float3(0, 0, 1) +
+            material.Scalar0 * normals1 +
+            material.Scalar1 * normals2 +
+            material.Scalar2 * normals3
+        );        
+    } else
+    {
+        surface.Normal = normalize(
+            float3(0, 0, 1) + normals1
+        ); 
+    }
+  
     surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
     surface.Bitangent = cross(surface.Normal, surface.Tangent) * handedness;
     
@@ -465,7 +565,7 @@ float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, fl
     }
 }
 
-    void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, in float handedness, float4 landBlend0, float4 landBlend1, in Material material)
+void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, in float handedness, float4 landBlend0, float4 landBlend1, in Material material)
 {
     float mipLevel = surface.MipLevel;
     

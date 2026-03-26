@@ -317,7 +317,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 	RE::BSShader::Type shaderType = RE::BSShader::Type::None;
 	REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
-	REX::EnumSet<RE::BSWaterShaderProperty::WaterFlag, std::uint32_t> waterShaderFlags;
+	REX::EnumSet<Material::WaterShaderFlags, std::uint32_t> waterShaderFlags;
 	RE::BSShaderMaterial::Feature feature = RE::BSShaderMaterial::Feature::kNone;
 	stl::enumeration<PBRShaderFlags, uint32_t> pbrFlags;
 
@@ -551,7 +551,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 			if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(effect)) {
 				shaderType = RE::BSShader::Type::Water;
-				waterShaderFlags = waterShaderProp->waterFlags;
+				waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
 
 				if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material)) {
 					colors[0] = {
@@ -580,28 +580,6 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 					scalars[1] = waterMaterial->amplitudeA[1];
 					scalars[2] = waterMaterial->amplitudeA[2];
 
-					if (form->GetFormType() == RE::FormType::Water) {
-						auto* waterForm = form->As<RE::TESWaterForm>();
-						auto& shaderData = waterForm->data;
-
-						auto getNormalScroll = [&](uint32_t i, half& x, half& y) {
-							float dirRad = shaderData.noiseWindDirectionA[i] * std::numbers::pi_v<float> / 180.0f;
-
-							// "Correct" is cos sin but it doesn't scroll the right direction
-							auto scroll = float2(std::sin(dirRad), std::cos(dirRad)) * shaderData.noiseWindSpeedA[i];
-
-							x = scroll.x;
-							y = scroll.y;
-						};
-
-						// NormalsScroll0
-						getNormalScroll(0, vectors[0].x, vectors[0].y);
-						getNormalScroll(1, vectors[0].z, vectors[0].w);
-
-						// NormalsScroll1
-						getNormalScroll(2, vectors[1].x, vectors[1].y);
-					}
-
 					// NormalsScale
 					vectors[1].z = waterMaterial->uvScaleA[0];
 					vectors[1].w = waterMaterial->uvScaleA[1];
@@ -611,14 +589,6 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 					vectors[2].y = 0.0f;
 					vectors[2].z = 0.0f;
 					vectors[2].w = 0.0f;
-
-					// CellTexCoordOffset 
-					vectors[3] = {
-						static_cast<float>(waterShaderProp->flowX),
-						static_cast<float>(waterShaderProp->flowY),
-						static_cast<float>(waterShaderProp->cellX),
-						static_cast<float>(waterShaderProp->cellY)
-					};
 
 					textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
 					textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
@@ -970,10 +940,12 @@ DirtyFlags Mesh::Update()
 	return updateFlags;
 }
 
-MeshData Mesh::GetData(const float3 externalEmittance, const float4* waterTexScroll) const
+MeshData Mesh::GetData(const float3 externalEmittance)
 {
+	auto* bsMaterial = bsGeometryPtr ? reinterpret_cast<RE::BSShaderProperty*>(bsGeometryPtr->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get()) : nullptr;
+
 	return MeshData(
-		material.GetData(externalEmittance, waterTexScroll),
+		material.GetData(externalEmittance, bsMaterial),
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
 		{0, 0},
 		localToRoot
