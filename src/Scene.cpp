@@ -146,6 +146,9 @@ RenderNode* Scene::GetPathTracing()
 
 nvrhi::ITexture* Scene::GetFlowMapTexture()
 {
+	if (!g_FlowMapSourceTex->get())
+		return Renderer::GetSingleton()->GetBlackTexture();
+
 	if (!m_FlowMapTexture) {		
 		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(g_FlowMapSourceTex->get()->rendererTexture->texture);
 
