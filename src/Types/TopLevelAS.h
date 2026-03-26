@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "Core/Instance.h"
 #include "Renderer.h"
+#include "Scene.h"
 #include "Events/ITLASUpdateListener.h"
 
 class TopLevelAS
@@ -42,9 +43,18 @@ public:
 
 		commandList->beginMarker("BLAS Update");
 
+		auto* scene = Scene::GetSingleton();
+		bool cullRefraction = scene->IsPathTracingActive();
+
 		for (auto& instance : instances)
 		{
 			if (instance->IsHidden())
+				continue;
+
+			// Skip non-effect models with kRefraction when Path Tracing is active
+			if (cullRefraction &&
+				instance->model->GetShaderFlags().any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction) &&
+				!(instance->model->GetShaderTypes() & RE::BSShader::Type::Effect))
 				continue;
 
 			instance->model->UpdateBLAS(commandList);
