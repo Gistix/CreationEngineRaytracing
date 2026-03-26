@@ -631,6 +631,7 @@ void Main()
 #else
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
 #endif
+        bool arrivedViaDelta = false;
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
 
@@ -668,6 +669,7 @@ void Main()
             bool isDelta = bsdfSample.isLobe(LobeType::Delta);
             isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+            arrivedViaDelta = isDelta;
 
             if (isValid)
                 direction = bsdfSample.wo;
@@ -866,7 +868,7 @@ void Main()
             }
 
             float3 sharcRadiance;
-            if (isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
+            if (!arrivedViaDelta && isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
                 if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))

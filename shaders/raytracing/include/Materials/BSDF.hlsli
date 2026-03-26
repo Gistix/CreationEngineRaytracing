@@ -835,7 +835,7 @@ struct StandardBSDF
     {
         StandardBSDF bsdf;
         bsdf.emission = surface.Emissive;
-        bsdf.isEnter = isEnter;
+        bsdf.isEnter = surface.IsThinSurface ? true : isEnter;
         return bsdf;
     }
 
