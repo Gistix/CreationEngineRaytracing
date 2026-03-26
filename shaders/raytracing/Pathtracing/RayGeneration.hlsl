@@ -279,7 +279,11 @@ void Main()
         uint buildVertexIndex = 1;          // camera=0, first hit=1
         uint buildBranchID = 1;             // sentinel bit
         float3 buildThp = float3(1,1,1);
-        float3 buildMVs = float3(0,0,0);   // Initial placeholder; actual MV computed inside StablePlanesHandleHit/Miss
+        // Compute MV from the primary surface position. All stable planes for this pixel
+        // share this MV — it tracks the screen-space movement of the actual geometry, not
+        // the virtual position deep in a delta reflection/refraction chain.
+        float3 primaryHitPos = Camera.Position.xyz + sourceDirection * primarySceneDistance;
+        float3 buildMVs = computeMotionVector(primaryHitPos, primaryHitPos);
         float buildSceneLength = primarySceneDistance;
         float3x3 buildImageXform = float3x3(1,0,0, 0,1,0, 0,0,1);
         float buildRoughnessAccum = 0;

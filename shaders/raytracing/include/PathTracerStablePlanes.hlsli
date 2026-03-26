@@ -224,13 +224,9 @@ void StablePlanesHandleMiss(
     const float3 skyRadiance,
     const bool isDominant)
 {
-    // Compute virtual motion vectors for sky hit:
-    // Use a very distant virtual position along the ray
-    float3 virtualWorldPos = rayOrigin + rayDir * kEnvironmentMapSceneDistance;
-    // Sky has no object motion, MV comes purely from camera movement
-    float3 skyMV = computeMotionVector(virtualWorldPos, virtualWorldPos);
-
-    // For sky, normal doesn't matter much, use the ray direction
+    // Use the passed-in motionVectors from the primary surface. The pixel is at the
+    // primary surface on screen; computing MV from a far-away sky virtual position
+    // would produce an excessively large vector that destabilises temporal reprojection.
     float3 planeNormal = -rayDir;
 
     ctx.StoreStablePlane(
@@ -238,7 +234,7 @@ void StablePlanesHandleMiss(
         rayOrigin, rayDir, stableBranchID,
         /* sceneLength */ 1.0 / 0.0,  // +inf for sky miss
         /* rayTCurrent */ kEnvironmentMapSceneDistance,
-        throughput, skyMV,
+        throughput, motionVectors,
         /* roughness */ 1.0,          // sky = fully rough for denoiser
         planeNormal,
         /* diffBSDFEstimate */ float3(1,1,1),
@@ -251,7 +247,7 @@ void StablePlanesHandleMiss(
     // Write dominant plane MV and Depth to global output
     if (isDominant)
     {
-        MotionVectors[pixelPos] = float4(skyMV, 0);
+        MotionVectors[pixelPos] = float4(motionVectors, 0);
         Depth[pixelPos] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
     }
 
@@ -325,11 +321,10 @@ StablePlanesHitResult StablePlanesHandleHit(
     uint waterCounters = f32tof16(clamp(waterVolumeAbsorption.y, 0, HLF_MAX)) | (f32tof16(clamp(waterVolumeAbsorption.z, 0, HLF_MAX)) << 16);
     bool isEnterSurface = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0;
 
-    // Compute motion vector for this hit surface
-    // virtualWorldPos is the point along the camera ray at accumulated scene distance
-    float3 virtualWorldPos = rayOrigin + rayDir * totalSceneLength;
-    // No per-object motion currently, MV is purely from camera movement
-    float3 computedMV = computeMotionVector(virtualWorldPos, virtualWorldPos);
+    // Use the passed-in motionVectors computed from the primary surface position.
+    // For delta chains (mirrors, glass, water), the virtual world position diverges far
+    // from the actual screen pixel, causing huge MV that destabilises temporal reprojection.
+    // The primary surface MV correctly tracks where this pixel was on screen last frame.
 
     // Accumulate emissive along the delta path (this is noise-free, deterministic)
     float3 emissive = surface.Emissive;
@@ -345,15 +340,15 @@ StablePlanesHitResult StablePlanesHandleHit(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, computedMV,
+            throughput, motionVectors,
             surface.Roughness, surface.Normal,
             surface.DiffuseAlbedo.xxx, surface.F0,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
         {
-            MotionVectors[pixelPos] = float4(computedMV, 0);
-            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+            MotionVectors[pixelPos] = float4(motionVectors, 0);
+            Depth[pixelPos] = computeClipDepth(surface.Position);
         }
         return result;
     }
@@ -398,15 +393,15 @@ StablePlanesHitResult StablePlanesHandleHit(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, computedMV,
+            throughput, motionVectors,
             surface.Roughness, surface.Normal,
             diffBSDFEstimate, specBSDFEstimate,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
         {
-            MotionVectors[pixelPos] = float4(computedMV, 0);
-            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+            MotionVectors[pixelPos] = float4(motionVectors, 0);
+            Depth[pixelPos] = computeClipDepth(surface.Position);
         }
         return result;
     }
@@ -493,15 +488,15 @@ StablePlanesHitResult StablePlanesHandleHit(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, computedMV,
+            throughput, motionVectors,
             surface.Roughness, surface.Normal,
             max(surface.DiffuseAlbedo, 0.04), max(surface.F0, 0.04),
             storeAsDominant, waterFlags, waterCounters
         );
         if (storeAsDominant)
         {
-            MotionVectors[pixelPos] = float4(computedMV, 0);
-            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+            MotionVectors[pixelPos] = float4(motionVectors, 0);
+            Depth[pixelPos] = computeClipDepth(surface.Position);
         }
     }
 
