@@ -37,7 +37,11 @@ struct Scene
 	ID3D12Resource* m_PhysicalSkyTrLUTResource = nullptr;
 	nvrhi::TextureHandle m_PhysicalSkyTrLUTTexture;
 
+	ID3D12Resource* m_FlowMapResource = nullptr;
+	nvrhi::TextureHandle m_FlowMapTexture;
+
 	int32_t* g_FlowMapSize = nullptr;
+	RE::NiPointer<RE::NiSourceTexture>* g_FlowMapSourceTex = nullptr;
 	float4* g_DisplacementCellTexCoordOffset = nullptr;
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
 	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
@@ -77,6 +81,8 @@ struct Scene
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
 	inline nvrhi::ITexture* GetPhysicalSkyTrLUTTexture() const { return m_PhysicalSkyTrLUTTexture; }
+
+	nvrhi::ITexture* GetFlowMapTexture();
 
 	RenderNode* GetGlobalIllumination();
 
