@@ -10,6 +10,8 @@
 
 #include "interop/Material.hlsli"
 
+#include "include/FlowMap.hlsli"
+
 #define LIGHTINGSETTINGS Raytracing
 #define HAIRSETTINGS Features.HairSpecular
 
@@ -411,9 +413,9 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.F0 = 0.02f;
     surface.IOR = 1.33f;
  
-    const bool hasFlowMap = material.ShaderFlags & WaterShaderFlags::kEnableFlowmap;
-    const bool hasBlendNormals = material.ShaderFlags & WaterShaderFlags::kBlendNormals;
-    const bool hasNormalTexcoord = material.ShaderFlags & WaterShaderFlags::kVertexUV;
+    const bool hasFlowMap = (material.ShaderFlags & WaterShaderFlags::kEnableFlowmap) != 0;
+    const bool hasBlendNormals = (material.ShaderFlags & WaterShaderFlags::kBlendNormals) != 0;
+    const bool hasNormalTexcoord = (material.ShaderFlags & WaterShaderFlags::kVertexUV) != 0;
     
     const bool hasWading = true;
     
@@ -431,13 +433,11 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
     float4 cellTexCoordOffset = material.Vector3;
     
-    float2 posAdjust = surface.Position.xy;
+    float2 scrollAdjust1;
+    float2 scrollAdjust2;
+    float2 scrollAdjust3;
     
-    float2 scrollAdjust1 = float2(0.0f, 0.0f);
-    float2 scrollAdjust2 = float2(0.0f, 0.0f);
-    float2 scrollAdjust3 = float2(0.0f, 0.0f);
-    
-    if (hasNormalTexcoord)
+    if (hasNormalTexcoord && !hasFlowMap)
     {
         float3 scaledNormals = normalsScale * scale;
 
@@ -446,37 +446,20 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         scrollAdjust3 = texCoord0.xy / scaledNormals.zz;
     } else
     {
-        scrollAdjust1 = posAdjust.xy / normalsScale.xx;
-        scrollAdjust2 = posAdjust.xy / normalsScale.yy;
-        scrollAdjust3 = posAdjust.xy / normalsScale.zz;        
+        scrollAdjust1 = surface.Position.xy / normalsScale.xx;
+        scrollAdjust2 = surface.Position.xy / normalsScale.yy;
+        scrollAdjust3 = surface.Position.xy / normalsScale.zz;        
     }
 
-    float2 normalCoord1 = float2(0.0f, 0.0f);
-    float2 normalCoord2 = float2(0.0f, 0.0f);
-    float2 normalCoord3 = float2(0.0f, 0.0f);    
-    
-    if (!hasFlowMap)
-    {
-        normalCoord1 = normalScroll1 + scrollAdjust1;
-        normalCoord2 = normalScroll2 + scrollAdjust2;
-        normalCoord3 = normalScroll3 + scrollAdjust3;
-    }
-
-    /*float4 flowCoord = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float2 normalCoord1;
+    float2 normalCoord2;
+    float2 normalCoord3;    
      
     if (hasFlowMap)
     {
-        if (!hasBlendNormals)
-        {
-            normalCoord2 = 0.0;
-            normalCoord3 = 0.0;
-        }
+        float4 flowCoord = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-        if (!hasNormalTexcoord)
-        {
-            flowCoord = 0.0;
-        }
-        else if (hasWading)
+        if (hasWading)
         {
             flowCoord.xy =
                 ((-0.5 + texCoord0.xy) * 0.1 + cellTexCoordOffset.xy) +
@@ -490,27 +473,23 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
             flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
         }
-    }
-    else
+        
+        float reflectionColorW = 1.0f;
+        
+        FlowmapData flowData1 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll1 + scrollAdjust1);         
+        normalCoord1 = (flowData1.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData1.color.w), 0));
+  
+        FlowmapData flowData2 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll2 + scrollAdjust2);         
+        normalCoord2 = (flowData2.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData2.color.w), 0));
+        
+        FlowmapData flowData3 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll3 + scrollAdjust3);         
+        normalCoord3 = (flowData3.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData3.color.w), 0));       
+    } else
     {
-        //flowCoord.z = worldViewPos.w;
-        flowCoord.w = 0.0;
-
-        if (hasWading || hasVertexColor)
-        {
-            flowCoord = 0.0;
-
-            if (hasNormalTexcoord)
-            {
-                flowCoord.xy = texCoord0.xy;
-            }
-
-            if (hasVertexColor)
-            {
-                //flowCoord.z = input.Color.w;
-            }
-        }
-    }*/
+        normalCoord1 = normalScroll1 + scrollAdjust1;
+        normalCoord2 = normalScroll2 + scrollAdjust2;
+        normalCoord3 = normalScroll3 + scrollAdjust3;
+    }
     
     Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
     float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 + float3(-1, -1, -2);    
