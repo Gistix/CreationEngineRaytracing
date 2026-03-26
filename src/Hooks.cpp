@@ -216,6 +216,12 @@ namespace Hooks
 				return;
 		}
 
+		// Cull non-effect models with kRefraction when Path Tracing is active
+		if (scene->IsPathTracingActive() && shaderType != RE::BSShader::Type::Effect && pass->shaderProperty) {
+			if (pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+				return;
+		}
+
 		// Skip rendering geometry that has been determined to be occluded
 		// Never cull during reflection rendering - reflections need all visible geometry
 		if (Scene::GetSingleton()->ApplyPathTracingCull() && pass->shader && pass->geometry) {
@@ -309,6 +315,7 @@ namespace Hooks
 
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
+		scene->g_FlowMapSourceTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(527694, 414616).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
 

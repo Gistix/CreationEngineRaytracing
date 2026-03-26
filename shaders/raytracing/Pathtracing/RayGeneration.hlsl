@@ -152,13 +152,12 @@ void Main()
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);   
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);    
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        SpecularHitDistance[idx] = RAY_TMAX;            
+        SpecularHitDistance[idx] = RAY_TMAX;
+        
+        float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
+        MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
+        Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)        
 #endif
-        {
-            float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
-            MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
-            Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
-        }
         return;
 #endif
     }
@@ -220,12 +219,11 @@ void Main()
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
         SpecularHitDistance[idx] = RAY_TMAX;
+        
+        float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
+        MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
+        Depth[idx] = 1;        
     #endif
-        {
-            float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
-            MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
-            Depth[idx] = 1;
-        }
         return;
 #endif
     }
@@ -247,16 +245,14 @@ void Main()
     const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
     SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
     NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);   
-#endif
-
+    
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
-#if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
-    {
-        float3 hitPosW = sourcePosition;
-        MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPosW), 0);
-        Depth[idx] = computeClipDepth(hitPosW);
-    }
-#endif     
+#   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
+    float3 hitPosW = sourcePosition;
+    MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPosW), 0);
+    Depth[idx] = computeClipDepth(hitPosW);
+#   endif   
+#endif   
     
     bool isSssPath = false;
     
@@ -279,7 +275,11 @@ void Main()
         uint buildVertexIndex = 1;          // camera=0, first hit=1
         uint buildBranchID = 1;             // sentinel bit
         float3 buildThp = float3(1,1,1);
-        float3 buildMVs = float3(0,0,0);   // Initial placeholder; actual MV computed inside StablePlanesHandleHit/Miss
+        // Compute MV from the primary surface position. All stable planes for this pixel
+        // share this MV — it tracks the screen-space movement of the actual geometry, not
+        // the virtual position deep in a delta reflection/refraction chain.
+        float3 primaryHitPos = Camera.Position.xyz + sourceDirection * primarySceneDistance;
+        float3 buildMVs = computeMotionVector(primaryHitPos, primaryHitPos);
         float buildSceneLength = primarySceneDistance;
         float3x3 buildImageXform = float3x3(1,0,0, 0,1,0, 0,0,1);
         float buildRoughnessAccum = 0;

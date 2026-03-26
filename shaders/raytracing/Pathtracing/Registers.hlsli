@@ -38,23 +38,26 @@ RWTexture2DArray<uint>                      StablePlanesHeaderUAV       : regist
 RWStructuredBuffer<StablePlane>             StablePlanesBufferUAV       : register(u6);
 RWTexture2D<float4>                         StableRadianceUAV           : register(u7);
 
+#if !(defined(SHARC) && SHARC_UPDATE)
 // PT Motion Vectors output (written by BUILD/REFERENCE pass)
 RWTexture2D<float4>                         MotionVectors               : register(u8);
 
 // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
 RWTexture2D<float>                          Depth                       : register(u9);
+#endif
 
 RaytracingAccelerationStructure             Scene                       : register(t0);
 Texture2D<float4>                           SkyHemisphere               : register(t1);
-StructuredBuffer<Light>                     Lights                      : register(t2);
-StructuredBuffer<Instance>                  Instances                   : register(t3);
-StructuredBuffer<Mesh>                      Meshes                      : register(t4);
+Texture2D<float4>                           WaterFlowMap                : register(t2);
+StructuredBuffer<Light>                     Lights                      : register(t3);
+StructuredBuffer<Instance>                  Instances                   : register(t4);
+StructuredBuffer<Mesh>                      Meshes                      : register(t5);
 
 #if defined(SHARC)
-StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t5);
+StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t6);
 
 #   if !SHARC_UPDATE
-StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t6);
+StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t7);
 #   endif
 #endif
 
