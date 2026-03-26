@@ -21,6 +21,36 @@
 #include "raytracing/include/StablePlanes.hlsli"
 #include "raytracing/include/Materials/BSDF.hlsli"
 
+// ============================================================================
+// Motion Vector computation (shared by all path tracer modes)
+// ============================================================================
+// Computes screen-space motion vector from a pair of world-space positions.
+
+float3 computeMotionVector(float3 posW, float3 prevPosW)
+{
+    float4 currClip = mul(Camera.ViewProj, float4(posW - Camera.Position, 1.0));
+    float4 prevClip = mul(Camera.PrevViewProj, float4(prevPosW - Camera.PositionPrev, 1.0));
+
+    float3 currNDC = currClip.xyz / currClip.w;
+    float3 prevNDC = prevClip.xyz / prevClip.w;
+
+    float3 motion = prevNDC - currNDC;
+    return motion * float3(0.5f, -0.5f, 1.0f);
+}
+
+// ============================================================================
+// Clip-space depth computation (shared by all path tracer modes)
+// ============================================================================
+// Returns NDC depth (clipPos.z / clipPos.w) in [0, 1] range for a world-space
+// position, matching the standard DirectX depth buffer convention used by
+// Skyrim's raster pipeline (see Utility.hlsl: SV_POSITION → positionCS.z/w).
+
+float computeClipDepth(float3 posW)
+{
+    float4 clipPos = mul(Camera.ViewProj, float4(posW - Camera.Position, 1.0));
+    return clipPos.z / clipPos.w;
+}
+
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
 
 // ============================================================================
@@ -89,27 +119,6 @@ struct StablePlaneExplorationPayload
         return p;
     }
 };
-
-// ============================================================================
-// Motion Vector computation
-// ============================================================================
-// Computes 2.5D screen-space motion vector from a pair of world-space positions.
-// Returns float3(pixelDisplacementXY, viewDepthDelta).
-// Uses Camera.ViewProj (current, unjittered) and Camera.PrevViewProj (previous, unjittered).
-
-float3 computeMotionVector(float3 posW, float3 prevPosW)
-{
-    float4 clipPos = mul(float4(posW, 1.0), Camera.ViewProj);
-    clipPos.xyz /= clipPos.w;
-
-    float4 prevClipPos = mul(float4(prevPosW, 1.0), Camera.PrevViewProj);
-    prevClipPos.xyz /= prevClipPos.w;
-
-    float3 motion;
-    motion.xy = (prevClipPos.xy - clipPos.xy) * float2(0.5, -0.5) * Camera.RenderSize;
-    motion.z = prevClipPos.w - clipPos.w;
-    return motion;
-}
 
 // ============================================================================
 // imageXform computation helpers
@@ -239,9 +248,12 @@ void StablePlanesHandleMiss(
         /* packedCounters */ 0
     );
 
-    // Write dominant plane MV to global output
+    // Write dominant plane MV and Depth to global output
     if (isDominant)
+    {
         MotionVectors[pixelPos] = float4(skyMV, 0);
+        Depth[pixelPos] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
+    }
 
     // Accumulate sky radiance as stable (noise-free) radiance
     ctx.AccumulateStableRadiance(pixelPos, skyRadiance * throughput);
@@ -339,7 +351,10 @@ StablePlanesHitResult StablePlanesHandleHit(
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
+        {
             MotionVectors[pixelPos] = float4(computedMV, 0);
+            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+        }
         return result;
     }
 
@@ -389,21 +404,31 @@ StablePlanesHitResult StablePlanesHandleHit(
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
+        {
             MotionVectors[pixelPos] = float4(computedMV, 0);
+            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+        }
         return result;
     }
 
     // Pure delta surface: evaluate delta lobe lighting (sun/point light reflections)
-    // This is deterministic and noise-free; FILL pass won't visit this surface.
+    // This is deterministic and noise-free, captured in stable radiance.
+    // FILL pass skips delta lighting for pure delta primary surfaces to avoid double-counting.
     {
         float3 deltaLighting = EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, vertexIndex > 1);
         if (any(deltaLighting > 0))
             ctx.AccumulateStableRadiance(pixelPos, deltaLighting * throughput);
     }
 
-    // Fork paths for each active lobe
-    // The first active lobe continues on the current path (reuse the current planeIndex)
-    // Additional lobes get forked to empty planes
+    // Fork paths for each active lobe.
+    // On plane 0 with 2+ delta lobes (e.g. water: transmission + reflection),
+    // we store the delta surface itself as plane 0's base and fork ALL lobes
+    // to child planes. The FILL pass will start from the delta surface and
+    // randomly select a branch via BSDF sampling, naturally filling all children.
+    // On plane 0 with exactly 1 delta lobe (PSR: e.g. pure mirror), we continue
+    // that lobe on the current path as primary surface replacement.
+    // On other planes, we always continue the first lobe.
+    bool canReuseCurrent = (planeIndex != 0) || (activeDeltaLobes == 1);
 
     // Find empty planes for forking
     int availableCount = 0;
@@ -417,7 +442,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         if (!any(deltaLobes[lobeIdx].thp > 0))
             continue;
 
-        if (lobeIdx == firstActiveLobe)
+        if (canReuseCurrent && lobeIdx == firstActiveLobe)
         {
             // First active lobe: continue on current path
             result.continueTracing      = true;
@@ -438,7 +463,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
         else
         {
-            // Additional lobes: fork to empty plane if available
+            // Fork to empty plane
             if (forkedCount < availableCount)
             {
                 int targetPlane = availablePlanes[forkedCount];
@@ -455,13 +480,15 @@ StablePlanesHitResult StablePlanesHandleHit(
                 forkPayload.Pack(packed);
                 ctx.StoreExplorationStart(pixelPos, targetPlane, packed);
             }
-            // else: no more free planes, discard this lobe
         }
     }
 
-    // If no lobe continued (shouldn't happen, but safety), store as base surface
+    // If path did not continue (plane 0 multi-fork, or no lobes), store as base
     if (!result.continueTracing)
     {
+        // When multi-forking on plane 0 (canReuseCurrent=false), the delta surface
+        // should NOT be dominant — the first child plane will become dominant instead.
+        bool storeAsDominant = isDominant && canReuseCurrent;
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
@@ -469,10 +496,13 @@ StablePlanesHitResult StablePlanesHandleHit(
             throughput, computedMV,
             surface.Roughness, surface.Normal,
             max(surface.DiffuseAlbedo, 0.04), max(surface.F0, 0.04),
-            isDominant, waterFlags, waterCounters
+            storeAsDominant, waterFlags, waterCounters
         );
-        if (isDominant)
+        if (storeAsDominant)
+        {
             MotionVectors[pixelPos] = float4(computedMV, 0);
+            Depth[pixelPos] = computeClipDepth(virtualWorldPos);
+        }
     }
 
     return result;
