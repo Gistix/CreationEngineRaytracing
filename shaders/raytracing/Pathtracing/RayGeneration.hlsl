@@ -499,7 +499,7 @@ void Main()
         float3 fillHitPos = fillRayOrigin + fillRayDir * fillPayload.hitDistance;
         sourcePayload = fillPayload;
         sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * fillSceneLength, Raytracing.PixelConeSpreadAngle);
-        sourceSurface = SurfaceMaker::make(fillHitPos, fillPayload, fillRayDir, sourceRayCone, sourceInstance, sourceMaterial, false);
+        sourceSurface = SurfaceMaker::make(fillHitPos, fillPayload, fillRayDir, sourceRayCone, sourceInstance, sourceMaterial, true);
         sourceBRDFContext = BRDFContext::make(sourceSurface, -fillRayDir);
         sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
         if (!sourceIsEnter) sourceSurface.FlipNormal();
@@ -651,6 +651,7 @@ void Main()
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
             BSDFSample bsdfSample;
+            bool isPrimaryReplacement = false;
             
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
             
@@ -668,6 +669,7 @@ void Main()
             bool isDelta = bsdfSample.isLobe(LobeType::Delta);
             isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+            isPrimaryReplacement = surface.Primary && isDelta;
 
             if (isValid)
                 direction = bsdfSample.wo;
@@ -788,7 +790,7 @@ void Main()
             
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
 
-            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
+            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, isPrimaryReplacement);
 
             // Pass through Effect materials in bounce: accumulate emissive, continue ray unchanged
             bool effectMiss = false;
@@ -823,7 +825,7 @@ void Main()
                 }
 
                 localPosition = ray.Origin + direction * payload.hitDistance;
-                surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
+                surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, isPrimaryReplacement);
             }
 
             if (effectMiss)
@@ -899,25 +901,25 @@ void Main()
             {
 #ifdef SUBSURFACE_SCATTERING
                 if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
+                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, surface.Primary);
                     isSssPath = true;
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
                     StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
+                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, false);
+                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
                 }
             }
             
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
             if (bounceHasDeltaLobes)
             {
-                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, false);
+                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
             }
             
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
@@ -943,6 +945,7 @@ void Main()
             sampleRadiance += directRadiance * throughput;
             sampleRadiance += surface.Emissive * throughput;
 #endif
+
         }
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
