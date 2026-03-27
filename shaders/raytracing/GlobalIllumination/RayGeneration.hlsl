@@ -378,12 +378,12 @@ void Main()
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
                     StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
+                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, false);
                 }
             }
             

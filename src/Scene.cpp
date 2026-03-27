@@ -197,7 +197,7 @@ nvrhi::ITexture* Scene::GetFlowMapTexture()
 			.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 			.setHeight(nativeTexDesc.Height)
 			.setFormat(formatIt->second)
-			.setInitialState(nvrhi::ResourceStates::ShaderResource)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 			.setDebugName("FlowMap Texture");
 
 		m_FlowMapTexture = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(m_FlowMapResource), textureDesc);
