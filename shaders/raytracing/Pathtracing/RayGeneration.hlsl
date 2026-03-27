@@ -666,15 +666,16 @@ void Main()
             const bool hasTransmission = false;
 #else            
             bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed);
-            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
-            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
-            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
-            isPrimaryReplacement = surface.Primary && isDelta;
-
+            
             if (isValid)
                 direction = bsdfSample.wo;
             else
                 break;
+            
+            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
+            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
+            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+            isPrimaryReplacement = surface.Primary && isDelta;
 
             throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
 
