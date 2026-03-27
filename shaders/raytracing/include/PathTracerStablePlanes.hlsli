@@ -410,7 +410,7 @@ StablePlanesHitResult StablePlanesHandleHit(
     // This is deterministic and noise-free, captured in stable radiance.
     // FILL pass skips delta lighting for pure delta primary surfaces to avoid double-counting.
     {
-        float3 deltaLighting = EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, vertexIndex > 1);
+        float3 deltaLighting = EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
         if (any(deltaLighting > 0))
             ctx.AccumulateStableRadiance(pixelPos, deltaLighting * throughput);
     }
