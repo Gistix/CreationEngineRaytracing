@@ -485,6 +485,7 @@ struct DefaultBSDF
     float specTrans;                        ///< Mix between dielectric BRDF and specular BSDF.
     float coatStrength;                     ///< Coat layer coverage.
     float3 coatLocalN;                      ///< Coat normal in base tangent frame.
+    float3 coatTransmittance;               ///< Single-pass coat transmittance, sqrt(CoatColor).
 
     float pDiffuseReflection;               ///< Probability for sampling the diffuse BRDF.
     float pDiffuseTransmission;             ///< Probability for sampling the diffuse BTDF.
@@ -506,6 +507,24 @@ struct DefaultBSDF
         float3 coatT, coatB;
         CreateOrthonormalBasis(coatLocalN, coatT, coatB);
         return coatT * v.x + coatB * v.y + coatLocalN * v.z;
+    }
+
+    // OpenPBR 3.9.7: View-dependent coat absorption for reflected light (two-pass through coat).
+    // coat_color = T_coat^2 (square of normal-incidence transmittance per OpenPBR).
+    // Full path absorption for reflection: T_coat^(1/cosI + 1/cosO).
+    float3 evalCoatAbsorption(float cosI, float cosO)
+    {
+        float pathScale = 1.0 / max(abs(cosI), 0.01) + 1.0 / max(abs(cosO), 0.01);
+        float3 absorption = pow(coatTransmittance, pathScale);
+        return lerp(float3(1, 1, 1), absorption, coatStrength);
+    }
+
+    // Single-pass coat absorption for transmitted light (enters through coat only).
+    float3 evalCoatAbsorptionSinglePass(float cosI)
+    {
+        float pathScale = 1.0 / max(abs(cosI), 0.01);
+        float3 absorption = pow(coatTransmittance, pathScale);
+        return lerp(float3(1, 1, 1), absorption, coatStrength);
     }
 
     void __init(float3 N, float3 V, Surface surface, bool isEnter = true)
@@ -572,6 +591,9 @@ struct DefaultBSDF
 
             // Coat normal in base tangent frame
             coatLocalN = surface.ToLocal(surface.CoatNormal);
+
+            // OpenPBR: coat_color = T^2, so single-pass transmittance T = sqrt(coat_color)
+            coatTransmittance = sqrt(max(surface.CoatColor, float3(1e-5, 1e-5, 1e-5)));
         }
         else
         {
@@ -579,6 +601,7 @@ struct DefaultBSDF
             coatReflection.alpha = 0;
             coatReflection.activeLobes = 0;
             coatLocalN = float3(0, 0, 1);
+            coatTransmittance = float3(1, 1, 1);
         }
 
         float surfaceMetallic = surface.Metallic;
@@ -641,6 +664,17 @@ struct DefaultBSDF
         if (pDiffuseTransmission > 0.f) diffuse += (1.f - specTrans) * diffTrans * diffuseTransmission.Eval(wi, wo);
         if (pSpecularReflection > 0.f) specular += (1.f - specTrans) * specularReflection.Eval(wi, wo);
         if (pSpecularReflectionTransmission > 0.f) specular += specTrans * (specularReflectionTransmission.Eval(wi, wo));   // <- do we want to consider transmission as specular? this depends entirely on denoiser - should ask RR folks
+
+        // OpenPBR 3.9.7: View-dependent coat absorption applied to base lobes.
+        // Reflected rays traverse the coat twice; transmitted rays traverse it once.
+        if (coatStrength > 0)
+        {
+            float3 coatAbs = (wo.z > 0) ? evalCoatAbsorption(wi.z, wo.z) : evalCoatAbsorptionSinglePass(wi.z);
+            diffuse *= coatAbs;
+            specular *= coatAbs;
+        }
+
+        // Coat reflection is from above the absorbing medium and is not tinted.
         if (pCoatReflection > 0.f) specular += coatStrength * coatReflection.Eval(toCoatLocal(wi), toCoatLocal(wo));
 
         return float4(diffuse+specular, Average(specular)); // use average instead of sum to avoid hitting fp16 ceiling early
@@ -714,6 +748,14 @@ struct DefaultBSDF
             if (pDiffuseReflection > 0.f) pdf += pDiffuseReflection * diffuseReflection.EvalPdf(wi, wo);
             if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
             if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
+        }
+
+        // OpenPBR 3.9.7: Apply view-dependent coat absorption to base lobe weights (coat lobe is unaffected).
+        bool sampledCoat = (uSelect >= pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission) && pCoatReflection > 0.f;
+        if (!sampledCoat && coatStrength > 0 && valid)
+        {
+            float3 coatAbs = (wo.z > 0) ? evalCoatAbsorption(wi.z, wo.z) : evalCoatAbsorptionSinglePass(wi.z);
+            weight *= coatAbs;
         }
 
         if( !valid || (lobe & (uint)LobeType::Delta) != 0 )
@@ -817,6 +859,15 @@ struct DefaultBSDF
             deltaCoatReflection.dir = fromCoatLocal(float3(-wiCoat.x, -wiCoat.y, wiCoat.z));
             deltaCoatReflection.probability = pCoatReflection;
             deltaCoatReflection.thp = coatStrength * evalFresnelSchlick(coatReflection.albedo, 1.f, wiCoat.z);
+        }
+
+        // OpenPBR 3.9.7: Apply coat absorption to base delta lobes.
+        if (coatStrength > 0)
+        {
+            if (deltaReflection.probability > 0)
+                deltaReflection.thp *= evalCoatAbsorption(wi.z, wi.z); // mirror reflection: cosO = cosI
+            if (deltaTransmission.probability > 0)
+                deltaTransmission.thp *= evalCoatAbsorptionSinglePass(wi.z);
         }
 
         // Lobes are by convention in this order, and the index must match BSDFSample::getDeltaLobeIndex() as well as the UI.

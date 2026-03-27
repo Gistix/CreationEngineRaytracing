@@ -127,6 +127,13 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 }
             }
         }
+
+        // OpenPBR 3.11: Emission sits below the coat and is absorbed.
+        // At normal incidence, coat_color = T^2 gives the round-trip absorption.
+        if (surface.CoatStrength > 0)
+        {
+            surface.Emissive *= lerp(float3(1, 1, 1), surface.CoatColor, surface.CoatStrength);
+        }
     }
     else if (material.ShaderType == ShaderType::Lighting)
     {
