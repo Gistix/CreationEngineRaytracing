@@ -312,7 +312,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
         //Albedo = baseColorLinear; // This breaks sharc
         surface.Albedo = 0;
-        surface.Emissive = baseColorLinear * LIGHTINGSETTINGS.Effect;
+        surface.Emissive = baseColorLinear * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
     }
     else
     {

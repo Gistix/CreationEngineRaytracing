@@ -264,7 +264,7 @@ float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext b
 // throughput multiplied by the light irradiance. This correctly handles sun glints, point light
 // reflections in mirrors, etc.
 float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance,
-                              in StandardBSDF bsdf, inout uint randomSeed, bool isBounce)
+                              in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
     DeltaLobe deltaLobes[cMaxDeltaLobes];
     int deltaLobeCount;
@@ -297,7 +297,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
                 // But a delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
                 // Convert: L_sun = E_sun / ω_sun, where ω_sun = 2π(1-cosSunDisk).
                 float sunSolidAngle = 2.0f * K_PI * (1.0f - cosSunDisk);
-                float3 contribution = deltaThroughput * irradiance / sunSolidAngle * (isBounce ? Raytracing.Directional : 1.0f);
+                float3 contribution = deltaThroughput * irradiance / sunSolidAngle * (isPrimary ? 1.0f : Raytracing.Directional);
                 
                 contribution *= TraceRayShadow(Scene, surface, deltaDir, randomSeed);
                 
@@ -329,7 +329,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
                 
                 if (cosDelta >= cosAngle)
                 {
-                    float3 contribution = deltaThroughput * lightIrradiance * (isBounce ? Raytracing.Point : 1.0f);
+                    float3 contribution = deltaThroughput * lightIrradiance * (isPrimary ? 1.0f : Raytracing.Point);
                     
                     // Shadow ray toward the light
 #if USE_LIGHT_TLAS    
@@ -348,10 +348,10 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
     return totalRadiance;
 }
 
-float3 EvaluateDirectRadiance(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isBounce)
+float3 EvaluateDirectRadiance(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
-    float3 radiance = EvalDirectionalLight(material, surface, brdfContext, bsdf, randomSeed) * (isBounce ? Raytracing.Directional : 1.0f);
-    radiance += EvalPointLight(material, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isBounce ? Raytracing.Point : 1.0f);
+    float3 radiance = EvalDirectionalLight(material, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
+    radiance += EvalPointLight(material, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
 
     return radiance;
 }

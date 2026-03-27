@@ -334,7 +334,7 @@ void Main()
             Instance buildInstance;
             Material buildMaterial;
             RayCone buildRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * buildSceneLength, Raytracing.PixelConeSpreadAngle);
-            Surface buildSurface = SurfaceMaker::make(buildHitPos, buildPayload, hitResult.nextRayDir, buildRayCone, buildInstance, buildMaterial, false);
+            Surface buildSurface = SurfaceMaker::make(buildHitPos, buildPayload, hitResult.nextRayDir, buildRayCone, buildInstance, buildMaterial, true);
             BRDFContext buildBrdfCtx = BRDFContext::make(buildSurface, -hitResult.nextRayDir);
             bool buildIsEnter = dot(buildSurface.FaceNormal, buildBrdfCtx.ViewDirection) >= 0.0f;
             if (!buildIsEnter) buildSurface.FlipNormal();
@@ -562,18 +562,18 @@ void Main()
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
                 StandardBSDF specBsdf = StandardBSDF::make(specSurface, true);
-                direct += EvaluateDirectRadiance(sourceMaterial, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, false);
+                direct += EvaluateDirectRadiance(sourceMaterial, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
             }
             else
 #endif
-                direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);
+                direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
         }
         
         // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights.
         // Skip for pure delta surfaces — their delta lighting was captured in BUILD's stable radiance.
         if (sourceHasDeltaLobes && sourceHasNonDeltaLobes)
         {
-            direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, false);
+            direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
         }
     }
 
@@ -905,19 +905,19 @@ void Main()
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
                     StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, true);
+                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, true);
+                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, false);
                 }
             }
             
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
             if (bounceHasDeltaLobes)
             {
-                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
+                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, false);
             }
             
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
