@@ -35,4 +35,6 @@ namespace Constants
 	static constexpr uint32_t INVALID_FRAME_ID = UINT32_MAX;
 
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
+
+	static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;
 }
