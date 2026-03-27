@@ -350,6 +350,9 @@ void Main()
                 hitResult.nextInsideWater, hitResult.nextWaterAbsorption);
         }
 
+        if (buildIsDominant)
+            childNeedsDominant = true;
+
         // Explore forked paths (planes 1, 2, ...)
         int nextExplorePlane = spCtx.FindNextToExplore(idx, 1);
         while (nextExplorePlane >= 0)
