@@ -34,7 +34,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		if (flags.any(Flags::Dynamic)) {
 			geometry.dynamicPosition.resize(vertexCountIn);
 
-			static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ RE::BSDynamicTriShape::Ni_RTTI };
+			static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
 
 			if (bsGeometryPtr->GetRTTI() == dynamicTriShapeRTTI.get()) {
 				auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
@@ -90,7 +90,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		float3 min(FLT_MAX), max(-FLT_MAX);
 
 		for (uint32_t i = 0; i < vertexCountIn; i++) {
-			uint8_t* vtx = rendererData->rawVertexData + i * vertexSize;
+			uint8_t* vtx = Util::Adapter::CLib::GetVertexData(rendererData) + i * vertexSize;
 
 			Vertex vertexData{};
 
@@ -236,7 +236,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		}
 		else {
 			geometry.triangles.resize(triangleCountIn);
-			std::memcpy(geometry.triangles.data(), rendererData->rawIndexData, sizeof(Triangle) * triangleCountIn);
+			std::memcpy(geometry.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
 
 			if (HasDoubleSidedGeom())
 				flags.set(Mesh::Flags::DoubleSidedGeom);
@@ -406,7 +406,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 						scalars[0] = lightingPBRMaterial->GetRoughnessScale();
 						scalars[1] = lightingPBRMaterial->GetSpecularLevel();
 
-						pbrFlags = Util::Material::GetPBRShaderFlags(lightingPBRMaterial);
+						pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(lightingPBRMaterial);
 
 						if (pbrFlags & PBRShaderFlags::Subsurface) {
 							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
@@ -456,7 +456,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 									lightingBaseMaterial->specularColorScale
 								};
 
-								scalars[0] = Util::Material::ShininessToRoughness(lightingBaseMaterial->specularPower);
+								scalars[0] = Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterial->specularPower);
 							}
 
 							// SSS color
@@ -834,10 +834,10 @@ bool Mesh::UpdateSkinning()
 		return false;
 
 	// Update Bone matrices
-	auto& skinInstance = bsGeometryPtr->GetGeometryRuntimeData().skinInstance;
+	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
 
 	// RaceMenu crash fix
-	if (!skinInstance || !skinInstance.get())
+	if (!skinInstance)
 		return false;
 
 	const auto frameID = skinInstance->frameID;

@@ -89,6 +89,12 @@ using float3x4 = DirectX::XMFLOAT3X4;
 using float4x4 = DirectX::SimpleMath::Matrix;
 using uint = uint32_t;
 
+#if defined(FALLOUT4)
+namespace RE {
+	using FormID = TESFormID;
+}
+#endif
+
 #include "Types.h"
 
 #if defined(CERT_EXPORTS)
