@@ -90,8 +90,8 @@ void Main()
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
-        DiffuseOutput[idx] = float3(0.0f, 0.0f, 0.0f);
-        SpecularOutput[idx] = float3(0.0f, 0.0f, 0.0f);   
+        DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
         
 #   else
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);  
@@ -148,6 +148,7 @@ void Main()
 
     float3 radiance = 0;
     bool isSpecular = false;
+    float diffHitDist = 0;
     float specHitDist = 0;
 
     RayDesc ray;
@@ -307,7 +308,9 @@ void Main()
             
             if (isSpecular)
                 specHitDist += payload.hitDistance;
-
+            else
+                diffHitDist += payload.hitDistance;
+            
             if (!payload.Hit())
             {
                 float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
@@ -422,8 +425,8 @@ void Main()
 #   endif
     
 #   if defined(RAW_RADIANCE)
-    DiffuseOutput[idx] = float3(isSpecular ? 0.0f : radiance);
-    SpecularOutput[idx] = float3(isSpecular ? radiance * specularAlbedo : 0.0f);
+    DiffuseOutput[idx] = float4(isSpecular ? float3(0.0f, 0.0f, 0.0f) : radiance, diffHitDist);
+    SpecularOutput[idx] = float4(isSpecular ? radiance * specularAlbedo : float3(0.0f, 0.0f, 0.0f), specHitDist);
 #   else
     Output[idx] = float4(radiance, 1.0f);
 #   endif

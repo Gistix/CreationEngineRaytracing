@@ -2,6 +2,7 @@
 
 #include "Renderer/RootRenderNode.h"
 #include "Renderer/RenderNode.h"
+#include "Renderer/FrameGraphBuilder.h"
 
 class RenderGraph
 {
@@ -38,6 +39,8 @@ public:
     void ResolutionChanged(uint2 resolution);
 
     void SettingsChanged(const Settings& settings);
+
+    void Setup(const Settings& settings);
 
     void Execute(nvrhi::ICommandList* commandList);
 };

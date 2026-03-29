@@ -1,4 +1,5 @@
 #include "RootRenderNode.h"
+#include "Renderer/FrameGraphBuilder.h"
 
 void RootRenderNode::AttachRenderNode(RenderNode* renderNode)
 {
@@ -21,6 +22,17 @@ void RootRenderNode::DetachRenderNode(RenderNode* renderNode)
 	);
 
 	m_Children.erase(newEnd, m_Children.end());
+}
+
+void RootRenderNode::Setup(FrameGraphBuilder& builder, const Settings& settings)
+{
+	if (!m_Enabled)
+		return;
+
+	for (auto* child : m_Children)
+	{
+		child->Setup(builder, settings);
+	}
 }
 
 void RootRenderNode::ResolutionChanged(uint2 resolution)

@@ -9,8 +9,8 @@ enum class Mode
 enum class Denoiser
 {
 	None,
-	DLSS_RR,
-	Other
+	NRD_REBLUR,
+	DLSS_RR
 };
 
 struct GeneralSettings

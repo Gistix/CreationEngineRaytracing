@@ -1,5 +1,6 @@
 #include "GlobalIllumination.h"
 #include "Renderer.h"
+#include "Renderer/FrameGraphBuilder.h"
 #include "Scene.h"
 
 namespace Pass::Raytracing
@@ -16,8 +17,29 @@ namespace Pass::Raytracing
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
-		CreateBindingLayout();
 		CreatePipeline();
+	}
+
+	void GlobalIllumination::Setup(FrameGraphBuilder& builder, const Settings& settings)
+	{
+		if (settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
+			return;
+
+		const uint2 resolution = GetRenderer()->GetResolution();
+
+		TransientTextureDesc desc;
+		desc.width = resolution.x;
+		desc.height = resolution.y;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+
+		desc.debugName = "GI NRD Diffuse Radiance Hit Distance";
+		builder.WriteTexture(FrameGraphTextureId::NrdDiffuseRadianceHitDistance, desc);
+
+		desc.debugName = "GI NRD Specular Radiance Hit Distance";
+		builder.WriteTexture(FrameGraphTextureId::NrdSpecularRadianceHitDistance, desc);
 	}
 
 	void GlobalIllumination::ResolutionChanged([[maybe_unused]] uint2 resolution)
@@ -59,14 +81,22 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
-			nvrhi::BindingLayoutItem::Texture_UAV(2),
-			nvrhi::BindingLayoutItem::Texture_UAV(3)
+			nvrhi::BindingLayoutItem::Texture_UAV(1)
 		};
+
+		auto* scene = Scene::GetSingleton();
+		auto& settings = scene->m_Settings;
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2));
+
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
 
 	void GlobalIllumination::CreatePipeline()
 	{
+		CreateBindingLayout();
+
 		if (GetRenderer()->m_Settings.UseRayQuery)
 			CreateComputePipeline();
 		else
@@ -169,11 +199,37 @@ namespace Pass::Raytracing
 
 		auto* scene = Scene::GetSingleton();
 
+		auto& settings = scene->m_Settings;
+
 		auto* sceneGraph = scene->GetSceneGraph();
 
 		auto* renderTargets = renderer->GetRenderTargets();
+		const auto& sharedFrameResources = renderer->GetSharedFrameResources();
 
-		auto* rrInput = renderer->GetRRInput();
+		nvrhi::ITexture* diffuseTexture = nullptr;
+		nvrhi::ITexture* specularTexture = nullptr;
+		nvrhi::ITexture* specularHitDistTexture = nullptr;
+
+		switch (settings.GeneralSettings.Denoiser)
+		{
+		case Denoiser::NRD_REBLUR:
+		{
+			diffuseTexture = sharedFrameResources.nrdDiffuseRadianceHitDistance;
+			specularTexture = sharedFrameResources.nrdSpecularRadianceHitDistance;
+			break;
+		}
+		case Denoiser::DLSS_RR:
+		{
+			auto* rrInput = renderer->GetRRInput();
+
+			diffuseTexture = renderer->GetMainTexture();		
+			specularTexture = rrInput->specularAlbedo;
+			specularHitDistTexture = rrInput->specularHitDistance;
+			break;
+		}
+		default:
+			break;
+		}
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -194,10 +250,12 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetHashEntriesBuffer()),
-			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
-			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
-			nvrhi::BindingSetItem::Texture_UAV(3, rrInput->specularHitDistance)
+			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture),
+			nvrhi::BindingSetItem::Texture_UAV(1, specularTexture)
 		};
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, specularHitDistTexture));
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
@@ -205,7 +263,8 @@ namespace Pass::Raytracing
 	}
 
 	void GlobalIllumination::Execute(nvrhi::ICommandList* commandList)
-	{
+	{	
+		m_DirtyBindings = true;
 		CheckBindings();
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();

@@ -60,6 +60,8 @@ public:
 
 	void AddNode(RenderNode renderNode);
 
+	void Setup(class FrameGraphBuilder& builder, const Settings& settings);
+
 	void ResolutionChanged(uint2 resolution) override;
 
 	void SettingsChanged(const Settings& settings) override;

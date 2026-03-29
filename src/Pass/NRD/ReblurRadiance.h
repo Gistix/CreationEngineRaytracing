@@ -17,7 +17,8 @@ namespace Pass::NRD
 			eastl::string debugName;
 		};
 
-		static constexpr nrd::Identifier kDenoiserIdentifier = nrd::Identifier(nrd::Denoiser::REBLUR_DIFFUSE);
+		static constexpr nrd::Denoiser kDenoiser = nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR;
+		static constexpr nrd::Identifier kDenoiserIdentifier = nrd::Identifier(kDenoiser);
 
 		nvrhi::SamplerHandle m_NearestClampSampler;
 		nvrhi::SamplerHandle m_LinearClampSampler;
@@ -32,7 +33,9 @@ namespace Pass::NRD
 		eastl::vector<nvrhi::TextureHandle> m_TransientPool;
 
 		nvrhi::TextureHandle m_DiffuseOutput;
-		nvrhi::TextureHandle m_ValidationOutput;
+		nvrhi::TextureHandle m_SpecularOutput;
+		
+		nvrhi::TextureHandle m_MotionVectorsScratch;
 		nvrhi::TextureHandle m_FallbackSrvTexture;
 		nvrhi::TextureHandle m_FallbackUavTexture;
 
@@ -60,11 +63,11 @@ namespace Pass::NRD
 		ReblurRadiance(Renderer* renderer);
 		~ReblurRadiance() override;
 
+		void Setup(FrameGraphBuilder& builder, const Settings& settings) override;
 		void SettingsChanged(const Settings& settings) override;
 		void ResolutionChanged(uint2 resolution) override;
 		void Execute(nvrhi::ICommandList* commandList) override;
 
 		nvrhi::ITexture* GetDiffuseOutput() const { return m_DiffuseOutput; }
-		nvrhi::ITexture* GetValidationOutput() const { return m_ValidationOutput; }
 	};
 }

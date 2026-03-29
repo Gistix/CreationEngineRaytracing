@@ -1,23 +1,9 @@
 #include "ReblurRadiance.h"
 
 #include "Renderer.h"
+#include "Renderer/FrameGraphBuilder.h"
 #include "Scene.h"
 #include "ShaderUtils.h"
-
-namespace
-{
-	constexpr auto kTarget = L"cs_6_5";
-
-	std::wstring ToWide(const eastl::string& value)
-	{
-		return std::wstring(value.begin(), value.end());
-	}
-
-	void CopyMatrix(float* dst, const float4x4& src)
-	{
-		std::memcpy(dst, &src, sizeof(float) * 16);
-	}
-}
 
 namespace Pass::NRD
 {
@@ -36,8 +22,25 @@ namespace Pass::NRD
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
 
+		m_ReblurSettings = {};
+		m_ReblurSettings.checkerboardMode = nrd::CheckerboardMode::OFF;
+		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::OFF;
+		m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(30u, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
+		m_ReblurSettings.maxFastAccumulatedFrameNum = 6;
+		m_ReblurSettings.maxStabilizedFrameNum = 30;
+		m_ReblurSettings.fastHistoryClampingSigmaScale = 1.5f;
+
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
 		Setup();
+	}
+
+	void ReblurRadiance::Setup(FrameGraphBuilder& builder, const Settings& settings)
+	{
+		if (settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
+			return;
+
+		builder.ReadTexture(FrameGraphTextureId::NrdDiffuseRadianceHitDistance);
+		builder.ReadTexture(FrameGraphTextureId::NrdSpecularRadianceHitDistance);
 	}
 
 	ReblurRadiance::~ReblurRadiance()
@@ -60,7 +63,8 @@ namespace Pass::NRD
 		m_ResourceBindingLayout = nullptr;
 		m_ConstantBuffer = nullptr;
 		m_DiffuseOutput = nullptr;
-		m_ValidationOutput = nullptr;
+		m_SpecularOutput = nullptr;
+		m_MotionVectorsScratch = nullptr;
 		m_FallbackSrvTexture = nullptr;
 		m_FallbackUavTexture = nullptr;
 	}
@@ -71,7 +75,7 @@ namespace Pass::NRD
 
 		nrd::DenoiserDesc denoiserDesc = {};
 		denoiserDesc.identifier = kDenoiserIdentifier;
-		denoiserDesc.denoiser = nrd::Denoiser::REBLUR_DIFFUSE;
+		denoiserDesc.denoiser = kDenoiser;
 
 		nrd::InstanceCreationDesc creationDesc = {};
 		creationDesc.denoisers = &denoiserDesc;
@@ -178,8 +182,8 @@ namespace Pass::NRD
 					pipelineDesc.computeShaderDXIL.bytecode,
 					size_t(pipelineDesc.computeShaderDXIL.size));
 			} else {
-				eastl::string shaderIdentifier = pipelineDesc.shaderIdentifier;
-				eastl::vector<eastl::string> tokens;
+				std::string shaderIdentifier = pipelineDesc.shaderIdentifier;
+				eastl::vector<std::string> tokens;
 
 				size_t start = 0;
 				while (start <= shaderIdentifier.size()) {
@@ -203,20 +207,20 @@ namespace Pass::NRD
 				eastl::vector<DxcDefine> defines;
 
 				for (size_t tokenIndex = 1; tokenIndex < tokens.size(); ++tokenIndex) {
-					const eastl::string& token = tokens[tokenIndex];
+					const std::string& token = tokens[tokenIndex];
 					const size_t separator = token.find('=');
 
-					defineNames.push_back(ToWide(separator == eastl::string::npos ? token : token.substr(0, separator)));
-					defineValues.push_back(ToWide(separator == eastl::string::npos ? eastl::string("1") : token.substr(separator + 1)));
+					defineNames.push_back(Util::StringToWString(separator == std::string::npos ? token : token.substr(0, separator)));
+					defineValues.push_back(Util::StringToWString(separator == std::string::npos ? std::string("1") : token.substr(separator + 1)));
 				}
 
 				defines.reserve(defineNames.size());
 				for (size_t defineIndex = 0; defineIndex < defineNames.size(); ++defineIndex)
 					defines.push_back({ defineNames[defineIndex].c_str(), defineValues[defineIndex].c_str() });
 
-				const std::wstring shaderPath = L"extern/NRD/Shaders/" + ToWide(tokens[0]);
-				const std::wstring entryPoint = ToWide(instanceDesc.shaderEntryPoint);
-				ShaderUtils::CompileShader(shaderBlob, shaderPath.c_str(), defines, kTarget, entryPoint.c_str());
+				const std::wstring shaderPath = L"extern/NRD/Shaders/" + Util::StringToWString(tokens[0]);
+				const std::wstring entryPoint = Util::StringToWString(std::string{ instanceDesc.shaderEntryPoint });
+				ShaderUtils::CompileShader(shaderBlob, shaderPath.c_str(), defines, L"cs_6_5", entryPoint.c_str());
 
 				if (shaderBlob) {
 					pipeline.shader = device->createShader(
@@ -299,12 +303,32 @@ namespace Pass::NRD
 			nvrhi::TextureDesc desc;
 			desc.width = resolution.x;
 			desc.height = resolution.y;
-			desc.format = nvrhi::Format::RGBA8_UNORM;
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			desc.isUAV = true;
 			desc.keepInitialState = true;
 			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-			desc.debugName = "NRD Reblur Validation Output";
-			m_ValidationOutput = device->createTexture(desc);
+			desc.debugName = "NRD Reblur Specular Output";
+			m_SpecularOutput = device->createTexture(desc);
+		}
+
+		{
+			nvrhi::ITexture* sourceMotionVectors = Scene::GetSingleton()->IsPathTracingActive()
+				? GetRenderer()->m_PTMotionVectors.Get()
+				: GetRenderer()->GetMotionVectorTexture();
+
+			nvrhi::TextureDesc desc = sourceMotionVectors
+				? sourceMotionVectors->getDesc()
+				: nvrhi::TextureDesc();
+			desc.width = eastl::max<uint32_t>(1u, desc.width == 0 ? resolution.x : desc.width);
+			desc.height = eastl::max<uint32_t>(1u, desc.height == 0 ? resolution.y : desc.height);
+			desc.dimension = nvrhi::TextureDimension::Texture2D;
+			desc.mipLevels = 1;
+			desc.arraySize = 1;
+			desc.isUAV = true;
+			desc.keepInitialState = true;
+			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+			desc.debugName = "NRD Reblur Motion Vectors Scratch";
+			m_MotionVectorsScratch = device->createTexture(desc);
 		}
 
 		{
@@ -361,14 +385,6 @@ namespace Pass::NRD
 
 	void ReblurRadiance::SettingsChanged([[maybe_unused]] const Settings& settings)
 	{
-		m_ReblurSettings = {};
-		m_ReblurSettings.checkerboardMode = nrd::CheckerboardMode::OFF;
-		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::OFF;
-		m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(30u, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
-		m_ReblurSettings.maxFastAccumulatedFrameNum = 6;
-		m_ReblurSettings.maxStabilizedFrameNum = 30;
-		m_ReblurSettings.fastHistoryClampingSigmaScale = 1.5f;
-
 		m_SettingsDirty = true;
 	}
 
@@ -391,10 +407,10 @@ namespace Pass::NRD
 		const float4x4 viewToClip = camera->ViewProj * camera->ViewInverse;
 		const float4x4 viewToClipPrev = camera->PrevViewProj * camera->PrevViewInverse;
 
-		CopyMatrix(commonSettings.worldToViewMatrix, worldToView);
-		CopyMatrix(commonSettings.worldToViewMatrixPrev, worldToViewPrev);
-		CopyMatrix(commonSettings.viewToClipMatrix, viewToClip);
-		CopyMatrix(commonSettings.viewToClipMatrixPrev, viewToClipPrev);
+		std::memcpy(commonSettings.worldToViewMatrix, &worldToView, sizeof(float) * 16);
+		std::memcpy(commonSettings.worldToViewMatrixPrev, &worldToViewPrev, sizeof(float) * 16);
+		std::memcpy(commonSettings.viewToClipMatrix, &viewToClip, sizeof(float) * 16);
+		std::memcpy(commonSettings.viewToClipMatrixPrev, &viewToClipPrev, sizeof(float) * 16);
 
 		const uint2 resourceSize = renderer->GetResolution();
 		const uint2 rectSize = (camera->RenderSize.x != 0 && camera->RenderSize.y != 0)
@@ -418,7 +434,7 @@ namespace Pass::NRD
 		commonSettings.motionVectorScale[1] = 1.0f;
 		commonSettings.motionVectorScale[2] = 0.0f;
 
-		commonSettings.splitScreen = 1.0f;
+		commonSettings.splitScreen = 0.5f;
 
 		return commonSettings;
 	}
@@ -427,20 +443,23 @@ namespace Pass::NRD
 	{
 		auto* renderer = Renderer::GetSingleton();
 		auto* renderTargets = renderer->GetRenderTargets();
+		const auto& sharedFrameResources = renderer->GetSharedFrameResources();
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:
-			return Scene::GetSingleton()->IsPathTracingActive() ? renderer->m_PTMotionVectors.Get() : renderer->GetMotionVectorTexture();
+			return m_MotionVectorsScratch;
 		case nrd::ResourceType::IN_NORMAL_ROUGHNESS:
 			return renderTargets ? renderTargets->normalRoughness : nullptr;
 		case nrd::ResourceType::IN_VIEWZ:
 			return Scene::GetSingleton()->IsPathTracingActive() ? renderer->m_PTDepth.Get() : renderer->GetDepthTexture();
 		case nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST:
-			return renderer->GetMainTexture();
+			return sharedFrameResources.nrdDiffuseRadianceHitDistance;
+		case nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST:
+			return sharedFrameResources.nrdSpecularRadianceHitDistance;
 		case nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST:
 			return m_DiffuseOutput;
-		case nrd::ResourceType::OUT_VALIDATION:
-			return m_ValidationOutput;
+		case nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST:
+			return m_SpecularOutput;
 		case nrd::ResourceType::TRANSIENT_POOL:
 			return resource.indexInPool < m_TransientPool.size() ? m_TransientPool[resource.indexInPool] : nullptr;
 		case nrd::ResourceType::PERMANENT_POOL:
@@ -462,6 +481,7 @@ namespace Pass::NRD
 		case nrd::Format::R16_SFLOAT: return nvrhi::Format::R16_FLOAT;
 		case nrd::Format::RG16_SFLOAT: return nvrhi::Format::RG16_FLOAT;
 		case nrd::Format::RGBA16_SFLOAT: return nvrhi::Format::RGBA16_FLOAT;
+		case nrd::Format::R32_UINT: return nvrhi::Format::R32_UINT;
 		case nrd::Format::R32_SFLOAT: return nvrhi::Format::R32_FLOAT;
 		case nrd::Format::RG32_SFLOAT: return nvrhi::Format::RG32_FLOAT;
 		case nrd::Format::RGBA32_SFLOAT: return nvrhi::Format::RGBA32_FLOAT;
@@ -479,10 +499,19 @@ namespace Pass::NRD
 			return;
 
 		auto* renderer = GetRenderer();
+		nvrhi::ITexture* sourceMotionVectors = Scene::GetSingleton()->IsPathTracingActive()
+			? renderer->m_PTMotionVectors.Get()
+			: renderer->GetMotionVectorTexture();
 
 		if (m_ResourcesDirty) {
 			CreateResources();
 			CreateGlobalBindingSet();
+		}
+
+		if (sourceMotionVectors && m_MotionVectorsScratch) {
+			const nvrhi::TextureDesc& mvDesc = sourceMotionVectors->getDesc();
+			auto mvRegion = nvrhi::TextureSlice{ 0, 0, 0, mvDesc.width, mvDesc.height, 1 };
+			commandList->copyTexture(m_MotionVectorsScratch, mvRegion, sourceMotionVectors, mvRegion);
 		}
 
 		if (m_SettingsDirty) {
@@ -493,22 +522,17 @@ namespace Pass::NRD
 		const nrd::CommonSettings commonSettings = BuildCommonSettings();
 		const nrd::Result commonSettingsResult = nrd::SetCommonSettings(*m_NRD, commonSettings);
 		if (commonSettingsResult != nrd::Result::SUCCESS) {
-			logger::error(
-				"ReblurRadiance: failed to set NRD common settings (resource={}x{}, rect={}x{}, jitter=({}, {}), prevJitter=({}, {}), result={})",
-				commonSettings.resourceSize[0], commonSettings.resourceSize[1],
-				commonSettings.rectSize[0], commonSettings.rectSize[1],
-				commonSettings.cameraJitter[0], commonSettings.cameraJitter[1],
-				commonSettings.cameraJitterPrev[0], commonSettings.cameraJitterPrev[1],
-				uint32_t(commonSettingsResult));
+			logger::error("ReblurRadiance: failed to set NRD common settings {}", magic_enum::enum_name(commonSettingsResult));
 			return;
 		}
 
 		const nrd::Identifier identifiers[] = { kDenoiserIdentifier };
 		const nrd::DispatchDesc* dispatchDescs = nullptr;
 		uint32_t dispatchCount = 0;
+		auto computeDispatchesResult = nrd::GetComputeDispatches(*m_NRD, identifiers, 1, dispatchDescs, dispatchCount);
 
-		if (nrd::GetComputeDispatches(*m_NRD, identifiers, 1, dispatchDescs, dispatchCount) != nrd::Result::SUCCESS) {
-			logger::error("ReblurRadiance: failed to get NRD dispatches");
+		if (computeDispatchesResult != nrd::Result::SUCCESS) {
+			logger::error("ReblurRadiance: failed to get NRD dispatches {}", magic_enum::enum_name(computeDispatchesResult));
 			return;
 		}
 
@@ -524,42 +548,69 @@ namespace Pass::NRD
 			const Pipeline& pipeline = m_Pipelines[dispatchDesc.pipelineIndex];
 			if (!pipeline.pipeline)
 				continue;
+			
+			commandList->beginMarker(dispatchDesc.name);
+
+			const nrd::PipelineDesc& pipelineDesc = instanceDesc.pipelines[dispatchDesc.pipelineIndex];
 
 			if (dispatchDesc.constantBufferData && dispatchDesc.constantBufferDataSize > 0)
 				commandList->writeBuffer(m_ConstantBuffer, dispatchDesc.constantBufferData, dispatchDesc.constantBufferDataSize);
 
 			nvrhi::BindingSetDesc resourceBindingDesc;
-			uint32_t textureIndex = 0;
-			uint32_t storageTextureIndex = 0;
+			eastl::vector<nvrhi::ITexture*> srvTextures(maxTextures, m_FallbackSrvTexture);
+			eastl::vector<nvrhi::ITexture*> uavTextures(maxStorageTextures, m_FallbackUavTexture);
+			uint32_t resourceCursor = 0;
+			uint32_t srvBase = 0;
+			uint32_t uavBase = 0;
 
-			for (uint32_t resourceIndex = 0; resourceIndex < dispatchDesc.resourcesNum; ++resourceIndex) {
-				const nrd::ResourceDesc& resourceDesc = dispatchDesc.resources[resourceIndex];
-				nvrhi::ITexture* texture = GetDispatchResource(resourceDesc);
+			for (uint32_t rangeIndex = 0; rangeIndex < pipelineDesc.resourceRangesNum; ++rangeIndex) {
+				const nrd::ResourceRangeDesc& rangeDesc = pipelineDesc.resourceRanges[rangeIndex];
 
-				if (!texture) {
-					logger::warn("ReblurRadiance: missing resource type {} for dispatch {}", nrd::GetResourceTypeString(resourceDesc.type), dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
-					return;
+				for (uint32_t rangeResourceIndex = 0; rangeResourceIndex < rangeDesc.descriptorsNum; ++rangeResourceIndex) {
+					if (resourceCursor >= dispatchDesc.resourcesNum) {
+						logger::error("ReblurRadiance: resource range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+						return;
+					}
+
+					const nrd::ResourceDesc& resourceDesc = dispatchDesc.resources[resourceCursor++];
+					nvrhi::ITexture* texture = GetDispatchResource(resourceDesc);
+
+					if (!texture) {
+						logger::warn("ReblurRadiance: missing resource type {} for dispatch {}", nrd::GetResourceTypeString(resourceDesc.type), dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+						return;
+					}
+
+					if (rangeDesc.descriptorType == nrd::DescriptorType::TEXTURE) {
+						if (srvBase + rangeResourceIndex >= srvTextures.size()) {
+							logger::error("ReblurRadiance: SRV range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+							return;
+						}
+
+						srvTextures[srvBase + rangeResourceIndex] = texture;
+					} else {
+						if (uavBase + rangeResourceIndex >= uavTextures.size()) {
+							logger::error("ReblurRadiance: UAV range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+							return;
+						}
+
+						uavTextures[uavBase + rangeResourceIndex] = texture;
+					}
 				}
 
-				if (resourceDesc.descriptorType == nrd::DescriptorType::TEXTURE) {
-					auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, texture);
-					item.arrayElement = textureIndex++;
-					resourceBindingDesc.bindings.push_back(item);
-				} else {
-					auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, texture);
-					item.arrayElement = storageTextureIndex++;
-					resourceBindingDesc.bindings.push_back(item);
-				}
+				if (rangeDesc.descriptorType == nrd::DescriptorType::TEXTURE)
+					srvBase += rangeDesc.descriptorsNum;
+				else
+					uavBase += rangeDesc.descriptorsNum;
 			}
 
-			for (; textureIndex < maxTextures; ++textureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, m_FallbackSrvTexture);
+			for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
+				auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
 				item.arrayElement = textureIndex;
 				resourceBindingDesc.bindings.push_back(item);
 			}
 
-			for (; storageTextureIndex < maxStorageTextures; ++storageTextureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, m_FallbackUavTexture);
+			for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
+				auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
 				item.arrayElement = storageTextureIndex;
 				resourceBindingDesc.bindings.push_back(item);
 			}
@@ -572,6 +623,8 @@ namespace Pass::NRD
 			state.bindings = { m_GlobalBindingSet, resourceBindingSet };
 			commandList->setComputeState(state);
 			commandList->dispatch(dispatchDesc.gridWidth, dispatchDesc.gridHeight);
+
+			commandList->endMarker();
 		}
 
 		auto resolution = renderer->GetResolution();

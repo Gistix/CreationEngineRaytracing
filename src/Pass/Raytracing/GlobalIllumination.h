@@ -28,6 +28,9 @@ namespace Pass::Raytracing
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
+		nvrhi::TextureHandle m_DiffRadHitDistTexture;
+		nvrhi::TextureHandle m_SpecRadHitDistTexture;
+
 		SceneTLAS* m_SceneTLAS;
 		SHaRC* m_SHaRC;
 
@@ -37,6 +40,8 @@ namespace Pass::Raytracing
 
 	public:
 		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc);
+
+		void Setup(FrameGraphBuilder& builder, const Settings& settings) override;
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{
