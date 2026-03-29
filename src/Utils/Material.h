@@ -2,14 +2,19 @@
 
 #include "Constants.h"
 
-#include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
+#if defined(SKYRIM)
+#	include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
+#endif
 
 namespace Util
 {
-	namespace Material
+#if defined(SKYRIM)
+	namespace Material::Skyrim
 	{
 		float ShininessToRoughness(float shininess);
 
 		stl::enumeration<PBRShaderFlags, uint32_t> GetPBRShaderFlags(const BSLightingShaderMaterialPBR* pbrMaterial);
 	}
+#elif defined(FALLOUT4)
+#endif
 }

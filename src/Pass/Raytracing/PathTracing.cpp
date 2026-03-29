@@ -12,7 +12,7 @@ namespace Pass
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, false);
+		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -29,7 +29,7 @@ namespace Pass
 	{
 		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
 
-		auto defines = Util::Shader::GetRaytracingDefines(settings, true, false);
+		auto defines = Util::Shader::GetRaytracingDefines(settings, m_SHaRC != nullptr, false);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;

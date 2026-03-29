@@ -1,14 +1,22 @@
 #pragma once
 
+#include "ID.h"
+
+#if defined(SKYRIM)
+namespace CESE = SKSE;
+#elif defined(FALLOUT4)
+namespace CESE = F4SE;
+#endif
+
 namespace stl
 {
-	using namespace SKSE::stl;
+	using namespace CESE::stl;
 
 	template <class T, std::size_t Size = 5>
 	void write_thunk_call(std::uintptr_t a_src)
 	{
-		SKSE::AllocTrampoline(14);
-		auto& trampoline = SKSE::GetTrampoline();
+		CESE::AllocTrampoline(14);
+		auto& trampoline = CESE::GetTrampoline();
 		if (Size == 6) {
 			T::func = *(uintptr_t*)trampoline.write_call<6>(a_src, T::thunk);
 		}
@@ -25,7 +33,11 @@ namespace stl
 	}
 
 	template <std::size_t idx, class T>
+#if defined(SKYRIM)
 	void write_vfunc(REL::VariantID id)
+#elif defined(FALLOUT4)
+	void write_vfunc(REL::ID id)
+#endif
 	{
 		REL::Relocation<std::uintptr_t> vtbl{ id };
 		T::func = vtbl.write_vfunc(idx, T::thunk);
@@ -41,8 +53,8 @@ namespace stl
 	template <class T>
 	void write_thunk_jmp(std::uintptr_t a_src)
 	{
-		SKSE::AllocTrampoline(14);
-		auto& trampoline = SKSE::GetTrampoline();
+		CESE::AllocTrampoline(14);
+		auto& trampoline = CESE::GetTrampoline();
 		T::func = trampoline.write_branch<5>(a_src, T::thunk);
 	}
 

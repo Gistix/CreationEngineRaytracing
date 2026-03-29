@@ -91,8 +91,10 @@ void Renderer::InitDefaultTextures()
 	desc.debugName = "Default Black Texture";
 	m_BlackTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
+#if defined(SKYRIM)
 	desc.debugName = "Default RMAOS Texture";
 	m_RMAOSTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
+#endif
 
 	desc.debugName = "Default Detail Texture";
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
@@ -105,21 +107,27 @@ void Renderer::InitDefaultTextures()
 	commandList->beginTrackingTextureState(m_GrayTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 	commandList->beginTrackingTextureState(m_NormalTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 	commandList->beginTrackingTextureState(m_BlackTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
+#if defined(SKYRIM)
 	commandList->beginTrackingTextureState(m_RMAOSTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
+#endif
 	commandList->beginTrackingTextureState(m_DetailTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 
 	commandList->writeTexture(m_WhiteTexture->texture, 0, 0, white, 4);
 	commandList->writeTexture(m_GrayTexture->texture, 0, 0, gray, 4);
 	commandList->writeTexture(m_NormalTexture->texture, 0, 0, normal, 4);
 	commandList->writeTexture(m_BlackTexture->texture, 0, 0, black, 4);
+#if defined(SKYRIM)
 	commandList->writeTexture(m_RMAOSTexture->texture, 0, 0, rmaos, 4);
+#endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
 
 	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::ShaderResource);
 	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::ShaderResource);
 	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::ShaderResource);
 	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::ShaderResource);
+#if defined(SKYRIM)
 	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::ShaderResource);
+#endif
 	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::ShaderResource);
 
 	commandList->commitBarriers();
