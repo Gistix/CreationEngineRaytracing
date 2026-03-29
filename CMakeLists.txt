@@ -68,12 +68,12 @@ target_link_libraries(
     xbyak::xbyak
     mikktspace::mikktspace
 	d3dcompiler.lib
-	nvrhi_d3d12
-	nvrhi
     ${DETOURS_LIBRARY}
 )
 
 include(NVRHI)
+
+include(NRD)
 
 target_compile_definitions(
     ${PROJECT_NAME}
