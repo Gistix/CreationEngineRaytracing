@@ -40,20 +40,21 @@ RWTexture2D<float>                          SpecularHitDistance         : regist
 
 RaytracingAccelerationStructure             Scene                       : register(t0);
 Texture2D<float4>                           SkyHemisphere               : register(t1);
-StructuredBuffer<Light>                     Lights                      : register(t2);
-StructuredBuffer<Instance>                  Instances                   : register(t3);
-StructuredBuffer<Mesh>                      Meshes                      : register(t4);
+Texture2D<float4>                           WaterFlowMap                : register(t2);
+StructuredBuffer<Light>                     Lights                      : register(t3);
+StructuredBuffer<Instance>                  Instances                   : register(t4);
+StructuredBuffer<Mesh>                      Meshes                      : register(t5);
 
-Texture2D<float>                            Depth                       : register(t5); // RENDER_TARGETS_DEPTHSTENCIL::kMAIN - R32
-Texture2D<float4>                           Albedo                      : register(t6); // ALBEDO - True albedo (not modulated by metalness)
-Texture2D<snorm float4>                     NormalRoughness             : register(t7); // "NORMALROUGHNESS" - World normals and roughness - Processed from GBuffer encoded view normals and smoothness
-Texture2D<unorm float4>                     GNMAO                       : register(t8); // MASKS2 - Geometry normals (Encoded) + metalness/AO (Packed)
+Texture2D<float>                            Depth                       : register(t6); // RENDER_TARGETS_DEPTHSTENCIL::kMAIN - R32
+Texture2D<float4>                           Albedo                      : register(t7); // ALBEDO - True albedo (not modulated by metalness)
+Texture2D<snorm float4>                     NormalRoughness             : register(t8); // "NORMALROUGHNESS" - World normals and roughness - Processed from GBuffer encoded view normals and smoothness
+Texture2D<unorm float4>                     GNMAO                       : register(t9); // MASKS2 - Geometry normals (Encoded) + metalness/AO (Packed)
 
 #if defined(SHARC)
-StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t9);
+StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t10);
 
 #   if !SHARC_UPDATE
-StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t10);
+StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t11);
 #   endif
 #endif
 
