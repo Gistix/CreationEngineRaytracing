@@ -21,6 +21,7 @@
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raster/GBuffer.h"
+#include "Pass/NRD/ReblurRadiance.h"
 
 Scene::Scene()
 {
@@ -96,6 +97,12 @@ RenderNode* Scene::GetGlobalIllumination()
 				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
 				m_GlobalIllumination->GetPass<Pass::SHaRC>()
 			)			
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"NRD Reblur Radiance",
+			eastl::make_unique<Pass::NRD::ReblurRadiance>(renderer)
 		});
 	}
 

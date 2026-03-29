@@ -163,7 +163,20 @@ namespace Hooks
 		scene->shareTexture = false;
 	}
 
-	void CreateDepthStencil_Main::thunk(RE::BSGraphics::Renderer* This, uint32_t a_target, RE::BSGraphics::DepthStencilTargetProperties* a_properties)
+	void CreateDepthStencil_Main::thunk(RE::BSGraphics::Renderer* This, RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target, RE::BSGraphics::DepthStencilTargetProperties* a_properties)
+	{
+		auto* scene = Scene::GetSingleton();
+
+		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
+
+		scene->shareTexture = true;
+
+		func(This, a_target, a_properties);
+
+		scene->shareTexture = false;
+	}
+
+	void CreateRenderTarget_MotionVectors::thunk(RE::BSGraphics::Renderer* This, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties)
 	{
 		auto* scene = Scene::GetSingleton();
 
@@ -297,6 +310,8 @@ namespace Hooks
 		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605));
 
 		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951));
+
+		stl::write_thunk_call<CreateRenderTarget_MotionVectors>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x4F0, 0x4EF, 0x64E));
 
 		// Updates Shape dismember state
 		stl::detour_thunk<BSDismemberSkinInstance_UpdateDismemberPartion>(REL::RelocationID(15576, 15753));

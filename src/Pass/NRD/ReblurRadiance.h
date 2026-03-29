@@ -1,0 +1,70 @@
+#pragma once
+
+#include <PCH.h>
+
+#include "Pass/RenderPass.h"
+
+#include <NRD.h>
+
+namespace Pass::NRD
+{
+	class ReblurRadiance : public RenderPass
+	{
+		struct Pipeline
+		{
+			nvrhi::ShaderHandle shader;
+			nvrhi::ComputePipelineHandle pipeline;
+			eastl::string debugName;
+		};
+
+		static constexpr nrd::Identifier kDenoiserIdentifier = nrd::Identifier(nrd::Denoiser::REBLUR_DIFFUSE);
+
+		nvrhi::SamplerHandle m_NearestClampSampler;
+		nvrhi::SamplerHandle m_LinearClampSampler;
+
+		nvrhi::BindingLayoutHandle m_GlobalBindingLayout;
+		nvrhi::BindingLayoutHandle m_ResourceBindingLayout;
+		nvrhi::BindingSetHandle m_GlobalBindingSet;
+		nvrhi::BufferHandle m_ConstantBuffer;
+
+		eastl::vector<Pipeline> m_Pipelines;
+		eastl::vector<nvrhi::TextureHandle> m_PermanentPool;
+		eastl::vector<nvrhi::TextureHandle> m_TransientPool;
+
+		nvrhi::TextureHandle m_DiffuseOutput;
+		nvrhi::TextureHandle m_ValidationOutput;
+		nvrhi::TextureHandle m_FallbackSrvTexture;
+		nvrhi::TextureHandle m_FallbackUavTexture;
+
+		nrd::Instance* m_NRD = nullptr;
+		nrd::ReblurSettings m_ReblurSettings = {};
+
+		bool m_ResourcesDirty = true;
+		bool m_SettingsDirty = true;
+
+		void Setup();
+		void DestroyInstance();
+		void CreateBindingLayouts();
+		void CreatePipelines();
+		void CreateResources();
+		void CreateGlobalBindingSet();
+
+		nrd::CommonSettings BuildCommonSettings() const;
+
+		nvrhi::ITexture* GetDispatchResource(const nrd::ResourceDesc& resource) const;
+		nvrhi::Format GetFormat(nrd::Format format) const;
+
+		uint32_t GetMaxResourceCount(nrd::DescriptorType type) const;
+
+	public:
+		ReblurRadiance(Renderer* renderer);
+		~ReblurRadiance() override;
+
+		void SettingsChanged(const Settings& settings) override;
+		void ResolutionChanged(uint2 resolution) override;
+		void Execute(nvrhi::ICommandList* commandList) override;
+
+		nvrhi::ITexture* GetDiffuseOutput() const { return m_DiffuseOutput; }
+		nvrhi::ITexture* GetValidationOutput() const { return m_ValidationOutput; }
+	};
+}

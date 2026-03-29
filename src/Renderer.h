@@ -49,6 +49,8 @@ class Renderer
 	uint64_t m_LastSubmittedInstance = 0;
 
 	nvrhi::TextureHandle m_DepthTexture;
+	nvrhi::TextureHandle m_MotionVectorTexture;
+
 	nvrhi::TextureHandle m_MainTexture;
 
 	ID3D12Resource* m_CopyTargetResource = nullptr;
@@ -173,6 +175,7 @@ public:
 	RenderGraph* GetRenderGraph() { return m_RenderGraph.get(); }
 
 	nvrhi::ITexture* GetDepthTexture();
+	nvrhi::ITexture* GetMotionVectorTexture();
 
 	inline auto GetMainTexture() { return m_MainTexture; }
 
