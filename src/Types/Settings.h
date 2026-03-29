@@ -106,6 +106,52 @@ struct WaterSettings
 	float AbsorptionScale = 1.0f;
 };
 
+enum struct ReSTIRGIResamplingMode : int32_t
+{
+	None = 0,
+	Temporal = 1,
+	Spatial = 2,
+	TemporalAndSpatial = 3,
+	FusedSpatiotemporal = 4,
+};
+
+enum struct ReSTIRGIBiasCorrection : int32_t
+{
+	Off = 0,
+	Basic = 1,
+	Raytraced = 3
+};
+
+struct ReSTIRGISettings
+{
+	bool Enabled = true;
+	ReSTIRGIResamplingMode ResamplingMode = ReSTIRGIResamplingMode::TemporalAndSpatial;
+
+	// Temporal
+	float TemporalDepthThreshold = 0.1f;
+	float TemporalNormalThreshold = 0.5f;
+	int MaxHistoryLength = 20;
+	int MaxReservoirAge = 100;
+	bool EnablePermutationSampling = true;
+	bool EnableFallbackSampling = true;
+	ReSTIRGIBiasCorrection TemporalBiasCorrection = ReSTIRGIBiasCorrection::Basic;
+
+	// Spatial
+	float SpatialDepthThreshold = 0.1f;
+	float SpatialNormalThreshold = 0.5f;
+	int SpatialNumSamples = 2;
+	float SpatialSamplingRadius = 32.0f;
+	ReSTIRGIBiasCorrection SpatialBiasCorrection = ReSTIRGIBiasCorrection::Basic;
+
+	// Boiling filter
+	bool EnableBoilingFilter = true;
+	float BoilingFilterStrength = 0.4f;
+
+	// Final shading
+	bool EnableFinalVisibility = true;
+	bool EnableFinalMIS = false;
+};
+
 struct DebugSettings
 {
 	bool PathTracingCull = false;
@@ -124,4 +170,5 @@ struct Settings
 	AdvancedSettings AdvancedSettings;
 	WaterSettings WaterSettings;
 	DebugSettings DebugSettings;
+	ReSTIRGISettings ReSTIRGI;
 };

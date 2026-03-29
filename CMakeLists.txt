@@ -75,6 +75,14 @@ target_link_libraries(
 
 include(NVRHI)
 
+# RTXDI library (ReSTIR DI / GI / PT)
+add_subdirectory(extern/RTXDI/Libraries/Rtxdi)
+target_compile_options(Rtxdi PRIVATE /W3 /WX-)
+target_link_libraries(${PROJECT_NAME} PRIVATE Rtxdi)
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/extern/RTXDI/Libraries/Rtxdi/Include
+)
+
 target_compile_definitions(
     ${PROJECT_NAME}
     PRIVATE 
