@@ -45,6 +45,7 @@ namespace Pass
 		m_RaytracingData->Effect = settings.LightingSettings.Effect;
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
 		m_RaytracingData->WaterAbsorptionScale = settings.WaterSettings.AbsorptionScale;
+		m_RaytracingData->EnableReSTIRGI = settings.ReSTIRGI.Enabled ? 1 : 0;
 
 		// Directional Light
 		{

@@ -49,8 +49,13 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID)
     float3 L = normalize(finalReservoir.position - rab.surface.Position);
     float4 bsdfEval = rab.Eval(L);
 
-    // Final GI = BSDF(wi, wo) * radiance * RIS weight
-    float3 finalGI = bsdfEval.rgb * giRadiance * giWeight;
+    // Delta chain throughput: accounts for mirror/glass reflectance along the delta path
+    // before reaching the first non-delta surface. Stored as luminance in DiffuseAlbedo.a.
+    float deltaThpLum = SecondaryDiffuseAlbedo[GlobalIndex].a;
+    float deltaThp = (deltaThpLum > 0) ? deltaThpLum : 1.0;
+
+    // Final GI = deltaThp * BSDF(wi, wo) * radiance * RIS weight
+    float3 finalGI = deltaThp * bsdfEval.rgb * giRadiance * giWeight;
 
     // Optional final MIS: blend with the initial sample for reduced variance
     if (giParams.finalShadingParams.enableFinalMIS)
@@ -69,7 +74,7 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID)
             float misWeightInitial = 1.0 - misWeight;
 
             // Initial sample also uses full BSDF evaluation
-            float3 initialGI = bsdfEval.rgb * initialRadiance;
+            float3 initialGI = deltaThp * bsdfEval.rgb * initialRadiance;
             finalGI = finalGI * misWeight + initialGI * misWeightInitial;
         }
     }
