@@ -1,6 +1,8 @@
 #pragma once
 
+#if defined(SKYRIM)
 #include "Types/RE/CellAttachDetachEvent.h"
+#endif
 
 namespace Events
 {

@@ -79,8 +79,8 @@ class Renderer
 	eastl::unique_ptr<TextureReference> m_BlackTexture;
 #if defined(SKYRIM)
 	eastl::unique_ptr<TextureReference> m_RMAOSTexture;
-	eastl::unique_ptr<TextureReference> m_DetailTexture;
 #endif
+	eastl::unique_ptr<TextureReference> m_DetailTexture;
 
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
 
@@ -188,7 +188,9 @@ public:
 	inline auto& GetGrayTextureIndex() const { return m_GrayTexture->descriptorHandle; }
 	inline auto& GetNormalTextureIndex() const { return m_NormalTexture->descriptorHandle; }
 	inline auto& GetBlackTextureIndex() const { return m_BlackTexture->descriptorHandle; }
+#if defined(SKYRIM)
 	inline auto& GetRMAOSTextureIndex() const { return m_RMAOSTexture->descriptorHandle; }
+#endif
 	inline auto& GetDetailTextureIndex() const { return m_DetailTexture->descriptorHandle; }
 
 	static inline auto& GetFormatMapping() { return m_FormatMapping; }

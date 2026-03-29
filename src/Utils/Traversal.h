@@ -13,7 +13,7 @@ namespace Util
 				return result;
 			}
 
-			auto fadeNode = a_object->AsFadeNode();
+			auto fadeNode = Util::Adapter::CLib::AsFadeNode(a_object);
 			if (fadeNode) {
 				result = a_func(fadeNode);
 
@@ -22,9 +22,9 @@ namespace Util
 				}
 			}
 
-			auto node = a_object->AsNode();
+			auto node = Util::Adapter::CLib::AsNode(a_object);
 			if (node) {
-				for (auto& child : node->GetChildren()) {
+				for (auto& child : Util::Adapter::CLib::GetChildren(node)) {
 					result = ScenegraphFadeNodes(child.get(), a_func);
 					if (result == RE::BSVisit::BSVisitControl::kStop) {
 						break;
@@ -44,7 +44,7 @@ namespace Util
 				return result;
 			}
 
-			auto geom = a_object->AsGeometry();
+			auto geom = Util::Adapter::CLib::AsGeometry(a_object);
 			if (geom) {
 				return a_func(geom);
 			}
@@ -52,23 +52,25 @@ namespace Util
 			// Doodlum sez this is faster
 			auto rtti = a_object->GetRTTI();
 
-			static REL::Relocation<const RE::NiRTTI*> billboardRTTI{ RE::NiBillboardNode::Ni_RTTI };
+			static REL::Relocation<const RE::NiRTTI*> billboardRTTI{ NiRTTI(NiBillboardNode) };
+
 			if (rtti == billboardRTTI.get())
 				return result;
 
 			// Might break vegetation
-			static REL::Relocation<const RE::NiRTTI*> orderedRTTI{ RE::BSOrderedNode::Ni_RTTI };
+			static REL::Relocation<const RE::NiRTTI*> orderedRTTI{ NiRTTI(BSOrderedNode) };
 			if (rtti == orderedRTTI.get())
 				return result;
 
-			auto node = a_object->AsNode();
+			auto node = Util::Adapter::CLib::AsNode(a_object);
+
 			if (node) {
-				for (auto& child : node->GetChildren()) {
+				for (auto& child : Util::Adapter::CLib::GetChildren(node)) {
 					if (!child)
 						continue;
 
 					if (validFadeNode) {
-						if (auto fadeNode = child->AsFadeNode(); fadeNode && fadeNode != validFadeNode) {
+						if (auto fadeNode = Util::Adapter::CLib::AsFadeNode(child.get()); fadeNode && fadeNode != validFadeNode) {
 							continue;
 						}
 					}

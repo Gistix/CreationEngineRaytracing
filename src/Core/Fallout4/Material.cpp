@@ -1,4 +1,5 @@
-#include "Core/Material.h"
+#if defined(FALLOUT4)
+#include "Core/Fallout4/Material.h"
 
 #include "Scene.h"
 #include "Renderer.h"
@@ -98,3 +99,4 @@ MaterialData Material::GetData(const float3 externalEmittance, RE::BSShaderPrope
 		PBRFlags.underlying(),
 		GetShaderFlags());
 }
+#endif

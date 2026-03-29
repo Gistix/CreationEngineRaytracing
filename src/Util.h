@@ -2,6 +2,7 @@
 
 #include "Constants.h"
 
+#include "Utils/Adapter.h"
 #include "Utils/Game.h"
 #include "Utils/Geometry.h"
 #include "Utils/Material.h"
