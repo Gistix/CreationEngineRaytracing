@@ -6,6 +6,7 @@
 #include "interop/CameraData.hlsli"
 #include "interop/RaytracingData.hlsli"
 #include "interop/SharedData.hlsli"
+#include "interop/PackedSurfaceData.hlsli"
 
 #include "interop/Vertex.hlsli"
 #include "interop/Triangle.hlsli"
@@ -44,6 +45,15 @@ RWTexture2D<float4>                         MotionVectors               : regist
 
 // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
 RWTexture2D<float>                          Depth                       : register(u9);
+
+// ReSTIR GI: Secondary G-Buffer UAVs (written during FILL pass for GI initial samples)
+RWTexture2D<float4>                         SecondaryGBufPositionNormal : register(u10);
+RWTexture2D<float4>                         SecondaryGBufRadiance       : register(u11);
+RWTexture2D<float4>                         SecondaryGBufDiffuseAlbedo  : register(u12);
+RWTexture2D<float4>                         SecondaryGBufSpecularRough  : register(u13);
+
+// ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
+RWStructuredBuffer<PackedSurfaceData>       SurfaceDataBuffer           : register(u14);
 #endif
 
 RaytracingAccelerationStructure             Scene                       : register(t0);

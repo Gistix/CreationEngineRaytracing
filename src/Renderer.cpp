@@ -5,6 +5,8 @@
 
 #include "Pass/GIComposite.h"
 
+#include <Rtxdi/RtxdiUtils.h>
+
 #include "Renderer/RenderNode.h"
 
 Renderer::Renderer()
@@ -280,6 +282,143 @@ void Renderer::InitStablePlanes()
 		desc.debugName = "PT Depth";
 		m_PTDepth = device->createTexture(desc);
 	}
+}
+
+void Renderer::InitReSTIRGI()
+{
+	m_ReSTIRGIResources = eastl::make_unique<ReSTIRGIResources>();
+
+	auto device = GetDevice();
+	const uint width = m_RenderSize.x;
+	const uint height = m_RenderSize.y;
+
+	// Calculate reservoir buffer sizing using RTXDI block-linear layout
+	constexpr uint reservoirStride = 32;
+	constexpr uint blockSize = 16; // RTXDI_RESERVOIR_BLOCK_SIZE
+	const uint reservoirBlockRowPitch = (width + blockSize - 1) / blockSize;
+	const uint reservoirArrayPitch = reservoirBlockRowPitch * ((height + blockSize - 1) / blockSize) * blockSize * blockSize;
+	constexpr uint numArrays = 2;
+
+	{
+		nvrhi::BufferDesc desc;
+		desc.byteSize = reservoirArrayPitch * numArrays * reservoirStride;
+		desc.structStride = reservoirStride;
+		desc.canHaveUAVs = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Reservoir Buffer";
+		m_ReSTIRGIResources->reservoirBuffer = device->createBuffer(desc);
+	}
+
+	// Neighbor offset buffer: 8192 pairs of int8 offsets
+	constexpr uint neighborOffsetCount = 8192;
+	{
+		m_ReSTIRGIResources->neighborOffsetData.resize(neighborOffsetCount * 2);
+		rtxdi::FillNeighborOffsetBuffer(m_ReSTIRGIResources->neighborOffsetData.data(), neighborOffsetCount);
+
+		nvrhi::BufferDesc desc;
+		desc.byteSize = neighborOffsetCount * 2;
+		desc.format = nvrhi::Format::RG8_SNORM;
+		desc.canHaveTypedViews = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::ShaderResource;
+		desc.debugName = "ReSTIR GI Neighbor Offsets";
+		m_ReSTIRGIResources->neighborOffsetBuffer = device->createBuffer(desc);
+		m_ReSTIRGIResources->needsNeighborOffsetUpload = true;
+	}
+
+	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 48 bytes)
+	{
+		constexpr uint surfaceDataStride = 48; // sizeof(PackedSurfaceData)
+		nvrhi::BufferDesc desc;
+		desc.byteSize = 2u * width * height * surfaceDataStride;
+		desc.structStride = surfaceDataStride;
+		desc.canHaveUAVs = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Surface Data Buffer";
+		m_ReSTIRGIResources->surfaceDataBuffer = device->createBuffer(desc);
+	}
+
+	// Secondary G-buffer: position/normal (RGBA32_FLOAT)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA32_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Secondary Position/Normal";
+		m_ReSTIRGIResources->secondaryGBufferPositionNormal = device->createTexture(desc);
+	}
+
+	// Secondary G-buffer: radiance (RGBA32_FLOAT: radiance.xyz + samplePdf)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA32_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Secondary Radiance";
+		m_ReSTIRGIResources->secondaryGBufferRadiance = device->createTexture(desc);
+	}
+
+	// Secondary G-buffer: diffuse albedo (RGBA16_FLOAT)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Secondary Diffuse Albedo";
+		m_ReSTIRGIResources->secondaryGBufferDiffuseAlbedo = device->createTexture(desc);
+	}
+
+	// Secondary G-buffer: specular F0 + roughness (RGBA16_FLOAT)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Secondary Specular/Roughness";
+		m_ReSTIRGIResources->secondaryGBufferSpecularF0Roughness = device->createTexture(desc);
+	}
+
+	// Previous frame G-buffer: depth (R32_FLOAT)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::R32_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Prev GBuffer Depth";
+		m_ReSTIRGIResources->prevGBufferDepth = device->createTexture(desc);
+	}
+
+	// Previous frame G-buffer: normals (RGBA8_SNORM — matches game's normalRoughness texture format)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA8_SNORM;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR GI Prev GBuffer Normals";
+		m_ReSTIRGIResources->prevGBufferNormals = device->createTexture(desc);
+	}
+
+	logger::info("ReSTIR GI resources created ({}x{})", width, height);
 }
 
 void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
