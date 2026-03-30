@@ -8,6 +8,8 @@
 
 #include "Renderer/RenderGraph.h"
 
+#include "Renderer/TextureManager.h"
+
 struct MessageCallback : public nvrhi::IMessageCallback
 {
 	static MessageCallback& GetInstance()
@@ -74,6 +76,8 @@ class Renderer
 
 	nvrhi::TimerQueryHandle m_FrameTimer;
 	float m_FrameTime;
+
+	TextureManager m_TextureManager;
 
 	eastl::unique_ptr<TextureReference> m_WhiteTexture;
 	eastl::unique_ptr<TextureReference> m_GrayTexture;
@@ -184,6 +188,8 @@ public:
 	inline auto GetJitter() const { return m_Jitter; }
 
 	inline auto UpdateJitter(float2 jitter) { return m_Jitter = jitter; }
+
+	inline auto& GetTextureManager() const { return m_TextureManager; }
 
 	inline auto& GetBlackTexture() const { return m_BlackTexture->texture; }
 
