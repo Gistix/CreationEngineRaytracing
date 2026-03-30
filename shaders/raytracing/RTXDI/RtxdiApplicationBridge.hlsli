@@ -6,7 +6,7 @@
 //   ReSTIR GI reads it back and reconstructs Surface + BRDFContext for BRDF eval.
 //   NO GBuffer reconstruction heuristics.
 
-#include "Registers.hlsli"
+#include "ReSTIRGI/Registers.hlsli"
 
 // Material type required by StandardBSDF method signatures in BSDF.hlsli
 #include "interop/Material.hlsli"
@@ -41,6 +41,19 @@ struct RAB_Surface
         float3 wiLocal = surface.ToLocal(wi);
         float3 woLocal = surface.ToLocal(wo);
         DefaultBSDF bsdf = DefaultBSDF::make(surface.Normal, wi, surface, true);
+        return bsdf.Eval(wiLocal, woLocal);
+    }
+
+    // Evaluate BSDF with roughness clamped to a minimum value.
+    // Used for roughness-aware MIS weight computation in final shading.
+    float4 EvalRoughnessClamp(float minRoughness, float3 wo)
+    {
+        Surface roughSurface = surface;
+        roughSurface.Roughness = max(roughSurface.Roughness, minRoughness);
+        float3 wi = brdfContext.ViewDirection;
+        float3 wiLocal = roughSurface.ToLocal(wi);
+        float3 woLocal = roughSurface.ToLocal(wo);
+        DefaultBSDF bsdf = DefaultBSDF::make(roughSurface.Normal, wi, roughSurface, true);
         return bsdf.Eval(wiLocal, woLocal);
     }
 };
