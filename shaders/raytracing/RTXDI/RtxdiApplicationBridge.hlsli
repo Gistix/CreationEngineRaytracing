@@ -249,7 +249,8 @@ bool RAB_GetConservativeVisibility(RAB_Surface rab, float3 samplePosition)
     if (dist < 1e-4)
         return true;
 
-    float3 origin = OffsetRay(rab.surface.Position, rab.surface.FaceNormal);
+    bool behindSurface = dot(toSample, rab.surface.FaceNormal) < 0;
+    float3 origin = OffsetRayAlt(rab.surface.Position, rab.surface.FaceNormal, behindSurface);
 
     float3 offsetToSample = samplePosition - origin;
     float offsetDist = length(offsetToSample);

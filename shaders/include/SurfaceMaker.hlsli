@@ -51,7 +51,15 @@ struct SurfaceMaker
         material = mesh.Material;
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
-       
+
+        // Accumulate position error through transform chain for accurate ray offsetting
+        {
+            float3 objectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
+            float objectError = max(abs(objectSpacePos.x), max(abs(objectSpacePos.y), abs(objectSpacePos.z)));
+            float worldError = max(abs(position.x), max(abs(position.y), abs(position.z)));
+            surface.PositionError = max(objectError, worldError);
+        }
+
         float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
 
         float coneTexLODValue = ComputeRayConeTriangleLODValue(v0, v1, v2, objectToWorld3x3);
@@ -151,6 +159,7 @@ struct SurfaceMaker
         surface.FaceNormal = normalWS;
 
         surface.MipLevel = 0;
+        surface.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
 
         surface.GeomNormal = normalWS;
         surface.GeomTangent = tangentWS;
@@ -211,6 +220,7 @@ struct SurfaceMaker
         surface.FaceNormal = geomNormal;
 
         surface.MipLevel = 0.0f + Raytracing.TexLODBias;
+        surface.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
         surface.GeomNormal = geomNormal;
         surface.GeomTangent = tangent; // not needed for hybrid
 

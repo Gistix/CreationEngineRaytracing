@@ -69,7 +69,7 @@ float3 evalSingleScatteringTransmission(
 
                 const float3 sampleGeometryNormal = sampleSurface.FaceNormal;
                 const float3 sampleShadingNormal = sampleSurface.Normal;
-                backPosition = OffsetRay(backPosition, sampleGeometryNormal, false);
+                backPosition = OffsetRay(backPosition, sampleGeometryNormal, sampleSurface.PositionError, false);
 
                 // Prepare data needed to evaluate the light
                 float3 incidentVector = 0.0f;
@@ -139,7 +139,7 @@ float3 evalSingleScatteringTransmission(
                 const float3 scatteringSampleGeometryNormal = scatterSurface.FaceNormal;
 
                 float3 scatteringBoundaryPosition = samplePosition + scatteringPayload.hitDistance * scatteringDirection;
-                scatteringBoundaryPosition = OffsetRay(scatteringBoundaryPosition, scatteringSampleGeometryNormal, false);
+                scatteringBoundaryPosition = OffsetRay(scatteringBoundaryPosition, scatteringSampleGeometryNormal, scatterSurface.PositionError, false);
 
                 // Prepare data needed to evaluate the light
                 float3 incidentVector = 0.0f;
@@ -274,7 +274,7 @@ float3 EvaluateSubsurfaceDiffuseNEE(
                 const bool transition = dot(vectorToLight, sampleGeometryNormal) < 0.0f;
                 const float3 samplePosition = subsurfaceSample.samplePosition - subsurfaceInteraction.normal * samplePayload.hitDistance;
 
-                float3 sampleShadowHitPos = OffsetRay(samplePosition, sampleGeometryNormal, transition);
+                float3 sampleShadowHitPos = OffsetRay(samplePosition, sampleGeometryNormal, sampleSurface.PositionError, transition);
 
                 // Prepare data needed to evaluate the sample light
                 float3 sampleIncidentVector = float3(0.0f, 0.0f, 0.0f);
