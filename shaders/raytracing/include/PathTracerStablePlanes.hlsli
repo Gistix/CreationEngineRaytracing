@@ -169,14 +169,15 @@ StablePlaneExplorationPayload SplitDeltaPath(
     const bool prevInsideWater,
     const float3 prevWaterAbsorption,
     const bool isEnterSurface,
-    const float3 surfaceVolumeAbsorption)
+    const float3 surfaceVolumeAbsorption,
+    const float positionError)
 {
     StablePlaneExplorationPayload payload;
 
     payload.stableBranchID = StablePlanesAdvanceBranchID(prevBranchID, deltaLobeIndex);
     payload.vertexIndex    = prevVertexIndex + 1;
     payload.rayDir         = lobe.dir;
-    payload.rayOrigin      = OffsetRay(surfacePosition, faceNormal, lobe.transmission != 0);
+    payload.rayOrigin      = OffsetRay(surfacePosition, faceNormal, positionError, lobe.transmission != 0);
     payload.throughput     = prevThp * lobe.thp;
     payload.motionVectors  = prevMotionVectors;
     payload.sceneLength    = prevSceneLength;
@@ -403,7 +404,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         {
             result.continueTracing      = true;
             result.nextRayDir           = deltaLobes[lobeIdx].dir;
-            result.nextRayOrigin        = OffsetRay(surface.Position, faceNormal, deltaLobes[lobeIdx].transmission != 0);
+            result.nextRayOrigin        = OffsetRay(surface.Position, faceNormal, surface.PositionError, deltaLobes[lobeIdx].transmission != 0);
             result.nextThp              = throughput * deltaLobes[lobeIdx].thp;
             result.nextBranchID         = StablePlanesAdvanceBranchID(stableBranchID, lobeIdx);
             result.nextVertexIndex      = vertexIndex + 1;
@@ -427,7 +428,8 @@ StablePlanesHitResult StablePlanesHandleHit(
                     surface.Position, faceNormal, deltaLobes[lobeIdx], lobeIdx,
                     stableBranchID, vertexIndex, throughput, motionVectors,
                     totalSceneLength, imageXform, roughnessAccum, -rayDir,
-                    insideWaterVolume, waterVolumeAbsorption, isEnterSurface, surface.VolumeAbsorption
+                    insideWaterVolume, waterVolumeAbsorption, isEnterSurface, surface.VolumeAbsorption,
+                    surface.PositionError
                 );
 
                 uint4 packed[5];

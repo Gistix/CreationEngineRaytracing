@@ -287,7 +287,7 @@ void Main()
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
             
-            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, hasTransmission);
+            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
             ray.Direction = direction;
             ray.TMin = 0.0f;  // OffsetRay already handles precision, no additional offset needed
             ray.TMax = RAY_TMAX;
