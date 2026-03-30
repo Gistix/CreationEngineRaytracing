@@ -118,6 +118,32 @@ void SceneGraph::Initialize()
 
 		m_VertexWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
+
+	// Previous position SRV descriptor table (for reading prev positions in RT shaders)
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5).setSize(UINT_MAX)
+		};
+
+		m_PrevPositionDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
+	// Previous position UAV descriptor table (for writing prev positions in skinning shader)
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1).setSize(UINT_MAX)
+		};
+
+		m_PrevPositionWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
 }
 
 void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
@@ -284,6 +310,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		m_InstanceData[instanceIndex] = {
 			instance->m_Transform,
+			instance->m_PrevTransform,
 			InstanceLightData(lights.data(), numLights),
 			firstMeshIndex
 		};

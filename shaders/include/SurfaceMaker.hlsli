@@ -36,6 +36,7 @@ struct SurfaceMaker
         surface.Primary = primary;
         
         surface.Position = position;
+        surface.PrevPosition = position;
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
@@ -53,6 +54,29 @@ struct SurfaceMaker
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
        
         float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+
+        // Compute previous world position for motion vectors
+        {
+#if defined(HAS_PREV_POSITIONS)
+            if (mesh.Flags & MeshDataFlags::Skinned)
+            {
+                // Per-vertex: read previous skinned positions from PrevPositions buffer
+                Triangle tri = GetTriangle(mesh.GeometryIdx, payload.primitiveIndex);
+                float3 prevPos0 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.x)];
+                float3 prevPos1 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.y)];
+                float3 prevPos2 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.z)];
+                float3 prevRootPos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
+                surface.PrevPosition = mul(instance.PrevTransform, float4(prevRootPos, 1.0));
+            }
+            else
+#endif
+            {
+                // Per-object: use current vertex positions with previous instance transform
+                float3 objectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
+                float3 rootSpacePos = mul(mesh.Transform, float4(objectSpacePos, 1.0));
+                surface.PrevPosition = mul(instance.PrevTransform, float4(rootSpacePos, 1.0));
+            }
+        }
 
         float coneTexLODValue = ComputeRayConeTriangleLODValue(v0, v1, v2, objectToWorld3x3);
 
@@ -139,6 +163,7 @@ struct SurfaceMaker
         surface.Primary = false;
         
         surface.Position = position;
+        surface.PrevPosition = position;
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
@@ -207,6 +232,7 @@ struct SurfaceMaker
         surface.IsThinSurface = false;
 
         surface.Position = position;
+        surface.PrevPosition = position;
 
         surface.FaceNormal = geomNormal;
 

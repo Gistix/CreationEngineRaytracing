@@ -11,6 +11,7 @@ StructuredBuffer<Vertex> Vertices[]                     : register(t0, space2);
 StructuredBuffer<Skinning> MeshSkinning[]               : register(t0, space3);
 
 RWStructuredBuffer<Vertex> OutputVertices[]             : register(u0);
+RWStructuredBuffer<float3> PrevPositions[]              : register(u0, space1);
 
 namespace MeshFlags
 {
@@ -67,6 +68,10 @@ void Main(uint2 DTid : SV_DispatchThreadID)
         return;
 
     uint shapeIndex = NonUniformResourceIndex(updateData.index);
+
+    // Save the current skinned position as previous before overwriting
+    if (updateData.shapeFlags & MeshFlags::Skinned)
+        PrevPositions[shapeIndex][vertexIndex] = OutputVertices[shapeIndex][vertexIndex].Position;
 
     Vertex vertex = Vertices[shapeIndex][vertexIndex];
 

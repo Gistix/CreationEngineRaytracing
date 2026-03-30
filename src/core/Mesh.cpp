@@ -762,6 +762,24 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
 		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
+
+		// Previous position buffer for per-vertex motion vectors
+		const size_t prevPosSize = sizeof(float3) * vertexCount;
+
+		auto& prevPositionBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(prevPosSize)
+			.setStructStride(sizeof(float3))
+			.setCanHaveUAVs(true)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()));
+
+		buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
+
+		auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
+		device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
+
+		auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
+		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
 	}
 
 	// Updatable geometry is already in root space
@@ -947,7 +965,8 @@ MeshData Mesh::GetData(const float3 externalEmittance)
 	return MeshData(
 		material.GetData(externalEmittance, bsMaterial),
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
-		{0, 0},
+		flags.all(Flags::Skinned) ? MeshDataFlags::Skinned : 0u,
+		0u,
 		localToRoot
 	);
 }
