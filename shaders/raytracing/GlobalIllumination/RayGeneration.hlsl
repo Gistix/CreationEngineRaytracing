@@ -461,18 +461,19 @@ void Main()
 #       if defined(NRD_REBLUR)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);    
-#       else
+#       else // !NRD_REBLUR
     DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);
     SpecularOutput[idx] = float4(specularRadiance, specHitDist);    
-#       endif
+#       endif // NRD_REBLUR
     
-#   else
+#   else // ! RAW_RADIANCE
     Output[idx] = float4(radiance, 1.0f);
-#   endif
     
-#   if defined(DLSS_RR) 
+#       if defined(DLSS_RR) 
     SpecularAlbedo[idx] = specularAlbedo;
     SpecularHitDistance[idx] = specHitDist;
-#   endif
+#       endif
+    
+#   endif // RAW_RADIANCE
 #endif    
 }

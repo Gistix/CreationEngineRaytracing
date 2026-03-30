@@ -57,12 +57,14 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
-			nvrhi::BindingLayoutItem::Texture_UAV(0),
-			nvrhi::BindingLayoutItem::Texture_UAV(1)
+			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
 		auto* scene = Scene::GetSingleton();
 		auto& settings = scene->m_Settings;
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1));
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2));
@@ -182,7 +184,7 @@ namespace Pass::Raytracing
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
-		nvrhi::ITexture* diffuseTexture = nullptr;
+		nvrhi::ITexture* diffuseTexture = renderer->GetMainTexture();
 		nvrhi::ITexture* specularTexture = nullptr;
 		nvrhi::ITexture* specularHitDistTexture = nullptr;
 
@@ -200,7 +202,6 @@ namespace Pass::Raytracing
 		{
 			auto* rrInput = renderer->GetRRInput();
 
-			diffuseTexture = renderer->GetMainTexture();		
 			specularTexture = rrInput->specularAlbedo;
 			specularHitDistTexture = rrInput->specularHitDistance;
 			break;
@@ -228,9 +229,11 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetHashEntriesBuffer()),
-			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture),
-			nvrhi::BindingSetItem::Texture_UAV(1, specularTexture)
+			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, specularTexture));
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, specularHitDistTexture));

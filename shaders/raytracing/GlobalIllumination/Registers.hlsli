@@ -30,12 +30,14 @@ RWTexture2D<float4>                         DiffuseOutput               : regist
 RWTexture2D<float4>                         SpecularOutput              : register(u1);
 #   else
 RWTexture2D<float4>                         Output                      : register(u0);
-#endif
 
-#   if defined(DLSS_RR)
+#       if defined(DLSS_RR)
 RWTexture2D<float3>                         SpecularAlbedo              : register(u1);
 RWTexture2D<float>                          SpecularHitDistance         : register(u2);
+#       endif
+
 #   endif
+
 #endif
 
 RaytracingAccelerationStructure             Scene                       : register(t0);

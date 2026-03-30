@@ -473,5 +473,12 @@ void Scene::UpdateSettings(Settings settings)
 	if (currentMode != previousMode || !rootNode->HasRenderNode())
 		UpdateMode(currentMode, previousMode);
 
+	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR;
+	
+	if (currentMode == Mode::GlobalIllumination) {
+		rootNode->SetEnabled<Pass::NRD::ReblurRadiance>(nrdReblur);
+		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
+	}
+
 	rootNode->SettingsChanged(settings);
 }
