@@ -1,12 +1,16 @@
 #include "interop/CameraData.hlsli"
+#include "interop/SharedData.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
+ConstantBuffer<FeatureData> Features    : register(b1);
 
 Texture2D<float4> Albedo                : register(t0);
 Texture2D<float4> DiffuseIndirect       : register(t1);
 Texture2D<float4> SpecularIndirect      : register(t2);
 
 RWTexture2D<float4> Output              : register(u0);
+
+#include "include/ColorConversions.hlsli"
 
 #if defined(NRD_REBLUR)
 #include "include/NRD.hlsli"
@@ -20,7 +24,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
     if (any(idx >= size))
         return;*/
     
-    float3 albedo = Albedo[idx].rgb;
+    float3 albedo = LLGammaToTrueLinear(Albedo[idx].rgb);
     float4 diffuseIndirect = DiffuseIndirect[idx];
     float4 specularIndirect = SpecularIndirect[idx];
     

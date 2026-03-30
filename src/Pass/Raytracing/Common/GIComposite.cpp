@@ -17,6 +17,7 @@ namespace Pass::Common
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
+			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
@@ -49,6 +50,8 @@ namespace Pass::Common
 		if (!m_DirtyBindings)
 			return;
 
+		auto* scene = Scene::GetSingleton();
+
 		auto* renderer = GetRenderer();
 
 		auto* renderTargets = renderer->GetRenderTargets();
@@ -60,7 +63,8 @@ namespace Pass::Common
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
-			nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
+			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
+			nvrhi::BindingSetItem::ConstantBuffer(1, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(0, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(1, diffuseTexture),
 			nvrhi::BindingSetItem::Texture_SRV(2, specularTexture),
