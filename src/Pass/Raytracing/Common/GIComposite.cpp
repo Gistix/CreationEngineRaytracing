@@ -16,6 +16,7 @@ namespace Pass::Common
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		globalBindingLayoutDesc.bindings = {
+			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
@@ -30,7 +31,7 @@ namespace Pass::Common
 		auto device = GetRenderer()->GetDevice();
 
 		winrt::com_ptr<IDxcBlob> shaderBlob;
-		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/GIComposite2.hlsl", { { L"NRD_REBLUR", L"1" } }, L"cs_6_5");
+		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/GIComposite.hlsl", { { L"NRD_REBLUR", L"1" } }, L"cs_6_5");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
@@ -48,7 +49,7 @@ namespace Pass::Common
 		if (!m_DirtyBindings)
 			return;
 
-		auto renderer = GetRenderer();
+		auto* renderer = GetRenderer();
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
@@ -59,6 +60,7 @@ namespace Pass::Common
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
+			nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(0, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(1, diffuseTexture),
 			nvrhi::BindingSetItem::Texture_SRV(2, specularTexture),

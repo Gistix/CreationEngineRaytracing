@@ -209,14 +209,6 @@ namespace Pass::Raytracing
 			break;
 		}
 
-		const bool bindingsChanged =
-			diffuseTexture != m_LastDiffuseTexture ||
-			specularTexture != m_LastSpecularTexture ||
-			specularHitDistTexture != m_LastSpecularHitDistTexture;
-
-		if (!m_DirtyBindings && !bindingsChanged)
-			return;
-
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
@@ -244,9 +236,6 @@ namespace Pass::Raytracing
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, specularHitDistTexture));
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
-		m_LastDiffuseTexture = diffuseTexture;
-		m_LastSpecularTexture = specularTexture;
-		m_LastSpecularHitDistTexture = specularHitDistTexture;
 
 		m_DirtyBindings = false;
 	}

@@ -32,9 +32,6 @@ namespace Pass::Raytracing
 		SHaRC* m_SHaRC;
 
 		bool m_DirtyBindings = true;
-		nvrhi::TextureHandle m_LastDiffuseTexture;
-		nvrhi::TextureHandle m_LastSpecularTexture;
-		nvrhi::TextureHandle m_LastSpecularHitDistTexture;
 
 		eastl::vector<ShaderDefine> m_Defines;
 

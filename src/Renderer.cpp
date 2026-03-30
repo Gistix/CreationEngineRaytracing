@@ -3,8 +3,6 @@
 #include "Renderer.h"
 #include "Scene.h"
 
-#include "Pass/GIComposite.h"
-
 #include "Renderer/RenderNode.h"
 
 Renderer::Renderer()
