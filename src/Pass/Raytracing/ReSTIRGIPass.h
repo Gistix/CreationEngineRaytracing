@@ -43,6 +43,7 @@ namespace Pass::Raytracing
 		bool m_DirtyBindings = true;
 		bool m_Enabled = false;
 		rtxdi::ReSTIRGI_ResamplingMode m_ResamplingMode = rtxdi::ReSTIRGI_ResamplingMode::TemporalAndSpatial;
+		eastl::vector<ShaderDefine> m_Defines;
 
 	public:
 		ReSTIRGIPass(Renderer* renderer, SceneTLAS* sceneTLAS);
