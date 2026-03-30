@@ -25,6 +25,30 @@ public:
 		return nullptr;
 	}
 
+	template<typename T>
+	RenderNode* GetNode()
+	{
+		for (auto& child : m_Children)
+		{
+			if (auto* node = child.GetNode<T>())
+				return node;
+		}
+
+		return nullptr;
+	}
+
+	template<typename T>
+	bool SetEnabled(bool enabled)
+	{
+		for (auto& child : m_Children)
+		{
+			if (child->SetEnabled<T>(enabled))
+				return true;
+		}
+
+		return false;
+	}
+
 	void AttachRenderNode(RenderNode* renderNode);
 
 	void DetachRenderNode(RenderNode* renderNode);
