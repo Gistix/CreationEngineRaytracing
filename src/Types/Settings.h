@@ -2,6 +2,7 @@
 
 enum class Mode
 {
+	None,
 	GlobalIllumination,
 	PathTracing
 };
