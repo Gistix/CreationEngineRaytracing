@@ -24,7 +24,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
     if (any(idx >= size))
         return;*/
     
-    float3 albedo = LLGammaToTrueLinear(Albedo[idx].rgb);
+    float3 albedo = Albedo[idx].rgb;
     float4 diffuseIndirect = DiffuseIndirect[idx];
     float4 specularIndirect = SpecularIndirect[idx];
     
