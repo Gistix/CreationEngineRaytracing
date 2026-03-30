@@ -39,6 +39,8 @@ namespace Pass::NRD
 		nrd::Instance* m_NRD = nullptr;
 		nrd::ReblurSettings m_ReblurSettings = {};
 
+		nrd::CommonSettings m_CommonSettings = {};
+
 		bool m_ResourcesDirty = true;
 		bool m_SettingsDirty = true;
 
@@ -49,7 +51,7 @@ namespace Pass::NRD
 		void CreateResources();
 		void CreateGlobalBindingSet();
 
-		nrd::CommonSettings BuildCommonSettings() const;
+		void UpdateCommonSettings();
 
 		nvrhi::ITexture* GetDispatchResource(const nrd::ResourceDesc& resource) const;
 		nvrhi::Format GetFormat(nrd::Format format) const;

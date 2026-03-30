@@ -357,50 +357,46 @@ namespace Pass::NRD
 		m_ResourcesDirty = true;
 	}
 
-	nrd::CommonSettings ReblurRadiance::BuildCommonSettings() const
+	void ReblurRadiance::UpdateCommonSettings()
 	{
-		nrd::CommonSettings commonSettings = {};
 		auto* renderer = Renderer::GetSingleton();
 
-		const CameraData* camera = Scene::GetSingleton()->GetCameraData();
-		if (!camera)
-			return commonSettings;
+		auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
 
-		const float4x4 worldToView = camera->ViewInverse.Invert();
-		const float4x4 worldToViewPrev = camera->PrevViewInverse.Invert();
-		const float4x4 viewToClip = camera->ViewProj * camera->ViewInverse;
-		const float4x4 viewToClipPrev = camera->PrevViewProj * camera->PrevViewInverse;
+		auto cameraData = runtimeData.cameraData.getEye();
 
-		std::memcpy(commonSettings.worldToViewMatrix, &worldToView, sizeof(float) * 16);
-		std::memcpy(commonSettings.worldToViewMatrixPrev, &worldToViewPrev, sizeof(float) * 16);
-		std::memcpy(commonSettings.viewToClipMatrix, &viewToClip, sizeof(float) * 16);
-		std::memcpy(commonSettings.viewToClipMatrixPrev, &viewToClipPrev, sizeof(float) * 16);
+		std::memcpy(m_CommonSettings.worldToViewMatrixPrev, m_CommonSettings.worldToViewMatrix, sizeof(float4x4));
+		std::memcpy(m_CommonSettings.worldToViewMatrix, &cameraData.viewMat, sizeof(float4x4));
 
-		const uint2 resourceSize = renderer->GetResolution();
-		const uint2 rectSize = (camera->RenderSize.x != 0 && camera->RenderSize.y != 0)
-			? camera->RenderSize
-			: resourceSize;
+		std::memcpy(m_CommonSettings.viewToClipMatrixPrev, m_CommonSettings.viewToClipMatrix, sizeof(float4x4));
+		std::memcpy(m_CommonSettings.viewToClipMatrix, &cameraData.projMat, sizeof(float4x4));
 
-		commonSettings.frameIndex = camera->FrameIndex;
-		commonSettings.cameraJitter[0] = camera->Jitter.x;
-		commonSettings.cameraJitter[1] = camera->Jitter.y;
-		commonSettings.cameraJitterPrev[0] = commonSettings.cameraJitter[0];
-		commonSettings.cameraJitterPrev[1] = commonSettings.cameraJitter[1];
-		commonSettings.resourceSize[0] = uint16_t(eastl::max(1u, resourceSize.x));
-		commonSettings.resourceSize[1] = uint16_t(eastl::max(1u, resourceSize.y));
-		commonSettings.resourceSizePrev[0] = commonSettings.resourceSize[0];
-		commonSettings.resourceSizePrev[1] = commonSettings.resourceSize[1];
-		commonSettings.rectSize[0] = uint16_t(eastl::max(1u, rectSize.x));
-		commonSettings.rectSize[1] = uint16_t(eastl::max(1u, rectSize.y));
-		commonSettings.rectSizePrev[0] = commonSettings.rectSize[0];
-		commonSettings.rectSizePrev[1] = commonSettings.rectSize[1];
-		commonSettings.motionVectorScale[0] = 1.0f;
-		commonSettings.motionVectorScale[1] = 1.0f;
-		commonSettings.motionVectorScale[2] = 0.0f;
+		const auto resolution = renderer->GetResolution();
+		const auto dynamicResolution = renderer->GetDynamicResolution();
 
-		commonSettings.splitScreen = 0.5f;
+		m_CommonSettings.frameIndex = static_cast<uint32_t>(renderer->GetFrameIndex() % UINT32_MAX);
 
-		return commonSettings;
+		auto jitter = renderer->GetJitter();
+		m_CommonSettings.cameraJitter[0] = jitter.x;
+		m_CommonSettings.cameraJitter[1] = jitter.y;
+
+		auto prevJitter = renderer->GetJitter();
+		m_CommonSettings.cameraJitterPrev[0] = prevJitter.x;
+		m_CommonSettings.cameraJitterPrev[1] = prevJitter.y;
+
+		m_CommonSettings.resourceSizePrev[0] = m_CommonSettings.resourceSize[0];
+		m_CommonSettings.resourceSizePrev[1] = m_CommonSettings.resourceSize[1];
+
+		m_CommonSettings.resourceSize[0] = static_cast<uint16_t>(resolution.x);
+		m_CommonSettings.resourceSize[1] = static_cast<uint16_t>(resolution.y);
+
+		m_CommonSettings.rectSizePrev[0] = m_CommonSettings.rectSize[0];
+		m_CommonSettings.rectSizePrev[1] = m_CommonSettings.rectSize[1];
+
+		m_CommonSettings.rectSize[0] = static_cast<uint16_t>(dynamicResolution.x);
+		m_CommonSettings.rectSize[1] = static_cast<uint16_t>(dynamicResolution.y);
+
+		m_CommonSettings.splitScreen = 0.5f;
 	}
 
 	nvrhi::ITexture* ReblurRadiance::GetDispatchResource(const nrd::ResourceDesc& resource) const
@@ -490,8 +486,9 @@ namespace Pass::NRD
 			m_SettingsDirty = false;
 		}
 
-		const nrd::CommonSettings commonSettings = BuildCommonSettings();
-		const nrd::Result commonSettingsResult = nrd::SetCommonSettings(*m_NRD, commonSettings);
+		UpdateCommonSettings();
+
+		const nrd::Result commonSettingsResult = nrd::SetCommonSettings(*m_NRD, m_CommonSettings);
 		if (commonSettingsResult != nrd::Result::SUCCESS) {
 			logger::error("ReblurRadiance: failed to set NRD common settings {}", magic_enum::enum_name(commonSettingsResult));
 			return;

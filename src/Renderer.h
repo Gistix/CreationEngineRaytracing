@@ -71,6 +71,7 @@ class Renderer
 	float2 m_DynamicResolutionRatio;
 
 	float2 m_Jitter;
+	float2 m_PrevJitter;
 
 	eastl::unique_ptr<RenderGraph> m_RenderGraph;
 
@@ -187,7 +188,12 @@ public:
 
 	inline auto GetJitter() const { return m_Jitter; }
 
-	inline auto UpdateJitter(float2 jitter) { return m_Jitter = jitter; }
+	inline auto GetPrevJitter() const { return m_PrevJitter; }
+
+	inline void UpdateJitter(float2 jitter) { 
+		m_PrevJitter = m_Jitter;
+		m_Jitter = jitter;
+	}
 
 	inline auto& GetTextureManager() { return m_TextureManager; }
 
