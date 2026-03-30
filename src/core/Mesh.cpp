@@ -965,7 +965,8 @@ MeshData Mesh::GetData(const float3 externalEmittance)
 	return MeshData(
 		material.GetData(externalEmittance, bsMaterial),
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
-		flags.all(Flags::Skinned) ? MeshDataFlags::Skinned : 0u,
+		(flags.all(Flags::Skinned) ? MeshDataFlags::Skinned : 0u) |
+			(flags.all(Flags::DoubleSidedGeom) ? MeshDataFlags::DoubleSidedGeom : 0u),
 		0u,
 		localToRoot
 	);

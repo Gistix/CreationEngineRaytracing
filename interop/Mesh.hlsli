@@ -18,11 +18,13 @@ VALIDATE_ALIGNMENT(MeshData, 4);
 namespace MeshDataFlags
 {
     static constexpr uint32_t Skinned = 1u << 0;
+    static constexpr uint32_t DoubleSidedGeom = 1u << 1;
 }
 #else
 namespace MeshDataFlags
 {
     static const uint Skinned = 1u << 0;
+    static const uint DoubleSidedGeom = 1u << 1;
 }
 #endif
 
