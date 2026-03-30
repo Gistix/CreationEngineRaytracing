@@ -18,6 +18,7 @@ struct Surface
     bool Primary;
     
     float3 Position;
+    float3 PrevPosition;
     float3 GeomNormal;
     float3 GeomTangent;
     float3 Normal;

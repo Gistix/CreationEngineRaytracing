@@ -256,7 +256,8 @@ void Main()
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
     float3 hitPosW = sourcePosition;
-    MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPosW), 0);
+    float3 hitPrevPosW = sourceSurface.PrevPosition;
+    MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPrevPosW), 0);
     Depth[idx] = computeClipDepth(hitPosW);
 
     // Write packed surface data for ReSTIR GI (REFERENCE mode)
@@ -294,7 +295,8 @@ void Main()
         // share this MV — it tracks the screen-space movement of the actual geometry, not
         // the virtual position deep in a delta reflection/refraction chain.
         float3 primaryHitPos = Camera.Position.xyz + sourceDirection * primarySceneDistance;
-        float3 buildMVs = computeMotionVector(primaryHitPos, primaryHitPos);
+        float3 primaryPrevPosW = sourceSurface.PrevPosition;
+        float3 buildMVs = computeMotionVector(primaryHitPos, primaryPrevPosW);
         float buildSceneLength = primarySceneDistance;
         float3x3 buildImageXform = float3x3(1,0,0, 0,1,0, 0,0,1);
         float buildRoughnessAccum = 0;

@@ -1,18 +1,7 @@
 /*
  * PathTracerStablePlanes.hlsli
  *
- * BUILD pass logic for the Stable Planes system.
- * Contains: SplitDeltaPath, StablePlanesHandleHit, StablePlanesHandleMiss
- *
- * Called from RayGeneration.hlsl when PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES.
- * The BUILD pass performs deterministic Whitted-style tracing through delta (mirror/glass) surfaces,
- * discovering the delta tree and assigning stable planes for each terminal non-delta base surface.
- *
- * Requires:
- *   - StablePlanes.hlsli (data structures, StablePlanesContext)
- *   - BSDF.hlsli (DeltaLobe, EvalDeltaLobes)
- *   - LobeType.hlsli
- *   - Surface.hlsli, BRDFContext
+ * BUILD/FILL pass logic for the Stable Planes system.
  */
 
 #ifndef __PATH_TRACER_STABLE_PLANES_HLSLI__
@@ -22,9 +11,8 @@
 #include "raytracing/include/Materials/BSDF.hlsli"
 
 // ============================================================================
-// Motion Vector computation (shared by all path tracer modes)
+// Motion Vector Computation
 // ============================================================================
-// Computes screen-space motion vector from a pair of world-space positions.
 
 float3 computeMotionVector(float3 posW, float3 prevPosW)
 {
@@ -39,11 +27,8 @@ float3 computeMotionVector(float3 posW, float3 prevPosW)
 }
 
 // ============================================================================
-// Clip-space depth computation (shared by all path tracer modes)
+// Clip-space Depth Computation
 // ============================================================================
-// Returns NDC depth (clipPos.z / clipPos.w) in [0, 1] range for a world-space
-// position, matching the standard DirectX depth buffer convention used by
-// Skyrim's raster pipeline (see Utility.hlsl: SV_POSITION → positionCS.z/w).
 
 float computeClipDepth(float3 posW)
 {
@@ -51,14 +36,33 @@ float computeClipDepth(float3 posW)
     return clipPos.z / clipPos.w;
 }
 
+// ============================================================================
+// PSR Motion Vector and Depth
+// ============================================================================
+
+void computePSRMotionVectorsAndDepth(
+    const uint2 pixelPos,
+    const float totalSceneLength,
+    const float3x3 imageXform,
+    const float3 surfacePosition,
+    const float3 surfacePrevPosition,
+    out float3 outMotionVectors,
+    out float outDepth)
+{
+    float3 cameraRayDir = normalize(mul((float3x3)Camera.ViewInverse,
+        GetView(pixelPos, Camera.RenderSize, Camera.ProjInverse)));
+    float3 virtualWorldPos = Camera.Position.xyz + cameraRayDir * totalSceneLength;
+    float3 worldMotion = surfacePrevPosition - surfacePosition;
+    float3 virtualMotion = mul(imageXform, worldMotion);
+    outMotionVectors = computeMotionVector(virtualWorldPos, virtualWorldPos + virtualMotion);
+    outDepth = computeClipDepth(virtualWorldPos);
+}
+
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
 
 // ============================================================================
 // BUILD Pass Exploration Payload
 // ============================================================================
-// The exploration payload stores the complete state needed to resume a forked
-// delta path. It's serialized into a StablePlane's memory via PackCustomPayload.
-// Layout: 5 × uint4 = 80 bytes (matches StablePlane size exactly)
 
 struct StablePlaneExplorationPayload
 {
@@ -69,22 +73,20 @@ struct StablePlaneExplorationPayload
     float   sceneLength;        // accumulated ray travel before this segment
     uint    stableBranchID;
     uint    vertexIndex;
-    float3x3 imageXform;        // accumulated virtual-position transform
-    float   roughnessAccum;     // accumulated roughness along the path
-    bool    insideWaterVolume;   // inside a water volume after leaving the fork surface
-    float3  waterVolumeAbsorption; // Beer-Lambert absorption coefficient
+    float3x3 imageXform;
+    float   roughnessAccum;
+    bool    insideWaterVolume;
+    float3  waterVolumeAbsorption;
 
     void Pack(out uint4 packed[5])
     {
         packed[0] = uint4(asuint(rayOrigin), asuint(sceneLength));
         packed[1] = uint4(asuint(rayDir), stableBranchID);
         packed[2] = uint4(PackTwoFp32ToFp16(throughput, motionVectors), vertexIndex);
-        // Store imageXform rows 0 and 1 as fp16 (6 floats → 3 uints)
         packed[3] = uint4(
             PackTwoFp32ToFp16(imageXform[0], imageXform[1]),
             asuint(roughnessAccum)
         );
-        // Store imageXform row 2 as fp16 (3 floats → 2 uint halves) + water volume state
         packed[4] = uint4(
             Fp32ToFp16(float4(imageXform[2], 0)),
             (insideWaterVolume ? 1u : 0u) | (f32tof16(clamp(waterVolumeAbsorption.x, 0, HLF_MAX)) << 16),
@@ -121,10 +123,9 @@ struct StablePlaneExplorationPayload
 };
 
 // ============================================================================
-// imageXform computation helpers
+// imageXform Helpers
 // ============================================================================
 
-// Mirror reflection matrix for a given surface normal: I - 2*n*n^T
 float3x3 MirrorReflectionMatrix(float3 n)
 {
     return float3x3(
@@ -134,27 +135,22 @@ float3x3 MirrorReflectionMatrix(float3 n)
     );
 }
 
-// Update imageXform for a delta bounce:
-// - Reflection: multiply by mirror matrix
-// - Refraction: multiply by rotation matrix from incident to refracted direction
 float3x3 UpdateImageXform(float3x3 prevXform, float3 inDir, float3 outDir, float3 normal, bool isTransmission)
 {
     float3x3 bounceMatrix;
     if (isTransmission)
     {
-        // Refraction: rotation from inDir to outDir
-        bounceMatrix = MatrixRotateFromTo(inDir, outDir);
+        bounceMatrix = MatrixRotateFromTo(-inDir, outDir);
     }
     else
     {
-        // Reflection: mirror matrix
         bounceMatrix = MirrorReflectionMatrix(normal);
     }
     return mul(bounceMatrix, prevXform);
 }
 
 // ============================================================================
-// SplitDeltaPath — Fork a new exploration path for a delta lobe
+// SplitDeltaPath
 // ============================================================================
 
 StablePlaneExplorationPayload SplitDeltaPath(
@@ -187,10 +183,8 @@ StablePlaneExplorationPayload SplitDeltaPath(
     payload.sceneLength    = prevSceneLength;
     payload.roughnessAccum = prevRoughnessAccum;
 
-    // Update imageXform for this bounce
     payload.imageXform = UpdateImageXform(prevImageXform, incomingDir, lobe.dir, faceNormal, lobe.transmission != 0);
 
-    // Compute water volume state for the forked path
     if (lobe.transmission != 0 && any(surfaceVolumeAbsorption > 0.0f))
     {
         payload.insideWaterVolume     = isEnterSurface;
@@ -206,10 +200,8 @@ StablePlaneExplorationPayload SplitDeltaPath(
 }
 
 // ============================================================================
-// StablePlanesHandleMiss — Sky miss during BUILD pass
+// StablePlanesHandleMiss
 // ============================================================================
-// When a delta path misses all geometry and hits the sky, we store a plane
-// with SceneLength = inf, and accumulate sky radiance to StableRadiance.
 
 void StablePlanesHandleMiss(
     inout StablePlanesContext ctx,
@@ -225,48 +217,39 @@ void StablePlanesHandleMiss(
     const float3 skyRadiance,
     const bool isDominant)
 {
-    // Use the passed-in motionVectors from the primary surface. The pixel is at the
-    // primary surface on screen; computing MV from a far-away sky virtual position
-    // would produce an excessively large vector that destabilises temporal reprojection.
+    float3 skyMV; float skyDepth;
+    computePSRMotionVectorsAndDepth(pixelPos, kEnvironmentMapSceneDistance, imageXform,
+        float3(0,0,0), float3(0,0,0), skyMV, skyDepth);
+
     float3 planeNormal = -rayDir;
 
     ctx.StoreStablePlane(
         pixelPos, planeIndex, vertexIndex,
         rayOrigin, rayDir, stableBranchID,
-        /* sceneLength */ 1.0 / 0.0,  // +inf for sky miss
-        /* rayTCurrent */ kEnvironmentMapSceneDistance,
-        throughput, motionVectors,
-        /* roughness */ 1.0,          // sky = fully rough for denoiser
+        1.0 / 0.0,
+        kEnvironmentMapSceneDistance,
+        throughput, skyMV,
+        1.0,
         planeNormal,
-        /* diffBSDFEstimate */ float3(1,1,1),
-        /* specBSDFEstimate */ float3(0,0,0),
+        float3(1,1,1),
+        float3(0,0,0),
         isDominant,
         /* flagsAndVertexIndex */ 0,
-        /* packedCounters */ 0
+        0
     );
 
-    // Write dominant plane MV and Depth to global output
     if (isDominant)
     {
-        MotionVectors[pixelPos] = float4(motionVectors, 0);
-        Depth[pixelPos] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
+        MotionVectors[pixelPos] = float4(skyMV, 0);
+        Depth[pixelPos] = skyDepth;
     }
 
-    // Accumulate sky radiance as stable (noise-free) radiance
     ctx.AccumulateStableRadiance(pixelPos, skyRadiance * throughput);
 }
 
 // ============================================================================
-// StablePlanesHandleHit — Delta surface hit during BUILD pass
+// StablePlanesHandleHit
 // ============================================================================
-// At each delta surface, we:
-// 1. Evaluate delta lobes via EvalDeltaLobes
-// 2. If the surface has non-delta components, this is the base surface → store plane
-// 3. If purely delta: the primary lobe continues, others fork to empty planes
-// 4. Accumulate emissive to StableRadiance
-//
-// Returns: true if the path should continue tracing (delta-only surface),
-//          false if the path terminates here (base surface stored, or vertex limit)
 
 struct StablePlanesHitResult
 {
@@ -317,57 +300,48 @@ StablePlanesHitResult StablePlanesHandleHit(
     result.nextInsideWater    = insideWaterVolume;
     result.nextWaterAbsorption = waterVolumeAbsorption;
 
-    // Pack water state for stable plane storage
     uint waterFlags = (insideWaterVolume ? 1u : 0u) | (f32tof16(clamp(waterVolumeAbsorption.x, 0, HLF_MAX)) << 16);
     uint waterCounters = f32tof16(clamp(waterVolumeAbsorption.y, 0, HLF_MAX)) | (f32tof16(clamp(waterVolumeAbsorption.z, 0, HLF_MAX)) << 16);
     bool isEnterSurface = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0;
 
-    // Use the passed-in motionVectors computed from the primary surface position.
-    // For delta chains (mirrors, glass, water), the virtual world position diverges far
-    // from the actual screen pixel, causing huge MV that destabilises temporal reprojection.
-    // The primary surface MV correctly tracks where this pixel was on screen last frame.
-
-    // Accumulate emissive along the delta path (this is noise-free, deterministic)
     float3 emissive = surface.Emissive;
     if (any(emissive > 0))
         ctx.AccumulateStableRadiance(pixelPos, emissive * throughput);
 
-    // Check if we've exceeded vertex depth limit
     if (vertexIndex >= ctx.maxStablePlaneVertexDepth)
     {
-        // Store the current surface as the plane base (even if delta)
         float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
+        float3 psrMV; float psrDepth;
+        computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
+            surface.Position, surface.PrevPosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, motionVectors,
+            throughput, psrMV,
             surface.Roughness, surface.Normal,
             surface.DiffuseAlbedo.xxx, surface.F0,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
         {
-            MotionVectors[pixelPos] = float4(motionVectors, 0);
-            Depth[pixelPos] = computeClipDepth(surface.Position);
+            MotionVectors[pixelPos] = float4(psrMV, 0);
+            Depth[pixelPos] = psrDepth;
         }
         return result;
     }
 
-    // Evaluate delta lobes
     DeltaLobe deltaLobes[cMaxDeltaLobes];
     int deltaLobeCount;
     float nonDeltaPart;
     bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
 
-    // Filter very weak lobes
     for (int k = 0; k < deltaLobeCount; k++)
     {
         if (Average3(abs(deltaLobes[k].thp)) < 0.001)
             deltaLobes[k].thp = 0;
     }
 
-    // Count active delta lobes
     int activeDeltaLobes = 0;
     int firstActiveLobe = -1;
     for (int k2 = 0; k2 < deltaLobeCount; k2++)
@@ -379,54 +353,42 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
     }
 
-    // Determine face normal orientation
     float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
 
-    // If there's a non-delta component, this is the base surface for the plane
-    // (The first non-delta bounce is where the FILL pass will start stochastic tracing)
     if (nonDeltaPart > 1e-5 || activeDeltaLobes == 0)
     {
-        // Compute BSDF estimates for the denoiser
         float3 diffBSDFEstimate = max(surface.DiffuseAlbedo, 0.04);
         float3 specBSDFEstimate = max(surface.F0, 0.04);
 
+        float3 psrMV; float psrDepth;
+        computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
+            surface.Position, surface.PrevPosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, motionVectors,
+            throughput, psrMV,
             surface.Roughness, surface.Normal,
             diffBSDFEstimate, specBSDFEstimate,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
         {
-            MotionVectors[pixelPos] = float4(motionVectors, 0);
-            Depth[pixelPos] = computeClipDepth(surface.Position);
+            MotionVectors[pixelPos] = float4(psrMV, 0);
+            Depth[pixelPos] = psrDepth;
         }
         return result;
     }
 
-    // Pure delta surface: evaluate delta lobe lighting (sun/point light reflections)
-    // This is deterministic and noise-free, captured in stable radiance.
-    // FILL pass skips delta lighting for pure delta primary surfaces to avoid double-counting.
+    // Evaluate delta lobe lighting (deterministic, captured in stable radiance)
     {
         float3 deltaLighting = EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
         if (any(deltaLighting > 0))
             ctx.AccumulateStableRadiance(pixelPos, deltaLighting * throughput);
     }
 
-    // Fork paths for each active lobe.
-    // On plane 0 with 2+ delta lobes (e.g. water: transmission + reflection),
-    // we store the delta surface itself as plane 0's base and fork ALL lobes
-    // to child planes. The FILL pass will start from the delta surface and
-    // randomly select a branch via BSDF sampling, naturally filling all children.
-    // On plane 0 with exactly 1 delta lobe (PSR: e.g. pure mirror), we continue
-    // that lobe on the current path as primary surface replacement.
-    // On other planes, we always continue the first lobe.
     bool canReuseCurrent = (planeIndex != 0) || (activeDeltaLobes == 1);
 
-    // Find empty planes for forking
     int availableCount = 0;
     int availablePlanes[cStablePlaneCount];
     ctx.GetAvailableEmptyPlanes(pixelPos, availableCount, availablePlanes);
@@ -440,7 +402,6 @@ StablePlanesHitResult StablePlanesHandleHit(
 
         if (canReuseCurrent && lobeIdx == firstActiveLobe)
         {
-            // First active lobe: continue on current path
             result.continueTracing      = true;
             result.nextRayDir           = deltaLobes[lobeIdx].dir;
             result.nextRayOrigin        = OffsetRay(surface.Position, faceNormal, surface.PositionError, deltaLobes[lobeIdx].transmission != 0);
@@ -450,7 +411,6 @@ StablePlanesHitResult StablePlanesHandleHit(
             result.nextImageXform       = UpdateImageXform(imageXform, -rayDir, deltaLobes[lobeIdx].dir, faceNormal, deltaLobes[lobeIdx].transmission != 0);
             result.nextRoughnessAccum   = roughnessAccum;
 
-            // Update water volume state for continuing delta lobe
             if (deltaLobes[lobeIdx].transmission != 0 && any(surface.VolumeAbsorption > 0.0f))
             {
                 result.nextInsideWater     = isEnterSurface;
@@ -459,7 +419,6 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
         else
         {
-            // Fork to empty plane
             if (forkedCount < availableCount)
             {
                 int targetPlane = availablePlanes[forkedCount];
@@ -480,25 +439,25 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
     }
 
-    // If path did not continue (plane 0 multi-fork, or no lobes), store as base
     if (!result.continueTracing)
     {
-        // When multi-forking on plane 0 (canReuseCurrent=false), the delta surface
-        // should NOT be dominant — the first child plane will become dominant instead.
         bool storeAsDominant = isDominant && canReuseCurrent;
+        float3 psrMV; float psrDepth;
+        computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
+            surface.Position, surface.PrevPosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, motionVectors,
+            throughput, psrMV,
             surface.Roughness, surface.Normal,
             max(surface.DiffuseAlbedo, 0.04), max(surface.F0, 0.04),
             storeAsDominant, waterFlags, waterCounters
         );
         if (storeAsDominant)
         {
-            MotionVectors[pixelPos] = float4(motionVectors, 0);
-            Depth[pixelPos] = computeClipDepth(surface.Position);
+            MotionVectors[pixelPos] = float4(psrMV, 0);
+            Depth[pixelPos] = psrDepth;
         }
     }
 
@@ -513,11 +472,10 @@ StablePlanesHitResult StablePlanesHandleHit(
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 
-// Flags for the FILL pass path state
-static const uint kStablePlaneFlag_OnPlane          = 1 << 0;  // Currently on a stable plane base surface
-static const uint kStablePlaneFlag_OnBranch         = 1 << 1;  // On a stable delta branch (emissive was captured in BUILD)
-static const uint kStablePlaneFlag_OnDominant       = 1 << 2;  // On the dominant plane's branch
-static const uint kStablePlaneFlag_BaseScatterDiff  = 1 << 3;  // First scatter off plane base was diffuse
+static const uint kStablePlaneFlag_OnPlane          = 1 << 0;
+static const uint kStablePlaneFlag_OnBranch         = 1 << 1;
+static const uint kStablePlaneFlag_OnDominant       = 1 << 2;
+static const uint kStablePlaneFlag_BaseScatterDiff  = 1 << 3;
 
 struct StablePlaneFillState
 {
@@ -530,9 +488,6 @@ struct StablePlaneFillState
     void setFlag(uint f, bool v) { if(v) flags |= f; else flags &= ~f; }
 };
 
-// Restore path state from the stable plane buffer for the FILL pass.
-// This loads plane 0 (the primary plane) and reconstructs the path origin/direction/throughput.
-// Returns tMinMax for the narrow re-trace window.
 float2 FirstHitFromVBuffer(
     inout StablePlaneFillState fillState,
     inout float3 rayOrigin,
@@ -558,7 +513,6 @@ float2 FirstHitFromVBuffer(
     float3 thp, dummy;
     UnpackTwoFp32ToFp16(sp.PackedThpAndMVs, thp, dummy);
 
-    // Load water volume state stored during BUILD pass
     outInsideWaterVolume = sp.GetInsideWaterVolume();
     outWaterVolumeAbsorption = sp.GetWaterVolumeAbsorption();
 
@@ -566,7 +520,6 @@ float2 FirstHitFromVBuffer(
 
     if (!isMiss)
     {
-        // Narrow the ray interval for cheap re-hit
         tMinMax.x = lastRayTCurrent * 0.99;
         tMinMax.y = lastRayTCurrent * 1.01;
     }
@@ -583,11 +536,9 @@ float2 FirstHitFromVBuffer(
     uint dominantIdx = ctx.LoadDominantIndex(pixelPos);
     fillState.setFlag(kStablePlaneFlag_OnDominant, dominantIdx == basePlaneIndex);
 
-    return isMiss ? float2(-1, -1) : tMinMax;  // return negative tMinMax to signal miss
+    return isMiss ? float2(-1, -1) : tMinMax;
 }
 
-// Called after each BSDF scatter during the FILL pass.
-// Updates branch tracking, commits radiance on plane switches.
 void StablePlanesOnScatter(
     inout StablePlaneFillState fillState,
     inout float4 pathL,
@@ -603,7 +554,6 @@ void StablePlanesOnScatter(
     }
     fillState.setFlag(kStablePlaneFlag_OnPlane, false);
 
-    // Update branch ID and check if still on a known delta path
     if (fillState.hasFlag(kStablePlaneFlag_OnBranch) && nextVertexIndex <= cStablePlaneMaxVertexIndex)
     {
         fillState.stableBranchID = StablePlanesAdvanceBranchID(fillState.stableBranchID, bsdfSample.getDeltaLobeIndex());
@@ -615,10 +565,8 @@ void StablePlanesOnScatter(
             if (planeBranchID == cStablePlaneInvalidBranchID)
                 continue;
 
-            // Exact match: we've arrived at this stable plane
             if (StablePlaneIsOnPlane(planeBranchID, fillState.stableBranchID))
             {
-                // Commit accumulated radiance to previous plane
                 ctx.CommitDenoiserRadiance(pixelPos, fillState.planeIndex, pathL);
 
                 fillState.planeIndex = spi;
@@ -629,7 +577,6 @@ void StablePlanesOnScatter(
                 break;
             }
 
-            // Prefix match: on the path leading to this plane
             uint planeVertexIndex = StablePlanesVertexIndexFromBranchID(planeBranchID);
             onStablePath |= StablePlaneIsOnStablePath(planeBranchID, planeVertexIndex, fillState.stableBranchID, nextVertexIndex);
         }
@@ -637,7 +584,6 @@ void StablePlanesOnScatter(
     }
     else
     {
-        // Fell off the stable path
         fillState.stableBranchID = cStablePlaneInvalidBranchID;
         fillState.setFlag(kStablePlaneFlag_OnBranch, false);
         fillState.bouncesFromPlane++;

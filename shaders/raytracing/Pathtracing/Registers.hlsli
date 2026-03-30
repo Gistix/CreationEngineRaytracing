@@ -75,6 +75,9 @@ StructuredBuffer<Triangle>                  Triangles[]                 : regist
 StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
 Texture2D<float4>                           Textures[]                  : register(t0, space3);
 RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space4);
+StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space5);
+
+#define HAS_PREV_POSITIONS
 
 SamplerState                                DefaultSampler              : register(s0);
 

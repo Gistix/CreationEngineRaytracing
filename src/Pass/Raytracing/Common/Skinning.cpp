@@ -46,7 +46,8 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexCopyDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetSkinningDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetVertexWriteDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetVertexWriteDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetPrevPositionWriteDescriptors()->m_Layout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
@@ -158,7 +159,8 @@ namespace Pass
 			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable,
 			sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
 			sceneGraph->GetSkinningDescriptors()->m_DescriptorTable,
-			sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable
+			sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
+			sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable
 		};
 
 		nvrhi::ComputeState state;
