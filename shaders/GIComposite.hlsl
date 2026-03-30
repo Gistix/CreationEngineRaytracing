@@ -1,29 +1,37 @@
-
 #include "interop/CameraData.hlsli"
+#include "interop/SharedData.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
+ConstantBuffer<FeatureData> Features    : register(b1);
 
-Texture2D<float4> Direct                : register(t0);
-Texture2D<float4> Albedo                : register(t1);
-Texture2D<float4> DiffuseIndirect       : register(t2);
-Texture2D<float4> SpecularIndirect      : register(t3);
-
-SamplerState DefaultSmapler             : register(s0);
+Texture2D<float4> Albedo                : register(t0);
+Texture2D<float4> DiffuseIndirect       : register(t1);
+Texture2D<float4> SpecularIndirect      : register(t2);
 
 RWTexture2D<float4> Output              : register(u0);
 
-[numthreads(16, 16, 1)]
+#include "include/ColorConversions.hlsli"
+
+#if defined(NRD_REBLUR)
+#include "include/NRD.hlsli"
+#endif
+
+[numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {
-    uint2 size = Camera.RenderSize;
+    /*const uint2 size = Camera.ScreenSize;
     
     if (any(idx >= size))
-        return;
+        return;*/
     
-    float3 direct = Direct[idx].rgb;
     float3 albedo = Albedo[idx].rgb;
-    float3 diffuseIndirect = DiffuseIndirect[idx].rgb;
-    float3 specularIndirect = SpecularIndirect[idx].rgb;
+    float4 diffuseIndirect = DiffuseIndirect[idx];
+    float4 specularIndirect = SpecularIndirect[idx];
     
-    Output[idx] = float4(direct + diffuseIndirect * albedo + specularIndirect, 1.0f);
+#if defined(NRD_REBLUR)
+    diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
+    specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);   
+#endif
+    
+    Output[idx] = float4(diffuseIndirect.rgb * albedo + specularIndirect.rgb, 1.0f);
 }
