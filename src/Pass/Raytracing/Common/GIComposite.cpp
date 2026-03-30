@@ -2,8 +2,6 @@
 #include "Renderer.h"
 #include "Scene.h"
 
-#include "Pass/Raytracing/GlobalIllumination.h"
-
 namespace Pass::Common
 {
 	GIComposite::GIComposite(Renderer* renderer)
@@ -54,13 +52,16 @@ namespace Pass::Common
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
-		auto* globalIlluminationPass = renderer->GetRenderGraph()->GetRootNode()->GetPass<Pass::Raytracing::GlobalIllumination>();
+		auto& textureManager = renderer->GetTextureManager();
+
+		auto* diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
+		auto* specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::Texture_SRV(0, renderTargets->albedo),
-			nvrhi::BindingSetItem::Texture_SRV(1, globalIlluminationPass->GetDiffuseRadianceHitDistanceTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(2, globalIlluminationPass->GetSpecularRadianceHitDistanceTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(1, diffuseTexture),
+			nvrhi::BindingSetItem::Texture_SRV(2, specularTexture),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 

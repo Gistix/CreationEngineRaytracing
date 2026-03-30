@@ -21,8 +21,6 @@ namespace Pass::Raytracing
 
 	void GlobalIllumination::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
-		m_DiffRadHitDistTexture = nullptr;
-		m_SpecRadHitDistTexture = nullptr;
 		m_DirtyBindings = true;
 	}
 
@@ -33,49 +31,8 @@ namespace Pass::Raytracing
 		if (defines != m_Defines) {
 			m_Defines = defines;
 			CreatePipeline();
-			m_DiffRadHitDistTexture = nullptr;
-			m_SpecRadHitDistTexture = nullptr;
 			m_DirtyBindings = true;
 		}
-	}
-
-	void GlobalIllumination::EnsureNrdTextures()
-	{
-		auto* renderer = GetRenderer();
-		auto& settings = Scene::GetSingleton()->m_Settings;
-
-		if (settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
-		{
-			m_DiffRadHitDistTexture = nullptr;
-			m_SpecRadHitDistTexture = nullptr;
-			return;
-		}
-
-		const uint2 resolution = renderer->GetResolution();
-		const bool needsRecreate =
-			!m_DiffRadHitDistTexture ||
-			!m_SpecRadHitDistTexture ||
-			m_DiffRadHitDistTexture->getDesc().width != resolution.x ||
-			m_DiffRadHitDistTexture->getDesc().height != resolution.y ||
-			m_SpecRadHitDistTexture->getDesc().width != resolution.x ||
-			m_SpecRadHitDistTexture->getDesc().height != resolution.y;
-
-		if (!needsRecreate)
-			return;
-
-		nvrhi::TextureDesc desc;
-		desc.width = resolution.x;
-		desc.height = resolution.y;
-		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		desc.isUAV = true;
-		desc.keepInitialState = true;
-
-		desc.debugName = "GI NRD Diffuse Radiance Hit Distance";
-		m_DiffRadHitDistTexture = renderer->GetDevice()->createTexture(desc);
-
-		desc.debugName = "GI NRD Specular Radiance Hit Distance";
-		m_SpecRadHitDistTexture = renderer->GetDevice()->createTexture(desc);
 	}
 
 	void GlobalIllumination::CreateBindingLayout()
@@ -225,18 +182,18 @@ namespace Pass::Raytracing
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
-		EnsureNrdTextures();
-
 		nvrhi::ITexture* diffuseTexture = nullptr;
 		nvrhi::ITexture* specularTexture = nullptr;
 		nvrhi::ITexture* specularHitDistTexture = nullptr;
+
+		auto& textureManager = renderer->GetTextureManager();
 
 		switch (settings.GeneralSettings.Denoiser)
 		{
 		case Denoiser::NRD_REBLUR:
 		{
-			diffuseTexture = m_DiffRadHitDistTexture;
-			specularTexture = m_SpecRadHitDistTexture;
+			diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
+			specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
 			break;
 		}
 		case Denoiser::DLSS_RR:

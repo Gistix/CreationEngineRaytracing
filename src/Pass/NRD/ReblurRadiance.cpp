@@ -3,7 +3,6 @@
 #include "Renderer.h"
 #include "Scene.h"
 #include "ShaderUtils.h"
-#include "Pass/Raytracing/GlobalIllumination.h"
 
 namespace Pass::NRD
 {
@@ -24,7 +23,7 @@ namespace Pass::NRD
 
 		m_ReblurSettings = {};
 		m_ReblurSettings.checkerboardMode = nrd::CheckerboardMode::OFF;
-		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::OFF;
+		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
 		m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(30u, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
 		m_ReblurSettings.maxFastAccumulatedFrameNum = 6;
 		m_ReblurSettings.maxStabilizedFrameNum = 30;
@@ -408,10 +407,11 @@ namespace Pass::NRD
 	{
 		auto* renderer = Renderer::GetSingleton();
 		auto* renderTargets = renderer->GetRenderTargets();
-		auto* globalIlluminationPass = renderer->GetRenderGraph()->GetRootNode()->GetPass<Pass::Raytracing::GlobalIllumination>();
+		
+		auto& textureManager = renderer->GetTextureManager();
 
-		auto* diffuseTexture = globalIlluminationPass ? globalIlluminationPass->GetDiffuseRadianceHitDistanceTexture() : nullptr;
-		auto* specularTexture = globalIlluminationPass ? globalIlluminationPass->GetSpecularRadianceHitDistanceTexture() : nullptr;
+		auto* diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
+		auto* specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:

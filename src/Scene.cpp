@@ -91,7 +91,7 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
-			"GlobalIllumination",
+			"Global Illumination",
 			eastl::make_unique<Pass::Raytracing::GlobalIllumination>(
 				renderer,
 				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
@@ -99,7 +99,7 @@ RenderNode* Scene::GetGlobalIllumination()
 			)			
 		});
 
-		/*m_GlobalIllumination->AddNode({
+		m_GlobalIllumination->AddNode({
 			true,
 			"NRD Reblur Radiance",
 			eastl::make_unique<Pass::NRD::ReblurRadiance>(renderer)
@@ -109,7 +109,7 @@ RenderNode* Scene::GetGlobalIllumination()
 			true,
 			"GI Composite",
 			eastl::make_unique<Pass::Common::GIComposite>(renderer)
-		});*/
+		});
 	}
 
 	return m_GlobalIllumination.get();

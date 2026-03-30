@@ -189,7 +189,7 @@ public:
 
 	inline auto UpdateJitter(float2 jitter) { return m_Jitter = jitter; }
 
-	inline auto& GetTextureManager() const { return m_TextureManager; }
+	inline auto& GetTextureManager() { return m_TextureManager; }
 
 	inline auto& GetBlackTexture() const { return m_BlackTexture->texture; }
 

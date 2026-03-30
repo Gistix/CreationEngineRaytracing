@@ -28,9 +28,6 @@ namespace Pass::Raytracing
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
-		nvrhi::TextureHandle m_DiffRadHitDistTexture;
-		nvrhi::TextureHandle m_SpecRadHitDistTexture;
-
 		SceneTLAS* m_SceneTLAS;
 		SHaRC* m_SHaRC;
 
@@ -61,13 +58,8 @@ namespace Pass::Raytracing
 
 		void CreateComputePipeline();
 
-		void EnsureNrdTextures();
-
 		void CheckBindings();
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
-
-		nvrhi::ITexture* GetDiffuseRadianceHitDistanceTexture() const { return m_DiffRadHitDistTexture; }
-		nvrhi::ITexture* GetSpecularRadianceHitDistanceTexture() const { return m_SpecRadHitDistTexture; }
 	};
 }
