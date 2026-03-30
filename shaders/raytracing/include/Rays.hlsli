@@ -10,7 +10,7 @@
 
 #include "raytracing/include/Transparency.hlsli"
 
-#define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
+#define RAY_FLAGS (RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
 
 Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
 {
@@ -217,7 +217,7 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
     payload.randomSeed = randomSeed;
 
 #if USE_RAY_QUERY
-    RayQuery<RAY_FLAGS> rayQuery;
+    RayQuery<RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, 0xFF, ray);
 
     while (rayQuery.Proceed())
@@ -246,7 +246,7 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
     }
     
 #else // !USE_RAY_QUERY    
-    TraceRay(scene, RAY_FLAGS, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    TraceRay(scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
  #endif   
     
     randomSeed = payload.randomSeed;
