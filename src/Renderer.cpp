@@ -52,8 +52,6 @@ void Renderer::Initialize(RendererParams rendererParams)
 		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
 	}
 
-	m_ResourceManager.SetDevice(m_NVRHIDevice);
-
 	m_NativeD3D11Device = rendererParams.d3d11Device;
 	m_NativeD3D12Device = rendererParams.d3d12Device;
 
@@ -445,14 +443,10 @@ void Renderer::ExecutePasses()
 	m_CommandList->open();
 
 	m_CommandList->beginTimerQuery(m_FrameTimer);
-	m_ResourceManager.BeginFrame(m_FrameIndex);
-	m_SharedFrameResources = {};
 
 	scene->Update(m_CommandList);
-	m_RenderGraph->Setup(scene->m_Settings);
 
 	m_RenderGraph->Execute(m_CommandList);
-	m_ResourceManager.EndFrame();
 
 	scene->ClearDirtyStates();
 

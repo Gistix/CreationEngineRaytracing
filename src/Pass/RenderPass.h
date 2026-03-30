@@ -5,7 +5,6 @@
 #include "Types/Settings.h"
 
 class Renderer;
-class FrameGraphBuilder;
 class PassResources;
 class FrameGraph;
 
@@ -23,7 +22,6 @@ public:
 
     virtual ~RenderPass() = default;
 
-    virtual void Setup([[maybe_unused]] FrameGraphBuilder& builder, [[maybe_unused]] const Settings& settings) {};
     virtual void CreatePipeline() {};
     virtual void SettingsChanged([[maybe_unused]] const Settings& settings) {};
     virtual void ResolutionChanged([[maybe_unused]] uint2 resolution) {};

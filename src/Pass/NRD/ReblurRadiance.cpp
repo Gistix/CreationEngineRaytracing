@@ -1,9 +1,9 @@
 #include "ReblurRadiance.h"
 
 #include "Renderer.h"
-#include "Renderer/FrameGraphBuilder.h"
 #include "Scene.h"
 #include "ShaderUtils.h"
+#include "Pass/Raytracing/GlobalIllumination.h"
 
 namespace Pass::NRD
 {
@@ -34,15 +34,6 @@ namespace Pass::NRD
 		Setup();
 	}
 
-	void ReblurRadiance::Setup(FrameGraphBuilder& builder, const Settings& settings)
-	{
-		if (settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
-			return;
-
-		builder.ReadTexture(FrameGraphTextureId::NrdDiffuseRadianceHitDistance);
-		builder.ReadTexture(FrameGraphTextureId::NrdSpecularRadianceHitDistance);
-	}
-
 	ReblurRadiance::~ReblurRadiance()
 	{
 		DestroyInstance();
@@ -62,8 +53,6 @@ namespace Pass::NRD
 		m_GlobalBindingLayout = nullptr;
 		m_ResourceBindingLayout = nullptr;
 		m_ConstantBuffer = nullptr;
-		m_DiffuseOutput = nullptr;
-		m_SpecularOutput = nullptr;
 		m_MotionVectorsScratch = nullptr;
 		m_FallbackSrvTexture = nullptr;
 		m_FallbackUavTexture = nullptr;
@@ -288,30 +277,6 @@ namespace Pass::NRD
 		}
 
 		{
-			nvrhi::TextureDesc desc;
-			desc.width = resolution.x;
-			desc.height = resolution.y;
-			desc.format = nvrhi::Format::RGBA16_FLOAT;
-			desc.isUAV = true;
-			desc.keepInitialState = true;
-			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-			desc.debugName = "NRD Reblur Diffuse Output";
-			m_DiffuseOutput = device->createTexture(desc);
-		}
-
-		{
-			nvrhi::TextureDesc desc;
-			desc.width = resolution.x;
-			desc.height = resolution.y;
-			desc.format = nvrhi::Format::RGBA16_FLOAT;
-			desc.isUAV = true;
-			desc.keepInitialState = true;
-			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-			desc.debugName = "NRD Reblur Specular Output";
-			m_SpecularOutput = device->createTexture(desc);
-		}
-
-		{
 			nvrhi::ITexture* sourceMotionVectors = Scene::GetSingleton()->IsPathTracingActive()
 				? GetRenderer()->m_PTMotionVectors.Get()
 				: GetRenderer()->GetMotionVectorTexture();
@@ -384,7 +349,7 @@ namespace Pass::NRD
 	}
 
 	void ReblurRadiance::SettingsChanged([[maybe_unused]] const Settings& settings)
-	{
+	{		
 		m_SettingsDirty = true;
 	}
 
@@ -443,7 +408,10 @@ namespace Pass::NRD
 	{
 		auto* renderer = Renderer::GetSingleton();
 		auto* renderTargets = renderer->GetRenderTargets();
-		const auto& sharedFrameResources = renderer->GetSharedFrameResources();
+		auto* globalIlluminationPass = renderer->GetRenderGraph()->GetRootNode()->GetPass<Pass::Raytracing::GlobalIllumination>();
+
+		auto* diffuseTexture = globalIlluminationPass ? globalIlluminationPass->GetDiffuseRadianceHitDistanceTexture() : nullptr;
+		auto* specularTexture = globalIlluminationPass ? globalIlluminationPass->GetSpecularRadianceHitDistanceTexture() : nullptr;
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:
@@ -453,13 +421,13 @@ namespace Pass::NRD
 		case nrd::ResourceType::IN_VIEWZ:
 			return Scene::GetSingleton()->IsPathTracingActive() ? renderer->m_PTDepth.Get() : renderer->GetDepthTexture();
 		case nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST:
-			return sharedFrameResources.nrdDiffuseRadianceHitDistance;
+			return diffuseTexture;
 		case nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST:
-			return sharedFrameResources.nrdSpecularRadianceHitDistance;
+			return specularTexture;
 		case nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST:
-			return m_DiffuseOutput;
+			return diffuseTexture;
 		case nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST:
-			return m_SpecularOutput;
+			return specularTexture;
 		case nrd::ResourceType::TRANSIENT_POOL:
 			return resource.indexInPool < m_TransientPool.size() ? m_TransientPool[resource.indexInPool] : nullptr;
 		case nrd::ResourceType::PERMANENT_POOL:
@@ -496,6 +464,9 @@ namespace Pass::NRD
 	void ReblurRadiance::Execute(nvrhi::ICommandList* commandList)
 	{
 		if (!m_NRD)
+			return;
+
+		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
 			return;
 
 		auto* renderer = GetRenderer();
@@ -626,9 +597,5 @@ namespace Pass::NRD
 
 			commandList->endMarker();
 		}
-
-		auto resolution = renderer->GetResolution();
-		auto region = nvrhi::TextureSlice{ 0, 0, 0, resolution.x, resolution.y, 1 };
-		commandList->copyTexture(renderer->GetMainTexture(), region, m_DiffuseOutput, region);
 	}
 }

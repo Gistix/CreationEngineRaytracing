@@ -8,8 +8,6 @@
 
 #include "Renderer/RenderGraph.h"
 
-#include "Renderer/ResourceManager.h"
-
 struct MessageCallback : public nvrhi::IMessageCallback
 {
 	static MessageCallback& GetInstance()
@@ -73,7 +71,6 @@ class Renderer
 	float2 m_Jitter;
 
 	eastl::unique_ptr<RenderGraph> m_RenderGraph;
-	ResourceManager m_ResourceManager;
 
 	nvrhi::TimerQueryHandle m_FrameTimer;
 	float m_FrameTime;
@@ -93,12 +90,6 @@ class Renderer
 	void InitRR();
 
 public:
-	struct SharedFrameResources
-	{
-		nvrhi::TextureHandle nrdDiffuseRadianceHitDistance = nullptr;
-		nvrhi::TextureHandle nrdSpecularRadianceHitDistance = nullptr;
-	};
-
 	struct GBufferOutput
 	{
 		nvrhi::TextureHandle depth = nullptr;
@@ -146,7 +137,6 @@ public:
 	nvrhi::TextureHandle m_PTDepth;
 
 	eastl::unique_ptr<RenderTargets> m_RenderTargets;
-	SharedFrameResources m_SharedFrameResources;
 
 	struct RendererSettings
 	{
@@ -183,10 +173,6 @@ public:
 	//nvrhi::ICommandList* GetCommandList() const { return m_CommandList; }
 	
 	RenderGraph* GetRenderGraph() { return m_RenderGraph.get(); }
-	ResourceManager& GetResourceManager() { return m_ResourceManager; }
-	const ResourceManager& GetResourceManager() const { return m_ResourceManager; }
-	SharedFrameResources& GetSharedFrameResources() { return m_SharedFrameResources; }
-	const SharedFrameResources& GetSharedFrameResources() const { return m_SharedFrameResources; }
 
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();

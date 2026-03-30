@@ -12,7 +12,7 @@ SamplerState DefaultSmapler             : register(s0);
 
 RWTexture2D<float4> Output              : register(u0);
 
-[numthreads(16, 16, 1)]
+[numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {
     uint2 size = Camera.RenderSize;

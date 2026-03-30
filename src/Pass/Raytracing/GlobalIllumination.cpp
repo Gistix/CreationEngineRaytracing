@@ -1,6 +1,5 @@
 #include "GlobalIllumination.h"
 #include "Renderer.h"
-#include "Renderer/FrameGraphBuilder.h"
 #include "Scene.h"
 
 namespace Pass::Raytracing
@@ -20,30 +19,10 @@ namespace Pass::Raytracing
 		CreatePipeline();
 	}
 
-	void GlobalIllumination::Setup(FrameGraphBuilder& builder, const Settings& settings)
-	{
-		if (settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
-			return;
-
-		const uint2 resolution = GetRenderer()->GetResolution();
-
-		TransientTextureDesc desc;
-		desc.width = resolution.x;
-		desc.height = resolution.y;
-		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		desc.isUAV = true;
-		desc.keepInitialState = true;
-
-		desc.debugName = "GI NRD Diffuse Radiance Hit Distance";
-		builder.WriteTexture(FrameGraphTextureId::NrdDiffuseRadianceHitDistance, desc);
-
-		desc.debugName = "GI NRD Specular Radiance Hit Distance";
-		builder.WriteTexture(FrameGraphTextureId::NrdSpecularRadianceHitDistance, desc);
-	}
-
 	void GlobalIllumination::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
+		m_DiffRadHitDistTexture = nullptr;
+		m_SpecRadHitDistTexture = nullptr;
 		m_DirtyBindings = true;
 	}
 
@@ -54,8 +33,49 @@ namespace Pass::Raytracing
 		if (defines != m_Defines) {
 			m_Defines = defines;
 			CreatePipeline();
+			m_DiffRadHitDistTexture = nullptr;
+			m_SpecRadHitDistTexture = nullptr;
 			m_DirtyBindings = true;
 		}
+	}
+
+	void GlobalIllumination::EnsureNrdTextures()
+	{
+		auto* renderer = GetRenderer();
+		auto& settings = Scene::GetSingleton()->m_Settings;
+
+		if (settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
+		{
+			m_DiffRadHitDistTexture = nullptr;
+			m_SpecRadHitDistTexture = nullptr;
+			return;
+		}
+
+		const uint2 resolution = renderer->GetResolution();
+		const bool needsRecreate =
+			!m_DiffRadHitDistTexture ||
+			!m_SpecRadHitDistTexture ||
+			m_DiffRadHitDistTexture->getDesc().width != resolution.x ||
+			m_DiffRadHitDistTexture->getDesc().height != resolution.y ||
+			m_SpecRadHitDistTexture->getDesc().width != resolution.x ||
+			m_SpecRadHitDistTexture->getDesc().height != resolution.y;
+
+		if (!needsRecreate)
+			return;
+
+		nvrhi::TextureDesc desc;
+		desc.width = resolution.x;
+		desc.height = resolution.y;
+		desc.format = nvrhi::Format::RGBA16_FLOAT;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+
+		desc.debugName = "GI NRD Diffuse Radiance Hit Distance";
+		m_DiffRadHitDistTexture = renderer->GetDevice()->createTexture(desc);
+
+		desc.debugName = "GI NRD Specular Radiance Hit Distance";
+		m_SpecRadHitDistTexture = renderer->GetDevice()->createTexture(desc);
 	}
 
 	void GlobalIllumination::CreateBindingLayout()
@@ -204,7 +224,8 @@ namespace Pass::Raytracing
 		auto* sceneGraph = scene->GetSceneGraph();
 
 		auto* renderTargets = renderer->GetRenderTargets();
-		const auto& sharedFrameResources = renderer->GetSharedFrameResources();
+
+		EnsureNrdTextures();
 
 		nvrhi::ITexture* diffuseTexture = nullptr;
 		nvrhi::ITexture* specularTexture = nullptr;
@@ -214,8 +235,8 @@ namespace Pass::Raytracing
 		{
 		case Denoiser::NRD_REBLUR:
 		{
-			diffuseTexture = sharedFrameResources.nrdDiffuseRadianceHitDistance;
-			specularTexture = sharedFrameResources.nrdSpecularRadianceHitDistance;
+			diffuseTexture = m_DiffRadHitDistTexture;
+			specularTexture = m_SpecRadHitDistTexture;
 			break;
 		}
 		case Denoiser::DLSS_RR:
@@ -230,6 +251,14 @@ namespace Pass::Raytracing
 		default:
 			break;
 		}
+
+		const bool bindingsChanged =
+			diffuseTexture != m_LastDiffuseTexture ||
+			specularTexture != m_LastSpecularTexture ||
+			specularHitDistTexture != m_LastSpecularHitDistTexture;
+
+		if (!m_DirtyBindings && !bindingsChanged)
+			return;
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -258,13 +287,15 @@ namespace Pass::Raytracing
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, specularHitDistTexture));
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_LastDiffuseTexture = diffuseTexture;
+		m_LastSpecularTexture = specularTexture;
+		m_LastSpecularHitDistTexture = specularHitDistTexture;
 
 		m_DirtyBindings = false;
 	}
 
 	void GlobalIllumination::Execute(nvrhi::ICommandList* commandList)
 	{	
-		m_DirtyBindings = true;
 		CheckBindings();
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();

@@ -17,11 +17,11 @@
 #include "Pass/Raytracing/Common/SHaRC.h"
 
 #include "Pass/Raytracing/GlobalIllumination.h"
-#include "Pass/GIComposite.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/ReblurRadiance.h"
+#include "Pass/Raytracing/Common/GIComposite.h"
 
 Scene::Scene()
 {
@@ -99,11 +99,17 @@ RenderNode* Scene::GetGlobalIllumination()
 			)			
 		});
 
-		m_GlobalIllumination->AddNode({
+		/*m_GlobalIllumination->AddNode({
 			true,
 			"NRD Reblur Radiance",
 			eastl::make_unique<Pass::NRD::ReblurRadiance>(renderer)
 		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"GI Composite",
+			eastl::make_unique<Pass::Common::GIComposite>(renderer)
+		});*/
 	}
 
 	return m_GlobalIllumination.get();

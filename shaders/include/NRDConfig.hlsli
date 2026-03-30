@@ -115,16 +115,6 @@
 #define PT_PSR_BOUNCES_NUM                  2
 #define PT_RAY_FLAGS                        0
 
-// Spatial HAsh-based Radiance Cache ( SHARC )
-#define SHARC_CAPACITY                      ( 1 << 22 )
-#define SHARC_SCENE_SCALE                   45.0
-#define SHARC_DOWNSCALE                     5
-#define SHARC_ANTI_FIREFLY                  false
-#define SHARC_STALE_FRAME_NUM_MIN           32 // new version uses 8 by default, old value offers more stability in voxels with low number of samples ( critical for glass )
-#define SHARC_SEPARATE_EMISSIVE             1
-#define SHARC_MATERIAL_DEMODULATION         1
-#define SHARC_USE_FP16                      0
-
 // Blue noise
 #define BLUE_NOISE_SPATIAL_DIM              128 // see StaticTexture::ScramblingRanking
 #define BLUE_NOISE_TEMPORAL_DIM             4 // good values: 4-8 for shadows, 8-16 for occlusion, 8-32 for lighting

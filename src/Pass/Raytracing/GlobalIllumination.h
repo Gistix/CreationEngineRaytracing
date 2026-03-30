@@ -35,13 +35,14 @@ namespace Pass::Raytracing
 		SHaRC* m_SHaRC;
 
 		bool m_DirtyBindings = true;
+		nvrhi::TextureHandle m_LastDiffuseTexture;
+		nvrhi::TextureHandle m_LastSpecularTexture;
+		nvrhi::TextureHandle m_LastSpecularHitDistTexture;
 
 		eastl::vector<ShaderDefine> m_Defines;
 
 	public:
 		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc);
-
-		void Setup(FrameGraphBuilder& builder, const Settings& settings) override;
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{
@@ -60,8 +61,13 @@ namespace Pass::Raytracing
 
 		void CreateComputePipeline();
 
+		void EnsureNrdTextures();
+
 		void CheckBindings();
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
+
+		nvrhi::ITexture* GetDiffuseRadianceHitDistanceTexture() const { return m_DiffRadHitDistTexture; }
+		nvrhi::ITexture* GetSpecularRadianceHitDistanceTexture() const { return m_SpecRadHitDistTexture; }
 	};
 }
