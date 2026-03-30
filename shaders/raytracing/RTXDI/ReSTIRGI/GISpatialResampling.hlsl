@@ -1,7 +1,7 @@
 // ReSTIR GI Spatial Resampling Compute Shader
 // Combines GI reservoirs from spatially neighboring pixels.
 
-#include "RtxdiApplicationBridge.hlsli"
+#include "../RtxdiApplicationBridge.hlsli"
 #include <Rtxdi/GI/SpatialResampling.hlsli>
 
 [numthreads(8, 8, 1)]

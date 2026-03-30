@@ -6,7 +6,7 @@
 //   ReSTIR GI reads it back and reconstructs Surface + BRDFContext for BRDF eval.
 //   NO GBuffer reconstruction heuristics.
 
-#include "Registers.hlsli"
+#include "ReSTIRGI/Registers.hlsli"
 
 // Material type required by StandardBSDF method signatures in BSDF.hlsli
 #include "interop/Material.hlsli"

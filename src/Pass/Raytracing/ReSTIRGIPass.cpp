@@ -71,7 +71,7 @@ namespace Pass::Raytracing
 		// Temporal Resampling
 		{
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/ReSTIRGI/GITemporalResampling.hlsl", defines, L"cs_6_5");
+			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GITemporalResampling.hlsl", defines, L"cs_6_5");
 			if (blob) {
 				m_TemporalShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 				m_TemporalPipeline = device->createComputePipeline(
@@ -84,7 +84,7 @@ namespace Pass::Raytracing
 		// Spatial Resampling
 		{
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/ReSTIRGI/GISpatialResampling.hlsl", defines, L"cs_6_5");
+			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GISpatialResampling.hlsl", defines, L"cs_6_5");
 			if (blob) {
 				m_SpatialShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 				m_SpatialPipeline = device->createComputePipeline(
@@ -97,7 +97,7 @@ namespace Pass::Raytracing
 		// Fused Spatiotemporal Resampling
 		{
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/ReSTIRGI/GIFusedResampling.hlsl", defines, L"cs_6_5");
+			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GIFusedResampling.hlsl", defines, L"cs_6_5");
 			if (blob) {
 				m_FusedShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 				m_FusedPipeline = device->createComputePipeline(
@@ -110,7 +110,7 @@ namespace Pass::Raytracing
 		// Final Shading
 		{
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/ReSTIRGI/GIFinalShading.hlsl", defines, L"cs_6_5");
+			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GIFinalShading.hlsl", defines, L"cs_6_5");
 			if (blob) {
 				m_FinalShadingShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 				m_FinalShadingPipeline = device->createComputePipeline(

@@ -1,8 +1,8 @@
-// ReSTIR GI Temporal Resampling Compute Shader
-// Creates initial GI reservoirs from secondary surface data and applies temporal resampling.
+// ReSTIR GI Fused Spatiotemporal Resampling Compute Shader
+// Single-pass combined temporal + spatial resampling.
 
-#include "RtxdiApplicationBridge.hlsli"
-#include <Rtxdi/GI/TemporalResampling.hlsli>
+#include "../RtxdiApplicationBridge.hlsli"
+#include <Rtxdi/GI/SpatioTemporalResampling.hlsli>
 #include <Rtxdi/GI/BoilingFilter.hlsli>
 
 [numthreads(8, 8, 1)]
@@ -14,16 +14,14 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID, uint2 LocalIndex : SV_GroupTh
     const RTXDI_GIParameters giParams = g_ReSTIRGI.giParams;
     const RTXDI_RuntimeParameters runtimeParams = g_ReSTIRGI.runtimeParams;
 
-    // Get the current surface from G-buffer
     RAB_Surface surface = RAB_GetGBufferSurface(GlobalIndex, false);
 
     if (!RAB_IsSurfaceValid(surface))
     {
-        // No valid surface: store empty reservoir
         RTXDI_StoreGIReservoir(RTXDI_EmptyGIReservoir(),
             giParams.reservoirBufferParams,
             GlobalIndex,
-            giParams.bufferIndices.temporalResamplingOutputBufferIndex);
+            giParams.bufferIndices.spatialResamplingOutputBufferIndex);
         return;
     }
 
@@ -33,7 +31,7 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID, uint2 LocalIndex : SV_GroupTh
         float4 posNormal = SecondaryPositionNormal[GlobalIndex];
         float4 radPdf = SecondaryRadiance[GlobalIndex];
 
-        if (radPdf.w > 0) // Valid sample (pdf > 0)
+        if (radPdf.w > 0)
         {
             float3 samplePos = posNormal.xyz;
             float3 sampleNormal = DecodeNormal(half2(
@@ -46,45 +44,43 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID, uint2 LocalIndex : SV_GroupTh
         }
     }
 
-    // Store the initial reservoir for this frame at the secondary surface output buffer slot
+    // Store initial reservoir
     RTXDI_StoreGIReservoir(inputReservoir,
         giParams.reservoirBufferParams,
         GlobalIndex,
         giParams.bufferIndices.secondarySurfaceReSTIRDIOutputBufferIndex);
 
-    // Read motion vector and convert from UV-space to pixel-space for RTXDI
     float3 motionVector = MotionVectors[GlobalIndex].xyz;
-    motionVector.xy *= float2(Camera.RenderSize);
+    motionVector.xy *= float2(Camera.RenderSize); // UV-space to pixel-space for RTXDI
 
-    // Initialize random sampler
-    RTXDI_RandomSamplerState rng = RTXDI_InitRandomSampler(GlobalIndex, runtimeParams.frameIndex, 0);
+    RTXDI_RandomSamplerState rng = RTXDI_InitRandomSampler(GlobalIndex, runtimeParams.frameIndex, 2);
 
-    // Jitter max reservoir age to avoid large areas of reservoirs dying at the same time
-    RTXDI_GITemporalResamplingParameters tparams = giParams.temporalResamplingParams;
-    tparams.maxReservoirAge = uint(float(tparams.maxReservoirAge) * (0.5 + 0.5 * RTXDI_GetNextRandom(rng)));
+    // Jitter max reservoir age
+    RTXDI_GISpatioTemporalResamplingParameters stparams = giParams.spatioTemporalResamplingParams;
+    stparams.maxReservoirAge = uint(float(stparams.maxReservoirAge) * (0.5 + 0.5 * RTXDI_GetNextRandom(rng)));
 
-    // Perform temporal resampling
-    RTXDI_GIReservoir temporalResult = RTXDI_GITemporalResampling(
+    // Fused spatiotemporal resampling
+    RTXDI_GIReservoir result = RTXDI_GISpatioTemporalResampling(
         GlobalIndex,
         surface,
+        giParams.bufferIndices.secondarySurfaceReSTIRDIOutputBufferIndex,
         motionVector,
-        giParams.bufferIndices.temporalResamplingInputBufferIndex,
         inputReservoir,
         rng,
         runtimeParams,
         giParams.reservoirBufferParams,
-        tparams);
+        stparams);
 
 #ifdef RTXDI_ENABLE_BOILING_FILTER
     if (giParams.boilingFilterParams.enableBoilingFilter)
     {
-        RTXDI_GIBoilingFilter(LocalIndex, giParams.boilingFilterParams.boilingFilterStrength, temporalResult);
+        RTXDI_GIBoilingFilter(LocalIndex, giParams.boilingFilterParams.boilingFilterStrength, result);
     }
 #endif
 
-    // Store temporal result (finalization is done inside the library)
-    RTXDI_StoreGIReservoir(temporalResult,
+    // Store result (finalization is done inside the library)
+    RTXDI_StoreGIReservoir(result,
         giParams.reservoirBufferParams,
         GlobalIndex,
-        giParams.bufferIndices.temporalResamplingOutputBufferIndex);
+        giParams.bufferIndices.spatialResamplingOutputBufferIndex);
 }

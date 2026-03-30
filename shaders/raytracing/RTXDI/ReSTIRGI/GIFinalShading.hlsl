@@ -1,7 +1,7 @@
 // ReSTIR GI Final Shading Compute Shader
 // Reads the final GI reservoir and applies the indirect illumination to the output.
 
-#include "RtxdiApplicationBridge.hlsli"
+#include "../RtxdiApplicationBridge.hlsli"
 #include <Rtxdi/GI/Reservoir.hlsli>
 #include "include/ColorConversions.hlsli"
 
