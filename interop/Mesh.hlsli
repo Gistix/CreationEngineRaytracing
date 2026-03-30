@@ -17,14 +17,16 @@ VALIDATE_ALIGNMENT(MeshData, 4);
 #ifdef __cplusplus
 namespace MeshDataFlags
 {
-    static constexpr uint32_t Skinned = 1u << 0;
-    static constexpr uint32_t DoubleSidedGeom = 1u << 1;
+    static constexpr uint32_t Dynamic = 1u << 1;
+    static constexpr uint32_t Skinned = 1u << 2;
+    static constexpr uint32_t DoubleSidedGeom = 1u << 5;
 }
 #else
 namespace MeshDataFlags
 {
-    static const uint Skinned = 1u << 0;
-    static const uint DoubleSidedGeom = 1u << 1;
+    static const uint Dynamic = 1u << 1;
+    static const uint Skinned = 1u << 2;
+    static const uint DoubleSidedGeom = 1u << 5;
 }
 #endif
 

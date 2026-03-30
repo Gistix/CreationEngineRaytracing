@@ -56,8 +56,8 @@ struct SurfaceMaker
         float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
 
         // Compute previous world position for motion vectors
-        {
 #if defined(HAS_PREV_POSITIONS)
+        {
             if (mesh.Flags & MeshDataFlags::Skinned)
             {
                 // Per-vertex: read previous skinned positions from PrevPositions buffer
@@ -69,7 +69,6 @@ struct SurfaceMaker
                 surface.PrevPosition = mul(instance.PrevTransform, float4(prevRootPos, 1.0));
             }
             else
-#endif
             {
                 // Per-object: use current vertex positions with previous instance transform
                 float3 objectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
@@ -77,6 +76,7 @@ struct SurfaceMaker
                 surface.PrevPosition = mul(instance.PrevTransform, float4(rootSpacePos, 1.0));
             }
         }
+#endif
 
         float coneTexLODValue = ComputeRayConeTriangleLODValue(v0, v1, v2, objectToWorld3x3);
 
