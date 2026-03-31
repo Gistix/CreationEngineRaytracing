@@ -326,15 +326,14 @@ void Main()
 #   if defined(RAW_RADIANCE)
                 if (demodulatedThroughput)
                     originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);;
-#   endif                     
+#   endif
             }
             
 #if defined(NRD_REBLUR)
-            if (j == 0)
-                accumulatedHitDist = payload.hitDistance;
+            accumulatedHitDist += payload.hitDistance;
 #else
-        if (isSpecular)
-            specHitDist += payload.hitDistance;
+            if (isSpecular)
+                specHitDist += payload.hitDistance;
 #endif           
             
             if (!payload.Hit())
