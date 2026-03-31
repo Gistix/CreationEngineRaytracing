@@ -4,7 +4,8 @@
 
 namespace Util
 {
-	namespace Material
+#if defined(SKYRIM)
+	namespace Material::Skyrim
 	{
 		float ShininessToRoughness(float shininess)
 		{
@@ -78,4 +79,6 @@ namespace Util
 			return pbrFlags;
 		}
 	}
+#elif defined(FALLOUT4)
+#endif
 }

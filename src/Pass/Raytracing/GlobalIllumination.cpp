@@ -12,11 +12,10 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, false);
+		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
-		CreateBindingLayout();
 		CreatePipeline();
 	}
 
@@ -27,7 +26,7 @@ namespace Pass::Raytracing
 
 	void GlobalIllumination::SettingsChanged(const Settings& settings)
 	{
-		auto defines = Util::Shader::GetRaytracingDefines(settings, true, false);
+		auto defines = Util::Shader::GetRaytracingDefines(settings, m_SHaRC != nullptr, false);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
@@ -48,25 +47,36 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(3),
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
+			nvrhi::BindingLayoutItem::Texture_SRV(2),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
-			nvrhi::BindingLayoutItem::Texture_SRV(5),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
 			nvrhi::BindingLayoutItem::Texture_SRV(6),
 			nvrhi::BindingLayoutItem::Texture_SRV(7),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(9),
+			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
-			nvrhi::BindingLayoutItem::Texture_SRV(11),
-			nvrhi::BindingLayoutItem::Texture_UAV(0),
-			nvrhi::BindingLayoutItem::Texture_UAV(2),
-			nvrhi::BindingLayoutItem::Texture_UAV(3)
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
+			nvrhi::BindingLayoutItem::Texture_SRV(12),
+			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
+
+		auto* scene = Scene::GetSingleton();
+		auto& settings = scene->m_Settings;
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1));
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2));
+
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
 
 	void GlobalIllumination::CreatePipeline()
 	{
+		CreateBindingLayout();
+
 		if (GetRenderer()->m_Settings.UseRayQuery)
 			CreateComputePipeline();
 		else
@@ -77,6 +87,7 @@ namespace Pass::Raytracing
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"0");
+		//defines.emplace_back(L"DISABLE_NORMAL_REJECTION", L"1");
 
 		auto device = GetRenderer()->GetDevice();
 
@@ -138,6 +149,7 @@ namespace Pass::Raytracing
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
+		//defines.emplace_back(L"DISABLE_NORMAL_REJECTION", L"1");
 
 		auto device = GetRenderer()->GetDevice();
 
@@ -169,11 +181,37 @@ namespace Pass::Raytracing
 
 		auto* scene = Scene::GetSingleton();
 
+		auto& settings = scene->m_Settings;
+
 		auto* sceneGraph = scene->GetSceneGraph();
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
-		auto* rrInput = renderer->GetRRInput();
+		nvrhi::ITexture* diffuseTexture = renderer->GetMainTexture();
+		nvrhi::ITexture* specularTexture = nullptr;
+		nvrhi::ITexture* specularHitDistTexture = nullptr;
+
+		auto& textureManager = renderer->GetTextureManager();
+
+		switch (settings.GeneralSettings.Denoiser)
+		{
+		case Denoiser::NRD_REBLUR:
+		{
+			diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
+			specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
+			break;
+		}
+		case Denoiser::DLSS_RR:
+		{
+			auto* rrInput = renderer->GetRRInput();
+
+			specularTexture = rrInput->specularAlbedo;
+			specularHitDistTexture = rrInput->specularHitDistance;
+			break;
+		}
+		default:
+			break;
+		}
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -184,20 +222,25 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetInstanceBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(5, renderer->GetDepthTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(6, renderTargets->albedo),
-			nvrhi::BindingSetItem::Texture_SRV(7, renderTargets->normalRoughness),
-			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->gnmao),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(9, m_SHaRC->GetResolveBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetHashEntriesBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(11, scene->GetPhysicalSkyTrLUTTexture()),
-			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
-			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
-			nvrhi::BindingSetItem::Texture_UAV(3, rrInput->specularHitDistance)
+			nvrhi::BindingSetItem::Texture_SRV(2, scene->GetFlowMapTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(6, renderer->GetDepthTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(7, renderTargets->albedo),
+			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->normalRoughness),
+			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetResolveBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetHashEntriesBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(12, scene->GetPhysicalSkyTrLUTTexture()),
+			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, specularTexture));
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, specularHitDistTexture));
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
@@ -205,7 +248,7 @@ namespace Pass::Raytracing
 	}
 
 	void GlobalIllumination::Execute(nvrhi::ICommandList* commandList)
-	{
+	{	
 		CheckBindings();
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();

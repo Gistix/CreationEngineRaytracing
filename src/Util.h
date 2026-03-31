@@ -2,6 +2,7 @@
 
 #include "Constants.h"
 
+#include "Utils/Adapter.h"
 #include "Utils/Game.h"
 #include "Utils/Geometry.h"
 #include "Utils/Material.h"
@@ -20,6 +21,8 @@ namespace Util
 	std::string WStringToString(const std::wstring& wideString);
 
 	std::wstring StringToWString(const std::string& str);
+
+	eastl::wstring StringToWString(const eastl::string& str);
 
 	template <typename T>
 	std::string GetFlagsString(auto value)

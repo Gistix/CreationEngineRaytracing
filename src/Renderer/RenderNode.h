@@ -43,6 +43,7 @@ public:
 		return dynamic_cast<T*>(m_RenderPass.get());
 	}
 
+	// Returns the first pass of type T found in this node or any child nodes.
 	template<typename T>
 	T* GetPass()
 	{
@@ -56,6 +57,47 @@ public:
 		}
 
 		return nullptr;
+	}
+
+	// Returns the first node with a pass of type T.
+	template<typename T>
+	RenderNode* GetNode()
+	{
+		if (auto* pass = GetImmediatePass<T>())
+			return this;
+
+		for (auto& child : m_Children)
+		{
+			if (auto* node = child.GetNode<T>())
+				return node;
+		}
+
+		return nullptr;
+	}
+
+	// Sets the first found node with a pass of type T to enabled/disabled.
+	template<typename T>
+	bool SetEnabled(bool enabled)
+	{
+		if (GetImmediatePass<T>())
+		{
+			SetEnabled(enabled); // non-template version
+			return true;
+		}
+
+		for (auto& child : m_Children)
+		{
+			if (child.SetEnabled<T>(enabled))
+				return true;
+		}
+
+		return false;
+	}
+
+	// Sets this node to enabled/disabled.
+	void SetEnabled(bool enabled) { 
+		logger::info("RenderNode::SetEnabled - Setting {} enabled to {}", m_Name, enabled);
+		m_Enabled = enabled; 
 	}
 
 	void AddNode(RenderNode renderNode);

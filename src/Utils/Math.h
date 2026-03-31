@@ -12,7 +12,7 @@ namespace Util
 
 		float3 Float3(RE::NiPoint3 niPoint);
 
-		float3 Float3(RE::Color niColor);
+		float3 Float3(RE::NiColor niColor);
 
 		float3 Normalize(float3 vector);
 
