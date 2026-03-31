@@ -152,7 +152,7 @@ public:
 		nvrhi::TextureHandle secondaryGBufferDiffuseAlbedo = nullptr;   // RGBA16_FLOAT: diffuse albedo
 		nvrhi::TextureHandle secondaryGBufferSpecularF0Roughness = nullptr; // RGBA16_FLOAT: F0.xyz + roughness
 		nvrhi::TextureHandle prevGBufferDepth = nullptr;     // R32_FLOAT: previous frame linear depth
-		nvrhi::TextureHandle prevGBufferNormals = nullptr;   // RGBA16_FLOAT: previous frame normals
+		nvrhi::TextureHandle prevGBufferNormals = nullptr;   // RGBA16_SNORM: previous frame normals
 		bool needsNeighborOffsetUpload = false;
 		eastl::vector<uint8_t> neighborOffsetData;
 	};

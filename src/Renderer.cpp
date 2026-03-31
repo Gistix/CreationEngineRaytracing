@@ -420,12 +420,12 @@ void Renderer::InitReSTIRGI()
 		m_ReSTIRGIResources->prevGBufferDepth = device->createTexture(desc);
 	}
 
-	// Previous frame G-buffer: normals (RGBA8_SNORM — matches game's normalRoughness texture format)
+	// Previous frame G-buffer: normals (RGBA16_SNORM — matches shared normalRoughness texture format)
 	{
 		nvrhi::TextureDesc desc;
 		desc.width = width;
 		desc.height = height;
-		desc.format = nvrhi::Format::RGBA8_SNORM;
+		desc.format = nvrhi::Format::RGBA16_SNORM;
 		desc.isUAV = true;
 		desc.keepInitialState = true;
 		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
