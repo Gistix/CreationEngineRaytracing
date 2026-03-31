@@ -93,8 +93,8 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
 #       if defined(NRD_REBLUR)
-        DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, true);
-        SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, true);          
+        DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
+        SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
 #       else
         DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
@@ -330,12 +330,13 @@ void Main()
                 
 #   if defined(RAW_RADIANCE) && !defined(NRD)
                 if (demodulatedThroughput)
-                    originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);;
+                    originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
 #   endif
             }
             
 #if defined(NRD_REBLUR)
-            accumulatedHitDist += payload.hitDistance;
+            if (j == 0)
+                accumulatedHitDist = payload.hitDistance;
 #else
             if (isSpecular)
                 specHitDist += payload.hitDistance;
@@ -444,7 +445,7 @@ void Main()
             if (demodulatedThroughput)
                 throughput = originalThroughput;
 #   endif    // RAW_RADIANCE     
-            
+        
         }
 
 #if defined(NRD_REBLUR)
@@ -487,7 +488,7 @@ void Main()
 
     diffuseRadiance /= diffFactor;
     
-    // This removes envBRDF, only apply if we apply it during composite
+    // This removes envBRDF, only viable if we apply back it during composite
     //specularRadiance /= specFactor;
     
 #          if defined(NRD_REBLUR)
