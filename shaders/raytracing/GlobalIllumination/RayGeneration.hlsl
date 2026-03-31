@@ -92,8 +92,13 @@ void Main()
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
+#       if defined(NRD_REBLUR)
+        DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, true);
+        SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, true);          
+#       else
         DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
+#       endif // NRD_REBLUR
         
 #   else
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -203,7 +208,7 @@ void Main()
         float3 waterVolumeAbsorption = float3(0.0f, 0.0f, 0.0f);    
         
         // Throughput difference of demodulated first bounce
-#if defined(RAW_RADIANCE)
+#if defined(RAW_RADIANCE) && !defined(NRD)
         float3 originalThroughput = float3(1.0f, 1.0f, 1.0f);
 #endif            
         
@@ -232,7 +237,7 @@ void Main()
             if (j == 0)
                 isSpecular = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
             
-#if defined(RAW_RADIANCE)            
+#if defined(RAW_RADIANCE) && !defined(NRD)
             const bool demodulatedThroughput = (j == 0 && !isSpecular);
 #endif
             
@@ -252,7 +257,7 @@ void Main()
             brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);            
             
-#   if defined(RAW_RADIANCE)
+#   if defined(RAW_RADIANCE) && !defined(NRD)
             if (demodulatedThroughput) {
                 originalThroughput = throughput * bsdfSample.weight;
 
@@ -277,7 +282,7 @@ void Main()
             {
                 float3 throughputColor;
 
-#   if defined(RAW_RADIANCE)
+#   if defined(RAW_RADIANCE) && !defined(NRD)
                 // Apply russian roulette based on the original throughput
                 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
 #   else
@@ -295,7 +300,7 @@ void Main()
 
                 throughput /= (1.0f - rrProb);
                 
-#   if defined(RAW_RADIANCE)
+#   if defined(RAW_RADIANCE) && !defined(NRD)
                 if (demodulatedThroughput)
                     originalThroughput /= (1.0f - rrProb);
 #   endif                
@@ -323,7 +328,7 @@ void Main()
             {
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
                 
-#   if defined(RAW_RADIANCE)
+#   if defined(RAW_RADIANCE) && !defined(NRD)
                 if (demodulatedThroughput)
                     originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);;
 #   endif
@@ -432,7 +437,7 @@ void Main()
             sampleRadiance += surface.Emissive * throughput;
 #endif
             
-#   if defined(RAW_RADIANCE)
+#   if defined(RAW_RADIANCE) && !defined(NRD)
             // After throughput is applied to radiance, restore original throughput so that subsequent bounces is not increased due to missing diffuse albedo multiplication
             // This ensures first bounce has low frequency, allowing denoisers and linear upscaling to work with less per-pixel data
             // Diffuse albedo is re-applied during compositing (DiffuseRadiance * DiffuseAlbedo + SpecularRadiance)            
@@ -471,18 +476,29 @@ void Main()
     const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
     const float3 specularAlbedo = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
 #   endif
-    
+      
 #   if defined(RAW_RADIANCE)
     float3 diffuseRadiance = isSpecular ? 0.0.xxx : radiance;
     float3 specularRadiance = isSpecular ? radiance : 0.0.xxx;
+ 
+#       if defined(NRD)
+    float3 diffFactor, specFactor;
+    NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
+
+    diffuseRadiance /= diffFactor;
     
-#       if defined(NRD_REBLUR)
+    // This removes envBRDF, only apply if we apply it during composite
+    //specularRadiance /= specFactor;
+    
+#          if defined(NRD_REBLUR)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);    
-#       else // !NRD_REBLUR
+#           endif // NRD_REBLUR 
+    
+#       else // !NRD
     DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);
     SpecularOutput[idx] = float4(specularRadiance, specHitDist);    
-#       endif // NRD_REBLUR
+#       endif // NRD
     
 #   else // ! RAW_RADIANCE
     Output[idx] = float4(radiance, 1.0f);
