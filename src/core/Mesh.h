@@ -63,6 +63,7 @@ struct Mesh
 		nvrhi::BufferHandle dynamicPositionBuffer;
 		nvrhi::BufferHandle vertexBuffer;
 		nvrhi::BufferHandle vertexCopyBuffer;
+		nvrhi::BufferHandle prevPositionBuffer;
 		nvrhi::BufferHandle triangleBuffer;
 		nvrhi::BufferHandle skinningBuffer;
 	} buffers;

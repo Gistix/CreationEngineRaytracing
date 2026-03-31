@@ -17,10 +17,11 @@
 #include "Pass/Raytracing/Common/SHaRC.h"
 
 #include "Pass/Raytracing/GlobalIllumination.h"
-#include "Pass/GIComposite.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raster/GBuffer.h"
+#include "Pass/NRD/ReblurRadiance.h"
+#include "Pass/Raytracing/Common/GIComposite.h"
 
 Scene::Scene()
 {
@@ -90,12 +91,24 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
-			"GlobalIllumination",
+			"Global Illumination",
 			eastl::make_unique<Pass::Raytracing::GlobalIllumination>(
 				renderer,
 				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
 				m_GlobalIllumination->GetPass<Pass::SHaRC>()
 			)			
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"NRD Reblur Radiance",
+			eastl::make_unique<Pass::NRD::ReblurRadiance>(renderer)
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"GI Composite",
+			eastl::make_unique<Pass::Common::GIComposite>(renderer)
 		});
 	}
 
@@ -197,7 +210,7 @@ nvrhi::ITexture* Scene::GetFlowMapTexture()
 			.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 			.setHeight(nativeTexDesc.Height)
 			.setFormat(formatIt->second)
-			.setInitialState(nvrhi::ResourceStates::ShaderResource)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 			.setDebugName("FlowMap Texture");
 
 		m_FlowMapTexture = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(m_FlowMapResource), textureDesc);
@@ -390,27 +403,19 @@ void Scene::UpdateCameraData() const
 
 	m_CameraData->Jitter = renderer->GetJitter();
 
-	auto cameraWorldPos = runtimeData.posAdjust.getEye();
-	auto* tes = RE::TES::GetSingleton();
-	auto* cell = tes ? tes->GetCell(cameraWorldPos) : nullptr;
-	m_CameraData->IsUnderwater = (cell && cameraWorldPos.z < tes->GetWaterHeight(cameraWorldPos, cell)) ? 1 : 0;
+	// Actually "cameraUnderwater"?
+	m_CameraData->IsUnderwater = RE::TESWaterSystem::GetSingleton()->playerUnderwater;
 
 	// Compute underwater absorption from the current water type
 	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
 	if (m_CameraData->IsUnderwater) {
 		auto* waterSystem = RE::TESWaterSystem::GetSingleton();
 		if (waterSystem && waterSystem->currentWaterType) {
-			auto& shallowColor = waterSystem->currentWaterType->data.shallowWaterColor;
-			float3 waterColor = float3(
-				std::clamp(shallowColor.red / 255.0f, 0.0f, 1.0f),
-				std::clamp(shallowColor.green / 255.0f, 0.0f, 1.0f),
-				std::clamp(shallowColor.blue / 255.0f, 0.0f, 1.0f));
-			static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;
-			float absorptionScale = m_Settings.WaterSettings.AbsorptionScale;
+			float3 waterColor = Util::Math::Float3(waterSystem->currentWaterType->data.shallowWaterColor) / 255.0f;
 			m_CameraData->UnderwaterAbsorption = float3(
-				-std::log(std::max(waterColor.x, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH * absorptionScale,
-				-std::log(std::max(waterColor.y, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH * absorptionScale,
-				-std::log(std::max(waterColor.z, 1e-4f)) / WATER_ABSORPTION_REFERENCE_DEPTH * absorptionScale);
+				-std::log(std::max(waterColor.x, 1e-4f)),
+				-std::log(std::max(waterColor.y, 1e-4f)),
+				-std::log(std::max(waterColor.z, 1e-4f))) / Constants::WATER_ABSORPTION_REFERENCE_DEPTH * m_Settings.WaterSettings.AbsorptionScale;
 		}
 	}
 }
@@ -504,6 +509,13 @@ void Scene::UpdateSettings(Settings settings)
 
 	if (currentMode != previousMode || !rootNode->HasRenderNode())
 		UpdateMode(currentMode, previousMode);
+
+	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR;
+	
+	if (currentMode == Mode::GlobalIllumination) {
+		rootNode->SetEnabled<Pass::NRD::ReblurRadiance>(nrdReblur);
+		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
+	}
 
 	rootNode->SettingsChanged(settings);
 }

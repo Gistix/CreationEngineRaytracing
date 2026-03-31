@@ -3,8 +3,6 @@
 #include "Renderer.h"
 #include "Scene.h"
 
-#include "Pass/GIComposite.h"
-
 #include "Renderer/RenderNode.h"
 
 Renderer::Renderer()
@@ -19,6 +17,15 @@ nvrhi::ITexture* Renderer::GetDepthTexture() {
 	}
 
 	return m_DepthTexture;
+}
+
+nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
+	if (!m_MotionVectorTexture) {
+		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
+		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector", nvrhi::Format::RG16_FLOAT, nvrhi::ResourceStates::ShaderResource);
+	}
+
+	return m_MotionVectorTexture;
 }
 
 void Renderer::Initialize(RendererParams rendererParams)
@@ -89,8 +96,10 @@ void Renderer::InitDefaultTextures()
 	desc.debugName = "Default Black Texture";
 	m_BlackTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
+#if defined(SKYRIM)
 	desc.debugName = "Default RMAOS Texture";
 	m_RMAOSTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
+#endif
 
 	desc.debugName = "Default Detail Texture";
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
@@ -103,21 +112,27 @@ void Renderer::InitDefaultTextures()
 	commandList->beginTrackingTextureState(m_GrayTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 	commandList->beginTrackingTextureState(m_NormalTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 	commandList->beginTrackingTextureState(m_BlackTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
+#if defined(SKYRIM)
 	commandList->beginTrackingTextureState(m_RMAOSTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
+#endif
 	commandList->beginTrackingTextureState(m_DetailTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 
 	commandList->writeTexture(m_WhiteTexture->texture, 0, 0, white, 4);
 	commandList->writeTexture(m_GrayTexture->texture, 0, 0, gray, 4);
 	commandList->writeTexture(m_NormalTexture->texture, 0, 0, normal, 4);
 	commandList->writeTexture(m_BlackTexture->texture, 0, 0, black, 4);
+#if defined(SKYRIM)
 	commandList->writeTexture(m_RMAOSTexture->texture, 0, 0, rmaos, 4);
+#endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
 
 	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::ShaderResource);
 	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::ShaderResource);
 	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::ShaderResource);
 	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::ShaderResource);
+#if defined(SKYRIM)
 	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::ShaderResource);
+#endif
 	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::ShaderResource);
 
 	commandList->commitBarriers();
@@ -532,8 +547,10 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 
 nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown)
 {
-	D3D11_TEXTURE2D_DESC desc;
-	d3d11Texture->GetDesc(&desc);
+	if (!d3d11Texture) {
+		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");
+		return nullptr;
+	}
 
 	winrt::com_ptr<IDXGIResource1> dxgiResource;
 	d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
@@ -548,7 +565,10 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	winrt::com_ptr<ID3D12Resource> d3d12Resource;
 	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
 
-	CloseHandle(sharedHandle);
+	if (!d3d12Resource) {
+		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource");
+		return nullptr;
+	}
 
 	return CreateHandleForNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
 }

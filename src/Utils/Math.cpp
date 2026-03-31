@@ -28,9 +28,13 @@ namespace Util
 			return float3(niPoint.x, niPoint.y, niPoint.z);
 		}
 
-		float3 Float3(RE::Color niColor)
+		float3 Float3(RE::NiColor niColor)
 		{
+#if defined(SKYRIM)
 			return float3(niColor.red, niColor.green, niColor.blue);
+#elif defined(FALLOUT4)
+			return float3(niColor.r, niColor.g, niColor.b);
+#endif
 		}
 
 		float3 Normalize(float3 vector)

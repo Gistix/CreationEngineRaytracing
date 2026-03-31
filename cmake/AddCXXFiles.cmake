@@ -20,11 +20,7 @@ function(add_cxx_files TARGET)
 		"interop/**/*.hlsli"
 	)
 
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}}/interop
-		PREFIX "Interop Files"
-		FILES ${INTEROP_FILES})
-
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}}
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/interop
 		PREFIX "Interop Files"
 		FILES ${INTEROP_FILES})
 

@@ -6,6 +6,8 @@ namespace Util
 	{
 		eastl::vector<ShaderDefine> GetRaytracingDefines(const Settings& settings, bool sharc, bool sharcUpdate)
 		{
+			const bool sharcEnabled = sharc && settings.SHaRCSettings.Enabled;
+
 			eastl::vector<ShaderDefine> defines = {
 				{ L"MAX_BOUNCES", settings.RaytracingSettings.Bounces },
 				{ L"MAX_SAMPLES", settings.RaytracingSettings.SamplesPerPixel },
@@ -36,11 +38,18 @@ namespace Util
 			if (settings.AdvancedSettings.SSSSettings.Enabled)
 				defines.emplace_back(L"SUBSURFACE_SCATTERING");
 
-			if (sharc)
+			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
 
-			if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
-				defines.emplace_back(L"DLSS_RR", L"1");
+			if (!sharcUpdate) {
+				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR) {
+					defines.emplace_back(L"RAW_RADIANCE", L"1");
+					defines.emplace_back(L"NRD_REBLUR", L"1");
+				}
+
+				if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+					defines.emplace_back(L"DLSS_RR", L"1");
+			}
 
 			return defines;
 		}

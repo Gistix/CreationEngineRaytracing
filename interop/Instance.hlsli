@@ -51,6 +51,7 @@ struct InstanceLightData
 INTEROP_DATA_STRUCT(Instance, 4)
 {
 	INTEROP_ROW_MAJOR(float3x4) Transform;
+	INTEROP_ROW_MAJOR(float3x4) PrevTransform;
     InstanceLightData LightData;
 	uint FirstGeometryID;
 };
