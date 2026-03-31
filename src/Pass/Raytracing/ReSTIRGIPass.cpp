@@ -4,12 +4,15 @@
 #include "Constants.h"
 
 #include "ReSTIRGIData.hlsli"
+#include "Utils/Shader.h"
 
 namespace Pass::Raytracing
 {
 	ReSTIRGIPass::ReSTIRGIPass(Renderer* renderer, SceneTLAS* sceneTLAS)
 		: RenderPass(renderer), m_SceneTLAS(sceneTLAS)
 	{
+		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, false, false);
+
 		auto resolution = renderer->GetResolution();
 
 		rtxdi::ReSTIRGIStaticParameters staticParams;
@@ -65,7 +68,7 @@ namespace Pass::Raytracing
 	{
 		auto device = GetRenderer()->GetDevice();
 
-		eastl::vector<DxcDefine> defines;
+		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(DxcDefine{ L"USE_RAY_QUERY", L"1" });
 
 		// Temporal Resampling
@@ -134,6 +137,14 @@ namespace Pass::Raytracing
 
 	void ReSTIRGIPass::SettingsChanged(const Settings& settings)
 	{
+		auto defines = Util::Shader::GetRaytracingDefines(settings, false, false);
+
+		if (defines != m_Defines) {
+			m_Defines = defines;
+			CreatePipeline();
+			m_DirtyBindings = true;
+		}
+
 		m_Enabled = settings.ReSTIRGI.Enabled;
 
 		if (!m_Enabled)
