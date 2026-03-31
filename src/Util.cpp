@@ -37,6 +37,20 @@ namespace Util
 		return wstr;
 	}
 
+	eastl::wstring StringToWString(const eastl::string& str)
+	{
+		if (str.empty())
+			return eastl::wstring();
+
+		int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(),
+			(int)str.size(), nullptr, 0);
+		eastl::wstring wstr(size_needed, 0);
+		MultiByteToWideChar(CP_UTF8, 0, str.c_str(),
+			(int)str.size(), &wstr[0], size_needed);
+		return wstr;
+	}
+
+
 	int32_t GetJitterPhaseCount(int32_t renderWidth, int32_t displayWidth)
 	{
 		const float basePhaseCount = 8.0f;

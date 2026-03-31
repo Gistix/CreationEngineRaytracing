@@ -8,6 +8,8 @@
 
 #include "Renderer/RenderGraph.h"
 
+#include "Renderer/TextureManager.h"
+
 struct MessageCallback : public nvrhi::IMessageCallback
 {
 	static MessageCallback& GetInstance()
@@ -49,6 +51,8 @@ class Renderer
 	uint64_t m_LastSubmittedInstance = 0;
 
 	nvrhi::TextureHandle m_DepthTexture;
+	nvrhi::TextureHandle m_MotionVectorTexture;
+
 	nvrhi::TextureHandle m_MainTexture;
 
 	ID3D12Resource* m_CopyTargetResource = nullptr;
@@ -67,11 +71,14 @@ class Renderer
 	float2 m_DynamicResolutionRatio;
 
 	float2 m_Jitter;
+	float2 m_PrevJitter;
 
 	eastl::unique_ptr<RenderGraph> m_RenderGraph;
 
 	nvrhi::TimerQueryHandle m_FrameTimer;
 	float m_FrameTime;
+
+	TextureManager m_TextureManager;
 
 	eastl::unique_ptr<TextureReference> m_WhiteTexture;
 	eastl::unique_ptr<TextureReference> m_GrayTexture;
@@ -190,6 +197,7 @@ public:
 	RenderGraph* GetRenderGraph() { return m_RenderGraph.get(); }
 
 	nvrhi::ITexture* GetDepthTexture();
+	nvrhi::ITexture* GetMotionVectorTexture();
 
 	inline auto GetMainTexture() { return m_MainTexture; }
 
@@ -197,7 +205,14 @@ public:
 
 	inline auto GetJitter() const { return m_Jitter; }
 
-	inline auto UpdateJitter(float2 jitter) { return m_Jitter = jitter; }
+	inline auto GetPrevJitter() const { return m_PrevJitter; }
+
+	inline void UpdateJitter(float2 jitter) { 
+		m_PrevJitter = m_Jitter;
+		m_Jitter = jitter;
+	}
+
+	inline auto& GetTextureManager() { return m_TextureManager; }
 
 	inline auto& GetBlackTexture() const { return m_BlackTexture->texture; }
 

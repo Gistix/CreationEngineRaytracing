@@ -17,11 +17,12 @@
 #include "Pass/Raytracing/Common/SHaRC.h"
 
 #include "Pass/Raytracing/GlobalIllumination.h"
-#include "Pass/GIComposite.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raster/GBuffer.h"
+#include "Pass/NRD/ReblurRadiance.h"
+#include "Pass/Raytracing/Common/GIComposite.h"
 
 Scene::Scene()
 {
@@ -91,12 +92,24 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
-			"GlobalIllumination",
+			"Global Illumination",
 			eastl::make_unique<Pass::Raytracing::GlobalIllumination>(
 				renderer,
 				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
 				m_GlobalIllumination->GetPass<Pass::SHaRC>()
 			)			
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"NRD Reblur Radiance",
+			eastl::make_unique<Pass::NRD::ReblurRadiance>(renderer)
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"GI Composite",
+			eastl::make_unique<Pass::Common::GIComposite>(renderer)
 		});
 	}
 
@@ -469,6 +482,13 @@ void Scene::UpdateSettings(Settings settings)
 
 	if (currentMode != previousMode || !rootNode->HasRenderNode())
 		UpdateMode(currentMode, previousMode);
+
+	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR;
+	
+	if (currentMode == Mode::GlobalIllumination) {
+		rootNode->SetEnabled<Pass::NRD::ReblurRadiance>(nrdReblur);
+		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
+	}
 
 	rootNode->SettingsChanged(settings);
 }

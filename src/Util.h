@@ -22,6 +22,8 @@ namespace Util
 
 	std::wstring StringToWString(const std::string& str);
 
+	eastl::wstring StringToWString(const eastl::string& str);
+
 	template <typename T>
 	std::string GetFlagsString(auto value)
 	{
