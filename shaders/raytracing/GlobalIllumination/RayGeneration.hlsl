@@ -230,7 +230,11 @@ void Main()
                 break;            
  
             if (j == 0)
-                isSpecular = !bsdfSample.isLobe(LobeType::DiffuseReflection);
+                isSpecular = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
+            
+#if defined(RAW_RADIANCE)            
+            const bool demodulatedThroughput = (j == 0 && !isSpecular);
+#endif
             
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
@@ -249,7 +253,7 @@ void Main()
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);            
             
 #   if defined(RAW_RADIANCE)
-            if (j == 0 && !isSpecular) {
+            if (demodulatedThroughput) {
                 originalThroughput = throughput * bsdfSample.weight;
 
                 float3 diffuseWeightDemodulated = all(surface.DiffuseAlbedo > 0.f)
@@ -271,7 +275,16 @@ void Main()
 #else
             if (Raytracing.RussianRoulette == 1)
             {
-                const float rrVal = sqrt(Color::RGBToLuminance(throughput));
+                float3 throughputColor;
+
+#   if defined(RAW_RADIANCE)
+                // Apply russian roulette based on the original throughput
+                throughputColor = demodulatedThroughput ? originalThroughput : throughput;
+#   else
+                throughputColor = throughput;
+#   endif
+                
+                const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
                 float rrProb = saturate(0.85 - rrVal);
                 rrProb *= rrProb;
 
@@ -281,6 +294,11 @@ void Main()
                     break;
 
                 throughput /= (1.0f - rrProb);
+                
+#   if defined(RAW_RADIANCE)
+                if (demodulatedThroughput)
+                    originalThroughput /= (1.0f - rrProb);
+#   endif                
             }
 #endif
             
@@ -304,6 +322,11 @@ void Main()
             if (insideWaterVolume)
             {
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
+                
+#   if defined(RAW_RADIANCE)
+                if (demodulatedThroughput)
+                    originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);;
+#   endif                     
             }
             
 #if defined(NRD_REBLUR)
@@ -411,10 +434,10 @@ void Main()
 #endif
             
 #   if defined(RAW_RADIANCE)
-            // After throughput is applied to radiance, restore original throughput so that brighness is not increased due to missing diffuse albedo multiplication
+            // After throughput is applied to radiance, restore original throughput so that subsequent bounces is not increased due to missing diffuse albedo multiplication
             // This ensures first bounce has low frequency, allowing denoisers and linear upscaling to work with less per-pixel data
             // Diffuse albedo is re-applied during compositing (DiffuseRadiance * DiffuseAlbedo + SpecularRadiance)            
-            if (j == 0)
+            if (demodulatedThroughput)
                 throughput = originalThroughput;
 #   endif    // RAW_RADIANCE     
             
