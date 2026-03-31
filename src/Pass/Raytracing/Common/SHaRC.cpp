@@ -37,13 +37,14 @@ namespace Pass
 
 	void SHaRC::SettingsChanged(const Settings& settings)
 	{
+		m_Enabled = settings.SHaRCSettings.Enabled;
 		m_SHaRCData->SceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
 		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
 		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
 		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
 		m_SHaRCData->AntifireflyFilter = settings.SHaRCSettings.AntifireflyFilter ? 1 : 0;
 
-		auto defines = Util::Shader::GetRaytracingDefines(settings, true, true);
+		auto defines = Util::Shader::GetRaytracingDefines(settings, m_Enabled, true);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
@@ -98,7 +99,8 @@ namespace Pass
 			.addBindingLayout(m_UpdatePass.m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout);
 
 		m_UpdatePass.m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 	}
@@ -186,6 +188,9 @@ namespace Pass
 
 	void SHaRC::Execute(nvrhi::ICommandList* commandList)
 	{
+		if (!m_Enabled)
+			return;
+
 		commandList->writeBuffer(m_SHaRCBuffer, m_SHaRCData.get(), sizeof(SHaRCData));
 
 		// Update Pass
@@ -201,7 +206,8 @@ namespace Pass
 				m_UpdatePass.m_BindingSet,
 				sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
-				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
+				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+				sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable
 			};
 			commandList->setComputeState(state);
 

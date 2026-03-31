@@ -127,6 +127,13 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 }
             }
         }
+
+        // OpenPBR 3.11: Emission sits below the coat and is absorbed.
+        // At normal incidence, coat_color = T^2 gives the round-trip absorption.
+        if (surface.CoatStrength > 0)
+        {
+            surface.Emissive *= lerp(float3(1, 1, 1), surface.CoatColor, surface.CoatStrength);
+        }
     }
     else if (material.ShaderType == ShaderType::Lighting)
     {
@@ -241,16 +248,20 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.Scale = 1.f;
         } else if (material.Feature == Feature::kEye)
         {
-            surface.Roughness = 0.08f;
+            surface.Roughness = 0.2f;
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
             
             // Typical eye values
-            surface.SubsurfaceData.ScatteringColor = float3(1.0f, 0.8f, 0.6f);
+            surface.SubsurfaceData.ScatteringColor = float3(0.482f, 0.169f, 0.109f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
-            surface.SubsurfaceData.Scale = 1.f;
+            surface.SubsurfaceData.Scale = 10.f;
+
+            surface.CoatStrength = 1.f;
+            surface.CoatRoughness = 0.0f;
+            surface.CoatF0 = 0.026f;
         } else if (material.ShaderFlags & ShaderFlags::kSoftLighting)
         {
             surface.SubsurfaceData.HasSubsurface = 1;

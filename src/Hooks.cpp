@@ -229,6 +229,12 @@ namespace Hooks
 				return;
 		}
 
+		// Cull non-effect models with kRefraction when Path Tracing is active
+		if (scene->IsPathTracingActive() && shaderType != RE::BSShader::Type::Effect && pass->shaderProperty) {
+			if (pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+				return;
+		}
+
 		// Skip rendering geometry that has been determined to be occluded
 		// Never cull during reflection rendering - reflections need all visible geometry
 		if (Scene::GetSingleton()->ApplyPathTracingCull() && pass->shader && pass->geometry) {

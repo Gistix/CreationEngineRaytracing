@@ -249,7 +249,8 @@ void Main()
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
     float3 hitPosW = sourcePosition;
-    MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPosW), 0);
+    float3 hitPrevPosW = sourceSurface.PrevPosition;
+    MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPrevPosW), 0);
     Depth[idx] = computeClipDepth(hitPosW);
 #   endif   
 #endif   
@@ -279,7 +280,8 @@ void Main()
         // share this MV — it tracks the screen-space movement of the actual geometry, not
         // the virtual position deep in a delta reflection/refraction chain.
         float3 primaryHitPos = Camera.Position.xyz + sourceDirection * primarySceneDistance;
-        float3 buildMVs = computeMotionVector(primaryHitPos, primaryHitPos);
+        float3 primaryPrevPosW = sourceSurface.PrevPosition;
+        float3 buildMVs = computeMotionVector(primaryHitPos, primaryPrevPosW);
         float buildSceneLength = primarySceneDistance;
         float3x3 buildImageXform = float3x3(1,0,0, 0,1,0, 0,0,1);
         float buildRoughnessAccum = 0;
@@ -349,6 +351,9 @@ void Main()
                 buildInstance, randomSeed,
                 hitResult.nextInsideWater, hitResult.nextWaterAbsorption);
         }
+
+        if (buildIsDominant)
+            childNeedsDominant = true;
 
         // Explore forked paths (planes 1, 2, ...)
         int nextExplorePlane = spCtx.FindNextToExplore(idx, 1);
@@ -631,6 +636,7 @@ void Main()
 #else
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
 #endif
+        bool arrivedViaDelta = false;
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
 
@@ -676,6 +682,7 @@ void Main()
             isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
             isPrimaryReplacement = surface.Primary && isDelta;
+            arrivedViaDelta = isDelta;
 
             throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
 
@@ -869,7 +876,7 @@ void Main()
             }
 
             float3 sharcRadiance;
-            if (isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
+            if (!arrivedViaDelta && isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
                 if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))

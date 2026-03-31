@@ -119,6 +119,7 @@ struct LightingSettings
 
 struct SHaRCSettings
 {
+	bool Enabled = true;
 	float SceneScale = 1.0f;
 	int AccumFrameNum = 10;
 	int StaleFrameNum = 64;

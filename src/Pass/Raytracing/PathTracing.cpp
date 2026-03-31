@@ -12,7 +12,7 @@ namespace Pass
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, false);
+		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -29,7 +29,7 @@ namespace Pass
 	{
 		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
 
-		auto defines = Util::Shader::GetRaytracingDefines(settings, true, false);
+		auto defines = Util::Shader::GetRaytracingDefines(settings, m_SHaRC != nullptr, false);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
@@ -120,7 +120,8 @@ namespace Pass
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
-			sceneGraph->GetTextureDescriptors()->m_Layout
+			sceneGraph->GetTextureDescriptors()->m_Layout,
+			sceneGraph->GetPrevPositionDescriptors()->m_Layout
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -179,7 +180,8 @@ namespace Pass
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout);
 
 		outPipeline = device->createComputePipeline(pipelineDesc);
 	}
@@ -261,7 +263,8 @@ namespace Pass
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
-			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();

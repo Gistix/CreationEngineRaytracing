@@ -81,6 +81,8 @@ class SceneGraph
 	eastl::unique_ptr<BindlessTable> m_SkinningDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexCopyDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexWriteDescriptors;
+	eastl::unique_ptr<BindlessTable> m_PrevPositionDescriptors;
+	eastl::unique_ptr<BindlessTable> m_PrevPositionWriteDescriptors;
 
 	eastl::unique_ptr<BindlessTableManager> m_TextureDescriptors;
 
@@ -99,6 +101,8 @@ public:
 	inline auto& GetSkinningDescriptors() const { return m_SkinningDescriptors; }
 	inline auto& GetVertexCopyDescriptors() const { return m_VertexCopyDescriptors; }
 	inline auto& GetVertexWriteDescriptors() const { return m_VertexWriteDescriptors; }
+	inline auto& GetPrevPositionDescriptors() const { return m_PrevPositionDescriptors; }
+	inline auto& GetPrevPositionWriteDescriptors() const { return m_PrevPositionWriteDescriptors; }
 
 	inline auto& GetLightBuffer() const { return m_LightBuffer; }
 	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
