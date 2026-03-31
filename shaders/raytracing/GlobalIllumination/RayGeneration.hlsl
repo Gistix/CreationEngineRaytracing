@@ -243,7 +243,7 @@ void Main()
             
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
-            throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
+            throughput *= hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : surface.AO;
 
             // Track water volume entry/exit on transmission
             if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
