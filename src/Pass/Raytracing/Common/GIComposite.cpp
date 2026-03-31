@@ -21,6 +21,7 @@ namespace Pass::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
+			nvrhi::BindingLayoutItem::Texture_SRV(3),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -66,8 +67,9 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(0, renderTargets->albedo),
-			nvrhi::BindingSetItem::Texture_SRV(1, diffuseTexture),
-			nvrhi::BindingSetItem::Texture_SRV(2, specularTexture),
+			nvrhi::BindingSetItem::Texture_SRV(1, renderTargets->gnmao),
+			nvrhi::BindingSetItem::Texture_SRV(2, diffuseTexture),
+			nvrhi::BindingSetItem::Texture_SRV(3, specularTexture),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 

@@ -5,8 +5,9 @@ ConstantBuffer<CameraData> Camera       : register(b0);
 ConstantBuffer<FeatureData> Features    : register(b1);
 
 Texture2D<float4> Albedo                : register(t0);
-Texture2D<float4> DiffuseIndirect       : register(t1);
-Texture2D<float4> SpecularIndirect      : register(t2);
+Texture2D<unorm float4> GNMAO           : register(t1);
+Texture2D<float4> DiffuseIndirect       : register(t2);
+Texture2D<float4> SpecularIndirect      : register(t3);
 
 RWTexture2D<float4> Output              : register(u0);
 
@@ -19,12 +20,16 @@ RWTexture2D<float4> Output              : register(u0);
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {
-    /*const uint2 size = Camera.ScreenSize;
+    const uint2 size = Camera.ScreenSize;
     
     if (any(idx >= size))
-        return;*/
+        return;
     
-    float3 albedo = Albedo[idx].rgb;
+    const float3 albedo = LLGammaToTrueLinear(Albedo[idx].rgb);
+    const float metalness = GNMAO[idx].z;
+    
+    const float3 diffuseAlbedo = albedo * (1.0f - metalness);
+    
     float4 diffuseIndirect = DiffuseIndirect[idx];
     float4 specularIndirect = SpecularIndirect[idx];
     
@@ -33,5 +38,5 @@ void Main(uint2 idx : SV_DispatchThreadID)
     specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);   
 #endif
     
-    Output[idx] = float4(diffuseIndirect.rgb * albedo + specularIndirect.rgb, 1.0f);
+    Output[idx] = float4(diffuseIndirect.rgb * diffuseAlbedo + specularIndirect.rgb, 1.0f);
 }

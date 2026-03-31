@@ -86,6 +86,7 @@ namespace Pass::Raytracing
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"0");
+		//defines.emplace_back(L"DISABLE_NORMAL_REJECTION", L"1");
 
 		auto device = GetRenderer()->GetDevice();
 
@@ -147,6 +148,7 @@ namespace Pass::Raytracing
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
+		//defines.emplace_back(L"DISABLE_NORMAL_REJECTION", L"1");
 
 		auto device = GetRenderer()->GetDevice();
 
