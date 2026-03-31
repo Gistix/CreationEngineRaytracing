@@ -26,6 +26,8 @@
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
+#include "include/NRD.hlsli"
+
 #ifndef THREAD_GROUP_SIZE
 #define THREAD_GROUP_SIZE (32)
 #endif
@@ -90,17 +92,18 @@ void Main()
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
-        DiffuseOutput[idx] = float3(0.0f, 0.0f, 0.0f);
-        SpecularOutput[idx] = float3(0.0f, 0.0f, 0.0f);   
+        DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
         
 #   else
-        Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);  
-#   endif        
-
-#   if defined(DLSS_RR)
+        Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        
+#       if defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = RAY_TMAX;
+#       endif        
 #   endif
+        
 #endif
         return;
     }    
@@ -137,7 +140,7 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     
     
-    AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
+    //AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
 
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
@@ -148,7 +151,6 @@ void Main()
 
     float3 radiance = 0;
     bool isSpecular = false;
-    float specHitDist = 0;
 
     RayDesc ray;
     Payload payload;
@@ -168,6 +170,13 @@ void Main()
     SharcHitData sharcHitData;
 #endif    
     
+#if defined(NRD_REBLUR)
+     float diffHitDist = 0;     
+     float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+#else
+    float specHitDist = 0;
+#endif
+    
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
@@ -180,6 +189,10 @@ void Main()
         bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
 
+#if defined(NRD_REBLUR)
+        float accumulatedHitDist = 0;
+#endif        
+
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
         float materialRoughnessPrev = 0.0f;
@@ -187,19 +200,20 @@ void Main()
 
         // Water volume tracking for Beer-Lambert absorption
         bool insideWaterVolume = false;
-        float3 waterVolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
+        float3 waterVolumeAbsorption = float3(0.0f, 0.0f, 0.0f);    
         
+        // Throughput difference of demodulated first bounce
 #if defined(RAW_RADIANCE)
-        float3 throughputDelta = float3(1.0f, 1.0f, 1.0f);
-#endif        
+        float3 originalThroughput = float3(1.0f, 1.0f, 1.0f);
+#endif            
         
         [loop]
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
             BSDFSample bsdfSample;
-            
+                              
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
-            
+       
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
             direction = surface.Mul(SampleCosineHemisphere(randomSeed));
 
@@ -209,16 +223,20 @@ void Main()
             throughput *= surface.Albedo;
             
             const bool hasTransmission = false;
-#else            
-            bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed);
-            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
-            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
-            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
-
-            if (isValid)
+#else
+            if (bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed))
                 direction = bsdfSample.wo;
             else
-                break;
+                break;            
+ 
+            if (j == 0)
+                isSpecular = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
+            
+#if defined(RAW_RADIANCE)            
+            const bool demodulatedThroughput = (j == 0 && !isSpecular);
+#endif
+            
+            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
             throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
 
@@ -231,32 +249,26 @@ void Main()
             }
 
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-#   if defined(RAW_RADIANCE)
-            brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
-#   endif
             brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+            brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);            
             
 #   if defined(RAW_RADIANCE)
-            float3 brdfWeightOriginal = brdfWeight.diffuse * surface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
+            if (demodulatedThroughput) {
+                originalThroughput = throughput * bsdfSample.weight;
 
-#       if defined(SHARC) && SHARC_UPDATE
-            throughput *= brdfWeightOriginal;
-#       else
-            if (j > 0) {
-                throughput *= brdfWeightOriginal;
+                float3 diffuseWeightDemodulated = all(surface.DiffuseAlbedo > 0.f)
+                    ? brdfWeight.diffuse / max(surface.DiffuseAlbedo, 1e-4f)
+                    : brdfWeight.diffuse;            
+            
+                throughput *= diffuseWeightDemodulated + brdfWeight.specular + brdfWeight.transmission;                      
             } else {
-                float3 brdfWeightRaw = bsdfSample.weight;
-
-                throughputDelta = brdfWeightOriginal / brdfWeightRaw;
-
-                throughput *= brdfWeightRaw;
-            }
-#       endif
+                throughput *= bsdfSample.weight;
+            }         
 #   else    // RAW_RADIANCE
             throughput *= bsdfSample.weight;
 #   endif   // !RAW_RADIANCE
-#endif  
+            
+#endif  // LIGHTING_MODE
             
 #if defined(SHARC) && SHARC_UPDATE
             SharcSetThroughput(sharcState, throughput);
@@ -266,10 +278,12 @@ void Main()
                 float3 throughputColor;
 
 #   if defined(RAW_RADIANCE)
-                throughputColor = throughput * throughputDelta;
+                // Apply russian roulette based on the original throughput
+                throughputColor = demodulatedThroughput ? originalThroughput : throughput;
 #   else
                 throughputColor = throughput;
 #   endif
+                
                 const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
                 float rrProb = saturate(0.85 - rrVal);
                 rrProb *= rrProb;
@@ -280,6 +294,11 @@ void Main()
                     break;
 
                 throughput /= (1.0f - rrProb);
+                
+#   if defined(RAW_RADIANCE)
+                if (demodulatedThroughput)
+                    originalThroughput /= (1.0f - rrProb);
+#   endif                
             }
 #endif
             
@@ -303,11 +322,20 @@ void Main()
             if (insideWaterVolume)
             {
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
+                
+#   if defined(RAW_RADIANCE)
+                if (demodulatedThroughput)
+                    originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);;
+#   endif
             }
             
+#if defined(NRD_REBLUR)
+            accumulatedHitDist += payload.hitDistance;
+#else
             if (isSpecular)
                 specHitDist += payload.hitDistance;
-
+#endif           
+            
             if (!payload.Hit())
             {
                 float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
@@ -403,8 +431,28 @@ void Main()
 #else
             sampleRadiance += surface.Emissive * throughput;
 #endif
+            
+#   if defined(RAW_RADIANCE)
+            // After throughput is applied to radiance, restore original throughput so that subsequent bounces is not increased due to missing diffuse albedo multiplication
+            // This ensures first bounce has low frequency, allowing denoisers and linear upscaling to work with less per-pixel data
+            // Diffuse albedo is re-applied during compositing (DiffuseRadiance * DiffuseAlbedo + SpecularRadiance)            
+            if (demodulatedThroughput)
+                throughput = originalThroughput;
+#   endif    // RAW_RADIANCE     
+            
         }
 
+#if defined(NRD_REBLUR)
+        float normHitDist = accumulatedHitDist;
+        normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecular ? sourceSurface.Roughness : 1.0);
+        
+        if (isSpecular) {
+            NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
+        } else {
+            diffHitDist += normHitDist;
+        }
+#endif
+        
         radiance += sampleRadiance;
 
 #if defined(SHARC) && SHARC_UPDATE
@@ -412,25 +460,38 @@ void Main()
 #endif
     }
 
-    radiance /= MAX_SAMPLES;        
-      
+#if defined(NRD_REBLUR)
+    NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+#endif
     
+    radiance /= MAX_SAMPLES;
+       
 #if !(defined(SHARC) && SHARC_UPDATE)
-#   if defined(RAW_RADIANCE) || defined(DLSS_RR)
+#   if defined(DLSS_RR)
     const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
     const float3 specularAlbedo = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
 #   endif
     
 #   if defined(RAW_RADIANCE)
-    DiffuseOutput[idx] = float3(isSpecular ? 0.0f : radiance);
-    SpecularOutput[idx] = float3(isSpecular ? radiance * specularAlbedo : 0.0f);
-#   else
-    Output[idx] = float4(radiance, 1.0f);
-#   endif
+    float3 diffuseRadiance = isSpecular ? 0.0.xxx : radiance;
+    float3 specularRadiance = isSpecular ? radiance : 0.0.xxx;
     
-#   if defined(DLSS_RR) 
+#       if defined(NRD_REBLUR)
+    DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
+    SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);    
+#       else // !NRD_REBLUR
+    DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);
+    SpecularOutput[idx] = float4(specularRadiance, specHitDist);    
+#       endif // NRD_REBLUR
+    
+#   else // ! RAW_RADIANCE
+    Output[idx] = float4(radiance, 1.0f);
+    
+#       if defined(DLSS_RR) 
     SpecularAlbedo[idx] = specularAlbedo;
     SpecularHitDistance[idx] = specHitDist;
-#   endif
+#       endif
+    
+#   endif // RAW_RADIANCE
 #endif    
 }

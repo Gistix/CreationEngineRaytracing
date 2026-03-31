@@ -34,7 +34,8 @@ INTEROP_STRUCT(RaytracingData, 16)
     uint Pad;
     float Point; 
     INTEROP_DATA_TYPE(Light) DirectionalLight;
-    SubSurfaceScattering SubSurfaceScattering; 
+    SubSurfaceScattering SubSurfaceScattering;
+    float4 HitDistSettings;
 };
 VALIDATE_CBUFFER(RaytracingData, 16);
 

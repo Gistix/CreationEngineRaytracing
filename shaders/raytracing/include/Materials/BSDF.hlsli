@@ -102,13 +102,15 @@ struct DiffuseReflection
         wo = sample_cosine_hemisphere_concentric(preGeneratedSample.xy, pdf);
         lobe = (uint)LobeType::DiffuseReflection;
 
+#if !defined(DISABLE_NORMAL_REJECTION)        
         if (min(wo.z, wi.z) <= kMinCosTheta)
         {
             weight = float3(0.0f, 0.0f, 0.0f);
             lobeP = 0.0f;
             return false;
         }
-
+#endif
+        
         weight = EvalWeight(wi, wo);
         lobeP = 1.0f;
         return true;
@@ -153,13 +155,15 @@ struct DiffuseTransmissionLambert
         wo.z = -wo.z;
         lobe = (uint)LobeType::DiffuseTransmission;
 
+#if !defined(DISABLE_NORMAL_REJECTION)   
         if (min(wi.z, -wo.z) < kMinCosTheta)
         {
             weight = float3(0,0,0);
             lobeP = 0.0;
             return false;
         }
-
+#endif
+        
         weight = albedo;
         lobeP = 1.0;
         return true;
@@ -232,8 +236,10 @@ struct SpecularReflectionMicrofacet // : IBxDF
         lobe = (uint)LobeType::SpecularReflection;
         lobeP = 1.0;
 
+#if !defined(DISABLE_SPECULAR_NORMAL_REJECTION)
         if (wi.z < kMinCosTheta) return false;
-
+#endif
+        
         // Handle delta reflection.
         if (alpha == 0.f)
         {
@@ -253,8 +259,11 @@ struct SpecularReflectionMicrofacet // : IBxDF
         
         float wiDotH = dot(wi, h);
         wo = 2.f * wiDotH * h - wi;
+        
+#if !defined(DISABLE_SPECULAR_NORMAL_REJECTION)
         if (wo.z < kMinCosTheta) return false;
-
+#endif
+        
         pdf = EvalPdf(wi, wo); // We used to have pdf returned as part of the sampleGGX_XXX functions but this made it easier to add bugs when changing due to code duplication in refraction cases
         weight = Eval(wi, wo) / pdf;
         lobe = (uint)LobeType::SpecularReflection;
@@ -333,8 +342,10 @@ struct SpecularReflectionTransmissionMicrofacet
         lobe = (uint)LobeType::SpecularReflection;
         lobeP = 1;
 
+#if !defined(DISABLE_SPECULAR_NORMAL_REJECTION)        
         if (wi.z < kMinCosTheta) return false;
-
+#endif
+        
         float lobeSample = preGeneratedSample.z;
 
         // Handle delta reflection/transmission.
@@ -413,7 +424,11 @@ struct SpecularReflectionTransmissionMicrofacet
             (2.f * wiDotH * h - wi) :
             ((actualEta * wiDotH - cosThetaT) * h - actualEta * wi);
 
-        if (abs(wo.z) < kMinCosTheta || (wo.z > 0.f != isReflection)) return false;
+#if !defined(DISABLE_SPECULAR_NORMAL_REJECTION)
+        if (abs(wo.z) < kMinCosTheta) return false;        
+#endif
+        
+        if (wo.z > 0.f != isReflection) return false;
 
         float woDotH = dot(wo, h);
 

@@ -14,6 +14,9 @@
 [submodule "extern/NVRHI"]
 	path = extern/NVRHI
 	url = https://github.com/NVIDIA-RTX/NVRHI.git
+[submodule "extern/NRD"]
+	path = extern/NRD
+	url = https://github.com/NVIDIA-RTX/NRD.git
 [submodule "extern/RTXDI"]
 	path = extern/RTXDI
 	url = https://github.com/NVIDIA-RTX/RTXDI.git
