@@ -3,6 +3,7 @@
 
 #include "include/Common.hlsli"
 #include "raytracing/include/Common.hlsli"
+#include "raytracing/include/RayOffset.hlsli"
 
 #if !defined(RASTER)
 #   include "raytracing/include/Payload.hlsli"
@@ -53,12 +54,14 @@ struct SurfaceMaker
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
-        // Accumulate position error through transform chain for accurate ray offsetting
+        // Accumulate position error through transform chain for accurate ray offsetting.
         {
-            float3 objectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
-            float objectError = max(abs(objectSpacePos.x), max(abs(objectSpacePos.y), abs(objectSpacePos.z)));
-            float worldError = max(abs(position.x), max(abs(position.y), abs(position.z)));
-            surface.PositionError = max(objectError, worldError);
+            float baryInterpError = max(
+                CalculatePositionError(v0.Position),
+                max(CalculatePositionError(v1.Position),
+                    CalculatePositionError(v2.Position)));
+            float worldError = CalculatePositionError(position);
+            surface.PositionError = max(baryInterpError, worldError);
         }
 
         float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
