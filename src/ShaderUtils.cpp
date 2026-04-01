@@ -124,6 +124,6 @@ namespace ShaderUtils
 			dxcDefines[i] = { define.name.c_str(), define.value.c_str() };
 		}
 
-		CompileShaderLibrary(device, filePath, dxcDefines);
+		return CompileShaderLibrary(device, filePath, dxcDefines);
 	}
 };
