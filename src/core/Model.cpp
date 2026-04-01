@@ -140,3 +140,10 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 
 	m_LastBLASUpdate = Renderer::GetSingleton()->GetFrameIndex();
 }
+
+void Model::RemoveGeometry(RE::BSGeometry* geometry)
+{
+	meshes.erase(std::remove_if(meshes.begin(), meshes.end(), [&](auto& mesh) {
+		return mesh->bsGeometryPtr.get() == geometry;
+		}), meshes.end());
+}

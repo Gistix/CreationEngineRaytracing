@@ -88,6 +88,18 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct ActorEquipManager_EquipObject
+	{
+		static void thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData = nullptr, std::uint32_t a_count = 1, const RE::BGSEquipSlot* a_slot = nullptr, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct ActorEquipManager_UnequipObject
+	{
+		static bool thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData = nullptr, std::uint32_t a_count = 1, const RE::BGSEquipSlot* a_slot = nullptr, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false, const RE::BGSEquipSlot* a_slotToReplace = nullptr);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 #if defined(SKYRIM)
 	struct CreateTextureFromDDS
 	{

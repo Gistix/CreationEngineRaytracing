@@ -56,4 +56,10 @@ namespace magic_enum::customize
 	{
 		static constexpr bool is_flags = true;
 	};
+
+	template <>
+	struct enum_range<RE::BGSEquipSlot::Flag>
+	{
+		static constexpr bool is_flags = true;
+	};	
 }

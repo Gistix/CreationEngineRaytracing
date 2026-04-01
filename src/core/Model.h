@@ -48,6 +48,8 @@ struct Model
 
 	void UpdateBLAS(nvrhi::ICommandList* commandList);
 
+	void RemoveGeometry(RE::BSGeometry* geometry);
+
 	void AddRef()
 	{
 		refCount.fetch_add(1, eastl::memory_order_relaxed);
