@@ -544,6 +544,20 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         ); 
     }
   
+    // ---- Rain ripples on water surface ----
+    if (surface.Primary && Features.WetnessEffects.Raining > 0.0 && Features.WetnessEffects.EnableRaindropFx)
+    {
+        float3 ripplePosition = surface.Position.xyz;
+        float4 raindropInfo = Wetness::GetRainDrops(
+            ripplePosition,
+            Features.WetnessEffects.Time,
+            float3(0, 0, 1),  // water geometric normal (flat, z-up)
+            1.0,              // full ripple strength on water
+            Features.WetnessEffects);
+        float3 rippleNormal = normalize(raindropInfo.xyz);
+        surface.Normal = ReorientNormal(rippleNormal, surface.Normal);
+    }
+
     surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
     surface.Bitangent = cross(surface.Normal, surface.Tangent) * handedness;
     
