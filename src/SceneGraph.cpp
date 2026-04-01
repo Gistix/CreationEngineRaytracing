@@ -382,8 +382,36 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 	CreateModelInternal(form, model, root);
 }
 
-void SceneGraph::CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root)
+void SceneGraph::CreateActorModel(RE::Actor* actor, RE::BipedAnim* bipedAnim, const char* name, RE::NiAVObject* root)
 {
+	logger::trace("SceneGraph::CreateActorModel - {}", actor->GetName());
+
+	if (bipedAnim) {
+		for (const auto& object : bipedAnim->objects)
+		{
+			logger::trace("\tBiped Object - Item: {}, Addon: {}, Part: {}, PartClone: {}",
+				object.item ? object.item->GetName() : "N/A",
+				object.addon ? object.addon->GetName() : "N/A",
+				object.part ? object.part->GetModel() : "N/A",
+				object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A");
+		}
+	}
+
+	auto* actorProcess = actor->GetActorRuntimeData().currentProcess;
+
+	if (actorProcess) {
+		for (const auto& equippedForm : actorProcess->equippedForms)
+		{
+			if (!equippedForm.object)
+				continue;
+
+			logger::trace("\tEquipped Form - {}: {}, Flags: {}",
+				magic_enum::enum_name(equippedForm.object->GetFormType()), 
+				equippedForm.object->GetName(), 
+				Util::GetFlagsString<RE::BGSEquipSlot::Flag>(equippedForm.slot->flags.underlying()));
+		}
+	}
+
 	Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
 		const bool isRoot = (fadeNode == root);
 
@@ -438,6 +466,62 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	logger::debug("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
 
 	CreateModelInternal(water, path.c_str(), object);
+}
+
+void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+{
+	logger::debug("SceneGraph::ActorUnequip - Actor: {}, Object: {}, Type: {}", a_actor->GetName(), a_object->GetName(), magic_enum::enum_name(a_object->GetFormType()));
+
+	// TODO: Handle third/first person for player actor
+	auto* bipedAnim = a_actor->GetBiped(false).get();
+
+	// We can't find the NiNode without biped anim
+	if (!bipedAnim)
+		return;
+
+	for (const auto& object : bipedAnim->objects)
+	{
+		if (object.item != a_object)
+			continue;
+
+		logger::debug("\tUnequipping - {}, Type: {}",
+			object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A",
+			magic_enum::enum_name(object.item->GetFormType()));
+
+		switch (object.item->GetFormType())
+		{
+		case RE::FormType::Armor:
+			// Armors are part of the actor model, we need to remove the mesh from the instance model
+			RemoveActorObject(a_actor, object.partClone.get());
+			break;
+		case RE::FormType::Weapon:
+			// Weapons are separate models parented to a actor node, we can remove the entire instance
+			RemoveInstance(object.partClone.get());
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void SceneGraph::RemoveActorObject(RE::Actor* actor, RE::NiAVObject* object)
+{
+	auto it = m_InstancesFormIDs.find(actor->GetFormID());
+
+	if (it == m_InstancesFormIDs.end())
+		return;
+
+	eastl::vector<RE::BSGeometry*> geometries;
+
+	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* geometry)->RE::BSVisit::BSVisitControl {
+		geometries.push_back(geometry);
+		return RE::BSVisit::BSVisitControl::kContinue;
+	});
+
+	for (const auto& instance : it->second) {
+		for (auto* geometry : geometries)
+			instance->model->RemoveGeometry(geometry);
+	}
 }
 
 void SceneGraph::EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance)

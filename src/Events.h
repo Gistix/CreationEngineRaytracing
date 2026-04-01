@@ -79,6 +79,23 @@ namespace Events
 		}
 	};
 
+	class TESEquipEventHandler : public RE::BSTEventSink<RE::TESEquipEvent>
+	{
+	public:
+		virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*);
+
+		static bool Register()
+		{
+			static TESEquipEventHandler singleton;
+
+			auto scriptEventSourceHolder = RE::ScriptEventSourceHolder::GetSingleton();
+			scriptEventSourceHolder->GetEventSource<RE::TESEquipEvent>()->AddEventSink(&singleton);
+
+			logger::info("Events::Registered {}", typeid(singleton).name());
+
+			return true;
+		}
+	};
 #elif defined(FALLOUT4)
 
 #endif
