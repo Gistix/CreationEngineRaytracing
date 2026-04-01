@@ -11,6 +11,7 @@
 #include "interop/Material.hlsli"
 
 #include "include/FlowMap.hlsli"
+#include "include/Wetness.hlsli"
 
 #define LIGHTINGSETTINGS Raytracing
 #define HAIRSETTINGS Features.HairSpecular
@@ -412,6 +413,23 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         }
     }
 #endif
+
+    // ---- Wetness Effects ----
+    // Apply wetness to non-water, non-eye materials
+    if (material.ShaderType != ShaderType::Water && material.Feature != Feature::kEye)
+    {
+        bool isSkinned = (material.Feature == Feature::kFaceGen || material.Feature == Feature::kHairTint);
+        Wetness::WetnessParams wetnessParams = Wetness::ComputeWetness(
+            surface.Position,
+            normalWS,
+            surface.Normal,
+            Camera.Position,
+            Camera.WaterData,
+            Features.WetnessEffects,
+            isSkinned,
+            surface.Primary);
+        Wetness::ApplyWetness(surface, wetnessParams);
+    }
 }
 
 void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Material material)
@@ -605,7 +623,21 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
         normalWS, tangentWS, bitangentWS,
         surface.Normal, surface.Tangent, surface.Bitangent
     );
-#endif        
+#endif
+
+    // ---- Wetness Effects ----
+    {
+        Wetness::WetnessParams wetnessParams = Wetness::ComputeWetness(
+            surface.Position,
+            normalWS,
+            surface.Normal,
+            Camera.Position,
+            Camera.WaterData,
+            Features.WetnessEffects,
+            false,
+            surface.Primary);
+        Wetness::ApplyWetness(surface, wetnessParams);
+    }
 }
 
 #endif // SURFACE_SKYRIM_HLSL
