@@ -117,6 +117,20 @@ float3 EvalDirectionalLight(in Material material, in Surface surface, in BRDFCon
     return direct;
 }
 
+float GetSpotAttenuation(Light light, float3 surfaceToLight)
+{
+    if (light.Type != LightType::Spot)
+        return 1.0f;
+
+    float cosOuter = f16tof32(light.CosOuterAngleHalf);
+    float cosInner = f16tof32(light.CosInnerAngleHalf);
+
+    // light.Direction points from light toward where it aims
+    // surfaceToLight points from surface toward light, so negate it
+    float cosTheta = dot(normalize(-surfaceToLight), light.Direction);
+    return smoothstep(cosOuter, cosInner, cosTheta);
+}
+
 float GetAttenuation(Light light, float dist, inout float lightSourceAngle)
 {
     float atten = 0.0f;
@@ -143,6 +157,7 @@ float GetLightSampleWeight(Surface surface, Light light)
     float dist = length(l) * GAME_UNIT_TO_M;
     float lightSourceAngle = 0.0f;
     float atten = GetAttenuation(light, dist, lightSourceAngle);
+    atten *= GetSpotAttenuation(light, l);
     float intensity = max(light.Color.r, max(light.Color.g, light.Color.b)) * light.Fade;
     return atten * intensity;
 }
@@ -213,6 +228,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     float lightSourceAngle = 0.005f;
 
     float atten = GetAttenuation(light, dist, lightSourceAngle);
+    atten *= GetSpotAttenuation(light, lr);
 
     irradiance = light.Color * light.Fade * atten * lightWeight;
     lr = TangentToWorld(lr, SampleCosineHemisphereScaled(randomSeed, lightSourceAngle));
