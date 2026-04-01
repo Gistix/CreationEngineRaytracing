@@ -235,7 +235,45 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 			if (lightingSettings.LodDimmer)
 				lightData.Fade *= bsLight->lodDimmer;
 
-			lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
+			// Determine light type: Spot, Point, or Directional
+			// NiSpotLight extends NiPointLight; both have BSLight::pointLight = true.
+			// We distinguish spots via NiRTTI name check.
+			bool isSpot = false;
+			if (bsLight->pointLight) {
+				auto* rtti = niLight->GetRTTI();
+				if (rtti && rtti->name && std::strcmp(rtti->name, "NiSpotLight") == 0)
+					isSpot = true;
+			}
+
+			if (isSpot) {
+				lightData.Type = LightType::Spot;
+
+				// Spot direction from world rotation matrix, first column = model direction (1,0,0) transformed
+				auto& rot = niLight->world.rotate;
+				float3 dir(rot.entry[0][0], rot.entry[1][0], rot.entry[2][0]);
+				dir = Util::Math::Normalize(dir);
+				lightData.Direction = dir;
+
+				// NiSpotLight stores outerSpotAngle (half-angle in degrees) right after NiPointLight data
+				// NiPointLight size: 0x150 (SSE). NiSpotLight adds: outerSpotAngle at 0x14C, innerSpotAngle at 0x150
+				// These are accessible as POINT_LIGHT_RUNTIME_DATA is at 0x140, 3 floats (12 bytes) = ends at 0x14C
+				// Then: spotOuterAngle at 0x14C, spotInnerAngle at 0x150, spotExponent at 0x154
+				auto* pointLightData = reinterpret_cast<const float*>(&static_cast<RE::NiPointLight*>(niLight)->GetPointLightRuntimeData());
+				float outerAngleDeg = pointLightData[3]; // After constAtten, linearAtten, quadAtten
+				float innerAngleDeg = pointLightData[4];
+
+				// Clamp to valid range
+				outerAngleDeg = std::clamp(outerAngleDeg, 1.0f, 89.0f);
+				innerAngleDeg = std::clamp(innerAngleDeg, 0.0f, outerAngleDeg);
+
+				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(outerAngleDeg * (3.14159265f / 180.0f)));
+				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(innerAngleDeg * (3.14159265f / 180.0f)));
+			} else {
+				lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
+				lightData.Direction = float3(0.0f, 0.0f, 0.0f);
+				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
+				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
+			}
 
 			lightData.Flags = 0;
 

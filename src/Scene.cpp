@@ -428,6 +428,54 @@ void Scene::UpdateCameraData() const
 				-std::log(std::max(waterColor.z, 1e-4f))) / Constants::WATER_ABSORPTION_REFERENCE_DEPTH * m_Settings.WaterSettings.AbsorptionScale;
 		}
 	}
+
+	// Populate per-cell water data (5x5 grid centered on camera)
+	{
+		auto* tes = RE::TES::GetSingleton();
+		auto* sky = RE::Sky::GetSingleton();
+		auto eyePos = runtimeData.posAdjust.getEye();
+
+		for (int ky = -2; ky <= 2; ky++) {
+			for (int kx = -2; kx <= 2; kx++) {
+				int waterTile = (kx + 2) + ((ky + 2) * 5);
+
+				float4 data = float4(1.0f, 1.0f, 1.0f, -FLT_MAX);
+
+				RE::NiPoint3 samplePos;
+				samplePos.x = eyePos.x + static_cast<float>(kx) * 4096.0f;
+				samplePos.y = eyePos.y + static_cast<float>(ky) * 4096.0f;
+				samplePos.z = eyePos.z;
+
+				if (tes) {
+					if (auto* cell = tes->GetCell(samplePos)) {
+						auto* extraWater = cell->extraList.GetByType<RE::ExtraCellWaterType>();
+						RE::TESWaterForm* water = extraWater ? extraWater->water : nullptr;
+						if (!water) {
+							if (auto* worldSpace = tes->GetRuntimeData2().worldSpace) {
+								water = worldSpace->worldWater;
+							}
+						}
+						if (water) {
+							data.x = (static_cast<float>(water->data.deepWaterColor.red) + static_cast<float>(water->data.shallowWaterColor.red)) / 255.0f * 0.5f;
+							data.y = (static_cast<float>(water->data.deepWaterColor.green) + static_cast<float>(water->data.shallowWaterColor.green)) / 255.0f * 0.5f;
+							data.z = (static_cast<float>(water->data.deepWaterColor.blue) + static_cast<float>(water->data.shallowWaterColor.blue)) / 255.0f * 0.5f;
+						}
+
+						if (sky) {
+							const auto& wMul = sky->skyColor[RE::TESWeather::ColorTypes::kWaterMultiplier];
+							data.x *= wMul.red;
+							data.y *= wMul.green;
+							data.z *= wMul.blue;
+						}
+
+						data.w = cell->GetExteriorWaterHeight() - eyePos.z;
+					}
+				}
+
+				m_CameraData->WaterData[waterTile] = data;
+			}
+		}
+	}
 }
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)
