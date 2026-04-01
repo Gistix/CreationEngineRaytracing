@@ -68,7 +68,14 @@ namespace Pass
 			// PT Motion Vectors output
 			nvrhi::BindingLayoutItem::Texture_UAV(8),            // MotionVectors (RWTexture2D<float4>)
 			// PT Depth output
-			nvrhi::BindingLayoutItem::Texture_UAV(9)             // Depth (RWTexture2D<float>)
+			nvrhi::BindingLayoutItem::Texture_UAV(9),            // Depth (RWTexture2D<float>)
+			// ReSTIR GI: Secondary G-Buffer UAVs
+			nvrhi::BindingLayoutItem::Texture_UAV(10),           // SecondaryGBufPositionNormal
+			nvrhi::BindingLayoutItem::Texture_UAV(11),           // SecondaryGBufRadiance
+			nvrhi::BindingLayoutItem::Texture_UAV(12),           // SecondaryGBufDiffuseAlbedo
+			nvrhi::BindingLayoutItem::Texture_UAV(13),           // SecondaryGBufSpecularRough
+			// ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(14)   // SurfaceDataBuffer
 		};
 
 #if defined(NVAPI)
@@ -240,7 +247,13 @@ namespace Pass
 			// PT Motion Vectors output
 			nvrhi::BindingSetItem::Texture_UAV(8, renderer->m_PTMotionVectors),
 			// PT Depth output
-			nvrhi::BindingSetItem::Texture_UAV(9, renderer->m_PTDepth)
+			nvrhi::BindingSetItem::Texture_UAV(9, renderer->m_PTDepth),
+			// ReSTIR GI: Secondary G-Buffer UAVs
+			nvrhi::BindingSetItem::Texture_UAV(10, renderer->GetReSTIRGIResources()->secondaryGBufferPositionNormal),
+			nvrhi::BindingSetItem::Texture_UAV(11, renderer->GetReSTIRGIResources()->secondaryGBufferRadiance),
+			nvrhi::BindingSetItem::Texture_UAV(12, renderer->GetReSTIRGIResources()->secondaryGBufferDiffuseAlbedo),
+			nvrhi::BindingSetItem::Texture_UAV(13, renderer->GetReSTIRGIResources()->secondaryGBufferSpecularF0Roughness),
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(14, renderer->GetReSTIRGIResources()->surfaceDataBuffer)
 		};
 
 		

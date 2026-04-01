@@ -19,6 +19,7 @@
 #include "Pass/Raytracing/GlobalIllumination.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
+#include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/ReblurRadiance.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
@@ -150,6 +151,15 @@ RenderNode* Scene::GetPathTracing()
 				renderer,
 				m_PathTracing->GetPass<Pass::SceneTLAS>(),
 				m_PathTracing->GetPass<Pass::SHaRC>()
+			)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"ReSTIRGI",
+			eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(
+				renderer,
+				m_PathTracing->GetPass<Pass::SceneTLAS>()
 			)
 		});
 	}

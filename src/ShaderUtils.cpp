@@ -56,6 +56,7 @@ namespace ShaderUtils
 			L"-enable-16bit-types",
 			L"-T", Target,
 			L"-I", L"Data/shaders",
+			L"-I", L"extern/RTXDI-Library/Include",
 			L"-Zi",
 			L"-Zss",
 			L"-Qembed_debug",
@@ -123,6 +124,6 @@ namespace ShaderUtils
 			dxcDefines[i] = { define.name.c_str(), define.value.c_str() };
 		}
 
-		CompileShaderLibrary(device, filePath, dxcDefines);
+		return CompileShaderLibrary(device, filePath, dxcDefines);
 	}
 };
