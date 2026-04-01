@@ -304,6 +304,12 @@ StablePlanesHitResult StablePlanesHandleHit(
     uint waterCounters = f32tof16(clamp(waterVolumeAbsorption.y, 0, HLF_MAX)) | (f32tof16(clamp(waterVolumeAbsorption.z, 0, HLF_MAX)) << 16);
     bool isEnterSurface = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0;
 
+    // Coat-priority GBuffer: use coat layer properties for denoiser when coat is present
+    bool hasCoat = surface.CoatStrength > 0;
+    float  gbufferRoughness = hasCoat ? surface.CoatRoughness : surface.Roughness;
+    float3 gbufferNormal    = hasCoat ? surface.CoatNormal    : surface.Normal;
+    float3 coatTint         = lerp(float3(1,1,1), surface.CoatColor, surface.CoatStrength);
+
     float3 emissive = surface.Emissive;
     if (any(emissive > 0))
         ctx.AccumulateStableRadiance(pixelPos, emissive * throughput);
@@ -319,8 +325,8 @@ StablePlanesHitResult StablePlanesHandleHit(
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
             throughput, psrMV,
-            surface.Roughness, surface.Normal,
-            surface.DiffuseAlbedo.xxx, surface.F0,
+            gbufferRoughness, gbufferNormal,
+            surface.DiffuseAlbedo.xxx * coatTint, hasCoat ? surface.CoatF0 : surface.F0,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
@@ -357,8 +363,8 @@ StablePlanesHitResult StablePlanesHandleHit(
 
     if (nonDeltaPart > 1e-5 || activeDeltaLobes == 0)
     {
-        float3 diffBSDFEstimate = max(surface.DiffuseAlbedo, 0.04);
-        float3 specBSDFEstimate = max(surface.F0, 0.04);
+        float3 diffBSDFEstimate = max(surface.DiffuseAlbedo, 0.04) * coatTint;
+        float3 specBSDFEstimate = max(hasCoat ? surface.CoatF0 : surface.F0, 0.04);
 
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
@@ -368,7 +374,7 @@ StablePlanesHitResult StablePlanesHandleHit(
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
             throughput, psrMV,
-            surface.Roughness, surface.Normal,
+            gbufferRoughness, gbufferNormal,
             diffBSDFEstimate, specBSDFEstimate,
             isDominant, waterFlags, waterCounters
         );
@@ -450,8 +456,8 @@ StablePlanesHitResult StablePlanesHandleHit(
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
             throughput, psrMV,
-            surface.Roughness, surface.Normal,
-            max(surface.DiffuseAlbedo, 0.04), max(surface.F0, 0.04),
+            gbufferRoughness, gbufferNormal,
+            max(surface.DiffuseAlbedo, 0.04) * coatTint, max(hasCoat ? surface.CoatF0 : surface.F0, 0.04),
             storeAsDominant, waterFlags, waterCounters
         );
         if (storeAsDominant)

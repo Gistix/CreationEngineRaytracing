@@ -234,13 +234,15 @@ namespace Wetness
 
     float4 GetWaterData(float3 worldPosition, float3 cameraPosition, float4 waterDataGrid[25])
     {
-        float2 cellF = ((worldPosition.xy + cameraPosition.xy) / 4096.0) + 64.0;
+        // Compute fractional position within the absolute cell
+        float2 cellF = (worldPosition.xy / 4096.0) + 64.0;
         int2 cellInt;
         float2 cellFrac;
         cellFrac = frac(cellF);
         cellInt = int2(floor(cellF));
 
-        cellF = worldPosition.xy / float2(4096.0, 4096.0);
+        // Compute grid tile from camera-relative offset
+        cellF = (worldPosition.xy - cameraPosition.xy) / float2(4096.0, 4096.0);
         cellF += 2.5;
         cellF -= cellFrac;
         cellInt = int2(round(cellF));
@@ -286,7 +288,7 @@ namespace Wetness
             return params;
 
         float4 waterData = GetWaterData(worldPosition, cameraPosition, waterDataGrid);
-        float waterHeight = waterData.w;
+        float waterHeight = waterData.w + cameraPosition.z;  // Convert from camera-relative to absolute
 
         // Shore wetness
         float wetnessDistToWater = abs(worldPosition.z - waterHeight);
@@ -302,8 +304,7 @@ namespace Wetness
         float4 raindropInfo = float4(0, 0, 1, 0);
         if (isPrimary && (vertexNormal.z > 0.0) && (settings.Raining > 0.0) && settings.EnableRaindropFx)
         {
-            float3 ripplePosition = worldPosition.xyz + cameraPosition.xyz;
-            raindropInfo = GetRainDrops(ripplePosition, settings.Time, vertexNormal, flatnessAmount, settings);
+            raindropInfo = GetRainDrops(worldPosition.xyz, settings.Time, vertexNormal, flatnessAmount, settings);
         }
 
         float rainWetness = settings.Wetness * minWetnessAngle * settings.MaxRainWetness;
@@ -316,14 +317,15 @@ namespace Wetness
         float wetness = max(shoreWetness, rainWetness);
 
         // Puddle effects (basic calculation, applies on all bounces)
-        float puddleWetness = settings.PuddleWetness * minWetnessAngle;
+        // Scale by Wetness so puddles go to 0 when weather clears
+        float puddleWetness = settings.PuddleWetness * settings.Wetness * minWetnessAngle;
         float puddle = wetness;
 
         if (!isSkinned)
         {
             if (wetness > 0.0 || puddleWetness > 0.0)
             {
-                float3 puddleCoords = ((worldPosition.xyz + cameraPosition.xyz) * 0.5 + 0.5) * 0.01 / max(settings.PuddleRadius, 0.001);
+                float3 puddleCoords = (worldPosition.xyz * 0.5 + 0.5) * 0.01 / max(settings.PuddleRadius, 0.001);
                 puddle = PerlinNoise(puddleCoords) * 0.5 + 0.5;
                 puddle = puddle * ((minWetnessAngle / max(settings.PuddleMaxAngle, 0.001)) * settings.MaxPuddleWetness * 0.25) + 0.5;
                 puddle *= lerp(wetness, puddleWetness, saturate(puddle - 0.25));

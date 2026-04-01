@@ -248,10 +248,24 @@ void Main()
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
     
  #if !(defined(SHARC) && SHARC_UPDATE)
-    DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;   
-    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-    SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
-    NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);   
+    // Coat-priority GBuffer: when coat is present, use coat normal/roughness for denoiser;
+    // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
+    if (sourceSurface.CoatStrength > 0)
+    {
+        float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
+        DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+        float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
+        const float2 coatEnvBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * coatEnvBRDF.x + coatEnvBRDF.y);
+        NormalRoughness[idx] = float4(sourceSurface.CoatNormal, sourceSurface.CoatRoughness);
+    }
+    else
+    {
+        DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+        const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
+        NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
+    }
     
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
@@ -534,6 +548,8 @@ void Main()
 
     // Update GBuffer with the stable plane's base surface data (used by DLSS-RR).
     // Diffuse/normal follow the dominant plane, but specular albedo stays on the first plane.
+    // Coat-priority: when coat is present, dominant plane already stores coat-aware data from BUILD;
+    // for plane 0, coat properties are applied directly.
     uint dominantPlane = spCtx.LoadDominantIndex(idx);
     if (dominantPlane != 0)
     {
@@ -547,10 +563,26 @@ void Main()
     }
     else
     {
-        DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
-        NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
+        if (sourceSurface.CoatStrength > 0)
+        {
+            float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
+            DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+            NormalRoughness[idx] = float4(sourceSurface.CoatNormal, sourceSurface.CoatRoughness);
+        }
+        else
+        {
+            DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+            NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
+        }
     }
 
+    if (sourceSurface.CoatStrength > 0)
+    {
+        float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
+        const float2 coatEnvBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * coatEnvBRDF.x + coatEnvBRDF.y);
+    }
+    else
     {
         const float2 envBRDF2 = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
