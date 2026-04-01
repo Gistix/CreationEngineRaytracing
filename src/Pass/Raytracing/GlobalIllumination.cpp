@@ -63,11 +63,10 @@ namespace Pass::Raytracing
 		auto* scene = Scene::GetSingleton();
 		auto& settings = scene->m_Settings;
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1));
-
-		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2));
+		}
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
@@ -186,31 +185,14 @@ namespace Pass::Raytracing
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
-		nvrhi::ITexture* diffuseTexture = renderer->GetMainTexture();
-		nvrhi::ITexture* specularTexture = nullptr;
-		nvrhi::ITexture* specularHitDistTexture = nullptr;
+		nvrhi::ITexture* diffuseTexture = nullptr;
 
 		auto& textureManager = renderer->GetTextureManager();
 
-		switch (settings.GeneralSettings.Denoiser)
-		{
-		case Denoiser::NRD_REBLUR:
-		{
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR)
 			diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
-			specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
-			break;
-		}
-		case Denoiser::DLSS_RR:
-		{
-			auto* rrInput = renderer->GetRRInput();
-
-			specularTexture = rrInput->specularAlbedo;
-			specularHitDistTexture = rrInput->specularHitDistance;
-			break;
-		}
-		default:
-			break;
-		}
+		else
+			diffuseTexture = renderer->GetMainTexture();
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -234,11 +216,17 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, specularTexture));
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(TextureManager::Texture::SpecularRadiance)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(TextureManager::Texture::ViewDepth)));
+		}
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, specularHitDistTexture));
+		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
+			auto* rrInput = renderer->GetRRInput();
+
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, rrInput->specularAlbedo));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularHitDistance));
+		}
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 

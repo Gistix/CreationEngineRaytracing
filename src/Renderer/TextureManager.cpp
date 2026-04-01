@@ -21,6 +21,9 @@ nvrhi::ITexture* TextureManager::GetTexture(Texture texture) {
 
 		switch (texture)
 		{
+		case TextureManager::Texture::ViewDepth:
+			desc.format = nvrhi::Format::R32_FLOAT;
+			break;
 		case TextureManager::Texture::DiffuseRadiance:
 			break;
 		case TextureManager::Texture::SpecularRadiance:
