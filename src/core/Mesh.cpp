@@ -360,6 +360,18 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 				if (auto shaderMaterial = lightingShaderProp->material) {
 					feature = shaderMaterial->GetFeature();
 
+					// Some eye meshes use EnvironmentMap shader instead of Eye shader;
+					// detect them by geometry name and override the feature
+					if (feature == Feature::kEnvironmentMap) {
+						eastl::string nameLower(m_Name);
+						for (auto& c : nameLower)
+							c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+						if (nameLower.find("eye") != eastl::string::npos) {
+							feature = Feature::kEye;
+							logger::debug("[RT] BuildMaterial - Overriding EnvironmentMap to Eye for mesh: {}", m_Name.c_str());
+						}
+					}
+
 					for (size_t i = 0; i < 2; i++) {
 						texCoordOffsetScales[i] = {
 							shaderMaterial->texCoordOffset[i].x, shaderMaterial->texCoordOffset[i].y,
@@ -604,7 +616,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 	}
 
 	// Fallback to alpha test if possible
-	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye || feature == Feature::kEnvironmentMap;
+	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
 	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
 		alphaFlags &= ~Material::AlphaFlags::Blend;
 
