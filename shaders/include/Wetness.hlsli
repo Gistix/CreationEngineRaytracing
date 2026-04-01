@@ -135,6 +135,15 @@ namespace Wetness
         return val * val;
     }
 
+	// for when s = (0,0,1)
+	float3 ReorientNormal(float3 n1, float3 n2)
+	{
+		n1 += float3(0, 0, 1);
+		n2 *= float3(-1, -1, 1);
+
+		return n1 * dot(n1, n2) / n1.z - n2;
+	}    
+    
     // xyz - ripple normal, w - splash wetness
     float4 GetRainDrops(float3 worldPos, float t, float3 normal, float rippleStrengthModifier, WetnessEffectsSettings settings)
     {
