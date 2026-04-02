@@ -106,7 +106,11 @@ float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, fl
 {
     RayDesc ray;
     bool hasTransmission = any(surface.TransmissionColor > 0.0f) && dot(surface.FaceNormal, direction) < 0.0f;
+#if USE_SIA_INTERPOLATION
+    ray.Origin = OffsetRaySIA(surface.Position, surface.FaceNormal, surface.SIAOffset, hasTransmission);
+#else
     ray.Origin = OffsetRay(surface.Position, surface.FaceNormal, surface.PositionError, hasTransmission);
+#endif
     ray.Direction = direction;
     ray.TMin = 0.0f;
     ray.TMax = SHADOW_RAY_TMAX;
@@ -155,7 +159,11 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
 {
     RayDesc ray;
     bool hasTransmission = any(surface.TransmissionColor > 0.0f) && dot(surface.FaceNormal, direction) < 0.0f;
+#if USE_SIA_INTERPOLATION
+    ray.Origin = OffsetRaySIA(surface.Position, surface.FaceNormal, surface.SIAOffset, hasTransmission);
+#else
     ray.Origin = OffsetRay(surface.Position, surface.FaceNormal, surface.PositionError, hasTransmission);
+#endif
     ray.Direction = direction;
     ray.TMin = 0.0f;
     ray.TMax = tmax;

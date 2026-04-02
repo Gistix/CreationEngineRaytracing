@@ -315,7 +315,11 @@ void Main()
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
             
+#if USE_SIA_INTERPOLATION
+            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+#else
             ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+#endif
             ray.Direction = direction;
             ray.TMin = 0.0f;  // OffsetRay already handles precision, no additional offset needed
             ray.TMax = RAY_TMAX;

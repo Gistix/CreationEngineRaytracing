@@ -3,6 +3,7 @@
 
 #include "include/Common.hlsli"
 #include "include/PBR.hlsli"
+#include "raytracing/include/AdvancedSettings.hlsli"
 
 struct Subsurface
 {
@@ -65,6 +66,9 @@ struct Surface
 
     float MipLevel;
     float PositionError;
+#if USE_SIA_INTERPOLATION
+    float SIAOffset; // NVIDIA SIA safe spawn offset distance
+#endif
 
     float3 Mul(float3 tangentSample)
     {
