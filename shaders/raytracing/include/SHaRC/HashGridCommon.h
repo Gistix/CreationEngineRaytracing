@@ -160,6 +160,7 @@ struct HashMapData
 #endif  // !HASH_GRID_ENABLE_64_BIT_ATOMICS
 };
 
+#if SHARC_UPDATE || SHARC_RESOLVE
 void HashMapAtomicCompareExchange(in HashMapData hashMapData, in uint dstOffset, in uint64_t compareValue, in uint64_t value, out uint64_t originalValue)
 {
 #if HASH_GRID_ENABLE_64_BIT_ATOMICS
@@ -219,6 +220,7 @@ HashGridIndex HashMapInsertEntry(in HashMapData hashMapData, float3 samplePositi
 
 	return cacheIndex;
 }
+#endif // SHARC_UPDATE || SHARC_RESOLVE
 
 bool HashMapFind(in HashMapData hashMapData, const HashGridKey hashKey, inout HashGridIndex cacheIndex, out uint bucketOffset)
 {
