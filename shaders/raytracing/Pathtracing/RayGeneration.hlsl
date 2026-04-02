@@ -186,7 +186,11 @@ void Main()
         primaryEffectEmissive += sourceSurface.Emissive;
 
         float3 fn = dot(sourceDirection, sourceSurface.FaceNormal) <= 0.0f ? sourceSurface.FaceNormal : -sourceSurface.FaceNormal;
+#if USE_SIA_INTERPOLATION
+        sourceRay.Origin = OffsetRaySIA(sourceSurface.Position, fn, sourceSurface.SIAOffset, true);
+#else
         sourceRay.Origin = OffsetRay(sourceSurface.Position, fn, sourceSurface.PositionError, true);
+#endif
         sourceRay.Direction = sourceDirection;
         sourceRay.TMin = 0.0f;
         sourceRay.TMax = RAY_TMAX;
@@ -825,9 +829,13 @@ void Main()
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
             
+#if USE_SIA_INTERPOLATION
+            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+#else
             ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+#endif
             ray.Direction = direction;
-            ray.TMin = 0.0f;  // OffsetRay already handles precision, no additional offset needed
+            ray.TMin = 0.0f;  // Offset already handles precision, no additional offset needed
             ray.TMax = RAY_TMAX;
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
@@ -896,7 +904,11 @@ void Main()
                 sampleRadiance += surface.Emissive * throughput;
 #endif
                 float3 fn = dot(direction, surface.FaceNormal) <= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+#if USE_SIA_INTERPOLATION
+                ray.Origin = OffsetRaySIA(surface.Position, fn, surface.SIAOffset, true);
+#else
                 ray.Origin = OffsetRay(surface.Position, fn, surface.PositionError, true);
+#endif
                 ray.Direction = direction;
                 ray.TMin = 0.0f;
                 ray.TMax = RAY_TMAX;

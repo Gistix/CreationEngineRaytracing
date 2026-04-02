@@ -49,7 +49,11 @@ float3 evalSingleScatteringTransmission(
         float3 backPosition;
         {
             RayDesc transmissionRay;
+#if USE_SIA_INTERPOLATION
+            transmissionRay.Origin = OffsetRaySIA(hitPos, sourceSurface.FaceNormal, sourceSurface.SIAOffset, true);
+#else
             transmissionRay.Origin = OffsetRay(hitPos, -sourceSurface.FaceNormal);
+#endif
             transmissionRay.Direction = refractedRayDirection;
             transmissionRay.TMin = 0.0f;
             transmissionRay.TMax = RAY_TMAX;
@@ -69,7 +73,11 @@ float3 evalSingleScatteringTransmission(
 
                 const float3 sampleGeometryNormal = sampleSurface.FaceNormal;
                 const float3 sampleShadingNormal = sampleSurface.Normal;
+#if USE_SIA_INTERPOLATION
+                backPosition = OffsetRaySIA(backPosition, sampleGeometryNormal, sampleSurface.SIAOffset, false);
+#else
                 backPosition = OffsetRay(backPosition, sampleGeometryNormal, sampleSurface.PositionError, false);
+#endif
 
                 // Prepare data needed to evaluate the light
                 float3 incidentVector = 0.0f;
@@ -139,7 +147,11 @@ float3 evalSingleScatteringTransmission(
                 const float3 scatteringSampleGeometryNormal = scatterSurface.FaceNormal;
 
                 float3 scatteringBoundaryPosition = samplePosition + scatteringPayload.hitDistance * scatteringDirection;
+#if USE_SIA_INTERPOLATION
+                scatteringBoundaryPosition = OffsetRaySIA(scatteringBoundaryPosition, scatteringSampleGeometryNormal, scatterSurface.SIAOffset, false);
+#else
                 scatteringBoundaryPosition = OffsetRay(scatteringBoundaryPosition, scatteringSampleGeometryNormal, scatterSurface.PositionError, false);
+#endif
 
                 // Prepare data needed to evaluate the light
                 float3 incidentVector = 0.0f;
@@ -274,7 +286,12 @@ float3 EvaluateSubsurfaceDiffuseNEE(
                 const bool transition = dot(vectorToLight, sampleGeometryNormal) < 0.0f;
                 const float3 samplePosition = subsurfaceSample.samplePosition - subsurfaceInteraction.normal * samplePayload.hitDistance;
 
-                float3 sampleShadowHitPos = OffsetRay(samplePosition, sampleGeometryNormal, sampleSurface.PositionError, transition);
+                float3 sampleShadowHitPos;
+#if USE_SIA_INTERPOLATION
+                sampleShadowHitPos = OffsetRaySIA(samplePosition, sampleGeometryNormal, sampleSurface.SIAOffset, transition);
+#else
+                sampleShadowHitPos = OffsetRay(samplePosition, sampleGeometryNormal, sampleSurface.PositionError, transition);
+#endif
 
                 // Prepare data needed to evaluate the sample light
                 float3 sampleIncidentVector = float3(0.0f, 0.0f, 0.0f);

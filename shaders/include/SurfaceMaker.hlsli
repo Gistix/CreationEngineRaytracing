@@ -54,6 +54,44 @@ struct SurfaceMaker
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
+        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+
+#if USE_SIA_INTERPOLATION
+        // NVIDIA Self-Intersection Avoidance: precise interpolation + tight error bound.
+        // Compose the full object-to-world transform: o2w = instance.Transform * mesh.Transform
+        // We build a combined float3x4 for the SIA function.
+        {
+            // Compose mesh-local to world: o2w = Instance.Transform * Mesh.Transform
+            // Both are row-major float3x4 (3 rows, 4 cols: rotation|translation).
+            float3x4 o2w;
+            float3x3 rot = objectToWorld3x3;
+            float3 meshTranslation = float3(mesh.Transform._m03, mesh.Transform._m13, mesh.Transform._m23);
+            float3 instanceTranslation = float3(instance.Transform._m03, instance.Transform._m13, instance.Transform._m23);
+            float3 translation = mul((float3x3) instance.Transform, meshTranslation) + instanceTranslation;
+            o2w._m00 = rot._m00; o2w._m01 = rot._m01; o2w._m02 = rot._m02; o2w._m03 = translation.x;
+            o2w._m10 = rot._m10; o2w._m11 = rot._m11; o2w._m12 = rot._m12; o2w._m13 = translation.y;
+            o2w._m20 = rot._m20; o2w._m21 = rot._m21; o2w._m22 = rot._m22; o2w._m23 = translation.z;
+
+            float3 siaWldPosition;
+            float3 siaWldFaceNormal;
+            float  siaWldOffset;
+
+            SIA_SafeSpawnPointSimple(
+                siaWldPosition,
+                siaWldFaceNormal,
+                siaWldOffset,
+                v0.Position, v1.Position, v2.Position,
+                payload.Barycentrics(),
+                o2w);
+
+            // Override position with SIA precise interpolation result
+            surface.Position = siaWldPosition;
+            surface.PrevPosition = siaWldPosition; // Will be overridden by HAS_PREV_POSITIONS if available
+            surface.FaceNormal = siaWldFaceNormal;
+            surface.PositionError = 0.0f; // Not used in SIA path
+            surface.SIAOffset = siaWldOffset;
+        }
+#else
         // Accumulate position error through transform chain for accurate ray offsetting.
         {
             float baryInterpError = max(
@@ -63,8 +101,7 @@ struct SurfaceMaker
             float worldError = CalculatePositionError(position);
             surface.PositionError = max(baryInterpError, worldError);
         }
-
-        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+#endif // USE_SIA_INTERPOLATION
 
         // Compute previous world position for motion vectors
 #if defined(HAS_PREV_POSITIONS)
@@ -107,7 +144,10 @@ struct SurfaceMaker
         
         float4 vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
 
+#if !USE_SIA_INTERPOLATION
+        // Standard path: compute face normal from object-space cross product
         surface.FaceNormal = mul(objectToWorld3x3, objectSpaceFlatNormal);
+#endif
 
         surface.MipLevel = rayCone.computeLOD(coneTexLODValue, rayDir, normalWS, true) + Raytracing.TexLODBias;
         Texture2D baseTextureForLod = Textures[NonUniformResourceIndex(material.BaseTexture())];
@@ -190,6 +230,9 @@ struct SurfaceMaker
 
         surface.MipLevel = 0;
         surface.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
+#if USE_SIA_INTERPOLATION
+        surface.SIAOffset = 0.0f; // No SIA data available in raster path
+#endif
 
         surface.GeomNormal = normalWS;
         surface.GeomTangent = tangentWS;
@@ -254,6 +297,9 @@ struct SurfaceMaker
 
         surface.MipLevel = 0.0f + Raytracing.TexLODBias;
         surface.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
+#if USE_SIA_INTERPOLATION
+        surface.SIAOffset = 0.0f; // No SIA data available in hybrid path
+#endif
         surface.GeomNormal = geomNormal;
         surface.GeomTangent = tangent; // not needed for hybrid
 
