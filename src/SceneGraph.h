@@ -88,6 +88,7 @@ class SceneGraph
 
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
+	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
 	void CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path);
 
@@ -118,13 +119,17 @@ public:
 	void ClearDirtyStates();
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
-	void CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root);
+	void CreateActorModel(RE::Actor* actor, RE::BipedAnim* bipedAnim, const char* name, RE::NiAVObject* root);
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 
+	void ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool equip);
+
+	void RemoveActorObject(RE::Actor* actor, RE::NiAVObject* object);
+
 	void EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance);
 	void ReleaseTexture(ID3D11Texture2D* texture);
-	void RemoveInstance(RE::NiAVObject* node);
+	void RemoveInstance(RE::NiAVObject* object);
 	void RemoveInstance(RE::TESForm* form, bool releaseModel);
 
 	void SetInstanceDetached(RE::TESForm* form, bool detached);

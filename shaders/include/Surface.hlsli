@@ -63,6 +63,7 @@ struct Surface
 #endif
 
     float MipLevel;
+    float PositionError;
 
     float3 Mul(float3 tangentSample)
     {

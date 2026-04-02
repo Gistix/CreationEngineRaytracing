@@ -17,3 +17,6 @@
 [submodule "extern/NRD"]
 	path = extern/NRD
 	url = https://github.com/NVIDIA-RTX/NRD.git
+[submodule "extern/RTXDI-Library"]
+	path = extern/RTXDI-Library
+	url = https://github.com/NVIDIA-RTX/RTXDI-Library.git

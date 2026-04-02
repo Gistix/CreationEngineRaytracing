@@ -4,6 +4,7 @@ struct TextureManager
 {
 	enum class Texture
 	{
+		ViewDepth,
 		DiffuseRadiance,
 		SpecularRadiance,
 		Total

@@ -75,6 +75,9 @@ include(NVRHI)
 
 include(NRD)
 
+# RTXDI library (ReSTIR DI / GI / PT)
+include(RTXDI)
+
 target_compile_definitions(
     ${PROJECT_NAME}
     PRIVATE 

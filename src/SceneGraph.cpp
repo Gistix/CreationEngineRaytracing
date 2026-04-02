@@ -235,7 +235,45 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 			if (lightingSettings.LodDimmer)
 				lightData.Fade *= bsLight->lodDimmer;
 
-			lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
+			// Determine light type: Spot, Point, or Directional
+			// NiSpotLight extends NiPointLight; both have BSLight::pointLight = true.
+			// We distinguish spots via NiRTTI name check.
+			bool isSpot = false;
+			if (bsLight->pointLight) {
+				auto* rtti = niLight->GetRTTI();
+				if (rtti && rtti->name && std::strcmp(rtti->name, "NiSpotLight") == 0)
+					isSpot = true;
+			}
+
+			if (isSpot) {
+				lightData.Type = LightType::Spot;
+
+				// Spot direction from world rotation matrix, first column = model direction (1,0,0) transformed
+				auto& rot = niLight->world.rotate;
+				float3 dir(rot.entry[0][0], rot.entry[1][0], rot.entry[2][0]);
+				dir = Util::Math::Normalize(dir);
+				lightData.Direction = dir;
+
+				// NiSpotLight stores outerSpotAngle (half-angle in degrees) right after NiPointLight data
+				// NiPointLight size: 0x150 (SSE). NiSpotLight adds: outerSpotAngle at 0x14C, innerSpotAngle at 0x150
+				// These are accessible as POINT_LIGHT_RUNTIME_DATA is at 0x140, 3 floats (12 bytes) = ends at 0x14C
+				// Then: spotOuterAngle at 0x14C, spotInnerAngle at 0x150, spotExponent at 0x154
+				auto* pointLightData = reinterpret_cast<const float*>(&static_cast<RE::NiPointLight*>(niLight)->GetPointLightRuntimeData());
+				float outerAngleDeg = pointLightData[3]; // After constAtten, linearAtten, quadAtten
+				float innerAngleDeg = pointLightData[4];
+
+				// Clamp to valid range
+				outerAngleDeg = std::clamp(outerAngleDeg, 1.0f, 89.0f);
+				innerAngleDeg = std::clamp(innerAngleDeg, 0.0f, outerAngleDeg);
+
+				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(outerAngleDeg * (3.14159265f / 180.0f)));
+				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(innerAngleDeg * (3.14159265f / 180.0f)));
+			} else {
+				lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
+				lightData.Direction = float3(0.0f, 0.0f, 0.0f);
+				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
+				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
+			}
 
 			lightData.Flags = 0;
 
@@ -382,8 +420,36 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 	CreateModelInternal(form, model, root);
 }
 
-void SceneGraph::CreateActorModel(RE::Actor* actor, const char* name, RE::NiAVObject* root)
+void SceneGraph::CreateActorModel(RE::Actor* actor, RE::BipedAnim* bipedAnim, const char* name, RE::NiAVObject* root)
 {
+	logger::trace("SceneGraph::CreateActorModel - {}", actor->GetName());
+
+	if (bipedAnim) {
+		for (const auto& object : bipedAnim->objects)
+		{
+			logger::trace("\tBiped Object - Item: {}, Addon: {}, Part: {}, PartClone: {}",
+				object.item ? object.item->GetName() : "N/A",
+				object.addon ? object.addon->GetName() : "N/A",
+				object.part ? object.part->GetModel() : "N/A",
+				object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A");
+		}
+	}
+
+	auto* actorProcess = actor->GetActorRuntimeData().currentProcess;
+
+	if (actorProcess) {
+		for (const auto& equippedForm : actorProcess->equippedForms)
+		{
+			if (!equippedForm.object)
+				continue;
+
+			logger::trace("\tEquipped Form - {}: {}, Flags: {}",
+				magic_enum::enum_name(equippedForm.object->GetFormType()), 
+				equippedForm.object->GetName(), 
+				Util::GetFlagsString<RE::BGSEquipSlot::Flag>(equippedForm.slot->flags.underlying()));
+		}
+	}
+
 	Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
 		const bool isRoot = (fadeNode == root);
 
@@ -438,6 +504,65 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	logger::debug("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
 
 	CreateModelInternal(water, path.c_str(), object);
+}
+
+void SceneGraph::ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool equip)
+{
+	if (equip)
+		return;
+
+	logger::debug("SceneGraph::ActorEquipEvent - Actor: {}, Object: {}, Type: {}, Equip: {}", a_actor->GetName(), a_object->GetName(), magic_enum::enum_name(a_object->GetFormType()), equip);
+
+	// TODO: Handle third/first person for player actor
+	auto* bipedAnim = a_actor->GetBiped(false).get();
+
+	// We can't find the NiNode without biped anim
+	if (!bipedAnim)
+		return;
+
+	for (const auto& object : bipedAnim->objects)
+	{
+		if (object.item != a_object)
+			continue;
+
+		logger::debug("\tUnequipping - {}, Type: {}",
+			object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A",
+			magic_enum::enum_name(object.item->GetFormType()));
+
+		switch (object.item->GetFormType())
+		{
+		case RE::FormType::Armor:
+			// Armors are part of the actor model, we need to remove the mesh from the instance model
+			RemoveActorObject(a_actor, object.partClone.get());
+			break;
+		case RE::FormType::Weapon:
+			// Weapons are separate models parented to a actor node, we can remove the entire instance
+			RemoveInstance(object.partClone.get());
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void SceneGraph::RemoveActorObject(RE::Actor* actor, RE::NiAVObject* object)
+{
+	auto it = m_InstancesFormIDs.find(actor->GetFormID());
+
+	if (it == m_InstancesFormIDs.end())
+		return;
+
+	eastl::vector<RE::BSGeometry*> geometries;
+
+	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* geometry)->RE::BSVisit::BSVisitControl {
+		geometries.push_back(geometry);
+		return RE::BSVisit::BSVisitControl::kContinue;
+	});
+
+	for (const auto& instance : it->second) {
+		for (auto* geometry : geometries)
+			instance->model->RemoveGeometry(geometry);
+	}
 }
 
 void SceneGraph::EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance)
@@ -710,42 +835,8 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetMSNormalMapDescriptor([[maybe
 	return normalMap->textureRef->descriptorHandle;
 }
 
-void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
+eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* form, RE::NiAVObject* object)
 {
-	if (!pRoot)
-		return;
-
-	if (!path || strlen(path) == 0)
-		return;
-
-	if (m_InstanceNodes.find(pRoot) != m_InstanceNodes.end()) {
-		logger::warn("[RT] CreateModel \"{}\" - Instance/Model for 0x{:08X} already present.", path, reinterpret_cast<uintptr_t>(pRoot));
-		return;
-	}
-	
-	auto formID = form->GetFormID();
-
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
-
-	// We only need one buffer per model
-	if (m_Models.find(path) != m_Models.end()) {
-		AddInstance(formID, pRoot, path);
-		return;
-	}
-
-	logger::trace("[RT] CreateModel \"{}\"", typeid(*pRoot).name());
-
-	const auto* bsxFlags = pRoot->GetExtraData<RE::BSXFlags>("BSX");
-
-	if (bsxFlags) {
-		if (static_cast<int32_t>(bsxFlags->value) & static_cast<int32_t>(RE::BSXFlags::Flag::kEditorMarker))
-			return;
-
-		logger::debug("[RT] CreateModel - BSX Flags [0x{:x}]: {}", bsxFlags->value, Util::GetFlagsString<RE::BSXFlags::Flag>(bsxFlags->value));
-	}
-
-	logger::debug("[RT] CreateModel - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
-
 	auto formType = form->GetFormType();
 	auto baseFormType = formType;
 
@@ -754,22 +845,22 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			baseFormType = baseObject->GetFormType();
 	}
 
-	auto rootWorldInverse = pRoot->world.Invert();
+	auto rootWorldInverse = object->world.Invert();
 
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
 	// Will traverse and skip non-root fade nodes (and their children)
-	auto* validFadeNode = (formType == RE::FormType::ActorCharacter ? reinterpret_cast<RE::BSFadeNode*>(pRoot) : nullptr);
+	auto* validFadeNode = (formType == RE::FormType::ActorCharacter ? reinterpret_cast<RE::BSFadeNode*>(object) : nullptr);
 
-	Util::Traversal::ScenegraphRTGeometries(pRoot, validFadeNode, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
+	Util::Traversal::ScenegraphRTGeometries(object, validFadeNode, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
 		const char* name = pGeometry->name.c_str();
 
-		logger::trace("\t\t[RT] CreateModel::TraverseScenegraphGeometries - {}", name);
+		logger::trace("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - {}", name);
 
 		const auto& geometryType = pGeometry->GetType();
 
 		if (geometryType.none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape)) {
-			logger::warn("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Unsupported Geometry: {} for {}", magic_enum::enum_name(geometryType.get()), name);
+			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported Geometry: {} for {}", magic_enum::enum_name(geometryType.get()), name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
 
@@ -778,7 +869,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		auto* effect = geometryRuntimeData.properties[RE::BSGeometry::States::kEffect].get();
 
 		if (!effect) {
-			logger::debug("\t\t[RT] CreateModel::TraverseScenegraphGeometries - No Effect");
+			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - No Effect");
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
 
@@ -788,7 +879,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 		// Only lighting and effect shader for now
 		if (!isLightingShader && !isEffectShader && !isWaterShader) {
-			logger::warn("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Unsupported shader type: {}", effect->GetRTTI()->name);
+			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", effect->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
 
@@ -798,7 +889,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 		auto& geomFlags = pGeometry->GetFlags();
 
 		if (geomFlags.any(RE::NiAVObject::Flag::kHidden) && !skinned) {
-			logger::debug("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Is Hidden");
+			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Is Hidden");
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
 
@@ -825,12 +916,12 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			const auto& triShapeRuntime = pTriShape->GetTrishapeRuntimeData();
 
 			if (triShapeRuntime.vertexCount == 0) {
-				logger::error("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Vertex count of 0 for {}: {}", path ? path : "N/A", name ? name : "N/A");
+				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Vertex count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
 
 			if (triShapeRuntime.triangleCount == 0) {
-				logger::error("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Triangle count of 0 for {}: {}", path ? path : "N/A", name ? name : "N/A");
+				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
 
@@ -845,18 +936,18 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			auto& skinPartition = skinInstance->skinPartition;
 
 			if (!skinPartition) {
-				logger::warn("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Invalid SkinPartition");
+				logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Invalid SkinPartition");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
 
 			if (skinPartition->vertexCount == 0) {
-				logger::error("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Vertex count of 0 for {}: {}", path ? path : "N/A", name ? name : "N/A");
+				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Vertex count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
 
 			const auto skinNumPartitions = skinPartition->numPartitions;
 
-			logger::debug("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Partitions: {}, VertexCount: {}, Unk24: [0x{:X}]", skinNumPartitions, skinPartition->vertexCount, skinPartition->unk24);
+			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Partitions: {}, VertexCount: {}, Unk24: [0x{:X}]", skinNumPartitions, skinPartition->vertexCount, skinPartition->unk24);
 
 			// This looks diabolical
 			static REL::Relocation<const RE::NiRTTI*> dismemberRTTI{ RE::BSDismemberSkinInstance::Ni_RTTI };
@@ -876,7 +967,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				const auto dismemberNumPartitions = static_cast<uint32_t>(dismemberRuntime.numPartitions);
 
 				if (skinNumPartitions != dismemberNumPartitions)
-					logger::error("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Skin and Dismember partition count mismatch");
+					logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Skin and Dismember partition count mismatch");
 
 				std::memcpy(dismemberData.data(), dismemberRuntime.partitions, dismemberNumPartitions * sizeof(RE::BSDismemberSkinInstance::Data));
 
@@ -889,7 +980,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 				// Fix for modded geometry
 				if (partition.triangles == 0) {
-					logger::error("\t\t[RT] CreateModel::TraverseScenegraphGeometries - Triangle count of 0 for {}: {}", path ? path : "N/A", name ? name : "N/A");
+					logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
 					continue;
 				}
 
@@ -900,9 +991,9 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, dismemberPartition.editorVisible, dismemberPartition.slot, dismemberSkinInstance);
 
 				// Diabolical Part II
-				if (emplacedDismemberRef)				
+				if (emplacedDismemberRef)
 					it->second[i] = mesh.get();
-	
+
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, form);
 
@@ -912,6 +1003,47 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 		return RE::BSVisit::BSVisitControl::kContinue;
 	});
+
+	return meshes;
+}
+
+void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
+{
+	if (!pRoot)
+		return;
+
+	if (!path || strlen(path) == 0)
+		return;
+
+	if (m_InstanceNodes.find(pRoot) != m_InstanceNodes.end()) {
+		logger::warn("SceneGraph::CreateModelInternal \"{}\" - Instance/Model for 0x{:08X} already present.", path, reinterpret_cast<uintptr_t>(pRoot));
+		return;
+	}
+	
+	auto formID = form->GetFormID();
+
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	// We only need one buffer per model
+	if (m_Models.find(path) != m_Models.end()) {
+		AddInstance(formID, pRoot, path);
+		return;
+	}
+
+	logger::trace("SceneGraph::CreateModelInternal \"{}\"", typeid(*pRoot).name());
+
+	const auto* bsxFlags = pRoot->GetExtraData<RE::BSXFlags>("BSX");
+
+	if (bsxFlags) {
+		if (static_cast<int32_t>(bsxFlags->value) & static_cast<int32_t>(RE::BSXFlags::Flag::kEditorMarker))
+			return;
+
+		logger::debug("SceneGraph::CreateModelInternal - BSX Flags [0x{:x}]: {}", bsxFlags->value, Util::GetFlagsString<RE::BSXFlags::Flag>(bsxFlags->value));
+	}
+
+	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
+
+	auto meshes = CreateMeshes(form, pRoot);
 
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
 		auto model = eastl::make_unique<Model>(path, pRoot, form, meshes);
@@ -968,14 +1100,14 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			AddInstance(formID, pRoot, modelName);
 
-			logger::debug("[RT] CreateModel - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
+			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 		}
 		else {
-			logger::warn("[RT] CreateModel - Emplace failed for {} TriShapes", shapeCount);
+			logger::warn("SceneGraph::CreateModelInternal - Emplace failed for {} TriShapes", shapeCount);
 		}
 	}
 	else {
-		logger::debug("[RT] CreateModel - No TriShapes to commit");
+		logger::debug("SceneGraph::CreateModelInternal - No TriShapes to commit");
 	}
 }
 

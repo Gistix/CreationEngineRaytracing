@@ -7,6 +7,7 @@ namespace LightType
 {
 	static const uint16_t Directional = 0;
 	static const uint16_t Point = 1;
+	static const uint16_t Spot = 2;
 }
 
 namespace LightFlags
@@ -21,6 +22,9 @@ INTEROP_DATA_STRUCT(Light, 16)
 	float Radius;
 	float3 Color;
 	float InvRadius;
+	float3 Direction;
+	uint16_t CosOuterAngleHalf;
+	uint16_t CosInnerAngleHalf;
 	float FadeZone;
 	float SizeBias;
 	float Fade;

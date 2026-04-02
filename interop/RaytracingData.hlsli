@@ -30,7 +30,8 @@ INTEROP_STRUCT(RaytracingData, 16)
     float Sky;
     float Directional;
     float WaterAbsorptionScale;
-    uint2 Pad;
+    uint EnableReSTIRGI;
+    uint Pad;
     float Point; 
     INTEROP_DATA_TYPE(Light) DirectionalLight;
     SubSurfaceScattering SubSurfaceScattering;

@@ -68,6 +68,21 @@ float3 ViewToWorldVector(const float3 vec, const float4x4 invView)
 	return mul((float3x3)invView, vec);
 }
 
+half2 EncodeNormal(half3 n)
+{
+	n = -n;
+	half2 p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));
+	if (n.z < 0.0)
+	{
+		#if !defined(DX11)
+		p = (1.0 - abs(p.yx)) * select(p >= 0.0, half2(1.0, 1.0), half2(-1.0, -1.0));
+		#else
+		p = (1.0 - abs(p.yx)) * (p >= 0.0 ? half2(1.0, 1.0) : half2(-1.0, -1.0));
+		#endif
+	}
+	return p * 0.5 + 0.5;
+}
+
 half3 DecodeNormal(half2 f)
 {
 	f = f * 2.0 - 1.0;
