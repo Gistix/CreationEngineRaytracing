@@ -555,7 +555,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             1.0,              // full ripple strength on water
             Features.WetnessEffects);
         float3 rippleNormal = normalize(raindropInfo.xyz);
-        surface.Normal = Wetness::ReorientNormal(rippleNormal, surface.Normal);
+        surface.Normal = ReorientNormal(rippleNormal, surface.Normal);
     }
 
     surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
