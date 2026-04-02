@@ -223,6 +223,7 @@ float SharcLuma(float3 color)
 	return dot(color, luma);
 }
 
+#if SHARC_UPDATE
 void SharcAddVoxelData(in SharcParameters sharcParameters, HashGridIndex cacheIndex, float3 sampleValue, float3 sampleWeight, uint sampleData)
 {
 	if (cacheIndex == HASH_GRID_INVALID_CACHE_INDEX)
@@ -261,6 +262,7 @@ void SharcAddVoxelData(in SharcParameters sharcParameters, HashGridIndex cacheIn
 	if (sampleData != 0)
 		InterlockedAdd(BUFFER_AT_OFFSET(sharcParameters.accumulationBuffer, cacheIndex).data.w, sampleData);
 }
+#endif // SHARC_UPDATE
 
 void SharcInit(inout SharcState sharcState)
 {
@@ -407,6 +409,7 @@ HashGridKey SharcGetAdjacentLevelHashKey(HashGridKey hashKey, HashGridParameters
 	return modifiedHashGridKey;
 }
 
+#if SHARC_RESOLVE
 void SharcResolveEntry(uint entryIndex, SharcParameters sharcParameters, SharcResolveParameters resolveParameters)
 {
 	if (entryIndex >= sharcParameters.hashMapData.capacity)
@@ -530,3 +533,4 @@ void SharcResolveEntry(uint entryIndex, SharcParameters sharcParameters, SharcRe
 	zeroAccumulationData.data = uint4(0, 0, 0, 0);
 	BUFFER_AT_OFFSET(sharcParameters.accumulationBuffer, entryIndex) = zeroAccumulationData;
 }
+#endif // SHARC_RESOLVE
