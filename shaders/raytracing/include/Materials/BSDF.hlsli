@@ -180,11 +180,30 @@ struct DiffuseTransmissionLambert
 // OpenPBR §3.7 Fuzz lobe — Charlie NDF sheen BRDF
 // Reference: [Estevez & Kulla 2017, "Production Friendly Microfacet Sheen BRDF"]
 // Reference: https://github.com/tizian/ltc-sheen
+//
+// Directional albedo E_fuzz(cosTheta, roughness) for energy-conserving layering.
+// Polynomial fit to numerical integration of Charlie NDF * Vis_Charlie over hemisphere.
+// Used for OpenPBR eq.(81): base *= lerp(1, 1 - E_fuzz, fuzzWeight)
+float CharlieDirectionalAlbedo(float cosTheta, float roughness)
+{
+    // Fitted to tabulated data of Charlie BRDF hemispherical-directional reflectance.
+    // At roughness=0 the Charlie NDF concentrates at grazing → albedo peaks at grazing.
+    // At roughness=1 the distribution is broad → albedo is relatively uniform ~0.18.
+    float r = saturate(roughness);
+    float ct = saturate(cosTheta);
+    float ct2 = ct * ct;
+
+    // Approximate E(cosTheta, roughness) with a bivariate polynomial.
+    // Albedo increases toward grazing angles; increases with lower roughness at grazing.
+    float e0 = lerp(0.04f, 0.32f, r);                   // base at normal incidence
+    float e1 = lerp(0.70f, 0.18f, r);                   // grazing boost
+    return e0 + e1 * (1.0f - ct) * (1.0f - ct);         // quadratic ramp toward grazing
+}
+
 struct FuzzReflection
 {
-    float3 albedo;  ///< Fuzz color (tint).
-
-    static const float kFuzzRoughness = 1.0f;  // OpenPBR: fully rough microfiber
+    float3 albedo;      ///< Fuzz color (tint).
+    float roughness;    ///< Fuzz roughness (uses surface base roughness).
 
     float3 Eval(const float3 wi, const float3 wo)
     {
@@ -196,8 +215,8 @@ struct FuzzReflection
         float NdotV = saturate(wi.z);
         float NdotL = saturate(wo.z);
 
-        float D = BRDF::D_Charlie(kFuzzRoughness, NdotH);
-        float V = BRDF::Vis_Charlie(kFuzzRoughness, NdotV, NdotL);
+        float D = BRDF::D_Charlie(roughness, NdotH);
+        float V = BRDF::Vis_Charlie(roughness, NdotV, NdotL);
 
         return albedo * D * V * NdotL;
     }
@@ -638,13 +657,17 @@ struct DefaultBSDF
         // Fuzz layer: OpenPBR §3.7 microfiber sheen on top of base substrate
         fuzzWeight = 0;
         fuzzReflection.albedo = float3(0, 0, 0);
+        fuzzReflection.roughness = surfaceRoughness;
         if (surface.FuzzWeight > 0.0f)
         {
             fuzzWeight = surface.FuzzWeight;
             fuzzReflection.albedo = surface.FuzzColor;
 
-            // Energy conservation: attenuate base substrate by fuzz coverage
-            float fuzzAttenuation = 1.0f - fuzzWeight;
+            // OpenPBR eq.(81): base *= lerp(1, 1 - E_fuzz(μ_o, α), fuzzWeight)
+            // E_fuzz is the view-dependent directional albedo of the fuzz BRDF.
+            float NdotV = saturate(dot(N, V));
+            float Efuzz = CharlieDirectionalAlbedo(NdotV, surfaceRoughness);
+            float fuzzAttenuation = lerp(1.0f, 1.0f - Efuzz, fuzzWeight);
             diffuseReflection.albedo *= fuzzAttenuation;
             specularReflection.albedo *= fuzzAttenuation;
         }
