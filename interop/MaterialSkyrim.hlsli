@@ -298,6 +298,17 @@ INTEROP_DATA_STRUCT(Material, 4)
 		return Texture7;  // RGB = coat normal, A = coat roughness
 	}
 
+	// True PBR - Fuzz
+	half4 FuzzColorWeight()
+	{
+		return Color2;  // .rgb = fuzz color, .a = fuzz weight
+	}
+
+	uint16_t FuzzTexture()
+	{
+		return Texture7;  // RGB = fuzz color, A = fuzz weight
+	}
+
 #ifndef __cplusplus
 	float2 TexCoord(float2 texCoord)
     {

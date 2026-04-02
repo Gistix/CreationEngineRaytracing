@@ -49,11 +49,12 @@ struct Surface
     float3 CoatTangent;
     float3 CoatBitangent;
 
+    float3 FuzzColor;
+    float FuzzWeight;
+
 #if defined(FULL_MATERIAL)
     float3 SubsurfaceColor;
     float Thickness;
-    float3 FuzzColor;
-    float FuzzWeight;
     float GlintScreenSpaceScale;
     float GlintLogMicrofacetDensity;
     float GlintMicrofacetRoughness;

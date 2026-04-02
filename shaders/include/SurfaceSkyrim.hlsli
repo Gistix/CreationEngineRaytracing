@@ -129,6 +129,22 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             }
         }
 
+        // Fuzz (OpenPBR §3.7)
+        if (material.PBRFlags & PBR::Flags::Fuzz)
+        {
+            half4 fuzzColorWeight = material.FuzzColorWeight();
+            surface.FuzzColor = fuzzColorWeight.rgb;
+            surface.FuzzWeight = fuzzColorWeight.a;
+
+            if (material.PBRFlags & PBR::Flags::HasFeatureTexture1)
+            {
+                Texture2D fuzzTexture = Textures[NonUniformResourceIndex(material.FuzzTexture())];
+                float4 sampledFuzz = fuzzTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+                surface.FuzzColor *= sampledFuzz.rgb;
+                surface.FuzzWeight *= sampledFuzz.a;
+            }
+        }
+
         // OpenPBR 3.11: Emission sits below the coat and is absorbed.
         // At normal incidence, coat_color = T^2 gives the round-trip absorption.
         if (surface.CoatStrength > 0)
