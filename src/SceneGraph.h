@@ -88,6 +88,7 @@ class SceneGraph
 
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
+	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
 	void CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path);
 
@@ -122,7 +123,8 @@ public:
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 
-	void ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object);
+	void ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool equip);
+
 	void RemoveActorObject(RE::Actor* actor, RE::NiAVObject* object);
 
 	void EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance);

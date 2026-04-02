@@ -105,15 +105,14 @@ namespace Hooks
 
 	void ActorEquipManager_EquipObject::thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData, std::uint32_t a_count, const RE::BGSEquipSlot* a_slot, bool a_queueEquip, bool a_forceEquip, bool a_playSounds, bool a_applyNow)
 	{
-		logger::info("ActorEquipManager_EquipObject - Actor: {}, Object: {}, Type: {}", a_actor->GetName(), a_object->GetName(), magic_enum::enum_name(a_object->GetFormType()));
-
 		func(a_actorEquipManager, a_actor, a_object, a_extraData, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow);
 
+		Scene::GetSingleton()->GetSceneGraph()->ActorEquipEvent(a_actor, a_object, true);
 	};
 
 	bool ActorEquipManager_UnequipObject::thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData, std::uint32_t a_count, const RE::BGSEquipSlot* a_slot, bool a_queueEquip, bool a_forceEquip, bool a_playSounds, bool a_applyNow, const RE::BGSEquipSlot* a_slotToReplace)
 	{
-		Scene::GetSingleton()->GetSceneGraph()->ActorUnequip(a_actor, a_object);
+		Scene::GetSingleton()->GetSceneGraph()->ActorEquipEvent(a_actor, a_object, false);
 
 		return func(a_actorEquipManager, a_actor, a_object, a_extraData, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow, a_slotToReplace);
 	};
