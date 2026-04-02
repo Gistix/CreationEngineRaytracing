@@ -79,7 +79,7 @@ uint HashGridGetBaseSlot(const HashGridKey hashKey, uint capacity)
 	uint hash = HashGridHash32(hashKey);
 	uint slot = hash % capacity;
 
-	return min(slot, capacity - HASH_GRID_HASH_MAP_BUCKET_SIZE);
+	return slot;
 }
 
 uint HashGridGetLevel(float3 samplePosition, HashGridParameters gridParameters)
@@ -153,14 +153,13 @@ struct HashMapData
 {
 	uint capacity;
 
-	RW_STRUCTURED_BUFFER_UPDATE_RESOLVE(hashEntriesBuffer, uint64_t);
+	RW_STRUCTURED_BUFFER(hashEntriesBuffer, uint64_t);
 
 #if !HASH_GRID_ENABLE_64_BIT_ATOMICS
-	RW_STRUCTURED_BUFFER_UPDATE(lockBuffer, uint);
+	RW_STRUCTURED_BUFFER(lockBuffer, uint);
 #endif  // !HASH_GRID_ENABLE_64_BIT_ATOMICS
 };
 
-#if SHARC_UPDATE
 void HashMapAtomicCompareExchange(in HashMapData hashMapData, in uint dstOffset, in uint64_t compareValue, in uint64_t value, out uint64_t originalValue)
 {
 #if HASH_GRID_ENABLE_64_BIT_ATOMICS
@@ -198,15 +197,16 @@ bool HashMapInsert(in HashMapData hashMapData, const HashGridKey hashKey, out Ha
 	HASH_GRID_LOOP_ATTR
 	for (uint bucketOffset = 0; bucketOffset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucketOffset) {
 		HashGridKey prevHashGridKey;
-		HashMapAtomicCompareExchange(hashMapData, baseSlot + bucketOffset, HASH_GRID_INVALID_HASH_KEY, hashKey, prevHashGridKey);
+		uint slotIndex = (baseSlot + bucketOffset) % hashMapData.capacity;
+		HashMapAtomicCompareExchange(hashMapData, slotIndex, HASH_GRID_INVALID_HASH_KEY, hashKey, prevHashGridKey);
 
 		if (prevHashGridKey == HASH_GRID_INVALID_HASH_KEY || prevHashGridKey == hashKey) {
-			cacheIndex = baseSlot + bucketOffset;
+			cacheIndex = slotIndex;
 			return true;
 		}
 	}
 
-	cacheIndex = hashMapData.capacity - 1;
+	cacheIndex = 0;
 
 	return false;
 }
@@ -219,17 +219,17 @@ HashGridIndex HashMapInsertEntry(in HashMapData hashMapData, float3 samplePositi
 
 	return cacheIndex;
 }
-#endif
 
 bool HashMapFind(in HashMapData hashMapData, const HashGridKey hashKey, inout HashGridIndex cacheIndex, out uint bucketOffset)
 {
 	const uint baseSlot = HashGridGetBaseSlot(hashKey, hashMapData.capacity);
 	HASH_GRID_LOOP_ATTR
 	for (bucketOffset = 0; bucketOffset < HASH_GRID_HASH_MAP_BUCKET_SIZE; ++bucketOffset) {
-		HashGridKey storedHashKey = BUFFER_AT_OFFSET(hashMapData.hashEntriesBuffer, baseSlot + bucketOffset);
+		uint slotIndex = (baseSlot + bucketOffset) % hashMapData.capacity;
+		HashGridKey storedHashKey = BUFFER_AT_OFFSET(hashMapData.hashEntriesBuffer, slotIndex);
 
 		if (storedHashKey == hashKey) {
-			cacheIndex = baseSlot + bucketOffset;
+			cacheIndex = slotIndex;
 			return true;
 		}
 	}

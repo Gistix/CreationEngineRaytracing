@@ -124,7 +124,6 @@ struct SHaRCSettings
 	int AccumFrameNum = 10;
 	int StaleFrameNum = 64;
 	float RadianceScale = 1e3f;
-	bool AntifireflyFilter = true;
 };
 
 struct RISSettings

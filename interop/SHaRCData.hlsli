@@ -9,7 +9,7 @@ INTEROP_STRUCT(SHaRCData, 16)
     uint AccumFrameNum;
     uint StaleFrameNum;
     float RadianceScale;
-    uint AntifireflyFilter;
+    uint FrameIndex;
     uint3 Pad0;
 };
 VALIDATE_CBUFFER(SHaRCData, 16);

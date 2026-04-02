@@ -438,6 +438,12 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 							scalars[2] = lightingPBRMaterial->coatRoughness;
 						}
 
+						if (pbrFlags & PBRShaderFlags::Fuzz) {
+							textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
+
+							colors[2] = { lightingPBRMaterial->fuzzColor.red, lightingPBRMaterial->fuzzColor.green, lightingPBRMaterial->fuzzColor.blue, lightingPBRMaterial->fuzzWeight };
+						}
+
 						// Enforce TruePBR flag
 						shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
 					}

@@ -135,6 +135,8 @@ struct SurfaceMaker
         surface.CoatNormal = normalWS;
         surface.CoatTangent = tangentWS;
         surface.CoatBitangent = bitangentWS;
+        surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
+        surface.FuzzWeight = 0.0f;
     
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLandLODBlend)
@@ -209,6 +211,8 @@ struct SurfaceMaker
         surface.CoatNormal = normalWS;
         surface.CoatTangent = tangentWS;
         surface.CoatBitangent = bitangentWS;
+        surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
+        surface.FuzzWeight = 0.0f;
     
         float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
         
@@ -275,9 +279,6 @@ struct SurfaceMaker
         surface.F0 = PBR::F0(albedo, metallic);
         surface.IOR = F0toIOR(surface.F0);
 
-#if defined(FULL_MATERIAL)
-        surface.SubsurfaceColor = float3(0.0f, 0.0f, 0.0f);
-        surface.Thickness = 0.0f;
         surface.CoatColor = float3(1.0f, 1.0f, 1.0f);
         surface.CoatStrength = 0.0f;
         surface.CoatRoughness = 0.0f;
@@ -287,6 +288,10 @@ struct SurfaceMaker
         surface.CoatBitangent = bitangent;
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
+
+#if defined(FULL_MATERIAL)
+        surface.SubsurfaceColor = float3(0.0f, 0.0f, 0.0f);
+        surface.Thickness = 0.0f;
         surface.GlintScreenSpaceScale = 1.0f;
         surface.GlintLogMicrofacetDensity = 0.0f;
         surface.GlintMicrofacetRoughness = 0.0f;
