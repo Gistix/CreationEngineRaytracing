@@ -87,6 +87,10 @@ void Main()
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
+#if defined(RAW_RADIANCE) && defined(NRD_REBLUR)    
+    ViewDepth[idx] = depthVS;
+#endif 
+    
     [branch]
     if (depthVS < FP_VIEW_Z || depth >= SKY_Z)
     {
@@ -179,7 +183,7 @@ void Main()
      float diffHitDist = 0;     
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #else
-    float specHitDist = 0;
+    float specHitDist = RAY_TMAX;
 #endif
     
     [loop]
@@ -333,15 +337,7 @@ void Main()
                     originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
 #   endif
             }
-            
-#if defined(NRD_REBLUR)
-            if (j == 0)
-                accumulatedHitDist = payload.hitDistance;
-#else
-            if (isSpecular)
-                specHitDist += payload.hitDistance;
-#endif           
-            
+                       
             if (!payload.Hit())
             {
                 float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
@@ -353,6 +349,14 @@ void Main()
 #endif                
                 break;
             }
+            
+#if defined(NRD_REBLUR)
+            if (j == 0)
+                accumulatedHitDist = payload.hitDistance;
+#else
+            if (j == 0 && isSpecular)
+                specHitDist = min(specHitDist, payload.hitDistance);
+#endif                      
             
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
 

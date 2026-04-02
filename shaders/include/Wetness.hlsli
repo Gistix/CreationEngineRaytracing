@@ -8,6 +8,8 @@
 #include "include/Surface.hlsli"
 #include "interop/SharedData.hlsli"
 
+#include "raytracing/include/Common.hlsli"
+
 namespace Wetness
 {
     // ---- Noise helpers (from community shaders Random.hlsli) ----
@@ -134,7 +136,7 @@ namespace Wetness
         float val = lerp(1.0, 0.0, (normalised_t - rain_stay) / (1.0 - rain_stay));
         return val * val;
     }
-
+    
     // xyz - ripple normal, w - splash wetness
     float4 GetRainDrops(float3 worldPos, float t, float3 normal, float rippleStrengthModifier, WetnessEffectsSettings settings)
     {

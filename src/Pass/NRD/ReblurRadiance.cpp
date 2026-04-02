@@ -434,6 +434,7 @@ namespace Pass::NRD
 		
 		auto& textureManager = renderer->GetTextureManager();
 
+		auto* viewDepth = textureManager.GetTexture(TextureManager::Texture::ViewDepth);
 		auto* diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
 		auto* specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
 
@@ -443,7 +444,7 @@ namespace Pass::NRD
 		case nrd::ResourceType::IN_NORMAL_ROUGHNESS:
 			return renderTargets ? renderTargets->normalRoughness : nullptr;
 		case nrd::ResourceType::IN_VIEWZ:
-			return Scene::GetSingleton()->IsPathTracingActive() ? renderer->m_PTDepth.Get() : renderer->GetDepthTexture();
+			return viewDepth;
 		case nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST:
 			return diffuseTexture;
 		case nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST:
