@@ -49,8 +49,9 @@ namespace Pass
 
 		eastl::vector<ShaderDefine> m_Defines;
 
-		bool m_Enabled = true;
-		bool m_DirtyBindings = true;
+	bool m_Enabled = true;
+	bool m_DirtyBindings = true;
+	uint32_t m_FrameCounter = 0;
 	public:
 		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS);
 

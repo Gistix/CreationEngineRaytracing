@@ -42,7 +42,6 @@ namespace Pass
 		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
 		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
 		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
-		m_SHaRCData->AntifireflyFilter = settings.SHaRCSettings.AntifireflyFilter ? 1 : 0;
 
 		auto defines = Util::Shader::GetRaytracingDefines(settings, m_Enabled, true);
 
@@ -128,7 +127,8 @@ namespace Pass
 			{ L"LINEAR_BLOCK_SIZE", linearBlockSizeWStr.c_str() },
 			{ L"SHARC", L"" },
 			{ L"SHARC_UPDATE", L"0" },
-			{ L"SHARC_RESOLVE", L"1" }
+			{ L"SHARC_RESOLVE", L"1" },
+			{ L"SHARC_ENABLE_FADE_ACCELERATION", L"1" }
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
@@ -190,6 +190,8 @@ namespace Pass
 	{
 		if (!m_Enabled)
 			return;
+
+		m_SHaRCData->FrameIndex = m_FrameCounter++;
 
 		commandList->writeBuffer(m_SHaRCBuffer, m_SHaRCData.get(), sizeof(SHaRCData));
 
