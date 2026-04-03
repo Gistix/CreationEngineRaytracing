@@ -561,7 +561,7 @@ void Renderer::SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* m
 	}
 }
 
-void Renderer::ExecutePasses()
+nvrhi::ICommandList* Renderer::StartExecution()
 {
 	auto* scene = Scene::GetSingleton();
 
@@ -581,13 +581,12 @@ void Renderer::ExecutePasses()
 
 	m_CommandList->beginTimerQuery(m_FrameTimer);
 
-	scene->Update(m_CommandList);
+	return m_CommandList;
+}
 
-	m_RenderGraph->Execute(m_CommandList);
-
-	scene->ClearDirtyStates();
-
-	if (m_CopyTargetTexture) 
+void Renderer::EndExecution()
+{
+	if (m_CopyTargetTexture)
 	{
 		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
 		m_CommandList->copyTexture(m_CopyTargetTexture, region, m_MainTexture, region);

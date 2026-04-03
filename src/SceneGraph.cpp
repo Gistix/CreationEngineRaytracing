@@ -302,6 +302,14 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), numLights * sizeof(LightData));
 }
 
+void SceneGraph::UpdateActors()
+{
+	for (auto& [formID, actorRef]: m_Actors)
+	{
+		actorRef.Update();
+	}
+}
+
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
@@ -506,13 +514,22 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	CreateModelInternal(water, path.c_str(), object);
 }
 
-void SceneGraph::ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool equip)
+void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object)
 {
-	if (equip)
-		return;
+	switch (a_object.formType)
+	{
+	case RE::FormType::Armor:
+		break;
+	case RE::FormType::Weapon:
+		CreateModelInternal(a_object.item, a_object.part->GetModel(), a_object.partClone, a_actor);
+		break;
+	default:
+		break;
+	}
+}
 
-	logger::debug("SceneGraph::ActorEquipEvent - Actor: {}, Object: {}, Type: {}, Equip: {}", a_actor->GetName(), a_object->GetName(), magic_enum::enum_name(a_object->GetFormType()), equip);
-
+void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+{
 	// TODO: Handle third/first person for player actor
 	auto* bipedAnim = a_actor->GetBiped(false).get();
 
@@ -520,23 +537,24 @@ void SceneGraph::ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_objec
 	if (!bipedAnim)
 		return;
 
-	for (const auto& object : bipedAnim->objects)
+	for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
 	{
+		const auto& object = bipedAnim->objects[i];
+
 		if (object.item != a_object)
 			continue;
 
-		logger::debug("\tUnequipping - {}, Type: {}",
-			object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A",
-			magic_enum::enum_name(object.item->GetFormType()));
-
+		// In theory these should all be separate instances then?
+		// TODO: Investigate using ActorReference to store a list of all actor parts instances instead of the current disjointed setup
 		switch (object.item->GetFormType())
 		{
+		case RE::FormType::Armature:
 		case RE::FormType::Armor:
-			// Armors are part of the actor model, we need to remove the mesh from the instance model
+			// These are part of the actor model, we need to remove the mesh from the instance model
 			RemoveActorObject(a_actor, object.partClone.get());
 			break;
 		case RE::FormType::Weapon:
-			// Weapons are separate models parented to a actor node, we can remove the entire instance
+			// Weapons are separate models parented to an actor node
 			RemoveInstance(object.partClone.get());
 			break;
 		default:
@@ -607,7 +625,13 @@ void SceneGraph::RemoveInstance(RE::NiAVObject* node)
 
 void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
 {
-	auto instanceFormIDsIt = m_InstancesFormIDs.find(form->GetFormID());
+	auto formID = form->GetFormID();
+
+	if (releaseModel) {
+		m_Actors.erase(formID);
+	}
+
+	auto instanceFormIDsIt = m_InstancesFormIDs.find(formID);
 
 	// No instance to remove
 	if (instanceFormIDsIt == m_InstancesFormIDs.end())
@@ -1007,7 +1031,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 	return meshes;
 }
 
-void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
+void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot, RE::Actor* actor)
 {
 	if (!pRoot)
 		return;
@@ -1021,12 +1045,13 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	}
 	
 	auto formID = form->GetFormID();
+	auto instanceFormID = actor ? actor->GetFormID() : formID;
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	// We only need one buffer per model
 	if (m_Models.find(path) != m_Models.end()) {
-		AddInstance(formID, pRoot, path);
+		AddInstance(instanceFormID, pRoot, path);
 		return;
 	}
 
@@ -1037,12 +1062,11 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	if (bsxFlags) {
 		if (static_cast<int32_t>(bsxFlags->value) & static_cast<int32_t>(RE::BSXFlags::Flag::kEditorMarker))
 			return;
-
-		logger::debug("SceneGraph::CreateModelInternal - BSX Flags [0x{:x}]: {}", bsxFlags->value, Util::GetFlagsString<RE::BSXFlags::Flag>(bsxFlags->value));
 	}
 
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
 
+	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
 	auto meshes = CreateMeshes(form, pRoot);
 
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
@@ -1098,7 +1122,10 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			device->waitForIdle();
 
-			AddInstance(formID, pRoot, modelName);
+			AddInstance(instanceFormID, pRoot, modelName);
+
+			if (form->GetFormType() == RE::FormType::ActorCharacter)
+				m_Actors.try_emplace(formID, ActorReference(form->As<RE::Actor>()));
 
 			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 		}
@@ -1117,13 +1144,13 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 
 	auto instanceNodeIt = m_InstanceNodes.find(node);
 	if (instanceNodeIt != m_InstanceNodes.end()) {
-		logger::warn("SceneGraph::AddInstance - Instance already exists: {}", path);
+		logger::warn("SceneGraph::AddInstance - Node already exists: {}", path);
 		return;
 	}
 
 	auto modelIt = m_Models.find(path);
 	if (modelIt == m_Models.end()) {
-		logger::warn("SceneGraph::AddInstance - Model already exists: {}", path);
+		logger::warn("SceneGraph::AddInstance - Model doesn't exists: {}", path);
 		return;
 	}
 

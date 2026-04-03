@@ -300,35 +300,38 @@ bool Scene::Initialize(RendererParams rendererParams)
 	return true;
 }
 
-void Scene::Render()
+void Scene::Execute()
 {
 	if (!m_Settings.Enabled)
 		return;
 
-	UpdateCameraData();
+	auto* sceneGraph = GetSceneGraph();
 
-	Renderer::GetSingleton()->ExecutePasses();
-}
+	sceneGraph->UpdateActors();
 
-void Scene::Update(nvrhi::ICommandList* commandList)
-{
-	GetSceneGraph()->Update(commandList);
+	auto* renderer = Renderer::GetSingleton();
 
-	// Update camera data buffer
+	auto* commandList = renderer->StartExecution();
+
+	// Update all scene related data and their buffers
+	sceneGraph->Update(commandList);
+
 	commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
 
-	/*if (m_DirtyFeatureData)
-	{*/
-		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
-		/*m_DirtyFeatureData = false;
-	}*/
+	commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
+
+	// Executes attached render nodes
+	renderer->GetRenderGraph()->Execute(commandList);
+
+	ClearDirtyStates();
+
+	renderer->EndExecution();
 }
 
 void Scene::ClearDirtyStates()
 {
 	GetSceneGraph()->ClearDirtyStates();
 }
-
 
 void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) 
 {
