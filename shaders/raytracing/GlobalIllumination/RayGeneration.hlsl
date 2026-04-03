@@ -314,12 +314,18 @@ void Main()
 #if defined(SHARC)
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
-            
+            // First bounce comes from GBuffer
+            if (j == 0)
+                ray.Origin = OffsetRayAlt(surface.Position, faceNormalOriented, hasTransmission);
+            else
+            {
 #if USE_SIA_INTERPOLATION
-            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+                ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
 #else
-            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+                ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
 #endif
+            }
+
             ray.Direction = direction;
             ray.TMin = 0.0f;  // OffsetRay already handles precision, no additional offset needed
             ray.TMax = RAY_TMAX;
