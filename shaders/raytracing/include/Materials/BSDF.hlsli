@@ -10,6 +10,7 @@
 #include "raytracing/include/Materials/Fresnel.hlsli"
 #include "raytracing/include/Materials/LobeType.hlsli"
 #include "raytracing/include/Materials/Microfacet.hlsli"
+#include "raytracing/include/Materials/Glint.hlsli"
 
 #include "raytracing/include/Materials/HairChiangBSDF.hlsli"
 #include "raytracing/include/Materials/HairFarFieldBCSDF.hlsli"
@@ -276,6 +277,15 @@ struct SpecularReflectionMicrofacet // : IBxDF
     float alpha;        ///< GGX width parameter.
     uint activeLobes;   ///< BSDF lobes to include for sampling and evaluation. See LobeType.hlsli.
 
+    // Glint parameters (discrete stochastic microfacet model)
+    bool glintEnabled;
+    float glintAlpha;       ///< Microfacet roughness for individual glints.
+    float glintN;           ///< Number of microfacet particles.
+    float glintFilterSize;  ///< UV-space filter scale.
+    float glintDensityRandomization; ///< Density randomization factor.
+    float2 glintUV;         ///< Surface UV coordinates.
+    float glintMipLevel;    ///< Mip level for UV Jacobian estimation.
+
     bool hasLobe(LobeType lobe) { return (activeLobes & (uint)lobe) != 0; }
 
     float3 Eval(const float3 wi, const float3 wo)
@@ -290,7 +300,16 @@ struct SpecularReflectionMicrofacet // : IBxDF
         float3 h = normalize(wi + wo);
         float wiDotH = dot(wi, h);
 
-        float D = evalNdfGGX(alpha, h.z);
+        float D;
+        if (glintEnabled)
+        {
+            float2x2 uvJ = Glint::EstimateUVJacobian(glintMipLevel);
+            D = Glint::EvalGlintNDF(h, alpha, glintAlpha, glintUV, uvJ, glintN, glintFilterSize);
+        }
+        else
+        {
+            D = evalNdfGGX(alpha, h.z);
+        }
         float G = evalMaskingSmithGGXCorrelated(alpha, wi.z, wo.z);
         float3 F = evalFresnelSchlick(albedo, 1.f, wiDotH);
         
@@ -645,6 +664,18 @@ struct DefaultBSDF
         specularReflection.alpha = alpha;
         specularReflection.activeLobes = activeLobes;
 
+        // Glint: discrete stochastic microfacet NDF
+        specularReflection.glintEnabled = surface.GlintLogMicrofacetDensity > 0;
+        if (specularReflection.glintEnabled)
+        {
+            specularReflection.glintAlpha = surface.GlintMicrofacetRoughness;
+            specularReflection.glintN = pow(10.0, surface.GlintLogMicrofacetDensity);
+            specularReflection.glintFilterSize = surface.GlintScreenSpaceScale;
+            specularReflection.glintDensityRandomization = surface.GlintDensityRandomization;
+            specularReflection.glintUV = surface.GlintTexCoord;
+            specularReflection.glintMipLevel = surface.MipLevel;
+        }
+
         specularReflectionTransmission.transmissionAlbedo = transmissionAlbedo;
         specularReflectionTransmission.alpha = surfaceEta == 1.f ? 0.f : alpha;
         specularReflectionTransmission.eta = surfaceEta;
@@ -693,6 +724,7 @@ struct DefaultBSDF
             coatReflection.albedo = coatF0;
             coatReflection.alpha = coatAlpha;
             coatReflection.activeLobes = (uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection;
+            coatReflection.glintEnabled = false;
 
             coatWeight = Luminance(coatFresnel) * coatStrength;
 
@@ -707,6 +739,7 @@ struct DefaultBSDF
             coatReflection.albedo = 0;
             coatReflection.alpha = 0;
             coatReflection.activeLobes = 0;
+            coatReflection.glintEnabled = false;
             coatLocalN = float3(0, 0, 1);
             coatTransmittance = float3(1, 1, 1);
         }

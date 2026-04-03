@@ -309,6 +309,12 @@ INTEROP_DATA_STRUCT(Material, 4)
 		return Texture7;  // RGB = fuzz color, A = fuzz weight
 	}
 
+	// True PBR - Glint
+	half4 GlintParams()
+	{
+		return Vector3;  // x = screenSpaceScale, y = logMicrofacetDensity, z = microfacetRoughness, w = densityRandomization
+	}
+
 #ifndef __cplusplus
 	float2 TexCoord(float2 texCoord)
     {
