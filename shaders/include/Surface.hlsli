@@ -58,7 +58,6 @@ struct Surface
     float GlintMicrofacetRoughness;
     float GlintDensityRandomization;
     float2 GlintTexCoord;
-#endif
 
     float MipLevel;
     float PositionError;
