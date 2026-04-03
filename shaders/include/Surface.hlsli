@@ -53,15 +53,11 @@ struct Surface
     float3 FuzzColor;
     float FuzzWeight;
 
-#if defined(FULL_MATERIAL)
-    float3 SubsurfaceColor;
-    float Thickness;
     float GlintScreenSpaceScale;
     float GlintLogMicrofacetDensity;
     float GlintMicrofacetRoughness;
     float GlintDensityRandomization;
-    //Glints::GlintCachedVars GlintCache;
-    float Noise;
+    float2 GlintTexCoord;
 #endif
 
     float MipLevel;

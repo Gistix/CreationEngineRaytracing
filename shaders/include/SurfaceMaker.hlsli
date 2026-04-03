@@ -335,15 +335,11 @@ struct SurfaceMaker
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
 
-#if defined(FULL_MATERIAL)
-        surface.SubsurfaceColor = float3(0.0f, 0.0f, 0.0f);
-        surface.Thickness = 0.0f;
         surface.GlintScreenSpaceScale = 1.0f;
         surface.GlintLogMicrofacetDensity = 0.0f;
         surface.GlintMicrofacetRoughness = 0.0f;
         surface.GlintDensityRandomization = 0.0f;
-        surface.Noise = 0.0f;
-#endif         
+        surface.GlintTexCoord = float2(0.0f, 0.0f);
         
         return surface; 
     }
