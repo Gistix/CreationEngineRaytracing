@@ -18,10 +18,9 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
 
-	if (meshFlags.none(Mesh::Flags::Landscape, Mesh::Flags::Water))
-	{
-		auto* refr = form->AsReference();
+	auto* refr = form->AsReference();
 
+	if (refr && refr->extraList.HasType(RE::ExtraDataType::kEmittanceSource)) {
 		if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
 			auto* tesRegion = extra->source->As<RE::TESRegion>();
 			m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
@@ -113,7 +112,7 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 {
 	bool update;
 
-	if (m_DirtyFlags.all(DirtyFlags::Visibility))
+	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
 		update = false;
 	else {
 		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
@@ -143,7 +142,16 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 
 void Model::RemoveGeometry(RE::BSGeometry* geometry)
 {
-	meshes.erase(std::remove_if(meshes.begin(), meshes.end(), [&](auto& mesh) {
+	// Find the first mesh whose bsGeometryPtr matches
+	auto it = eastl::find_if(meshes.begin(), meshes.end(), [&](auto& mesh) {
 		return mesh->bsGeometryPtr.get() == geometry;
-		}), meshes.end());
+	});
+
+	if (it == meshes.end())
+		return;
+
+	// Erase single element
+	meshes.erase(it);
+
+	m_DirtyFlags.set(DirtyFlags::Mesh);
 }

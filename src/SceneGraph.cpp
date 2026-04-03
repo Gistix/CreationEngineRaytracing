@@ -302,6 +302,14 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), numLights * sizeof(LightData));
 }
 
+void SceneGraph::UpdateActors()
+{
+	for (auto& [formID, actorRef]: m_Actors)
+	{
+		actorRef.Update();
+	}
+}
+
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
@@ -506,10 +514,22 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	CreateModelInternal(water, path.c_str(), object);
 }
 
-void SceneGraph::ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool equip)
+void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object)
 {
-	logger::info("SceneGraph::ActorEquipEvent - Actor: {},  Type: {}, Equip: {}", a_actor->GetName(), magic_enum::enum_name(a_actor->GetFormType()), equip);
+	switch (a_object.formType)
+	{
+	case RE::FormType::Armor:
+		break;
+	case RE::FormType::Weapon:
+		CreateModelInternal(a_object.item, a_object.part->GetModel(), a_object.partClone, a_actor);
+		break;
+	default:
+		break;
+	}
+}
 
+void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+{
 	// TODO: Handle third/first person for player actor
 	auto* bipedAnim = a_actor->GetBiped(false).get();
 
@@ -517,44 +537,25 @@ void SceneGraph::ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_objec
 	if (!bipedAnim)
 		return;
 
-	logger::info("SceneGraph::ActorEquipEvent - Object: {}, Type: {}, FormID: 0x{:08X}", a_object->GetName(), magic_enum::enum_name(a_object->GetFormType()), a_object->GetFormID());
-
 	for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
 	{
 		const auto& object = bipedAnim->objects[i];
 
-		logger::info("Object {} - Addon: 0x{:08X}, Item: 0x{:08X}, Address: 0x{:08X}", 
-			i, 
-			object.addon ? object.addon->GetFormID() : 0, 
-			object.item ? object.item->GetFormID() : 0,
-			reinterpret_cast<uintptr_t>(&bipedAnim->objects[i].partClone)
-		);
-
 		if (object.item != a_object)
 			continue;
 
-		logger::debug("\t{} - {}, Type: {}",
-			equip ? "Equipping" : "Unequipping",
-			object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A",
-			magic_enum::enum_name(object.item->GetFormType()));
-
+		// In theory these should all be separate instances then?
+		// TODO: Investigate using ActorReference to store a list of all actor parts instances instead of the current disjointed setup
 		switch (object.item->GetFormType())
 		{
+		case RE::FormType::Armature:
 		case RE::FormType::Armor:
-			// Armors are part of the actor model, we need to remove the mesh from the instance model
-			if (equip) {
-			} else {	
-				RemoveActorObject(a_actor, object.partClone.get());
-			}
+			// These are part of the actor model, we need to remove the mesh from the instance model
+			RemoveActorObject(a_actor, object.partClone.get());
 			break;
 		case RE::FormType::Weapon:
 			// Weapons are separate models parented to an actor node
-			if (equip) {
-				CreateModelInternal(object.item, object.part->GetModel(), object.partClone.get(), a_actor);
-			}
-			else {	
-				RemoveInstance(object.partClone.get());
-			}
+			RemoveInstance(object.partClone.get());
 			break;
 		default:
 			break;
@@ -624,7 +625,13 @@ void SceneGraph::RemoveInstance(RE::NiAVObject* node)
 
 void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
 {
-	auto instanceFormIDsIt = m_InstancesFormIDs.find(form->GetFormID());
+	auto formID = form->GetFormID();
+
+	if (releaseModel) {
+		m_Actors.erase(formID);
+	}
+
+	auto instanceFormIDsIt = m_InstancesFormIDs.find(formID);
 
 	// No instance to remove
 	if (instanceFormIDsIt == m_InstancesFormIDs.end())
@@ -1116,6 +1123,9 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 			device->waitForIdle();
 
 			AddInstance(instanceFormID, pRoot, modelName);
+
+			if (form->GetFormType() == RE::FormType::ActorCharacter)
+				m_Actors.try_emplace(formID, ActorReference(form->As<RE::Actor>()));
 
 			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 		}

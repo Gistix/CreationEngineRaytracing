@@ -3,6 +3,7 @@
 #include "core/Model.h"
 #include "core/Instance.h"
 #include "core/Light.h"
+#include "Core/ActorReference.h"
 
 #include "Light.hlsli"
 #include "Mesh.hlsli"
@@ -32,6 +33,9 @@ class SceneGraph
 	eastl::vector<eastl::unique_ptr<Instance>> m_Instances;
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
+
+	// Actors
+	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
 
 	eastl::unordered_set<RE::BSLight*> m_TempActiveLights;
 	eastl::map<RE::BSLight*, Light> m_Lights;
@@ -115,6 +119,7 @@ public:
 
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
+	void UpdateActors();
 	void ClearDirtyStates();
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
@@ -122,7 +127,8 @@ public:
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 
-	void ActorEquipEvent(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool equip);
+	void ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object);
+	void ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object);
 
 	void RemoveActorObject(RE::Actor* actor, RE::NiAVObject* object);
 

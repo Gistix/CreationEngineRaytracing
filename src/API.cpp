@@ -14,7 +14,7 @@ void UpdateCamera()
 
 void Execute()
 {
-	Renderer::GetSingleton()->ExecutePasses();
+	Scene::GetSingleton()->Execute();
 }
 
 void SetResolution(uint32_t width, uint32_t height) {

@@ -103,54 +103,11 @@ namespace Hooks
 		}
 	}
 
-	RE::ObjectRefHandle* Actor_RemoveItem::thunk(RE::Actor* a_actor, RE::ObjectRefHandle* a_hidden_return_argument, RE::TESBoundObject* a_item, std::int32_t a_count, RE::ITEM_REMOVE_REASON a_reason, RE::ExtraDataList* a_extraList, RE::TESObjectREFR* a_moveToRef, const RE::NiPoint3* a_dropLoc, const RE::NiPoint3* a_rotate)
-	{
-		logger::info("Actor::RemoveItem - Actor: {},  Type: {}", a_actor->GetName(), magic_enum::enum_name(a_actor->GetFormType()));
-
-		Scene::GetSingleton()->GetSceneGraph()->ActorEquipEvent(a_actor, a_item, false);
-
-		return func(a_actor, a_hidden_return_argument, a_item, a_count, a_reason, a_extraList, a_moveToRef, a_dropLoc, a_rotate);
-	};
-	
-	bool Actor_UnequipItem::thunk(RE::Actor* a_actor, std::uint64_t a2, RE::TESBoundObject* a_item, std::int32_t a4, std::uint64_t a5)
-	{
-		logger::info("Actor::UnequipItem - Actor: {},  Type: {}", a_actor->GetName(), magic_enum::enum_name(a_actor->GetFormType()));
-
-		Scene::GetSingleton()->GetSceneGraph()->ActorEquipEvent(a_actor, a_item, false);
-
-		return func(a_actor, a2, a_item, a4, a5);
-	};
-
 	bool ActorEquipManager_UnequipObject::thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData, std::uint32_t a_count, const RE::BGSEquipSlot* a_slot, bool a_queueEquip, bool a_forceEquip, bool a_playSounds, bool a_applyNow, const RE::BGSEquipSlot* a_slotToReplace)
 	{
-		Scene::GetSingleton()->GetSceneGraph()->ActorEquipEvent(a_actor, a_object, false);
+		Scene::GetSingleton()->GetSceneGraph()->ActorUnequip(a_actor, a_object);
 
 		return func(a_actorEquipManager, a_actor, a_object, a_extraData, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow, a_slotToReplace);
-	};
-
-	bool Actor_AddWornItem::thunk(RE::Actor* a_actor, RE::TESBoundObject* a_item, std::int32_t a_count, void* a4, bool a5, bool a6, bool a7)
-	{
-		auto result = func(a_actor, a_item, a_count, a4, a5, a6, a7);
-
-		Scene::GetSingleton()->GetSceneGraph()->ActorEquipEvent(a_actor, a_item, true);
-
-		return result;
-	};
-
-	void PlayerCharacter_EquipItem::thunk(RE::PlayerCharacter* a_actor, void* a2, bool a3)
-	{
-		logger::info("PlayerCharacter::EquipItem - Actor: {},  Type: {}", a_actor->GetName(), magic_enum::enum_name(a_actor->GetFormType()));	
-
-		func(a_actor, a2, a3);
-	};
-
-	bool PlayerCharacter_CheckItem::thunk(RE::PlayerCharacter* a_actor, RE::NiAVObject* a_object)
-	{
-		auto result = func(a_actor, a_object);
-
-		logger::info("PlayerCharacter::CheckItem - {}", result);
-
-		return result;
 	};
 
 #if defined(SKYRIM)
@@ -339,19 +296,7 @@ namespace Hooks
 
 		//stl::detour_thunk<TESObjectCELL_AddRefr>(REL::RelocationID(19003, 19411));
 
-		//stl::detour_thunk<Actor_UnequipItem>(REL::RelocationID(36950, 37975));
-		stl::detour_thunk<Actor_AddWornItem>(REL::RelocationID(36979, 38004));
-
-		//stl::detour_thunk<ActorEquipManager_EquipObject>(REL::RelocationID(37938, 38894));
 		stl::detour_thunk<ActorEquipManager_UnequipObject>(REL::RelocationID(37945, 38901));
-
-		stl::detour_thunk<PlayerCharacter_EquipItem>(REL::RelocationID(0, 19769));
-
-		stl::detour_thunk<PlayerCharacter_CheckItem>(REL::RelocationID(0, 40475));
-		
-		auto bipedRel = REL::RelocationID(0, 15683).address();
-		auto playerRel = bipedRel + REL::Relocate(0, 0x2c3);
-		auto npcRel = bipedRel + REL::Relocate(0, 0x309);
 
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));

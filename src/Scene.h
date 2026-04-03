@@ -91,9 +91,7 @@ struct Scene
 
 	bool Initialize(RendererParams rendererParams);
 
-	void Render();
-
-	void Update(nvrhi::ICommandList* commandList);
+	void Execute();
 
 	void ClearDirtyStates();
 

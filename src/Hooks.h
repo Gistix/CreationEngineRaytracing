@@ -88,46 +88,9 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-
-	struct Actor_RemoveItem
-	{
-		static RE::ObjectRefHandle* thunk(RE::Actor* a_actor, RE::ObjectRefHandle* a_hidden_return_argument, RE::TESBoundObject* a_item, std::int32_t a_count, RE::ITEM_REMOVE_REASON a_reason, RE::ExtraDataList* a_extraList, RE::TESObjectREFR* a_moveToRef, const RE::NiPoint3* a_dropLoc = 0, const RE::NiPoint3* a_rotate = 0);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct Actor_UnequipItem
-	{
-		static bool thunk(RE::Actor* a_actor, std::uint64_t a2, RE::TESBoundObject* a_item, std::int32_t a4, std::uint64_t a5);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-	
 	struct ActorEquipManager_UnequipObject
 	{
 		static bool thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData = nullptr, std::uint32_t a_count = 1, const RE::BGSEquipSlot* a_slot = nullptr, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false, const RE::BGSEquipSlot* a_slotToReplace = nullptr);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct Actor_AddWornItem
-	{
-		static bool thunk(RE::Actor* a_actor, RE::TESBoundObject* a_item, std::int32_t a_count, void* a4, bool a5, bool a6, bool a7);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct PlayerCharacter_EquipItem
-	{
-		static void thunk(RE::PlayerCharacter* a_actor, void* a2, bool a3);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct PlayerCharacter_CheckItem
-	{
-		static bool thunk(RE::PlayerCharacter* a_actor, RE::NiAVObject* a_object);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-	
-	struct ReplacePartClone
-	{
-		static void thunk(RE::NiPointer<RE::NiAVObject>* a_partClone, RE::NiAVObject* a_object);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

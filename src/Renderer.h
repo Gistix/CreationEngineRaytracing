@@ -309,7 +309,9 @@ public:
 
 	void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 
-	void ExecutePasses();
+	nvrhi::ICommandList* StartExecution();
+
+	void EndExecution();
 
 	void WaitExecution();
 
