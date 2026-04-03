@@ -301,12 +301,14 @@ struct SpecularReflectionMicrofacet // : IBxDF
         float wiDotH = dot(wi, h);
 
         float D;
+#if defined(GLINT)
         if (glintEnabled)
         {
             float2x2 uvJ = Glint::EstimateUVJacobian(glintMipLevel);
             D = Glint::EvalGlintNDF(h, alpha, glintAlpha, glintUV, uvJ, glintN, glintFilterSize);
         }
         else
+#endif
         {
             D = evalNdfGGX(alpha, h.z);
         }
@@ -664,6 +666,7 @@ struct DefaultBSDF
         specularReflection.alpha = alpha;
         specularReflection.activeLobes = activeLobes;
 
+#if defined(GLINT)
         // Glint: discrete stochastic microfacet NDF
         specularReflection.glintEnabled = surface.GlintLogMicrofacetDensity > 0;
         if (specularReflection.glintEnabled)
@@ -675,6 +678,7 @@ struct DefaultBSDF
             specularReflection.glintUV = surface.GlintTexCoord;
             specularReflection.glintMipLevel = surface.MipLevel;
         }
+#endif
 
         specularReflectionTransmission.transmissionAlbedo = transmissionAlbedo;
         specularReflectionTransmission.alpha = surfaceEta == 1.f ? 0.f : alpha;
