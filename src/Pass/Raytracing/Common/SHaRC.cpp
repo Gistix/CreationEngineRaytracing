@@ -175,7 +175,7 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_UAV(6, m_ResolveBuffer),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_ResolveBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)
