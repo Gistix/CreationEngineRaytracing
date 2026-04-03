@@ -22,8 +22,9 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 
 	if (refr && refr->extraList.HasType(RE::ExtraDataType::kEmittanceSource)) {
 		if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
-			auto* tesRegion = extra->source->As<RE::TESRegion>();
-			m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+			if (auto* tesRegion = extra->source->As<RE::TESRegion>()) {
+				m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+			}
 		}
 	}
 }

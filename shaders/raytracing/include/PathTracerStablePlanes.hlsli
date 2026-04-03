@@ -170,14 +170,22 @@ StablePlaneExplorationPayload SplitDeltaPath(
     const float3 prevWaterAbsorption,
     const bool isEnterSurface,
     const float3 surfaceVolumeAbsorption,
-    const float positionError)
+    const float positionError
+#if USE_SIA_INTERPOLATION
+    , const float siaOffset
+#endif
+    )
 {
     StablePlaneExplorationPayload payload;
 
     payload.stableBranchID = StablePlanesAdvanceBranchID(prevBranchID, deltaLobeIndex);
     payload.vertexIndex    = prevVertexIndex + 1;
     payload.rayDir         = lobe.dir;
+#if USE_SIA_INTERPOLATION
+    payload.rayOrigin      = OffsetRaySIA(surfacePosition, faceNormal, siaOffset, lobe.transmission != 0);
+#else
     payload.rayOrigin      = OffsetRay(surfacePosition, faceNormal, positionError, lobe.transmission != 0);
+#endif
     payload.throughput     = prevThp * lobe.thp;
     payload.motionVectors  = prevMotionVectors;
     payload.sceneLength    = prevSceneLength;
@@ -410,7 +418,11 @@ StablePlanesHitResult StablePlanesHandleHit(
         {
             result.continueTracing      = true;
             result.nextRayDir           = deltaLobes[lobeIdx].dir;
+#if USE_SIA_INTERPOLATION
+            result.nextRayOrigin        = OffsetRaySIA(surface.Position, faceNormal, surface.SIAOffset, deltaLobes[lobeIdx].transmission != 0);
+#else
             result.nextRayOrigin        = OffsetRay(surface.Position, faceNormal, surface.PositionError, deltaLobes[lobeIdx].transmission != 0);
+#endif
             result.nextThp              = throughput * deltaLobes[lobeIdx].thp;
             result.nextBranchID         = StablePlanesAdvanceBranchID(stableBranchID, lobeIdx);
             result.nextVertexIndex      = vertexIndex + 1;
@@ -436,6 +448,9 @@ StablePlanesHitResult StablePlanesHandleHit(
                     totalSceneLength, imageXform, roughnessAccum, -rayDir,
                     insideWaterVolume, waterVolumeAbsorption, isEnterSurface, surface.VolumeAbsorption,
                     surface.PositionError
+#if USE_SIA_INTERPOLATION
+                    , surface.SIAOffset
+#endif
                 );
 
                 uint4 packed[5];

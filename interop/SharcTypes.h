@@ -20,7 +20,7 @@ struct SharcPackedData
 {
 	float16_t4 radianceData;
 	uint sampleData;
-	uint luminanceM2;
+	uint sampleDataExt;
 };
 
 #if SHARC_ENABLE_GLSL

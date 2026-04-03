@@ -29,4 +29,19 @@
 #define RIS_MAX_CANDIDATES (4)
 #endif
 
+// Self-Intersection Avoidance method:
+//   0 = Original method (CalculatePositionError + CalculateRayOffset)
+//   1 = NVIDIA SIA (precise interpolation + tight error bounds from transform chain)
+// 
+// When enabled, position interpolation and ray offset in SurfaceMaker use the
+// NVIDIA self-intersection avoidance algorithm which provides:
+//   - Precise MAD-based barycentric interpolation (reduces floating-point error)
+//   - Tight error bounds through the full object-to-world transform chain
+//   - A computed safe offset instead of heuristic scaling
+//
+// Reference: https://github.com/NVIDIA/self-intersection-avoidance
+#ifndef USE_SIA_INTERPOLATION
+#define USE_SIA_INTERPOLATION (1)
+#endif
+
 #endif // ADVANCED_SETTINGS_HLSL

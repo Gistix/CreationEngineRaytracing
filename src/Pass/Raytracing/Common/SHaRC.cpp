@@ -42,7 +42,6 @@ namespace Pass
 		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
 		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
 		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
-		m_SHaRCData->AntifireflyFilter = settings.SHaRCSettings.AntifireflyFilter ? 1 : 0;
 
 		auto defines = Util::Shader::GetRaytracingDefines(settings, m_Enabled, true);
 
@@ -71,10 +70,10 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1),
-			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2),
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(3)
 		};
 
 		m_UpdatePass.m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
@@ -128,7 +127,8 @@ namespace Pass
 			{ L"LINEAR_BLOCK_SIZE", linearBlockSizeWStr.c_str() },
 			{ L"SHARC", L"" },
 			{ L"SHARC_UPDATE", L"0" },
-			{ L"SHARC_RESOLVE", L"1" }
+			{ L"SHARC_RESOLVE", L"1" },
+			{ L"SHARC_ENABLE_FADE_ACCELERATION", L"1" }
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
@@ -175,10 +175,10 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_ResolveBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
-			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer),
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(3, m_ResolveBuffer)
 		};
 
 		m_UpdatePass.m_BindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_UpdatePass.m_BindingLayout);
@@ -190,6 +190,8 @@ namespace Pass
 	{
 		if (!m_Enabled)
 			return;
+
+		m_SHaRCData->FrameIndex = m_FrameCounter++;
 
 		commandList->writeBuffer(m_SHaRCBuffer, m_SHaRCData.get(), sizeof(SHaRCData));
 

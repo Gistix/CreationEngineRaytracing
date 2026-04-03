@@ -438,6 +438,17 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 							scalars[2] = lightingPBRMaterial->coatRoughness;
 						}
 
+						if (pbrFlags & PBRShaderFlags::Fuzz) {
+							textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
+
+							colors[2] = { lightingPBRMaterial->fuzzColor.red, lightingPBRMaterial->fuzzColor.green, lightingPBRMaterial->fuzzColor.blue, lightingPBRMaterial->fuzzWeight };
+						}
+
+						if (pbrFlags & PBRShaderFlags::Glint) {
+							const auto& glint = lightingPBRMaterial->GetGlintParameters();
+							vectors[3] = { glint.screenSpaceScale, glint.logMicrofacetDensity, glint.microfacetRoughness, glint.densityRandomization };
+						}
+
 						// Enforce TruePBR flag
 						shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
 					}

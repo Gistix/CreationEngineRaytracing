@@ -10,6 +10,7 @@
 #include "raytracing/include/Materials/Fresnel.hlsli"
 #include "raytracing/include/Materials/LobeType.hlsli"
 #include "raytracing/include/Materials/Microfacet.hlsli"
+#include "raytracing/include/Materials/Glint.hlsli"
 
 #include "raytracing/include/Materials/HairChiangBSDF.hlsli"
 #include "raytracing/include/Materials/HairFarFieldBCSDF.hlsli"
@@ -177,6 +178,77 @@ struct DiffuseTransmissionLambert
     }
 };
 
+// OpenPBR §3.7 Fuzz lobe — Charlie NDF sheen BRDF
+// Reference: [Estevez & Kulla 2017, "Production Friendly Microfacet Sheen BRDF"]
+// Reference: https://github.com/tizian/ltc-sheen
+//
+// Directional albedo E_fuzz(cosTheta, roughness) for energy-conserving layering.
+// Polynomial fit to numerical integration of Charlie NDF * Vis_Charlie over hemisphere.
+// Used for OpenPBR eq.(81): base *= lerp(1, 1 - E_fuzz, fuzzWeight)
+float CharlieDirectionalAlbedo(float cosTheta, float roughness)
+{
+    // Fitted to tabulated data of Charlie BRDF hemispherical-directional reflectance.
+    // At roughness=0 the Charlie NDF concentrates at grazing → albedo peaks at grazing.
+    // At roughness=1 the distribution is broad → albedo is relatively uniform ~0.18.
+    float r = saturate(roughness);
+    float ct = saturate(cosTheta);
+    float ct2 = ct * ct;
+
+    // Approximate E(cosTheta, roughness) with a bivariate polynomial.
+    // Albedo increases toward grazing angles; increases with lower roughness at grazing.
+    float e0 = lerp(0.04f, 0.32f, r);                   // base at normal incidence
+    float e1 = lerp(0.70f, 0.18f, r);                   // grazing boost
+    return e0 + e1 * (1.0f - ct) * (1.0f - ct);         // quadratic ramp toward grazing
+}
+
+struct FuzzReflection
+{
+    float3 albedo;      ///< Fuzz color (tint).
+    float roughness;    ///< Fuzz roughness (uses surface base roughness).
+
+    float3 Eval(const float3 wi, const float3 wo)
+    {
+        if (min(wi.z, wo.z) <= kMinCosTheta)
+            return float3(0.0f, 0.0f, 0.0f);
+
+        float3 h = normalize(wi + wo);
+        float NdotH = saturate(h.z);
+        float NdotV = saturate(wi.z);
+        float NdotL = saturate(wo.z);
+
+        float D = BRDF::D_Charlie(roughness, NdotH);
+        float V = BRDF::Vis_Charlie(roughness, NdotV, NdotL);
+
+        return albedo * D * V * NdotL;
+    }
+
+    bool SampleBSDF(const float3 wi, out float3 wo, out float pdf, out float3 weight, out uint lobe, out float lobeP, const float4 preGeneratedSample)
+    {
+        wo = sample_cosine_hemisphere_concentric(preGeneratedSample.xy, pdf);
+        lobe = (uint)LobeType::DiffuseReflection;
+
+#if !defined(DISABLE_NORMAL_REJECTION)
+        if (min(wo.z, wi.z) <= kMinCosTheta)
+        {
+            weight = float3(0.0f, 0.0f, 0.0f);
+            lobeP = 0.0f;
+            return false;
+        }
+#endif
+
+        weight = pdf > 0.0f ? Eval(wi, wo) / pdf : float3(0.0f, 0.0f, 0.0f);
+        lobeP = 1.0f;
+        return true;
+    }
+
+    float EvalPdf(const float3 wi, const float3 wo)
+    {
+        if (min(wi.z, wo.z) < kMinCosTheta) return 0.f;
+
+        return K_1_PI * wo.z;
+    }
+};
+
 // Cheap polynomial approximation to single the average energy compensation for multiple bounces
 // Ems = (1-Ess) / Ess
 float EmsApprox(float r2, float NdV)
@@ -205,6 +277,15 @@ struct SpecularReflectionMicrofacet // : IBxDF
     float alpha;        ///< GGX width parameter.
     uint activeLobes;   ///< BSDF lobes to include for sampling and evaluation. See LobeType.hlsli.
 
+    // Glint parameters (discrete stochastic microfacet model)
+    bool glintEnabled;
+    float glintAlpha;       ///< Microfacet roughness for individual glints.
+    float glintN;           ///< Number of microfacet particles.
+    float glintFilterSize;  ///< UV-space filter scale.
+    float glintDensityRandomization; ///< Density randomization factor.
+    float2 glintUV;         ///< Surface UV coordinates.
+    float glintMipLevel;    ///< Mip level for UV Jacobian estimation.
+
     bool hasLobe(LobeType lobe) { return (activeLobes & (uint)lobe) != 0; }
 
     float3 Eval(const float3 wi, const float3 wo)
@@ -219,7 +300,16 @@ struct SpecularReflectionMicrofacet // : IBxDF
         float3 h = normalize(wi + wo);
         float wiDotH = dot(wi, h);
 
-        float D = evalNdfGGX(alpha, h.z);
+        float D;
+        if (glintEnabled)
+        {
+            float2x2 uvJ = Glint::EstimateUVJacobian(glintMipLevel);
+            D = Glint::EvalGlintNDF(h, alpha, glintAlpha, glintUV, uvJ, glintN, glintFilterSize);
+        }
+        else
+        {
+            D = evalNdfGGX(alpha, h.z);
+        }
         float G = evalMaskingSmithGGXCorrelated(alpha, wi.z, wo.z);
         float3 F = evalFresnelSchlick(albedo, 1.f, wiDotH);
         
@@ -495,18 +585,21 @@ struct DefaultBSDF
     SpecularReflectionMicrofacet specularReflection;
     SpecularReflectionTransmissionMicrofacet specularReflectionTransmission;
     SpecularReflectionMicrofacet coatReflection;
+    FuzzReflection fuzzReflection;
 
     float diffTrans;                        ///< Mix between diffuse BRDF and diffuse BTDF.
     float specTrans;                        ///< Mix between dielectric BRDF and specular BSDF.
     float coatStrength;                     ///< Coat layer coverage.
     float3 coatLocalN;                      ///< Coat normal in base tangent frame.
     float3 coatTransmittance;               ///< Single-pass coat transmittance, sqrt(CoatColor).
+    float fuzzWeight;                       ///< Fuzz layer weight [0,1].
 
     float pDiffuseReflection;               ///< Probability for sampling the diffuse BRDF.
     float pDiffuseTransmission;             ///< Probability for sampling the diffuse BTDF.
     float pSpecularReflection;              ///< Probability for sampling the specular BRDF.
     float pSpecularReflectionTransmission;  ///< Probability for sampling the specular BSDF.
     float pCoatReflection;                  ///< Probability for sampling the coat specular BRDF.
+    float pFuzzReflection;                  ///< Probability for sampling the fuzz BRDF.
 
     // Transform a base-local vector to coat-local frame.
     float3 toCoatLocal(float3 v)
@@ -571,6 +664,18 @@ struct DefaultBSDF
         specularReflection.alpha = alpha;
         specularReflection.activeLobes = activeLobes;
 
+        // Glint: discrete stochastic microfacet NDF
+        specularReflection.glintEnabled = surface.GlintLogMicrofacetDensity > 0;
+        if (specularReflection.glintEnabled)
+        {
+            specularReflection.glintAlpha = surface.GlintMicrofacetRoughness;
+            specularReflection.glintN = pow(10.0, surface.GlintLogMicrofacetDensity);
+            specularReflection.glintFilterSize = surface.GlintScreenSpaceScale;
+            specularReflection.glintDensityRandomization = surface.GlintDensityRandomization;
+            specularReflection.glintUV = surface.GlintTexCoord;
+            specularReflection.glintMipLevel = surface.MipLevel;
+        }
+
         specularReflectionTransmission.transmissionAlbedo = transmissionAlbedo;
         specularReflectionTransmission.alpha = surfaceEta == 1.f ? 0.f : alpha;
         specularReflectionTransmission.eta = surfaceEta;
@@ -579,6 +684,24 @@ struct DefaultBSDF
 
         diffTrans = surface.DiffTrans;
         specTrans = surface.SpecTrans;
+
+        // Fuzz layer: OpenPBR §3.7 microfiber sheen on top of base substrate
+        fuzzWeight = 0;
+        fuzzReflection.albedo = float3(0, 0, 0);
+        fuzzReflection.roughness = surfaceRoughness;
+        if (surface.FuzzWeight > 0.0f)
+        {
+            fuzzWeight = surface.FuzzWeight;
+            fuzzReflection.albedo = surface.FuzzColor;
+
+            // OpenPBR eq.(81): base *= lerp(1, 1 - E_fuzz(μ_o, α), fuzzWeight)
+            // E_fuzz is the view-dependent directional albedo of the fuzz BRDF.
+            float NdotV = saturate(dot(N, V));
+            float Efuzz = CharlieDirectionalAlbedo(NdotV, surfaceRoughness);
+            float fuzzAttenuation = lerp(1.0f, 1.0f - Efuzz, fuzzWeight);
+            diffuseReflection.albedo *= fuzzAttenuation;
+            specularReflection.albedo *= fuzzAttenuation;
+        }
 
         // Coat layer: independent specular lobe with energy-conserving base attenuation
         float coatWeight = 0;
@@ -601,6 +724,7 @@ struct DefaultBSDF
             coatReflection.albedo = coatF0;
             coatReflection.alpha = coatAlpha;
             coatReflection.activeLobes = (uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection;
+            coatReflection.glintEnabled = false;
 
             coatWeight = Luminance(coatFresnel) * coatStrength;
 
@@ -615,6 +739,7 @@ struct DefaultBSDF
             coatReflection.albedo = 0;
             coatReflection.alpha = 0;
             coatReflection.activeLobes = 0;
+            coatReflection.glintEnabled = false;
             coatLocalN = float3(0, 0, 1);
             coatTransmittance = float3(1, 1, 1);
         }
@@ -632,8 +757,9 @@ struct DefaultBSDF
         pSpecularReflection = (activeLobes & ((uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection)) ? specularWeight * (metallicBRDF + dielectricBSDF) : 0.f;
         pSpecularReflectionTransmission = (activeLobes & ((uint)LobeType::SpecularReflection | (uint)LobeType::DeltaReflection | (uint)LobeType::SpecularTransmission | (uint)LobeType::DeltaTransmission)) ? specularBSDF : 0.f;
         pCoatReflection = coatWeight;
+        pFuzzReflection = fuzzWeight > 0 ? Luminance(fuzzReflection.albedo) * fuzzWeight : 0.f;
 
-        float normFactor = pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission + pCoatReflection;
+        float normFactor = pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission + pCoatReflection + pFuzzReflection;
         if (normFactor > 0.f)
         {
             normFactor = 1.f / normFactor;
@@ -642,6 +768,7 @@ struct DefaultBSDF
             pSpecularReflection *= normFactor;
             pSpecularReflectionTransmission *= normFactor;
             pCoatReflection *= normFactor;
+            pFuzzReflection *= normFactor;
         }
     }
 
@@ -680,7 +807,10 @@ struct DefaultBSDF
         if (pSpecularReflection > 0.f) specular += (1.f - specTrans) * specularReflection.Eval(wi, wo);
         if (pSpecularReflectionTransmission > 0.f) specular += specTrans * (specularReflectionTransmission.Eval(wi, wo));   // <- do we want to consider transmission as specular? this depends entirely on denoiser - should ask RR folks
 
-        // OpenPBR 3.9.7: View-dependent coat absorption applied to base lobes.
+        // Fuzz lobe: diffuse-class sheen
+        if (pFuzzReflection > 0.f) diffuse += fuzzWeight * fuzzReflection.Eval(wi, wo);
+
+        // OpenPBR 3.9.7: View-dependent coat absorption applied to base lobes (including fuzz).
         // Reflected rays traverse the coat twice; transmitted rays traverse it once.
         if (coatStrength > 0)
         {
@@ -717,6 +847,7 @@ struct DefaultBSDF
             if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
             if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
             if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
+            if (pFuzzReflection > 0.f) pdf += pFuzzReflection * fuzzReflection.EvalPdf(wi, wo);
         }
         else if (uSelect < pDiffuseReflection + pDiffuseTransmission)
         {
@@ -737,6 +868,7 @@ struct DefaultBSDF
             if (pDiffuseReflection > 0.f) pdf += pDiffuseReflection * diffuseReflection.EvalPdf(wi, wo);
             if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
             if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
+            if (pFuzzReflection > 0.f) pdf += pFuzzReflection * fuzzReflection.EvalPdf(wi, wo);
         }
         else if (uSelect < pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission)
         {
@@ -749,6 +881,7 @@ struct DefaultBSDF
             if (pDiffuseTransmission > 0.f) pdf += pDiffuseTransmission * diffuseTransmission.EvalPdf(wi, wo);
             if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
             if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
+            if (pFuzzReflection > 0.f) pdf += pFuzzReflection * fuzzReflection.EvalPdf(wi, wo);
         }
         else if (pCoatReflection > 0.f)
         {
@@ -763,10 +896,26 @@ struct DefaultBSDF
             if (pDiffuseReflection > 0.f) pdf += pDiffuseReflection * diffuseReflection.EvalPdf(wi, wo);
             if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
             if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
+            if (pFuzzReflection > 0.f) pdf += pFuzzReflection * fuzzReflection.EvalPdf(wi, wo);
+        }
+        else if (pFuzzReflection > 0.f)
+        {
+            valid = fuzzReflection.SampleBSDF(wi, wo, pdf, weight, lobe, lobeP, preGeneratedSample);
+            weight /= pFuzzReflection;
+            weight *= fuzzWeight;
+            pdf *= pFuzzReflection;
+            lobeP *= pFuzzReflection;
+            if (pDiffuseReflection > 0.f) pdf += pDiffuseReflection * diffuseReflection.EvalPdf(wi, wo);
+            if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
+            if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
+            if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
         }
 
-        // OpenPBR 3.9.7: Apply view-dependent coat absorption to base lobe weights (coat lobe is unaffected).
-        bool sampledCoat = (uSelect >= pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission) && pCoatReflection > 0.f;
+        // OpenPBR 3.9.7: Apply view-dependent coat absorption to base and fuzz lobe weights (coat lobe is unaffected).
+        // Fuzz sits below the coat, so coat absorption applies to fuzz as well.
+        bool sampledCoat = (uSelect >= pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission)
+                        && pCoatReflection > 0.f
+                        && uSelect < pDiffuseReflection + pDiffuseTransmission + pSpecularReflection + pSpecularReflectionTransmission + pCoatReflection;
         if (!sampledCoat && coatStrength > 0 && valid)
         {
             float3 coatAbs = (wo.z > 0) ? evalCoatAbsorption(wi.z, wo.z) : evalCoatAbsorptionSinglePass(wi.z);
@@ -787,6 +936,7 @@ struct DefaultBSDF
         if (pSpecularReflection > 0.f) pdf += pSpecularReflection * specularReflection.EvalPdf(wi, wo);
         if (pSpecularReflectionTransmission > 0.f) pdf += pSpecularReflectionTransmission * specularReflectionTransmission.EvalPdf(wi, wo);
         if (pCoatReflection > 0.f) pdf += pCoatReflection * coatReflection.EvalPdf(toCoatLocal(wi), toCoatLocal(wo));
+        if (pFuzzReflection > 0.f) pdf += pFuzzReflection * fuzzReflection.EvalPdf(wi, wo);
         return pdf;
     }
 

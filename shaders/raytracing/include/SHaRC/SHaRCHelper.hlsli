@@ -34,11 +34,9 @@ SharcParameters GetSharcParameters()
         sharcParameters.hashMapData.capacity = SHARC_CAPACITY;
         sharcParameters.hashMapData.hashEntriesBuffer = SharcHashEntriesBuffer;
 
-#if SHARC_UPDATE
-#   if !SHARC_ENABLE_64_BIT_ATOMICS && !SHARC_RESOLVE
+#if !SHARC_ENABLE_64_BIT_ATOMICS && SHARC_UPDATE
         sharcParameters.hashMapData.lockBuffer = SharcLockBuffer;
-#   endif // !SHARC_ENABLE_64_BIT_ATOMICS && !SHARC_RESOLVE
-#endif // SHARC_UPDATE
+#endif // !SHARC_ENABLE_64_BIT_ATOMICS && SHARC_UPDATE
 
 #if SHARC_UPDATE || SHARC_RESOLVE
         sharcParameters.accumulationBuffer = SharcAccumulationBuffer;
@@ -46,6 +44,7 @@ SharcParameters GetSharcParameters()
 
         sharcParameters.resolvedBuffer = SharcResolvedBuffer;
         sharcParameters.radianceScale = SHaRC.RadianceScale;
+        sharcParameters.enableAntiFireflyFilter = true;
     }
 
     return sharcParameters;
@@ -58,7 +57,7 @@ SharcResolveParameters GetSharcResolveParameters()
         resolveParameters.accumulationFrameNum = SHaRC.AccumFrameNum;
         resolveParameters.staleFrameNumMax = SHaRC.StaleFrameNum;
         resolveParameters.cameraPositionPrev = Camera.PositionPrev;
-        resolveParameters.enableAntiFireflyFilter = SHaRC.AntifireflyFilter;
+        resolveParameters.frameIndex = SHaRC.FrameIndex;
     }
 
     return resolveParameters;

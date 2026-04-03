@@ -1,6 +1,8 @@
 #ifndef RAY_OFFSET_HLSL
 #define RAY_OFFSET_HLSL
 
+#include "raytracing/include/AdvancedSettings.hlsli"
+
 // https://github.com/NVIDIAGameWorks/dxvk-remix/blob/main/src/dxvk/shaders/rtx/concept/ray/ray_utilities.h
 
 /*
@@ -129,6 +131,38 @@ float3 OffsetRay(float3 position, float3 normal, float positionError, bool hasTr
 float3 OffsetRay(float3 position, float3 normal, bool hasTransmission = false)
 {
     return OffsetRay(position, normal, CalculatePositionError(position), hasTransmission);
+}
+
+// ============================================================================
+// NVIDIA Self-Intersection Avoidance (SIA) offset method
+// ============================================================================
+
+// Offset the world-space position along the world-space normal by the SIA-computed
+// safe offset. The offset value should come from SIA_SafeSpawnPoint() or
+// SIA_SafeSpawnPointSimple().
+//
+// This replaces the standard OffsetRay for SIA-computed surfaces. The offset is
+// already a tight error bound, so no additional scaling or position-error tracking
+// is needed.
+float3 OffsetRaySIA(float3 wldPosition, float3 wldNormal, float wldOffset, bool hasTransmission = false)
+{
+    float sign = hasTransmission ? -1.0f : 1.0f;
+    precise float3 p = mad(sign * wldOffset, wldNormal, wldPosition);
+    return p;
+}
+
+// Unified offset function that dispatches to the appropriate method based on
+// USE_SIA_INTERPOLATION. Call sites can use this instead of branching manually.
+//
+// When USE_SIA_INTERPOLATION=1: uses SIA offset (siaOffset parameter, ignores positionError)
+// When USE_SIA_INTERPOLATION=0: uses standard offset (positionError parameter, ignores siaOffset)
+float3 OffsetRayAuto(float3 position, float3 normal, float positionError, float siaOffset, bool hasTransmission)
+{
+#if USE_SIA_INTERPOLATION
+    return OffsetRaySIA(position, normal, siaOffset, hasTransmission);
+#else
+    return OffsetRay(position, normal, positionError, hasTransmission);
+#endif
 }
 
 #endif // RAY_OFFSET_HLSL

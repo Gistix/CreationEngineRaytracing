@@ -129,6 +129,33 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             }
         }
 
+        // Fuzz (OpenPBR §3.7)
+        if (material.PBRFlags & PBR::Flags::Fuzz)
+        {
+            half4 fuzzColorWeight = material.FuzzColorWeight();
+            surface.FuzzColor = fuzzColorWeight.rgb;
+            surface.FuzzWeight = fuzzColorWeight.a;
+
+            if (material.PBRFlags & PBR::Flags::HasFeatureTexture1)
+            {
+                Texture2D fuzzTexture = Textures[NonUniformResourceIndex(material.FuzzTexture())];
+                float4 sampledFuzz = fuzzTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+                surface.FuzzColor *= sampledFuzz.rgb;
+                surface.FuzzWeight *= sampledFuzz.a;
+            }
+        }
+
+        // Glint (Discrete Stochastic Microfacet Model)
+        if (material.PBRFlags & PBR::Flags::Glint)
+        {
+            half4 glintParams = material.GlintParams();
+            surface.GlintScreenSpaceScale = glintParams.x;
+            surface.GlintLogMicrofacetDensity = glintParams.y;
+            surface.GlintMicrofacetRoughness = glintParams.z;
+            surface.GlintDensityRandomization = glintParams.w;
+            surface.GlintTexCoord = texCoord0;
+        }
+
         // OpenPBR 3.11: Emission sits below the coat and is absorbed.
         // At normal incidence, coat_color = T^2 gives the round-trip absorption.
         if (surface.CoatStrength > 0)
@@ -555,7 +582,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             1.0,              // full ripple strength on water
             Features.WetnessEffects);
         float3 rippleNormal = normalize(raindropInfo.xyz);
-        surface.Normal = Wetness::ReorientNormal(rippleNormal, surface.Normal);
+        surface.Normal = ReorientNormal(rippleNormal, surface.Normal);
     }
 
     surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
