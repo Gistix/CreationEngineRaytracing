@@ -153,14 +153,14 @@ struct HashMapData
 {
 	uint capacity;
 
-	RW_STRUCTURED_BUFFER(hashEntriesBuffer, uint64_t);
+	RW_STRUCTURED_BUFFER_UPDATE_RESOLVE(hashEntriesBuffer, uint64_t);
 
 #if !HASH_GRID_ENABLE_64_BIT_ATOMICS
-	RW_STRUCTURED_BUFFER(lockBuffer, uint);
+	RW_STRUCTURED_BUFFER_UPDATE(lockBuffer, uint);
 #endif  // !HASH_GRID_ENABLE_64_BIT_ATOMICS
 };
 
-#if SHARC_UPDATE || SHARC_RESOLVE
+#if SHARC_UPDATE
 void HashMapAtomicCompareExchange(in HashMapData hashMapData, in uint dstOffset, in uint64_t compareValue, in uint64_t value, out uint64_t originalValue)
 {
 #if HASH_GRID_ENABLE_64_BIT_ATOMICS
