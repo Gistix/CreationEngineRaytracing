@@ -77,6 +77,30 @@
 #	define RW_STRUCTURED_BUFFER(name, type) RWStructuredBuffer<type> name
 #endif
 
+#ifndef RW_STRUCTURED_BUFFER_UPDATE
+#	if SHARC_UPDATE
+#		define RW_STRUCTURED_BUFFER_UPDATE(name, type) RWStructuredBuffer<type> name
+#	else
+#		define RW_STRUCTURED_BUFFER_UPDATE(name, type) StructuredBuffer<type> name
+#	endif
+#endif
+
+#ifndef RW_STRUCTURED_BUFFER_UPDATE_RESOLVE
+#	if SHARC_UPDATE || SHARC_RESOLVE
+#		define RW_STRUCTURED_BUFFER_UPDATE_RESOLVE(name, type) RWStructuredBuffer<type> name
+#	else
+#		define RW_STRUCTURED_BUFFER_UPDATE_RESOLVE(name, type) StructuredBuffer<type> name
+#	endif
+#endif
+
+#ifndef RW_STRUCTURED_BUFFER_RESOLVE
+#	if SHARC_RESOLVE
+#		define RW_STRUCTURED_BUFFER_RESOLVE(name, type) RWStructuredBuffer<type> name
+#	else
+#		define RW_STRUCTURED_BUFFER_RESOLVE(name, type) StructuredBuffer<type> name
+#	endif
+#endif
+
 #ifndef BUFFER_AT_OFFSET
 #	define BUFFER_AT_OFFSET(name, offset) name[offset]
 #endif
@@ -129,7 +153,7 @@ struct SharcParameters
 	bool enableAntiFireflyFilter;
 
 	RW_STRUCTURED_BUFFER(accumulationBuffer, SharcAccumulationData);
-	RW_STRUCTURED_BUFFER(resolvedBuffer, SharcPackedData);
+	RW_STRUCTURED_BUFFER_RESOLVE(resolvedBuffer, SharcPackedData);
 };
 
 struct SharcState
@@ -200,7 +224,7 @@ SharcVoxelData SharcUnpackVoxelData(SharcPackedData packedData)
 	return voxelData;
 }
 
-SharcVoxelData SharcGetVoxelData(RW_STRUCTURED_BUFFER(voxelDataBuffer, SharcPackedData), HashGridIndex cacheIndex)
+SharcVoxelData SharcGetVoxelData(RW_STRUCTURED_BUFFER_RESOLVE(voxelDataBuffer, SharcPackedData), HashGridIndex cacheIndex)
 {
 	SharcVoxelData voxelData;
 	voxelData.accumulatedRadiance = float3(0, 0, 0);

@@ -26,7 +26,6 @@ ConstantBuffer<SHaRCData>                   SHaRC                       : regist
 RWStructuredBuffer<uint64_t>                SharcHashEntriesBuffer      : register(u0);
 RWStructuredBuffer<uint>                    SharcLockBuffer             : register(u1);
 RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer     : register(u2);
-RWStructuredBuffer<SharcPackedData>         SharcResolvedBuffer         : register(u3);
 #else
 RWTexture2D<float4>                         Output                      : register(u0);
 RWTexture2D<float3>                         DiffuseAlbedo               : register(u1);
@@ -65,9 +64,7 @@ StructuredBuffer<Instance>                  Instances                   : regist
 StructuredBuffer<Mesh>                      Meshes                      : register(t5);
 
 #if defined(SHARC)
-#   if !SHARC_UPDATE
 StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t6);
-#   endif
 
 #   if !SHARC_UPDATE
 StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : register(t7);
