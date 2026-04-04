@@ -42,7 +42,7 @@ struct Model
 		return false;
 	}
 
-	void Update();
+	void Update(bool isPlayer);
 
 	void SetData(MeshData* meshData, uint32_t& index);
 

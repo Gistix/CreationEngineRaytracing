@@ -326,8 +326,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (instance->IsHidden())
 			continue;
 
+		bool isPlayer = Util::IsPlayerFormID(instance->m_FormID);
+
 		// Update if applicabe and queue skinning/dynamic update
-		instance->model->Update();
+		instance->model->Update(isPlayer);
 
 		uint32_t firstMeshIndex = meshIndex;
 
@@ -611,7 +613,7 @@ void SceneGraph::RemoveInstance(RE::NiAVObject* node)
 
 	m_InstanceNodes.erase(instanceNodeIt);
 
-	m_InstancesFormIDs.erase(instance->formID);
+	m_InstancesFormIDs.erase(instance->m_FormID);
 
 	// Removes the original instance, all pointers past this point are invalid
 	auto instIt = eastl::find_if(

@@ -19,7 +19,7 @@ struct Instance
 	};
 
 	// Instance form id
-	RE::FormID formID;
+	RE::FormID m_FormID;
 
 	// Node ptr
 	RE::NiAVObject* node;
@@ -42,7 +42,7 @@ struct Instance
 
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
-	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : formID(formID), node(node), model(model) { }
+	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), node(node), model(model) { }
 	
 	void SetDetached(bool detach);
 

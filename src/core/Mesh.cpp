@@ -869,7 +869,7 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 	commandList->writeBuffer(buffers.dynamicPositionBuffer, geometry.dynamicPosition.data(), sizeof(float4) * vertexCount);
 }
 
-bool Mesh::UpdateSkinning()
+bool Mesh::UpdateSkinning(bool isPlayer)
 {
 	if (!bsGeometryPtr)
 		return false;
@@ -886,12 +886,9 @@ bool Mesh::UpdateSkinning()
 	if (frameID == Constants::INVALID_FRAME_ID)
 		return false;
 
-	//if (bsGeometryPtr->GetFlags().any(RE::NiAVObject::Flag::kNoAnimSyncZ, RE::NiAVObject::Flag::kNoAnimSyncS))
-	//	return false;
-	//logger::info("Mesh::UpdateSkinning - Flags: {}, {}", Util::GetFlagsString<RE::NiAVObject::Flag>(bsGeometryPtr->GetFlags().underlying()), m_Name);
-
-	// Only update if the game has updated the matrices
-	if (m_FrameID == frameID)
+	// Only update if the game has updated the bones
+	// Always update for player (COtR fix)
+	if (!isPlayer && m_FrameID == frameID)
 		return false;
 
 	auto* rootParent = skinInstance->rootParent;
@@ -921,23 +918,21 @@ bool Mesh::UpdateSkinning()
 	if (skinData->bones == 0)
 		return false;
 
-	auto skinRootInverse = Util::Math::GetXMFromNiTransform(skinRoot.Invert());
+	auto skinRootInverse = skinRoot.Invert();
 
 	if (m_BoneMatrices.empty() || skinData->bones != m_BoneMatrices.size())
 		m_BoneMatrices.resize(skinData->bones);
 
 	for (uint i = 0; i < skinData->bones; i++) {
-		auto boneData = skinData->boneData[i];
 		auto boneWorld = *skinInstance->boneWorldTransforms[i];
-
-		auto boneMatrix = boneWorld * boneData.skinToBone; //  skinData->rootParentToSkin * boneWorld * boneData.skinToBone;
-		XMStoreFloat3x4(&m_BoneMatrices[i], XMMatrixMultiply(Util::Math::GetXMFromNiTransform(boneMatrix), skinRootInverse));
+		auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
+		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(skinRootInverse * boneMatrix));
 	}
 
 	return true;
 }
 
-DirtyFlags Mesh::Update()
+DirtyFlags Mesh::Update(bool isPlayer)
 {
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
@@ -975,7 +970,7 @@ DirtyFlags Mesh::Update()
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning())
+	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
 	return updateFlags;

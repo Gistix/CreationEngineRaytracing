@@ -49,7 +49,7 @@ void Instance::Update(uint32_t tlasInstanceID)
 	auto* player = RE::PlayerCharacter::GetSingleton();
 
 	// TODO: Update logic for first person model support (both shares the same form id of the player)
-	if (Util::IsPlayerFormID(formID)) {
+	if (Util::IsPlayerFormID(m_FormID)) {
 		m_State.set(!player->Is3rdPersonVisible(), State::FirstPersonHidden);
 	}
 
