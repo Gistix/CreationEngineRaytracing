@@ -87,6 +87,8 @@ struct Scene
 
 	RenderNode* GetModeNode(Mode mode);
 
+	bool IsModeInitialized(Mode mode);
+
 	void UpdateMode(Mode mode, Mode previousMode);
 
 	bool Initialize(RendererParams rendererParams);

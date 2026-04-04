@@ -239,12 +239,23 @@ RenderNode* Scene::GetModeNode(Mode mode)
 	return nullptr;
 }
 
+bool Scene::IsModeInitialized(Mode mode)
+{
+	if (mode == Mode::GlobalIllumination)
+		return m_GlobalIllumination != nullptr;
+	else if (mode == Mode::PathTracing)
+		return m_PathTracing != nullptr;
+
+	return false;
+}
+
 void Scene::UpdateMode(Mode mode, Mode previousMode)
 {
 	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
 
 	// Detach previous mode node
-	rootNode->DetachRenderNode(GetModeNode(previousMode));
+	if (IsModeInitialized(previousMode))
+		rootNode->DetachRenderNode(GetModeNode(previousMode));
 
 	// Attach new mode node
 	rootNode->AttachRenderNode(GetModeNode(mode));
@@ -274,28 +285,6 @@ bool Scene::Initialize(RendererParams rendererParams)
 	m_FeatureData = eastl::make_unique<FeatureData>();
 	m_FeatureBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
 		sizeof(FeatureData), "Feature Data", Constants::MAX_CB_VERSIONS));
-
-
-	//m_GBuffer = eastl::make_unique<RenderNode>(true, "GBuffer", eastl::make_unique<Pass::GBuffer>(renderer));
-
-	/*{
-		m_PathTracing = eastl::make_unique<RenderNode>(true, "Path Tracing");
-
-		m_PathTracing->AddNode({
-			true,
-			"RaytracingCommon",
-			eastl::make_unique<Pass::SceneTLAS>(renderer)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"RTGBuffer",
-			eastl::make_unique<Pass::Raytracing::GBuffer>(
-				renderer,
-				m_PathTracing->GetPass<Pass::SceneTLAS>()
-			)
-		});
-	}*/
 
 	return true;
 }
@@ -541,5 +530,5 @@ void Scene::UpdateSettings(Settings settings)
 		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
 	}
 
-	rootNode->SettingsChanged(settings);
+	rootNode->SettingsChanged(settings); 
 }
