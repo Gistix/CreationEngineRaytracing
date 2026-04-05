@@ -244,8 +244,10 @@ void Main()
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
 
     bool sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
-    if (!sourceIsEnter) 
+    if (!sourceIsEnter) {
         sourceSurface.FlipNormal();
+        sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
+    }
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);    
     
@@ -372,7 +374,10 @@ void Main()
             Surface buildSurface = SurfaceMaker::make(buildHitPos, buildPayload, hitResult.nextRayDir, buildRayCone, buildInstance, buildMaterial, true);
             BRDFContext buildBrdfCtx = BRDFContext::make(buildSurface, -hitResult.nextRayDir);
             bool buildIsEnter = dot(buildSurface.FaceNormal, buildBrdfCtx.ViewDirection) >= 0.0f;
-            if (!buildIsEnter) buildSurface.FlipNormal();
+            if (!buildIsEnter) {
+                buildSurface.FlipNormal();
+                buildBrdfCtx.NdotV = saturate(dot(buildSurface.Normal, buildBrdfCtx.ViewDirection));
+            }
             AdjustShadingNormal(buildSurface, buildBrdfCtx, true, false);
             StandardBSDF buildBsdf = StandardBSDF::make(buildSurface, buildIsEnter);
 
@@ -431,7 +436,10 @@ void Main()
                 Surface expSurface = SurfaceMaker::make(expHitPos, expPayload, ep.rayDir, expRayCone, expInstance, expMaterial, false);
                 BRDFContext expBrdfCtx = BRDFContext::make(expSurface, -ep.rayDir);
                 bool expIsEnter = dot(expSurface.FaceNormal, expBrdfCtx.ViewDirection) >= 0.0f;
-                if (!expIsEnter) expSurface.FlipNormal();
+                if (!expIsEnter) {
+                    expSurface.FlipNormal();
+                    expBrdfCtx.NdotV = saturate(dot(expSurface.Normal, expBrdfCtx.ViewDirection));
+                }
                 AdjustShadingNormal(expSurface, expBrdfCtx, true, false);
                 StandardBSDF expBsdf = StandardBSDF::make(expSurface, expIsEnter);
 
@@ -474,7 +482,10 @@ void Main()
                     Surface contSurface = SurfaceMaker::make(contHitPos, contPayload, expHitResult.nextRayDir, contRayCone, contInstance, contMaterial, false);
                     BRDFContext contBrdfCtx = BRDFContext::make(contSurface, -expHitResult.nextRayDir);
                     bool contIsEnter = dot(contSurface.FaceNormal, contBrdfCtx.ViewDirection) >= 0.0f;
-                    if (!contIsEnter) contSurface.FlipNormal();
+                    if (!contIsEnter) {
+                        contSurface.FlipNormal();
+                        contBrdfCtx.NdotV = saturate(dot(contSurface.Normal, contBrdfCtx.ViewDirection));
+                    }
                     AdjustShadingNormal(contSurface, contBrdfCtx, true, false);
                     StandardBSDF contBsdf = StandardBSDF::make(contSurface, contIsEnter);
 
@@ -540,7 +551,10 @@ void Main()
         sourceSurface = SurfaceMaker::make(fillHitPos, fillPayload, fillRayDir, sourceRayCone, sourceInstance, sourceMaterial, true);
         sourceBRDFContext = BRDFContext::make(sourceSurface, -fillRayDir);
         sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
-        if (!sourceIsEnter) sourceSurface.FlipNormal();
+        if (!sourceIsEnter) {
+            sourceSurface.FlipNormal();
+            sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
+        }
         AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);
         sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);
         fillPlaneThp = fillThp;
@@ -1023,7 +1037,10 @@ void Main()
             
             brdfContext = BRDFContext::make(surface, -direction);
             isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
-            if (!isEnter) surface.FlipNormal();
+            if (!isEnter) {
+                surface.FlipNormal();
+                brdfContext.NdotV = saturate(dot(surface.Normal, brdfContext.ViewDirection));
+            }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
             bsdf = StandardBSDF::make(surface, isEnter);

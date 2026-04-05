@@ -405,7 +405,10 @@ void Main()
             
             brdfContext = BRDFContext::make(surface, -direction);
             isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
-            if (!isEnter) surface.FlipNormal();
+            if (!isEnter) {
+                surface.FlipNormal();
+                brdfContext.NdotV = saturate(dot(surface.Normal, brdfContext.ViewDirection));
+            }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
             bsdf = StandardBSDF::make(surface, isEnter);

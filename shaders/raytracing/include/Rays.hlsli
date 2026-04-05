@@ -10,7 +10,7 @@
 
 #include "raytracing/include/Transparency.hlsli"
 
-#define RAY_FLAGS (RAY_FLAG_CULL_BACK_FACING_TRIANGLES | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
+#define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
 
 Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
 {
