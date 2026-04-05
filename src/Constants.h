@@ -17,7 +17,7 @@ namespace Constants
 	static constexpr uint32_t INSTANCE_LIGHTS_MAX = 32;
 
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
-	static constexpr uint32_t NUM_MESHES_MAX = 8 * 1024;
+	static constexpr uint32_t NUM_MESHES_MAX = 16 * 1024;
 
 	static constexpr uint32_t TLAS_INSTANCES_MIN = 2048;
 	static constexpr uint32_t TLAS_INSTANCES_THRESHOLD = 256;
@@ -27,7 +27,7 @@ namespace Constants
 	static constexpr uint32_t LIGHT_TLAS_INSTANCES_THRESHOLD = 16;
 	static constexpr uint32_t LIGHT_TLAS_INSTANCES_STEP = 32;
 
-	static constexpr uint32_t NUM_INSTANCES_MAX = 8 * 1024;
+	static constexpr uint32_t NUM_INSTANCES_MAX = 16 * 1024;
 
 	static constexpr uint32_t NUM_TEXTURES_MIN = 512;
 	static constexpr uint32_t NUM_TEXTURES_MAX = 8 * 1024;
