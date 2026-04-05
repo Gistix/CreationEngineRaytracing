@@ -177,9 +177,9 @@ struct Mesh
 
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
-	bool UpdateSkinning();
+	bool UpdateSkinning(bool isPlayer);
 
-	DirtyFlags Update();
+	DirtyFlags Update(bool isPlayer);
 
 	bool IsHidden() const;
 
