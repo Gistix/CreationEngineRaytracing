@@ -129,6 +129,10 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
 #endif
 
     lr = TangentToWorld(lr, SampleConeUniform(randomSeed, cosSunDisk));
+
+    // Correct MC weight for uniform cone sampling of a finite-size disk light.
+    // Factor = 2/(1+cosα) → 1 for small angles (sun), matters for large celestial bodies.
+    irradiance *= 2.0f / (1.0f + cosSunDisk);
 }
 
 float3 EvalDirectionalLight(in Material material, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
@@ -349,10 +353,10 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
             if (cosDelta >= cosSunDisk)
             {
                 // irradiance = E_sun (total flux/area from the sun).
-                // Standard NEE uses this with cone sampling where PDF = 1/ω_sun, so E_sun = L_sun × ω_sun works out.
-                // But a delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
-                // Convert: L_sun = E_sun / ω_sun, where ω_sun = 2π(1-cosSunDisk).
-                float sunSolidAngle = 2.0f * K_PI * (1.0f - cosSunDisk);
+                // A delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
+                // Convert: L_sun = E_sun / Ω_proj, where Ω_proj = π·sin²α = π(1-cos²α)
+                // is the projected solid angle of the disk.
+                float sunSolidAngle = K_PI * (1.0f - cosSunDisk * cosSunDisk);
                 float3 contribution = deltaThroughput * irradiance / sunSolidAngle * (isPrimary ? 1.0f : Raytracing.Directional);
                 
                 contribution *= TraceRayShadow(Scene, surface, deltaDir, randomSeed);
