@@ -609,7 +609,20 @@ void SceneGraph::RemoveInstance(RE::NiAVObject* node)
 
 	auto& instance = instanceNodeIt->second;
 
-	instance->model->Release();
+	auto refCount = instance->model->Release();
+
+	if (refCount <= 0) {
+		auto renderer = Renderer::GetSingleton();
+
+		logger::debug("SceneGraph::RemoveInstance(NiAVObject) - {}", instance->model->m_Name);
+
+		auto modelIt = m_Models.find(instance->model->m_Name);
+
+		if (modelIt != m_Models.end()) {
+			m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
+			m_Models.erase(modelIt);
+		}
+	}
 
 	m_InstanceNodes.erase(instanceNodeIt);
 
