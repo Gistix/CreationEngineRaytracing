@@ -886,15 +886,18 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	if (frameID == Constants::INVALID_FRAME_ID)
 		return false;
 
-	// Only update if the game has updated the bones
-	// Always update for player (COtR fix)
-	if (!isPlayer && m_FrameID == frameID)
-		return false;
-
 	auto* rootParent = skinInstance->rootParent;
 
 	// UBE crash fix
 	if (!rootParent)
+		return false;
+
+	// Mostly for COtR, head geometry becomes unparented after the first few frames
+	const bool unparentedPlayer = isPlayer && !rootParent->parent;
+
+	// Only update if the game has updated the animation
+	// Part 1 of COtR fix
+	if (!unparentedPlayer && m_FrameID == frameID)
 		return false;
 
 	m_FrameID = frameID;
@@ -906,6 +909,10 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	// If skin transform is identity it will break skinning
 	if (skinRoot == identity)
 		return false;
+
+	// Part 2 of COtR fix
+	if (unparentedPlayer)
+		skinRoot = RE::PlayerCharacter::GetSingleton()->Get3D(false)->world;
 
 	auto* skinData = skinInstance->skinData.get();
 
