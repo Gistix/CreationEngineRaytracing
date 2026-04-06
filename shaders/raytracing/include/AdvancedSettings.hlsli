@@ -14,7 +14,7 @@
 #define LIGHTING_MODE_PBR       1
 
 #ifndef DIFFUSE_MODE
-#define DIFFUSE_MODE (DIFFUSE_MODE_BURLEY)
+#define DIFFUSE_MODE (DIFFUSE_MODE_CHAN)
 #endif
 
 #ifndef LIGHTEVAL_MODE
@@ -41,7 +41,7 @@
 //
 // Reference: https://github.com/NVIDIA/self-intersection-avoidance
 #ifndef USE_SIA_INTERPOLATION
-#define USE_SIA_INTERPOLATION (1)
+#define USE_SIA_INTERPOLATION (0)
 #endif
 
 #endif // ADVANCED_SETTINGS_HLSL
