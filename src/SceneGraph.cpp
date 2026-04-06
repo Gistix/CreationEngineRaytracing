@@ -557,7 +557,7 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
 			break;
 		case RE::FormType::Weapon:
 			// Weapons are separate models parented to an actor node
-			RemoveInstance(object.partClone.get());
+			ReleaseObjectInstance(object.partClone.get());
 			break;
 		default:
 			break;
@@ -597,7 +597,7 @@ void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 	m_Textures.erase(texture);
 }
 
-void SceneGraph::RemoveInstance(RE::NiAVObject* node)
+void SceneGraph::ReleaseObjectInstance(RE::NiAVObject* node, bool releaseModel)
 {
 	auto instanceNodeIt = m_InstanceNodes.find(node);
 
@@ -609,7 +609,23 @@ void SceneGraph::RemoveInstance(RE::NiAVObject* node)
 
 	auto& instance = instanceNodeIt->second;
 
-	instance->model->Release();
+	auto refCount = instance->model->Release();
+
+	if (refCount <= 0 && releaseModel) {
+		logger::debug("SceneGraph::ReleaseObjectInstance - {}", instance->model->m_Name);
+
+		auto modelIt = m_Models.find(instance->model->m_Name);
+
+		if (modelIt != m_Models.end()) {
+			auto renderer = Renderer::GetSingleton();
+
+			// Add to safe-release vector
+			m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
+
+			// Erase from list
+			m_Models.erase(modelIt);
+		}
+	}
 
 	m_InstanceNodes.erase(instanceNodeIt);
 
@@ -625,7 +641,7 @@ void SceneGraph::RemoveInstance(RE::NiAVObject* node)
 		m_Instances.erase(instIt);
 }
 
-void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
+void SceneGraph::ReleaseFormInstances(RE::TESForm* form, bool releaseModel)
 {
 	auto formID = form->GetFormID();
 
@@ -650,8 +666,7 @@ void SceneGraph::RemoveInstance(RE::TESForm* form, bool releaseModel)
 		auto refCount = instance->model->Release();
 
 		if (refCount <= 0 && releaseModel) {
-			logger::debug("SceneGraph::RemoveInstance - {}", instance->model->m_Name);
-			//m_Models.erase(instance->model->m_Name);
+			logger::debug("SceneGraph::ReleaseFormInstances - {}", instance->model->m_Name);
 
 			auto modelIt = m_Models.find(instance->model->m_Name);
 

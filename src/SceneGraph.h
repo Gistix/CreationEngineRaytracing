@@ -134,8 +134,13 @@ public:
 
 	void EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance);
 	void ReleaseTexture(ID3D11Texture2D* texture);
-	void RemoveInstance(RE::NiAVObject* object);
-	void RemoveInstance(RE::TESForm* form, bool releaseModel);
+
+	// Releases an object instance while keeping the model and mesh data intact.
+	// releaseModel is to be used by water and only water.
+	void ReleaseObjectInstance(RE::NiAVObject* object, bool releaseModel = false);
+
+	// Releases all instances of a form, and optionally releases the model and mesh data if there are no remaining instances using it.
+	void ReleaseFormInstances(RE::TESForm* form, bool releaseModel);
 
 	void SetInstanceDetached(RE::TESForm* form, bool detached);
 

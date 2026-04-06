@@ -13,7 +13,7 @@ namespace Hooks
 
 	void Release3DRelatedData::thunk(RE::TESObjectREFR* refr)
 	{
-		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(refr, true);
+		Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(refr, true);
 
 		func(refr);
 	}
@@ -21,7 +21,7 @@ namespace Hooks
 	void Actor_Set3D::thunk(RE::Actor* a_actor, RE::NiAVObject* a_object, bool a_queue3DTasks)
 	{
 		if (!a_object)
-			Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(a_actor, true);
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_actor, true);
 
 		func(a_actor, a_object, a_queue3DTasks);
 	}
@@ -37,7 +37,7 @@ namespace Hooks
 	{
 		func(oThis);
 
-		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
+		Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(oThis, true);
 	};
 
 	void TESWaterSystem_AddWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural)
@@ -49,9 +49,9 @@ namespace Hooks
 
 	void TESWaterSystem_RemoveWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj)
 	{
-		func(a_waterSystem, a_waterObj);
+		Scene::GetSingleton()->GetSceneGraph()->ReleaseObjectInstance(a_waterObj, true);
 
-		//Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
+		func(a_waterSystem, a_waterObj);
 	};
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
