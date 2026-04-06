@@ -16,7 +16,7 @@ namespace Events
 		if (a_event->loaded)
 			return RE::BSEventNotifyControl::kContinue;
 
-		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(eventRef, true);
+		Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(eventRef, true);
 
 		return RE::BSEventNotifyControl::kContinue;
 	}

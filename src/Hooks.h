@@ -57,7 +57,7 @@ namespace Hooks
 	{
 		static void thunk(T* oThis)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis);
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseObjectInstance(oThis);
 
 			func(oThis);
 		}
