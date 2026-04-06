@@ -22,7 +22,7 @@ struct Instance
 	RE::FormID m_FormID;
 
 	// Node ptr
-	RE::NiAVObject* node;
+	RE::NiAVObject* m_Node;
 
 	// Model ptr
 	Model* model;
@@ -42,7 +42,7 @@ struct Instance
 
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
-	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), node(node), model(model) { }
+	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) { }
 	
 	void SetDetached(bool detach);
 

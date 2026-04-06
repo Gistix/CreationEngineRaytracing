@@ -15,8 +15,8 @@ void Light::UpdateInstances()
 
 	for (auto& instance : sceneGraph->GetInstances())
 	{
-		auto& center = instance->node->worldBound.center;
-		float radius = instance->node->worldBound.radius;
+		auto& center = instance->m_Node->worldBound.center;
+		float radius = instance->m_Node->worldBound.radius;
 
 		if ((center - position).Length() > radius + runtimeData.radius.x)
 			continue;
