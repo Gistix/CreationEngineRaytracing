@@ -661,7 +661,7 @@ void SceneGraph::ReleaseFormInstances(RE::TESForm* form, bool releaseModel)
 
 	// A single form can hold multiple model instances
 	for (auto& instance : instanceFormIDsIt->second) {
-		m_InstanceNodes.erase(instance->node);
+		m_InstanceNodes.erase(instance->m_Node);
 
 		auto refCount = instance->model->Release();
 
@@ -888,6 +888,8 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 	auto rootWorldInverse = object->world.Invert();
 
+	const bool isRootOrigin = object->world.translate == RE::NiPoint3::Zero();
+
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
 	// Will traverse and skip non-root fade nodes (and their children)
@@ -947,8 +949,11 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 		float3x4 localToRoot{};
 
+		const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
+
 		// Some plants have parts with geometry world position of [0, 0, 0]
-		if (pGeometry->world.translate != RE::NiPoint3::Zero())
+		// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
+		if (!isOrigin || isOrigin && isRootOrigin)
 			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
