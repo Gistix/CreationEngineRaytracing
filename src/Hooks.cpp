@@ -51,7 +51,7 @@ namespace Hooks
 	{
 		func(a_waterSystem, a_waterObj);
 
-		Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(a_waterObj);
+		//Scene::GetSingleton()->GetSceneGraph()->RemoveInstance(oThis, true);
 	};
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
