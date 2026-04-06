@@ -14,7 +14,7 @@ bool Instance::IsDetached() const
 }
 bool Instance::IsHidden() const
 {
-	return m_State.any(State::Detached, State::FirstPersonHidden, State::DistanceHidden) || node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
+	return m_State.any(State::Detached, State::FirstPersonHidden, State::DistanceHidden) || m_Node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
 }
 
 bool Instance::SkipUpdate()
@@ -29,7 +29,7 @@ bool Instance::SkipUpdate()
 		const uint64_t delta = frameIndex - m_LastUpdate;
 
 		float3 cameraPosition = Scene::GetSingleton()->GetCameraData()->Position;
-		float3 instanceCenter = Util::Math::Float3(node->worldBound.center);
+		float3 instanceCenter = Util::Math::Float3(m_Node->worldBound.center);
 
 		const float distance = Util::Units::GameUnitsToMeters(float3::Distance(cameraPosition, instanceCenter));
 
@@ -55,7 +55,7 @@ void Instance::Update(uint32_t tlasInstanceID)
 
 	if (model->GetMeshFlags().none(Mesh::Flags::Landscape) && !IsDetached())
 	{
-		auto distance = player->Get3D(false)->world.translate.GetDistance(node->world.translate);
+		auto distance = player->Get3D(false)->world.translate.GetDistance(m_Node->world.translate);
 		bool hide = distance > 40000;
 
 		if (hide && m_State.none(State::DistanceHidden))
@@ -71,7 +71,7 @@ void Instance::Update(uint32_t tlasInstanceID)
 	if (SkipUpdate())
 		return;
 
-	if (memcmp(&m_NiTransform, &node->world, sizeof(RE::NiTransform)) != 0)
+	if (memcmp(&m_NiTransform, &m_Node->world, sizeof(RE::NiTransform)) != 0)
 		m_DirtyFlags |= DirtyFlags::Transform;
 
 	m_DirtyFlags |= model->GetDirtyFlags().get();
@@ -80,10 +80,10 @@ void Instance::Update(uint32_t tlasInstanceID)
 		logger::trace("Instance::Update - {}: {}", model->m_Name, Util::GetFlagsString<DirtyFlags>(static_cast<uint8_t>(m_DirtyFlags)));
 
 	// Update transform for BLAS instance
-	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(node->world));
-	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(node->previousWorld));
+	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(m_Node->world));
+	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_Node->previousWorld));
 
-	m_NiTransform = node->world;
+	m_NiTransform = m_Node->world;
 
 	m_TLASInstanceID = tlasInstanceID;
 }
