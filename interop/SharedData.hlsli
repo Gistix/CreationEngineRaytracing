@@ -126,6 +126,7 @@ struct LinearLightingSettings
 {
 	uint enableLinearLighting;
 	uint enableGammaCorrection;
+	uint enableACEScg;
 	uint isDirLightLinear;
 	float dirLightMult;
 	float lightGamma;
@@ -152,6 +153,9 @@ struct LinearLightingSettings
 	float projectedEffectMult;
 	float deferredEffectMult;
 	float otherEffectMult;
+	float _pad0;
+	float _pad1;
+	float _pad2;
 };
 #ifdef __cplusplus
 static_assert(sizeof(LinearLightingSettings) % 16 == 0);
