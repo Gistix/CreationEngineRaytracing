@@ -62,8 +62,8 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             windowAlpha = emissive;
         }
 
-        surface.Albedo = albedo.rgb * vertexColor.rgb;
-        surface.Emissive = emissive * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+        surface.Albedo = GamutTransform(albedo.rgb * vertexColor.rgb);
+        surface.Emissive = GamutTransform(emissive) * EmitColorToLinear(material.EffectColor().rgb) * material.EffectColor().a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         surface.Roughness = saturate(rmaos.x * material.RoughnessScale());
         surface.Metallic = saturate(rmaos.y);
         surface.AO = rmaos.z;
@@ -75,7 +75,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
             float4 subsurfaceColor = subsurfaceTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
             float thickness = subsurfaceColor.a * material.SubsurfaceScale();
-            surface.SubsurfaceData.ScatteringColor = subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb;
+            surface.SubsurfaceData.ScatteringColor = GamutTransform(subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
 
             surface.TransmissionColor = surface.SubsurfaceData.ScatteringColor;
@@ -92,7 +92,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             // Just use simple diffuse transmission for thin objects
             float4 subsurfaceColor = subsurfaceTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
             float thickness = subsurfaceColor.a * material.SubsurfaceScale();
-            surface.TransmissionColor = subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb;
+            surface.TransmissionColor = GamutTransform(subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb);
             surface.DiffTrans = 1 - thickness;
         }
 
@@ -112,6 +112,8 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 surface.CoatColor *= sampledCoat.rgb;
                 surface.CoatStrength *= sampledCoat.a;
             }
+
+            surface.CoatColor = GamutTransform(surface.CoatColor);
 
             if (material.PBRFlags & PBR::Flags::HasFeatureTexture1)
             {
@@ -145,6 +147,8 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 surface.FuzzColor *= sampledFuzz.rgb;
                 surface.FuzzWeight *= sampledFuzz.a;
             }
+
+            surface.FuzzColor = GamutTransform(surface.FuzzColor);
         }
 
         // Glint (Discrete Stochastic Microfacet Model)
@@ -325,7 +329,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.Anisotropy = -0.5f;
 
             Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];          
-            surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
+            surface.SubsurfaceData.ScatteringColor = GamutTransform(scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb) * K_PI;
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;            
         }
@@ -681,7 +685,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     [branch]
     if (material.ShaderType == ShaderType::TruePBR)
     {
-        surface.Albedo = baseColor;
+        surface.Albedo = GamutTransform(baseColor);
 
         float4 rmaos = BlendLandTexture(material.Texture12, texCoord0, landBlend0.x, mipLevel) + BlendLandTexture(material.Texture13, texCoord0, landBlend0.y, mipLevel) +
                         BlendLandTexture(material.Texture14, texCoord0, landBlend0.z, mipLevel) + BlendLandTexture(material.Texture15, texCoord0, landBlend0.w, mipLevel) +
@@ -694,7 +698,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     }
     else if (material.ShaderType == ShaderType::Lighting)
     {
-        surface.Albedo = baseColor; // GammaToTrueLinear looks wonky
+        surface.Albedo = GamutTransform(baseColor); // GammaToTrueLinear looks wonky
     }
 
 #if defined(DEBUG_NONORMALMAP)
