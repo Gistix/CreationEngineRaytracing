@@ -10,7 +10,14 @@ inline float Square(float value)
 
 inline float Luminance(float3 rgb)
 {
+#ifdef CERT_HAS_FEATURES
+    // AP1 (ACEScg) luminance coefficients when wide gamut is active
+    return Features.LinearLighting.enableACEScg
+        ? dot(rgb, float3(0.2722287168f, 0.6740817658f, 0.0536895174f))
+        : dot(rgb, float3(0.2126f, 0.7152f, 0.0722f));
+#else
     return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f));
+#endif
 }
 
 inline float Average(float3 rgb)

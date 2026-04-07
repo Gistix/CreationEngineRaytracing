@@ -2,30 +2,12 @@
 #define COLOR_CONVERSIONS_COMMON_HLSLI
 
 #include "interop/SharedData.hlsli"
+#include "Common/ColorSpaces.hlsli"
 #include "Utils/MathConstants.hlsli"
 
 #define LLSETTINGS Features.LinearLighting
 #define LLON LLSETTINGS.enableLinearLighting
 #define LLACESCG LLSETTINGS.enableACEScg
-
-// sRGB -> XYZ -> AP1 (ACEScg) gamut transform matrices
-static const float3x3 sRGB_2_XYZ_MAT = {
-    0.4123907993, 0.3575843394, 0.1804807884,
-    0.2126390059, 0.7151686788, 0.0721923154,
-    0.0193308187, 0.1191947798, 0.9505321522,
-};
-
-static const float3x3 XYZ_2_AP1_MAT = {
-     1.6410233797, -0.3248032942, -0.2364246952,
-    -0.6636628587,  1.6153315917,  0.0167563477,
-     0.0117218943, -0.0082844420,  0.9883948585,
-};
-
-float3 sRGBToAP1(float3 sRGB)
-{
-    float3 XYZ = mul(sRGB_2_XYZ_MAT, sRGB);
-    return mul(XYZ_2_AP1_MAT, XYZ);
-}
 
 // Gamut transform: converts linear sRGB-gamut color to ACEScg when enabled
 float3 GamutTransform(float3 linearColor)

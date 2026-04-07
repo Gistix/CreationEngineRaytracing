@@ -13,7 +13,7 @@
 ConstantBuffer<CameraData>                  Camera                      : register(b0);
 ConstantBuffer<RaytracingData>              Raytracing                  : register(b1);
 ConstantBuffer<FeatureData>                 Features                    : register(b2);
-
+#define CERT_HAS_FEATURES
 
 RaytracingAccelerationStructure             Scene                       : register(t0);
 StructuredBuffer<Instance>                  Instances                   : register(t1);

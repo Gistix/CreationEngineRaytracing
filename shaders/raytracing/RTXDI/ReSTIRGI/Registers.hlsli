@@ -10,7 +10,7 @@
 ConstantBuffer<CameraData>    Camera      : register(b0);
 ConstantBuffer<ReSTIRGIData>  g_ReSTIRGI  : register(b1);
 ConstantBuffer<FeatureData>   Features    : register(b2);
-
+#define CERT_HAS_FEATURES
 // Scene acceleration structure (for visibility rays in bias correction)
 RaytracingAccelerationStructure SceneBVH  : register(t0);
 

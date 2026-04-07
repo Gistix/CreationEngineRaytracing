@@ -20,6 +20,7 @@
 ConstantBuffer<CameraData>                  Camera                      : register(b0);
 ConstantBuffer<RaytracingData>              Raytracing                  : register(b1);
 ConstantBuffer<FeatureData>                 Features                    : register(b2);
+#define CERT_HAS_FEATURES
 ConstantBuffer<SHaRCData>                   SHaRC                       : register(b3);
 
 #if defined(SHARC) && SHARC_UPDATE
