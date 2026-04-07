@@ -430,44 +430,48 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 	CreateModelInternal(form, model, root);
 }
 
-void SceneGraph::CreateActorModel(RE::Actor* actor, RE::BipedAnim* bipedAnim, const char* name, RE::NiAVObject* root)
+void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool firstPerson)
 {
-	logger::trace("SceneGraph::CreateActorModel - {}", actor->GetName());
+	auto name = firstPerson ? std::format("{}_1stPerson", actor->GetName()) : std::string(actor->GetName());
 
-	if (bipedAnim) {
-		for (const auto& object : bipedAnim->objects)
-		{
-			logger::trace("\tBiped Object - Item: {}, Addon: {}, Part: {}, PartClone: {}",
-				object.item ? object.item->GetName() : "N/A",
-				object.addon ? object.addon->GetName() : "N/A",
-				object.part ? object.part->GetModel() : "N/A",
-				object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A");
+	auto* biped = actor->GetBiped(firstPerson).get();
+
+	logger::debug("SceneGraph::CreateActorModel - {}", name);
+
+	if (biped) {
+		if (!firstPerson) {
+			if (auto* headNode = actor->GetFaceNodeSkinned()) {
+				auto headName = std::format("{}_{}", actor->GetName(), headNode->name.c_str());
+				CreateModelInternal(actor, headName.c_str(), headNode);
+			}
 		}
-	}
 
-	auto* actorProcess = actor->GetActorRuntimeData().currentProcess;
-
-	if (actorProcess) {
-		for (const auto& equippedForm : actorProcess->equippedForms)
+		for (size_t i = 0; i < RE::BIPED_OBJECTS::kTotal; i++)
 		{
-			if (!equippedForm.object)
+			const auto& object = biped->objects[i];
+
+			if (!object.item)
 				continue;
 
-			logger::trace("\tEquipped Form - {}: {}, Flags: {}",
-				magic_enum::enum_name(equippedForm.object->GetFormType()), 
-				equippedForm.object->GetName(), 
-				Util::GetFlagsString<RE::BGSEquipSlot::Flag>(equippedForm.slot->flags.underlying()));
+			if (!object.part || !object.part->GetModel())
+				continue;
+
+			if (!object.partClone)
+				continue;
+
+			CreateModelInternal(object.item, object.part->GetModel(), object.partClone.get(), actor);
 		}
 	}
+	else {
+		Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
+			const bool isRoot = (fadeNode == root);
 
-	Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
-		const bool isRoot = (fadeNode == root);
+			auto fadeNodeName = std::format("{}.{}", name, fadeNode->name.c_str());
+			CreateModelInternal(actor, isRoot ? name.c_str() : fadeNodeName.c_str(), fadeNode);
 
-		auto fadeNodeName = std::format("{}.{}", name, fadeNode->name.c_str());
-		CreateModelInternal(actor, isRoot ? name : fadeNodeName.c_str(), fadeNode);
-
-		return RE::BSVisit::BSVisitControl::kContinue;
-	});
+			return RE::BSVisit::BSVisitControl::kContinue;
+		});
+	}
 }
 
 void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
@@ -949,13 +953,6 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 		float3x4 localToRoot{};
 
-		const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
-
-		// Some plants have parts with geometry world position of [0, 0, 0]
-		// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
-		if (!isOrigin || isOrigin && isRootOrigin)
-			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
-
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
 
@@ -970,6 +967,13 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
+
+			const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
+
+			// Some plants have parts with geometry world position of [0, 0, 0]
+			// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
+			if (!isOrigin || isOrigin && isRootOrigin)
+				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
 			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, true, 0);
 
@@ -990,6 +994,9 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Vertex count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
+
+			// Meshes are skinned to root parent
+			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * skinInstance->rootParent->world));
 
 			const auto skinNumPartitions = skinPartition->numPartitions;
 

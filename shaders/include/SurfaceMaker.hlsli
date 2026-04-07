@@ -113,8 +113,9 @@ struct SurfaceMaker
                 float3 prevPos0 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.x)];
                 float3 prevPos1 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.y)];
                 float3 prevPos2 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.z)];
-                float3 prevRootPos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
-                surface.PrevPosition = mul(instance.PrevTransform, float4(prevRootPos, 1.0));
+                float3 prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
+                float3 prevRootSpacePos = mul(mesh.Transform, float4(prevObjectSpacePos, 1.0));       
+                surface.PrevPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));
             }
             else
             {

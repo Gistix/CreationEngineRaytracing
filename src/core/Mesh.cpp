@@ -805,13 +805,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
 	}
 
-	// Updatable geometry is already in root space
-	if (updatable)
-		localToRoot = float3x4(
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f);
-
 	// Geometry description
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
@@ -826,8 +819,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	geometryTriangles.vertexStride = sizeof(Vertex);
 	geometryTriangles.vertexCount = vertexCount;
 
-	if (!updatable)
-		geometryDesc.setTransform(localToRoot.f);
+	geometryDesc.setTransform(localToRoot.f);
 }
 
 bool Mesh::UpdateDynamicPosition()
