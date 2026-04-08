@@ -42,7 +42,7 @@ struct Model
 		return false;
 	}
 
-	void Update(bool isPlayer);
+	void Update(RE::NiAVObject* object, bool isPlayer);
 
 	void SetData(MeshData* meshData, uint32_t& index);
 

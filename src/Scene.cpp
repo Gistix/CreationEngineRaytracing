@@ -340,18 +340,17 @@ void Scene::AttachModel([[maybe_unused]] RE::TESForm* form)
 
 	if (Util::IsPlayer(refr)) {
 		if (auto* player = reinterpret_cast<RE::PlayerCharacter*>(refr)) {
-			auto name = player->GetName();
 			// First Person
 			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), node);
 
 			// Third Person
-			GetSceneGraph()->CreateActorModel(player, player->GetBiped(false).get(), name, player->Get3D(false));
+			GetSceneGraph()->CreateActorModel(player);
 			return;
 		}
 	}
 
 	if (auto* actor = refr->As<RE::Actor>()) {
-		GetSceneGraph()->CreateActorModel(actor, actor->GetBiped().get(), actor->GetName(), node);
+		GetSceneGraph()->CreateActorModel(actor, node);
 	}
 }
 

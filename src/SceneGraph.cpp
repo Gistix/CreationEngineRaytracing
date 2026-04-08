@@ -329,7 +329,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		bool isPlayer = Util::IsPlayerFormID(instance->m_FormID);
 
 		// Update if applicabe and queue skinning/dynamic update
-		instance->model->Update(isPlayer);
+		instance->model->Update(instance->m_Node, isPlayer);
 
 		uint32_t firstMeshIndex = meshIndex;
 
@@ -430,44 +430,56 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 	CreateModelInternal(form, model, root);
 }
 
-void SceneGraph::CreateActorModel(RE::Actor* actor, RE::BipedAnim* bipedAnim, const char* name, RE::NiAVObject* root)
+void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool firstPerson)
 {
-	logger::trace("SceneGraph::CreateActorModel - {}", actor->GetName());
+	auto name = std::format("{}{}_{:0X}", actor->GetName(), firstPerson ? "_1stPerson" : "", actor->GetFormID());
 
-	if (bipedAnim) {
-		for (const auto& object : bipedAnim->objects)
+	auto* biped = actor->GetBiped(firstPerson).get();
+
+	logger::debug("SceneGraph::CreateActorModel - {}", name);
+
+	if (biped) {
+		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
+
+		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object) {
+			for (auto& mesh : CreateMeshes(form, object))
+			{
+				meshes.push_back(eastl::move(mesh));
+			}
+		};
+
+
+		if (!firstPerson)
+			if (auto* headNode = actor->GetFaceNodeSkinned())
+				createAppendMeshes(actor, headNode);
+
+		for (size_t i = 0; i < RE::BIPED_OBJECTS::kTotal; i++)
 		{
-			logger::trace("\tBiped Object - Item: {}, Addon: {}, Part: {}, PartClone: {}",
-				object.item ? object.item->GetName() : "N/A",
-				object.addon ? object.addon->GetName() : "N/A",
-				object.part ? object.part->GetModel() : "N/A",
-				object.partClone && object.partClone->name.c_str() ? object.partClone->name.c_str() : "N/A");
-		}
-	}
+			const auto& object = biped->objects[i];
 
-	auto* actorProcess = actor->GetActorRuntimeData().currentProcess;
-
-	if (actorProcess) {
-		for (const auto& equippedForm : actorProcess->equippedForms)
-		{
-			if (!equippedForm.object)
+			if (!object.item)
 				continue;
 
-			logger::trace("\tEquipped Form - {}: {}, Flags: {}",
-				magic_enum::enum_name(equippedForm.object->GetFormType()), 
-				equippedForm.object->GetName(), 
-				Util::GetFlagsString<RE::BGSEquipSlot::Flag>(equippedForm.slot->flags.underlying()));
+			if (!object.partClone)
+				continue;
+
+			createAppendMeshes(object.item, object.partClone.get());
 		}
+
+		auto object = actor->Get3D(firstPerson);
+
+		CommitModel(name.c_str(), object, actor, meshes);
 	}
+	else {
+		Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
+			const bool isRoot = (fadeNode == root);
 
-	Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
-		const bool isRoot = (fadeNode == root);
+			auto fadeNodeName = std::format("{}.{}", name, fadeNode->name.c_str());
+			CreateModelInternal(actor, isRoot ? name.c_str() : fadeNodeName.c_str(), fadeNode);
 
-		auto fadeNodeName = std::format("{}.{}", name, fadeNode->name.c_str());
-		CreateModelInternal(actor, isRoot ? name : fadeNodeName.c_str(), fadeNode);
-
-		return RE::BSVisit::BSVisitControl::kContinue;
-	});
+			return RE::BSVisit::BSVisitControl::kContinue;
+		});
+	}
 }
 
 void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
@@ -516,14 +528,14 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	CreateModelInternal(water, path.c_str(), object);
 }
 
-void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object)
+void SceneGraph::ActorEquip([[maybe_unused]] RE::Actor* a_actor, const BipObjectReference& a_object)
 {
 	switch (a_object.formType)
 	{
 	case RE::FormType::Armor:
 		break;
 	case RE::FormType::Weapon:
-		CreateModelInternal(a_object.item, a_object.part->GetModel(), a_object.partClone, a_actor);
+		//CreateModelInternal(a_object.item, a_object.part->GetModel(), a_object.partClone, a_actor);
 		break;
 	default:
 		break;
@@ -947,14 +959,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
 
-		float3x4 localToRoot{};
-
-		const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
-
-		// Some plants have parts with geometry world position of [0, 0, 0]
-		// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
-		if (!isOrigin || isOrigin && isRootOrigin)
-			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+		auto localToRoot = float3x4(
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f);
 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
@@ -970,6 +978,13 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
+
+			const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
+
+			// Some plants have parts with geometry world position of [0, 0, 0]
+			// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
+			if (!isOrigin || isOrigin && isRootOrigin)
+				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
 			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, true, 0);
 
@@ -1053,7 +1068,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 	return meshes;
 }
 
-void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot, RE::Actor* actor)
+void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
 {
 	if (!pRoot)
 		return;
@@ -1067,13 +1082,12 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	}
 	
 	auto formID = form->GetFormID();
-	auto instanceFormID = actor ? actor->GetFormID() : formID;
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	// We only need one buffer per model
 	if (m_Models.find(path) != m_Models.end()) {
-		AddInstance(instanceFormID, pRoot, path);
+		AddInstance(formID, pRoot, path);
 		return;
 	}
 
@@ -1091,8 +1105,12 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
 	auto meshes = CreateMeshes(form, pRoot);
 
+	CommitModel(path, pRoot, form, meshes);
+}
+
+void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
-		auto model = eastl::make_unique<Model>(path, pRoot, form, meshes);
+		auto model = eastl::make_unique<Model>(path, object, form, meshes);
 
 		auto& modelName = model->m_Name;
 
@@ -1144,7 +1162,9 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			device->waitForIdle();
 
-			AddInstance(instanceFormID, pRoot, modelName);
+			auto formID = form->GetFormID();
+
+			AddInstance(formID, object, modelName);
 
 			if (form->GetFormType() == RE::FormType::ActorCharacter)
 				m_Actors.try_emplace(formID, ActorReference(form->As<RE::Actor>()));

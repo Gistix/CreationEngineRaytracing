@@ -51,7 +51,7 @@ void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLi
 	}
 }
 
-void Model::Update(bool isPlayer)
+void Model::Update(RE::NiAVObject* object, bool isPlayer)
 {
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
@@ -61,7 +61,7 @@ void Model::Update(bool isPlayer)
 	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
 
 	for (auto& mesh : meshes) {
-		auto dirtyFlags = mesh->Update(isPlayer);
+		auto dirtyFlags = mesh->Update(object, isPlayer);
 
 		bool vertexUpdate = (dirtyFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 		bool skinUpdate = (dirtyFlags & DirtyFlags::Skin) != DirtyFlags::None;

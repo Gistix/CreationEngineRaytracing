@@ -1,6 +1,7 @@
 #pragma once
 
 #include <PCH.h>
+#include "Core/Instance.h"
 
 struct BipObjectReference
 {
@@ -70,5 +71,5 @@ struct ActorReference
 
 	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
 
-	std::bitset<RE::BIPED_OBJECTS::kTotal> m_Changed;
+	eastl::unordered_map<RE::BIPED_OBJECTS, Instance*> m_Instances;
 };
