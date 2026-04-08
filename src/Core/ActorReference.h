@@ -46,7 +46,7 @@ struct BipObjectReference
 
 struct ActorReference
 {
-	ActorReference(RE::Actor* actor) : m_Actor(actor)
+	ActorReference(RE::Actor* actor, bool firstPerson) : m_Actor(actor), m_FirstPerson(firstPerson)
 	{
 		auto* biped = m_Actor->GetBiped(false).get();
 
@@ -68,6 +68,8 @@ struct ActorReference
 	RE::Actor* m_Actor;
 
 	bool m_Biped;
+
+	bool m_FirstPerson;
 
 	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
 

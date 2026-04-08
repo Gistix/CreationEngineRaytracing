@@ -468,7 +468,7 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 
 		auto object = actor->Get3D(firstPerson);
 
-		CommitModel(name.c_str(), object, actor, meshes);
+		CommitModel(name.c_str(), object, actor, meshes, firstPerson);
 	}
 	else {
 		Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
@@ -528,17 +528,28 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	CreateModelInternal(water, path.c_str(), object);
 }
 
-void SceneGraph::ActorEquip([[maybe_unused]] RE::Actor* a_actor, const BipObjectReference& a_object)
+void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, bool firstPerson)
 {
-	switch (a_object.formType)
-	{
-	case RE::FormType::Armor:
-		break;
-	case RE::FormType::Weapon:
-		//CreateModelInternal(a_object.item, a_object.part->GetModel(), a_object.partClone, a_actor);
-		break;
-	default:
-		break;
+	if (!a_object.item)
+		return;
+
+	if (!a_object.partClone)
+		return;
+
+	auto it = m_InstancesFormIDs.find(a_actor->GetFormID());
+
+	if (it == m_InstancesFormIDs.end())
+		return;
+
+	auto meshes = CreateMeshes(a_object.item, a_object.partClone);
+
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	for (const auto& instance : it->second) {
+		if (instance->model->m_FirstPerson == firstPerson) {
+			instance->model->AppendMeshes(this, meshes);
+			break;
+		}
 	}
 }
 
@@ -551,6 +562,8 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
 	if (!bipedAnim)
 		return;
 
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
 	for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
 	{
 		const auto& object = bipedAnim->objects[i];
@@ -558,22 +571,7 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
 		if (object.item != a_object)
 			continue;
 
-		// In theory these should all be separate instances then?
-		// TODO: Investigate using ActorReference to store a list of all actor parts instances instead of the current disjointed setup
-		switch (object.item->GetFormType())
-		{
-		case RE::FormType::Armature:
-		case RE::FormType::Armor:
-			// These are part of the actor model, we need to remove the mesh from the instance model
-			RemoveActorObject(a_actor, object.partClone.get());
-			break;
-		case RE::FormType::Weapon:
-			// Weapons are separate models parented to an actor node
-			ReleaseObjectInstance(object.partClone.get());
-			break;
-		default:
-			break;
-		}
+		RemoveActorObject(a_actor, object.partClone.get());
 	}
 }
 
@@ -1108,7 +1106,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	CommitModel(path, pRoot, form, meshes);
 }
 
-void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
+void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes, bool firstPerson) {
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
 		auto model = eastl::make_unique<Model>(path, object, form, meshes);
 
@@ -1166,8 +1164,10 @@ void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 
 			AddInstance(formID, object, modelName);
 
-			if (form->GetFormType() == RE::FormType::ActorCharacter)
-				m_Actors.try_emplace(formID, ActorReference(form->As<RE::Actor>()));
+			if (form->GetFormType() == RE::FormType::ActorCharacter) {
+				auto* actor = form->As<RE::Actor>();
+				m_Actors.try_emplace(formID, ActorReference(actor, firstPerson));
+			}
 
 			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 		}

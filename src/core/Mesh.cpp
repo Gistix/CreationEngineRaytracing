@@ -211,28 +211,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	{
 		// Landscape contains no triangles, so we build them ourselves
 		if (flags.any(Flags::Landscape)) {
-			geometry.triangles.reserve(triangleCountIn);
-
-			constexpr uint16_t GRID_SIZE = 16;
-			constexpr uint16_t VERTICES = GRID_SIZE + 1;
-
-			for (uint16_t y = 0; y < GRID_SIZE; y++) {
-				for (uint16_t x = 0; x < GRID_SIZE; x++) {
-					uint16_t v0 = y * VERTICES + x;
-					uint16_t v1 = v0 + 1;
-					uint16_t v2 = v0 + VERTICES;
-					uint16_t v3 = v2 + 1;
-
-					if (v0 >= vertexCount || v1 >= vertexCount || v2 >= vertexCount)
-						logger::critical("[RT] Quad {} {} vertex overflow: [{}, {}, {}]", x, y, v0, v1, v2);
-
-					// First triangle
-					geometry.triangles.emplace_back(v0, v1, v2);
-
-					// Second triangle
-					geometry.triangles.emplace_back(v1, v3, v2);
-				}
-			}
+			geometry.triangles = GetLandscapeTriangles();
 		}
 		else {
 			geometry.triangles.resize(triangleCountIn);
@@ -250,6 +229,34 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 
 	if (!hasTangent)
 		Util::CalcTangents::GetSingleton()->calc(this);
+}
+
+eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
+{
+	static const eastl::vector<Triangle> triangles = [] {
+		eastl::vector<Triangle> t;
+
+		constexpr uint16_t GRID_SIZE = 16;
+		constexpr uint16_t VERTICES = GRID_SIZE + 1;
+
+		t.reserve(GRID_SIZE * GRID_SIZE * 2);
+
+		for (uint16_t y = 0; y < GRID_SIZE; y++) {
+			for (uint16_t x = 0; x < GRID_SIZE; x++) {
+				uint16_t v0 = y * VERTICES + x;
+				uint16_t v1 = v0 + 1;
+				uint16_t v2 = v0 + VERTICES;
+				uint16_t v3 = v2 + 1;
+
+				t.emplace_back(v0, v1, v2);
+				t.emplace_back(v1, v3, v2);
+			}
+		}
+
+		return t;
+	}();
+
+	return triangles;
 }
 
 Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap = false)
