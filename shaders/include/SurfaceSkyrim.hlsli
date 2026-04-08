@@ -246,7 +246,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         [branch]
         if (material.Feature == Feature::kFaceGen)
         {          
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            float3 gammaAlbedo = diffuse.rgb * vertexColor.rgb;
             
             Texture2D detailTexture = Textures[NonUniformResourceIndex(material.DetailTexture())];
             float3 detailColor = detailTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
@@ -261,7 +261,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         }
         else if (material.Feature == Feature::kSkinTint)
         {
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            float3 gammaAlbedo = diffuse.rgb * vertexColor.rgb;
             
             float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;               
             tintColor = tintColor - tintColor * gammaAlbedo;
