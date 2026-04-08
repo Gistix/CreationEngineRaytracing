@@ -7,6 +7,8 @@ namespace Util
 		float4 GetClippingData();
 
 		bool IsGlobalLight(RE::BSLight* a_light);
+
+		bool IsHidden(RE::NiAVObject* object);
 	}
 
 	namespace Units

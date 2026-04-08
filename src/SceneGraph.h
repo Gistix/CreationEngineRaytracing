@@ -93,7 +93,8 @@ class SceneGraph
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
-	void CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node, RE::Actor* actor = nullptr);
+	void CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
+	void CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path);
 public:
 	void Initialize();

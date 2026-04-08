@@ -824,9 +824,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
-	if (!bsGeometryPtr)
-		return false;
-
 	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
@@ -861,11 +858,8 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 	commandList->writeBuffer(buffers.dynamicPositionBuffer, geometry.dynamicPosition.data(), sizeof(float4) * vertexCount);
 }
 
-bool Mesh::UpdateSkinning(bool isPlayer)
+bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 {
-	if (!bsGeometryPtr)
-		return false;
-
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
 
@@ -904,7 +898,7 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 
 	// Part 2 of COtR fix
 	if (unparentedPlayer)
-		skinRoot = RE::PlayerCharacter::GetSingleton()->Get3D(false)->world;
+		skinRoot = object->world;
 
 	auto* skinData = skinInstance->skinData.get();
 
@@ -928,10 +922,12 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(skinRootInverse * boneMatrix));
 	}
 
+	geometryDesc.setTransform(localToRoot.f);
+
 	return true;
 }
 
-DirtyFlags Mesh::Update(bool isPlayer)
+DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 {
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
@@ -941,7 +937,7 @@ DirtyFlags Mesh::Update(bool isPlayer)
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
 	if (dynamic || skinned)
-		m_PendingState.set(bsGeometryPtr->GetFlags().all(RE::NiAVObject::Flag::kHidden), State::Hidden);
+		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get()), State::Hidden);
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
@@ -969,7 +965,7 @@ DirtyFlags Mesh::Update(bool isPlayer)
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning(isPlayer))
+	if (skinned && UpdateSkinning(object, isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
 	return updateFlags;
