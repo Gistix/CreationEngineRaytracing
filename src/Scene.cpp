@@ -261,15 +261,9 @@ void Scene::UpdateMode(Mode mode, Mode previousMode)
 	rootNode->AttachRenderNode(GetModeNode(mode));
 }
 
-bool Scene::Initialize(RendererParams rendererParams) 
+void Scene::Initialize() 
 {
 	auto* renderer = Renderer::GetSingleton();
-
-	// Initialize renderer
-	renderer->Initialize(rendererParams);
-
-	if (!renderer->GetDevice())
-		return false;
 
 	// Initialize global descriptors (mesh and texture bindless arrays)
 	m_SceneGraph->Initialize();
@@ -285,8 +279,6 @@ bool Scene::Initialize(RendererParams rendererParams)
 	m_FeatureData = eastl::make_unique<FeatureData>();
 	m_FeatureBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
 		sizeof(FeatureData), "Feature Data", Constants::MAX_CB_VERSIONS));
-
-	return true;
 }
 
 void Scene::Execute()

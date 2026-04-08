@@ -32,20 +32,18 @@ RWTexture2D<float3>                         DiffuseAlbedo               : regist
 RWTexture2D<float3>                         SpecularAlbedo              : register(u2);
 RWTexture2D<float4>                         NormalRoughness             : register(u3);
 RWTexture2D<float>                          SpecularHitDistance         : register(u4);
-#endif
 
+RWTexture2D<float4>                         MotionVectors               : register(u5); // PT Motion Vectors output (written by BUILD/REFERENCE pass)
+RWTexture2D<float>                          Depth                       : register(u6); // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
+
+#   if defined(STABLE_PLANES)
 // Stable Planes UAVs (always declared, used when PATH_TRACER_MODE != REFERENCE)
-RWTexture2DArray<uint>                      StablePlanesHeaderUAV       : register(u5);
-RWStructuredBuffer<StablePlane>             StablePlanesBufferUAV       : register(u6);
-RWTexture2D<float4>                         StableRadianceUAV           : register(u7);
+RWTexture2DArray<uint>                      StablePlanesHeaderUAV       : register(u7);
+RWStructuredBuffer<StablePlane>             StablePlanesBufferUAV       : register(u8);
+RWTexture2D<float4>                         StableRadianceUAV           : register(u9);
+#   endif
 
-#if !(defined(SHARC) && SHARC_UPDATE)
-// PT Motion Vectors output (written by BUILD/REFERENCE pass)
-RWTexture2D<float4>                         MotionVectors               : register(u8);
-
-// PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
-RWTexture2D<float>                          Depth                       : register(u9);
-
+#   if defined(RESTIR_GI)
 // ReSTIR GI: Secondary G-Buffer UAVs (written during FILL pass for GI initial samples)
 RWTexture2D<float4>                         SecondaryGBufPositionNormal : register(u10);
 RWTexture2D<float4>                         SecondaryGBufRadiance       : register(u11);
@@ -54,6 +52,7 @@ RWTexture2D<float4>                         SecondaryGBufSpecularRough  : regist
 
 // ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
 RWStructuredBuffer<PackedSurfaceData>       SurfaceDataBuffer           : register(u14);
+#   endif
 #endif
 
 RaytracingAccelerationStructure             Scene                       : register(t0);

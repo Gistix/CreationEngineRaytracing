@@ -135,12 +135,6 @@ public:
 	};
 	eastl::unique_ptr<StablePlanesResources> m_StablePlanes;
 
-	// PT Motion Vectors output (RGBA16_FLOAT, written by BUILD pass)
-	nvrhi::TextureHandle m_PTMotionVectors;
-
-	// PT Depth output (R32_FLOAT, clip-space depth)
-	nvrhi::TextureHandle m_PTDepth;
-
 	// ReSTIR GI resources
 	struct ReSTIRGIResources
 	{
@@ -174,6 +168,8 @@ public:
 	}
 
 	Renderer();
+
+	bool Initialize(RendererParams parameters);
 
 	auto GetDevice() const { return m_NVRHIDevice; }
 
@@ -292,8 +288,6 @@ public:
 	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
 
 	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState);
-
-	void Initialize(RendererParams parameters);
 
 	void InitDefaultTextures();
 

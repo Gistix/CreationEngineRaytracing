@@ -22,12 +22,14 @@ nvrhi::ITexture* TextureManager::GetTexture(Texture texture) {
 		switch (texture)
 		{
 		case TextureManager::Texture::ViewDepth:
+		case TextureManager::Texture::ClipDepth:
 			desc.format = nvrhi::Format::R32_FLOAT;
 			break;
+		case TextureManager::Texture::MotionVectors3D:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			break;
 		case TextureManager::Texture::DiffuseRadiance:
-			break;
 		case TextureManager::Texture::SpecularRadiance:
-			break;
 		default:
 			break;
 		}

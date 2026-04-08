@@ -12,25 +12,7 @@ Renderer::Renderer()
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
 }
 
-nvrhi::ITexture* Renderer::GetDepthTexture() {
-	if (!m_DepthTexture) {
-		auto& depthStencils = RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils;
-		m_DepthTexture = ShareTexture(depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::DepthWrite);
-	}
-
-	return m_DepthTexture;
-}
-
-nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
-	if (!m_MotionVectorTexture) {
-		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
-		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector", nvrhi::Format::RG16_FLOAT, nvrhi::ResourceStates::ShaderResource);
-	}
-
-	return m_MotionVectorTexture;
-}
-
-void Renderer::Initialize(RendererParams rendererParams)
+bool Renderer::Initialize(RendererParams rendererParams)
 {
 	Hooks::InstallD3D11Hooks(rendererParams.d3d11Device);
 
@@ -45,6 +27,9 @@ void Renderer::Initialize(RendererParams rendererParams)
 	deviceDesc.logBufferLifetime = false;
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
+
+	if (!m_NVRHIDevice)
+		return false;
 
 	if (m_Settings.ValidationLayer)
 	{
@@ -67,6 +52,8 @@ void Renderer::Initialize(RendererParams rendererParams)
 		}
 
 	m_FrameTimer = GetDevice()->createTimerQuery();
+
+	return true;
 }
 
 void Renderer::InitDefaultTextures()
@@ -141,6 +128,24 @@ void Renderer::InitDefaultTextures()
 
 	commandList->close();
 	GetDevice()->executeCommandList(commandList);
+}
+
+nvrhi::ITexture* Renderer::GetDepthTexture() {
+	if (!m_DepthTexture) {
+		auto& depthStencils = RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils;
+		m_DepthTexture = ShareTexture(depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::DepthWrite);
+	}
+
+	return m_DepthTexture;
+}
+
+nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
+	if (!m_MotionVectorTexture) {
+		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
+		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector", nvrhi::Format::RG16_FLOAT, nvrhi::ResourceStates::ShaderResource);
+	}
+
+	return m_MotionVectorTexture;
 }
 
 void Renderer::InitGBufferOutput()
@@ -271,32 +276,6 @@ void Renderer::InitStablePlanes()
 	}
 
 	logger::info("Stable Planes resources created ({}x{}, {} planes)", width, height, stablePlaneCount);
-
-	// PT MotionVectors: RGBA16_FLOAT, written by BUILD pass for dominant plane MV output
-	{
-		nvrhi::TextureDesc desc;
-		desc.width = width;
-		desc.height = height;
-		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.isUAV = true;
-		desc.keepInitialState = true;
-		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		desc.debugName = "PT MotionVectors";
-		m_PTMotionVectors = device->createTexture(desc);
-	}
-
-	// PT Depth: R32_FLOAT, clip-space depth output
-	{
-		nvrhi::TextureDesc desc;
-		desc.width = width;
-		desc.height = height;
-		desc.format = nvrhi::Format::R32_FLOAT;
-		desc.isUAV = true;
-		desc.keepInitialState = true;
-		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		desc.debugName = "PT Depth";
-		m_PTDepth = device->createTexture(desc);
-	}
 }
 
 void Renderer::InitReSTIRGI()
@@ -591,11 +570,13 @@ void Renderer::EndExecution()
 		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
 		m_CommandList->copyTexture(m_CopyTargetTexture, region, m_MainTexture, region);
 
-		if (m_PTDepthCopyTargetTexture && m_PTDepth)
-			m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_PTDepth, region);
-
-		if (m_PTMVCopyTargetTexture && m_PTMotionVectors)
-			m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_PTMotionVectors, region);
+		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Mode == Mode::PathTracing) {
+			if (m_PTDepthCopyTargetTexture)
+				m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_TextureManager.GetTexture(TextureManager::Texture::ClipDepth), region);
+	
+			if (m_PTMVCopyTargetTexture)
+				m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_TextureManager.GetTexture(TextureManager::Texture::MotionVectors3D), region);
+		}
 	}
 
 	m_CommandList->endTimerQuery(m_FrameTimer);

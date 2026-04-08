@@ -30,12 +30,7 @@ namespace Util
 				defines.emplace_back(L"RIS_MAX_CANDIDATES", settings.AdvancedSettings.RIS.MaxCandidates);
 			}
 
-			defines.emplace_back(L"HAIR_MODE", static_cast<int>(settings.AdvancedSettings.HairBSDF));
-
 			defines.emplace_back(L"DIFFUSE_MODE", static_cast<int>(settings.AdvancedSettings.DiffuseBRDF));
-
-			if (settings.AdvancedSettings.SSSSettings.Enabled)
-				defines.emplace_back(L"SUBSURFACE_SCATTERING");
 
 			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
@@ -51,6 +46,33 @@ namespace Util
 				if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
 			}
+
+			return defines;
+		}
+
+		eastl::vector<ShaderDefine> GetPathTracingDefines(const Settings& settings, bool sharc, bool sharcUpdate)
+		{
+			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
+
+			defines.emplace_back(L"HAIR_MODE", static_cast<int>(settings.AdvancedSettings.HairBSDF));
+
+			if (settings.AdvancedSettings.SSSSettings.Enabled)
+				defines.emplace_back(L"SUBSURFACE_SCATTERING");
+
+			if (!sharc || (sharc && !sharcUpdate)) {
+				if (settings.DebugSettings.StablePlanes)
+					defines.emplace_back(L"STABLE_PLANES");
+
+				if (settings.ReSTIRGI.Enabled)
+					defines.emplace_back(L"RESTIR_GI");
+			}
+
+			return defines;
+		}
+
+		eastl::vector<ShaderDefine> GetGlobalIlluminationDefines(const Settings& settings, bool sharc, bool sharcUpdate)
+		{
+			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
 
 			return defines;
 		}

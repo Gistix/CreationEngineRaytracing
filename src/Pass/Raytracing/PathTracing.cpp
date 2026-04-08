@@ -12,7 +12,12 @@ namespace Pass
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
+		const auto& settings = Scene::GetSingleton()->m_Settings;
+
+		m_Defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);
+
+		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
+		m_UseRestirGI = settings.ReSTIRGI.Enabled;
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -28,11 +33,13 @@ namespace Pass
 	void PathTracing::SettingsChanged(const Settings& settings)
 	{
 		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
+		m_UseRestirGI = settings.ReSTIRGI.Enabled;
 
-		auto defines = Util::Shader::GetRaytracingDefines(settings, m_SHaRC != nullptr, false);
+		auto defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
+			CreateBindingLayout();
 			CreatePipeline();
 			m_DirtyBindings = true;
 		}
@@ -61,22 +68,27 @@ namespace Pass
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
 			nvrhi::BindingLayoutItem::Texture_UAV(3),
 			nvrhi::BindingLayoutItem::Texture_UAV(4),
-			// Stable Planes UAVs
-			nvrhi::BindingLayoutItem::Texture_UAV(5),           // StablePlanesHeader (RWTexture2DArray<uint>)
-			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(6),  // StablePlanesBuffer (RWStructuredBuffer<StablePlane>)
-			nvrhi::BindingLayoutItem::Texture_UAV(7),           // StableRadiance (RWTexture2D<float4>)
-			// PT Motion Vectors output
-			nvrhi::BindingLayoutItem::Texture_UAV(8),            // MotionVectors (RWTexture2D<float4>)
-			// PT Depth output
-			nvrhi::BindingLayoutItem::Texture_UAV(9),            // Depth (RWTexture2D<float>)
-			// ReSTIR GI: Secondary G-Buffer UAVs
-			nvrhi::BindingLayoutItem::Texture_UAV(10),           // SecondaryGBufPositionNormal
-			nvrhi::BindingLayoutItem::Texture_UAV(11),           // SecondaryGBufRadiance
-			nvrhi::BindingLayoutItem::Texture_UAV(12),           // SecondaryGBufDiffuseAlbedo
-			nvrhi::BindingLayoutItem::Texture_UAV(13),           // SecondaryGBufSpecularRough
-			// ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
-			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(14)   // SurfaceDataBuffer
+			nvrhi::BindingLayoutItem::Texture_UAV(5),            // MotionVectors (RWTexture2D<float4>)
+			nvrhi::BindingLayoutItem::Texture_UAV(6)            // Depth (RWTexture2D<float>)
 		};
+
+		if (m_UseStablePlanes) {
+			// Stable Planes UAVs
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(7));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(8));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9));
+		}
+
+		if (m_UseRestirGI) {
+			// ReSTIR GI: Secondary G-Buffer UAVs
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(10)); // SecondaryGBufPositionNormal
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(11)); // SecondaryGBufRadiance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(12)); // SecondaryGBufDiffuseAlbedo
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(13)); // SecondaryGBufSpecularRough
+
+			// ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(14)); // SurfaceDataBuffer
+		}
 
 #if defined(NVAPI)
 		globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
@@ -157,12 +169,16 @@ namespace Pass
 
 	void PathTracing::CreateRayTracingPipeline()
 	{
-		// Reference mode (mode 0)
-		CreateRayTracingPipelineForMode(0, m_RayPipeline, m_ShaderTable);
-		// BUILD mode (mode 1)
-		CreateRayTracingPipelineForMode(1, m_BuildRayPipeline, m_BuildShaderTable);
-		// FILL mode (mode 2)
-		CreateRayTracingPipelineForMode(2, m_FillRayPipeline, m_FillShaderTable);
+		if (m_UseStablePlanes) {
+			// BUILD mode (mode 1)
+			CreateRayTracingPipelineForMode(1, m_BuildRayPipeline, m_BuildShaderTable);
+			// FILL mode (mode 2)
+			CreateRayTracingPipelineForMode(2, m_FillRayPipeline, m_FillShaderTable);
+		}
+		else{
+			// Reference mode (mode 0)
+			CreateRayTracingPipelineForMode(0, m_RayPipeline, m_ShaderTable);
+		}
 	}
 
 	void PathTracing::CreateComputePipelineForMode(int mode, nvrhi::ShaderHandle& outShader, nvrhi::ComputePipelineHandle& outPipeline)
@@ -195,12 +211,16 @@ namespace Pass
 
 	void PathTracing::CreateComputePipeline()
 	{
-		// Reference mode (mode 0)
-		CreateComputePipelineForMode(0, m_ComputeShader, m_ComputePipeline);
-		// BUILD mode (mode 1)
-		CreateComputePipelineForMode(1, m_BuildComputeShader, m_BuildComputePipeline);
-		// FILL mode (mode 2)
-		CreateComputePipelineForMode(2, m_FillComputeShader, m_FillComputePipeline);
+		if (m_UseStablePlanes) {
+			// BUILD mode (mode 1)
+			CreateComputePipelineForMode(1, m_BuildComputeShader, m_BuildComputePipeline);
+			// FILL mode (mode 2)
+			CreateComputePipelineForMode(2, m_FillComputeShader, m_FillComputePipeline);
+		}
+		else {
+			// Reference mode (mode 0)
+			CreateComputePipelineForMode(0, m_ComputeShader, m_ComputePipeline);
+		}
 	}
 
 	void PathTracing::CheckBindings()
@@ -218,7 +238,7 @@ namespace Pass
 
 		auto* rrInput = renderer->GetRRInput();
 
-		auto* sp = renderer->GetStablePlanes();
+		auto& textureManager = renderer->GetTextureManager();
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -240,28 +260,43 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(3, rts->normalRoughness),
 			nvrhi::BindingSetItem::Texture_UAV(4, rrInput->specularHitDistance),
-			// Stable Planes UAVs
-			nvrhi::BindingSetItem::Texture_UAV(5, sp->header),
-			nvrhi::BindingSetItem::StructuredBuffer_UAV(6, sp->buffer),
-			nvrhi::BindingSetItem::Texture_UAV(7, sp->stableRadiance),
-			// PT Motion Vectors output
-			nvrhi::BindingSetItem::Texture_UAV(8, renderer->m_PTMotionVectors),
-			// PT Depth output
-			nvrhi::BindingSetItem::Texture_UAV(9, renderer->m_PTDepth),
-			// ReSTIR GI: Secondary G-Buffer UAVs
-			nvrhi::BindingSetItem::Texture_UAV(10, renderer->GetReSTIRGIResources()->secondaryGBufferPositionNormal),
-			nvrhi::BindingSetItem::Texture_UAV(11, renderer->GetReSTIRGIResources()->secondaryGBufferRadiance),
-			nvrhi::BindingSetItem::Texture_UAV(12, renderer->GetReSTIRGIResources()->secondaryGBufferDiffuseAlbedo),
-			nvrhi::BindingSetItem::Texture_UAV(13, renderer->GetReSTIRGIResources()->secondaryGBufferSpecularF0Roughness),
-			nvrhi::BindingSetItem::StructuredBuffer_UAV(14, renderer->GetReSTIRGIResources()->surfaceDataBuffer)
+			nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(TextureManager::Texture::MotionVectors3D)),
+			nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(TextureManager::Texture::ClipDepth))
 		};
 
-		
+		if (m_UseStablePlanes) {
+			auto* sp = renderer->GetStablePlanes();
+
+			// Stable Planes UAVs
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, sp->header));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(8, sp->buffer));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, sp->stableRadiance));
+		}
+
+		if (m_UseRestirGI) {
+			auto* rgi = renderer->GetReSTIRGIResources();
+
+			// ReSTIR GI: Secondary G-Buffer UAVs
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(10, rgi->secondaryGBufferPositionNormal));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(11, rgi->secondaryGBufferRadiance));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(12, rgi->secondaryGBufferDiffuseAlbedo));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(13, rgi->secondaryGBufferSpecularF0Roughness));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(14, rgi->surfaceDataBuffer));
+		}
+
 #if defined(NVAPI)
 		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+
+		if (!m_BindingSet) {
+
+			for (const auto& binding : bindingSetDesc.bindings)
+			{
+				logger::info("PathTracing::CheckBindings - {}, {}, 0x{:08X}", magic_enum::enum_name(binding.type), binding.slot, reinterpret_cast<uintptr_t>(binding.resourceHandle));
+			}
+		}
 
 		m_DirtyBindings = false;
 	}

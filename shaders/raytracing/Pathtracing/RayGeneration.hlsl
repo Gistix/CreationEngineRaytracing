@@ -29,7 +29,9 @@
 #include "Raytracing/Include/SHARC/Sharc.hlsli"
 #include "Raytracing/Include/SHARC/SHaRCHelper.hlsli"
 
+#if defined(STABLE_PLANES)
 #include "raytracing/include/PathTracerStablePlanes.hlsli"
+#endif
 
 #if defined(GROUP_TILING)
 #   define DXC_STATIC_DISPATCH_GRID_DIM 1
@@ -86,11 +88,13 @@ void Main()
 
     // ReSTIR GI: Write empty packed surface (overwritten below on valid hit).
     // BUILD mode does not write (FILL follows immediately and writes the real data).
-#if !(defined(SHARC) && SHARC_UPDATE) && (PATH_TRACER_MODE != PATH_TRACER_MODE_BUILD_STABLE_PLANES)
+#if defined(RESTIR_GI)    
+#   if !(defined(SHARC) && SHARC_UPDATE) && (PATH_TRACER_MODE != PATH_TRACER_MODE_BUILD_STABLE_PLANES)
     uint surfBufIdx = (Camera.FrameIndex % 2) * (size.x * size.y) + idx.y * size.x + idx.x;
     SurfaceDataBuffer[surfBufIdx] = PSD_Empty();
+#   endif
 #endif
-
+    
     RayDesc sourceRay = SetupPrimaryRay(idx, size, Camera);
     
     const float3 sourceDirection = sourceRay.Direction;
@@ -280,6 +284,7 @@ void Main()
     MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPrevPosW), 0);
     Depth[idx] = computeClipDepth(hitPosW);
 
+#       if defined(RESTIR_GI)    
     // Write packed surface data for ReSTIR GI (REFERENCE mode)
     SurfaceDataBuffer[surfBufIdx] = PSD_Pack(
         sourceSurface.Position, sourceSurface.Normal, sourceSurface.Tangent, sourceSurface.Bitangent,
@@ -287,6 +292,7 @@ void Main()
         sourceSurface.DiffuseAlbedo, sourceSurface.F0,
         sourceSurface.Roughness, sourceSurface.Metallic,
         primarySceneDistance);
+#       endif  
 #   endif   
 #endif   
     
@@ -966,7 +972,8 @@ void Main()
             }
 
             // ReSTIR GI: capture secondary surface geometry before SHaRC may terminate the path
-#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#if defined(RESTIR_GI)              
+#   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES     
             if (Raytracing.EnableReSTIRGI && !giSecStarted && !arrivedViaDelta)
             {
                 // Write SurfaceDataBuffer with the scattering surface (primary for GI)
@@ -989,6 +996,7 @@ void Main()
                 giSecThroughput = throughput;
                 giSecPdf = bsdfSample.pdf;
             }
+#   endif
 #endif
 
 #if defined(SHARC)
@@ -1115,11 +1123,14 @@ void Main()
         // Commit remaining radiance to the current plane at path end
         spCtx.CommitDenoiserRadiance(idx, fillState.planeIndex, fillPathL);
 
+#   if defined(RESTIR_GI)       
         // Write accumulated secondary radiance for ReSTIR GI
         if (giSecStarted)
             SecondaryGBufRadiance[idx] = float4(giSecRadiance, giSecPdf);
         else
             SecondaryGBufRadiance[idx] = float4(0, 0, 0, 0);
+#   endif
+        
 #endif
         radiance += sampleRadiance;
 

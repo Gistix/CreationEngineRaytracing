@@ -197,7 +197,7 @@ enum struct ReSTIRGIBiasCorrection : int32_t
 
 struct ReSTIRGISettings
 {
-	bool Enabled = true;
+	bool Enabled = false;
 	ReSTIRGIResamplingMode ResamplingMode = ReSTIRGIResamplingMode::TemporalAndSpatial;
 
 	// Temporal
@@ -229,7 +229,7 @@ struct DebugSettings
 {
 	bool PathTracingCull = false;
 	bool EnableWater = false;
-	bool StablePlanes = true;
+	bool StablePlanes = false;
 };
 
 struct Settings

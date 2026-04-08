@@ -274,13 +274,10 @@ namespace Pass::NRD
 		}
 
 		{
-			nvrhi::ITexture* sourceMotionVectors = Scene::GetSingleton()->IsPathTracingActive()
-				? GetRenderer()->m_PTMotionVectors.Get()
-				: GetRenderer()->GetMotionVectorTexture();
+			nvrhi::ITexture* sourceMotionVectors = GetRenderer()->GetMotionVectorTexture();
 
-			nvrhi::TextureDesc desc = sourceMotionVectors
-				? sourceMotionVectors->getDesc()
-				: nvrhi::TextureDesc();
+			nvrhi::TextureDesc desc = sourceMotionVectors ? sourceMotionVectors->getDesc() : nvrhi::TextureDesc();
+
 			desc.width = eastl::max<uint32_t>(1u, desc.width == 0 ? resolution.x : desc.width);
 			desc.height = eastl::max<uint32_t>(1u, desc.height == 0 ? resolution.y : desc.height);
 			desc.dimension = nvrhi::TextureDimension::Texture2D;
@@ -495,9 +492,7 @@ namespace Pass::NRD
 			return;
 
 		auto* renderer = GetRenderer();
-		nvrhi::ITexture* sourceMotionVectors = Scene::GetSingleton()->IsPathTracingActive()
-			? renderer->m_PTMotionVectors.Get()
-			: renderer->GetMotionVectorTexture();
+		nvrhi::ITexture* sourceMotionVectors = renderer->GetMotionVectorTexture();
 
 		if (m_ResourcesDirty) {
 			CreateResources();

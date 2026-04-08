@@ -91,7 +91,7 @@ struct Scene
 
 	void UpdateMode(Mode mode, Mode previousMode);
 
-	bool Initialize(RendererParams rendererParams);
+	void Initialize();
 
 	void Execute();
 
