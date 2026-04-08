@@ -26,7 +26,7 @@ void ActorReference::Update()
 
 		if (curObject != prevObject) {
 			if (curObject.IsValid())
-				SceneGraph->ActorEquip(m_Actor, curObject);
+				SceneGraph->ActorEquip(m_Actor, curObject, m_FirstPerson);
 
 			// The reason why we don't unequip here and use the event instead is because 'partClone' needs to be valid
 			// Since for non-weapons we traverse the scene graph for each of its BSGeometry to remove their 'Mesh' from the 'Model'

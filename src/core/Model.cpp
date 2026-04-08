@@ -51,7 +51,7 @@ void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLi
 	}
 }
 
-void Model::Update(bool isPlayer)
+void Model::Update(RE::NiAVObject* object, bool isPlayer)
 {
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
@@ -61,7 +61,7 @@ void Model::Update(bool isPlayer)
 	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
 
 	for (auto& mesh : meshes) {
-		auto dirtyFlags = mesh->Update(isPlayer);
+		auto dirtyFlags = mesh->Update(object, isPlayer);
 
 		bool vertexUpdate = (dirtyFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 		bool skinUpdate = (dirtyFlags & DirtyFlags::Skin) != DirtyFlags::None;
@@ -141,6 +141,25 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 	m_LastBLASUpdate = Renderer::GetSingleton()->GetFrameIndex();
 }
 
+void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& a_meshes)
+{
+	// Copy Command
+	auto copyCommandList = Renderer::GetSingleton()->GetCopyCommandList();
+	copyCommandList->open();
+
+	for (auto& mesh : a_meshes) {
+		mesh->CreateBuffers(sceneGraph, copyCommandList);
+		meshes.push_back(eastl::move(mesh));
+	}
+
+	copyCommandList->close();
+
+	Renderer::GetSingleton()->GetDevice()->executeCommandList(copyCommandList, nvrhi::CommandQueue::Copy);
+
+	// Triggers a BLAS update
+	m_DirtyFlags.set(DirtyFlags::Mesh);
+}
+
 void Model::RemoveGeometry(RE::BSGeometry* geometry)
 {
 	// Find the first mesh whose bsGeometryPtr matches
@@ -154,5 +173,6 @@ void Model::RemoveGeometry(RE::BSGeometry* geometry)
 	// Erase single element
 	meshes.erase(it);
 
+	// Triggers a BLAS update
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }

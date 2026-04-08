@@ -19,6 +19,9 @@ struct Model
 
 	uint64_t m_LastBLASUpdate = 0;
 
+	// Meant to used for the player
+	bool m_FirstPerson = false;
+
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool update);
@@ -42,11 +45,13 @@ struct Model
 		return false;
 	}
 
-	void Update(bool isPlayer);
+	void Update(RE::NiAVObject* object, bool isPlayer);
 
 	void SetData(MeshData* meshData, uint32_t& index);
 
 	void UpdateBLAS(nvrhi::ICommandList* commandList);
+
+	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	void RemoveGeometry(RE::BSGeometry* geometry);
 

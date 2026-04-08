@@ -211,28 +211,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	{
 		// Landscape contains no triangles, so we build them ourselves
 		if (flags.any(Flags::Landscape)) {
-			geometry.triangles.reserve(triangleCountIn);
-
-			constexpr uint16_t GRID_SIZE = 16;
-			constexpr uint16_t VERTICES = GRID_SIZE + 1;
-
-			for (uint16_t y = 0; y < GRID_SIZE; y++) {
-				for (uint16_t x = 0; x < GRID_SIZE; x++) {
-					uint16_t v0 = y * VERTICES + x;
-					uint16_t v1 = v0 + 1;
-					uint16_t v2 = v0 + VERTICES;
-					uint16_t v3 = v2 + 1;
-
-					if (v0 >= vertexCount || v1 >= vertexCount || v2 >= vertexCount)
-						logger::critical("[RT] Quad {} {} vertex overflow: [{}, {}, {}]", x, y, v0, v1, v2);
-
-					// First triangle
-					geometry.triangles.emplace_back(v0, v1, v2);
-
-					// Second triangle
-					geometry.triangles.emplace_back(v1, v3, v2);
-				}
-			}
+			geometry.triangles = GetLandscapeTriangles();
 		}
 		else {
 			geometry.triangles.resize(triangleCountIn);
@@ -250,6 +229,34 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 
 	if (!hasTangent)
 		Util::CalcTangents::GetSingleton()->calc(this);
+}
+
+eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
+{
+	static const eastl::vector<Triangle> triangles = [] {
+		eastl::vector<Triangle> t;
+
+		constexpr uint16_t GRID_SIZE = 16;
+		constexpr uint16_t VERTICES = GRID_SIZE + 1;
+
+		t.reserve(GRID_SIZE * GRID_SIZE * 2);
+
+		for (uint16_t y = 0; y < GRID_SIZE; y++) {
+			for (uint16_t x = 0; x < GRID_SIZE; x++) {
+				uint16_t v0 = y * VERTICES + x;
+				uint16_t v1 = v0 + 1;
+				uint16_t v2 = v0 + VERTICES;
+				uint16_t v3 = v2 + 1;
+
+				t.emplace_back(v0, v1, v2);
+				t.emplace_back(v1, v3, v2);
+			}
+		}
+
+		return t;
+	}();
+
+	return triangles;
 }
 
 Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap = false)
@@ -836,9 +843,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
-	if (!bsGeometryPtr)
-		return false;
-
 	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
@@ -873,11 +877,8 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 	commandList->writeBuffer(buffers.dynamicPositionBuffer, geometry.dynamicPosition.data(), sizeof(float4) * vertexCount);
 }
 
-bool Mesh::UpdateSkinning(bool isPlayer)
+bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 {
-	if (!bsGeometryPtr)
-		return false;
-
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
 
@@ -916,7 +917,7 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 
 	// Part 2 of COtR fix
 	if (unparentedPlayer)
-		skinRoot = RE::PlayerCharacter::GetSingleton()->Get3D(false)->world;
+		skinRoot = object->world;
 
 	auto* skinData = skinInstance->skinData.get();
 
@@ -940,10 +941,12 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(skinRootInverse * boneMatrix));
 	}
 
+	geometryDesc.setTransform(localToRoot.f);
+
 	return true;
 }
 
-DirtyFlags Mesh::Update(bool isPlayer)
+DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 {
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
@@ -953,7 +956,7 @@ DirtyFlags Mesh::Update(bool isPlayer)
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
 	if (dynamic || skinned)
-		m_PendingState.set(bsGeometryPtr->GetFlags().all(RE::NiAVObject::Flag::kHidden), State::Hidden);
+		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get()), State::Hidden);
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
@@ -981,7 +984,7 @@ DirtyFlags Mesh::Update(bool isPlayer)
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning(isPlayer))
+	if (skinned && UpdateSkinning(object, isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
 	return updateFlags;

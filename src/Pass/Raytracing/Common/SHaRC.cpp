@@ -19,8 +19,6 @@ namespace Pass
 		m_SHaRCBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
 			sizeof(SHaRCData), "SHaRC Data", Constants::MAX_CB_VERSIONS));
 
-		SettingsChanged(Scene::GetSingleton()->m_Settings);
-
 		auto device = renderer->GetDevice();
 
 		m_HashEntriesBuffer = Util::CreateStructuredBuffer<uint64_t>(device, MAX_CAPACITY, "SHaRC Hash Entries Buffer", true);
@@ -28,7 +26,7 @@ namespace Pass
 		m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
-		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, true, true);
+		m_Defines = Util::Shader::GetPathTracingDefines(Scene::GetSingleton()->m_Settings, true, true);
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
 		SetupUpdate();
@@ -43,7 +41,7 @@ namespace Pass
 		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
 		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
 
-		auto defines = Util::Shader::GetRaytracingDefines(settings, true, true);
+		auto defines = Util::Shader::GetPathTracingDefines(settings, true, true);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;

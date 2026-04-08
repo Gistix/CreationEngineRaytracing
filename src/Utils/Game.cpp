@@ -27,5 +27,15 @@ namespace Util
 		{
 			return !(a_light->portalStrict || !a_light->portalGraph);
 		}
+
+		bool IsHidden(RE::NiAVObject* object) {
+			if (object->GetFlags().all(RE::NiAVObject::Flag::kHidden))
+				return true;
+
+			if (object->parent)
+				return IsHidden(object->parent);
+
+			return false;
+		}
 	}
 }

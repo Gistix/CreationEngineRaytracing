@@ -177,15 +177,17 @@ struct Mesh
 
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
-	bool UpdateSkinning(bool isPlayer);
+	bool UpdateSkinning(RE::NiAVObject* object, bool isPlayer);
 
-	DirtyFlags Update(bool isPlayer);
+	DirtyFlags Update(RE::NiAVObject* object, bool isPlayer);
 
 	bool IsHidden() const;
 
 	MeshData GetData(const float3 externalEmittance);
 
 	void UpdateDismember(bool enable);
+
+	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
 	// State is pending until BLASRebuild
 	stl::enumeration<State, uint8_t> m_PendingState = State::None;

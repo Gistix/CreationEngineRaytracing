@@ -329,7 +329,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		bool isPlayer = Util::IsPlayerFormID(instance->m_FormID);
 
 		// Update if applicabe and queue skinning/dynamic update
-		instance->model->Update(isPlayer);
+		instance->model->Update(instance->m_Node, isPlayer);
 
 		uint32_t firstMeshIndex = meshIndex;
 
@@ -432,19 +432,26 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 
 void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool firstPerson)
 {
-	auto name = firstPerson ? std::format("{}_1stPerson", actor->GetName()) : std::string(actor->GetName());
+	auto name = std::format("{}{}_{:0X}", actor->GetName(), firstPerson ? "_1stPerson" : "", actor->GetFormID());
 
 	auto* biped = actor->GetBiped(firstPerson).get();
 
 	logger::debug("SceneGraph::CreateActorModel - {}", name);
 
 	if (biped) {
-		if (!firstPerson) {
-			if (auto* headNode = actor->GetFaceNodeSkinned()) {
-				auto headName = std::format("{}_{}", actor->GetName(), headNode->name.c_str());
-				CreateModelInternal(actor, headName.c_str(), headNode);
+		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
+
+		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object) {
+			for (auto& mesh : CreateMeshes(form, object))
+			{
+				meshes.push_back(eastl::move(mesh));
 			}
-		}
+		};
+
+
+		if (!firstPerson)
+			if (auto* headNode = actor->GetFaceNodeSkinned())
+				createAppendMeshes(actor, headNode);
 
 		for (size_t i = 0; i < RE::BIPED_OBJECTS::kTotal; i++)
 		{
@@ -453,14 +460,15 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 			if (!object.item)
 				continue;
 
-			if (!object.part || !object.part->GetModel())
-				continue;
-
 			if (!object.partClone)
 				continue;
 
-			CreateModelInternal(object.item, object.part->GetModel(), object.partClone.get(), actor);
+			createAppendMeshes(object.item, object.partClone.get());
 		}
+
+		auto object = actor->Get3D(firstPerson);
+
+		CommitModel(name.c_str(), object, actor, meshes, firstPerson);
 	}
 	else {
 		Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
@@ -520,17 +528,28 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	CreateModelInternal(water, path.c_str(), object);
 }
 
-void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object)
+void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, bool firstPerson)
 {
-	switch (a_object.formType)
-	{
-	case RE::FormType::Armor:
-		break;
-	case RE::FormType::Weapon:
-		CreateModelInternal(a_object.item, a_object.part->GetModel(), a_object.partClone, a_actor);
-		break;
-	default:
-		break;
+	if (!a_object.item)
+		return;
+
+	if (!a_object.partClone)
+		return;
+
+	auto it = m_InstancesFormIDs.find(a_actor->GetFormID());
+
+	if (it == m_InstancesFormIDs.end())
+		return;
+
+	auto meshes = CreateMeshes(a_object.item, a_object.partClone);
+
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	for (const auto& instance : it->second) {
+		if (instance->model->m_FirstPerson == firstPerson) {
+			instance->model->AppendMeshes(this, meshes);
+			break;
+		}
 	}
 }
 
@@ -543,6 +562,8 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
 	if (!bipedAnim)
 		return;
 
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
 	for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
 	{
 		const auto& object = bipedAnim->objects[i];
@@ -550,22 +571,7 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
 		if (object.item != a_object)
 			continue;
 
-		// In theory these should all be separate instances then?
-		// TODO: Investigate using ActorReference to store a list of all actor parts instances instead of the current disjointed setup
-		switch (object.item->GetFormType())
-		{
-		case RE::FormType::Armature:
-		case RE::FormType::Armor:
-			// These are part of the actor model, we need to remove the mesh from the instance model
-			RemoveActorObject(a_actor, object.partClone.get());
-			break;
-		case RE::FormType::Weapon:
-			// Weapons are separate models parented to an actor node
-			ReleaseObjectInstance(object.partClone.get());
-			break;
-		default:
-			break;
-		}
+		RemoveActorObject(a_actor, object.partClone.get());
 	}
 }
 
@@ -951,7 +957,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
 
-		float3x4 localToRoot{};
+		auto localToRoot = float3x4(
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f);
 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
@@ -994,9 +1003,6 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Vertex count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
-
-			// Meshes are skinned to root parent
-			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * skinInstance->rootParent->world));
 
 			const auto skinNumPartitions = skinPartition->numPartitions;
 
@@ -1060,7 +1066,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 	return meshes;
 }
 
-void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot, RE::Actor* actor)
+void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
 {
 	if (!pRoot)
 		return;
@@ -1074,13 +1080,12 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	}
 	
 	auto formID = form->GetFormID();
-	auto instanceFormID = actor ? actor->GetFormID() : formID;
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	// We only need one buffer per model
 	if (m_Models.find(path) != m_Models.end()) {
-		AddInstance(instanceFormID, pRoot, path);
+		AddInstance(formID, pRoot, path);
 		return;
 	}
 
@@ -1098,8 +1103,12 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
 	auto meshes = CreateMeshes(form, pRoot);
 
+	CommitModel(path, pRoot, form, meshes);
+}
+
+void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes, bool firstPerson) {
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
-		auto model = eastl::make_unique<Model>(path, pRoot, form, meshes);
+		auto model = eastl::make_unique<Model>(path, object, form, meshes);
 
 		auto& modelName = model->m_Name;
 
@@ -1151,10 +1160,14 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 			device->waitForIdle();
 
-			AddInstance(instanceFormID, pRoot, modelName);
+			auto formID = form->GetFormID();
 
-			if (form->GetFormType() == RE::FormType::ActorCharacter)
-				m_Actors.try_emplace(formID, ActorReference(form->As<RE::Actor>()));
+			AddInstance(formID, object, modelName);
+
+			if (form->GetFormType() == RE::FormType::ActorCharacter) {
+				auto* actor = form->As<RE::Actor>();
+				m_Actors.try_emplace(formID, ActorReference(actor, firstPerson));
+			}
 
 			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 		}

@@ -220,13 +220,15 @@ namespace Pass::Raytracing
 		auto* renderTargets = renderer->GetRenderTargets();
 		auto* rrInput = renderer->GetRRInput();
 
+		auto& textureManager = renderer->GetTextureManager();
+
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_ConstantBuffer),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
-			nvrhi::BindingSetItem::Texture_SRV(1, renderer->m_PTDepth),
+			nvrhi::BindingSetItem::Texture_SRV(1, textureManager.GetTexture(TextureManager::Texture::ClipDepth)),
 			nvrhi::BindingSetItem::Texture_SRV(2, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(3, giRes->prevGBufferDepth),
 			nvrhi::BindingSetItem::Texture_SRV(4, giRes->prevGBufferNormals),
@@ -235,7 +237,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(7, giRes->secondaryGBufferDiffuseAlbedo),
 			nvrhi::BindingSetItem::Texture_SRV(8, giRes->secondaryGBufferSpecularF0Roughness),
 			nvrhi::BindingSetItem::TypedBuffer_SRV(9, giRes->neighborOffsetBuffer),
-			nvrhi::BindingSetItem::Texture_SRV(10, renderer->m_PTMotionVectors),
+			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(TextureManager::Texture::MotionVectors3D)),
 			nvrhi::BindingSetItem::Texture_SRV(11, rrInput->diffuseAlbedo),
 			nvrhi::BindingSetItem::Texture_SRV(12, rrInput->specularAlbedo),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(13, giRes->surfaceDataBuffer),
@@ -280,8 +282,10 @@ namespace Pass::Raytracing
 		auto* giRes = renderer->GetReSTIRGIResources();
 		auto* renderTargets = renderer->GetRenderTargets();
 
+		auto& textureManager = renderer->GetTextureManager();
+
 		// Copy current depth to previous
-		commandList->copyTexture(giRes->prevGBufferDepth, nvrhi::TextureSlice(), renderer->m_PTDepth, nvrhi::TextureSlice());
+		commandList->copyTexture(giRes->prevGBufferDepth, nvrhi::TextureSlice(), textureManager.GetTexture(TextureManager::Texture::ClipDepth), nvrhi::TextureSlice());
 
 		// Copy current normals to previous (from PathTracing UAV3 output)
 		commandList->copyTexture(giRes->prevGBufferNormals, nvrhi::TextureSlice(), renderTargets->normalRoughness, nvrhi::TextureSlice());

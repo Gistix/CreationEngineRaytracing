@@ -51,7 +51,8 @@ namespace Pass
 		eastl::vector<ShaderDefine> m_Defines;
 
 		bool m_DirtyBindings = true;
-		bool m_UseStablePlanes = true;  // Toggle for stable planes vs reference mode
+		bool m_UseStablePlanes = false;  // Toggle for stable planes vs reference mode
+		bool m_UseRestirGI = false;
 	public:
 		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);
 
