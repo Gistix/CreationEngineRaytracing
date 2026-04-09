@@ -584,9 +584,26 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_
 	}
 }
 
-void SceneGraph::EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance)
+void SceneGraph::UnregisterDismemberMesh(RE::BSDismemberSkinInstance* skin, Mesh* mesh)
 {
-	m_DismemberReferences.erase(dismemberSkinInstance);
+	auto it = m_DismemberReferences.find(skin);
+	if (it == m_DismemberReferences.end())
+		return;
+
+	for (auto& entry : it->second) {
+		if (entry == mesh) {
+			entry = nullptr;
+			break;
+		}
+	}
+
+	const bool anyLiveMeshes = eastl::any_of(
+		it->second.begin(),
+		it->second.end(),
+		[](const Mesh* m) { return m != nullptr; });
+
+	if (!anyLiveMeshes)
+		m_DismemberReferences.erase(it);
 }
 
 void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)

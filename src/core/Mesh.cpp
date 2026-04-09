@@ -14,7 +14,7 @@
 Mesh::~Mesh()
 {
 	if (m_BSDismemberPtr)
-		Scene::GetSingleton()->GetSceneGraph()->EraseDismemberReference(m_BSDismemberPtr);
+		Scene::GetSingleton()->GetSceneGraph()->UnregisterDismemberMesh(m_BSDismemberPtr, this);
 }
 
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
