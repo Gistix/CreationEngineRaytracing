@@ -52,6 +52,7 @@ struct Model
 	void UpdateBLAS(nvrhi::ICommandList* commandList);
 
 	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);
 
 	void RemoveGeometry(RE::BSGeometry* geometry);
 

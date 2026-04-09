@@ -440,20 +440,23 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 
 	if (biped) {
 		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
+		eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> bipedMeshes;
 
-		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object) {
+		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object, int i = -1) {
 			for (auto& mesh : CreateMeshes(form, object))
 			{
+				if (i > -1)
+					bipedMeshes[i].push_back(mesh.get());
+
 				meshes.push_back(eastl::move(mesh));
 			}
 		};
-
 
 		if (!firstPerson)
 			if (auto* headNode = actor->GetFaceNodeSkinned())
 				createAppendMeshes(actor, headNode);
 
-		for (size_t i = 0; i < RE::BIPED_OBJECTS::kTotal; i++)
+		for (uint32_t i = 0; i < RE::BIPED_OBJECTS::kTotal; i++)
 		{
 			const auto& object = biped->objects[i];
 
@@ -463,12 +466,16 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 			if (!object.partClone)
 				continue;
 
-			createAppendMeshes(object.item, object.partClone.get());
+			createAppendMeshes(object.item, object.partClone.get(), i);
 		}
 
 		auto object = actor->Get3D(firstPerson);
 
-		CommitModel(name.c_str(), object, actor, meshes, firstPerson);
+		auto commited = CommitModel(name.c_str(), object, actor, meshes);
+
+		if (commited) {
+			m_Actors.try_emplace(actor->GetFormID(), ActorReference(actor, firstPerson, bipedMeshes));
+		}
 	}
 	else {
 		Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
@@ -528,7 +535,13 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	CreateModelInternal(water, path.c_str(), object);
 }
 
-void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, bool firstPerson)
+void SceneGraph::CreateLODModel(RE::NiNode* node)
+{
+	if (!node)
+		return;
+}
+
+void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
 {
 	if (!a_object.item)
 		return;
@@ -543,6 +556,9 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_obje
 
 	auto meshes = CreateMeshes(a_object.item, a_object.partClone);
 
+	for (const auto& mesh: meshes)
+		a_meshes.push_back(mesh.get());
+
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	for (const auto& instance : it->second) {
@@ -553,45 +569,18 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_obje
 	}
 }
 
-void SceneGraph::ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+void SceneGraph::ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson)
 {
-	// TODO: Handle third/first person for player actor
-	auto* bipedAnim = a_actor->GetBiped(false).get();
-
-	// We can't find the NiNode without biped anim
-	if (!bipedAnim)
-		return;
-
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
-
-	for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
-	{
-		const auto& object = bipedAnim->objects[i];
-
-		if (object.item != a_object)
-			continue;
-
-		RemoveActorObject(a_actor, object.partClone.get());
-	}
-}
-
-void SceneGraph::RemoveActorObject(RE::Actor* actor, RE::NiAVObject* object)
-{
-	auto it = m_InstancesFormIDs.find(actor->GetFormID());
+	auto it = m_InstancesFormIDs.find(a_actor->GetFormID());
 
 	if (it == m_InstancesFormIDs.end())
 		return;
 
-	eastl::vector<RE::BSGeometry*> geometries;
-
-	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* geometry)->RE::BSVisit::BSVisitControl {
-		geometries.push_back(geometry);
-		return RE::BSVisit::BSVisitControl::kContinue;
-	});
-
 	for (const auto& instance : it->second) {
-		for (auto* geometry : geometries)
-			instance->model->RemoveGeometry(geometry);
+		if (instance->model->m_FirstPerson == firstPerson) {
+			instance->model->RemoveMeshes(a_meshes);
+			break;
+		}
 	}
 }
 
@@ -1106,7 +1095,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	CommitModel(path, pRoot, form, meshes);
 }
 
-void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes, bool firstPerson) {
+bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
 		auto model = eastl::make_unique<Model>(path, object, form, meshes);
 
@@ -1164,12 +1153,9 @@ void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 
 			AddInstance(formID, object, modelName);
 
-			if (form->GetFormType() == RE::FormType::ActorCharacter) {
-				auto* actor = form->As<RE::Actor>();
-				m_Actors.try_emplace(formID, ActorReference(actor, firstPerson));
-			}
-
 			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
+
+			return true;
 		}
 		else {
 			logger::warn("SceneGraph::CreateModelInternal - Emplace failed for {} TriShapes", shapeCount);
@@ -1178,6 +1164,8 @@ void SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 	else {
 		logger::debug("SceneGraph::CreateModelInternal - No TriShapes to commit");
 	}
+
+	return false;
 }
 
 void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path)

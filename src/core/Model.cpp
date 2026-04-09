@@ -160,6 +160,25 @@ void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
+void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
+{
+	auto oldSize = meshes.size();
+
+	// Remove any unique_ptr whose raw pointer is in toRemove
+	meshes.erase(
+		eastl::remove_if(meshes.begin(), meshes.end(),
+			[&a_meshes](const auto& m)
+			{
+				return eastl::find(a_meshes.begin(), a_meshes.end(), m.get()) != a_meshes.end();
+			}),
+		meshes.end()
+	);
+
+	// Triggers a BLAS update
+	if ( meshes.size() != oldSize)	
+		m_DirtyFlags.set(DirtyFlags::Mesh);
+}
+
 void Model::RemoveGeometry(RE::BSGeometry* geometry)
 {
 	// Find the first mesh whose bsGeometryPtr matches
