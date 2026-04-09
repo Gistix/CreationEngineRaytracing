@@ -1,6 +1,7 @@
 #include "PathTracing.h"
 #include "Renderer.h"
 #include "Scene.h"
+#include "ShaderCache.h"
 
 namespace Pass
 {
@@ -189,8 +190,7 @@ namespace Pass
 
 		auto device = GetRenderer()->GetDevice();
 
-		winrt::com_ptr<IDxcBlob> rayGenBlob;
-		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
 		outShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!outShader)

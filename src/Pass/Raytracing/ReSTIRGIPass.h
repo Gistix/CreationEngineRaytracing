@@ -3,7 +3,6 @@
 #include <PCH.h>
 
 #include "Pass/RenderPass.h"
-#include "ShaderUtils.h"
 
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 
