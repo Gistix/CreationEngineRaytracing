@@ -939,10 +939,12 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
-	if (!bsGeometryPtr)
+	if (!bsGeometryPtr) {
+		logger::error("Mesh::Update - Null BSGeometry pointer for {}", m_Name);
 		return DirtyFlags::None;
+	}
 
-	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check
+	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
 	if (dynamic || skinned)
 		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get()), State::Hidden);
 
