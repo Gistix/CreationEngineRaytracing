@@ -30,8 +30,10 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 
 			static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
 
-			if (bsGeometryPtr->GetRTTI() == dynamicTriShapeRTTI.get()) {
-				auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
+			auto bsGeometry = m_WeakBSGeometry.lock_raii();
+
+			if (bsGeometry->GetRTTI() == dynamicTriShapeRTTI.get()) {
+				auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometry.get());
 
 				if (pDynamicTriShape) {
 					auto& dynTriShapeRuntime = pDynamicTriShape->GetDynamicTrishapeRuntimeData();
@@ -823,9 +825,9 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	geometryDesc.setTransform(localToRoot.f);
 }
 
-bool Mesh::UpdateDynamicPosition()
+bool Mesh::UpdateDynamicPosition(RE::BSGeometry* bsGeometry)
 {
-	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
+	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometry);
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
 	if (!runtimeData.dynamicData)
@@ -859,10 +861,10 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 	commandList->writeBuffer(buffers.dynamicPositionBuffer, geometry.dynamicPosition.data(), sizeof(float4) * vertexCount);
 }
 
-bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
+bool Mesh::UpdateSkinning(RE::BSGeometry* bsGeometry, RE::NiAVObject* object, bool isPlayer)
 {
 	// Update Bone matrices
-	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
+	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometry);
 
 	// RaceMenu crash fix
 	if (!skinInstance)
@@ -928,9 +930,9 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 	return true;
 }
 
-void Mesh::UpdateDismember()
+void Mesh::UpdateDismember(RE::BSGeometry* bsGeometry)
 {
-	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
+	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometry);
 
 	if (!skinInstance)
 		return;
@@ -956,17 +958,22 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
-	if (!bsGeometryPtr) {
+	// Lock weak BSGeometry reference for all of Update
+	auto lockedBSGeometry = m_WeakBSGeometry.lock_raii();
+
+	auto bsGeometry = lockedBSGeometry.get();
+
+	if (!bsGeometry) {
 		logger::error("Mesh::Update - Null BSGeometry pointer for {}", m_Name);
 		return DirtyFlags::None;
 	}
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
 	if (dynamic || skinned)
-		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get()), State::Hidden);
+		m_PendingState.set(Util::Game::IsHidden(bsGeometry), State::Hidden);
 
 	if (skinned)
-		UpdateDismember();
+		UpdateDismember(bsGeometry);
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
@@ -991,10 +998,10 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	if (wasHidden && !isHidden)
 		updateFlags |= DirtyFlags::Visibility;
 
-	if (dynamic && UpdateDynamicPosition())
+	if (dynamic && UpdateDynamicPosition(bsGeometry))
 		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning(object, isPlayer))
+	if (skinned && UpdateSkinning(bsGeometry, object, isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
 	return updateFlags;
@@ -1002,7 +1009,9 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 
 MeshData Mesh::GetData(const float3 externalEmittance)
 {
-	auto* bsMaterial = bsGeometryPtr ? reinterpret_cast<RE::BSShaderProperty*>(bsGeometryPtr->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get()) : nullptr;
+	auto lockedBSGeometry = m_WeakBSGeometry.lock_raii();
+
+	auto* bsMaterial = lockedBSGeometry ? reinterpret_cast<RE::BSShaderProperty*>(lockedBSGeometry->GetGeometryRuntimeData().properties[RE::BSGeometry::States::kEffect].get()) : nullptr;
 
 	return MeshData(
 		material.GetData(externalEmittance, bsMaterial),

@@ -57,7 +57,7 @@ namespace Util
 #if defined(SKYRIM)
 		RE::NiSkinInstance* GetSkinInstance(RE::BSGeometry* geometry)
 		{
-			return geometry->GetGeometryRuntimeData().skinInstance.get();
+			return geometry->GetGeometryRuntimeData().skinInstance ? geometry->GetGeometryRuntimeData().skinInstance.get() : nullptr;
 		}
 #elif defined(FALLOUT4)
 		RE::BSSkin::Instance* GetSkinInstance(RE::BSGeometry* geometry)

@@ -17,6 +17,8 @@
 
 #include <eastl/unordered_set.h>
 
+#include "Types/WeakBSGeometry.h"
+
 class SceneGraph;
 
 struct Mesh
@@ -45,7 +47,7 @@ struct Mesh
 	uint triangleCount = 0;
 	RE::BSGraphics::Vertex::Flags vertexFlags;
 
-	RE::NiPointer<RE::BSGeometry> bsGeometryPtr;
+	WeakBSGeometry m_WeakBSGeometry;
 
 	struct MeshGeometry
 	{
@@ -75,18 +77,14 @@ struct Mesh
 
 	float3x4 localToRoot;
 
-	// DismemberSkinInstance slot
 	uint8_t m_Partition;
 
 	uint32_t m_FrameID;
 
 	DescriptorHandle m_DescriptorHandle;
 
-	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
-		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition)
-	{
-
-	}
+	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometry, float3x4 localToRoot, uint8_t partition = 0) :
+		flags(flags), m_Name(name), m_WeakBSGeometry(bsGeometry), localToRoot(localToRoot), m_Partition(partition) {}
 
 	bool HasDoubleSidedGeom()
 	{
@@ -165,13 +163,13 @@ struct Mesh
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
-	bool UpdateDynamicPosition();
+	bool UpdateDynamicPosition(RE::BSGeometry* bsGeometry);
 
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
-	bool UpdateSkinning(RE::NiAVObject* object, bool isPlayer);
+	bool UpdateSkinning(RE::BSGeometry* bsGeometry, RE::NiAVObject* object, bool isPlayer);
 
-	void UpdateDismember();
+	void UpdateDismember(RE::BSGeometry* bsGeometry);
 
 	DirtyFlags Update(RE::NiAVObject* object, bool isPlayer);
 

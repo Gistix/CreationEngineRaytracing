@@ -83,6 +83,12 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BSGeometry_Dtor
+	{
+		static void thunk(RE::BSGeometry* a_geometry);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 #if defined(SKYRIM)
 	struct CreateTextureFromDDS
 	{

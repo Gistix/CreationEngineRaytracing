@@ -1,6 +1,7 @@
 #include "Hooks.h"
 #include "Renderer.h"
 #include "Util.h"
+#include "Types/WeakBSGeometry.h"
 
 namespace Hooks
 {
@@ -84,6 +85,13 @@ namespace Hooks
 		logger::info("TESObjectCELL::AddRefr - 0x{:08X} {} {}", a_refr->formID, a_refr->GetName(), a_node ? a_node->name.c_str() : "N/A" );
 
 		func(a_cell, a_refr, a_node);
+	}
+
+	void BSGeometry_Dtor::thunk(RE::BSGeometry* a_geometry)
+	{
+		WeakBSGeometry::Erase(a_geometry);
+
+		func(a_geometry);
 	}
 
 #if defined(SKYRIM)
@@ -279,6 +287,12 @@ namespace Hooks
 		//stl::detour_thunk<ShadowSceneNode_DetachObject>(REL::RelocationID(99705, 106339));
 
 		//stl::detour_thunk<TESObjectCELL_AddRefr>(REL::RelocationID(19003, 19411));
+
+		// BSTriShape
+		stl::detour_thunk<BSGeometry_Dtor>(REL::RelocationID(69294, 70666));
+
+		// BSDynamicTriShape
+		stl::detour_thunk<BSGeometry_Dtor>(REL::RelocationID(69573, 70958));
 
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));

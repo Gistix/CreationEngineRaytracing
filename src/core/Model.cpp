@@ -178,20 +178,3 @@ void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
 	if ( meshes.size() != oldSize)	
 		m_DirtyFlags.set(DirtyFlags::Mesh);
 }
-
-void Model::RemoveGeometry(RE::BSGeometry* geometry)
-{
-	// Find the first mesh whose bsGeometryPtr matches
-	auto it = eastl::find_if(meshes.begin(), meshes.end(), [&](auto& mesh) {
-		return mesh->bsGeometryPtr.get() == geometry;
-	});
-
-	if (it == meshes.end())
-		return;
-
-	// Erase single element
-	meshes.erase(it);
-
-	// Triggers a BLAS update
-	m_DirtyFlags.set(DirtyFlags::Mesh);
-}

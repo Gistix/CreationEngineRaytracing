@@ -54,8 +54,6 @@ struct Model
 	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);
 
-	void RemoveGeometry(RE::BSGeometry* geometry);
-
 	void AddRef()
 	{
 		refCount.fetch_add(1, eastl::memory_order_relaxed);
