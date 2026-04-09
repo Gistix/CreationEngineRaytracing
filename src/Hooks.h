@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Scene.h"
+#include "Types/RE/RE.h"
 
 namespace Hooks
 {
@@ -88,12 +89,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct ActorEquipManager_UnequipObject
-	{
-		static bool thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData = nullptr, std::uint32_t a_count = 1, const RE::BGSEquipSlot* a_slot = nullptr, bool a_queueEquip = true, bool a_forceEquip = false, bool a_playSounds = true, bool a_applyNow = false, const RE::BGSEquipSlot* a_slotToReplace = nullptr);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 #if defined(SKYRIM)
 	struct CreateTextureFromDDS
 	{
@@ -152,6 +147,12 @@ namespace Hooks
 	struct BSBatchRenderer_RenderPassImmediately
 	{
 		static void thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct AttachLOD
+	{
+		static int thunk(RE::BGSObjectLODAttachState* a_state, void* a_arg2, uint32_t a_arg3);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 #elif defined(FALLOUT4)
