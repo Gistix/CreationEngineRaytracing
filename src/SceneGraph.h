@@ -22,8 +22,6 @@ class SceneGraph
 {
 	std::shared_mutex m_ReleaseDataMutex;
 
-	eastl::unordered_map<RE::BSDismemberSkinInstance*, eastl::vector<Mesh*>> m_DismemberReferences;
-
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 
@@ -116,8 +114,6 @@ public:
 	inline auto& GetInstances() const { return m_Instances; }
 	inline auto& GetLights() { return m_Lights; }
 
-	inline auto& GetDismemberReferences() { return m_DismemberReferences; }
-
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
 	void UpdateActors();
@@ -132,7 +128,6 @@ public:
 	void ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 
-	void UnregisterDismemberMesh(RE::BSDismemberSkinInstance* skin, Mesh* mesh);
 	void ReleaseTexture(ID3D11Texture2D* texture);
 
 	// Releases an object instance while keeping the model and mesh data intact.

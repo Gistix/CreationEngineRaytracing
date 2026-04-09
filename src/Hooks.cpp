@@ -86,23 +86,6 @@ namespace Hooks
 		func(a_cell, a_refr, a_node);
 	}
 
-	void BSDismemberSkinInstance_UpdateDismemberPartion::thunk(RE::BSDismemberSkinInstance* oThis, std::uint16_t a_slot, bool a_enable)
-	{
-		func(oThis, a_slot, a_enable);
-
-		auto& dismemberReferences = Scene::GetSingleton()->GetSceneGraph()->GetDismemberReferences();
-
-		if (auto it = dismemberReferences.find(oThis); it != dismemberReferences.end()) {
-			for (auto& mesh : it->second) {
-				if (a_slot == mesh->slot) {
-					logger::debug("BSDismemberSkinInstance::UpdateDismemberPartion {} {} - 0x{:08X} 0x{:08X}", a_slot, a_enable, reinterpret_cast<uintptr_t>(oThis), reinterpret_cast<uintptr_t>(mesh));
-					mesh->UpdateDismember(a_enable);
-					break;
-				}
-			}
-		}
-	}
-
 #if defined(SKYRIM)
 	RE::NiSourceTexture* CreateTextureFromDDS::thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5)
 	{
@@ -327,9 +310,6 @@ namespace Hooks
 		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951));
 
 		stl::write_thunk_call<CreateRenderTarget_MotionVectors>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x4F0, 0x4EF, 0x64E));
-
-		// Updates Shape dismember state
-		stl::detour_thunk<BSDismemberSkinInstance_UpdateDismemberPartion>(REL::RelocationID(15576, 15753));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);

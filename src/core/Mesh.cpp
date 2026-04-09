@@ -11,12 +11,6 @@
 
 #include "Utils/CalcTangents.h"
 
-Mesh::~Mesh()
-{
-	if (m_BSDismemberPtr)
-		Scene::GetSingleton()->GetSceneGraph()->UnregisterDismemberMesh(m_BSDismemberPtr, this);
-}
-
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
 	auto vertexDesc = rendererData->vertexDesc;
@@ -934,6 +928,29 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 	return true;
 }
 
+void Mesh::UpdateDismember()
+{
+	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
+
+	if (!skinInstance)
+		return;
+
+	static REL::Relocation<const RE::NiRTTI*> dismemberRTTI{ RE::BSDismemberSkinInstance::Ni_RTTI };
+
+	if (skinInstance->GetRTTI() != dismemberRTTI.get())
+		return;
+
+	auto* dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
+	auto& dismemberRuntime = dismemberSkinInstance->GetRuntimeData();
+
+	if (dismemberRuntime.numPartitions == 0)
+		return;
+
+	auto& partition = dismemberRuntime.partitions[m_Partition];
+
+	m_PendingState.set(!partition.editorVisible, State::DismemberHidden);
+}
+
 DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 {
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
@@ -947,6 +964,9 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
 	if (dynamic || skinned)
 		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get()), State::Hidden);
+
+	if (skinned)
+		UpdateDismember();
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
@@ -996,11 +1016,6 @@ MeshData Mesh::GetData(const float3 externalEmittance)
 bool Mesh::IsHidden() const
 {
 	return m_State.any(State::Hidden,State::DismemberHidden);
-}
-
-void Mesh::UpdateDismember(bool visible)
-{
-	m_PendingState.set(!visible, State::DismemberHidden);
 }
 
 void Mesh::CalculateNormals()

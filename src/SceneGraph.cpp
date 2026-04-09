@@ -466,6 +466,7 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 			if (!object.partClone)
 				continue;
 
+			logger::debug("\tSceneGraph::CreateActorModel - {}", magic_enum::enum_name(static_cast<RE::BIPED_OBJECT>(i)));
 			createAppendMeshes(object.item, object.partClone.get(), i);
 		}
 
@@ -582,28 +583,6 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_
 			break;
 		}
 	}
-}
-
-void SceneGraph::UnregisterDismemberMesh(RE::BSDismemberSkinInstance* skin, Mesh* mesh)
-{
-	auto it = m_DismemberReferences.find(skin);
-	if (it == m_DismemberReferences.end())
-		return;
-
-	for (auto& entry : it->second) {
-		if (entry == mesh) {
-			entry = nullptr;
-			break;
-		}
-	}
-
-	const bool anyLiveMeshes = eastl::any_of(
-		it->second.begin(),
-		it->second.end(),
-		[](const Mesh* m) { return m != nullptr; });
-
-	if (!anyLiveMeshes)
-		m_DismemberReferences.erase(it);
 }
 
 void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
@@ -908,10 +887,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
-	// Will traverse and skip non-root fade nodes (and their children)
-	auto* validFadeNode = (formType == RE::FormType::ActorCharacter ? reinterpret_cast<RE::BSFadeNode*>(object) : nullptr);
-
-	Util::Traversal::ScenegraphRTGeometries(object, validFadeNode, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
+	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
 		const char* name = pGeometry->name.c_str();
 
 		logger::trace("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - {}", name);
@@ -990,7 +966,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			if (!isOrigin || isOrigin && isRootOrigin)
 				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
-			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, true, 0);
+			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, form);
@@ -1014,35 +990,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Partitions: {}, VertexCount: {}, Unk24: [0x{:X}]", skinNumPartitions, skinPartition->vertexCount, skinPartition->unk24);
 
-			// This looks diabolical
-			static REL::Relocation<const RE::NiRTTI*> dismemberRTTI{ RE::BSDismemberSkinInstance::Ni_RTTI };
-
-			eastl::vector<RE::BSDismemberSkinInstance::Data> dismemberData(skinNumPartitions, { true, false, 0 });
-
-			RE::BSDismemberSkinInstance* dismemberSkinInstance = nullptr;
-
-			decltype(m_DismemberReferences.begin()) it;
-			bool emplacedDismemberRef = false;
-
-			if (skinInstance->GetRTTI() == dismemberRTTI.get()) {
-				dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
-
-				auto& dismemberRuntime = dismemberSkinInstance->GetRuntimeData();
-
-				const auto dismemberNumPartitions = static_cast<uint32_t>(dismemberRuntime.numPartitions);
-
-				if (skinNumPartitions != dismemberNumPartitions)
-					logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Skin and Dismember partition count mismatch");
-
-				std::memcpy(dismemberData.data(), dismemberRuntime.partitions, dismemberNumPartitions * sizeof(RE::BSDismemberSkinInstance::Data));
-
-				eastl::tie(it, emplacedDismemberRef) = m_DismemberReferences.try_emplace(dismemberSkinInstance, eastl::vector<Mesh*>(skinNumPartitions));
-			}
-
-			for (size_t i = 0; i < skinPartition->partitions.size(); i++) {
+			// TODO: Proper partitioned mesh creation (read vertices only once, add only used vertices to each partitions mesh, etc...)
+			for (size_t i = 0; i < skinNumPartitions; i++) {
 				auto& partition = skinPartition->partitions[i];
-				auto& dismemberPartition = dismemberData[i];
-
+	
 				// Fix for modded geometry
 				if (partition.triangles == 0) {
 					logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
@@ -1053,11 +1004,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				if (partition.bonesPerVertex > 0)
 					flags |= Mesh::Flags::Skinned;
 
-				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, dismemberPartition.editorVisible, dismemberPartition.slot, dismemberSkinInstance);
-
-				// Diabolical Part II
-				if (emplacedDismemberRef)
-					it->second[i] = mesh.get();
+				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, i);
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, form);

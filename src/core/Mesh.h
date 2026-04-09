@@ -47,9 +47,6 @@ struct Mesh
 
 	RE::NiPointer<RE::BSGeometry> bsGeometryPtr;
 
-	// Used as key to dismember refr map
-	RE::BSDismemberSkinInstance* m_BSDismemberPtr = nullptr;
-
 	struct MeshGeometry
 	{
 		eastl::vector<float4> dynamicPosition;
@@ -79,22 +76,17 @@ struct Mesh
 	float3x4 localToRoot;
 
 	// DismemberSkinInstance slot
-	uint16_t slot;
+	uint8_t m_Partition;
 
 	uint32_t m_FrameID;
 
 	DescriptorHandle m_DescriptorHandle;
 
-	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, bool dismemberVisible = true, uint16_t slot = 0, RE::BSDismemberSkinInstance* bsDismemberPtr = nullptr) :
-		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), slot(slot), m_BSDismemberPtr(bsDismemberPtr)
+	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
+		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition)
 	{
-		if (!dismemberVisible) {
-			m_State.set(State::DismemberHidden);
-			m_PendingState.set(State::DismemberHidden);
-		}
-	}
 
-	~Mesh();
+	}
 
 	bool HasDoubleSidedGeom()
 	{
@@ -179,13 +171,13 @@ struct Mesh
 
 	bool UpdateSkinning(RE::NiAVObject* object, bool isPlayer);
 
+	void UpdateDismember();
+
 	DirtyFlags Update(RE::NiAVObject* object, bool isPlayer);
 
 	bool IsHidden() const;
 
 	MeshData GetData(const float3 externalEmittance);
-
-	void UpdateDismember(bool enable);
 
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:

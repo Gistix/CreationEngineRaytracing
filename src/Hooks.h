@@ -83,12 +83,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BSDismemberSkinInstance_UpdateDismemberPartion
-	{
-		static void thunk(RE::BSDismemberSkinInstance* oThis, std::uint16_t a_slot, bool a_enable);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 #if defined(SKYRIM)
 	struct CreateTextureFromDDS
 	{
