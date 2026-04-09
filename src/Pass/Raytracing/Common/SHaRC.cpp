@@ -1,6 +1,7 @@
 #include "SHaRC.h"
 #include "Renderer.h"
 #include "Scene.h"
+#include "ShaderCache.h"
 
 #include "Interop/SharcTypes.h"
 
@@ -85,8 +86,7 @@ namespace Pass
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
-		winrt::com_ptr<IDxcBlob> rayGenBlob;
-		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
 		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		auto* sceneGraph = scene->GetSceneGraph();
