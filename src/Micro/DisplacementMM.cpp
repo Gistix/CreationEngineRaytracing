@@ -98,6 +98,16 @@ void DisplacementMM::ProcessMesh(nvrhi::ICommandList* commandList, Mesh* mesh)
 	m_DMMData->MeshIndex = mesh->m_DescriptorHandle.Get();
 	m_DMMData->DisplacementIndex = material.GetDisplacementDescriptorIndex();
 
+	// Assign DMM Usage Count
+	{
+		NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_USAGE_COUNT uc{};
+		uc.count = mesh->triangleCount;
+		uc.subdivisionLevel = subdivisionLevel;
+		uc.format = NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_FORMAT_DC1_64_TRIS_64_BYTES;
+
+		mesh->dmm.usageCount = uc;
+	}
+
 	// Buffer Size
 	auto microValuesElements = m_DMMData->TriangleCount * m_DMMData->MicroVertexCount;
 	auto biasScaleElements = m_DMMData->TriangleCount;
@@ -108,7 +118,7 @@ void DisplacementMM::ProcessMesh(nvrhi::ICommandList* commandList, Mesh* mesh)
 		nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(0, GetMicroValuesBuffer(microValuesElements)),
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(1, GetBiasScaleBuffer(biasScaleElements)),
-		nvrhi::BindingSetItem::RawBuffer_UAV(2, mesh->buffers.micromeshBuffer)
+		nvrhi::BindingSetItem::RawBuffer_UAV(2, mesh->dmm.buffer)
 	};
 
 	m_BindingSet = device->createBindingSet(bindingSetDesc, m_BindingLayout);

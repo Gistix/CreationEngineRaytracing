@@ -64,8 +64,13 @@ struct Mesh
 		nvrhi::BufferHandle prevPositionBuffer;
 		nvrhi::BufferHandle triangleBuffer;
 		nvrhi::BufferHandle skinningBuffer;
-		nvrhi::BufferHandle micromeshBuffer;
 	} buffers;
+
+	struct DMMData
+	{
+		NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_USAGE_COUNT usageCount;
+		nvrhi::BufferHandle buffer;
+	} dmm;
 
 	eastl::vector<float3x4> m_BoneMatrices;
 

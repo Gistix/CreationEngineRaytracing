@@ -46,6 +46,8 @@ using namespace std::literals;
 #include <nvrhi/utils.h>
 #include <nvrhi/validation.h>
 
+#include <nvapi.h>
+
 #include <magic_enum/magic_enum.hpp>
 
 using namespace magic_enum::bitwise_operators;

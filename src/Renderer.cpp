@@ -53,6 +53,8 @@ bool Renderer::Initialize(RendererParams rendererParams)
 
 	m_FrameTimer = GetDevice()->createTimerQuery();
 
+	m_SupportedFeatures = SupportedFeatures::Raytracing | SupportedFeatures::OpacityMicroMaps | SupportedFeatures::DisplacementMicroMeshes;
+
 	return true;
 }
 

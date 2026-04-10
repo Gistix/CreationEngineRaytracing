@@ -818,7 +818,9 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
 	}
 
-	if (flags.all(Flags::Displacement)) {
+	bool dmmSupport = Renderer::GetSingleton()->GetSupportedFeatures() & SupportedFeatures::DisplacementMicroMeshes;
+
+	if (dmmSupport && flags.all(Flags::Displacement)) {
 		auto bufferDesc = nvrhi::BufferDesc()
 			.setByteSize(triangleCount * DisplacementMM::PACKED_STRIDE)
 			.setCanHaveUAVs(true)
@@ -826,7 +828,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 			.setDebugName("MicroMesh Buffer");
 
-		buffers.micromeshBuffer = device->createBuffer(bufferDesc);
+		dmm.buffer = device->createBuffer(bufferDesc);
 	}
 
 	// Geometry description

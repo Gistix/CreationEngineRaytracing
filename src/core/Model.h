@@ -30,6 +30,10 @@ struct Model
 
 	void BuildBLAS(nvrhi::ICommandList* commandList);
 
+	void BuildStandardBLAS(nvrhi::ICommandList* commandList);
+
+	void BuildDMMBLAS(nvrhi::ICommandList* commandList);
+
 	static std::string KeySuffix(RE::NiAVObject* root)
 	{
 		return std::format("_{:08X}", reinterpret_cast<uintptr_t>(root));

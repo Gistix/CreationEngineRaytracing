@@ -91,27 +91,123 @@ void Model::SetData(MeshData* meshData, uint32_t& index)
 
 void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 {
+	auto* renderer = Renderer::GetSingleton();
+
+	auto supportedFeatures = renderer->GetSupportedFeatures();
+	bool dmmSupport = supportedFeatures & SupportedFeatures::DisplacementMicroMeshes;
+
+	if (dmmSupport && meshFlags.all(Mesh::Flags::Displacement)) {
+		BuildDMMBLAS(commandList);
+	} else {
+		BuildStandardBLAS(commandList);
+	}
+
+	m_LastBLASUpdate = renderer->GetFrameIndex();
+}
+
+void Model::BuildStandardBLAS(nvrhi::ICommandList* commandList)
+{
 	auto blasDesc = MakeBLASDesc(false);
 
-	auto* displacementMM = Scene::GetSingleton()->m_DisplacementMM.get();
-
-	for (auto& mesh: meshes) {
+	for (auto& mesh : meshes) {
 		if (mesh->IsHidden())
 			continue;
-
-		if (mesh->flags.all(Mesh::Flags::Displacement))
-			displacementMM->ProcessMesh(commandList, mesh.get());
 
 		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}
 
-	auto* renderer = Renderer::GetSingleton();
-
-	blas = renderer->GetDevice()->createAccelStruct(blasDesc);
+	blas = Renderer::GetSingleton()->GetDevice()->createAccelStruct(blasDesc);
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+}
 
-	m_LastBLASUpdate = renderer->GetFrameIndex();
+void Model::BuildDMMBLAS(nvrhi::ICommandList* commandList)
+{
+	ID3D12GraphicsCommandList4* nativeCommandList = commandList->getNativeObject(nvrhi::ObjectTypes::D3D12_GraphicsCommandList);
+
+	auto* displacementMM = Scene::GetSingleton()->m_DisplacementMM.get();
+
+	static auto vertexNormalOffset = offsetof(Vertex, Normal);
+
+	eastl::vector<NVAPI_D3D12_RAYTRACING_GEOMETRY_DESC_EX> geoms;
+	geoms.reserve(meshes.size());
+
+	for (auto& mesh : meshes) {
+		if (mesh->IsHidden())
+			continue;
+
+		NVAPI_D3D12_RAYTRACING_GEOMETRY_DMM_TRIANGLES_DESC triangleDesc{};
+
+		ID3D12Resource* nativeTriangleBuffer = mesh->buffers.triangleBuffer->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		ID3D12Resource* nativeVertexBuffer = mesh->buffers.vertexBuffer->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		
+		triangleDesc.triangles = {
+			0,
+			DXGI_FORMAT_R16_UINT,
+			DXGI_FORMAT_R32G32B32_FLOAT,
+			mesh->triangleCount * 3,
+			mesh->vertexCount,
+			nativeTriangleBuffer->GetGPUVirtualAddress(),
+			{
+				nativeVertexBuffer->GetGPUVirtualAddress(),
+				sizeof(Vertex)
+			}
+		};
+
+		if (mesh->flags.all(Mesh::Flags::Displacement)) {
+			displacementMM->ProcessMesh(commandList, mesh.get());
+
+			ID3D12Resource* nativeDMMBuffer = mesh->dmm.buffer->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+
+			NVAPI_D3D12_RAYTRACING_GEOMETRY_DMM_ATTACHMENT_DESC dmmDesc{};
+
+			dmmDesc.vertexDisplacementVectorBuffer = {
+				nativeVertexBuffer->GetGPUVirtualAddress() + vertexNormalOffset,
+				sizeof(Vertex)
+			};
+			dmmDesc.vertexDisplacementVectorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+			dmmDesc.displacementMicromapArray = nativeDMMBuffer->GetGPUVirtualAddress();
+
+			dmmDesc.numDMMUsageCounts = 1;
+			dmmDesc.pDMMUsageCounts = &mesh->dmm.usageCount;
+
+			triangleDesc.dmmAttachment = dmmDesc;
+		}
+
+		NVAPI_D3D12_RAYTRACING_GEOMETRY_DESC_EX geometryDesc{};
+		geometryDesc.type = NVAPI_D3D12_RAYTRACING_GEOMETRY_TYPE_DMM_TRIANGLES_EX;
+		geometryDesc.flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		geometryDesc.dmmTriangles = triangleDesc;
+
+		geoms.push_back(geometryDesc);
+	}
+
+	if (geoms.empty())
+		return;
+
+	NVAPI_D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_EX inputDescEx{};
+	inputDescEx.type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+	inputDescEx.flags = NVAPI_D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE_EX;
+	inputDescEx.descsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+	inputDescEx.geometryDescStrideInBytes = sizeof(NVAPI_D3D12_RAYTRACING_GEOMETRY_DESC_EX);
+	inputDescEx.numDescs = geoms.size();
+	inputDescEx.pGeometryDescs = geoms.data();
+
+	nvrhi::d3d12::AccelStruct* as = checked_cast<AccelStruct*>(blas);
+
+	NVAPI_D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC_EX asDesc = {};
+	asDesc.destAccelerationStructureData = blas->GetGPUVirtualAddress();
+	asDesc.inputs = inputDescEx;
+	asDesc.scratchAccelerationStructureData = m_D3D12ScratchBuffer->GetGPUVirtualAddress();
+
+	NVAPI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_EX_PARAMS asExParams = {};
+	asExParams.numPostbuildInfoDescs = 0;
+	asExParams.pPostbuildInfoDescs = nullptr;
+	asExParams.pDesc = &asDesc;
+	asExParams.version = NVAPI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_EX_PARAMS_VER;
+
+	NvAPI_Status nvapiStatus = NvAPI_D3D12_BuildRaytracingAccelerationStructureEx(nativeCommandList, &asExParams);
 }
 
 void Model::UpdateBLAS(nvrhi::ICommandList* commandList)

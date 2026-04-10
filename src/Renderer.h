@@ -5,6 +5,7 @@
 #include "CameraData.hlsli"
 #include "Types/RendererParams.h"
 #include "Types/TextureReference.h"
+#include "Types/SupportedFeatures.h"
 
 #include "Renderer/RenderGraph.h"
 
@@ -39,6 +40,8 @@ struct MessageCallback : public nvrhi::IMessageCallback
 
 class Renderer
 {
+	SupportedFeatures m_SupportedFeatures;
+
 	ID3D12Device5* m_NativeD3D12Device;
 	ID3D11Device5* m_NativeD3D11Device;
 
@@ -170,6 +173,8 @@ public:
 	Renderer();
 
 	bool Initialize(RendererParams parameters);
+
+	auto GetSupportedFeatures() const { return m_SupportedFeatures; };
 
 	auto GetDevice() const { return m_NVRHIDevice; }
 
