@@ -19,7 +19,6 @@ namespace Pass::Common
 {
 	class GIComposite : public RenderPass
 	{
-		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
 
