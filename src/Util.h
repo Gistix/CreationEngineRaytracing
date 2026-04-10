@@ -47,13 +47,13 @@ namespace Util
 	};
 
 	template <typename T>
-	auto CreateStructuredBuffer(nvrhi::IDevice* device, uint32_t maxCapacity, const char* name, bool uav = false) {
+	auto CreateStructuredBuffer(nvrhi::IDevice* device, uint32_t maxCapacity, const char* name, bool uav = false, nvrhi::ResourceStates initialState = nvrhi::ResourceStates::ShaderResource) {
 		auto size = static_cast<uint32_t>(sizeof(T));
 
 		auto bufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size * maxCapacity)
 			.setStructStride(size)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+			.enableAutomaticStateTracking(initialState)
 			.setDebugName(name);
 
 		if (uav)

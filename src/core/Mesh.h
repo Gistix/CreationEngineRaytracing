@@ -29,7 +29,8 @@ struct Mesh
 		Landscape = 1 << 3,
 		Static = 1 << 4,
 		DoubleSidedGeom = 1 << 5,
-		Water = 1 << 6
+		Water = 1 << 6,
+		Displacement = 1 << 7
 	};
 
 	enum class State : uint8_t
@@ -63,6 +64,7 @@ struct Mesh
 		nvrhi::BufferHandle prevPositionBuffer;
 		nvrhi::BufferHandle triangleBuffer;
 		nvrhi::BufferHandle skinningBuffer;
+		nvrhi::BufferHandle micromeshBuffer;
 	} buffers;
 
 	eastl::vector<float3x4> m_BoneMatrices;

@@ -421,6 +421,11 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 						pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(lightingPBRMaterial);
 
+						if (pbrFlags & PBRShaderFlags::HasDisplacement) {
+							textures[Constants::Material::DISPLACEMENT_TEXTURE] = GetTexture(lightingPBRMaterial->displacementTexture, blackTexture);
+							flags.set(Flags::Displacement);
+						}
+
 						if (pbrFlags & PBRShaderFlags::Subsurface) {
 							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
 
@@ -520,7 +525,14 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								}
 							}
 
-							//							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
+							// Parallax and Parallax Occlusion
+							if (feature == Feature::kParallax || feature == Feature::kParallaxOcc) {
+								if (const auto* parallaxMaterial = skyrim_cast<RE::BSLightingShaderMaterialParallax*>(shaderMaterial)) {
+									textures[Constants::Material::DISPLACEMENT_TEXTURE] = GetTexture(parallaxMaterial->heightTexture, blackTexture);
+
+									flags.set(Flags::Displacement);
+								}
+							}
 
 							// FaceGen
 							if (feature == Feature::kFaceGen) {
@@ -804,6 +816,17 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
 		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
+	}
+
+	if (flags.all(Flags::Displacement)) {
+		auto bufferDesc = nvrhi::BufferDesc()
+			.setByteSize(triangleCount * DisplacementMM::PACKED_STRIDE)
+			.setCanHaveUAVs(true)
+			.setCanHaveRawViews(true)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName("MicroMesh Buffer");
+
+		buffers.micromeshBuffer = device->createBuffer(bufferDesc);
 	}
 
 	// Geometry description

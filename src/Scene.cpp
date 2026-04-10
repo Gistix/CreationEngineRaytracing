@@ -27,6 +27,8 @@
 Scene::Scene()
 {
 	m_SceneGraph = eastl::make_unique<SceneGraph>();
+
+	m_DisplacementMM = eastl::make_unique<DisplacementMM>();
 }
 
 void Scene::Load()
@@ -269,6 +271,8 @@ void Scene::Initialize()
 	m_SceneGraph->Initialize();
 
 	renderer->InitDefaultTextures();
+
+	m_DisplacementMM->Initialize();
 
 	// Camera Data
 	m_CameraData = eastl::make_unique<CameraData>();

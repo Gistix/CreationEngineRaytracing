@@ -93,9 +93,14 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 {
 	auto blasDesc = MakeBLASDesc(false);
 
+	auto* displacementMM = Scene::GetSingleton()->m_DisplacementMM.get();
+
 	for (auto& mesh: meshes) {
 		if (mesh->IsHidden())
 			continue;
+
+		if (mesh->flags.all(Mesh::Flags::Displacement))
+			displacementMM->ProcessMesh(commandList, mesh.get());
 
 		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}

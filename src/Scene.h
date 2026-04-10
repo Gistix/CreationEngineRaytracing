@@ -12,6 +12,8 @@
 
 #include "Types/Settings.h"
 
+#include "Micro/DisplacementMM.h"
+
 struct Scene
 {
 	std::shared_mutex m_SceneMutex;
@@ -43,6 +45,8 @@ struct Scene
 	float4* g_DisplacementCellTexCoordOffset = nullptr;
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
 	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
+
+	eastl::unique_ptr<DisplacementMM> m_DisplacementMM;
 
 	Settings m_Settings;
 

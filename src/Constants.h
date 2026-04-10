@@ -7,6 +7,7 @@ namespace Constants
 		static constexpr uint32_t EMISSIVE_COLOR = 1;
 
 		static constexpr uint32_t NORMALMAP_TEXTURE = 1;
+		static constexpr uint32_t DISPLACEMENT_TEXTURE = 4;
 	}
 
 	static constexpr uint32_t MAX_CB_VERSIONS = 16;

@@ -13,6 +13,8 @@
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 
+#include "Constants.h"
+
 struct Material
 {
 	static constexpr uint MAX_LAND_TEXTURES = 5u;
@@ -128,6 +130,19 @@ struct Material
 	eastl::array<half4, 2> TexCoordOffsetScale;
 
 	eastl::array<Texture, 20> Textures;
+
+	bool HasDisplacementMap() const
+	{
+		if (GetShaderType() == ShaderType::TruePBR)
+			return PBRFlags.all(PBRShaderFlags::HasDisplacement);
+
+		return Feature == RE::BSShaderMaterial::Feature::kParallax || Feature == RE::BSShaderMaterial::Feature::kParallaxOcc;
+	}
+
+	DescriptorIndex GetDisplacementDescriptorIndex() const
+	{
+		return Textures[Constants::Material::DISPLACEMENT_TEXTURE].texture.lock()->Get();
+	}
 
 	uint32_t GetShaderFlags() const
 	{
