@@ -174,6 +174,17 @@ public:
 
 	bool Initialize(RendererParams parameters);
 
+	auto GetSupportedFeatures() const { return m_SupportedFeatures; }
+
+	auto HasNVAPI() const 
+	{ 
+#if defined(NVAPI)
+		return true;
+#else
+		return false;
+#endif
+	}
+
 	auto GetDevice() const { return m_NVRHIDevice; }
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }

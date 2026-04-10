@@ -1,4 +1,5 @@
 #include "Shader.h"
+#include "Renderer.h"
 
 namespace Util
 {
@@ -18,6 +19,16 @@ namespace Util
 				{ L"ALT_PBR_CONV_ROUGHNESS", L"0" },
 				{ L"ALT_PBR_CONV_METALLIC", L"0" }
 			};
+
+			auto* renderer = Renderer::GetSingleton();
+
+			if (renderer->GetSupportedFeatures() & SupportedFeatures::ShaderExecutionReordering) {
+				bool hasNVAPI = renderer->HasNVAPI();
+
+				defines.emplace_back(L"USE_SER");
+				defines.emplace_back(L"USE_NVAPI_HIT_OBJECT_EXTENSION", hasNVAPI ? 1 : 0);
+				defines.emplace_back(L"USE_DX_HIT_OBJECT_EXTENSION", hasNVAPI ? 0 : 1);
+			}
 
 			if (settings.AdvancedSettings.GGXEnergyConservation)
 				defines.emplace_back(L"GGX_ENERGY_CONSERVATION");

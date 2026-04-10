@@ -10,6 +10,8 @@
 
 #include "raytracing/include/Transparency.hlsli"
 
+#include "raytracing/include/SERUtils.hlsli"
+
 #define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
 
 Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
@@ -66,10 +68,10 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
     payload.PackInstanceGeometryIndex(0, 0);
     payload.randomSeed = randomSeed;
 
-#if USE_RAY_QUERY
+#if USE_RAY_QUERY || defined(__INTELLISENSE__)
     RayQuery<RAY_FLAGS> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, 0xFF, ray);
-
+    
     while (rayQuery.Proceed())
     {
         if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
@@ -86,16 +88,43 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
         }
     }
 
+#   if defined(SER_HIT_OBJECT) || defined(__INTELLISENSE__)
+    SER_HIT_OBJECT hit;
+    
+    if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+    {
+        SER_HIT_OBJECT_INIT_FROM_RAYQ(Scene, hit, rayQuery);
+    }
+    else
+    {
+        SER_HIT_OBJECT_INIT_FROM_MISS(hit, rayQuery);
+    }
+    
+    SER_REORDER_HIT(hit, 0, 0);
+    
+    SER_INVOKE_HIT(Scene, hit, payload);
+#   else  
     if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {
         payload.hitDistance = rayQuery.CommittedRayT();
         payload.primitiveIndex = rayQuery.CommittedPrimitiveIndex();
         payload.PackBarycentrics(rayQuery.CommittedTriangleBarycentrics());
         payload.PackInstanceGeometryIndex(rayQuery.CommittedInstanceIndex(), rayQuery.CommittedGeometryIndex());
-    }
-#else // !USE_RAY_QUERY    
+    }    
+#   endif    
+#else // !USE_RAY_QUERY
+#   if defined(SER_HIT_OBJECT) || defined(__INTELLISENSE__)
+    SER_HIT_OBJECT hit;
+    
+    NvTraceRayHitObject(Scene, RAY_FLAGS, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload, hit);
+    
+    SER_REORDER_HIT(hit, 0, 0);
+    
+    SER_INVOKE_HIT(Scene, hit, payload);
+#   else
     TraceRay(Scene, RAY_FLAGS, 0xFF, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
- #endif
+#   endif   
+#endif
     
     randomSeed = payload.randomSeed;
     
