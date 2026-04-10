@@ -46,8 +46,8 @@ struct BipObjectReference
 
 struct ActorReference
 {
-	ActorReference(RE::Actor* actor, bool firstPerson, eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> meshes) 
-		: m_Actor(actor), m_FirstPerson(firstPerson), m_Meshes(meshes)
+	ActorReference(RE::Actor* actor, bool firstPerson, eastl::vector<Mesh*> faceMeshes, eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> meshes)
+		: m_Actor(actor), m_FirstPerson(firstPerson), m_FaceMeshes(faceMeshes), m_ObjectMeshes(meshes)
 	{
 		auto* biped = m_Actor->GetBiped(false).get();
 
@@ -74,5 +74,8 @@ struct ActorReference
 
 	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
 
-	eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> m_Meshes;
+	RE::NiAVObject* m_FaceNode;
+
+	eastl::vector<Mesh*> m_FaceMeshes;
+	eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> m_ObjectMeshes;
 };

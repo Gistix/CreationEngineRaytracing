@@ -125,7 +125,7 @@ public:
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 	void CreateLODModel(RE::NiNode* node);
 
-	void ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
+	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 
 	void ReleaseTexture(ID3D11Texture2D* texture);

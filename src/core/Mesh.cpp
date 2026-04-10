@@ -825,6 +825,9 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
+	if (!bsGeometryPtr)
+		return false;
+
 	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
@@ -861,6 +864,9 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 
 bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 {
+	if (!bsGeometryPtr)
+		return false;
+
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
 
@@ -930,6 +936,9 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 
 void Mesh::UpdateDismember()
 {
+	if (!bsGeometryPtr)
+		return;
+
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
 
 	if (!skinInstance)
@@ -953,13 +962,13 @@ void Mesh::UpdateDismember()
 
 DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 {
+	// Only this reference remains, so erase it
+	if (bsGeometryPtr->GetRefCount() == 1) {
+		logger::warn("Mesh::Update - Released BSGeometry being referenced in {}", m_Name);
+	}
+
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
-
-	if (!bsGeometryPtr) {
-		logger::error("Mesh::Update - Null BSGeometry pointer for {}", m_Name);
-		return DirtyFlags::None;
-	}
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
 	if (dynamic || skinned)

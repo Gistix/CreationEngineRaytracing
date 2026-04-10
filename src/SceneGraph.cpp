@@ -440,12 +440,15 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 
 	if (biped) {
 		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
+		eastl::vector<Mesh*> faceMeshes;
 		eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> bipedMeshes;
 
 		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object, int i = -1) {
 			for (auto& mesh : CreateMeshes(form, object))
 			{
-				if (i > -1)
+				if (i == -1)
+					faceMeshes.push_back(mesh.get());
+				else
 					bipedMeshes[i].push_back(mesh.get());
 
 				meshes.push_back(eastl::move(mesh));
@@ -475,7 +478,7 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 		auto commited = CommitModel(name.c_str(), object, actor, meshes);
 
 		if (commited) {
-			m_Actors.try_emplace(actor->GetFormID(), ActorReference(actor, firstPerson, bipedMeshes));
+			m_Actors.try_emplace(actor->GetFormID(), ActorReference(actor, firstPerson, faceMeshes, bipedMeshes));
 		}
 	}
 	else {
@@ -542,12 +545,12 @@ void SceneGraph::CreateLODModel(RE::NiNode* node)
 		return;
 }
 
-void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
+void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
 {
-	if (!a_object.item)
+	if (!a_form)
 		return;
 
-	if (!a_object.partClone)
+	if (!a_object)
 		return;
 
 	auto it = m_InstancesFormIDs.find(a_actor->GetFormID());
@@ -555,7 +558,7 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_obje
 	if (it == m_InstancesFormIDs.end())
 		return;
 
-	auto meshes = CreateMeshes(a_object.item, a_object.partClone);
+	auto meshes = CreateMeshes(a_form, a_object);
 
 	for (const auto& mesh: meshes)
 		a_meshes.push_back(mesh.get());
