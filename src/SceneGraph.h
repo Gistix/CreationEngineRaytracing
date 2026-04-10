@@ -22,8 +22,6 @@ class SceneGraph
 {
 	std::shared_mutex m_ReleaseDataMutex;
 
-	eastl::unordered_map<RE::BSDismemberSkinInstance*, eastl::vector<Mesh*>> m_DismemberReferences;
-
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 
@@ -94,7 +92,7 @@ class SceneGraph
 
 	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
 	void CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
-	void CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes, bool firstPerson = false);
+	bool CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path);
 public:
 	void Initialize();
@@ -116,8 +114,6 @@ public:
 	inline auto& GetInstances() const { return m_Instances; }
 	inline auto& GetLights() { return m_Lights; }
 
-	inline auto& GetDismemberReferences() { return m_DismemberReferences; }
-
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
 	void UpdateActors();
@@ -127,13 +123,11 @@ public:
 	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
+	void CreateLODModel(RE::NiNode* node);
 
-	void ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, bool firstPerson);
-	void ActorUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object);
+	void ActorEquip(RE::Actor* a_actor, const BipObjectReference& a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
+	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 
-	void RemoveActorObject(RE::Actor* actor, RE::NiAVObject* object);
-
-	void EraseDismemberReference(RE::BSDismemberSkinInstance* dismemberSkinInstance);
 	void ReleaseTexture(ID3D11Texture2D* texture);
 
 	// Releases an object instance while keeping the model and mesh data intact.

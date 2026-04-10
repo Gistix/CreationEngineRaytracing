@@ -5,7 +5,6 @@
 #include "Pass/RenderPass.h"
 #include "CameraData.hlsli"
 #include "RaytracingData.hlsli"
-#include "ShaderUtils.h"
 #include "framework/DescriptorTableManager.h"
 #include "Util.h"
 

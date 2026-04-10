@@ -86,30 +86,6 @@ namespace Hooks
 		func(a_cell, a_refr, a_node);
 	}
 
-	void BSDismemberSkinInstance_UpdateDismemberPartion::thunk(RE::BSDismemberSkinInstance* oThis, std::uint16_t a_slot, bool a_enable)
-	{
-		func(oThis, a_slot, a_enable);
-
-		auto& dismemberReferences = Scene::GetSingleton()->GetSceneGraph()->GetDismemberReferences();
-
-		if (auto it = dismemberReferences.find(oThis); it != dismemberReferences.end()) {
-			for (auto& mesh : it->second) {
-				if (a_slot == mesh->slot) {
-					logger::debug("BSDismemberSkinInstance::UpdateDismemberPartion {} {} - 0x{:08X} 0x{:08X}", a_slot, a_enable, reinterpret_cast<uintptr_t>(oThis), reinterpret_cast<uintptr_t>(mesh));
-					mesh->UpdateDismember(a_enable);
-					break;
-				}
-			}
-		}
-	}
-
-	bool ActorEquipManager_UnequipObject::thunk(RE::ActorEquipManager* a_actorEquipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraData, std::uint32_t a_count, const RE::BGSEquipSlot* a_slot, bool a_queueEquip, bool a_forceEquip, bool a_playSounds, bool a_applyNow, const RE::BGSEquipSlot* a_slotToReplace)
-	{
-		Scene::GetSingleton()->GetSceneGraph()->ActorUnequip(a_actor, a_object);
-
-		return func(a_actorEquipManager, a_actor, a_object, a_extraData, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow, a_slotToReplace);
-	};
-
 #if defined(SKYRIM)
 	RE::NiSourceTexture* CreateTextureFromDDS::thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5)
 	{
@@ -264,6 +240,14 @@ namespace Hooks
 
 		func(pass, technique, alphaTest, renderFlags);
 	}
+
+	int AttachLOD::thunk(RE::BGSObjectLODAttachState* a_state, void* a_arg2, uint32_t a_arg3)
+	{
+		if (!a_state->isAttached)
+			Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_state->objectNode);
+
+		return func(a_state, a_arg2, a_arg3);
+	}
 #elif defined(FALLOUT4)
 
 #endif
@@ -296,8 +280,6 @@ namespace Hooks
 
 		//stl::detour_thunk<TESObjectCELL_AddRefr>(REL::RelocationID(19003, 19411));
 
-		stl::detour_thunk<ActorEquipManager_UnequipObject>(REL::RelocationID(37945, 38901));
-
 #if defined(SKYRIM)
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
@@ -305,6 +287,8 @@ namespace Hooks
 		// Destructor to remove instances (not models)
 		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));
 
+		stl::detour_thunk<AttachLOD>(REL::RelocationID(30741, 31581));
+		
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
 		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
@@ -326,9 +310,6 @@ namespace Hooks
 		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951));
 
 		stl::write_thunk_call<CreateRenderTarget_MotionVectors>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x4F0, 0x4EF, 0x64E));
-
-		// Updates Shape dismember state
-		stl::detour_thunk<BSDismemberSkinInstance_UpdateDismemberPartion>(REL::RelocationID(15576, 15753));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);

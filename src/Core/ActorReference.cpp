@@ -13,8 +13,7 @@ void ActorReference::Update()
 	if (!biped)
 		return;
 
-	auto* SceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
 	{
@@ -23,13 +22,18 @@ void ActorReference::Update()
 		const auto& curObject = BipObjectReference(object);
 		auto& prevObject = m_Objects[i];
 
-
+		// Current and previous objects are different
 		if (curObject != prevObject) {
-			if (curObject.IsValid())
-				SceneGraph->ActorEquip(m_Actor, curObject, m_FirstPerson);
 
-			// The reason why we don't unequip here and use the event instead is because 'partClone' needs to be valid
-			// Since for non-weapons we traverse the scene graph for each of its BSGeometry to remove their 'Mesh' from the 'Model'
+			// Remove previous valid object
+			if (prevObject.IsValid()) {
+				sceneGraph->ActorUnequip(m_Actor, m_Meshes[i], m_FirstPerson);
+				m_Meshes[i].clear();
+			}
+
+			// Add current valid object
+			if (curObject.IsValid())
+				sceneGraph->ActorEquip(m_Actor, curObject, m_Meshes[i], m_FirstPerson);
 
 			prevObject = curObject;
 		}

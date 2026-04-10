@@ -5,6 +5,7 @@
 
 #include "ReSTIRGIData.hlsli"
 #include "Utils/Shader.h"
+#include "ShaderUtils.h"
 
 namespace Pass::Raytracing
 {
