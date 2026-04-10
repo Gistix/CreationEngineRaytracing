@@ -5,6 +5,7 @@
 #include "CameraData.hlsli"
 #include "Types/RendererParams.h"
 #include "Types/TextureReference.h"
+#include "Types/SupportedFeatures.h"
 
 #include "Renderer/RenderGraph.h"
 
@@ -47,6 +48,8 @@ class Renderer
 	nvrhi::CommandListHandle m_CommandList = nullptr;
 	//nvrhi::CommandListHandle m_ComputeCommandList = nullptr;
 	//nvrhi::CommandListHandle m_CopyCommandList = nullptr;
+
+	SupportedFeatures m_SupportedFeatures;
 
 	uint64_t m_LastSubmittedInstance = 0;
 

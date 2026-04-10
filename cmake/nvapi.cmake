@@ -1,9 +1,12 @@
-vcpkg_from_git(
-    OUT_SOURCE_PATH SOURCE_PATH
-    URL https://github.com/NVIDIA/nvapi
-    REF 9296d671e71608d6d6b7749ed93989af4ada8858
-    HEAD_REF main
+include(FetchContent)
+
+FetchContent_Declare(
+    nvapi
+    GIT_REPOSITORY https://github.com/NVIDIA/nvapi
+    GIT_TAG 9296d671e71608d6d6b7749ed93989af4ada8858
 )
 
-set(NVAPI_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/extern/nvapi")
-set(NVAPI_LIBRARY "${CMAKE_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib")
+FetchContent_MakeAvailable(nvapi)
+
+set(NVAPI_INCLUDE_DIR ${nvapi_SOURCE_DIR})
+set(NVAPI_LIBRARY "${nvapi_SOURCE_DIR}/amd64/nvapi64.lib")
