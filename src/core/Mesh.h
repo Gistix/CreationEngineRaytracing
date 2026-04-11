@@ -17,6 +17,8 @@
 
 #include <eastl/unordered_set.h>
 
+#include "Libraries/OMM/OmmBakerIntegration.h"
+
 class SceneGraph;
 
 struct Mesh
