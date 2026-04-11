@@ -20,3 +20,6 @@
 [submodule "extern/RTXDI-Library"]
 	path = extern/RTXDI-Library
 	url = https://github.com/NVIDIA-RTX/RTXDI-Library.git
+[submodule "extern\\OMM"]
+	path = extern\\OMM
+	url = https://github.com/Gistix/OMM.git
