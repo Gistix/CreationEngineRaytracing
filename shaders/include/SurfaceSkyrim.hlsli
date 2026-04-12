@@ -218,6 +218,29 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             float envMask = envMaskTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
 
             surface.Roughness = max(lerp(surface.Roughness, 0.0f, envMask), 0.08f);
+
+            // Cubemap-based material override
+            TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(material.EnvTexture())];
+
+            // Dynamic Cubemap Creator sets mip 15 at (0,1,0) to black
+            float3 envColorTest = envCubemap.SampleLevel(DefaultSampler, float3(0.0, 1.0, 0.0), 15).xyz;
+            bool dynamicCubemap = all(envColorTest == 0.0);
+
+            if (dynamicCubemap) {
+                float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
+
+                if (envColorBase.a < 1.0) {
+                    surface.F0 = lerp(surface.F0, ColorToLinear(envColorBase.rgb), envMask);
+                    surface.Roughness = lerp(surface.Roughness, envColorBase.a, envMask);
+                } else {
+                    surface.F0 = lerp(surface.F0, float3(1.0, 1.0, 1.0), envMask);
+                    surface.Roughness = lerp(surface.Roughness, 1.0 / 7.0, envMask);
+                }
+            } else {
+                // Static cubemap: use +X face average color as metallic tint
+                float3 faceAvg = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15).rgb;
+                surface.F0 = lerp(surface.F0, saturate(ColorToLinear(faceAvg)), envMask);
+            }
         }
 
         [branch]

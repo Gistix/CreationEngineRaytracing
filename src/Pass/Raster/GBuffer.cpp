@@ -90,7 +90,8 @@ namespace Pass::Raster
 				m_BindingLayout,
 				sceneGraph->GetTriangleDescriptors()->m_Layout,
 				sceneGraph->GetVertexDescriptors()->m_Layout,
-				sceneGraph->GetTextureDescriptors()->m_Layout
+				sceneGraph->GetTextureDescriptors()->m_Layout,
+				sceneGraph->GetCubemapDescriptors()->m_Layout
 			};
 			pipelineDesc.renderState.depthStencilState.depthTestEnable = true;
 			pipelineDesc.renderState.depthStencilState.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
@@ -126,7 +127,8 @@ namespace Pass::Raster
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
-			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		state.viewport.addViewportAndScissorRect(fbinfo.getViewport());

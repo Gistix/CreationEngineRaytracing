@@ -75,6 +75,7 @@ StructuredBuffer<Vertex>                    Vertices[]                  : regist
 Texture2D<float4>                           Textures[]                  : register(t0, space3);
 RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space4);
 StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space5);
+TextureCube<float4>                         CubeTextures[]              : register(t0, space6);
 
 #define HAS_PREV_POSITIONS
 
