@@ -358,7 +358,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 		if (effect) {
 			if (RE::BSShaderProperty* shaderProp = netimmerse_cast<RE::BSShaderProperty*>(effect)) {
 				shaderFlags = shaderProp->flags.get();
-				colors[0].w *= shaderProp->alpha;
+				colors[0].w = shaderProp->alpha;
 			}
 
 			if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(effect)) {
@@ -391,8 +391,8 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 					// BSLightingShaderProperty with materialAlpha != 1 treated as alpha blending
 					if (const auto* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
-						if (lightingBaseMaterial->materialAlpha != 1.0f) {
-							colors[0].w *= lightingBaseMaterial->materialAlpha;
+						if (lightingBaseMaterial->materialAlpha != 1.0f && (!property || property->GetType() != RE::NiProperty::Type::kAlpha)) {
+							colors[0].w = lightingBaseMaterial->materialAlpha;
 							alphaFlags |= Material::AlphaFlags::Blend;
 						}
 					}

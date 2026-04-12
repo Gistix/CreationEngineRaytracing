@@ -157,6 +157,26 @@ struct LinearLightingSettings
 static_assert(sizeof(LinearLightingSettings) % 16 == 0);
 #endif
 
+struct ExponentialHeightFogSettings
+{
+    uint enabled;
+    uint useDynamicCubemaps;
+    float startDistance;
+    float fogHeight;
+    float fogHeightFalloff;
+    float fogDensity;
+    float directionalInscatteringMultiplier;
+    float directionalInscatteringExponent;
+    float4 inscatteringTint;
+    float cubemapMipLevel;
+    float pad0;
+    float pad1;
+    float pad2;
+};
+#ifdef __cplusplus
+static_assert(sizeof(ExponentialHeightFogSettings) % 16 == 0);
+#endif
+
 INTEROP_STRUCT(FeatureData, 16)
 {
     CPMSettings ExtendedMaterial;
@@ -165,6 +185,7 @@ INTEROP_STRUCT(FeatureData, 16)
     HairSpecularSettings HairSpecular;
     ExtendedTranslucencySettings ExtendedTranslucency;
     LinearLightingSettings LinearLighting;
+    ExponentialHeightFogSettings ExponentialHeightFog;
 };
 VALIDATE_CBUFFER(FeatureData, 16);
 
