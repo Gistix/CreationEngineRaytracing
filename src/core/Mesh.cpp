@@ -211,6 +211,20 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 			geometry.triangles.resize(triangleCountIn);
 			std::memcpy(geometry.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
 
+			// Validate triangle indices are within vertex bounds
+			if (vertexCountIn > 0) {
+				const uint16_t maxIndex = static_cast<uint16_t>(std::min(vertexCountIn, 65536u) - 1);
+				for (uint32_t i = 0; i < triangleCountIn; i++) {
+					auto& tri = geometry.triangles[i];
+					if (tri.x > maxIndex || tri.y > maxIndex || tri.z > maxIndex) {
+						logger::warn("[RT] Mesh::BuildMesh - Triangle {} has out-of-bounds index ({}, {}, {}) for vertexCount {}", i, tri.x, tri.y, tri.z, vertexCountIn);
+						tri.x = std::min(tri.x, maxIndex);
+						tri.y = std::min(tri.y, maxIndex);
+						tri.z = std::min(tri.z, maxIndex);
+					}
+				}
+			}
+
 			if (HasDoubleSidedGeom())
 				flags.set(Mesh::Flags::DoubleSidedGeom);
 		}
