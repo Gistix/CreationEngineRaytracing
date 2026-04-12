@@ -143,7 +143,8 @@ namespace Pass
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
 			sceneGraph->GetTextureDescriptors()->m_Layout,
-			sceneGraph->GetPrevPositionDescriptors()->m_Layout
+			sceneGraph->GetPrevPositionDescriptors()->m_Layout,
+			sceneGraph->GetCubemapDescriptors()->m_Layout
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -206,7 +207,8 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
 
 		outPipeline = device->createComputePipeline(pipelineDesc);
 	}
@@ -316,7 +318,8 @@ namespace Pass
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable
+			sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
