@@ -507,6 +507,24 @@ void Scene::UpdateSettings(Settings settings)
 
 	m_Settings = settings;
 
+	// Toggle vanilla fog based on path tracing state
+	{
+		bool ptActive = IsPathTracingActive();
+
+		if (auto* imageSpaceManager = RE::ImageSpaceManager::GetSingleton()) {
+			auto& fogShader = !REL::Module::IsVR() ?
+				imageSpaceManager->GetRuntimeData().BSImagespaceShaderISSAOBlurH :
+				imageSpaceManager->GetVRRuntimeData().BSImagespaceShaderISSAOBlurH;
+
+			if (fogShader.get()) {
+				fogShader->active = !ptActive;
+			}
+		}
+
+		static auto& enableFog = (*(bool*)REL::RelocationID(528125, 415070).address());
+		enableFog = !ptActive;
+	}
+
 	auto currentMode = settings.GeneralSettings.Mode;
 
 	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();

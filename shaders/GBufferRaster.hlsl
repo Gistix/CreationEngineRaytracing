@@ -24,6 +24,7 @@ StructuredBuffer<Mesh>            Meshes         : register(t1);
 StructuredBuffer<uint16_t3>       Triangles[]    : register(t0, space1);
 StructuredBuffer<Vertex>          Vertices[]     : register(t0, space2);
 Texture2D<float4>                 Textures[]     : register(t0, space3);
+TextureCube<float4>               CubeTextures[] : register(t0, space6);
 
 SamplerState                      DefaultSampler : register(s0);
 

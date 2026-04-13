@@ -177,6 +177,7 @@ public:
 	auto GetDevice() const { return m_NVRHIDevice; }
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
+	static auto GetNativeD3D11Device() { return GetSingleton()->m_NativeD3D11Device; }
 
 	nvrhi::CommandListHandle GetGraphicsCommandList() const {
 		return GetDevice()->createCommandList(

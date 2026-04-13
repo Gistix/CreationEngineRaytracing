@@ -212,6 +212,20 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 			geometry.triangles.resize(triangleCountIn);
 			std::memcpy(geometry.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
 
+			// Validate triangle indices are within vertex bounds
+			if (vertexCountIn > 0) {
+				const uint16_t maxIndex = static_cast<uint16_t>(std::min(vertexCountIn, 65536u) - 1);
+				for (uint32_t i = 0; i < triangleCountIn; i++) {
+					auto& tri = geometry.triangles[i];
+					if (tri.x > maxIndex || tri.y > maxIndex || tri.z > maxIndex) {
+						logger::warn("[RT] Mesh::BuildMesh - Triangle {} has out-of-bounds index ({}, {}, {}) for vertexCount {}", i, tri.x, tri.y, tri.z, vertexCountIn);
+						tri.x = std::min(tri.x, maxIndex);
+						tri.y = std::min(tri.y, maxIndex);
+						tri.z = std::min(tri.z, maxIndex);
+					}
+				}
+			}
+
 			if (HasDoubleSidedGeom())
 				flags.set(Mesh::Flags::DoubleSidedGeom);
 		}
@@ -284,6 +298,20 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 	//return Texture(defaultDescHandle, nullptr);
 }
 
+Texture Mesh::GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle)
+{
+	if (!niPointer || !niPointer->rendererTexture)
+		return Texture(defaultDescHandle, nullptr);
+
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	auto result = sceneGraph->GetCubemapDescriptor(niPointer->rendererTexture->texture);
+
+	if (!result)
+		return Texture(defaultDescHandle, nullptr);
+
+	return Texture(result, defaultDescHandle.get());
+}
+
 void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form)
 {
 	auto* renderer = Renderer::GetSingleton();
@@ -341,7 +369,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 		if (effect) {
 			if (RE::BSShaderProperty* shaderProp = netimmerse_cast<RE::BSShaderProperty*>(effect)) {
 				shaderFlags = shaderProp->flags.get();
-				colors[0].w *= shaderProp->alpha;
+				colors[0].w = shaderProp->alpha;
 			}
 
 			if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(effect)) {
@@ -371,6 +399,14 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 				if (auto shaderMaterial = lightingShaderProp->material) {
 					feature = shaderMaterial->GetFeature();
+
+					// BSLightingShaderProperty with materialAlpha != 1 treated as alpha blending
+					if (const auto* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
+						if (lightingBaseMaterial->materialAlpha != 1.0f && (!property || property->GetType() != RE::NiProperty::Type::kAlpha)) {
+							colors[0].w = lightingBaseMaterial->materialAlpha;
+							alphaFlags |= Material::AlphaFlags::Blend;
+						}
+					}
 
 					// Some eye meshes use EnvironmentMap shader instead of Eye shader;
 					// detect them by geometry name and override the feature
@@ -499,10 +535,14 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
 							}
 
-							// Envmap
+							// Envmap / Eye
 							if (feature == Feature::kEnvironmentMap || feature == Feature::kEye) {
 								if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial)) {
-									textures[5] = GetTexture(lightingEnvmapMaterial->envMaskTexture, blackTexture);
+									textures[4] = GetCubemapTexture(lightingEnvmapMaterial->envTexture, blackTexture);
+									textures[5] = GetTexture(lightingEnvmapMaterial->envMaskTexture, whiteTexture);
+								} else if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
+									textures[4] = GetCubemapTexture(lightingEyeMaterial->envTexture, blackTexture);
+									textures[5] = GetTexture(lightingEyeMaterial->envMaskTexture, whiteTexture);
 								}
 							}
 
