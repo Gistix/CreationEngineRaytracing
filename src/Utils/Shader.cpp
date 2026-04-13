@@ -6,7 +6,7 @@ namespace Util
 	{
 		eastl::vector<ShaderDefine> GetRaytracingDefines(const Settings& settings, bool sharc, bool sharcUpdate)
 		{
-			const bool sharcEnabled = sharc;
+			const bool sharcEnabled = sharc && settings.SHaRCSettings.Enabled;
 
 			eastl::vector<ShaderDefine> defines = {
 				{ L"MAX_BOUNCES", settings.RaytracingSettings.Bounces },
