@@ -114,7 +114,7 @@ namespace Hooks
 
 		if (cutOff) {
 			uint32_t cutOffSize = 1 << (expSettings.TextureCutOff + 7);
-			cutOff = (cutOffSize * cutOffSize) < (a_width * a_height);
+			cutOff = (a_width * a_height) < (cutOffSize * cutOffSize);
 		}
 
 		auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
