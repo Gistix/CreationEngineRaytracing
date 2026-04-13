@@ -2,6 +2,8 @@
 #include "Renderer.h"
 #include "Util.h"
 
+#include "Core/D3D12Texture.h"
+
 namespace Hooks
 {
 	void TES_AttachModel::thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
@@ -87,6 +89,190 @@ namespace Hooks
 	}
 
 #if defined(SKYRIM)
+	HRESULT CreateTextureAndSRV::thunk(
+		ID3D11Device* a_device,
+		D3D11_RESOURCE_DIMENSION a_dimension,
+		uint32_t a_width,
+		uint32_t a_height,
+		uint32_t a_depth,
+		uint32_t a_mipLevels,
+		uint32_t a_arraySize,
+		DXGI_FORMAT a_format,
+		bool a_cubemap,
+		const D3D11_SUBRESOURCE_DATA* a_data,
+		RE::BSGraphics::Texture** a_outTexture
+	) {
+		bool shareTexture = a_dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D && !a_cubemap;
+
+		if (!shareTexture)
+			return func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
+
+		auto& expSettings = Scene::GetSingleton()->m_Settings.ExperimentalSettings;
+
+		bool exclusiveMode = expSettings.TextureMode == TextureMode::Exclusive;
+		bool cutOff = expSettings.TextureCutOff != 0;
+
+		if (cutOff) {
+			uint32_t cutOffSize = 1 << (expSettings.TextureCutOff + 7);
+			cutOff = (cutOffSize * cutOffSize) < (a_width * a_height);
+		}
+
+		auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+
+		if (exclusiveMode && !cutOff) {
+			auto& stateRuntimeData = RE::BSGraphics::State::GetSingleton()->GetRuntimeData();
+
+			auto* texture = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::D3D12Texture), 8));
+
+			if (!texture)
+				return E_OUTOFMEMORY;
+
+			std::memset(texture, 0, sizeof(RE::BSGraphics::D3D12Texture));
+
+			auto defaultTexture = stateRuntimeData.defaultTextureGrey->rendererTexture;
+
+			texture->texture = defaultTexture->texture;
+			texture->unk08 = defaultTexture->unk08;
+			texture->resourceView = defaultTexture->resourceView;
+			texture->unk18 = defaultTexture->unk18;
+			texture->unk20 = defaultTexture->unk20;
+
+			defaultTexture->texture->AddRef();
+			defaultTexture->resourceView->AddRef();
+
+			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
+			texture->pad24 = 1;
+
+			auto renderer = Renderer::GetSingleton();
+			auto device = renderer->GetDevice();
+			auto nativeDevice = renderer->GetNativeD3D12Device();
+
+			D3D12_RESOURCE_DESC nativeDesc = {};
+			nativeDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+			nativeDesc.Width = a_width;
+			nativeDesc.Height = a_height;
+			nativeDesc.DepthOrArraySize = 1;
+			nativeDesc.MipLevels = static_cast<UINT16>(a_mipLevels);
+			nativeDesc.Format = a_format;
+			nativeDesc.SampleDesc.Count = 1;
+			nativeDesc.SampleDesc.Quality = 0;
+			nativeDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+			D3D12_HEAP_PROPERTIES heapProps = {};
+			heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+			HRESULT hr = nativeDevice->CreateCommittedResource(
+				&heapProps,
+				D3D12_HEAP_FLAG_NONE,
+				&nativeDesc,
+				D3D12_RESOURCE_STATE_COPY_DEST,
+				nullptr,
+				IID_PPV_ARGS(&texture->d3d12Texture)
+			);
+
+			if (FAILED(hr)) {
+				if (texture->d3d12Texture)
+					texture->d3d12Texture->Release();
+
+				return hr;
+			}
+
+			auto formatIt = Renderer::GetFormatMapping().find(a_format);
+
+			if (formatIt == Renderer::GetFormatMapping().end()) {
+				if (texture->d3d12Texture)
+					texture->d3d12Texture->Release();
+
+				return E_FAIL;
+			}
+
+			auto& textureDesc = nvrhi::TextureDesc()
+				.setWidth(a_width)
+				.setHeight(a_height)
+				.setMipLevels(a_mipLevels)
+				.setFormat(formatIt->second)
+				.setInitialState(nvrhi::ResourceStates::CopyDest)
+				.setDebugName("Shared Texture [?]");
+
+			auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(texture->d3d12Texture), textureDesc);
+
+			// Upload Texture Data
+			{
+				std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+				auto commandList = renderer->GetGraphicsCommandList();
+
+				commandList->open();
+
+				commandList->beginTrackingTextureState(textureHandle, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
+
+				for (uint32_t i = 0; i < a_mipLevels; i++)
+				{
+					const auto& mipData = a_data[i];
+					commandList->writeTexture(textureHandle, 0, i, mipData.pSysMem, mipData.SysMemPitch, mipData.SysMemSlicePitch);
+				}
+
+				commandList->setPermanentTextureState(textureHandle, nvrhi::ResourceStates::ShaderResource);
+
+				commandList->commitBarriers();
+
+				commandList->close();
+
+				device->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
+
+				device->waitForIdle();
+			}
+
+			*a_outTexture = texture;
+
+			return hr;
+		}
+		else {
+			auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
+
+			if (!texture)
+				return E_OUTOFMEMORY;
+
+			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
+
+			auto desc = D3D11_TEXTURE2D_DESC{};
+			desc.Width = a_width;
+			desc.Height = a_height;
+			desc.MipLevels = a_mipLevels;
+			desc.ArraySize = a_arraySize;
+			desc.Format = a_format;
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Usage = D3D11_USAGE_DEFAULT;
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			desc.CPUAccessFlags = 0;
+			desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+
+			auto result = a_device->CreateTexture2D(&desc, a_data, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
+
+			if (FAILED(result) || !texture->texture) {
+				return result;
+			}
+
+			auto srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC{};
+			srvDesc.Format = a_format;
+			srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Texture2D.MostDetailedMip = 0;
+			srvDesc.Texture2D.MipLevels = a_mipLevels;
+
+			auto srvResult = a_device->CreateShaderResourceView(texture->texture, &srvDesc, &texture->resourceView);
+
+			if (FAILED(srvResult)) {
+				texture->texture->Release();
+				return srvResult;
+			}
+
+			*a_outTexture = texture;
+
+			return result;
+		}
+	}
+
 	RE::NiSourceTexture* CreateTextureFromDDS::thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5)
 	{
 		auto* scene = Scene::GetSingleton();
@@ -206,7 +392,7 @@ namespace Hooks
 
 		auto* scene = Scene::GetSingleton();
 
-		if (scene->IsPathTracingActive() && scene->m_Settings.DebugSettings.EnableWater) {
+		if (scene->IsPathTracingActive() && scene->m_Settings.AdvancedSettings.EnableWater) {
 			if (shaderType == RE::BSShader::Type::Water)
 				return;
 		}
@@ -281,6 +467,8 @@ namespace Hooks
 		//stl::detour_thunk<TESObjectCELL_AddRefr>(REL::RelocationID(19003, 19411));
 
 #if defined(SKYRIM)
+		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
+
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
 
@@ -297,7 +485,7 @@ namespace Hooks
 		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
 		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
-		stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
+		//stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
 
 		auto createFlowMapRel = REL::RelocationID(31234, 32031).address() + REL::Relocate(0x7E, 0xF8);
 		if (REL::Module::IsSE())
@@ -331,9 +519,9 @@ namespace Hooks
 		logger::info("[Raytracing] Installed hooks");
 	}
 
-	void InstallD3D11Hooks(ID3D11Device* device)
+	void InstallD3D11Hooks([[maybe_unused]]ID3D11Device* device)
 	{
-		stl::detour_vfunc<5, ID3D11Device_CreateTexture2D>(device);
+		//stl::detour_vfunc<5, ID3D11Device_CreateTexture2D>(device);
 
 		logger::info("[Raytracing] Installed D3D11 hooks");
 	}

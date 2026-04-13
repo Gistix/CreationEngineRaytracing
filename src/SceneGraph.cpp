@@ -523,7 +523,7 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 
 void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
 {
-	if (!Scene::GetSingleton()->m_Settings.DebugSettings.EnableWater)
+	if (!Scene::GetSingleton()->m_Settings.AdvancedSettings.EnableWater)
 		return;
 
 	if (!water)
@@ -706,52 +706,63 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	}
 }
 
-eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource)
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
 {
-	if (!d3d11Resource)
+	bool shareResource = d3d12Resource == nullptr;
+
+	if (shareResource && !d3d11Resource)
 		return nullptr;
 
-	auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+	IUnknown* key = nullptr;
+	
+	if (shareResource)
+		key = d3d11Resource;
+	else
+		key = d3d12Resource;
 
-	if (auto refIt = m_Textures.find(d3d11Texture); refIt != m_Textures.end())
+	if (auto refIt = m_Textures.find(key); refIt != m_Textures.end())
 		return refIt->second->descriptorHandle;
 
-	winrt::com_ptr<IDXGIResource> dxgiResource;
-	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+	if (shareResource) {
+		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
 
-	if (FAILED(hr)) {
-		logger::error("SceneGraph::GetTextureRegister - Failed to query interface.");
-		return nullptr;
+		winrt::com_ptr<IDXGIResource> dxgiResource;
+		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+
+		if (FAILED(hr)) {
+			logger::error("SceneGraph::GetTextureRegister - Failed to query interface.");
+			return nullptr;
+		}
+
+		HANDLE sharedHandle = nullptr;
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+
+		if (FAILED(hr) || !sharedHandle) {
+			D3D11_TEXTURE2D_DESC desc;
+			d3d11Texture->GetDesc(&desc);
+
+			logger::debug("SceneGraph::GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
+			return nullptr;
+		}
+
+		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
+
+		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Resource));
+
+		if (FAILED(hr)) {
+			logger::error("SceneGraph::GetTextureRegister - Failed to open shared handle.");
+			return nullptr;
+		}
+
+		if (!d3d12Resource) {
+			logger::error("[RT] GetTextureRegister - Failed to acquire DX12 texture.");
+			return nullptr;
+		}
+
+		d3d12Resource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
 	}
 
-	HANDLE sharedHandle = nullptr;
-	hr = dxgiResource->GetSharedHandle(&sharedHandle);
-
-	if (FAILED(hr) || !sharedHandle) {
-		D3D11_TEXTURE2D_DESC desc;
-		d3d11Texture->GetDesc(&desc);
-
-		logger::debug("SceneGraph::GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
-		return nullptr;
-	}
-
-	auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
-
-	winrt::com_ptr<ID3D12Resource> d3d12Texture;
-	hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Texture));
-
-	if (FAILED(hr)) {
-		logger::error("SceneGraph::GetTextureRegister - Failed to open shared handle.");
-		return nullptr;
-	}
-
-	if (!d3d12Texture) {
-		logger::error("[RT] GetTextureRegister - Failed to adquire DX12 texture.");
-		return nullptr;
-	}
-
-
-	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Texture->GetDesc();
+	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
 	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
 
@@ -764,12 +775,15 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
 		.setFormat(formatIt->second)
-		.setInitialState(nvrhi::ResourceStates::ShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Shared Texture [?]");
 
-	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Texture.get()), textureDesc);
+	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 
-	auto [it, emplaced] = m_Textures.try_emplace(d3d11Texture, nullptr);
+	if (shareResource)
+		d3d12Resource->Release();
+
+	auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
 
 	if (emplaced) {
 		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
@@ -1101,8 +1115,7 @@ bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 
 			// MSN Conversion - must happen after buffers are uploaded and GPU is idle
 			if (modelPtr->ShouldQueueMSNConversion()) {
-				auto graphicsCommandList = device->createCommandList(
-					nvrhi::CommandListParameters().setQueueType(nvrhi::CommandQueue::Graphics));
+				auto graphicsCommandList = Renderer::GetSingleton()->GetGraphicsCommandList();
 				graphicsCommandList->open();
 
 				ConvertMSN(modelPtr, graphicsCommandList);

@@ -77,7 +77,7 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
-			"SceneTLAS",
+			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});
 
@@ -131,7 +131,7 @@ RenderNode* Scene::GetPathTracing()
 
 		m_PathTracing->AddNode({
 			true,
-			"RaytracingCommon",
+			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});
 

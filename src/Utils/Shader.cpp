@@ -60,7 +60,7 @@ namespace Util
 				defines.emplace_back(L"SUBSURFACE_SCATTERING");
 
 			if (!sharc || (sharc && !sharcUpdate)) {
-				if (settings.DebugSettings.StablePlanes)
+				if (settings.AdvancedSettings.StablePlanes)
 					defines.emplace_back(L"STABLE_PLANES");
 
 				if (settings.ReSTIRGI.Enabled)
