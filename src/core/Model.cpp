@@ -32,14 +32,14 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 {
 	auto blasDesc = nvrhi::rt::AccelStructDesc()
-		.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace)
+		//.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace)
 		.setIsTopLevel(false)
 		.setDebugName(std::format("{} - BLAS", m_Name.c_str()));
 
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
-		blasDesc.buildFlags |= (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild | (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
 	else
-		blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
 
 	return blasDesc;
 }

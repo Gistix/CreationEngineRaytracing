@@ -58,4 +58,16 @@ public:
 	void SettingsChanged(const Settings& settings) override;
 
 	void Execute(nvrhi::ICommandList* commandList) override;
+
+	template <typename Func>
+	void ForEach(Func&& func)
+	{
+		if (!m_Enabled)
+			return;
+
+		for (auto* child : m_Children)
+		{
+			child->ForEach(func);
+		}
+	}
 };

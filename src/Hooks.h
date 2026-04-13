@@ -84,6 +84,41 @@ namespace Hooks
 	};
 
 #if defined(SKYRIM)
+	struct CreateTextureAndSRV
+	{
+		static HRESULT thunk(
+			ID3D11Device* a_device,
+			D3D11_RESOURCE_DIMENSION a_dimension,
+			uint32_t a_width,
+			uint32_t a_height,
+			uint32_t a_depth,
+			uint32_t a_mipLevels,	// 1D/2D mip count
+			uint32_t a_arraySize,	// array size (or depth for 3D reinterpretation)
+			DXGI_FORMAT a_format,
+			bool a_cubeMap,
+			const D3D11_SUBRESOURCE_DATA* a_data,
+			RE::BSGraphics::Texture** a_outTexture);
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+	/*struct CreateTextureAndSRV
+	{
+		static HRESULT thunk(
+			ID3D11Device* a_device,
+			int a_textureType, 
+			uint32_t a_width, 
+			uint32_t a_height, 
+			__int64 a_pitchOrLinearSize, 
+			uint32_t a_mipCount, 
+			uint32_t a_sliceCount, 
+			uint8_t a_format,
+			bool a_isCubeMap,
+			__int64 a_pixelData,
+			RE::BSGraphics::Texture** a_outTexture);
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};*/
+
 	struct CreateTextureFromDDS
 	{
 		static RE::NiSourceTexture* thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5);

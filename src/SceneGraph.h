@@ -53,7 +53,7 @@ class SceneGraph
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	nvrhi::BufferHandle m_InstanceBuffer;
 
-	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<TextureReference>> m_Textures;
+	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
 
 	// MSN (Model Space Normal) conversion
 	struct ConvertedNormalMap
@@ -90,7 +90,7 @@ class SceneGraph
 	eastl::unique_ptr<BindlessTableManager> m_CubemapDescriptors;
 
 	// Cubemap cache: DX11 cubemap resource -> DX12 cubemap TextureReference
-	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<TextureReference>> m_Cubemaps;
+	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Cubemaps;
 
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
@@ -146,8 +146,8 @@ public:
 
 	void RunGarbageCollection(uint64_t frameIndex);
 
-	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource);
-	eastl::shared_ptr<DescriptorHandle> GetCubemapDescriptor(ID3D11Resource* d3d11Resource);
+	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
+	eastl::shared_ptr<DescriptorHandle> GetCubemapDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);
 
 	void ConvertMSN(Model* model, nvrhi::ICommandList* commandList);

@@ -17,7 +17,7 @@ namespace Pass
 
 		m_Defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);
 
-		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
+		m_UseStablePlanes = settings.AdvancedSettings.StablePlanes;
 		m_UseRestirGI = settings.ReSTIRGI.Enabled;
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
@@ -33,7 +33,7 @@ namespace Pass
 
 	void PathTracing::SettingsChanged(const Settings& settings)
 	{
-		m_UseStablePlanes = settings.DebugSettings.StablePlanes;
+		m_UseStablePlanes = settings.AdvancedSettings.StablePlanes;
 		m_UseRestirGI = settings.ReSTIRGI.Enabled;
 
 		auto defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);

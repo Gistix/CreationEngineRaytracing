@@ -6,10 +6,11 @@
 #include "Renderer.h"
 #include "SceneGraph.h"
 
-#include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
-#include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
+#include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
+#include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
 
 #include "Utils/CalcTangents.h"
+#include "Core/D3D12Texture.h"
 
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
@@ -267,7 +268,7 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 	return triangles;
 }
 
-Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap = false)
+Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, [[maybe_unused]] bool modelSpaceNormalMap = false)
 {
 	if (!niPointer || !niPointer->rendererTexture)
 		return Texture(defaultDescHandle, nullptr);
@@ -276,15 +277,25 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
+	auto* texture = niPointer->rendererTexture;
+
 	if (modelSpaceNormalMap)
-		result = sceneGraph->GetMSNormalMapDescriptor(this, niPointer->rendererTexture);
-	else
-		result = sceneGraph->GetTextureDescriptor(niPointer->rendererTexture->texture);
+		result = sceneGraph->GetMSNormalMapDescriptor(this, texture);
+	else {
+		ID3D12Resource* d3d12Resource = nullptr;
+
+		if (texture->pad24 == 1)
+			d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
+
+		result = sceneGraph->GetTextureDescriptor(texture->texture, d3d12Resource);
+	}
 
 	if (!result)
 		return Texture(defaultDescHandle, nullptr);
 
 	return Texture(result, defaultDescHandle.get());
+
+	//return Texture(defaultDescHandle, nullptr);
 }
 
 Texture Mesh::GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle)
