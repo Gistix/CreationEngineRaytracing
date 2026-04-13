@@ -75,7 +75,7 @@ struct Scene
 
 	inline bool IsPathTracingActive() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing; };
 
-	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.DebugSettings.PathTracingCull; };
+	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.ExperimentalSettings.PathTracingCull; };
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
 

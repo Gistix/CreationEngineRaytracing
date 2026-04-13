@@ -536,7 +536,7 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 
 void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
 {
-	if (!Scene::GetSingleton()->m_Settings.DebugSettings.EnableWater)
+	if (!Scene::GetSingleton()->m_Settings.AdvancedSettings.EnableWater)
 		return;
 
 	if (!water)
@@ -719,52 +719,63 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	}
 }
 
-eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource)
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
 {
-	if (!d3d11Resource)
+	bool shareResource = d3d12Resource == nullptr;
+
+	if (shareResource && !d3d11Resource)
 		return nullptr;
 
-	auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+	IUnknown* key = nullptr;
+	
+	if (shareResource)
+		key = d3d11Resource;
+	else
+		key = d3d12Resource;
 
-	if (auto refIt = m_Textures.find(d3d11Texture); refIt != m_Textures.end())
+	if (auto refIt = m_Textures.find(key); refIt != m_Textures.end())
 		return refIt->second->descriptorHandle;
 
-	winrt::com_ptr<IDXGIResource> dxgiResource;
-	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+	if (shareResource) {
+		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
 
-	if (FAILED(hr)) {
-		logger::error("SceneGraph::GetTextureRegister - Failed to query interface.");
-		return nullptr;
+		winrt::com_ptr<IDXGIResource> dxgiResource;
+		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+
+		if (FAILED(hr)) {
+			logger::error("SceneGraph::GetTextureRegister - Failed to query interface.");
+			return nullptr;
+		}
+
+		HANDLE sharedHandle = nullptr;
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+
+		if (FAILED(hr) || !sharedHandle) {
+			D3D11_TEXTURE2D_DESC desc;
+			d3d11Texture->GetDesc(&desc);
+
+			logger::debug("SceneGraph::GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
+			return nullptr;
+		}
+
+		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
+
+		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Resource));
+
+		if (FAILED(hr)) {
+			logger::error("SceneGraph::GetTextureRegister - Failed to open shared handle.");
+			return nullptr;
+		}
+
+		if (!d3d12Resource) {
+			logger::error("[RT] GetTextureRegister - Failed to acquire DX12 texture.");
+			return nullptr;
+		}
+
+		d3d12Resource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
 	}
 
-	HANDLE sharedHandle = nullptr;
-	hr = dxgiResource->GetSharedHandle(&sharedHandle);
-
-	if (FAILED(hr) || !sharedHandle) {
-		D3D11_TEXTURE2D_DESC desc;
-		d3d11Texture->GetDesc(&desc);
-
-		logger::debug("SceneGraph::GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
-		return nullptr;
-	}
-
-	auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
-
-	winrt::com_ptr<ID3D12Resource> d3d12Texture;
-	hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Texture));
-
-	if (FAILED(hr)) {
-		logger::error("SceneGraph::GetTextureRegister - Failed to open shared handle.");
-		return nullptr;
-	}
-
-	if (!d3d12Texture) {
-		logger::error("[RT] GetTextureRegister - Failed to adquire DX12 texture.");
-		return nullptr;
-	}
-
-
-	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Texture->GetDesc();
+	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
 	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
 
@@ -777,12 +788,15 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
 		.setFormat(formatIt->second)
-		.setInitialState(nvrhi::ResourceStates::ShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Shared Texture [?]");
 
-	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Texture.get()), textureDesc);
+	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 
-	auto [it, emplaced] = m_Textures.try_emplace(d3d11Texture, nullptr);
+	if (shareResource)
+		d3d12Resource->Release();
+
+	auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
 
 	if (emplaced) {
 		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
@@ -794,157 +808,189 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 	return nullptr;
 }
 
-eastl::shared_ptr<DescriptorHandle> SceneGraph::GetCubemapDescriptor(ID3D11Resource* d3d11Resource)
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetCubemapDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
 {
-	if (!d3d11Resource)
+	bool shareResource = d3d12Resource == nullptr;
+
+	if (shareResource && !d3d11Resource)
 		return nullptr;
 
-	auto* d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+	IUnknown* key = nullptr;
+
+	if (shareResource)
+		key = d3d11Resource;
+	else
+		key = d3d12Resource;
 
 	// Check cache
-	if (auto refIt = m_Cubemaps.find(d3d11Texture); refIt != m_Cubemaps.end())
+	if (auto refIt = m_Cubemaps.find(key); refIt != m_Cubemaps.end())
 		return refIt->second->descriptorHandle;
 
-	D3D11_TEXTURE2D_DESC srcDesc;
-	d3d11Texture->GetDesc(&srcDesc);
+	if (shareResource) {
+		auto* d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
 
-	// Verify this is actually a cubemap
-	if (!(srcDesc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) || srcDesc.ArraySize != 6) {
-		logger::warn("[RT] GetCubemapDescriptor - Texture is not a cubemap [{}, {}] ArraySize: {} MiscFlags: {:#x}",
-			srcDesc.Width, srcDesc.Height, srcDesc.ArraySize, srcDesc.MiscFlags);
-		return nullptr;
-	}
+		D3D11_TEXTURE2D_DESC srcDesc;
+		d3d11Texture->GetDesc(&srcDesc);
 
-	// Try shared handle first (zero VRAM overhead)
-	{
-		winrt::com_ptr<IDXGIResource> dxgiResource;
-		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+		// Verify this is actually a cubemap
+		if (!(srcDesc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) || srcDesc.ArraySize != 6) {
+			logger::warn("[RT] GetCubemapDescriptor - Texture is not a cubemap [{}, {}] ArraySize: {} MiscFlags: {:#x}",
+				srcDesc.Width, srcDesc.Height, srcDesc.ArraySize, srcDesc.MiscFlags);
+			return nullptr;
+		}
 
-		if (SUCCEEDED(hr)) {
-			HANDLE sharedHandle = nullptr;
-			hr = dxgiResource->GetSharedHandle(&sharedHandle);
+		// Try shared handle first (zero VRAM overhead)
+		{
+			winrt::com_ptr<IDXGIResource> dxgiResource;
+			HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
 
-			if (SUCCEEDED(hr) && sharedHandle) {
-				auto* d3d12Device = Renderer::GetNativeD3D12Device();
+			if (SUCCEEDED(hr)) {
+				HANDLE sharedHandle = nullptr;
+				hr = dxgiResource->GetSharedHandle(&sharedHandle);
 
-				winrt::com_ptr<ID3D12Resource> d3d12Texture;
-				hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Texture));
+				if (SUCCEEDED(hr) && sharedHandle) {
+					auto* d3d12Device = Renderer::GetNativeD3D12Device();
 
-				if (SUCCEEDED(hr) && d3d12Texture) {
-					D3D12_RESOURCE_DESC nativeTexDesc = d3d12Texture->GetDesc();
+					hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Resource));
 
-					auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
-					if (formatIt != Renderer::GetFormatMapping().end()) {
-						auto textureDesc = nvrhi::TextureDesc()
-							.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
-							.setHeight(nativeTexDesc.Height)
-							.setFormat(formatIt->second)
-							.setArraySize(6)
-							.setDimension(nvrhi::TextureDimension::TextureCube)
-							.setMipLevels(nativeTexDesc.MipLevels)
-							.setInitialState(nvrhi::ResourceStates::ShaderResource)
-							.setDebugName("Shared Cubemap");
+					if (FAILED(hr)) {
+						logger::error("SceneGraph::GetCubemapDescriptor - Failed to open shared handle.");
+					}
 
-						auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(
-							nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Texture.get()), textureDesc);
+					if (!d3d12Resource) {
+						logger::error("[RT] GetCubemapDescriptor - Failed to acquire DX12 texture.");
+					}
 
-						if (textureHandle) {
-							auto [it, emplaced] = m_Cubemaps.try_emplace(d3d11Texture, nullptr);
-							if (emplaced) {
-								it->second = eastl::make_unique<TextureReference>(textureHandle, m_CubemapDescriptors->m_DescriptorTable.get());
-								logger::debug("[RT] GetCubemapDescriptor - Shared cubemap [{}, {}] mips: {}",
-									srcDesc.Width, srcDesc.Height, nativeTexDesc.MipLevels);
-								return it->second->descriptorHandle;
-							}
-						}
+					if (d3d12Resource) {
+						d3d12Resource->SetName(std::format(L"Shared Cubemap 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
 					}
 				}
 			}
 		}
-	}
 
-	// Fallback: staging copy from DX11 to DX12
-	logger::debug("[RT] GetCubemapDescriptor - Shared handle failed, using staging copy [{}, {}]", srcDesc.Width, srcDesc.Height);
+		// Fallback: staging copy from DX11 to DX12
+		if (!d3d12Resource) {
+			logger::debug("[RT] GetCubemapDescriptor - Shared handle failed, using staging copy [{}, {}]", srcDesc.Width, srcDesc.Height);
 
-	auto* d3d11Device = Renderer::GetNativeD3D11Device();
-	winrt::com_ptr<ID3D11DeviceContext> d3d11Context;
-	d3d11Device->GetImmediateContext(d3d11Context.put());
+			auto* d3d11Device = Renderer::GetNativeD3D11Device();
+			winrt::com_ptr<ID3D11DeviceContext> d3d11Context;
+			d3d11Device->GetImmediateContext(d3d11Context.put());
 
-	// Create staging texture
-	D3D11_TEXTURE2D_DESC stagingDesc = srcDesc;
-	stagingDesc.Usage = D3D11_USAGE_STAGING;
-	stagingDesc.BindFlags = 0;
-	stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-	stagingDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
+			// Create staging texture
+			D3D11_TEXTURE2D_DESC stagingDesc = srcDesc;
+			stagingDesc.Usage = D3D11_USAGE_STAGING;
+			stagingDesc.BindFlags = 0;
+			stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+			stagingDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
 
-	winrt::com_ptr<ID3D11Texture2D> stagingTexture;
-	HRESULT hr = d3d11Device->CreateTexture2D(&stagingDesc, nullptr, stagingTexture.put());
-	if (FAILED(hr)) {
-		logger::error("[RT] GetCubemapDescriptor - Failed to create staging texture");
-		return nullptr;
-	}
-
-	// Copy source cubemap to staging
-	d3d11Context->CopyResource(stagingTexture.get(), d3d11Texture);
-
-	// Map format
-	auto formatIt = Renderer::GetFormatMapping().find(srcDesc.Format);
-	if (formatIt == Renderer::GetFormatMapping().end()) {
-		logger::error("[RT] GetCubemapDescriptor - Unmapped format {}", magic_enum::enum_name(srcDesc.Format));
-		return nullptr;
-	}
-
-	// Create DX12 cubemap texture
-	auto device = Renderer::GetSingleton()->GetDevice();
-	auto cubemapDesc = nvrhi::TextureDesc()
-		.setWidth(srcDesc.Width)
-		.setHeight(srcDesc.Height)
-		.setFormat(formatIt->second)
-		.setArraySize(6)
-		.setDimension(nvrhi::TextureDimension::TextureCube)
-		.setMipLevels(srcDesc.MipLevels)
-		.setInitialState(nvrhi::ResourceStates::Common)
-		.setKeepInitialState(false)
-		.setDebugName("Cubemap [Staging Copy]");
-
-	auto cubemapHandle = device->createTexture(cubemapDesc);
-	if (!cubemapHandle) {
-		logger::error("[RT] GetCubemapDescriptor - Failed to create DX12 cubemap");
-		return nullptr;
-	}
-
-	// Upload each face/mip
-	auto commandList = device->createCommandList();
-	commandList->open();
-	commandList->beginTrackingTextureState(cubemapHandle, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-
-	for (uint32_t face = 0; face < 6; face++) {
-		for (uint32_t mip = 0; mip < srcDesc.MipLevels; mip++) {
-			uint32_t subresource = D3D11CalcSubresource(mip, face, srcDesc.MipLevels);
-
-			D3D11_MAPPED_SUBRESOURCE mapped;
-			hr = d3d11Context->Map(stagingTexture.get(), subresource, D3D11_MAP_READ, 0, &mapped);
+			winrt::com_ptr<ID3D11Texture2D> stagingTexture;
+			HRESULT hr = d3d11Device->CreateTexture2D(&stagingDesc, nullptr, stagingTexture.put());
 			if (FAILED(hr)) {
-				logger::error("[RT] GetCubemapDescriptor - Failed to map subresource face={} mip={}", face, mip);
-				continue;
+				logger::error("[RT] GetCubemapDescriptor - Failed to create staging texture");
+				return nullptr;
 			}
 
-			commandList->writeTexture(cubemapHandle, face, mip, mapped.pData, mapped.RowPitch);
+			// Copy source cubemap to staging
+			d3d11Context->CopyResource(stagingTexture.get(), d3d11Texture);
 
-			d3d11Context->Unmap(stagingTexture.get(), subresource);
+			// Map format
+			auto formatIt = Renderer::GetFormatMapping().find(srcDesc.Format);
+			if (formatIt == Renderer::GetFormatMapping().end()) {
+				logger::error("[RT] GetCubemapDescriptor - Unmapped format {}", magic_enum::enum_name(srcDesc.Format));
+				return nullptr;
+			}
+
+			// Create DX12 cubemap texture
+			auto device = Renderer::GetSingleton()->GetDevice();
+			auto cubemapDesc = nvrhi::TextureDesc()
+				.setWidth(srcDesc.Width)
+				.setHeight(srcDesc.Height)
+				.setFormat(formatIt->second)
+				.setArraySize(6)
+				.setDimension(nvrhi::TextureDimension::TextureCube)
+				.setMipLevels(srcDesc.MipLevels)
+				.setInitialState(nvrhi::ResourceStates::Common)
+				.setKeepInitialState(false)
+				.setDebugName("Cubemap [Staging Copy]");
+
+			auto cubemapHandle = device->createTexture(cubemapDesc);
+			if (!cubemapHandle) {
+				logger::error("[RT] GetCubemapDescriptor - Failed to create DX12 cubemap");
+				return nullptr;
+			}
+
+			// Upload each face/mip
+			auto commandList = device->createCommandList();
+			commandList->open();
+			commandList->beginTrackingTextureState(cubemapHandle, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
+
+			for (uint32_t face = 0; face < 6; face++) {
+				for (uint32_t mip = 0; mip < srcDesc.MipLevels; mip++) {
+					uint32_t subresource = D3D11CalcSubresource(mip, face, srcDesc.MipLevels);
+
+					D3D11_MAPPED_SUBRESOURCE mapped;
+					hr = d3d11Context->Map(stagingTexture.get(), subresource, D3D11_MAP_READ, 0, &mapped);
+					if (FAILED(hr)) {
+						logger::error("[RT] GetCubemapDescriptor - Failed to map subresource face={} mip={}", face, mip);
+						continue;
+					}
+
+					commandList->writeTexture(cubemapHandle, face, mip, mapped.pData, mapped.RowPitch);
+
+					d3d11Context->Unmap(stagingTexture.get(), subresource);
+				}
+			}
+
+			commandList->setPermanentTextureState(cubemapHandle, nvrhi::ResourceStates::ShaderResource);
+			commandList->commitBarriers();
+			commandList->close();
+			device->executeCommandList(commandList);
+
+			auto [it, emplaced] = m_Cubemaps.try_emplace(key, nullptr);
+			if (emplaced) {
+				it->second = eastl::make_unique<TextureReference>(cubemapHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+				logger::debug("[RT] GetCubemapDescriptor - Created cubemap via staging [{}, {}] mips: {}",
+					srcDesc.Width, srcDesc.Height, srcDesc.MipLevels);
+				return it->second->descriptorHandle;
+			}
+
+			logger::error("[RT] GetCubemapDescriptor - Cubemap emplace failed");
+			return nullptr;
 		}
 	}
 
-	commandList->setPermanentTextureState(cubemapHandle, nvrhi::ResourceStates::ShaderResource);
-	commandList->commitBarriers();
-	commandList->close();
-	device->executeCommandList(commandList);
+	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
-	auto [it, emplaced] = m_Cubemaps.try_emplace(d3d11Texture, nullptr);
+	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
+	if (formatIt == Renderer::GetFormatMapping().end()) {
+		logger::error("[RT] GetCubemapDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
+		if (shareResource)
+			d3d12Resource->Release();
+		return nullptr;
+	}
+
+	auto textureDesc = nvrhi::TextureDesc()
+		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
+		.setHeight(nativeTexDesc.Height)
+		.setFormat(formatIt->second)
+		.setArraySize(6)
+		.setDimension(nvrhi::TextureDimension::TextureCube)
+		.setMipLevels(nativeTexDesc.MipLevels)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setDebugName("Shared Cubemap");
+
+	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(
+		nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
+
+	if (shareResource)
+		d3d12Resource->Release();
+
+	auto [it, emplaced] = m_Cubemaps.try_emplace(key, nullptr);
+
 	if (emplaced) {
-		it->second = eastl::make_unique<TextureReference>(cubemapHandle, m_CubemapDescriptors->m_DescriptorTable.get());
-		logger::debug("[RT] GetCubemapDescriptor - Created cubemap via staging [{}, {}] mips: {}",
-			srcDesc.Width, srcDesc.Height, srcDesc.MipLevels);
+		it->second = eastl::make_unique<TextureReference>(textureHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+		logger::debug("[RT] GetCubemapDescriptor - Shared cubemap [{}, {}] mips: {}",
+			nativeTexDesc.Width, nativeTexDesc.Height, nativeTexDesc.MipLevels);
 		return it->second->descriptorHandle;
 	}
 
@@ -1272,8 +1318,7 @@ bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 
 			// MSN Conversion - must happen after buffers are uploaded and GPU is idle
 			if (modelPtr->ShouldQueueMSNConversion()) {
-				auto graphicsCommandList = device->createCommandList(
-					nvrhi::CommandListParameters().setQueueType(nvrhi::CommandQueue::Graphics));
+				auto graphicsCommandList = Renderer::GetSingleton()->GetGraphicsCommandList();
 				graphicsCommandList->open();
 
 				ConvertMSN(modelPtr, graphicsCommandList);
