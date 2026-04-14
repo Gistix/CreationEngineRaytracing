@@ -15,7 +15,7 @@ extern "C" {
 	CERT_API void SetCopyTarget(ID3D12Resource* target);
 	CERT_API void UpdateFeatureData(void* data, uint32_t size);
 	CERT_API void SetSkyHemisphere(ID3D12Resource* skyHemi);
-	CERT_API void GetFrameTime(PassTiming*&, uint32_t&);
+	CERT_API void GetPassTimings(eastl::vector<PassTiming>&);
 	CERT_API void UpdateSettings(Settings);
 	CERT_API void GetRRInput(ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance);
 	CERT_API void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao, ID3D12Resource* diffuseAlbedo);
