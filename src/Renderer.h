@@ -183,7 +183,7 @@ public:
 		return GetDevice()->createCommandList(
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Graphics)
-			.setEnableImmediateExecution(true)
+			.setEnableImmediateExecution(false)
 		);
 	}
 
@@ -191,7 +191,7 @@ public:
 		return GetDevice()->createCommandList(
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Compute)
-			.setEnableImmediateExecution(true)
+			.setEnableImmediateExecution(false)
 		);
 	}
 
@@ -199,7 +199,7 @@ public:
 		return GetDevice()->createCommandList(
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Copy)
-			.setEnableImmediateExecution(true)
+			.setEnableImmediateExecution(false)
 		);
 	}
 

@@ -273,88 +273,186 @@ namespace Hooks
 		}
 	}
 
-	RE::NiSourceTexture* CreateTextureFromDDS::thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5)
+	void CreateRenderTarget::thunk(
+		RE::BSGraphics::Renderer* a_renderer, 
+		RE::RENDER_TARGETS::RENDER_TARGET a_target, 
+		const char* a_RenderTarget, 
+		RE::BSGraphics::RenderTargetProperties* a_properties)
 	{
-		auto* scene = Scene::GetSingleton();
+		switch (a_target)
+		{
+		case RE::RENDER_TARGETS::kMOTION_VECTOR:
+		case RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT:
+			break;
+		default:
+			func(a_renderer, a_target, a_RenderTarget, a_properties);
+			return;
+		}
 
-		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
+		auto desc = D3D11_TEXTURE2D_DESC{};
+		desc.Width = a_properties->width;
+		desc.Height = a_properties->height;
+		desc.MipLevels = a_properties->allowMipGeneration ? 0 : 1;
+		desc.ArraySize = 1;
+		desc.Format = static_cast<DXGI_FORMAT>(a_properties->format.underlying());
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+		desc.CPUAccessFlags = 0;
 
-		scene->shareTexture = true;
+		// Yes, we created this entire function just to set the texture as shared
+		desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
-		auto* result = func(a1, path, srv, a4, a5);
+		if (a_properties->supportUnorderedAccess)
+			desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 
-		scene->shareTexture = false;
+		if (a_properties->allowMipGeneration)
+			desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
-		return result;
+		auto& renderTexture = a_renderer->GetRuntimeData().renderTargets[a_target];
+
+		auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
+
+		device->CreateTexture2D(&desc, nullptr, &renderTexture.texture);
+		device->CreateRenderTargetView(renderTexture.texture, nullptr, &renderTexture.RTV);
+		device->CreateShaderResourceView(renderTexture.texture, nullptr, &renderTexture.SRV);
+
+		if (a_properties->copyable)
+		{
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			device->CreateTexture2D(&desc, nullptr, &renderTexture.textureCopy);
+			device->CreateShaderResourceView(renderTexture.textureCopy, nullptr, &renderTexture.SRVCopy);
+		}
+
+		if (a_properties->supportUnorderedAccess)
+		{
+			D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+			uavDesc.Format = desc.Format;
+			uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+			device->CreateUnorderedAccessView(renderTexture.texture, &uavDesc, &renderTexture.UAV);
+		}
+	}
+
+	void CreateDepthStencil::thunk(
+		RE::BSGraphics::Renderer* a_renderer,
+		RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target,
+		[[ maybe_unused ]] const char* a_depthStencilTarget,
+		RE::BSGraphics::DepthStencilTargetProperties* a_properties)
+	{
+		DXGI_FORMAT texFormat, dsvFormat, srvFormat;
+		bool stencil = a_properties->stencil;
+
+		if (a_properties->use16BitsDepth)
+		{
+			texFormat = DXGI_FORMAT_R16_TYPELESS;
+			dsvFormat = DXGI_FORMAT_D16_UNORM;
+			srvFormat = DXGI_FORMAT_R16_UNORM;
+		}
+		else
+		{
+			texFormat = DXGI_FORMAT_R32_TYPELESS;
+			dsvFormat = DXGI_FORMAT_D32_FLOAT;
+			srvFormat = DXGI_FORMAT_R32_FLOAT;
+		}
+
+		if (stencil)
+		{
+			texFormat = DXGI_FORMAT_R24G8_TYPELESS;
+			dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+			srvFormat = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+		}
+
+		D3D11_TEXTURE2D_DESC texDesc = {};
+		texDesc.Width = a_properties->width;
+		texDesc.Height = a_properties->height;
+		texDesc.MipLevels = 1;
+		texDesc.ArraySize = a_properties->arraySize;
+		texDesc.Format = texFormat;
+		texDesc.SampleDesc.Count = 1;
+		texDesc.SampleDesc.Quality = 0;
+		texDesc.Usage = D3D11_USAGE_DEFAULT;
+		texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+		texDesc.CPUAccessFlags = 0;
+
+		// Yes, we created this entire function just to set the texture as shared (2)
+		texDesc.MiscFlags = a_target == RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN ? D3D11_RESOURCE_MISC_SHARED : 0;
+
+		auto& depthStencil = a_renderer->GetDepthStencilData().depthStencils[a_target];
+		auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
+
+		device->CreateTexture2D(&texDesc, nullptr, &depthStencil.texture);
+
+		D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+		D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc2 = {};
+		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+
+		srvDesc.Format = srvFormat;
+
+		uint32_t arraySize = a_properties->arraySize;
+
+		if (arraySize > 1)
+		{
+			srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+			srvDesc.Texture2DArray.MipLevels = 1;
+			srvDesc.Texture2DArray.ArraySize = arraySize;
+		}
+		else
+		{
+			srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			srvDesc.Texture2D.MipLevels = 1;
+		}
+
+		for (uint32_t i = 0; i < arraySize; ++i)
+		{
+			if (arraySize > 1)
+			{
+				dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+				dsvDesc.Texture2DArray.MipSlice = 0;
+				dsvDesc.Texture2DArray.FirstArraySlice = i;
+				dsvDesc.Texture2DArray.ArraySize = 1;
+
+				dsvDesc2.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+				dsvDesc2.Texture2DArray.MipSlice = 0;
+				dsvDesc2.Texture2DArray.FirstArraySlice = i;
+				dsvDesc2.Texture2DArray.ArraySize = 1;
+			}
+			else
+			{
+				dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+				dsvDesc.Texture2D.MipSlice = 0;
+
+				dsvDesc2.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+				dsvDesc2.Texture2D.MipSlice = 0;
+			}
+
+			dsvDesc.Format = dsvFormat;
+			dsvDesc.Flags = 0;
+
+			dsvDesc2.Format = dsvFormat;
+			dsvDesc2.Flags = D3D11_DSV_READ_ONLY_DEPTH | (stencil ? D3D11_DSV_READ_ONLY_STENCIL : 0);
+
+			device->CreateDepthStencilView(depthStencil.texture, &dsvDesc, &depthStencil.views[i]);
+			device->CreateDepthStencilView(depthStencil.texture, &dsvDesc2, &depthStencil.readOnlyViews[i]);
+		}
+
+		device->CreateShaderResourceView(depthStencil.texture, &srvDesc, &depthStencil.depthSRV);
+
+		if (stencil)
+		{
+			srvDesc.Format = DXGI_FORMAT_X24_TYPELESS_G8_UINT;
+			device->CreateShaderResourceView(depthStencil.texture, &srvDesc, &depthStencil.stencilSRV);
+		}
 	}
 
 	void* CreateFlowMapSE::thunk(void* a1, int a2, int a3, void* a4)
 	{
-		auto* scene = Scene::GetSingleton();
-
-		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
-
-		scene->shareTexture = true;
-
-		auto* result = func(a1, a2, a3, a4);
-
-		scene->shareTexture = false;
-
-		return result;
+		return func(a1, a2, a3, a4);
 	}
 
 	void* CreateFlowMapAE::thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7)
 	{
-		auto* scene = Scene::GetSingleton();
-
-		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
-
-		scene->shareTexture = true;
-
-		auto* result = func(a1, a2, a3, a4, a5, a6, a7);
-
-		scene->shareTexture = false;
-
-		return result;
-	}
-	
-	void CreateRenderTarget_PlayerFaceGenTint::thunk(RE::BSGraphics::Renderer* oThis, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties)
-	{
-		auto* scene = Scene::GetSingleton();
-
-		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
-
-		scene->shareTexture = true;
-
-		func(oThis, a_target, a_properties);
-
-		scene->shareTexture = false;
-	}
-
-	void CreateDepthStencil_Main::thunk(RE::BSGraphics::Renderer* This, RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target, RE::BSGraphics::DepthStencilTargetProperties* a_properties)
-	{
-		auto* scene = Scene::GetSingleton();
-
-		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
-
-		scene->shareTexture = true;
-
-		func(This, a_target, a_properties);
-
-		scene->shareTexture = false;
-	}
-
-	void CreateRenderTarget_MotionVectors::thunk(RE::BSGraphics::Renderer* This, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties)
-	{
-		auto* scene = Scene::GetSingleton();
-
-		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
-
-		scene->shareTexture = true;
-
-		func(This, a_target, a_properties);
-
-		scene->shareTexture = false;
+		return func(a1, a2, a3, a4, a5, a6, a7);
 	}
 
 	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
@@ -438,23 +536,6 @@ namespace Hooks
 
 #endif
 
-	HRESULT WINAPI ID3D11Device_CreateTexture2D::thunk(ID3D11Device* This, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
-	{
-		if (!pDesc)
-			return func(This, pDesc, pInitialData, ppTexture2D);
-
-		auto* scene = Scene::GetSingleton();
-
-		std::lock_guard<std::recursive_mutex> lock(scene->shareTextureMutex);
-
-		D3D11_TEXTURE2D_DESC descCopy = *pDesc;
-
-		if (scene->shareTexture && !(pDesc->MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE))
-			descCopy.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
-
-		return func(This, &descCopy, pInitialData, ppTexture2D);
-	}
-
 	void Install()
 	{
 		stl::write_vfunc<0x6B, Release3DRelatedData>(RE::VTABLE_TESObjectREFR[0]);
@@ -468,6 +549,9 @@ namespace Hooks
 
 #if defined(SKYRIM)
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
+
+		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
+		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
@@ -485,19 +569,11 @@ namespace Hooks
 		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
 		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
-		//stl::detour_thunk<CreateTextureFromDDS>(REL::RelocationID(69334, 70716));
-
 		auto createFlowMapRel = REL::RelocationID(31234, 32031).address() + REL::Relocate(0x7E, 0xF8);
 		if (REL::Module::IsSE())
 			stl::write_thunk_call<CreateFlowMapSE>(createFlowMapRel);
 		else
 			stl::write_thunk_call<CreateFlowMapAE>(createFlowMapRel);
-
-		stl::write_thunk_call<CreateRenderTarget_PlayerFaceGenTint>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x606, 0x605));
-
-		stl::write_thunk_call<CreateDepthStencil_Main>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x951, 0x951));
-
-		stl::write_thunk_call<CreateRenderTarget_MotionVectors>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0x4F0, 0x4EF, 0x64E));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
