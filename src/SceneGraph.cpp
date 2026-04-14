@@ -457,6 +457,8 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 		eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> bipedMeshes;
 
 		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object, int i = -1) {
+			logger::debug("Appending {}: {}", magic_enum::enum_name(form->GetFormType()), object->name);
+
 			for (auto& mesh : CreateMeshes(form, object))
 			{
 				if (i == -1)
@@ -1186,7 +1188,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			if (!isOrigin || isOrigin && isRootOrigin)
 				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
-			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, form);
@@ -1224,7 +1226,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				if (partition.bonesPerVertex > 0)
 					flags |= Mesh::Flags::Skinned;
 
-				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, i);
+				auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot, i);
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, form);

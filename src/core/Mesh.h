@@ -82,11 +82,10 @@ struct Mesh
 
 	DescriptorHandle m_DescriptorHandle;
 
-	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
-		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition)
-	{
+	RE::FormType m_FormType;
 
-	}
+	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
+		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition) { }
 
 	bool HasDoubleSidedGeom()
 	{
@@ -171,6 +170,8 @@ struct Mesh
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
 	bool UpdateSkinning(RE::NiAVObject* object, bool isPlayer);
+
+	bool UpdateTransform(RE::NiAVObject* object);
 
 	void UpdateDismember();
 

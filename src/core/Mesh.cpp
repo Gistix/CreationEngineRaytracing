@@ -876,9 +876,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
-	if (!bsGeometryPtr)
-		return false;
-
 	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
@@ -915,9 +912,6 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 
 bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 {
-	if (!bsGeometryPtr)
-		return false;
-
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
 
@@ -980,7 +974,16 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(skinRootInverse * boneMatrix));
 	}
 
-	geometryDesc.setTransform(localToRoot.f);
+	return true;
+}
+
+bool Mesh::UpdateTransform(RE::NiAVObject* object)
+{
+	if (m_FormType != RE::FormType::Weapon)
+		return false;
+
+	// Update local to root transform
+	XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
 
 	return true;
 }
@@ -1016,6 +1019,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	// Only this reference remains, so erase it
 	if (bsGeometryPtr->GetRefCount() == 1) {
 		logger::warn("Mesh::Update - Released BSGeometry being referenced in {}", m_Name);
+		return DirtyFlags::None;
 	}
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
@@ -1056,6 +1060,11 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 
 	if (skinned && UpdateSkinning(object, isPlayer))
 		updateFlags |= DirtyFlags::Skin;
+
+	if (!skinned && UpdateTransform(object))
+		updateFlags |= DirtyFlags::Transform;
+
+	geometryDesc.setTransform(localToRoot.f);
 
 	return updateFlags;
 }
