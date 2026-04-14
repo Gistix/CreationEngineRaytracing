@@ -23,7 +23,7 @@ namespace Util
     }
 
     int CalcTangents::get_num_faces(const SMikkTSpaceContext* context) {
-        return static_cast<Mesh*> (context->m_pUserData)->triangleCount;
+        return static_cast<Mesh*> (context->m_pUserData)->triangleData.count;
     }
 
     int CalcTangents::get_num_vertices_of_face([[ maybe_unused ]] const SMikkTSpaceContext* context, 
@@ -38,7 +38,7 @@ namespace Util
         Mesh* working_mesh = static_cast<Mesh*> (context->m_pUserData);
 
         auto index = get_vertex_index(context, iFace, iVert);
-        auto vertex = working_mesh->geometry.vertices[index];
+        auto vertex = working_mesh->vertexData.vertices[index];
 
         outpos[0] = vertex.Position.x;
         outpos[1] = vertex.Position.y;
@@ -51,7 +51,7 @@ namespace Util
         Mesh* working_mesh = static_cast<Mesh*> (context->m_pUserData);
 
         auto index = get_vertex_index(context, iFace, iVert);
-        auto vertex = working_mesh->geometry.vertices[index];
+        auto vertex = working_mesh->vertexData.vertices[index];
 
 
         outnormal[0] = vertex.Normal.x;
@@ -65,7 +65,7 @@ namespace Util
         Mesh* working_mesh = static_cast<Mesh*> (context->m_pUserData);
 
         auto index = get_vertex_index(context, iFace, iVert);
-        auto vertex = working_mesh->geometry.vertices[index];
+        auto vertex = working_mesh->vertexData.vertices[index];
 
         outuv[0] = vertex.Texcoord0.x;
         outuv[1] = vertex.Texcoord0.y;
@@ -78,7 +78,7 @@ namespace Util
 
 
         auto index = get_vertex_index(context, iFace, iVert);
-        auto* vertex = &working_mesh->geometry.vertices[index];
+        auto* vertex = &working_mesh->vertexData.vertices[index];
 
         vertex->Tangent.x = tangentu[0];
         vertex->Tangent.y = tangentu[1];
@@ -89,7 +89,7 @@ namespace Util
     int CalcTangents::get_vertex_index(const SMikkTSpaceContext* context, int iFace, int iVert) {
         Mesh* working_mesh = static_cast<Mesh*> (context->m_pUserData);
 
-        auto& triangle = working_mesh->geometry.triangles[iFace];
+        auto& triangle = working_mesh->triangleData.triangles[iFace];
 
         int index;
 

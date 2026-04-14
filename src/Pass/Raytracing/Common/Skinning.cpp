@@ -76,7 +76,7 @@ namespace Pass
 			const bool vertexUpdate = (queuedMesh.updateFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 			const bool skinUpdate = (queuedMesh.updateFlags & DirtyFlags::Skin) != DirtyFlags::None;
 
-			numVertices = std::max(numVertices, mesh->vertexCount);
+			numVertices = std::max(numVertices, mesh->vertexData.count);
 			uint32_t numBoneMatrices = skinUpdate ? static_cast<uint32_t>(mesh->m_BoneMatrices.size()) : 0;
 
 			auto& vertexUpdateData = m_VertexUpdateData[shapeIndex];
@@ -84,7 +84,7 @@ namespace Pass
 			vertexUpdateData = VertexUpdateData(
 				mesh->m_DescriptorHandle.Get(),
 				static_cast<uint32_t>(queuedMesh.updateFlags),
-				mesh->vertexCount,
+				mesh->vertexData.count,
 				boneMatrixIndex,
 				mesh->flags.underlying(),
 				numBoneMatrices);

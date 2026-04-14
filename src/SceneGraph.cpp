@@ -1525,7 +1525,7 @@ void SceneGraph::ConvertMSN(Model* model, nvrhi::ICommandList* commandList)
 			commandList->setPushConstants(&geometryIdx, sizeof(geometryIdx));
 
 			nvrhi::DrawArguments args;
-			args.vertexCount = mesh->triangleCount * 3;
+			args.vertexCount = mesh->triangleData.count * 3;
 			args.instanceCount = 1;
 			commandList->draw(args);
 		}

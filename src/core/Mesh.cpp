@@ -27,7 +27,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		bool skinned = flags.any(Flags::Skinned);
 
 		if (flags.any(Flags::Dynamic)) {
-			geometry.dynamicPosition.resize(vertexCountIn);
+			vertexData.dynamicPosition.resize(vertexCountIn);
 
 			static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
 
@@ -38,7 +38,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 					auto& dynTriShapeRuntime = pDynamicTriShape->GetDynamicTrishapeRuntimeData();
 
 					dynTriShapeRuntime.lock.Lock();
-					std::memcpy(geometry.dynamicPosition.data(), dynTriShapeRuntime.dynamicData, dynTriShapeRuntime.dataSize);
+					std::memcpy(vertexData.dynamicPosition.data(), dynTriShapeRuntime.dynamicData, dynTriShapeRuntime.dataSize);
 					dynTriShapeRuntime.lock.Unlock();
 
 					dynamic = true;
@@ -51,10 +51,10 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 				flags.reset(Flags::Dynamic);
 		}
 
-		geometry.vertices.resize(vertexCountIn);
+		vertexData.vertices.resize(vertexCountIn);
 
 		if (skinned)
-			geometry.skinning.resize(vertexCountIn);
+			vertexData.skinning.resize(vertexCountIn);
 
 		auto vertexSize = Util::Geometry::GetSkyrimVertexSize(vertexFlags);
 		auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
@@ -87,7 +87,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		for (uint32_t i = 0; i < vertexCountIn; i++) {
 			uint8_t* vtx = Util::Adapter::CLib::GetVertexData(rendererData) + i * vertexSize;
 
-			Vertex vertexData{};
+			Vertex vertex{};
 
 			float4 pos;
 
@@ -95,18 +95,18 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 				std::memcpy(&pos, vtx + posOffset, sizeof(float4));
 			}
 			else if (dynamic) {
-				pos = geometry.dynamicPosition[i];
+				pos = vertexData.dynamicPosition[i];
 			}
 
 			min = float3::Min(min, float3(pos));
 			max = float3::Max(max, float3(pos));
 
 			if (hasPosition || dynamic) {
-				vertexData.Position = { pos.x, pos.y, pos.z };
+				vertex.Position = { pos.x, pos.y, pos.z };
 			}
 
 			if (vertexFlags & RE::BSGraphics::Vertex::VF_UV) {
-				std::memcpy(&vertexData.Texcoord0, vtx + uvOffset, sizeof(half2));
+				std::memcpy(&vertex.Texcoord0, vtx + uvOffset, sizeof(half2));
 			}
 
 			if (hasNormal) {
@@ -115,7 +115,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 				auto normal = normalPacked.unpack();
 
 				float3 N = Util::Math::Normalize({ normal.x, normal.y, normal.z });
-				vertexData.Normal = N;
+				vertex.Normal = N;
 
 				if (hasTangent) {
 					byte4f bitangentPacked;
@@ -135,9 +135,9 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 
 					T = Util::Math::Normalize(T - N * N.Dot(T));
 
-					vertexData.Tangent = Util::Math::Normalize(T);
+					vertex.Tangent = Util::Math::Normalize(T);
 
-					vertexData.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
+					vertex.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
 				}
 			}
 
@@ -181,42 +181,42 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 				fillSkinningData(weights);
 				fillSkinningData(boneIds);
 
-				geometry.skinning[i] = Skinning(weights, boneIds);
+				vertexData.skinning[i] = Skinning(weights, boneIds);
 			}
 
 			if (vertexFlags & RE::BSGraphics::Vertex::VF_LANDDATA) {
-				std::memcpy(&vertexData.LandBlend0, vtx + landOffset, sizeof(uint32_t));
-				std::memcpy(&vertexData.LandBlend1, vtx + landOffset + sizeof(uint32_t), sizeof(uint32_t));
+				std::memcpy(&vertex.LandBlend0, vtx + landOffset, sizeof(uint32_t));
+				std::memcpy(&vertex.LandBlend1, vtx + landOffset + sizeof(uint32_t), sizeof(uint32_t));
 			}
 
 			if (vertexFlags & RE::BSGraphics::Vertex::VF_COLORS) {
-				std::memcpy(&vertexData.Color, vtx + colorOffset, sizeof(uint32_t));
+				std::memcpy(&vertex.Color, vtx + colorOffset, sizeof(uint32_t));
 			}
 			else {
-				vertexData.Color.pack({ 1.0f, 1.0f, 1.0f, 1.0f });
+				vertex.Color.pack({ 1.0f, 1.0f, 1.0f, 1.0f });
 			}
 
-			geometry.vertices[i] = vertexData;
+			vertexData.vertices[i] = vertex;
 		}
 
-		vertexCount = vertexCountIn;
+		vertexData.count = vertexCountIn;
 	}
 
 	// Triangles
 	{
 		// Landscape contains no triangles, so we build them ourselves
 		if (flags.any(Flags::Landscape)) {
-			geometry.triangles = GetLandscapeTriangles();
+			triangleData.triangles = GetLandscapeTriangles();
 		}
 		else {
-			geometry.triangles.resize(triangleCountIn);
-			std::memcpy(geometry.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
+			triangleData.triangles.resize(triangleCountIn);
+			std::memcpy(triangleData.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
 
 			// Validate triangle indices are within vertex bounds
 			if (vertexCountIn > 0) {
 				const uint16_t maxIndex = static_cast<uint16_t>(std::min(vertexCountIn, 65536u) - 1);
 				for (uint32_t i = 0; i < triangleCountIn; i++) {
-					auto& tri = geometry.triangles[i];
+					auto& tri = triangleData.triangles[i];
 					if (tri.x > maxIndex || tri.y > maxIndex || tri.z > maxIndex) {
 						logger::warn("[RT] Mesh::BuildMesh - Triangle {} has out-of-bounds index ({}, {}, {}) for vertexCount {}", i, tri.x, tri.y, tri.z, vertexCountIn);
 						tri.x = std::min(tri.x, maxIndex);
@@ -230,7 +230,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 				flags.set(Mesh::Flags::DoubleSidedGeom);
 		}
 
-		triangleCount = triangleCountIn;
+		triangleData.count = triangleCountIn;
 	}
 
 	if (!hasNormal)
@@ -730,9 +730,9 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 	// Triangle Buffer
 	{
-		const size_t size = sizeof(Triangle) * triangleCount;
+		const size_t size = sizeof(Triangle) * triangleData.count;
 
-		logger::debug("Mesh::CreateBuffers - Triangle Count: {}, Buffer Size: {}", triangleCount, size);
+		logger::debug("Mesh::CreateBuffers - Triangle Count: {}, Buffer Size: {}", triangleData.count, size);
 
 		auto& triangleBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
@@ -743,7 +743,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		buffers.triangleBuffer = device->createBuffer(triangleBufferDesc);
 
-		commandList->writeBuffer(buffers.triangleBuffer, geometry.triangles.data(), size);
+		commandList->writeBuffer(buffers.triangleBuffer, triangleData.triangles.data(), size);
 
 		{
 			// Create SRV binding for triangles
@@ -756,7 +756,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	auto descriptorIndex = m_DescriptorHandle.Get();
 
 	if (flags.all(Flags::Dynamic)) {
-		const size_t size = sizeof(float4) * vertexCount;
+		const size_t size = sizeof(float4) * vertexData.count;
 
 		logger::debug("Mesh::CreateBuffers - Dynamic Buffer Size: {}", size);
 
@@ -779,9 +779,9 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 	// Vertex Buffer
 	{
-		const size_t size = sizeof(Vertex) * vertexCount;
+		const size_t size = sizeof(Vertex) * vertexData.count;
 
-		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexCount, size);
+		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexData.count, size);
 
 		auto& vertexBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
@@ -793,7 +793,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
 
-		commandList->writeBuffer(buffers.vertexBuffer, geometry.vertices.data(), size);
+		commandList->writeBuffer(buffers.vertexBuffer, vertexData.vertices.data(), size);
 
 		auto vertexBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexBuffer);
 		device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable, vertexBindingSet);
@@ -806,7 +806,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 	// Vertex Copy
 	if (updatable) {
-		const size_t size = sizeof(Vertex) * vertexCount;
+		const size_t size = sizeof(Vertex) * vertexData.count;
 
 		auto& vertexCopyBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
@@ -816,14 +816,14 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		buffers.vertexCopyBuffer = device->createBuffer(vertexCopyBufferDesc);
 
-		commandList->writeBuffer(buffers.vertexCopyBuffer, geometry.vertices.data(), size);
+		commandList->writeBuffer(buffers.vertexCopyBuffer, vertexData.vertices.data(), size);
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexCopyBuffer);
 		device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable, bindingSet);
 	}
 
 	if (flags.all(Flags::Skinned)) {
-		const size_t size = sizeof(Skinning) * vertexCount;
+		const size_t size = sizeof(Skinning) * vertexData.count;
 
 		auto& skinningBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
@@ -833,13 +833,13 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		buffers.skinningBuffer = device->createBuffer(skinningBufferDesc);
 
-		commandList->writeBuffer(buffers.skinningBuffer, geometry.skinning.data(), size);
+		commandList->writeBuffer(buffers.skinningBuffer, vertexData.skinning.data(), size);
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
 		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
 
 		// Previous position buffer for per-vertex motion vectors
-		const size_t prevPosSize = sizeof(float3) * vertexCount;
+		const size_t prevPosSize = sizeof(float3) * vertexData.count;
 
 		auto& prevPositionBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(prevPosSize)
@@ -863,13 +863,13 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	geometryTriangles.indexBuffer = buffers.triangleBuffer;
 	geometryTriangles.indexOffset = 0;
 	geometryTriangles.indexFormat = nvrhi::Format::R16_UINT;
-	geometryTriangles.indexCount = triangleCount * 3;
+	geometryTriangles.indexCount = triangleData.count * 3;
 
 	geometryTriangles.vertexBuffer = buffers.vertexBuffer;
 	geometryTriangles.vertexOffset = 0;
 	geometryTriangles.vertexFormat = nvrhi::Format::RGB32_FLOAT;
 	geometryTriangles.vertexStride = sizeof(Vertex);
-	geometryTriangles.vertexCount = vertexCount;
+	geometryTriangles.vertexCount = vertexData.count;
 
 	geometryDesc.setTransform(localToRoot.f);
 }
@@ -891,12 +891,12 @@ bool Mesh::UpdateDynamicPosition()
 	runtimeData.lock.Lock();
 
 	// Has dynamic position changed?
-	if (std::memcmp(geometry.dynamicPosition.data(), runtimeData.dynamicData, dataSize) == 0) {
+	if (std::memcmp(vertexData.dynamicPosition.data(), runtimeData.dynamicData, dataSize) == 0) {
 		runtimeData.lock.Unlock();
 		return false;
 	}
 
-	std::memcpy(geometry.dynamicPosition.data(), runtimeData.dynamicData, dataSize);
+	std::memcpy(vertexData.dynamicPosition.data(), runtimeData.dynamicData, dataSize);
 	runtimeData.lock.Unlock();
 
 	return true;
@@ -907,7 +907,7 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 	if (flags.none(Flags::Dynamic))
 		return;
 
-	commandList->writeBuffer(buffers.dynamicPositionBuffer, geometry.dynamicPosition.data(), sizeof(float4) * vertexCount);
+	commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
 }
 
 bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
@@ -1090,13 +1090,13 @@ bool Mesh::IsHidden() const
 void Mesh::CalculateNormals()
 {
 	eastl::vector<float3> normals;
-	normals.resize(vertexCount, float3(0, 0, 0));
+	normals.resize(vertexData.count, float3(0, 0, 0));
 
 	// Loop over triangles
-	for (auto& t : geometry.triangles) {
-		Vertex& v0 = geometry.vertices[t.x];
-		Vertex& v1 = geometry.vertices[t.y];
-		Vertex& v2 = geometry.vertices[t.z];
+	for (auto& t : triangleData.triangles) {
+		Vertex& v0 = vertexData.vertices[t.x];
+		Vertex& v1 = vertexData.vertices[t.y];
+		Vertex& v2 = vertexData.vertices[t.z];
 
 		float3 pos0 = v0.Position;
 		float3 pos1 = v1.Position;
@@ -1113,7 +1113,7 @@ void Mesh::CalculateNormals()
 	}
 
 	// Normalize and orthogonalize
-	for (size_t i = 0; i < vertexCount; i++) {
-		geometry.vertices[i].Normal = Util::Math::Normalize(normals[i]);
+	for (size_t i = 0; i < vertexData.count; i++) {
+		vertexData.vertices[i].Normal = Util::Math::Normalize(normals[i]);
 	}
 }
