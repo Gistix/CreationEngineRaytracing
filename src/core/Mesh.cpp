@@ -12,8 +12,10 @@
 #include "Utils/CalcTangents.h"
 #include "Core/D3D12Texture.h"
 
-void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
+void Mesh::BuildVertices(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
 {
+	vertexData = {};
+
 	auto vertexDesc = rendererData->vertexDesc;
 
 	vertexFlags = vertexDesc.GetFlags();
@@ -21,223 +23,290 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	bool hasNormal = vertexFlags & RE::BSGraphics::Vertex::VF_NORMAL;
 	bool hasTangent = vertexFlags & RE::BSGraphics::Vertex::VF_TANGENT;
 
-	// Vertices
-	{
-		bool dynamic = false;
-		bool skinned = flags.any(Flags::Skinned);
+	bool dynamic = false;
+	bool skinned = flags.any(Flags::Skinned);
 
-		if (flags.any(Flags::Dynamic)) {
-			vertexData.dynamicPosition.resize(vertexCountIn);
+	if (flags.any(Flags::Dynamic)) {
+		vertexData.dynamicPosition.resize(vertexCountIn);
 
-			static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
+		static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
 
-			if (bsGeometryPtr->GetRTTI() == dynamicTriShapeRTTI.get()) {
-				auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
+		if (bsGeometryPtr->GetRTTI() == dynamicTriShapeRTTI.get()) {
+			auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 
-				if (pDynamicTriShape) {
-					auto& dynTriShapeRuntime = pDynamicTriShape->GetDynamicTrishapeRuntimeData();
+			if (pDynamicTriShape) {
+				auto& dynTriShapeRuntime = pDynamicTriShape->GetDynamicTrishapeRuntimeData();
 
-					dynTriShapeRuntime.lock.Lock();
-					std::memcpy(vertexData.dynamicPosition.data(), dynTriShapeRuntime.dynamicData, dynTriShapeRuntime.dataSize);
-					dynTriShapeRuntime.lock.Unlock();
+				dynTriShapeRuntime.lock.Lock();
+				std::memcpy(vertexData.dynamicPosition.data(), dynTriShapeRuntime.dynamicData, dynTriShapeRuntime.dataSize);
+				dynTriShapeRuntime.lock.Unlock();
 
-					dynamic = true;
-				}
+				dynamic = true;
 			}
-
-			// Clear Dynamic flag if geometry is not a valid BSDynamicTriShape.
-			// Enforces the invariant that when Flags::Dynamic is set, geometry is always a BSDynamicTriShape.
-			if (!dynamic)
-				flags.reset(Flags::Dynamic);
 		}
 
-		vertexData.vertices.resize(vertexCountIn);
+		// Clear Dynamic flag if geometry is not a valid BSDynamicTriShape.
+		// Enforces the invariant that when Flags::Dynamic is set, geometry is always a BSDynamicTriShape.
+		if (!dynamic)
+			flags.reset(Flags::Dynamic);
+	}
 
-		if (skinned)
-			vertexData.skinning.resize(vertexCountIn);
+	vertexData.vertices.resize(vertexCountIn);
 
-		auto vertexSize = Util::Geometry::GetSkyrimVertexSize(vertexFlags);
-		auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
+	if (skinned)
+		vertexData.skinning.resize(vertexCountIn);
 
-		if (vertexSize != vertexSize2)
-			logger::warn("[RT] Mesh::BuildMesh - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);
+	auto vertexSize = Util::Geometry::GetSkyrimVertexSize(vertexFlags);
+	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
 
-		bool hasPosition = vertexFlags & RE::BSGraphics::Vertex::VF_VERTEX;
+	if (vertexSize != vertexSize2)
+		logger::warn("[RT] Mesh::BuildMesh - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);
 
-		uint32_t posOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_POSITION);
-		uint32_t uvOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_TEXCOORD0);
-		uint32_t normOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_NORMAL);
-		uint32_t tangOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_BINORMAL);
-		uint32_t colorOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_COLOR);
-		uint32_t skinOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_SKINNING);
-		uint32_t landOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_LANDDATA);
+	bool hasPosition = vertexFlags & RE::BSGraphics::Vertex::VF_VERTEX;
 
-		uint32_t boneIDOffset = sizeof(uint16_t) * bonesPerVertex;
+	uint32_t posOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_POSITION);
+	uint32_t uvOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_TEXCOORD0);
+	uint32_t normOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_NORMAL);
+	uint32_t tangOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_BINORMAL);
+	uint32_t colorOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_COLOR);
+	uint32_t skinOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_SKINNING);
+	uint32_t landOffset = vertexDesc.GetAttributeOffset(RE::BSGraphics::Vertex::VA_LANDDATA);
 
-		eastl::vector<half> weights;
-		eastl::vector<uint8_t> boneIds;
+	uint32_t boneIDOffset = sizeof(uint16_t) * bonesPerVertex;
+
+	eastl::vector<half> weights;
+	eastl::vector<uint8_t> boneIds;
+
+	if (skinned) {
+		weights.resize(bonesPerVertex);
+		boneIds.resize(bonesPerVertex);
+	}
+
+	for (uint32_t i = 0; i < vertexCountIn; i++) {
+		uint8_t* vtx = Util::Adapter::CLib::GetVertexData(rendererData) + i * vertexSize;
+
+		Vertex vertex{};
+
+		float4 pos;
+
+		if (hasPosition) {
+			std::memcpy(&pos, vtx + posOffset, sizeof(float4));
+		}
+		else if (dynamic) {
+			pos = vertexData.dynamicPosition[i];
+		}
+
+		if (hasPosition || dynamic) {
+			vertex.Position = { pos.x, pos.y, pos.z };
+		}
+
+		if (vertexFlags & RE::BSGraphics::Vertex::VF_UV) {
+			std::memcpy(&vertex.Texcoord0, vtx + uvOffset, sizeof(half2));
+		}
+
+		if (hasNormal) {
+			byte4f normalPacked;
+			std::memcpy(&normalPacked, vtx + normOffset, sizeof(byte4f));
+			auto normal = normalPacked.unpack();
+
+			float3 N = Util::Math::Normalize({ normal.x, normal.y, normal.z });
+			vertex.Normal = N;
+
+			if (hasTangent) {
+				byte4f bitangentPacked;
+				std::memcpy(&bitangentPacked, vtx + tangOffset, sizeof(byte4f));
+				auto bitangent = bitangentPacked.unpack();
+
+				float3 B = { bitangent.x, bitangent.y, bitangent.z };
+				B = Util::Math::Normalize(B - N * N.Dot(B));
+
+				float3 T = { pos.w, normal.w, bitangent.w };
+
+				// Dynamic TriShapes (Blendshape/Morphtarget) do not have vertex position
+				if (!hasPosition) {
+					float sign = B.Cross(N).x < 0 ? -1.0f : 1.0f;
+					T.x = std::sqrt(std::max(0.0f, 1.0f - bitangent.y * bitangent.y - bitangent.z * bitangent.z)) * sign;
+				}
+
+				T = Util::Math::Normalize(T - N * N.Dot(T));
+
+				vertex.Tangent = Util::Math::Normalize(T);
+
+				vertex.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
+			}
+		}
 
 		if (skinned) {
-			weights.resize(bonesPerVertex);
-			boneIds.resize(bonesPerVertex);
-		}
+			if (vertexFlags & RE::BSGraphics::Vertex::VF_SKINNED) {
+				std::memcpy(weights.data(), vtx + skinOffset, sizeof(half) * bonesPerVertex);
+				std::memcpy(boneIds.data(), vtx + skinOffset + boneIDOffset, sizeof(uint8_t) * bonesPerVertex);
 
-		float3 min(FLT_MAX), max(-FLT_MAX);
-
-		for (uint32_t i = 0; i < vertexCountIn; i++) {
-			uint8_t* vtx = Util::Adapter::CLib::GetVertexData(rendererData) + i * vertexSize;
-
-			Vertex vertex{};
-
-			float4 pos;
-
-			if (hasPosition) {
-				std::memcpy(&pos, vtx + posOffset, sizeof(float4));
-			}
-			else if (dynamic) {
-				pos = vertexData.dynamicPosition[i];
-			}
-
-			min = float3::Min(min, float3(pos));
-			max = float3::Max(max, float3(pos));
-
-			if (hasPosition || dynamic) {
-				vertex.Position = { pos.x, pos.y, pos.z };
-			}
-
-			if (vertexFlags & RE::BSGraphics::Vertex::VF_UV) {
-				std::memcpy(&vertex.Texcoord0, vtx + uvOffset, sizeof(half2));
-			}
-
-			if (hasNormal) {
-				byte4f normalPacked;
-				std::memcpy(&normalPacked, vtx + normOffset, sizeof(byte4f));
-				auto normal = normalPacked.unpack();
-
-				float3 N = Util::Math::Normalize({ normal.x, normal.y, normal.z });
-				vertex.Normal = N;
-
-				if (hasTangent) {
-					byte4f bitangentPacked;
-					std::memcpy(&bitangentPacked, vtx + tangOffset, sizeof(byte4f));
-					auto bitangent = bitangentPacked.unpack();
-
-					float3 B = { bitangent.x, bitangent.y, bitangent.z };
-					B = Util::Math::Normalize(B - N * N.Dot(B));
-
-					float3 T = { pos.w, normal.w, bitangent.w };
-
-					// Dynamic TriShapes (Blendshape/Morphtarget) do not have vertex position
-					if (!hasPosition) {
-						float sign = B.Cross(N).x < 0 ? -1.0f : 1.0f;
-						T.x = std::sqrt(std::max(0.0f, 1.0f - bitangent.y * bitangent.y - bitangent.z * bitangent.z)) * sign;
-					}
-
-					T = Util::Math::Normalize(T - N * N.Dot(T));
-
-					vertex.Tangent = Util::Math::Normalize(T);
-
-					vertex.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
+				float sum = 0.0f;
+				for (float w : weights) {
+					sum += w;
 				}
-			}
 
-			if (skinned) {
-				if (vertexFlags & RE::BSGraphics::Vertex::VF_SKINNED) {
-					std::memcpy(weights.data(), vtx + skinOffset, sizeof(half) * bonesPerVertex);
-					std::memcpy(boneIds.data(), vtx + skinOffset + boneIDOffset, sizeof(uint8_t) * bonesPerVertex);
+				if (sum < 1.0f) {
+					weights[0] += 1.0f - sum;
+				}
+				else if (sum > eastl::numeric_limits<float>::epsilon()) {
+					float sumRcp = 1.0f / sum;
 
-					float sum = 0.0f;
-					for (float w : weights) {
-						sum += w;
-					}
-
-					if (sum < 1.0f) {
-						weights[0] += 1.0f - sum;
-					}
-					else if (sum > eastl::numeric_limits<float>::epsilon()) {
-						float sumRcp = 1.0f / sum;
-
-						for (half& w : weights) {
-							w *= sumRcp;
-						}
-					}
-					else {
-						weights = { 1.0f };
+					for (half& w : weights) {
+						w *= sumRcp;
 					}
 				}
 				else {
 					weights = { 1.0f };
-					boneIds = { 0 };
 				}
-
-				auto fillSkinningData = []<typename T>(eastl::vector<T>&vector) {
-					auto currSize = vector.size();
-
-					if (currSize < 4) {
-						vector.insert(vector.end(), 4 - currSize, 0);
-					}
-				};
-
-				fillSkinningData(weights);
-				fillSkinningData(boneIds);
-
-				vertexData.skinning[i] = Skinning(weights, boneIds);
-			}
-
-			if (vertexFlags & RE::BSGraphics::Vertex::VF_LANDDATA) {
-				std::memcpy(&vertex.LandBlend0, vtx + landOffset, sizeof(uint32_t));
-				std::memcpy(&vertex.LandBlend1, vtx + landOffset + sizeof(uint32_t), sizeof(uint32_t));
-			}
-
-			if (vertexFlags & RE::BSGraphics::Vertex::VF_COLORS) {
-				std::memcpy(&vertex.Color, vtx + colorOffset, sizeof(uint32_t));
 			}
 			else {
-				vertex.Color.pack({ 1.0f, 1.0f, 1.0f, 1.0f });
+				weights = { 1.0f };
+				boneIds = { 0 };
 			}
 
-			vertexData.vertices[i] = vertex;
+			auto fillSkinningData = []<typename T>(eastl::vector<T>&vector) {
+				auto currSize = vector.size();
+
+				if (currSize < 4) {
+					vector.insert(vector.end(), 4 - currSize, 0);
+				}
+			};
+
+			fillSkinningData(weights);
+			fillSkinningData(boneIds);
+
+			vertexData.skinning[i] = Skinning(weights, boneIds);
 		}
 
-		vertexData.count = vertexCountIn;
-	}
+		if (vertexFlags & RE::BSGraphics::Vertex::VF_LANDDATA) {
+			std::memcpy(&vertex.LandBlend0, vtx + landOffset, sizeof(uint32_t));
+			std::memcpy(&vertex.LandBlend1, vtx + landOffset + sizeof(uint32_t), sizeof(uint32_t));
+		}
 
-	// Triangles
-	{
-		// Landscape contains no triangles, so we build them ourselves
-		if (flags.any(Flags::Landscape)) {
-			triangleData.triangles = GetLandscapeTriangles();
+		if (vertexFlags & RE::BSGraphics::Vertex::VF_COLORS) {
+			std::memcpy(&vertex.Color, vtx + colorOffset, sizeof(uint32_t));
 		}
 		else {
-			triangleData.triangles.resize(triangleCountIn);
-			std::memcpy(triangleData.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
-
-			// Validate triangle indices are within vertex bounds
-			if (vertexCountIn > 0) {
-				const uint16_t maxIndex = static_cast<uint16_t>(std::min(vertexCountIn, 65536u) - 1);
-				for (uint32_t i = 0; i < triangleCountIn; i++) {
-					auto& tri = triangleData.triangles[i];
-					if (tri.x > maxIndex || tri.y > maxIndex || tri.z > maxIndex) {
-						logger::warn("[RT] Mesh::BuildMesh - Triangle {} has out-of-bounds index ({}, {}, {}) for vertexCount {}", i, tri.x, tri.y, tri.z, vertexCountIn);
-						tri.x = std::min(tri.x, maxIndex);
-						tri.y = std::min(tri.y, maxIndex);
-						tri.z = std::min(tri.z, maxIndex);
-					}
-				}
-			}
-
-			if (HasDoubleSidedGeom())
-				flags.set(Mesh::Flags::DoubleSidedGeom);
+			vertex.Color.pack({ 1.0f, 1.0f, 1.0f, 1.0f });
 		}
 
-		triangleData.count = triangleCountIn;
+		vertexData.vertices[i] = vertex;
 	}
+
+	vertexData.count = vertexCountIn;
+}
+
+void Mesh::BuildTriangles(RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn)
+{
+	triangleData = {};
+
+	// Landscape contains no triangles, so we copy from a pre-built vector
+	if (flags.any(Flags::Landscape)) {
+		triangleData.triangles = GetLandscapeTriangles();
+	}
+	else {
+		triangleData.triangles.resize(triangleCountIn);
+		std::memcpy(triangleData.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
+	}
+
+	triangleData.count = triangleCountIn;
+}
+
+void Mesh::ClearUnusedVertices()
+{
+	eastl::vector<uint16_t> vertices;
+	vertices.reserve(triangleData.count * 3);
+
+	for (const auto& tri: triangleData.triangles)
+	{
+		vertices.push_back(tri.x);
+		vertices.push_back(tri.y);
+		vertices.push_back(tri.z);
+	}
+
+	eastl::sort(vertices.begin(), vertices.end());
+	vertices.erase(eastl::unique(vertices.begin(), vertices.end()), vertices.end());
+
+	auto vertexCount = static_cast<uint32_t>(vertices.size());
+
+	if (vertexCount == vertexData.count)
+		return;
+
+	// Remaps old vertices -> new
+	vertexData.remap.resize(vertexData.count);
+
+	// Rebuild vertices and remap vector
+	auto cleanVertexData = VertexData{};
+
+	bool dynamic = flags.all(Flags::Dynamic);
+
+	cleanVertexData.count = vertexCount;
+
+	if (dynamic) {
+		cleanVertexData.dynamicPosition = vertexData.dynamicPosition;
+		cleanVertexData.dynamicPositionRemapped.resize(vertexCount);
+	}
+
+	cleanVertexData.vertices.resize(vertexCount);
+	cleanVertexData.skinning.resize(vertexCount);
+	cleanVertexData.remap.resize(vertexCount);
+
+	uint16_t i = 0;
+	for (const auto& v : vertices)
+	{
+		if (dynamic)
+			cleanVertexData.dynamicPositionRemapped[i] = vertexData.dynamicPosition[v];
+	
+		cleanVertexData.vertices[i] = vertexData.vertices[v];
+		cleanVertexData.skinning[i] = vertexData.skinning[v];
+
+		// New -> Old
+		cleanVertexData.remap[i] = v;
+
+		// Old -> new
+		vertexData.remap[v] = i;
+
+		i++;
+	}
+
+	// Remap Triangles
+	auto& remap = vertexData.remap;
+
+	for (auto& triangle: triangleData.triangles)
+	{
+		triangle.x = remap[triangle.x];
+		triangle.y = remap[triangle.y];
+		triangle.z = remap[triangle.z];
+	}
+
+	vertexData = cleanVertexData;
+
+	flags.set(Flags::Remapped);
+}
+
+void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
+{
+	BuildVertices(rendererData, vertexCountIn, bonesPerVertex);
+	BuildTriangles(rendererData, triangleCountIn);
+
+	// Clear unused partition vertices
+	if (flags.all(Mesh::Flags::Skinned))
+		ClearUnusedVertices();
+
+	if (flags.none(Flags::Landscape) && HasDoubleSidedGeom())
+		flags.set(Mesh::Flags::DoubleSidedGeom);
+
+	auto vertexDesc = rendererData->vertexDesc;
+
+	bool hasNormal = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_NORMAL;
+	bool hasTangent = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_TANGENT;
 
 	if (!hasNormal)
 		CalculateNormals();
 
 	if (!hasTangent)
-		Util::CalcTangents::GetSingleton()->calc(this);
+		Util::CalcTangents(this);
 }
 
 eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
@@ -294,8 +363,6 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 		return Texture(defaultDescHandle, nullptr);
 
 	return Texture(result, defaultDescHandle.get());
-
-	//return Texture(defaultDescHandle, nullptr);
 }
 
 Texture Mesh::GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle)
@@ -906,8 +973,19 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 {
 	if (flags.none(Flags::Dynamic))
 		return;
+	
+	if (flags.all(Flags::Remapped)) {
+		// Remap original vertices to remapped partition vertices
+		for (size_t i = 0; i < vertexData.count; i++)
+		{
+			const auto& v = vertexData.remap[i];
+			vertexData.dynamicPositionRemapped[i] = vertexData.dynamicPosition[v];
+		}
 
-	commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
+		commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPositionRemapped.data(), sizeof(float4) * vertexData.count);
+	}
+	else
+		commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
 }
 
 bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)

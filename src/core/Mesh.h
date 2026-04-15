@@ -29,7 +29,8 @@ struct Mesh
 		Landscape = 1 << 3,
 		Static = 1 << 4,
 		DoubleSidedGeom = 1 << 5,
-		Water = 1 << 6
+		Water = 1 << 6,
+		Remapped = 1 << 7
 	};
 
 	enum class State : uint8_t
@@ -51,6 +52,8 @@ struct Mesh
 		eastl::vector<float4> dynamicPosition;
 		eastl::vector<Vertex> vertices;
 		eastl::vector<Skinning> skinning;
+		eastl::vector<uint16_t> remap;
+		eastl::vector<float4> dynamicPositionRemapped;
 	} vertexData;
 
 	struct TriangleData
@@ -158,7 +161,11 @@ struct Mesh
 		return false;
 	}
 
+	void BuildVertices(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex);
+	void BuildTriangles(RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn);
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
+
+	void ClearUnusedVertices();
 
 	void CalculateNormals();
 
