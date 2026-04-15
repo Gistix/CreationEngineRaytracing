@@ -2,6 +2,6 @@
 
 struct PassTiming
 {
-	const char* name;
+	eastl::string name;
 	float timing;
 };

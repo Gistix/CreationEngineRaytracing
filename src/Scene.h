@@ -18,9 +18,6 @@ struct Scene
 
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
-	std::recursive_mutex shareTextureMutex;
-	bool shareTexture = false;
-
 	eastl::unique_ptr<RenderNode> m_GlobalIllumination;
 	eastl::unique_ptr<RenderNode> m_PathTracing;
 	eastl::unique_ptr<RenderNode> m_GBuffer;

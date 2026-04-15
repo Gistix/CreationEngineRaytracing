@@ -149,7 +149,7 @@ namespace Pass::Raster
 				commandList->setPushConstants(&constants, sizeof(constants));
 
 				nvrhi::DrawArguments args;
-				args.vertexCount = model->meshes[m]->triangleCount * 3;
+				args.vertexCount = model->meshes[m]->triangleData.count * 3;
 				args.instanceCount = 1;
 				commandList->draw(args);
 			}

@@ -227,7 +227,7 @@ void Renderer::InitRR()
 	nvrhi::TextureDesc desc;
 	desc.width = m_RenderSize.x;
 	desc.height = m_RenderSize.y;
-	desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+	desc.initialState = nvrhi::ResourceStates::Common;
 	desc.keepInitialState = true;
 	desc.isUAV = true;
 	desc.mipLevels = 1;
@@ -709,7 +709,7 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
 
 	if (!d3d12Resource) {
-		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource");
+		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}", debugName);
 		return nullptr;
 	}
 

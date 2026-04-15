@@ -41,19 +41,23 @@ struct Mesh
 
 	eastl::string m_Name;
 
-	uint vertexCount = 0;
-	uint triangleCount = 0;
 	RE::BSGraphics::Vertex::Flags vertexFlags;
 
 	RE::NiPointer<RE::BSGeometry> bsGeometryPtr;
 
-	struct MeshGeometry
+	struct VertexData
 	{
+		uint count = 0;
 		eastl::vector<float4> dynamicPosition;
 		eastl::vector<Vertex> vertices;
 		eastl::vector<Skinning> skinning;
+	} vertexData;
+
+	struct TriangleData
+	{
+		uint count = 0;
 		eastl::vector<Triangle> triangles;
-	} geometry;
+	} triangleData;
 
 	struct MeshBuffers
 	{
@@ -82,11 +86,10 @@ struct Mesh
 
 	DescriptorHandle m_DescriptorHandle;
 
-	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
-		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition)
-	{
+	RE::FormType m_FormType;
 
-	}
+	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
+		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition) { }
 
 	bool HasDoubleSidedGeom()
 	{
@@ -134,14 +137,14 @@ struct Mesh
 		};
 
 		eastl::hash_set<TriangleKey, TriangleKeyHash> seen;
-		seen.reserve(geometry.triangles.size());
+		seen.reserve(triangleData.triangles.size());
 
-		for (const Triangle& tri : geometry.triangles)
+		for (const Triangle& tri : triangleData.triangles)
 		{
 			std::array<int32_t, 3> positions[3] = {
-				quantize(geometry.vertices[tri.x].Position),
-				quantize(geometry.vertices[tri.y].Position),
-				quantize(geometry.vertices[tri.z].Position),
+				quantize(vertexData.vertices[tri.x].Position),
+				quantize(vertexData.vertices[tri.y].Position),
+				quantize(vertexData.vertices[tri.z].Position),
 			};
 
 			std::sort(positions, positions + 3, cmp);
@@ -171,6 +174,8 @@ struct Mesh
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
 	bool UpdateSkinning(RE::NiAVObject* object, bool isPlayer);
+
+	bool UpdateTransform(RE::NiAVObject* object);
 
 	void UpdateDismember();
 

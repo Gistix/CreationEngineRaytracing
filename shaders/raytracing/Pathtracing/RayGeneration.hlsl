@@ -876,7 +876,7 @@ void Main()
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
             }
             
-            if (isSpecular)
+            if (isSpecular && j == 0)
                 specHitDist += payload.hitDistance;
 
             if (!payload.Hit())
