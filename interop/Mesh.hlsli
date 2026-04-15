@@ -11,6 +11,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint Flags;
     uint Pad;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
+    INTEROP_ROW_MAJOR(float3x4) PrevTransform;
 };
 VALIDATE_ALIGNMENT(MeshData, 4);
 

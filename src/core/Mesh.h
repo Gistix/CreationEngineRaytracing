@@ -80,7 +80,8 @@ struct Mesh
 
 	stl::enumeration<Flags, uint8_t> flags = Flags::None;
 
-	float3x4 localToRoot;
+	float3x4 m_LocalToRoot;
+	float3x4 m_PrevLocalToRoot;
 
 	// DismemberSkinInstance slot
 	uint8_t m_Partition;
@@ -92,7 +93,7 @@ struct Mesh
 	RE::FormType m_FormType;
 
 	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
-		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition) { }
+		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_Partition(partition) { }
 
 	bool HasDoubleSidedGeom()
 	{

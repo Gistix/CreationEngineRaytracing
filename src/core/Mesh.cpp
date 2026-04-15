@@ -938,7 +938,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	geometryTriangles.vertexStride = sizeof(Vertex);
 	geometryTriangles.vertexCount = vertexData.count;
 
-	geometryDesc.setTransform(localToRoot.f);
+	geometryDesc.setTransform(m_LocalToRoot.f);
 }
 
 bool Mesh::UpdateDynamicPosition()
@@ -1057,11 +1057,13 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
 {
-	if (m_FormType != RE::FormType::Weapon)
+	if (flags.any(Flags::Skinned, Flags::Landscape, Flags::Water))
 		return false;
 
+	m_PrevLocalToRoot = m_LocalToRoot;
+
 	// Update local to root transform
-	XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
+	XMStoreFloat3x4(&m_LocalToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
 
 	return true;
 }
@@ -1142,7 +1144,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	if (!skinned && UpdateTransform(object))
 		updateFlags |= DirtyFlags::Transform;
 
-	geometryDesc.setTransform(localToRoot.f);
+	geometryDesc.setTransform(m_LocalToRoot.f);
 
 	return updateFlags;
 }
@@ -1156,7 +1158,8 @@ MeshData Mesh::GetData(const float3 externalEmittance)
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
 		static_cast<uint32_t>(flags.get()),
 		0u,
-		localToRoot
+		m_LocalToRoot,
+		m_PrevLocalToRoot
 	);
 }
 
