@@ -970,6 +970,13 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetCubemapDescriptor(ID3D11Resou
 
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
+	if (nativeTexDesc.DepthOrArraySize < 6) {
+		logger::debug("[RT] GetCubemapDescriptor - Not a cubemap (DepthOrArraySize = {}), skipping.", nativeTexDesc.DepthOrArraySize);
+		if (shareResource)
+			d3d12Resource->Release();
+		return nullptr;
+	}
+
 	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
 	if (formatIt == Renderer::GetFormatMapping().end()) {
 		logger::error("[RT] GetCubemapDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
