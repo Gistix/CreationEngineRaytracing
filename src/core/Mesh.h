@@ -29,7 +29,8 @@ struct Mesh
 		Landscape = 1 << 3,
 		Static = 1 << 4,
 		DoubleSidedGeom = 1 << 5,
-		Water = 1 << 6
+		Water = 1 << 6,
+		Remapped = 1 << 7
 	};
 
 	enum class State : uint8_t
@@ -51,6 +52,8 @@ struct Mesh
 		eastl::vector<float4> dynamicPosition;
 		eastl::vector<Vertex> vertices;
 		eastl::vector<Skinning> skinning;
+		eastl::vector<uint16_t> remap;
+		eastl::vector<float4> dynamicPositionRemapped;
 	} vertexData;
 
 	struct TriangleData
@@ -77,7 +80,9 @@ struct Mesh
 
 	stl::enumeration<Flags, uint8_t> flags = Flags::None;
 
-	float3x4 localToRoot;
+	float3x4 m_LocalToRoot;
+	float3x4 m_PrevLocalToRoot;
+	bool m_LockLocalToRoot = false;
 
 	// DismemberSkinInstance slot
 	uint8_t m_Partition;
@@ -88,8 +93,8 @@ struct Mesh
 
 	RE::FormType m_FormType;
 
-	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
-		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition) { }
+	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0, bool lockLocalToRoot = false) :
+		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_LockLocalToRoot(lockLocalToRoot), m_Partition(partition) { }
 
 	bool HasDoubleSidedGeom()
 	{
@@ -158,7 +163,11 @@ struct Mesh
 		return false;
 	}
 
+	void BuildVertices(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex);
+	void BuildTriangles(RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn);
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
+
+	void ClearUnusedVertices();
 
 	void CalculateNormals();
 

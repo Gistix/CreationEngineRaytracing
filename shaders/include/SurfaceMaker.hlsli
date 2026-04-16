@@ -47,7 +47,16 @@ struct SurfaceMaker
 
         // Loads all geometry releated data
         Vertex v0, v1, v2;
+        
+#if defined(HAS_PREV_POSITIONS)
+        float3 prevPos0, prevPos1, prevPos2;
+        
+        if (mesh.Flags & MeshDataFlags::Skinned)
+            GetVertices(mesh.GeometryIdx, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
+        else
+#endif        
         GetVertices(mesh.GeometryIdx, payload.primitiveIndex, v0, v1, v2);
+
         float3 uvw = GetBary(payload.Barycentrics());
 
         material = mesh.Material;
@@ -106,24 +115,17 @@ struct SurfaceMaker
         // Compute previous world position for motion vectors
 #if defined(HAS_PREV_POSITIONS)
         {
+            float3 objectSpacePos = float3(0.0f, 0.0f, 0.0f);
+        
             if (mesh.Flags & MeshDataFlags::Skinned)
-            {
                 // Per-vertex: read previous skinned positions from PrevPositions buffer
-                Triangle tri = GetTriangle(mesh.GeometryIdx, payload.primitiveIndex);
-                float3 prevPos0 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.x)];
-                float3 prevPos1 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.y)];
-                float3 prevPos2 = PrevPositions[NonUniformResourceIndex(mesh.GeometryIdx)][NonUniformResourceIndex(tri.z)];
-                float3 prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
-                float3 prevRootSpacePos = mul(mesh.Transform, float4(prevObjectSpacePos, 1.0));       
-                surface.PrevPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));
-            }
+                objectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);     
             else
-            {
                 // Per-object: use current vertex positions with previous instance transform
-                float3 objectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
-                float3 rootSpacePos = mul(mesh.Transform, float4(objectSpacePos, 1.0));
-                surface.PrevPosition = mul(instance.PrevTransform, float4(rootSpacePos, 1.0));
-            }
+                objectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
+ 
+            float3 prevRootSpacePos = mul(mesh.PrevTransform, float4(objectSpacePos, 1.0));       
+            surface.PrevPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));       
         }
 #endif
 

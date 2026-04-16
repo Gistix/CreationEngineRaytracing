@@ -134,6 +134,7 @@ public:
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 
 	void ReleaseTexture(ID3D11Texture2D* texture);
+	void ReleaseCubemap(ID3D11Texture2D* texture);
 
 	// Releases an object instance while keeping the model and mesh data intact.
 	// releaseModel is to be used by water and only water.
