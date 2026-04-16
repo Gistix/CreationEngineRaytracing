@@ -1060,6 +1060,9 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 	if (flags.any(Flags::Skinned, Flags::Landscape, Flags::Water))
 		return false;
 
+	if (m_LockLocalToRoot)
+		return false;
+
 	m_PrevLocalToRoot = m_LocalToRoot;
 
 	// Update local to root transform

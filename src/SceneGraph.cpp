@@ -1182,13 +1182,14 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			}
 
 			const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
+			const bool lockLocalToRoot = isOrigin && !isRootOrigin;
 
 			// Some plants have parts with geometry world position of [0, 0, 0]
 			// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
 			if (!isOrigin || isOrigin && isRootOrigin)
 				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
 
-			auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot, 0, lockLocalToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, form);
