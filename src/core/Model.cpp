@@ -115,6 +115,8 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
 		update = false;
+	else if (m_DirtyFlags.any(DirtyFlags::Transform))
+		update = true;
 	else {
 		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 			return;

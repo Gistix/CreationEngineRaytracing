@@ -1063,10 +1063,16 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 	if (m_LockLocalToRoot)
 		return false;
 
-	m_PrevLocalToRoot = m_LocalToRoot;
+	// Compute new transform
+	float3x4 newLocalToRoot;
+	XMStoreFloat3x4(&newLocalToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
 
-	// Update local to root transform
-	XMStoreFloat3x4(&m_LocalToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
+	// Skip update if transform hasn't actually changed (avoids spurious motion vectors from FP jitter)
+	if (memcmp(&newLocalToRoot, &m_LocalToRoot, sizeof(float3x4)) == 0)
+		return false;
+
+	m_PrevLocalToRoot = m_LocalToRoot;
+	m_LocalToRoot = newLocalToRoot;
 
 	return true;
 }
