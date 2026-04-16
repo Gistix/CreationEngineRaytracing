@@ -610,6 +610,13 @@ void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 	m_Textures.erase(texture);
 }
 
+void SceneGraph::ReleaseCubemap(ID3D11Texture2D* texture)
+{
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	m_Cubemaps.erase(texture);
+}
+
 void SceneGraph::ReleaseObjectInstance(RE::NiAVObject* node, bool releaseModel)
 {
 	auto instanceNodeIt = m_InstanceNodes.find(node);
