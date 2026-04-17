@@ -136,6 +136,7 @@ public:
 	ActorReference* GetActorRefr(RE::FormID a_formID);
 
 	void ReleaseTexture(ID3D11Texture2D* texture);
+	void ReleaseCubemap(ID3D11Texture2D* texture);
 
 	// Releases an object instance while keeping the model and mesh data intact.
 	// releaseModel is to be used by water and only water.

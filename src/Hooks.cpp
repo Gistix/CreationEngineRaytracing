@@ -60,7 +60,10 @@ namespace Hooks
 	{
 		if (oThis && oThis->rendererTexture) {
 			if (auto resource = oThis->rendererTexture->texture) {
-				Scene::GetSingleton()->GetSceneGraph()->ReleaseTexture(reinterpret_cast<ID3D11Texture2D*>(resource));
+				auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+				auto* texture = reinterpret_cast<ID3D11Texture2D*>(resource);
+				sceneGraph->ReleaseTexture(texture);
+				sceneGraph->ReleaseCubemap(texture);
 			}
 		}
 
