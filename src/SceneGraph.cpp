@@ -161,11 +161,7 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 {
-	//auto& mainSSNRuntimeData = RE::DrawWorld::GetSingleton().mainShadowSceneNode->GetRuntimeData();
 	auto& mainSSNRuntimeData = RE::BSShaderManager::State::GetSingleton().shadowSceneNode[0]->GetRuntimeData();
-
-	//auto accumulator = *m_CurrentAccumulator.get();
-	//auto& mainSSNRuntimeData = accumulator->GetRuntimeData().activeShadowSceneNode->GetRuntimeData();
 
 	// Update Light Vector
 	{
