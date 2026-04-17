@@ -402,12 +402,15 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 		return;
 	}
 
+	// TODO: Proper Model transform update, this whole section feels like hack
 	const REL::Relocation<const RE::NiRTTI*> rtti{ RE::NiMultiTargetTransformController::Ni_RTTI };
 	auto* controller = reinterpret_cast<RE::NiMultiTargetTransformController*>(root->GetController(rtti.get()));
-
+	
 	if (controller) {
 		eastl::hash_set<RE::NiNode*> parents;
 		eastl::hash_set<RE::NiAVObject*> targets;
+
+		uint32_t createModels = 0;
 
 		for (uint16_t i = 0; i < controller->numInterps; i++) {
 			auto* target = controller->targets[i];
@@ -421,7 +424,7 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 			if (!emplaced)
 				continue;
 
-			CreateModelInternal(form, std::format("{}_{}", model, target->name.c_str()).c_str(), target);
+			createModels += CreateModelInternal(form, std::format("{}_{}", model, target->name.c_str()).c_str(), target);
 		}
 
 		for (auto* parent : parents) {
@@ -429,11 +432,12 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 				if (targets.find(child.get()) != targets.end())
 					continue;
 
-				CreateModelInternal(form, std::format("{}_{}_{}", model, child->name.c_str(), child->parentIndex).c_str(), child.get());
+				createModels += CreateModelInternal(form, std::format("{}_{}_{}", model, child->name.c_str(), child->parentIndex).c_str(), child.get());
 			}
 		}
 
-		return;
+		if (createModels > 0)
+			return;
 	}
 
 	CreateModelInternal(form, model, root);
@@ -1263,17 +1267,17 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 	return meshes;
 }
 
-void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
+uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
 {
 	if (!pRoot)
-		return;
+		return 0;
 
 	if (!path || strlen(path) == 0)
-		return;
+		return 0;
 
 	if (m_InstanceNodes.find(pRoot) != m_InstanceNodes.end()) {
 		logger::warn("SceneGraph::CreateModelInternal \"{}\" - Instance/Model for 0x{:08X} already present.", path, reinterpret_cast<uintptr_t>(pRoot));
-		return;
+		return 0;
 	}
 	
 	auto formID = form->GetFormID();
@@ -1281,9 +1285,9 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	// We only need one buffer per model
-	if (m_Models.find(path) != m_Models.end()) {
+	if (auto it = m_Models.find(path); it != m_Models.end()) {
 		AddInstance(formID, pRoot, path);
-		return;
+		return static_cast<uint32_t>(it->second->meshes.size());
 	}
 
 	logger::trace("SceneGraph::CreateModelInternal \"{}\"", typeid(*pRoot).name());
@@ -1292,7 +1296,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 	if (bsxFlags) {
 		if (static_cast<int32_t>(bsxFlags->value) & static_cast<int32_t>(RE::BSXFlags::Flag::kEditorMarker))
-			return;
+			return 0;
 	}
 
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
@@ -1301,6 +1305,8 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	auto meshes = CreateMeshes(form, pRoot);
 
 	CommitModel(path, pRoot, form, meshes);
+
+	return static_cast<uint32_t>(meshes.size());
 }
 
 bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
