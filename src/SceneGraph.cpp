@@ -1211,6 +1211,8 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
 			if (!isOrigin || isOrigin && isRootOrigin)
 				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+			else
+				flags |= Mesh::Flags::Origin;
 
 			auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot);
 

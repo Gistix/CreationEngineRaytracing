@@ -1057,13 +1057,20 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
 {
-	if (flags.any(Flags::Skinned, Flags::Landscape, Flags::Water))
+	if (flags.any(Flags::Skinned, Flags::Landscape, Flags::Water, Flags::Origin))
 		return false;
 
+	float3x4 localToRoot;
+	XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
+
+	if (Util::Math::MatrixNearEqual(localToRoot, m_LocalToRoot))
+		return false;
+
+	// Update previous transform
 	m_PrevLocalToRoot = m_LocalToRoot;
 
-	// Update local to root transform
-	XMStoreFloat3x4(&m_LocalToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
+	// Update transform
+	m_LocalToRoot = localToRoot;
 
 	return true;
 }

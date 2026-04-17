@@ -24,6 +24,8 @@ struct Model
 
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
+	void UpdateMeshFlags();
+
 	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool update);
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
@@ -53,8 +55,6 @@ struct Model
 
 	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);
-
-	void RemoveGeometry(RE::BSGeometry* geometry);
 
 	void AddRef()
 	{
@@ -103,8 +103,8 @@ struct Model
 		return m_EmittanceColor ? *m_EmittanceColor : float3(1.0f, 1.0f, 1.0f);
 	}
 private:
-	stl::enumeration<DirtyFlags, uint8_t> m_DirtyFlags = DirtyFlags::None;
-	stl::enumeration<Mesh::Flags, uint8_t> meshFlags = Mesh::Flags::None;
+	stl::enumeration<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
+	stl::enumeration<Mesh::Flags> meshFlags = Mesh::Flags::None;
 	uint32_t shaderTypes = RE::BSShader::Type::None;
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;

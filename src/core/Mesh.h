@@ -21,7 +21,7 @@ class SceneGraph;
 
 struct Mesh
 {
-	enum class Flags : uint8_t
+	enum class Flags : uint16_t
 	{
 		None = 0,
 		Dynamic = 1 << 1,
@@ -30,7 +30,8 @@ struct Mesh
 		Static = 1 << 4,
 		DoubleSidedGeom = 1 << 5,
 		Water = 1 << 6,
-		Remapped = 1 << 7
+		Remapped = 1 << 7,
+		Origin = 1 << 8
 	};
 
 	enum class State : uint8_t
@@ -78,7 +79,7 @@ struct Mesh
 
 	Material material;
 
-	stl::enumeration<Flags, uint8_t> flags = Flags::None;
+	stl::enumeration<Flags> flags = Flags::None;
 
 	float3x4 m_LocalToRoot;
 	float3x4 m_PrevLocalToRoot;
