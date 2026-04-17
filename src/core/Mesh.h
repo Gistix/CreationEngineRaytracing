@@ -82,7 +82,6 @@ struct Mesh
 
 	float3x4 m_LocalToRoot;
 	float3x4 m_PrevLocalToRoot;
-	bool m_LockLocalToRoot = false;
 
 	// DismemberSkinInstance slot
 	uint8_t m_Partition;
@@ -93,8 +92,8 @@ struct Mesh
 
 	RE::FormType m_FormType;
 
-	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0, bool lockLocalToRoot = false) :
-		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_LockLocalToRoot(lockLocalToRoot), m_Partition(partition) { }
+	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
+		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_Partition(partition) { }
 
 	bool HasDoubleSidedGeom()
 	{
