@@ -508,6 +508,16 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 	}
 }
 
+ActorReference* SceneGraph::GetActorRefr(RE::FormID a_formID)
+{
+	auto it = m_Actors.find(a_formID);
+
+	if (it == m_Actors.end())
+		return nullptr;
+
+	return &it->second;
+}
+
 void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 {
 	auto* cell = land->parentCell;

@@ -532,6 +532,73 @@ namespace Hooks
 
 		return func(a_state, a_arg2, a_arg3);
 	}
+
+	struct LoadAndAttachAddon
+	{
+		static RE::NiAVObject* thunk(RE::TESModel* a_model, RE::BIPED_OBJECT a_bipedObj, RE::TESObjectREFR* a_actor, RE::BSTSmartPointer<RE::BipedAnim>& a_biped, RE::NiAVObject* a_root)
+		{
+			auto* result = func(a_model, a_bipedObj, a_actor, a_biped, a_root);
+
+			if (auto* animObject = stl::adjust_pointer<RE::TESObjectANIO>(a_model->GetAsModelTextureSwap(), -0x20); animObject) {
+				auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+				if (auto* actorRefr = sceneGraph->GetActorRefr(a_actor->GetFormID())) {
+					actorRefr->AttachAnimObject(animObject, result);
+				}
+			}
+			
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct DetachAddonSE
+	{
+		static int32_t thunk(RE::AnimationObject* a_animObject)
+		{
+			if (a_animObject) {
+				if (auto refrPtr = a_animObject->handle.get()) {
+					if (auto* object = a_animObject->object) {
+						auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+						if (auto* actorRefr = sceneGraph->GetActorRefr(refrPtr->GetFormID())) {
+							actorRefr->DetachAnimObject(object);
+						}
+					}
+				}
+			}
+
+			return func(a_animObject);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct DetachAddonAE
+	{
+		static int32_t thunk(RE::BSTArray<RE::AnimationObject>& a_animObjects, uint32_t a_index, uint32_t a3)
+		{
+			if (a3) {
+				auto& animObject = a_animObjects[a_index];
+
+				if (auto refrPtr = animObject.handle.get()) {
+					if (auto* object = animObject.object) {
+						auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+						if (auto* actorRefr = sceneGraph->GetActorRefr(refrPtr->GetFormID())) {
+							actorRefr->DetachAnimObject(object);
+						}
+					}
+				}
+			}
+
+			return func(a_animObjects, a_index, a3);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 #elif defined(FALLOUT4)
 
 #endif
@@ -586,6 +653,13 @@ namespace Hooks
 		scene->g_FlowMapSourceTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(527694, 414616).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
+		
+		stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
+
+		if (REL::Module::IsSE())
+			stl::detour_thunk<DetachAddonSE>(REL::RelocationID(42412, 0));
+		else
+			stl::detour_thunk<DetachAddonAE>(REL::RelocationID(0, 43585));
 
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
