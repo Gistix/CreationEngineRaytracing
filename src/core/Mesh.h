@@ -188,7 +188,7 @@ struct Mesh
 
 	void UpdateDismember();
 
-	DirtyFlags Update(RE::NiAVObject* object, bool isPlayer);
+	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer);
 
 	bool IsHidden() const;
 
@@ -197,8 +197,8 @@ struct Mesh
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
 	// State is pending until BLASRebuild
-	stl::enumeration<State, uint8_t> m_PendingState = State::None;
-	stl::enumeration<State, uint8_t> m_State = State::None;
+	stl::enumeration<State> m_PendingState = State::None;
+	stl::enumeration<State> m_State = State::None;
 
 	void UpdateState();
 };

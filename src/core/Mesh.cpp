@@ -1101,7 +1101,7 @@ void Mesh::UpdateDismember()
 	m_PendingState.set(!partition.editorVisible, State::DismemberHidden);
 }
 
-DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
+DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer)
 {
 	// Only this reference remains, so erase it
 	if (bsGeometryPtr->GetRefCount() == 1) {
@@ -1113,8 +1113,9 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
-	if (dynamic || skinned)
-		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get()), State::Hidden);
+	if (dynamic || skinned) {
+		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot), State::Hidden);
+	}
 
 	if (skinned)
 		UpdateDismember();
@@ -1125,7 +1126,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	// Update states
 	m_State = m_PendingState;
 
-	// Current hiddent state
+	// Current hidden state
 	bool isHidden = IsHidden();
 
 	// Becomes hidden this frame
@@ -1145,10 +1146,10 @@ DirtyFlags Mesh::Update(RE::NiAVObject* object, bool isPlayer)
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning(object, isPlayer))
+	if (skinned && UpdateSkinning(instanceRoot, isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	if (!skinned && UpdateTransform(object))
+	if (!skinned && UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
 
 	geometryDesc.setTransform(m_LocalToRoot.f);
