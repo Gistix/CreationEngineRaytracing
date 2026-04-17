@@ -508,6 +508,16 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 	}
 }
 
+ActorReference* SceneGraph::GetActorRefr(RE::FormID a_formID)
+{
+	auto it = m_Actors.find(a_formID);
+
+	if (it == m_Actors.end())
+		return nullptr;
+
+	return &it->second;
+}
+
 void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 {
 	auto* cell = land->parentCell;
@@ -969,6 +979,13 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetCubemapDescriptor(ID3D11Resou
 	}
 
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
+
+	if (nativeTexDesc.DepthOrArraySize < 6) {
+		logger::debug("[RT] GetCubemapDescriptor - Not a cubemap (DepthOrArraySize = {}), skipping.", nativeTexDesc.DepthOrArraySize);
+		if (shareResource)
+			d3d12Resource->Release();
+		return nullptr;
+	}
 
 	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
 	if (formatIt == Renderer::GetFormatMapping().end()) {
