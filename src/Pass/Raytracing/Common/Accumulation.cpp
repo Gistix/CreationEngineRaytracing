@@ -69,7 +69,7 @@ namespace Pass::Common
 			desc.height = resolution.y;
 			desc.isUAV = true;
 			desc.keepInitialState = true;
-			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			desc.format = nvrhi::Format::RGBA32_FLOAT;
 			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
 			desc.debugName = "Accumulation Texture";
 
