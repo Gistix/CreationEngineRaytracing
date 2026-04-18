@@ -132,18 +132,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct CreateFlowMapSE
-	{
-		static void* thunk(void* a1, int a2, int a3, void* a4);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct CreateFlowMapAE
-	{
-		static void* thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BSCullingProcess_AppendVirtual
 	{
 		static void thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2);
