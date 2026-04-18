@@ -17,5 +17,7 @@ namespace Util
 		float3 Normalize(float3 vector);
 
 		DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);
+
+		bool MatrixNearEqual(const float3x4& a, const float3x4& b, float epsilon = 1e-5f);
 	}
 }

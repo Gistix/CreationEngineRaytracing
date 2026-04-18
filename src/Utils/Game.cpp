@@ -28,12 +28,13 @@ namespace Util
 			return !(a_light->portalStrict || !a_light->portalGraph);
 		}
 
-		bool IsHidden(RE::NiAVObject* object) {
+		bool IsHidden(RE::NiAVObject* object, RE::NiAVObject* root) {
 			if (object->GetFlags().all(RE::NiAVObject::Flag::kHidden))
 				return true;
 
-			if (object->parent)
-				return IsHidden(object->parent);
+			// We stop recursion if parent is the root
+			if (object->parent && (root == nullptr || object->parent != root))
+				return IsHidden(object->parent, root);
 
 			return false;
 		}

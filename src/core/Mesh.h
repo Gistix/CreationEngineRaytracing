@@ -21,7 +21,7 @@ class SceneGraph;
 
 struct Mesh
 {
-	enum class Flags : uint8_t
+	enum class Flags : uint16_t
 	{
 		None = 0,
 		Dynamic = 1 << 1,
@@ -30,7 +30,8 @@ struct Mesh
 		Static = 1 << 4,
 		DoubleSidedGeom = 1 << 5,
 		Water = 1 << 6,
-		Remapped = 1 << 7
+		Remapped = 1 << 7,
+		Origin = 1 << 8
 	};
 
 	enum class State : uint8_t
@@ -78,11 +79,10 @@ struct Mesh
 
 	Material material;
 
-	stl::enumeration<Flags, uint8_t> flags = Flags::None;
+	stl::enumeration<Flags> flags = Flags::None;
 
 	float3x4 m_LocalToRoot;
 	float3x4 m_PrevLocalToRoot;
-	bool m_LockLocalToRoot = false;
 
 	// DismemberSkinInstance slot
 	uint8_t m_Partition;
@@ -93,8 +93,8 @@ struct Mesh
 
 	RE::FormType m_FormType;
 
-	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0, bool lockLocalToRoot = false) :
-		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_LockLocalToRoot(lockLocalToRoot), m_Partition(partition) { }
+	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
+		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_Partition(partition) { }
 
 	bool HasDoubleSidedGeom()
 	{
@@ -188,7 +188,7 @@ struct Mesh
 
 	void UpdateDismember();
 
-	DirtyFlags Update(RE::NiAVObject* object, bool isPlayer);
+	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer);
 
 	bool IsHidden() const;
 
@@ -197,8 +197,8 @@ struct Mesh
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
 	// State is pending until BLASRebuild
-	stl::enumeration<State, uint8_t> m_PendingState = State::None;
-	stl::enumeration<State, uint8_t> m_State = State::None;
+	stl::enumeration<State> m_PendingState = State::None;
+	stl::enumeration<State> m_State = State::None;
 
 	void UpdateState();
 };

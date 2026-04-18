@@ -8,7 +8,7 @@ namespace Util
 
 		bool IsGlobalLight(RE::BSLight* a_light);
 
-		bool IsHidden(RE::NiAVObject* object);
+		bool IsHidden(RE::NiAVObject* object, RE::NiAVObject* root = nullptr);
 	}
 
 	namespace Units

@@ -7,12 +7,7 @@
 Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
 	m_Name(name), meshes(eastl::move(meshes))
 {
-	for (auto& mesh : this->meshes) {
-		meshFlags.set(mesh->flags.get());
-		shaderTypes |= mesh->material.shaderType;
-		features |= static_cast<int>(mesh->material.Feature);
-		shaderFlags.set(mesh->material.shaderFlags.get());
-	}
+	UpdateMeshFlags();
 
 	// Models with these flags cannot be instanced directly
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
@@ -29,10 +24,24 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	}
 }
 
+void Model::UpdateMeshFlags()
+{
+	meshFlags.reset();
+	shaderTypes = RE::BSShader::Type::None;
+	features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
+	shaderFlags.reset();
+
+	for (auto& mesh : meshes) {
+		meshFlags.set(mesh->flags.get());
+		shaderTypes |= mesh->material.shaderType;
+		features |= static_cast<int>(mesh->material.Feature);
+		shaderFlags.set(mesh->material.shaderFlags.get());
+	}
+}
+
 nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 {
 	auto blasDesc = nvrhi::rt::AccelStructDesc()
-		//.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace)
 		.setIsTopLevel(false)
 		.setDebugName(std::format("{} - BLAS", m_Name.c_str()));
 
@@ -115,13 +124,13 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
 		update = false;
-	else if (m_DirtyFlags.any(DirtyFlags::Transform))
-		update = true;
 	else {
 		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 			return;
 
-		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin))
+		// TODO: Add transform updates to non-skinned/non-dynamic meshes
+		// Attempting it on other model types currenty causes device disconnection
+		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
 			return;
 
 		update = true;
@@ -155,10 +164,11 @@ void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr
 	}
 
 	copyCommandList->close();
-
 	Renderer::GetSingleton()->GetDevice()->executeCommandList(copyCommandList, nvrhi::CommandQueue::Copy);
 
-	// Triggers a BLAS update
+	UpdateMeshFlags();
+
+	// Triggers a BLAS rebuild
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
@@ -176,24 +186,9 @@ void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
 		meshes.end()
 	);
 
-	// Triggers a BLAS update
-	if ( meshes.size() != oldSize)	
+	UpdateMeshFlags();
+
+	// Triggers a BLAS rebuild
+	if (meshes.size() != oldSize)	
 		m_DirtyFlags.set(DirtyFlags::Mesh);
-}
-
-void Model::RemoveGeometry(RE::BSGeometry* geometry)
-{
-	// Find the first mesh whose bsGeometryPtr matches
-	auto it = eastl::find_if(meshes.begin(), meshes.end(), [&](auto& mesh) {
-		return mesh->bsGeometryPtr.get() == geometry;
-	});
-
-	if (it == meshes.end())
-		return;
-
-	// Erase single element
-	meshes.erase(it);
-
-	// Triggers a BLAS update
-	m_DirtyFlags.set(DirtyFlags::Mesh);
 }

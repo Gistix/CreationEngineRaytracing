@@ -314,7 +314,7 @@ void Scene::ClearDirtyStates()
 	GetSceneGraph()->ClearDirtyStates();
 }
 
-void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) 
+void Scene::AttachModel(RE::TESForm* form) 
 {
 	auto* refr = form->AsReference();
 

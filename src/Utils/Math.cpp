@@ -79,5 +79,26 @@ namespace Util
 
 			return temp;
 		}
+
+		bool MatrixNearEqual(const float3x4& a, const float3x4& b, float epsilon)
+		{
+			using namespace DirectX;
+
+			XMVECTOR eps = XMVectorReplicate(epsilon);
+
+			XMVECTOR a0 = XMLoadFloat4(reinterpret_cast<const XMFLOAT4*>(&a._11));
+			XMVECTOR b0 = XMLoadFloat4(reinterpret_cast<const XMFLOAT4*>(&b._11));
+
+			XMVECTOR a1 = XMLoadFloat4(reinterpret_cast<const XMFLOAT4*>(&a._21));
+			XMVECTOR b1 = XMLoadFloat4(reinterpret_cast<const XMFLOAT4*>(&b._21));
+
+			XMVECTOR a2 = XMLoadFloat4(reinterpret_cast<const XMFLOAT4*>(&a._31));
+			XMVECTOR b2 = XMLoadFloat4(reinterpret_cast<const XMFLOAT4*>(&b._31));
+
+			return
+				XMVector4EqualInt(XMVectorNearEqual(a0, b0, eps), XMVectorTrueInt()) &&
+				XMVector4EqualInt(XMVectorNearEqual(a1, b1, eps), XMVectorTrueInt()) &&
+				XMVector4EqualInt(XMVectorNearEqual(a2, b2, eps), XMVectorTrueInt());
+		}
 	}
 }
