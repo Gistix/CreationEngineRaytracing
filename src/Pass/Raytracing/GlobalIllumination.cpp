@@ -13,6 +13,11 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_LinearClampSampler = GetRenderer()->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(true));
+
 		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
@@ -42,6 +47,7 @@ namespace Pass::Raytracing
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
+			nvrhi::BindingLayoutItem::Sampler(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -121,7 +127,8 @@ namespace Pass::Raytracing
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
-			sceneGraph->GetTextureDescriptors()->m_Layout
+			sceneGraph->GetTextureDescriptors()->m_Layout,
+			sceneGraph->GetCubemapDescriptors()->m_Layout
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -165,7 +172,8 @@ namespace Pass::Raytracing
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
@@ -197,6 +205,7 @@ namespace Pass::Raytracing
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
+			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
@@ -243,7 +252,8 @@ namespace Pass::Raytracing
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
-			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetResolution();

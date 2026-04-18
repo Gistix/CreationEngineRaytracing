@@ -67,6 +67,19 @@ void SceneGraph::Initialize()
 		m_TextureDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
 	}
 
+	// Cubemap bindless descriptor table (space6)
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_CUBEMAPS_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::Texture_SRV(6).setSize(UINT_MAX)
+		};
+
+		m_CubemapDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
+	}
+
 	// Dynamic Vertex bindless descriptor table
 	{
 		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
@@ -148,11 +161,7 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 {
-	//auto& mainSSNRuntimeData = RE::DrawWorld::GetSingleton().mainShadowSceneNode->GetRuntimeData();
 	auto& mainSSNRuntimeData = RE::BSShaderManager::State::GetSingleton().shadowSceneNode[0]->GetRuntimeData();
-
-	//auto accumulator = *m_CurrentAccumulator.get();
-	//auto& mainSSNRuntimeData = accumulator->GetRuntimeData().activeShadowSceneNode->GetRuntimeData();
 
 	// Update Light Vector
 	{
@@ -393,12 +402,15 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 		return;
 	}
 
+	// TODO: Proper Model transform update, this whole section feels like hack
 	const REL::Relocation<const RE::NiRTTI*> rtti{ RE::NiMultiTargetTransformController::Ni_RTTI };
 	auto* controller = reinterpret_cast<RE::NiMultiTargetTransformController*>(root->GetController(rtti.get()));
-
+	
 	if (controller) {
 		eastl::hash_set<RE::NiNode*> parents;
 		eastl::hash_set<RE::NiAVObject*> targets;
+
+		uint32_t createModels = 0;
 
 		for (uint16_t i = 0; i < controller->numInterps; i++) {
 			auto* target = controller->targets[i];
@@ -412,7 +424,7 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 			if (!emplaced)
 				continue;
 
-			CreateModelInternal(form, std::format("{}_{}", model, target->name.c_str()).c_str(), target);
+			createModels += CreateModelInternal(form, std::format("{}_{}", model, target->name.c_str()).c_str(), target);
 		}
 
 		for (auto* parent : parents) {
@@ -420,11 +432,12 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 				if (targets.find(child.get()) != targets.end())
 					continue;
 
-				CreateModelInternal(form, std::format("{}_{}_{}", model, child->name.c_str(), child->parentIndex).c_str(), child.get());
+				createModels += CreateModelInternal(form, std::format("{}_{}_{}", model, child->name.c_str(), child->parentIndex).c_str(), child.get());
 			}
 		}
 
-		return;
+		if (createModels > 0)
+			return;
 	}
 
 	CreateModelInternal(form, model, root);
@@ -444,6 +457,8 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 		eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> bipedMeshes;
 
 		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object, int i = -1) {
+			logger::debug("Appending {}: {}", magic_enum::enum_name(form->GetFormType()), object->name);
+
 			for (auto& mesh : CreateMeshes(form, object))
 			{
 				if (i == -1)
@@ -493,6 +508,16 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 	}
 }
 
+ActorReference* SceneGraph::GetActorRefr(RE::FormID a_formID)
+{
+	auto it = m_Actors.find(a_formID);
+
+	if (it == m_Actors.end())
+		return nullptr;
+
+	return &it->second;
+}
+
 void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 {
 	auto* cell = land->parentCell;
@@ -523,7 +548,7 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 
 void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
 {
-	if (!Scene::GetSingleton()->m_Settings.DebugSettings.EnableWater)
+	if (!Scene::GetSingleton()->m_Settings.AdvancedSettings.EnableWater)
 		return;
 
 	if (!water)
@@ -593,6 +618,13 @@ void SceneGraph::ReleaseTexture(ID3D11Texture2D* texture)
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	m_Textures.erase(texture);
+}
+
+void SceneGraph::ReleaseCubemap(ID3D11Texture2D* texture)
+{
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	m_Cubemaps.erase(texture);
 }
 
 void SceneGraph::ReleaseObjectInstance(RE::NiAVObject* node, bool releaseModel)
@@ -706,52 +738,63 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	}
 }
 
-eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource)
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
 {
-	if (!d3d11Resource)
+	bool shareResource = d3d12Resource == nullptr;
+
+	if (shareResource && !d3d11Resource)
 		return nullptr;
 
-	auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+	IUnknown* key = nullptr;
+	
+	if (shareResource)
+		key = d3d11Resource;
+	else
+		key = d3d12Resource;
 
-	if (auto refIt = m_Textures.find(d3d11Texture); refIt != m_Textures.end())
+	if (auto refIt = m_Textures.find(key); refIt != m_Textures.end())
 		return refIt->second->descriptorHandle;
 
-	winrt::com_ptr<IDXGIResource> dxgiResource;
-	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+	if (shareResource) {
+		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
 
-	if (FAILED(hr)) {
-		logger::error("SceneGraph::GetTextureRegister - Failed to query interface.");
-		return nullptr;
+		winrt::com_ptr<IDXGIResource> dxgiResource;
+		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+
+		if (FAILED(hr)) {
+			logger::error("SceneGraph::GetTextureRegister - Failed to query interface.");
+			return nullptr;
+		}
+
+		HANDLE sharedHandle = nullptr;
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+
+		if (FAILED(hr) || !sharedHandle) {
+			D3D11_TEXTURE2D_DESC desc;
+			d3d11Texture->GetDesc(&desc);
+
+			logger::debug("SceneGraph::GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
+			return nullptr;
+		}
+
+		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
+
+		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Resource));
+
+		if (FAILED(hr)) {
+			logger::error("SceneGraph::GetTextureRegister - Failed to open shared handle.");
+			return nullptr;
+		}
+
+		if (!d3d12Resource) {
+			logger::error("[RT] GetTextureRegister - Failed to acquire DX12 texture.");
+			return nullptr;
+		}
+
+		d3d12Resource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
 	}
 
-	HANDLE sharedHandle = nullptr;
-	hr = dxgiResource->GetSharedHandle(&sharedHandle);
-
-	if (FAILED(hr) || !sharedHandle) {
-		D3D11_TEXTURE2D_DESC desc;
-		d3d11Texture->GetDesc(&desc);
-
-		logger::debug("SceneGraph::GetTextureRegister - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
-		return nullptr;
-	}
-
-	auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
-
-	winrt::com_ptr<ID3D12Resource> d3d12Texture;
-	hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Texture));
-
-	if (FAILED(hr)) {
-		logger::error("SceneGraph::GetTextureRegister - Failed to open shared handle.");
-		return nullptr;
-	}
-
-	if (!d3d12Texture) {
-		logger::error("[RT] GetTextureRegister - Failed to adquire DX12 texture.");
-		return nullptr;
-	}
-
-
-	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Texture->GetDesc();
+	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
 	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
 
@@ -764,12 +807,15 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
 		.setFormat(formatIt->second)
-		.setInitialState(nvrhi::ResourceStates::ShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Shared Texture [?]");
 
-	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Texture.get()), textureDesc);
+	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 
-	auto [it, emplaced] = m_Textures.try_emplace(d3d11Texture, nullptr);
+	if (shareResource)
+		d3d12Resource->Release();
+
+	auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
 
 	if (emplaced) {
 		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
@@ -778,6 +824,203 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 	else
 		logger::error("SceneGraph::GetTextureRegister - TextureReference emplace failed.");
 
+	return nullptr;
+}
+
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetCubemapDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
+{
+	bool shareResource = d3d12Resource == nullptr;
+
+	if (shareResource && !d3d11Resource)
+		return nullptr;
+
+	IUnknown* key = nullptr;
+
+	if (shareResource)
+		key = d3d11Resource;
+	else
+		key = d3d12Resource;
+
+	// Check cache
+	if (auto refIt = m_Cubemaps.find(key); refIt != m_Cubemaps.end())
+		return refIt->second->descriptorHandle;
+
+	if (shareResource) {
+		auto* d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+
+		D3D11_TEXTURE2D_DESC srcDesc;
+		d3d11Texture->GetDesc(&srcDesc);
+
+		// Verify this is actually a cubemap
+		if (!(srcDesc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) || srcDesc.ArraySize != 6) {
+			logger::warn("[RT] GetCubemapDescriptor - Texture is not a cubemap [{}, {}] ArraySize: {} MiscFlags: {:#x}",
+				srcDesc.Width, srcDesc.Height, srcDesc.ArraySize, srcDesc.MiscFlags);
+			return nullptr;
+		}
+
+		// Try shared handle first (zero VRAM overhead)
+		{
+			winrt::com_ptr<IDXGIResource> dxgiResource;
+			HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+
+			if (SUCCEEDED(hr)) {
+				HANDLE sharedHandle = nullptr;
+				hr = dxgiResource->GetSharedHandle(&sharedHandle);
+
+				if (SUCCEEDED(hr) && sharedHandle) {
+					auto* d3d12Device = Renderer::GetNativeD3D12Device();
+
+					hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Resource));
+
+					if (FAILED(hr)) {
+						logger::error("SceneGraph::GetCubemapDescriptor - Failed to open shared handle.");
+					}
+
+					if (!d3d12Resource) {
+						logger::error("[RT] GetCubemapDescriptor - Failed to acquire DX12 texture.");
+					}
+
+					if (d3d12Resource) {
+						d3d12Resource->SetName(std::format(L"Shared Cubemap 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
+					}
+				}
+			}
+		}
+
+		// Fallback: staging copy from DX11 to DX12
+		if (!d3d12Resource) {
+			logger::debug("[RT] GetCubemapDescriptor - Shared handle failed, using staging copy [{}, {}]", srcDesc.Width, srcDesc.Height);
+
+			auto* d3d11Device = Renderer::GetNativeD3D11Device();
+			winrt::com_ptr<ID3D11DeviceContext> d3d11Context;
+			d3d11Device->GetImmediateContext(d3d11Context.put());
+
+			// Create staging texture
+			D3D11_TEXTURE2D_DESC stagingDesc = srcDesc;
+			stagingDesc.Usage = D3D11_USAGE_STAGING;
+			stagingDesc.BindFlags = 0;
+			stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+			stagingDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+			winrt::com_ptr<ID3D11Texture2D> stagingTexture;
+			HRESULT hr = d3d11Device->CreateTexture2D(&stagingDesc, nullptr, stagingTexture.put());
+			if (FAILED(hr)) {
+				logger::error("[RT] GetCubemapDescriptor - Failed to create staging texture");
+				return nullptr;
+			}
+
+			// Copy source cubemap to staging
+			d3d11Context->CopyResource(stagingTexture.get(), d3d11Texture);
+
+			// Map format
+			auto formatIt = Renderer::GetFormatMapping().find(srcDesc.Format);
+			if (formatIt == Renderer::GetFormatMapping().end()) {
+				logger::error("[RT] GetCubemapDescriptor - Unmapped format {}", magic_enum::enum_name(srcDesc.Format));
+				return nullptr;
+			}
+
+			// Create DX12 cubemap texture
+			auto device = Renderer::GetSingleton()->GetDevice();
+			auto cubemapDesc = nvrhi::TextureDesc()
+				.setWidth(srcDesc.Width)
+				.setHeight(srcDesc.Height)
+				.setFormat(formatIt->second)
+				.setArraySize(6)
+				.setDimension(nvrhi::TextureDimension::TextureCube)
+				.setMipLevels(srcDesc.MipLevels)
+				.setInitialState(nvrhi::ResourceStates::Common)
+				.setKeepInitialState(false)
+				.setDebugName("Cubemap [Staging Copy]");
+
+			auto cubemapHandle = device->createTexture(cubemapDesc);
+			if (!cubemapHandle) {
+				logger::error("[RT] GetCubemapDescriptor - Failed to create DX12 cubemap");
+				return nullptr;
+			}
+
+			// Upload each face/mip
+			auto commandList = device->createCommandList();
+			commandList->open();
+			commandList->beginTrackingTextureState(cubemapHandle, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
+
+			for (uint32_t face = 0; face < 6; face++) {
+				for (uint32_t mip = 0; mip < srcDesc.MipLevels; mip++) {
+					uint32_t subresource = D3D11CalcSubresource(mip, face, srcDesc.MipLevels);
+
+					D3D11_MAPPED_SUBRESOURCE mapped;
+					hr = d3d11Context->Map(stagingTexture.get(), subresource, D3D11_MAP_READ, 0, &mapped);
+					if (FAILED(hr)) {
+						logger::error("[RT] GetCubemapDescriptor - Failed to map subresource face={} mip={}", face, mip);
+						continue;
+					}
+
+					commandList->writeTexture(cubemapHandle, face, mip, mapped.pData, mapped.RowPitch);
+
+					d3d11Context->Unmap(stagingTexture.get(), subresource);
+				}
+			}
+
+			commandList->setPermanentTextureState(cubemapHandle, nvrhi::ResourceStates::ShaderResource);
+			commandList->commitBarriers();
+			commandList->close();
+			device->executeCommandList(commandList);
+
+			auto [it, emplaced] = m_Cubemaps.try_emplace(key, nullptr);
+			if (emplaced) {
+				it->second = eastl::make_unique<TextureReference>(cubemapHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+				logger::debug("[RT] GetCubemapDescriptor - Created cubemap via staging [{}, {}] mips: {}",
+					srcDesc.Width, srcDesc.Height, srcDesc.MipLevels);
+				return it->second->descriptorHandle;
+			}
+
+			logger::error("[RT] GetCubemapDescriptor - Cubemap emplace failed");
+			return nullptr;
+		}
+	}
+
+	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
+
+	if (nativeTexDesc.DepthOrArraySize < 6) {
+		logger::debug("[RT] GetCubemapDescriptor - Not a cubemap (DepthOrArraySize = {}), skipping.", nativeTexDesc.DepthOrArraySize);
+		if (shareResource)
+			d3d12Resource->Release();
+		return nullptr;
+	}
+
+	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
+	if (formatIt == Renderer::GetFormatMapping().end()) {
+		logger::error("[RT] GetCubemapDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
+		if (shareResource)
+			d3d12Resource->Release();
+		return nullptr;
+	}
+
+	auto textureDesc = nvrhi::TextureDesc()
+		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
+		.setHeight(nativeTexDesc.Height)
+		.setFormat(formatIt->second)
+		.setArraySize(6)
+		.setDimension(nvrhi::TextureDimension::TextureCube)
+		.setMipLevels(nativeTexDesc.MipLevels)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setDebugName("Shared Cubemap");
+
+	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(
+		nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
+
+	if (shareResource)
+		d3d12Resource->Release();
+
+	auto [it, emplaced] = m_Cubemaps.try_emplace(key, nullptr);
+
+	if (emplaced) {
+		it->second = eastl::make_unique<TextureReference>(textureHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+		logger::debug("[RT] GetCubemapDescriptor - Shared cubemap [{}, {}] mips: {}",
+			nativeTexDesc.Width, nativeTexDesc.Height, nativeTexDesc.MipLevels);
+		return it->second->descriptorHandle;
+	}
+
+	logger::error("[RT] GetCubemapDescriptor - Cubemap emplace failed");
 	return nullptr;
 }
 
@@ -968,8 +1211,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
 			if (!isOrigin || isOrigin && isRootOrigin)
 				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+			else
+				flags |= Mesh::Flags::Origin;
 
-			auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, form);
@@ -1007,7 +1252,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				if (partition.bonesPerVertex > 0)
 					flags |= Mesh::Flags::Skinned;
 
-				auto mesh = eastl::make_unique<Mesh>(flags, name, pGeometry, localToRoot, i);
+				auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot, i);
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, form);
@@ -1022,17 +1267,17 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 	return meshes;
 }
 
-void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
+uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* pRoot)
 {
 	if (!pRoot)
-		return;
+		return 0;
 
 	if (!path || strlen(path) == 0)
-		return;
+		return 0;
 
 	if (m_InstanceNodes.find(pRoot) != m_InstanceNodes.end()) {
 		logger::warn("SceneGraph::CreateModelInternal \"{}\" - Instance/Model for 0x{:08X} already present.", path, reinterpret_cast<uintptr_t>(pRoot));
-		return;
+		return 0;
 	}
 	
 	auto formID = form->GetFormID();
@@ -1040,9 +1285,9 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	// We only need one buffer per model
-	if (m_Models.find(path) != m_Models.end()) {
+	if (auto it = m_Models.find(path); it != m_Models.end()) {
 		AddInstance(formID, pRoot, path);
-		return;
+		return static_cast<uint32_t>(it->second->meshes.size());
 	}
 
 	logger::trace("SceneGraph::CreateModelInternal \"{}\"", typeid(*pRoot).name());
@@ -1051,7 +1296,7 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 
 	if (bsxFlags) {
 		if (static_cast<int32_t>(bsxFlags->value) & static_cast<int32_t>(RE::BSXFlags::Flag::kEditorMarker))
-			return;
+			return 0;
 	}
 
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
@@ -1060,6 +1305,8 @@ void SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE::Ni
 	auto meshes = CreateMeshes(form, pRoot);
 
 	CommitModel(path, pRoot, form, meshes);
+
+	return static_cast<uint32_t>(meshes.size());
 }
 
 bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
@@ -1101,8 +1348,7 @@ bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 
 			// MSN Conversion - must happen after buffers are uploaded and GPU is idle
 			if (modelPtr->ShouldQueueMSNConversion()) {
-				auto graphicsCommandList = device->createCommandList(
-					nvrhi::CommandListParameters().setQueueType(nvrhi::CommandQueue::Graphics));
+				auto graphicsCommandList = Renderer::GetSingleton()->GetGraphicsCommandList();
 				graphicsCommandList->open();
 
 				ConvertMSN(modelPtr, graphicsCommandList);
@@ -1307,7 +1553,7 @@ void SceneGraph::ConvertMSN(Model* model, nvrhi::ICommandList* commandList)
 			commandList->setPushConstants(&geometryIdx, sizeof(geometryIdx));
 
 			nvrhi::DrawArguments args;
-			args.vertexCount = mesh->triangleCount * 3;
+			args.vertexCount = mesh->triangleData.count * 3;
 			args.instanceCount = 1;
 			commandList->draw(args);
 		}

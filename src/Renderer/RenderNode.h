@@ -3,14 +3,8 @@
 #include "Pass/RenderPass.h"
 #include "Renderer/IRenderNode.h"
 
-class RenderNode : public IRenderNode
+struct RenderNode : public IRenderNode
 {
-	bool m_Enabled = true;
-	eastl::string m_Name;
-	eastl::unique_ptr<RenderPass> m_RenderPass;
-	eastl::vector<RenderNode> m_Children;
-
-public:
 	RenderNode(bool enabled, const char* name) :
 		m_Enabled(enabled), m_Name(name) {
 	}
@@ -107,4 +101,24 @@ public:
 	void SettingsChanged(const Settings& settings) override;
 
 	void Execute(nvrhi::ICommandList* commandList) override;
+
+	template <typename Func>
+	void ForEach(Func&& func)
+	{
+		if (!m_Enabled)
+			return;
+
+		std::invoke(func, this);
+
+		for (auto& child : m_Children)
+		{
+			child.ForEach(std::forward<Func>(func));
+		}
+	}
+
+	bool m_Enabled = true;
+	eastl::string m_Name;
+	eastl::unique_ptr<RenderPass> m_RenderPass;
+	eastl::vector<RenderNode> m_Children;
+	nvrhi::TimerQueryHandle m_TimerQuery = nullptr;
 };

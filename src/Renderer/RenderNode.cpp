@@ -1,4 +1,6 @@
 #include "RenderNode.h"
+#include "Scene.h"
+#include "Renderer.h"
 
 void RenderNode::AddNode(RenderNode renderNode)
 {
@@ -39,9 +41,24 @@ void RenderNode::Execute(nvrhi::ICommandList* commandList)
 		return;
 
 	if (m_RenderPass) {
-		commandList->beginMarker(std::format("{} - Pass", m_Name.c_str()).c_str());
+		auto& debugSettings = Scene::GetSingleton()->m_Settings.DebugSettings;
+
+		if (debugSettings.Markers)
+			commandList->beginMarker(std::format("{} - Pass", m_Name.c_str()).c_str());
+
+		if (!m_TimerQuery)
+			m_TimerQuery = Renderer::GetSingleton()->GetDevice()->createTimerQuery();
+
+		if (debugSettings.Timings)
+			commandList->beginTimerQuery(m_TimerQuery);
+
 		m_RenderPass->Execute(commandList);
-		commandList->endMarker();
+
+		if (debugSettings.Timings)
+			commandList->endTimerQuery(m_TimerQuery);
+
+		if (debugSettings.Markers)
+			commandList->endMarker();
 	}
 
 	for (auto& child : m_Children)

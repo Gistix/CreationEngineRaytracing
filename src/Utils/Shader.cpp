@@ -6,7 +6,7 @@ namespace Util
 	{
 		eastl::vector<ShaderDefine> GetRaytracingDefines(const Settings& settings, bool sharc, bool sharcUpdate)
 		{
-			const bool sharcEnabled = sharc;
+			const bool sharcEnabled = sharc && settings.SHaRCSettings.Enabled;
 
 			eastl::vector<ShaderDefine> defines = {
 				{ L"MAX_BOUNCES", settings.RaytracingSettings.Bounces },
@@ -60,7 +60,7 @@ namespace Util
 				defines.emplace_back(L"SUBSURFACE_SCATTERING");
 
 			if (!sharc || (sharc && !sharcUpdate)) {
-				if (settings.DebugSettings.StablePlanes)
+				if (settings.AdvancedSettings.StablePlanes)
 					defines.emplace_back(L"STABLE_PLANES");
 
 				if (settings.ReSTIRGI.Enabled)

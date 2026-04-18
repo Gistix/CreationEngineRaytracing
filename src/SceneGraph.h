@@ -53,7 +53,7 @@ class SceneGraph
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	nvrhi::BufferHandle m_InstanceBuffer;
 
-	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<TextureReference>> m_Textures;
+	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
 
 	// MSN (Model Space Normal) conversion
 	struct ConvertedNormalMap
@@ -87,11 +87,15 @@ class SceneGraph
 	eastl::unique_ptr<BindlessTable> m_PrevPositionWriteDescriptors;
 
 	eastl::unique_ptr<BindlessTableManager> m_TextureDescriptors;
+	eastl::unique_ptr<BindlessTableManager> m_CubemapDescriptors;
+
+	// Cubemap cache: DX11 cubemap resource -> DX12 cubemap TextureReference
+	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Cubemaps;
 
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
-	void CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
+	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	bool CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path);
 public:
@@ -100,6 +104,7 @@ public:
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
 	inline auto& GetTextureDescriptors() const { return m_TextureDescriptors; }
+	inline auto& GetCubemapDescriptors() const { return m_CubemapDescriptors; }
 	inline auto& GetDynamicVertexDescriptors() const { return m_DynamicVertexDescriptors; }
 	inline auto& GetSkinningDescriptors() const { return m_SkinningDescriptors; }
 	inline auto& GetVertexCopyDescriptors() const { return m_VertexCopyDescriptors; }
@@ -128,7 +133,10 @@ public:
 	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 
+	ActorReference* GetActorRefr(RE::FormID a_formID);
+
 	void ReleaseTexture(ID3D11Texture2D* texture);
+	void ReleaseCubemap(ID3D11Texture2D* texture);
 
 	// Releases an object instance while keeping the model and mesh data intact.
 	// releaseModel is to be used by water and only water.
@@ -141,7 +149,8 @@ public:
 
 	void RunGarbageCollection(uint64_t frameIndex);
 
-	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource);
+	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
+	eastl::shared_ptr<DescriptorHandle> GetCubemapDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);
 
 	void ConvertMSN(Model* model, nvrhi::ICommandList* commandList);

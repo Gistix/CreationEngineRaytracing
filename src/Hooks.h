@@ -84,39 +84,51 @@ namespace Hooks
 	};
 
 #if defined(SKYRIM)
-	struct CreateTextureFromDDS
+	struct CreateTextureAndSRV
 	{
-		static RE::NiSourceTexture* thunk(RE::BSResource::CompressedArchiveStream* a1, char* path, ID3D11ShaderResourceView* srv, char a4, bool a5);
+		static HRESULT thunk(
+			ID3D11Device* a_device,
+			D3D11_RESOURCE_DIMENSION a_dimension,
+			uint32_t a_width,
+			uint32_t a_height,
+			uint32_t a_depth,
+			uint32_t a_mipLevels,
+			uint32_t a_arraySize,
+			DXGI_FORMAT a_format,
+			bool a_cubeMap,
+			const D3D11_SUBRESOURCE_DATA* a_data,
+			RE::BSGraphics::Texture** a_outTexture);
+
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct CreateFlowMapSE
+	/*struct CreateTextureAndSRV
 	{
-		static void* thunk(void* a1, int a2, int a3, void* a4);
+		static HRESULT thunk(
+			ID3D11Device* a_device,
+			int a_textureType, 
+			uint32_t a_width, 
+			uint32_t a_height, 
+			__int64 a_pitchOrLinearSize, 
+			uint32_t a_mipCount, 
+			uint32_t a_sliceCount, 
+			uint8_t a_format,
+			bool a_isCubeMap,
+			__int64 a_pixelData,
+			RE::BSGraphics::Texture** a_outTexture);
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};*/
+
+	struct CreateRenderTarget
+	{
+		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::RENDER_TARGETS::RENDER_TARGET a_target, const char* a_RenderTarget, RE::BSGraphics::RenderTargetProperties* a_properties);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct CreateFlowMapAE
+	struct CreateDepthStencil
 	{
-		static void* thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct CreateRenderTarget_PlayerFaceGenTint
-	{
-		static void thunk(RE::BSGraphics::Renderer* oThis, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct CreateDepthStencil_Main
-	{
-		static void thunk(RE::BSGraphics::Renderer* This, RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target, RE::BSGraphics::DepthStencilTargetProperties* a_properties);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct CreateRenderTarget_MotionVectors
-	{
-		static void thunk(RE::BSGraphics::Renderer* This, RE::RENDER_TARGETS::RENDER_TARGET a_target, RE::BSGraphics::RenderTargetProperties* a_properties);
+		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target, const char* a_depthStencilTarget, RE::BSGraphics::DepthStencilTargetProperties* a_properties);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

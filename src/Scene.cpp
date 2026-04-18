@@ -77,7 +77,7 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
-			"SceneTLAS",
+			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});
 
@@ -131,7 +131,7 @@ RenderNode* Scene::GetPathTracing()
 
 		m_PathTracing->AddNode({
 			true,
-			"RaytracingCommon",
+			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});
 
@@ -314,7 +314,7 @@ void Scene::ClearDirtyStates()
 	GetSceneGraph()->ClearDirtyStates();
 }
 
-void Scene::AttachModel([[maybe_unused]] RE::TESForm* form) 
+void Scene::AttachModel(RE::TESForm* form) 
 {
 	auto* refr = form->AsReference();
 
@@ -506,6 +506,24 @@ void Scene::UpdateSettings(Settings settings)
 	auto previousMode = m_Settings.GeneralSettings.Mode;
 
 	m_Settings = settings;
+
+	// Toggle vanilla fog based on path tracing state
+	{
+		bool ptActive = IsPathTracingActive();
+
+		if (auto* imageSpaceManager = RE::ImageSpaceManager::GetSingleton()) {
+			auto& fogShader = !REL::Module::IsVR() ?
+				imageSpaceManager->GetRuntimeData().BSImagespaceShaderISSAOBlurH :
+				imageSpaceManager->GetVRRuntimeData().BSImagespaceShaderISSAOBlurH;
+
+			if (fogShader.get()) {
+				fogShader->active = !ptActive;
+			}
+		}
+
+		static auto& enableFog = (*(bool*)REL::RelocationID(528125, 415070).address());
+		enableFog = !ptActive;
+	}
 
 	auto currentMode = settings.GeneralSettings.Mode;
 

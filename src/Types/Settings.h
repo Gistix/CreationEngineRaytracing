@@ -172,6 +172,8 @@ struct AdvancedSettings
 	HairBSDF HairBSDF = HairBSDF::FarFieldBCSDF;
 	DiffuseBRDF DiffuseBRDF = DiffuseBRDF::Burley;
 	SSSSettings SSSSettings;
+	bool EnableWater = false;
+	bool StablePlanes = false;
 };
 
 struct WaterSettings
@@ -225,11 +227,23 @@ struct ReSTIRGISettings
 	bool EnableFinalMIS = false;
 };
 
-struct DebugSettings
+enum struct TextureMode : uint32_t
+{
+	Share = 0,
+	Exclusive = 1
+};
+
+struct ExperimentalSettings
 {
 	bool PathTracingCull = false;
-	bool EnableWater = false;
-	bool StablePlanes = false;
+	TextureMode TextureMode = TextureMode::Share;
+	uint32_t TextureCutOff = 0;
+};
+
+struct DebugSettings
+{
+	bool Markers = false;
+	bool Timings = false;
 };
 
 struct Settings
@@ -243,6 +257,7 @@ struct Settings
 	SHaRCSettings SHaRCSettings;
 	AdvancedSettings AdvancedSettings;
 	WaterSettings WaterSettings;
-	DebugSettings DebugSettings;
+	ExperimentalSettings ExperimentalSettings;
 	ReSTIRGISettings ReSTIRGI;
+	DebugSettings DebugSettings;
 };

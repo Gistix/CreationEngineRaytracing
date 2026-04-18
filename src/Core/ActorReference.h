@@ -7,7 +7,7 @@ struct BipObjectReference
 {
 	BipObjectReference() = default;
 
-	BipObjectReference(RE::BIPOBJECT& object)
+	BipObjectReference(const RE::BIPOBJECT& object)
 	{
 		item = object.item;
 		addon = object.addon;
@@ -49,33 +49,39 @@ struct ActorReference
 	ActorReference(RE::Actor* actor, bool firstPerson, eastl::vector<Mesh*> faceMeshes, eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> meshes)
 		: m_Actor(actor), m_FirstPerson(firstPerson), m_FaceMeshes(faceMeshes), m_ObjectMeshes(meshes)
 	{
-		auto* biped = m_Actor->GetBiped(false).get();
 
-		if (!biped)
-			return;
+		if (auto* biped = m_Actor->GetBiped(false).get()) {
+			for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
+			{
+				auto& object = biped->objects[i];
 
-		for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
-		{
-			auto& object = biped->objects[i];
+				m_Objects[i] = { object };
+			}
 
-			m_Objects[i] = { object };
+			m_Biped = true;
 		}
 
-		m_Biped = true;
+
 	}
 
 	void Update();
-
+	void AttachAnimObject(RE::TESObjectANIO* animatedObject, RE::NiAVObject* object);
+	void DetachAnimObject(RE::TESObjectANIO* animatedObject);
+	
 	RE::Actor* m_Actor;
 
 	bool m_Biped;
 
 	bool m_FirstPerson;
 
-	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
-
+	// Face (Actually the head but whatever)
 	RE::NiAVObject* m_FaceNode;
-
 	eastl::vector<Mesh*> m_FaceMeshes;
+
+	// Biped Objects (equipable items)
+	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
 	eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> m_ObjectMeshes;
+
+	// Animated Objects (non-equipable animation-only items)
+	eastl::unordered_map<RE::TESObjectANIO*, eastl::vector<Mesh*>> m_AnimatedObjectMeshes;
 };

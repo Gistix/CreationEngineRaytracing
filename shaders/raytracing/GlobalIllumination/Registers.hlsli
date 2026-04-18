@@ -67,7 +67,9 @@ StructuredBuffer<Triangle>                  Triangles[]                 : regist
 StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
 Texture2D<float4>                           Textures[]                  : register(t0, space3);
 //RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space4);
+TextureCube<float4>                         CubeTextures[]              : register(t0, space6);
 
 SamplerState                                DefaultSampler              : register(s0);
+SamplerState                                ClampSampler                : register(s1);
 
 #endif // REGISTERS_HLSLI

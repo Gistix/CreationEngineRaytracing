@@ -51,8 +51,6 @@ bool Renderer::Initialize(RendererParams rendererParams)
 			m_FormatMapping.emplace(nativeFormat, format);
 		}
 
-	m_FrameTimer = GetDevice()->createTimerQuery();
-
 	// This one is quite obvious, but just to be sure...
 	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingPipeline))
 		m_SupportedFeatures |= SupportedFeatures::Raytracing;
@@ -229,7 +227,7 @@ void Renderer::InitRR()
 	nvrhi::TextureDesc desc;
 	desc.width = m_RenderSize.x;
 	desc.height = m_RenderSize.y;
-	desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+	desc.initialState = nvrhi::ResourceStates::Common;
 	desc.keepInitialState = true;
 	desc.isUAV = true;
 	desc.mipLevels = 1;
@@ -570,13 +568,11 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 	m_DynamicResolutionRatio = { stateRuntime.dynamicResolutionWidthRatio, stateRuntime.dynamicResolutionHeightRatio };
 
-	// Create a command list
+	// Create a new command list
 	if (!m_CommandList)
-		m_CommandList = GetDevice()->createCommandList();
+		m_CommandList = GetGraphicsCommandList();
 
 	m_CommandList->open();
-
-	m_CommandList->beginTimerQuery(m_FrameTimer);
 
 	return m_CommandList;
 }
@@ -596,8 +592,6 @@ void Renderer::EndExecution()
 				m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_TextureManager.GetTexture(TextureManager::Texture::MotionVectors3D), region);
 		}
 	}
-
-	m_CommandList->endTimerQuery(m_FrameTimer);
 
 	// Close it
 	m_CommandList->close();
@@ -620,13 +614,27 @@ void Renderer::WaitExecution()
 
 void Renderer::PostExecution()
 {
-	if (GetDevice()->pollTimerQuery(m_FrameTimer))
-		m_FrameTime = m_NVRHIDevice->getTimerQueryTime(m_FrameTimer) * 1000.0f;
+	auto device = GetDevice();
+
+	auto* scene = Scene::GetSingleton();
+
+	auto timings = scene->m_Settings.DebugSettings.Timings;
+
+	m_PassTimings.clear();
+
+	if (timings) {
+		auto* rootNode = m_RenderGraph->GetRootNode();
+
+		rootNode->ForEach([&](RenderNode* node) {
+			if (node->m_TimerQuery && device->pollTimerQuery(node->m_TimerQuery))
+				m_PassTimings.push_back(PassTiming(node->m_Name.c_str(), m_NVRHIDevice->getTimerQueryTime(node->m_TimerQuery) * 1000.0f));
+		});
+	}
 
 	m_FrameIndex++;
 
 	// Run garbage collection to release resources that are no longer in use
-	GetDevice()->runGarbageCollection();
+	device->runGarbageCollection();
 
 	// Flush pending BLAS compactions before destroying any models,
 	// otherwise stale IDs in asBuildsCompleted can reference freed entries in RTXMU
@@ -635,10 +643,8 @@ void Renderer::PostExecution()
 		computeCommandList->open();
 		computeCommandList->compactBottomLevelAccelStructs();
 		computeCommandList->close();
-		GetDevice()->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
+		device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
 	}
-
-	auto* scene = Scene::GetSingleton();
 
 	scene->GetSceneGraph()->RunGarbageCollection(m_FrameIndex);
 
@@ -703,7 +709,7 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
 
 	if (!d3d12Resource) {
-		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource");
+		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}", debugName);
 		return nullptr;
 	}
 

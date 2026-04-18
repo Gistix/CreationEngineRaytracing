@@ -64,9 +64,9 @@ void SetSkyHemisphere(ID3D12Resource* skyHemi)
 	scene->SetSkyHemisphere(skyHemi);
 }
 
-float* GetFrameTime()
+void GetPassTimings(eastl::vector<PassTiming>& passTimings)
 {
-	return Renderer::GetSingleton()->GetFrameTime();
+	passTimings = Renderer::GetSingleton()->GetPassTimings();
 }
 
 void UpdateSettings(Settings settings)

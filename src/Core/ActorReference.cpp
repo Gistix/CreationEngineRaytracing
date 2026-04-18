@@ -19,35 +19,58 @@ void ActorReference::Update()
 		m_FaceNode = faceNode;
 	}
 
-	if (!m_Biped)
-		return;
+	if (m_Biped) {
+		if (auto* biped = m_Actor->GetBiped(m_FirstPerson).get()) {
+			for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
+			{
+				auto& object = biped->objects[i];
 
-	auto* biped = m_Actor->GetBiped(m_FirstPerson).get();
+				const auto& curObject = BipObjectReference(object);
+				auto& prevObject = m_Objects[i];
 
-	if (!biped)
-		return;
+				// Current and previous objects are different
+				if (curObject != prevObject) {
 
-	for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
-	{
-		auto& object = biped->objects[i];
+					// Remove previous valid object
+					if (prevObject.IsValid()) {
+						sceneGraph->ActorUnequip(m_Actor, m_ObjectMeshes[i], m_FirstPerson);
+						m_ObjectMeshes[i].clear();
+					}
 
-		const auto& curObject = BipObjectReference(object);
-		auto& prevObject = m_Objects[i];
+					// Add current valid object
+					if (curObject.IsValid())
+						sceneGraph->ActorEquip(m_Actor, curObject.item, curObject.partClone, m_ObjectMeshes[i], m_FirstPerson);
 
-		// Current and previous objects are different
-		if (curObject != prevObject) {
-
-			// Remove previous valid object
-			if (prevObject.IsValid()) {
-				sceneGraph->ActorUnequip(m_Actor, m_ObjectMeshes[i], m_FirstPerson);
-				m_ObjectMeshes[i].clear();
+					prevObject = curObject;
+				}
 			}
-
-			// Add current valid object
-			if (curObject.IsValid())
-				sceneGraph->ActorEquip(m_Actor, curObject.item, curObject.partClone, m_ObjectMeshes[i], m_FirstPerson);
-
-			prevObject = curObject;
 		}
 	}
+}
+
+void ActorReference::AttachAnimObject(RE::TESObjectANIO* animObject, RE::NiAVObject* object)
+{
+	if (m_AnimatedObjectMeshes.find(animObject) != m_AnimatedObjectMeshes.end())
+		return;
+
+	auto [it, emplaced] = m_AnimatedObjectMeshes.try_emplace(animObject);
+
+	if (!emplaced)
+		return;
+
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	sceneGraph->ActorEquip(m_Actor, animObject, object, it->second, m_FirstPerson);
+}
+
+void ActorReference::DetachAnimObject(RE::TESObjectANIO* animObject)
+{
+	auto it = m_AnimatedObjectMeshes.find(animObject);
+
+	if (it == m_AnimatedObjectMeshes.end())
+		return;
+
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	sceneGraph->ActorUnequip(m_Actor, it->second, m_FirstPerson);
+
+	m_AnimatedObjectMeshes.erase(it);
 }

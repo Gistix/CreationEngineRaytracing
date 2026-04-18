@@ -23,7 +23,7 @@ class SceneGraph;
 
 struct Mesh
 {
-	enum class Flags : uint8_t
+	enum class Flags : uint16_t
 	{
 		None = 0,
 		Dynamic = 1 << 1,
@@ -31,7 +31,9 @@ struct Mesh
 		Landscape = 1 << 3,
 		Static = 1 << 4,
 		DoubleSidedGeom = 1 << 5,
-		Water = 1 << 6
+		Water = 1 << 6,
+		Remapped = 1 << 7,
+		Origin = 1 << 8
 	};
 
 	enum class State : uint8_t
@@ -43,19 +45,25 @@ struct Mesh
 
 	eastl::string m_Name;
 
-	uint vertexCount = 0;
-	uint triangleCount = 0;
 	RE::BSGraphics::Vertex::Flags vertexFlags;
 
 	RE::NiPointer<RE::BSGeometry> bsGeometryPtr;
 
-	struct MeshGeometry
+	struct VertexData
 	{
+		uint count = 0;
 		eastl::vector<float4> dynamicPosition;
 		eastl::vector<Vertex> vertices;
 		eastl::vector<Skinning> skinning;
+		eastl::vector<uint16_t> remap;
+		eastl::vector<float4> dynamicPositionRemapped;
+	} vertexData;
+
+	struct TriangleData
+	{
+		uint count = 0;
 		eastl::vector<Triangle> triangles;
-	} geometry;
+	} triangleData;
 
 	struct MeshBuffers
 	{
@@ -73,9 +81,10 @@ struct Mesh
 
 	Material material;
 
-	stl::enumeration<Flags, uint8_t> flags = Flags::None;
+	stl::enumeration<Flags> flags = Flags::None;
 
-	float3x4 localToRoot;
+	float3x4 m_LocalToRoot;
+	float3x4 m_PrevLocalToRoot;
 
 	// DismemberSkinInstance slot
 	uint8_t m_Partition;
@@ -84,11 +93,10 @@ struct Mesh
 
 	DescriptorHandle m_DescriptorHandle;
 
-	Mesh(Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
-		flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), localToRoot(localToRoot), m_Partition(partition)
-	{
+	RE::FormType m_FormType;
 
-	}
+	Mesh(RE::FormType formType, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
+		m_FormType(formType), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_Partition(partition) { }
 
 	bool HasDoubleSidedGeom()
 	{
@@ -136,14 +144,14 @@ struct Mesh
 		};
 
 		eastl::hash_set<TriangleKey, TriangleKeyHash> seen;
-		seen.reserve(geometry.triangles.size());
+		seen.reserve(triangleData.triangles.size());
 
-		for (const Triangle& tri : geometry.triangles)
+		for (const Triangle& tri : triangleData.triangles)
 		{
 			std::array<int32_t, 3> positions[3] = {
-				quantize(geometry.vertices[tri.x].Position),
-				quantize(geometry.vertices[tri.y].Position),
-				quantize(geometry.vertices[tri.z].Position),
+				quantize(vertexData.vertices[tri.x].Position),
+				quantize(vertexData.vertices[tri.y].Position),
+				quantize(vertexData.vertices[tri.z].Position),
 			};
 
 			std::sort(positions, positions + 3, cmp);
@@ -157,11 +165,16 @@ struct Mesh
 		return false;
 	}
 
+	void BuildVertices(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex);
+	void BuildTriangles(RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn);
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
+
+	void ClearUnusedVertices();
 
 	void CalculateNormals();
 
 	Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap);
+	Texture GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle);
 
 	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form);
 
@@ -173,9 +186,11 @@ struct Mesh
 
 	bool UpdateSkinning(RE::NiAVObject* object, bool isPlayer);
 
+	bool UpdateTransform(RE::NiAVObject* object);
+
 	void UpdateDismember();
 
-	DirtyFlags Update(RE::NiAVObject* object, bool isPlayer);
+	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer);
 
 	bool IsHidden() const;
 
@@ -184,8 +199,8 @@ struct Mesh
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
 	// State is pending until BLASRebuild
-	stl::enumeration<State, uint8_t> m_PendingState = State::None;
-	stl::enumeration<State, uint8_t> m_State = State::None;
+	stl::enumeration<State> m_PendingState = State::None;
+	stl::enumeration<State> m_State = State::None;
 
 	void UpdateState();
 };

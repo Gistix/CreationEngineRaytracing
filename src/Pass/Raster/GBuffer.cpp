@@ -17,6 +17,11 @@ namespace Pass::Raster
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_LinearClampSampler = renderer->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(true));
+
 		CreatePipeline();
 	}
 
@@ -34,7 +39,8 @@ namespace Pass::Raster
 			nvrhi::BindingSetItem::PushConstants(3, sizeof(uint2)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler)
+			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
+			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler)
 		};
 
 		nvrhi::utils::CreateBindingSetAndLayout(GetRenderer()->GetDevice(), nvrhi::ShaderType::All, 0, bindingSetDesc, m_BindingLayout, m_BindingSet);
@@ -90,7 +96,8 @@ namespace Pass::Raster
 				m_BindingLayout,
 				sceneGraph->GetTriangleDescriptors()->m_Layout,
 				sceneGraph->GetVertexDescriptors()->m_Layout,
-				sceneGraph->GetTextureDescriptors()->m_Layout
+				sceneGraph->GetTextureDescriptors()->m_Layout,
+				sceneGraph->GetCubemapDescriptors()->m_Layout
 			};
 			pipelineDesc.renderState.depthStencilState.depthTestEnable = true;
 			pipelineDesc.renderState.depthStencilState.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
@@ -126,7 +133,8 @@ namespace Pass::Raster
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
-			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		state.viewport.addViewportAndScissorRect(fbinfo.getViewport());
@@ -147,7 +155,7 @@ namespace Pass::Raster
 				commandList->setPushConstants(&constants, sizeof(constants));
 
 				nvrhi::DrawArguments args;
-				args.vertexCount = model->meshes[m]->triangleCount * 3;
+				args.vertexCount = model->meshes[m]->triangleData.count * 3;
 				args.instanceCount = 1;
 				commandList->draw(args);
 			}

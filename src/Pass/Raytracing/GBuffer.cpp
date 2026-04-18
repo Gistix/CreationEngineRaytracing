@@ -12,6 +12,11 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_LinearClampSampler = GetRenderer()->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(true));
+
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
 		CreatePipeline();
@@ -60,6 +65,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
 			nvrhi::BindingLayoutItem::Sampler(0),
+			nvrhi::BindingLayoutItem::Sampler(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
@@ -111,7 +117,8 @@ namespace Pass::Raytracing
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
-			sceneGraph->GetTextureDescriptors()->m_Layout
+			sceneGraph->GetTextureDescriptors()->m_Layout,
+			sceneGraph->GetCubemapDescriptors()->m_Layout
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -160,7 +167,8 @@ namespace Pass::Raytracing
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
 
 		m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 
@@ -210,6 +218,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
+			nvrhi::BindingSetItem::Sampler(0, m_LinearClampSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, m_ViewDepth),
 			nvrhi::BindingSetItem::Texture_UAV(1, gBufferOutput->motionVectors),
 			nvrhi::BindingSetItem::Texture_UAV(2, gBufferOutput->albedo),
@@ -237,7 +246,8 @@ namespace Pass::Raytracing
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
-			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();

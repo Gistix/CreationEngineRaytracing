@@ -6,6 +6,7 @@
 #include "Types/RendererParams.h"
 #include "Types/TextureReference.h"
 #include "Types/SupportedFeatures.h"
+#include "Types/PassTiming.h"
 
 #include "Renderer/RenderGraph.h"
 
@@ -78,8 +79,7 @@ class Renderer
 
 	eastl::unique_ptr<RenderGraph> m_RenderGraph;
 
-	nvrhi::TimerQueryHandle m_FrameTimer;
-	float m_FrameTime;
+	eastl::vector<PassTiming> m_PassTimings;
 
 	TextureManager m_TextureManager;
 
@@ -177,11 +177,21 @@ public:
 	auto GetDevice() const { return m_NVRHIDevice; }
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
+	static auto GetNativeD3D11Device() { return GetSingleton()->m_NativeD3D11Device; }
+
+	nvrhi::CommandListHandle GetGraphicsCommandList() const {
+		return GetDevice()->createCommandList(
+			nvrhi::CommandListParameters()
+			.setQueueType(nvrhi::CommandQueue::Graphics)
+			.setEnableImmediateExecution(false)
+		);
+	}
 
 	nvrhi::CommandListHandle GetComputeCommandList() const {
 		return GetDevice()->createCommandList(
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Compute)
+			.setEnableImmediateExecution(false)
 		);
 	}
 
@@ -189,10 +199,10 @@ public:
 		return GetDevice()->createCommandList(
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Copy)
+			.setEnableImmediateExecution(false)
 		);
 	}
-	//nvrhi::ICommandList* GetCommandList() const { return m_CommandList; }
-	
+
 	RenderGraph* GetRenderGraph() { return m_RenderGraph.get(); }
 
 	nvrhi::ITexture* GetDepthTexture();
@@ -226,7 +236,7 @@ public:
 
 	static inline auto& GetFormatMapping() { return m_FormatMapping; }
 	
-	inline float* GetFrameTime() { return &m_FrameTime; };
+	inline auto GetPassTimings() const { return m_PassTimings; };
 
 	static inline auto GetFormat(DXGI_FORMAT nativeFormat) 
 	{ 

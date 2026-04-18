@@ -253,4 +253,21 @@ void GetVertices(in uint meshIndex, in uint primitiveIndex, out Vertex v0, out V
     v2 = vertices[NonUniformResourceIndex(geomTriangle.z)];
 }
 
+#if defined(HAS_PREV_POSITIONS)
+void GetVertices(in uint meshIndex, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)
+{
+    Triangle geomTriangle = GetTriangle(meshIndex, primitiveIndex);
+
+    StructuredBuffer<Vertex> vertices = Vertices[NonUniformResourceIndex(meshIndex)];
+    v0 = vertices[NonUniformResourceIndex(geomTriangle.x)];
+    v1 = vertices[NonUniformResourceIndex(geomTriangle.y)];
+    v2 = vertices[NonUniformResourceIndex(geomTriangle.z)];
+    
+    StructuredBuffer<float3> prevVertices = PrevPositions[NonUniformResourceIndex(meshIndex)];
+    prevPos0 = prevVertices[NonUniformResourceIndex(geomTriangle.x)];
+    prevPos1 = prevVertices[NonUniformResourceIndex(geomTriangle.y)];
+    prevPos2 = prevVertices[NonUniformResourceIndex(geomTriangle.z)];    
+}
+#endif
+
 #endif // GEOMETRY_HLSL
