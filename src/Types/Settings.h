@@ -11,7 +11,8 @@ enum class Denoiser
 {
 	None,
 	NRD_REBLUR,
-	DLSS_RR
+	DLSS_RR,
+	Accumulation
 };
 
 struct GeneralSettings

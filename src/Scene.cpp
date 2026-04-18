@@ -23,6 +23,7 @@
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/ReblurRadiance.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
+#include "Pass/Raytracing/Common/Accumulation.h"
 
 Scene::Scene()
 {
@@ -161,6 +162,12 @@ RenderNode* Scene::GetPathTracing()
 				renderer,
 				m_PathTracing->GetPass<Pass::SceneTLAS>()
 			)
+		});
+
+		m_PathTracing->AddNode({
+			false,
+			"Accumulation",
+			eastl::make_unique<Pass::Common::Accumulation>(renderer)
 		});
 	}
 
@@ -533,11 +540,15 @@ void Scene::UpdateSettings(Settings settings)
 		UpdateMode(currentMode, previousMode);
 
 	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR;
+	const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
 	
 	if (currentMode == Mode::GlobalIllumination) {
 		rootNode->SetEnabled<Pass::NRD::ReblurRadiance>(nrdReblur);
 		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
 	}
+
+	// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
+	rootNode->SetEnabled<Pass::Common::Accumulation>(accumulation && currentMode == Mode::PathTracing);
 
 	rootNode->SettingsChanged(settings); 
 }
