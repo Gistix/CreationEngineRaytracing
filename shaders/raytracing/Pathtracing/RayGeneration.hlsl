@@ -184,6 +184,7 @@ void Main()
 
     // Pass through Effect materials on primary ray: accumulate emissive, don't interact
     float3 primaryEffectEmissive = float3(0, 0, 0);
+#if defined(EFFECT_PASSTHROUGH)    
     [loop]
     for (uint effectPrimPass = 0; effectPrimPass < 16 && sourceMaterial.ShaderType == ShaderType::Effect; effectPrimPass++)
     {
@@ -242,7 +243,8 @@ void Main()
         return;
 #endif
     }
-
+#endif
+    
     float primarySceneDistance = length(sourcePosition - Camera.Position.xyz);
 
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
@@ -908,6 +910,7 @@ void Main()
 
             surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, isPrimaryReplacement);
 
+#if defined(EFFECT_PASSTHROUGH)         
             // Pass through Effect materials in bounce: accumulate emissive, continue ray unchanged
             bool effectMiss = false;
             [loop]
@@ -970,7 +973,8 @@ void Main()
 #endif
                 break;
             }
-
+#endif
+            
             // ReSTIR GI: capture secondary surface geometry before SHaRC may terminate the path
 #if defined(RESTIR_GI)              
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES     

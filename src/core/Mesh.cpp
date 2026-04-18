@@ -370,13 +370,15 @@ Texture Mesh::GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPoint
 	if (!niPointer || !niPointer->rendererTexture)
 		return Texture(defaultDescHandle, nullptr);
 
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	/*auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 	auto result = sceneGraph->GetCubemapDescriptor(niPointer->rendererTexture->texture);
 
 	if (!result)
 		return Texture(defaultDescHandle, nullptr);
 
-	return Texture(result, defaultDescHandle.get());
+	return Texture(result, defaultDescHandle.get());*/
+
+	return Texture(defaultDescHandle, nullptr);
 }
 
 void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form)
@@ -431,6 +433,21 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 	{
 		auto* property = geometryRuntimeData.properties[State::kProperty].get();
 
+		// Set alpha flags
+		if (property && property->GetType() == RE::NiProperty::Type::kAlpha) {
+			static REL::Relocation<const RE::NiRTTI*> niAlphaPropertyRTTI{ RE::NiAlphaProperty::Ni_RTTI };
+			auto alphaProperty = property->GetRTTI() == niAlphaPropertyRTTI.get() ? reinterpret_cast<RE::NiAlphaProperty*>(property) : nullptr;
+
+			if (alphaProperty && alphaProperty->GetAlphaBlending()) {
+				alphaFlags |= Material::AlphaFlags::Blend;
+			}
+
+			if (alphaProperty && alphaProperty->GetAlphaTesting()) {
+				alphaFlags |= Material::AlphaFlags::Test;
+				alphaThreshold = alphaProperty->alphaThreshold / 255.0f;
+			}
+		}
+
 		auto* effect = geometryRuntimeData.properties[State::kEffect].get();
 
 		if (effect) {
@@ -441,21 +458,6 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 			if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(effect)) {
 				shaderType = RE::BSShader::Type::Lighting;
-
-				// Set alpha flags
-				if (property && property->GetType() == RE::NiProperty::Type::kAlpha) {
-					static REL::Relocation<const RE::NiRTTI*> niAlphaPropertyRTTI{ RE::NiAlphaProperty::Ni_RTTI };
-					auto alphaProperty = property->GetRTTI() == niAlphaPropertyRTTI.get() ? reinterpret_cast<RE::NiAlphaProperty*>(property) : nullptr;
-
-					if (alphaProperty && alphaProperty->GetAlphaBlending()) {
-						alphaFlags |= Material::AlphaFlags::Blend;
-					}
-
-					if (alphaProperty && alphaProperty->GetAlphaTesting()) {
-						alphaFlags |= Material::AlphaFlags::Test;
-						alphaThreshold = alphaProperty->alphaThreshold / 255.0f;
-					}
-				}
 
 				colors[Constants::Material::EMISSIVE_COLOR] = {
 					lightingShaderProp->emissiveColor->red,
@@ -598,7 +600,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 							}
 
 							// SSS color
-							if (lightingShaderProp->flags.all(EShaderPropertyFlag::kSoftLighting)) {								
+							if (lightingShaderProp->flags.all(EShaderPropertyFlag::kSoftLighting)) {
 								textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
 							}
 
@@ -607,7 +609,8 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial)) {
 									textures[4] = GetCubemapTexture(lightingEnvmapMaterial->envTexture, blackTexture);
 									textures[5] = GetTexture(lightingEnvmapMaterial->envMaskTexture, whiteTexture);
-								} else if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
+								}
+								else if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
 									textures[4] = GetCubemapTexture(lightingEyeMaterial->envTexture, blackTexture);
 									textures[5] = GetTexture(lightingEyeMaterial->envMaskTexture, whiteTexture);
 								}
@@ -674,8 +677,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 					logger::warn("[RT] BuildMaterial - BSShaderMaterial is nullptr");
 				}
 			}
-
-			if (auto effectShaderProp = netimmerse_cast<RE::BSEffectShaderProperty*>(effect)) {
+			else if (auto effectShaderProp = netimmerse_cast<RE::BSEffectShaderProperty*>(effect)) {
 				shaderType = RE::BSShader::Type::Effect;
 
 				if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->material)) {
@@ -683,15 +685,16 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 						effectMaterial->baseColor.red,
 						effectMaterial->baseColor.green,
 						effectMaterial->baseColor.blue,
-						effectMaterial->baseColorScale
+						effectMaterial->baseColor.alpha
 					};
+
+					scalars[0] = effectMaterial->baseColorScale;
 
 					textures[0] = GetTexture(effectMaterial->sourceTexture, blackTexture);
 					textures[2] = GetTexture(effectMaterial->greyscaleTexture, blackTexture);
 				}
 			}
-
-			if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(effect)) {
+			else if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(effect)) {
 				shaderType = RE::BSShader::Type::Water;
 				waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
 
