@@ -11,6 +11,9 @@
 
 #include "Utils/CalcTangents.h"
 #include "Core/D3D12Texture.h"
+#include "Constants.h"
+
+#include <omm-gpu-nvrhi.h>
 
 void Mesh::BuildVertices(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
 {
@@ -356,7 +359,8 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 		if (texture->pad24 == 1)
 			d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
 
-		result = sceneGraph->GetTextureDescriptor(texture->texture, d3d12Resource);
+		if (auto* textureReference = sceneGraph->GetTextureReference(texture->texture, d3d12Resource))
+			return Texture(textureReference->descriptorHandle, defaultDescHandle.get(), textureReference->texture);
 	}
 
 	if (!result)
@@ -792,7 +796,12 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
 {
-	auto device = Renderer::GetSingleton()->GetDevice();
+	auto renderer = Renderer::GetSingleton();
+	auto device = renderer->GetDevice();
+
+	auto supportedFeatures = renderer->GetSupportedFeatures();
+
+	auto omm = supportedFeatures & SupportedFeatures::OpacityMicroMaps;
 
 	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned);
 
@@ -810,6 +819,12 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(std::format("{} (Triangle Buffer)", m_Name.c_str()));
+
+		if (omm) {
+			triangleBufferDesc
+				.setFormat(nvrhi::Format::R16_UINT)
+				.setCanHaveTypedViews(true);
+		}
 
 		buffers.triangleBuffer = device->createBuffer(triangleBufferDesc);
 
@@ -860,6 +875,11 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 			.setIsAccelStructBuildInput(true)
 			.setDebugName(std::format("{} (Vertex Buffer)", m_Name.c_str()));
+
+
+		if (omm) {
+			vertexBufferDesc.setCanHaveRawViews(true);
+		}
 
 		buffers.vertexBuffer = device->createBuffer(vertexBufferDesc);
 
@@ -942,6 +962,181 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	geometryTriangles.vertexCount = vertexData.count;
 
 	geometryDesc.setTransform(m_LocalToRoot.f);
+}
+
+bool Mesh::NeedsOpacityMicromap() const
+{
+	if ((material.alphaFlags & Material::AlphaFlags::Test) == Material::AlphaFlags::None)
+		return false;
+
+	if (!material.Textures[0].handle)
+		return false;
+
+	return Renderer::GetSingleton()->GetDevice()->queryFeatureSupport(nvrhi::Feature::RayTracingOpacityMicromap);
+}
+
+bool Mesh::RecordOpacityMicromapBuild(omm::GpuBakeNvrhi& baker, nvrhi::ICommandList* commandList)
+{
+	if (!NeedsOpacityMicromap() || ommBuffers.buildAttempted)
+		return false;
+
+	ommBuffers.buildAttempted = true;
+
+	omm::GpuBakeNvrhi::Input input = {};
+	input.operation = omm::GpuBakeNvrhi::Operation::SetupAndBake;
+	input.alphaTexture = material.Textures[0].handle;
+	input.alphaTextureChannel = material.Textures[0].alphaChannel;
+	input.alphaCutoff = material.alphaThreshold;
+	input.alphaCutoffGreater = omm::OpacityState::Opaque;
+	input.alphaCutoffLessEqual = omm::OpacityState::Transparent;
+	input.bilinearFilter = true;
+	input.enableLevelLineIntersection = true;
+	input.sampleMode = nvrhi::SamplerAddressMode::Clamp;
+	input.texCoordFormat = nvrhi::Format::R16_FLOAT;
+	input.texCoordBuffer = buffers.vertexBuffer;
+	input.texCoordBufferOffsetInBytes = uint32_t(offsetof(Vertex, Texcoord0));
+	input.texCoordStrideInBytes = sizeof(Vertex);
+	input.indexBuffer = buffers.triangleBuffer;
+	input.numIndices = triangleData.count * 3;
+	input.maxSubdivisionLevel = Constants::OMM_SUBDIV_LEVEL;
+	input.format = nvrhi::rt::OpacityMicromapFormat::OC1_4_State;
+	input.dynamicSubdivisionScale = 1.f;
+	input.enableSpecialIndices = true;
+	input.enableTexCoordDeduplication = true;
+	input.computeOnly = false;
+
+	omm::GpuBakeNvrhi::PreDispatchInfo preDispatchInfo = {};
+	baker.GetPreDispatchInfo(input, preDispatchInfo);
+
+	auto device = Renderer::GetSingleton()->GetDevice();
+
+	auto createGpuBuffer = [device, this](size_t byteSize, const char* suffix) -> nvrhi::BufferHandle {
+		if (byteSize == 0) {
+			logger::warn("createGpuBuffer - {} has size of 0", suffix);
+			return nullptr;
+		}
+
+		nvrhi::BufferDesc desc;
+		desc.byteSize = byteSize;
+		desc.canHaveRawViews = true;
+		desc.canHaveUAVs = true;
+		desc.isAccelStructBuildInput = true;
+		desc.initialState = nvrhi::ResourceStates::Common;
+		desc.keepInitialState = true;
+		desc.debugName = std::format("{} ({})", m_Name.c_str(), suffix);
+		return device->createBuffer(desc);
+	};
+
+	auto createReadbackBuffer = [device, this](size_t byteSize, const char* suffix) -> nvrhi::BufferHandle {
+		if (byteSize == 0) {
+			logger::warn("createReadbackBuffer - {} has size of 0", suffix);
+			return nullptr;
+		}
+
+		nvrhi::BufferDesc desc;
+		desc.byteSize = byteSize;
+		desc.cpuAccess = nvrhi::CpuAccessMode::Read;
+		desc.initialState = nvrhi::ResourceStates::Common;
+		desc.keepInitialState = true;
+		desc.debugName = std::format("{} ({})", m_Name.c_str(), suffix);
+		return device->createBuffer(desc);
+	};
+
+	ommBuffers.ommIndexFormat = preDispatchInfo.ommIndexFormat;
+	ommBuffers.ommArrayBuffer = createGpuBuffer(preDispatchInfo.ommArrayBufferSize, "OMM Array Buffer");
+	ommBuffers.ommDescBuffer = createGpuBuffer(preDispatchInfo.ommDescBufferSize, "OMM Desc Buffer");
+	ommBuffers.ommIndexBuffer = createGpuBuffer(preDispatchInfo.ommIndexBufferSize, "OMM Index Buffer");
+	ommBuffers.ommDescArrayHistogramBuffer = createGpuBuffer(preDispatchInfo.ommDescArrayHistogramSize, "OMM Desc Histogram Buffer");
+	ommBuffers.ommIndexHistogramBuffer = createGpuBuffer(preDispatchInfo.ommIndexHistogramSize, "OMM Index Histogram Buffer");
+	ommBuffers.ommPostDispatchInfoBuffer = createGpuBuffer(preDispatchInfo.ommPostDispatchInfoBufferSize, "OMM Post Dispatch Info Buffer");
+
+	ommBuffers.ommDescArrayHistogramReadbackBuffer = createReadbackBuffer(preDispatchInfo.ommDescArrayHistogramSize, "OMM Desc Histogram Readback");
+	ommBuffers.ommIndexHistogramReadbackBuffer = createReadbackBuffer(preDispatchInfo.ommIndexHistogramSize, "OMM Index Histogram Readback");
+
+	ommBuffers.ommDescArrayHistogramSize = preDispatchInfo.ommDescArrayHistogramSize;
+	ommBuffers.ommIndexHistogramSize = preDispatchInfo.ommIndexHistogramSize;
+
+	omm::GpuBakeNvrhi::Buffers output = {};
+	output.ommArrayBuffer = ommBuffers.ommArrayBuffer;
+	output.ommDescBuffer = ommBuffers.ommDescBuffer;
+	output.ommIndexBuffer = ommBuffers.ommIndexBuffer;
+	output.ommDescArrayHistogramBuffer = ommBuffers.ommDescArrayHistogramBuffer;
+	output.ommIndexHistogramBuffer = ommBuffers.ommIndexHistogramBuffer;
+	output.ommPostDispatchInfoBuffer = ommBuffers.ommPostDispatchInfoBuffer;
+
+	baker.Dispatch(commandList, input, output);
+
+	if (ommBuffers.ommDescArrayHistogramReadbackBuffer && ommBuffers.ommDescArrayHistogramBuffer)
+		commandList->copyBuffer(ommBuffers.ommDescArrayHistogramReadbackBuffer, 0, ommBuffers.ommDescArrayHistogramBuffer, 0, ommBuffers.ommDescArrayHistogramSize);
+
+	if (ommBuffers.ommIndexHistogramReadbackBuffer && ommBuffers.ommIndexHistogramBuffer)
+		commandList->copyBuffer(ommBuffers.ommIndexHistogramReadbackBuffer, 0, ommBuffers.ommIndexHistogramBuffer, 0, ommBuffers.ommIndexHistogramSize);
+
+	return true;
+}
+
+bool Mesh::FinalizeOpacityMicromapBuild()
+{
+	if (!ommBuffers.buildAttempted || ommBuffers.opacityMicromap)
+		return bool(ommBuffers.opacityMicromap);
+
+	auto device = Renderer::GetSingleton()->GetDevice();
+
+	if (ommBuffers.ommDescArrayHistogramReadbackBuffer && ommBuffers.ommDescArrayHistogramSize != 0) {
+		std::vector<nvrhi::rt::OpacityMicromapUsageCount> histogram;
+		void* data = device->mapBuffer(ommBuffers.ommDescArrayHistogramReadbackBuffer, nvrhi::CpuAccessMode::Read);
+		omm::GpuBakeNvrhi::ReadUsageDescBuffer(data, ommBuffers.ommDescArrayHistogramSize, histogram);
+		device->unmapBuffer(ommBuffers.ommDescArrayHistogramReadbackBuffer);
+		ommBuffers.ommDescArrayHistogram.resize(histogram.size());
+		for (size_t i = 0; i < histogram.size(); ++i)
+			ommBuffers.ommDescArrayHistogram[i] = histogram[i];
+	}
+
+	if (ommBuffers.ommIndexHistogramReadbackBuffer && ommBuffers.ommIndexHistogramSize != 0) {
+		std::vector<nvrhi::rt::OpacityMicromapUsageCount> histogram;
+		void* data = device->mapBuffer(ommBuffers.ommIndexHistogramReadbackBuffer, nvrhi::CpuAccessMode::Read);
+		omm::GpuBakeNvrhi::ReadUsageDescBuffer(data, ommBuffers.ommIndexHistogramSize, histogram);
+		device->unmapBuffer(ommBuffers.ommIndexHistogramReadbackBuffer);
+		ommBuffers.ommIndexHistogram.resize(histogram.size());
+		for (size_t i = 0; i < histogram.size(); ++i)
+			ommBuffers.ommIndexHistogram[i] = histogram[i];
+	}
+
+	if (ommBuffers.ommDescArrayHistogram.empty() || ommBuffers.ommIndexHistogram.empty())
+		return false;
+
+	nvrhi::rt::OpacityMicromapDesc ommDesc;
+	ommDesc.debugName = std::format("{} - OMM", m_Name.c_str());
+	ommDesc.flags = nvrhi::rt::OpacityMicromapBuildFlags::FastTrace;
+	ommDesc.counts.assign(ommBuffers.ommDescArrayHistogram.begin(), ommBuffers.ommDescArrayHistogram.end());
+	ommDesc.inputBuffer = ommBuffers.ommArrayBuffer;
+	ommDesc.perOmmDescs = ommBuffers.ommDescBuffer;
+
+	ommBuffers.opacityMicromap = device->createOpacityMicromap(ommDesc);
+	if (!ommBuffers.opacityMicromap)
+		return false;
+
+	auto commandList = Renderer::GetSingleton()->GetComputeCommandList();
+	commandList->open();
+	commandList->buildOpacityMicromap(ommBuffers.opacityMicromap, ommDesc);
+	commandList->close();
+	device->executeCommandList(commandList, nvrhi::CommandQueue::Compute);
+	device->waitForIdle();
+
+	auto& geometryTriangles = geometryDesc.geometryData.triangles;
+	geometryTriangles.opacityMicromap = ommBuffers.opacityMicromap;
+	geometryTriangles.ommIndexBuffer = ommBuffers.ommIndexBuffer;
+	geometryTriangles.ommIndexBufferOffset = 0;
+	geometryTriangles.ommIndexFormat = ommBuffers.ommIndexFormat;
+	geometryTriangles.pOmmUsageCounts = ommBuffers.ommIndexHistogram.data();
+	geometryTriangles.numOmmUsageCounts = uint32_t(ommBuffers.ommIndexHistogram.size());
+
+	ommBuffers.ommDescArrayHistogramBuffer = nullptr;
+	ommBuffers.ommIndexHistogramBuffer = nullptr;
+	ommBuffers.ommDescArrayHistogramReadbackBuffer = nullptr;
+	ommBuffers.ommIndexHistogramReadbackBuffer = nullptr;
+
+	return true;
 }
 
 bool Mesh::UpdateDynamicPosition()

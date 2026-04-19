@@ -22,9 +22,12 @@ struct Model
 	// Meant to used for the player
 	bool m_FirstPerson = false;
 
+	inline static std::mutex m_OMMBakerMutex;
+
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	void UpdateMeshFlags();
+	void EnsureOpacityMicromapsBuilt();
 
 	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool update);
 

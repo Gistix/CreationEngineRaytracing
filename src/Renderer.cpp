@@ -67,6 +67,9 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::ShaderExecutionReordering))
 		m_SupportedFeatures |= SupportedFeatures::ShaderExecutionReordering;
 
+	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingClusters))
+		m_SupportedFeatures |= SupportedFeatures::RayTracingClusters;
+	
 	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
 
 	return true;

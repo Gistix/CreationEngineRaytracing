@@ -738,7 +738,7 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	}
 }
 
-eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
+TextureReference* SceneGraph::GetTextureReference(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
 {
 	bool shareResource = d3d12Resource == nullptr;
 
@@ -753,7 +753,7 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 		key = d3d12Resource;
 
 	if (auto refIt = m_Textures.find(key); refIt != m_Textures.end())
-		return refIt->second->descriptorHandle;
+		return refIt->second.get();
 
 	if (shareResource) {
 		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
@@ -819,10 +819,18 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resou
 
 	if (emplaced) {
 		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
-		return it->second->descriptorHandle;
+		return it->second.get();
 	}
 	else
 		logger::error("SceneGraph::GetTextureRegister - TextureReference emplace failed.");
+
+	return nullptr;
+}
+
+eastl::shared_ptr<DescriptorHandle> SceneGraph::GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource)
+{
+	if (auto* textureReference = GetTextureReference(d3d11Resource, d3d12Resource))
+		return textureReference->descriptorHandle;
 
 	return nullptr;
 }

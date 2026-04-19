@@ -17,7 +17,10 @@
 
 #include <eastl/unordered_set.h>
 
-#include "Libraries/OMM/OmmBakerIntegration.h"
+namespace omm
+{
+	class GpuBakeNvrhi;
+}
 
 class SceneGraph;
 
@@ -74,6 +77,25 @@ struct Mesh
 		nvrhi::BufferHandle triangleBuffer;
 		nvrhi::BufferHandle skinningBuffer;
 	} buffers;
+
+	struct OpacityMicromapBuffers
+	{
+		bool buildAttempted = false;
+		nvrhi::rt::OpacityMicromapHandle opacityMicromap;
+		nvrhi::BufferHandle ommArrayBuffer;
+		nvrhi::BufferHandle ommDescBuffer;
+		nvrhi::BufferHandle ommIndexBuffer;
+		nvrhi::BufferHandle ommDescArrayHistogramBuffer;
+		nvrhi::BufferHandle ommIndexHistogramBuffer;
+		nvrhi::BufferHandle ommDescArrayHistogramReadbackBuffer;
+		nvrhi::BufferHandle ommIndexHistogramReadbackBuffer;
+		nvrhi::BufferHandle ommPostDispatchInfoBuffer;
+		nvrhi::Format ommIndexFormat = nvrhi::Format::UNKNOWN;
+		size_t ommDescArrayHistogramSize = 0;
+		size_t ommIndexHistogramSize = 0;
+		eastl::vector<nvrhi::rt::OpacityMicromapUsageCount> ommDescArrayHistogram;
+		eastl::vector<nvrhi::rt::OpacityMicromapUsageCount> ommIndexHistogram;
+	} ommBuffers;
 
 	eastl::vector<float3x4> m_BoneMatrices;
 
@@ -179,6 +201,9 @@ struct Mesh
 	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form);
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
+	bool NeedsOpacityMicromap() const;
+	bool RecordOpacityMicromapBuild(omm::GpuBakeNvrhi& baker, nvrhi::ICommandList* commandList);
+	bool FinalizeOpacityMicromapBuild();
 
 	bool UpdateDynamicPosition();
 

@@ -149,6 +149,7 @@ public:
 
 	void RunGarbageCollection(uint64_t frameIndex);
 
+	TextureReference* GetTextureReference(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
 	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
 	eastl::shared_ptr<DescriptorHandle> GetCubemapDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);

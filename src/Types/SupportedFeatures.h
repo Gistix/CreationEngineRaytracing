@@ -7,7 +7,8 @@ enum SupportedFeatures : uint32_t
 	OpacityMicroMaps = 1 << 2,
 	DisplacementMicroMeshes = 1 << 3,
 	LinearSweptSpheres = 1 << 4,
-	ShaderExecutionReordering = 1 << 5
+	ShaderExecutionReordering = 1 << 5,
+	RayTracingClusters = 1 << 6
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(SupportedFeatures);
