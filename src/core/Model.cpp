@@ -4,8 +4,6 @@
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
-#include <omm-gpu-nvrhi.h>
-
 Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
 	m_Name(name), meshes(eastl::move(meshes))
 {
@@ -43,43 +41,12 @@ void Model::UpdateMeshFlags()
 
 void Model::EnsureOpacityMicromapsBuilt()
 {
-	bool requiresBuild = false;
-	for (auto& mesh : meshes) {
-		if (mesh->NeedsOpacityMicromap() && !mesh->ommBuffers.buildAttempted) {
-			requiresBuild = true;
-			break;
-		}
-	}
+	auto renderer = Renderer::GetSingleton();
 
-	if (!requiresBuild)
+	if (!(renderer->GetSupportedFeatures() & SupportedFeatures::OpacityMicroMaps))
 		return;
 
-	auto* renderer = Renderer::GetSingleton();
-	auto device = renderer->GetDevice();
-
-	device->waitForIdle();
-
-	std::unique_lock lock(m_OMMBakerMutex);
-
-	auto commandList = renderer->GetGraphicsCommandList();
-	commandList->open();
-
-	omm::GpuBakeNvrhi baker(device, commandList, false);
-
-	bool dispatched = false;
-	for (auto& mesh : meshes)
-		dispatched |= mesh->RecordOpacityMicromapBuild(baker, commandList);
-
-	commandList->close();
-
-	if (!dispatched)
-		return;
-
-	device->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
-	device->waitForIdle();
-
-	for (auto& mesh : meshes)
-		mesh->FinalizeOpacityMicromapBuild();
+	renderer->GetOMMBaker()->Bake(this);
 }
 
 nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)

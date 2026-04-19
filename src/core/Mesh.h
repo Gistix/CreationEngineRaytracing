@@ -202,9 +202,7 @@ struct Mesh
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 	bool NeedsOpacityMicromap() const;
-	bool RecordOpacityMicromapBuild(omm::GpuBakeNvrhi& baker, nvrhi::ICommandList* commandList);
-	bool FinalizeOpacityMicromapBuild();
-
+	
 	bool UpdateDynamicPosition();
 
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);

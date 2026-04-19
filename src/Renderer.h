@@ -12,6 +12,8 @@
 
 #include "Renderer/TextureManager.h"
 
+#include "Framework/OMMBaker.h"
+
 struct MessageCallback : public nvrhi::IMessageCallback
 {
 	static MessageCallback& GetInstance()
@@ -93,6 +95,8 @@ class Renderer
 	eastl::unique_ptr<TextureReference> m_DetailTexture;
 
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
+
+	eastl::unique_ptr<OMMBaker> m_OMMBaker;
 
 	void InitGBufferOutput();
 	void InitRR();
@@ -290,6 +294,8 @@ public:
 
 		return m_ReSTIRGIResources.get();
 	}
+
+	auto GetOMMBaker() const { return m_OMMBaker.get(); }
 
 	void InitStablePlanes();
 

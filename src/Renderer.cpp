@@ -72,6 +72,8 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	
 	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
 
+	m_OMMBaker = eastl::make_unique<OMMBaker>();
+
 	return true;
 }
 
