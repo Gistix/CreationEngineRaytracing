@@ -80,5 +80,6 @@ TextureCube<float4>                         CubeTextures[]              : regist
 #define HAS_PREV_POSITIONS
 
 SamplerState                                DefaultSampler              : register(s0);
+SamplerState                                ClampSampler                : register(s1);
 
 #endif // REGISTERS_HLSLI

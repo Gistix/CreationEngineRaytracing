@@ -70,5 +70,6 @@ Texture2D<float4>                           Textures[]                  : regist
 TextureCube<float4>                         CubeTextures[]              : register(t0, space6);
 
 SamplerState                                DefaultSampler              : register(s0);
+SamplerState                                ClampSampler                : register(s1);
 
 #endif // REGISTERS_HLSLI

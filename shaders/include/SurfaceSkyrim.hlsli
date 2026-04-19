@@ -224,17 +224,23 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             float3 envColorTest = envCubemap.SampleLevel(DefaultSampler, float3(0.0, 1.0, 0.0), 15).xyz;
             bool dynamicCubemap = all(envColorTest == 0.0);
 
-            if (dynamicCubemap) {
+            if (dynamicCubemap)
+            {
                 float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
 
-                if (envColorBase.a < 1.0) {
+                if (envColorBase.a < 1.0)
+                {
                     surface.F0 = lerp(surface.F0, ColorToLinear(envColorBase.rgb), envMask);
                     surface.Roughness = lerp(surface.Roughness, envColorBase.a, envMask);
-                } else {
+                }
+                else
+                {
                     surface.F0 = lerp(surface.F0, float3(1.0, 1.0, 1.0), envMask);
                     surface.Roughness = lerp(surface.Roughness, 1.0 / 7.0, envMask);
                 }
-            } else {
+            }
+            else
+            {
                 // Static cubemap: use +X face average color as metallic tint
                 float3 faceAvg = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15).rgb;
                 surface.F0 = lerp(surface.F0, saturate(ColorToLinear(faceAvg)), envMask);
@@ -261,7 +267,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
         [branch]
         if (material.Feature == Feature::kFaceGen)
-        {          
+        {
             float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
             
             Texture2D detailTexture = Textures[NonUniformResourceIndex(material.DetailTexture())];
@@ -279,10 +285,10 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         {
             float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
             
-            float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;               
+            float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
             surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor)) * 2.0f;
-        }        
+        }
         
          [branch]
         if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint)
@@ -296,7 +302,8 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
-        } else if (material.Feature == Feature::kEye)
+        }
+        else if (material.Feature == Feature::kEye)
         {
             surface.Roughness = 0.2f;
             surface.F0 = 0.02776f;
@@ -312,15 +319,16 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.CoatStrength = 1.f;
             surface.CoatRoughness = 0.0f;
             surface.CoatF0 = 0.026f;
-        } else if (material.ShaderFlags & ShaderFlags::kSoftLighting)
+        }
+        else if (material.ShaderFlags & ShaderFlags::kSoftLighting)
         {
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
 
-            Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];          
+            Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];
             surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
-            surface.SubsurfaceData.Scale = 1.f;            
+            surface.SubsurfaceData.Scale = 1.f;
         }
 
         [branch]
@@ -336,44 +344,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.IsThinSurface = true;
             alpha = 0.0f;
         }
-    }
-    else if (material.ShaderType == ShaderType::Effect)
-    {
-        float3 base = float3(1, 1, 1);
-
-        [branch]
-        if (material.ShaderFlags & ShaderFlags::kGrayscaleToPaletteColor)
-        {
-            base *= baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
-        }
-
-        float3 baseColorMul = material.EffectColor().rgb;
-
-        [branch]
-        if (material.ShaderFlags & ShaderFlags::kVertexColors && !(material.ShaderFlags & ShaderFlags::kProjectedUV))
-        {
-            base *= vertexColor.rgb;
-        }
-
-        float3 baseColor = base * baseColorMul;
-
-        float baseColorScale = material.EffectColor().a;
-
-        [branch]
-        if (material.ShaderFlags & ShaderFlags::kGrayscaleToPaletteColor)
-        {
-            Texture2D effectTexture = Textures[NonUniformResourceIndex(material.EffectTexture())];
-
-            float2 grayscaleToColorUv = float2(base.g, baseColorMul.x);
-
-            baseColor = baseColorScale * effectTexture.SampleLevel(DefaultSampler, grayscaleToColorUv, mipLevel).rgb;
-        }
-
-        float3 baseColorLinear = EffectToLinear(baseColor);
-
-        //Albedo = baseColorLinear; // This breaks sharc
-        surface.Albedo = 0;
-        surface.Emissive = baseColorLinear * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
     }
     else
     {
@@ -479,6 +449,45 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.Primary);
         Wetness::ApplyWetness(surface, wetnessParams);
     }
+}
+
+void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in Material material)
+{
+    const float mipLevel = surface.MipLevel;
+    
+    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
+
+    float4 baseTexColor = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+    baseTexColor.xyz = baseTexColor.xyz;
+    
+    float4 baseColorMul = material.EffectColor();       
+    baseColorMul.xyz = baseColorMul.xyz;
+    
+    [branch]
+    if ((material.ShaderFlags & ShaderFlags::kVertexColors) && !(material.ShaderFlags & ShaderFlags::kProjectedUV))
+    {
+        baseColorMul *= float4(vertexColor.xyz, vertexColor.w);
+    }
+
+    float4 baseColor = float4(1, 1, 1, 1);
+    float baseColorScale = material.Scalar0;
+
+    [branch]
+    if (material.ShaderFlags & ShaderFlags::kGrayscaleToPaletteColor)
+    {
+        Texture2D effectTexture = Textures[NonUniformResourceIndex(material.EffectTexture())];
+
+        float2 grayscaleToColorUv = float2(baseTexColor.y, baseColorMul.x);
+
+        baseColor.xyz = baseColorScale * effectTexture.SampleLevel(ClampSampler, grayscaleToColorUv, mipLevel).xyz;
+    }
+    else
+    {
+        baseColor = baseTexColor * baseColorMul;
+    }
+
+    surface.Albedo = 0;
+    surface.Emissive = EffectToLinear(baseColor.xyz) * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
 }
 
 void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Material material)

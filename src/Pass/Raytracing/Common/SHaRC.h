@@ -38,6 +38,7 @@ namespace Pass
 		SubPass m_ResolvePass;
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
+		nvrhi::SamplerHandle m_LinearClampSampler;
 
 		nvrhi::BufferHandle m_HashEntriesBuffer;
 		nvrhi::BufferHandle m_LockBuffer;
