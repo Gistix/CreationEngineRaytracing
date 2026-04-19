@@ -12,6 +12,11 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_LinearClampSampler = GetRenderer()->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(true));
+
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
 		CreatePipeline();
@@ -60,6 +65,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
 			nvrhi::BindingLayoutItem::Sampler(0),
+			nvrhi::BindingLayoutItem::Sampler(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
@@ -212,6 +218,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
+			nvrhi::BindingSetItem::Sampler(0, m_LinearClampSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, m_ViewDepth),
 			nvrhi::BindingSetItem::Texture_UAV(1, gBufferOutput->motionVectors),
 			nvrhi::BindingSetItem::Texture_UAV(2, gBufferOutput->albedo),

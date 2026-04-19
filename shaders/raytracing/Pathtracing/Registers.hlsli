@@ -83,5 +83,6 @@ Texture2D<float4>                           PhysicalSkyTrLUT            : regist
 Texture2D<float4>                           SkinDetailNormal            : register(t9); 
 
 SamplerState                                DefaultSampler              : register(s0);
+SamplerState                                ClampSampler                : register(s1);
 
 #endif // REGISTERS_HLSLI

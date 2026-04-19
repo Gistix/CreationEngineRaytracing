@@ -448,15 +448,173 @@ namespace Hooks
 		}
 	}
 
-	void* CreateFlowMapSE::thunk(void* a1, int a2, int a3, void* a4)
+	struct CreateFlowMap
 	{
-		return func(a1, a2, a3, a4);
-	}
+		static uint32_t sub_140E4C440(DXGI_FORMAT a_format)
+		{
+			switch (a_format)
+			{
+			case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+			case DXGI_FORMAT_R32G32B32A32_FLOAT:
+			case DXGI_FORMAT_R32G32B32A32_UINT:
+			case DXGI_FORMAT_R32G32B32A32_SINT:
+				return 128;
+			case DXGI_FORMAT_R32G32B32_TYPELESS:
+			case DXGI_FORMAT_R32G32B32_FLOAT:
+			case DXGI_FORMAT_R32G32B32_UINT:
+			case DXGI_FORMAT_R32G32B32_SINT:
+				return 96;
+			case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+			case DXGI_FORMAT_R16G16B16A16_FLOAT:
+			case DXGI_FORMAT_R16G16B16A16_UNORM:
+			case DXGI_FORMAT_R16G16B16A16_UINT:
+			case DXGI_FORMAT_R16G16B16A16_SNORM:
+			case DXGI_FORMAT_R16G16B16A16_SINT:
+			case DXGI_FORMAT_R32G32_TYPELESS:
+			case DXGI_FORMAT_R32G32_FLOAT:
+			case DXGI_FORMAT_R32G32_UINT:
+			case DXGI_FORMAT_R32G32_SINT:
+			case DXGI_FORMAT_R32G8X24_TYPELESS:
+			case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+			case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
+			case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT:
+				return 64;
+			case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+			case DXGI_FORMAT_R10G10B10A2_UNORM:
+			case DXGI_FORMAT_R10G10B10A2_UINT:
+			case DXGI_FORMAT_R11G11B10_FLOAT:
+			case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+			case DXGI_FORMAT_R8G8B8A8_UNORM:
+			case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+			case DXGI_FORMAT_R8G8B8A8_UINT:
+			case DXGI_FORMAT_R8G8B8A8_SNORM:
+			case DXGI_FORMAT_R8G8B8A8_SINT:
+			case DXGI_FORMAT_R16G16_TYPELESS:
+			case DXGI_FORMAT_R16G16_FLOAT:
+			case DXGI_FORMAT_R16G16_UNORM:
+			case DXGI_FORMAT_R16G16_UINT:
+			case DXGI_FORMAT_R16G16_SNORM:
+			case DXGI_FORMAT_R16G16_SINT:
+			case DXGI_FORMAT_R32_TYPELESS:
+			case DXGI_FORMAT_D32_FLOAT:
+			case DXGI_FORMAT_R32_FLOAT:
+			case DXGI_FORMAT_R32_UINT:
+			case DXGI_FORMAT_R32_SINT:
+			case DXGI_FORMAT_R24G8_TYPELESS:
+			case DXGI_FORMAT_D24_UNORM_S8_UINT:
+			case DXGI_FORMAT_B8G8R8A8_UNORM:
+				return 32;
+			case DXGI_FORMAT_R8G8_TYPELESS:
+			case DXGI_FORMAT_R8G8_UNORM:
+			case DXGI_FORMAT_R8G8_UINT:
+			case DXGI_FORMAT_R8G8_SNORM:
+			case DXGI_FORMAT_R8G8_SINT:
+			case DXGI_FORMAT_R16_TYPELESS:
+			case DXGI_FORMAT_R16_FLOAT:
+			case DXGI_FORMAT_D16_UNORM:
+			case DXGI_FORMAT_R16_UNORM:
+			case DXGI_FORMAT_R16_UINT:
+			case DXGI_FORMAT_R16_SNORM:
+			case DXGI_FORMAT_R16_SINT:
+				return 16;
+			case DXGI_FORMAT_R8_TYPELESS:
+			case DXGI_FORMAT_R8_UNORM:
+			case DXGI_FORMAT_R8_UINT:
+			case DXGI_FORMAT_R8_SNORM:
+			case DXGI_FORMAT_R8_SINT:
+			case DXGI_FORMAT_A8_UNORM:
+				return 8;
+			default:
+				return 0;
+			}
+		}
 
-	void* CreateFlowMapAE::thunk(void* a1, int a2, int a3, void* a4, int a5, uint32_t a6, bool a7)
-	{
-		return func(a1, a2, a3, a4, a5, a6, a7);
-	}
+		static RE::BSGraphics::Texture* thunk(RE::BSGraphics::Renderer* a_renderer, UINT a_width, UINT a_height, void* a_pixelData, D3D11_USAGE a_usage, DXGI_FORMAT a_format, bool a_uav) {
+			// Texture Desc
+			D3D11_TEXTURE2D_DESC desc{};
+			desc.Width = a_width;
+			desc.Height = a_height;
+			desc.MipLevels = 1;
+			desc.ArraySize = 1;
+
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+
+			desc.Format = a_format;
+			desc.Usage = a_usage;
+
+			// Bind flags
+			if (a_usage == D3D11_USAGE_STAGING)
+				desc.BindFlags = 0;
+			else
+				desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+			if (a_uav)
+				desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+	
+			// CPU access flags
+			if (a_usage == D3D11_USAGE_DYNAMIC)
+				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			else if (a_usage == D3D11_USAGE_STAGING)
+				desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
+			else
+				desc.CPUAccessFlags = 0;
+
+			// ...
+			desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+
+			D3D11_SUBRESOURCE_DATA initialData{};
+			if (a_pixelData) {
+				initialData.pSysMem = a_pixelData;
+				initialData.SysMemPitch = a_width * (sub_140E4C440(a_format) >> 3);
+				initialData.SysMemSlicePitch = 0;
+			}
+
+			auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+			auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
+
+			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
+
+			if (!texture)
+				return nullptr;
+
+			auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
+
+			HRESULT hr = device->CreateTexture2D(&desc, a_pixelData ? &initialData : nullptr, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
+
+			if (FAILED(hr))
+				return texture;
+
+			// Store Texture Desc 
+			auto* textureDesc = reinterpret_cast<RE::BSGraphics::TextureData*>(&texture->unk18);
+			textureDesc->width = static_cast<uint16_t>(a_width);
+			textureDesc->height = static_cast<uint16_t>(a_height);
+			textureDesc->format = static_cast<uint8_t>(a_format);
+			textureDesc->unk1C = 1;
+			textureDesc->unk1E = 0;
+			texture->unk20 = 1;
+
+			// SRV creation (skipped for staging)
+			if (a_usage != D3D11_USAGE_STAGING)
+			{
+				D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+				srvDesc.Format = a_format;
+				srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+				srvDesc.Texture2D.MipLevels = 1;
+				srvDesc.Texture2D.MostDetailedMip = 0;
+
+				device->CreateShaderResourceView(texture->texture, &srvDesc, &texture->resourceView);
+			}
+			else
+			{
+				texture->resourceView = nullptr;
+			}
+
+			return texture;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
 	{
@@ -639,11 +797,7 @@ namespace Hooks
 		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
 		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
-		auto createFlowMapRel = REL::RelocationID(31234, 32031).address() + REL::Relocate(0x7E, 0xF8);
-		if (REL::Module::IsSE())
-			stl::write_thunk_call<CreateFlowMapSE>(createFlowMapRel);
-		else
-			stl::write_thunk_call<CreateFlowMapAE>(createFlowMapRel);
+		stl::write_thunk_call<CreateFlowMap>(REL::RelocationID(31234, 32031).address() + REL::Relocate(0x7E, 0xF8));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);

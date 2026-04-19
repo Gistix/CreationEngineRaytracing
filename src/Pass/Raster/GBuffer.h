@@ -22,6 +22,7 @@ namespace Pass::Raster
 		nvrhi::BindingSetHandle m_BindingSet;
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
+		nvrhi::SamplerHandle m_LinearClampSampler;
 
 		nvrhi::FramebufferHandle m_FrameBuffer;
 

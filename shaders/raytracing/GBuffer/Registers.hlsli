@@ -31,6 +31,6 @@ RWTexture2D<float4>                         NormalRoughness             : regist
 RWTexture2D<float4>                         EmissiveMetallic            : register(u4);
 
 SamplerState                                DefaultSampler              : register(s0);
-
+SamplerState                                ClampSampler                : register(s1);
 
 #endif // REGISTERS_HLSLI

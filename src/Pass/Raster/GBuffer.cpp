@@ -17,6 +17,11 @@ namespace Pass::Raster
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_LinearClampSampler = renderer->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(true));
+
 		CreatePipeline();
 	}
 
@@ -34,7 +39,8 @@ namespace Pass::Raster
 			nvrhi::BindingSetItem::PushConstants(3, sizeof(uint2)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler)
+			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
+			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler)
 		};
 
 		nvrhi::utils::CreateBindingSetAndLayout(GetRenderer()->GetDevice(), nvrhi::ShaderType::All, 0, bindingSetDesc, m_BindingLayout, m_BindingSet);

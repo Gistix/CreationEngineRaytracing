@@ -65,8 +65,10 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
     Material material = mesh.Material;
 
+#if defined(EFFECT_PASSTHROUGH)      
     if (material.ShaderType == ShaderType::Effect)
         return false;
+#endif
     
     float2 texCoord = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
