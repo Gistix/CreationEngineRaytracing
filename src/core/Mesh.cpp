@@ -294,7 +294,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	if (flags.all(Mesh::Flags::Skinned))
 		ClearUnusedVertices();
 
-	if (flags.none(Flags::Landscape) && HasDoubleSidedGeom())
+	if (flags.none(Flags::Landscape, Flags::Water) && Util::Geometry::HasDoubleSidedGeom(this))
 		flags.set(Mesh::Flags::DoubleSidedGeom);
 
 	auto vertexDesc = rendererData->vertexDesc;
@@ -337,46 +337,15 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 	return triangles;
 }
 
-Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, [[maybe_unused]] bool modelSpaceNormalMap = false)
+Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType)
 {
 	if (!niPointer || !niPointer->rendererTexture)
 		return Texture(defaultDescHandle, nullptr);
 
-	eastl::shared_ptr<DescriptorHandle> result = nullptr;
+	auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
 
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-	auto* texture = niPointer->rendererTexture;
-
-	if (modelSpaceNormalMap)
-		result = sceneGraph->GetMSNormalMapDescriptor(this, texture);
-	else {
-		ID3D12Resource* d3d12Resource = nullptr;
-
-		if (texture->pad24 == 1)
-			d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
-
-		result = sceneGraph->GetTextureDescriptor(texture->texture, d3d12Resource);
-	}
-
-	if (!result)
-		return Texture(defaultDescHandle, nullptr);
-
-	return Texture(result, defaultDescHandle.get());
-}
-
-Texture Mesh::GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle)
-{
-	if (!niPointer || !niPointer->rendererTexture)
-		return Texture(defaultDescHandle, nullptr);
-
-	/*auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	auto result = sceneGraph->GetCubemapDescriptor(niPointer->rendererTexture->texture);
-
-	if (!result)
-		return Texture(defaultDescHandle, nullptr);
-
-	return Texture(result, defaultDescHandle.get());*/
+	if (auto result = textureManager->GetDescriptor(niPointer->rendererTexture, textureType))
+		return Texture(result, defaultDescHandle.get());
 
 	return Texture(defaultDescHandle, nullptr);
 }
@@ -580,9 +549,8 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 						if (const RE::BSLightingShaderMaterialBase* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 							textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
 
-							bool isModelSpaceNormalMap = shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals);
-
-							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
+							auto textureType = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
+							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, textureType);
 
 							if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 								if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
@@ -604,14 +572,18 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
 							}
 
-							// Envmap / Eye
-							if (feature == Feature::kEnvironmentMap || feature == Feature::kEye) {
+							// Envmap
+							if (feature == Feature::kEnvironmentMap) {
 								if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial)) {
-									textures[4] = GetCubemapTexture(lightingEnvmapMaterial->envTexture, blackTexture);
+									textures[4] = GetTexture(lightingEnvmapMaterial->envTexture, blackTexture, TextureType::CubeMap);
 									textures[5] = GetTexture(lightingEnvmapMaterial->envMaskTexture, whiteTexture);
 								}
-								else if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
-									textures[4] = GetCubemapTexture(lightingEyeMaterial->envTexture, blackTexture);
+							}
+
+							// Eye
+							if (feature == Feature::kEye) {
+								if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
+									textures[4] = GetTexture(lightingEyeMaterial->envTexture, blackTexture, TextureType::CubeMap);
 									textures[5] = GetTexture(lightingEyeMaterial->envMaskTexture, whiteTexture);
 								}
 							}
@@ -649,7 +621,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 									if (Util::IsPlayer(form)) {
 										auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
 
-										auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptor(
+										auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->GetDescriptor(
 											gameRendererRuntimeData.renderTargets[RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT].texture
 										);
 
@@ -909,22 +881,35 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
 
 		// Previous position buffer for per-vertex motion vectors
-		const size_t prevPosSize = sizeof(float3) * vertexData.count;
+		{
+			const size_t prevPosSize = sizeof(float3) * vertexData.count;
 
-		auto& prevPositionBufferDesc = nvrhi::BufferDesc()
-			.setByteSize(prevPosSize)
-			.setStructStride(sizeof(float3))
-			.setCanHaveUAVs(true)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-			.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()));
+			auto& prevPositionBufferDesc = nvrhi::BufferDesc()
+				.setByteSize(prevPosSize)
+				.setStructStride(sizeof(float3))
+				.setCanHaveUAVs(true)
+				.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+				.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()));
 
-		buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
+			buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
 
-		auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
-		device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
+			// Fixes motion vector for trees that are far away and havent updated yet
+			{
+				eastl::vector<float3> positions;
+				positions.resize(vertexData.count);
 
-		auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
-		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
+				for (size_t i = 0; i < vertexData.count; i++)
+					positions[i] = vertexData.vertices[i].Position;
+
+				commandList->writeBuffer(buffers.prevPositionBuffer, positions.data(), prevPosSize);
+			}
+
+			auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
+			device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
+
+			auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
+			device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
+		}
 	}
 
 	// Geometry description
@@ -1104,7 +1089,7 @@ void Mesh::UpdateDismember()
 	m_PendingState.set(!partition.editorVisible, State::DismemberHidden);
 }
 
-DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer)
+DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
 {
 	// Only this reference remains, so erase it
 	if (bsGeometryPtr->GetRefCount() == 1) {
@@ -1115,8 +1100,11 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer)
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
+	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
+	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
+
 	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
-	if (dynamic || skinned) {
+	if (dynamic || skinned || dynamicModel || skinnedModel) {
 		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot), State::Hidden);
 	}
 
@@ -1152,7 +1140,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer)
 	if (skinned && UpdateSkinning(instanceRoot, isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	if (!skinned && UpdateTransform(instanceRoot))
+	if (!skinned && skinnedModel && UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
 
 	geometryDesc.setTransform(m_LocalToRoot.f);

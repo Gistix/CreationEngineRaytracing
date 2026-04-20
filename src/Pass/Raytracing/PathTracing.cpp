@@ -246,7 +246,7 @@ namespace Pass
 
 		auto* rrInput = renderer->GetRRInput();
 
-		auto& textureManager = renderer->GetTextureManager();
+		auto& textureManager = renderer->RenderTargetManager();
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -269,8 +269,8 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
 			nvrhi::BindingSetItem::Texture_UAV(3, rts->normalRoughness),
 			nvrhi::BindingSetItem::Texture_UAV(4, rrInput->specularHitDistance),
-			nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(TextureManager::Texture::MotionVectors3D)),
-			nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(TextureManager::Texture::ClipDepth))
+			nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::MotionVectors3D)),
+			nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::ClipDepth))
 		};
 
 		if (m_UseStablePlanes) {
