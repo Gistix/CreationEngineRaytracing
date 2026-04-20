@@ -70,7 +70,7 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer)
 	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
 
 	for (auto& mesh : meshes) {
-		auto dirtyFlags = mesh->Update(object, isPlayer);
+		auto dirtyFlags = mesh->Update(object, isPlayer, meshFlags.get());
 
 		bool vertexUpdate = (dirtyFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 		bool skinUpdate = (dirtyFlags & DirtyFlags::Skin) != DirtyFlags::None;

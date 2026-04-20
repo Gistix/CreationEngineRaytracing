@@ -407,7 +407,7 @@ namespace Pass::NRD
 		m_CommonSettings.cameraJitter[0] = jitter.x;
 		m_CommonSettings.cameraJitter[1] = jitter.y;
 
-		auto prevJitter = renderer->GetJitter();
+		auto prevJitter = renderer->GetPrevJitter();
 		m_CommonSettings.cameraJitterPrev[0] = prevJitter.x;
 		m_CommonSettings.cameraJitterPrev[1] = prevJitter.y;
 
@@ -429,11 +429,11 @@ namespace Pass::NRD
 		auto* renderer = Renderer::GetSingleton();
 		auto* renderTargets = renderer->GetRenderTargets();
 		
-		auto& textureManager = renderer->GetTextureManager();
+		auto& textureManager = renderer->RenderTargetManager();
 
-		auto* viewDepth = textureManager.GetTexture(TextureManager::Texture::ViewDepth);
-		auto* diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
-		auto* specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
+		auto* viewDepth = textureManager.GetTexture(RenderTarget::ViewDepth);
+		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
+		auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:

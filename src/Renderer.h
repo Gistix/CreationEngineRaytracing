@@ -10,7 +10,7 @@
 
 #include "Renderer/RenderGraph.h"
 
-#include "Renderer/TextureManager.h"
+#include "Renderer/RenderTargetManager.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback
 {
@@ -81,7 +81,7 @@ class Renderer
 
 	eastl::vector<PassTiming> m_PassTimings;
 
-	TextureManager m_TextureManager;
+	RenderTargetManager m_RenderTargetManager;
 
 	eastl::unique_ptr<TextureReference> m_WhiteTexture;
 	eastl::unique_ptr<TextureReference> m_GrayTexture;
@@ -221,7 +221,7 @@ public:
 		m_Jitter = jitter;
 	}
 
-	inline auto& GetTextureManager() { return m_TextureManager; }
+	inline auto& RenderTargetManager() { return m_RenderTargetManager; }
 
 	inline auto& GetBlackTexture() const { return m_BlackTexture->texture; }
 

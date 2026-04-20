@@ -1,6 +1,6 @@
 #pragma once
 
-struct TextureManager
+struct RenderTargetManager
 {
 	enum class Texture
 	{
@@ -18,3 +18,5 @@ struct TextureManager
 
 	nvrhi::ITexture* GetTexture(Texture texture);
 };
+
+using RenderTarget = RenderTargetManager::Texture;

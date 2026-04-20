@@ -4,6 +4,7 @@
 #include "core/Instance.h"
 #include "core/Light.h"
 #include "Core/ActorReference.h"
+#include "Core/TextureManager.h"
 
 #include "Light.hlsli"
 #include "Mesh.hlsli"
@@ -12,11 +13,12 @@
 #include "Constants.h"
 #include "Types/BindlessTableManager.h"
 #include "Types/BindlessTable.h"
-#include "Types/TextureReference.h"
 #include "Types/ReleasedData.h"
 
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
+
+#include "Pipeline/MSNConverter.h"
 
 class SceneGraph
 {
@@ -53,28 +55,7 @@ class SceneGraph
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	nvrhi::BufferHandle m_InstanceBuffer;
 
-	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
-
-	// MSN (Model Space Normal) conversion
-	struct ConvertedNormalMap
-	{
-		nvrhi::TextureHandle sourceTexture;       // DX12 handle for shared DX11 MSN source
-		nvrhi::TextureHandle convertedTexture;    // DX12 render target for converted tangent-space normal
-		eastl::unique_ptr<TextureReference> textureRef;
-		bool converted = false;
-	};
-
-	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<ConvertedNormalMap>> m_NormalMaps;
-	eastl::unordered_map<DescriptorIndex, ID3D11Texture2D*> m_MSNAllocationMap;
-
-	nvrhi::ShaderHandle m_MSNVertexShader;
-	nvrhi::ShaderHandle m_MSNPixelShader;
-	nvrhi::BindingLayoutHandle m_MSNBindingLayout;
-	nvrhi::SamplerHandle m_MSNSampler;
-	nvrhi::GraphicsPipelineHandle m_MSNGraphicsPipeline;
-	bool m_MSNPipelineInitialized = false;
-
-	void InitMSNPipeline();
+	eastl::unique_ptr<TextureManager> m_TextureManager;
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
@@ -85,12 +66,6 @@ class SceneGraph
 	eastl::unique_ptr<BindlessTable> m_VertexWriteDescriptors;
 	eastl::unique_ptr<BindlessTable> m_PrevPositionDescriptors;
 	eastl::unique_ptr<BindlessTable> m_PrevPositionWriteDescriptors;
-
-	eastl::unique_ptr<BindlessTableManager> m_TextureDescriptors;
-	eastl::unique_ptr<BindlessTableManager> m_CubemapDescriptors;
-
-	// Cubemap cache: DX11 cubemap resource -> DX12 cubemap TextureReference
-	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Cubemaps;
 
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
@@ -103,8 +78,8 @@ public:
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
-	inline auto& GetTextureDescriptors() const { return m_TextureDescriptors; }
-	inline auto& GetCubemapDescriptors() const { return m_CubemapDescriptors; }
+	inline auto& GetTextureDescriptors() const { return m_TextureManager->m_TextureDescriptors; }
+	inline auto& GetCubemapDescriptors() const { return m_TextureManager->m_CubemapDescriptors; }
 	inline auto& GetDynamicVertexDescriptors() const { return m_DynamicVertexDescriptors; }
 	inline auto& GetSkinningDescriptors() const { return m_SkinningDescriptors; }
 	inline auto& GetVertexCopyDescriptors() const { return m_VertexCopyDescriptors; }
@@ -118,6 +93,8 @@ public:
 
 	inline auto& GetInstances() const { return m_Instances; }
 	inline auto& GetLights() { return m_Lights; }
+
+	inline auto& GetTextureManager() { return m_TextureManager; }
 
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
@@ -135,8 +112,7 @@ public:
 
 	ActorReference* GetActorRefr(RE::FormID a_formID);
 
-	void ReleaseTexture(ID3D11Texture2D* texture);
-	void ReleaseCubemap(ID3D11Texture2D* texture);
+	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 
 	// Releases an object instance while keeping the model and mesh data intact.
 	// releaseModel is to be used by water and only water.
@@ -148,10 +124,4 @@ public:
 	void SetInstanceDetached(RE::TESForm* form, bool detached);
 
 	void RunGarbageCollection(uint64_t frameIndex);
-
-	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
-	eastl::shared_ptr<DescriptorHandle> GetCubemapDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
-	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);
-
-	void ConvertMSN(Model* model, nvrhi::ICommandList* commandList);
 };
