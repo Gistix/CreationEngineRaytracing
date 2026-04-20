@@ -129,6 +129,10 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 
 		d3d12Resource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
 	}
+	else if (!d3d12Resource) {
+		logger::error("TextureManager::GetDescriptor - D3D12Resource is null");
+		return nullptr;
+	}
 
 	// Create NVRHI handle for native texture
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
