@@ -157,6 +157,8 @@ void SceneGraph::Initialize()
 
 		m_PrevPositionWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
+
+	m_MSNConverter = eastl::make_unique<Pipeline::MSNConverter>();
 }
 
 void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
@@ -1111,7 +1113,7 @@ eastl::shared_ptr<DescriptorHandle> SceneGraph::GetMSNormalMapDescriptor([[maybe
 
 		normalMap->textureRef = eastl::make_unique<TextureReference>(normalMap->convertedTexture, m_TextureDescriptors->m_DescriptorTable.get());
 
-		m_MSNAllocationMap.emplace(normalMap->textureRef->descriptorHandle->Get(), d3d11Texture);
+		m_MSNConverter->Allocate(normalMap->textureRef->descriptorHandle->Get(), d3d11Texture);
 	}
 
 	return normalMap->textureRef->descriptorHandle;
@@ -1351,7 +1353,7 @@ bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 				auto graphicsCommandList = Renderer::GetSingleton()->GetGraphicsCommandList();
 				graphicsCommandList->open();
 
-				ConvertMSN(modelPtr, graphicsCommandList);
+				m_MSNConverter->Convert(modelPtr, graphicsCommandList, this);
 
 				graphicsCommandList->close();
 
@@ -1430,135 +1432,5 @@ void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
 		else {
 			++it;
 		}
-	}
-}
-
-void SceneGraph::InitMSNPipeline()
-{
-	if (m_MSNPipelineInitialized)
-		return;
-
-	auto device = Renderer::GetSingleton()->GetDevice();
-
-	// Compile shaders
-	winrt::com_ptr<IDxcBlob> vertexBlob, pixelBlob;
-	ShaderUtils::CompileShader(vertexBlob, L"data/shaders/ModelSpaceToTangent.hlsl", {}, L"vs_6_5", L"MainVS");
-	ShaderUtils::CompileShader(pixelBlob, L"data/shaders/ModelSpaceToTangent.hlsl", {}, L"ps_6_5", L"MainPS");
-
-	m_MSNVertexShader = device->createShader({ nvrhi::ShaderType::Vertex, "", "MainVS" }, vertexBlob->GetBufferPointer(), vertexBlob->GetBufferSize());
-	m_MSNPixelShader = device->createShader({ nvrhi::ShaderType::Pixel, "", "MainPS" }, pixelBlob->GetBufferPointer(), pixelBlob->GetBufferSize());
-
-	// Create sampler
-	m_MSNSampler = device->createSampler(
-		nvrhi::SamplerDesc()
-			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
-			.setAllFilters(true));
-
-	// Create binding layout for MSN pass
-	auto bindingLayoutDesc = nvrhi::BindingLayoutDesc()
-		.setVisibility(nvrhi::ShaderType::All)
-		.addItem(nvrhi::BindingLayoutItem::PushConstants(0, sizeof(uint32_t)))
-		.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))
-		.addItem(nvrhi::BindingLayoutItem::Sampler(0));
-
-	m_MSNBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-
-	m_MSNPipelineInitialized = true;
-}
-
-void SceneGraph::ConvertMSN(Model* model, nvrhi::ICommandList* commandList)
-{
-	InitMSNPipeline();
-
-	auto device = Renderer::GetSingleton()->GetDevice();
-
-	// Group meshes by their converted normal map (descriptor index)
-	eastl::unordered_map<DescriptorIndex, eastl::vector<Mesh*>> msnGroups;
-
-	for (auto& mesh : model->meshes) {
-		if (mesh->material.shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals))
-			continue;
-
-		auto descHandle = mesh->material.Textures[Constants::Material::NORMALMAP_TEXTURE].texture.lock();
-		if (!descHandle)
-			continue;
-
-		auto key = descHandle->Get();
-		msnGroups[key].push_back(mesh.get());
-	}
-
-	for (auto& [allocationIdx, meshes] : msnGroups) {
-		auto msnIt = m_MSNAllocationMap.find(allocationIdx);
-		if (msnIt == m_MSNAllocationMap.end())
-			continue;
-
-		auto normalMapIt = m_NormalMaps.find(msnIt->second);
-		if (normalMapIt == m_NormalMaps.end())
-			continue;
-
-		auto* normalMap = normalMapIt->second.get();
-
-		if (normalMap->converted)
-			continue;
-
-		// Create framebuffer for this render target
-		auto framebuffer = device->createFramebuffer(
-			nvrhi::FramebufferDesc().addColorAttachment(normalMap->convertedTexture));
-
-		const auto& fbinfo = framebuffer->getFramebufferInfo();
-
-		// Create pipeline lazily (all converted textures share R10G10B10A2_UNORM)
-		if (!m_MSNGraphicsPipeline) {
-			nvrhi::GraphicsPipelineDesc pipelineDesc;
-			pipelineDesc.VS = m_MSNVertexShader;
-			pipelineDesc.PS = m_MSNPixelShader;
-			pipelineDesc.primType = nvrhi::PrimitiveType::TriangleList;
-			pipelineDesc.bindingLayouts = {
-				m_MSNBindingLayout,
-				m_TriangleDescriptors->m_Layout,
-				m_VertexDescriptors->m_Layout
-			};
-			pipelineDesc.renderState.depthStencilState.depthTestEnable = false;
-			pipelineDesc.renderState.rasterState.setCullNone();
-
-			m_MSNGraphicsPipeline = device->createGraphicsPipeline(pipelineDesc, fbinfo);
-		}
-
-		// Create binding set with the source MSN texture
-		nvrhi::BindingSetDesc bindingSetDesc;
-		bindingSetDesc.bindings = {
-			nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)),
-			nvrhi::BindingSetItem::Texture_SRV(0, normalMap->sourceTexture),
-			nvrhi::BindingSetItem::Sampler(0, m_MSNSampler)
-		};
-		auto bindingSet = device->createBindingSet(bindingSetDesc, m_MSNBindingLayout);
-
-		// Clear RT to flat normal (0.5, 0.5, 1.0, 1.0)
-		commandList->clearTextureFloat(normalMap->convertedTexture, nvrhi::AllSubresources, nvrhi::Color(0.5f, 0.5f, 1.0f, 1.0f));
-
-		for (auto* mesh : meshes) {
-			uint32_t geometryIdx = mesh->m_DescriptorHandle.Get();
-
-			nvrhi::GraphicsState state;
-			state.pipeline = m_MSNGraphicsPipeline;
-			state.framebuffer = framebuffer;
-			state.bindings = {
-				bindingSet,
-				m_TriangleDescriptors->m_DescriptorTable->GetDescriptorTable(),
-				m_VertexDescriptors->m_DescriptorTable
-			};
-			state.viewport.addViewportAndScissorRect(fbinfo.getViewport());
-
-			commandList->setGraphicsState(state);
-			commandList->setPushConstants(&geometryIdx, sizeof(geometryIdx));
-
-			nvrhi::DrawArguments args;
-			args.vertexCount = mesh->triangleData.count * 3;
-			args.instanceCount = 1;
-			commandList->draw(args);
-		}
-
-		normalMap->converted = true;
-		m_MSNAllocationMap.erase(allocationIdx);
 	}
 }

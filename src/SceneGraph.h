@@ -18,6 +18,8 @@
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
 
+#include "Pipeline/MSNConverter.h"
+
 class SceneGraph
 {
 	std::shared_mutex m_ReleaseDataMutex;
@@ -65,16 +67,7 @@ class SceneGraph
 	};
 
 	eastl::unordered_map<ID3D11Texture2D*, eastl::unique_ptr<ConvertedNormalMap>> m_NormalMaps;
-	eastl::unordered_map<DescriptorIndex, ID3D11Texture2D*> m_MSNAllocationMap;
-
-	nvrhi::ShaderHandle m_MSNVertexShader;
-	nvrhi::ShaderHandle m_MSNPixelShader;
-	nvrhi::BindingLayoutHandle m_MSNBindingLayout;
-	nvrhi::SamplerHandle m_MSNSampler;
-	nvrhi::GraphicsPipelineHandle m_MSNGraphicsPipeline;
-	bool m_MSNPipelineInitialized = false;
-
-	void InitMSNPipeline();
+	eastl::unique_ptr<Pipeline::MSNConverter> m_MSNConverter;
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
@@ -119,6 +112,8 @@ public:
 	inline auto& GetInstances() const { return m_Instances; }
 	inline auto& GetLights() { return m_Lights; }
 
+	inline auto& GetNormalMaps() { return m_NormalMaps; }
+
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
 	void UpdateActors();
@@ -152,6 +147,4 @@ public:
 	eastl::shared_ptr<DescriptorHandle> GetTextureDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
 	eastl::shared_ptr<DescriptorHandle> GetCubemapDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr);
 	eastl::shared_ptr<DescriptorHandle> GetMSNormalMapDescriptor(Mesh* mesh, RE::BSGraphics::Texture* texture);
-
-	void ConvertMSN(Model* model, nvrhi::ICommandList* commandList);
 };
