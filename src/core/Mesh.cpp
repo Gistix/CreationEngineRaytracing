@@ -294,7 +294,7 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	if (flags.all(Mesh::Flags::Skinned))
 		ClearUnusedVertices();
 
-	if (flags.none(Flags::Landscape) && HasDoubleSidedGeom())
+	if (flags.none(Flags::Landscape, Flags::Water) && Util::Geometry::HasDoubleSidedGeom(this))
 		flags.set(Mesh::Flags::DoubleSidedGeom);
 
 	auto vertexDesc = rendererData->vertexDesc;
