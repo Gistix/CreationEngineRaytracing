@@ -29,14 +29,26 @@ namespace Util
 		}
 
 		bool IsHidden(RE::NiAVObject* object, RE::NiAVObject* root) {
+			if (!object)
+				return false;
+
 			if (object->GetFlags().all(RE::NiAVObject::Flag::kHidden))
 				return true;
 
-			// We stop recursion if parent is the root
-			if (object->parent && (root == nullptr || object->parent != root))
-				return IsHidden(object->parent, root);
+			if (!object->parent)
+				return false;
 
-			return false;
+			// If local object index is not the one in NiSwitchNode, it is effectively hidden
+			if (auto* switchNode = netimmerse_cast<RE::NiSwitchNode*>(object->parent)) {
+				if (static_cast<uint32_t>(switchNode->index) != object->parentIndex)
+					return true;
+			}
+
+			// Stop recursion if parent is the root (do not check the root)
+			if (object->parent == root)
+				return false;
+
+			return IsHidden(object->parent, root);
 		}
 	}
 }
