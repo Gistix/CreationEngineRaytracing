@@ -17,6 +17,8 @@
 
 #include <eastl/unordered_set.h>
 
+#include "Core/TextureManager.h"
+
 class SceneGraph;
 
 struct Mesh
@@ -171,8 +173,7 @@ struct Mesh
 
 	void CalculateNormals();
 
-	Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, bool modelSpaceNormalMap);
-	Texture GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle);
+	Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType = TextureType::Standard);
 
 	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form);
 

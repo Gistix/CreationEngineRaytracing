@@ -57,10 +57,10 @@ namespace Pass::Common
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
-		auto& textureManager = renderer->GetTextureManager();
+		auto& textureManager = renderer->RenderTargetManager();
 
-		auto* diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
-		auto* specularTexture = textureManager.GetTexture(TextureManager::Texture::SpecularRadiance);
+		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
+		auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {

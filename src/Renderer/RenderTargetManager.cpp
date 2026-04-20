@@ -1,7 +1,7 @@
-#include "Renderer/TextureManager.h"
+#include "RenderTargetManager.h"
 #include "Renderer.h"
 
-nvrhi::ITexture* TextureManager::GetTexture(Texture texture) {
+nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 	auto& textureHandle = m_Textures[static_cast<size_t>(texture)];
 
 	auto* renderer = Renderer::GetSingleton();
@@ -21,15 +21,15 @@ nvrhi::ITexture* TextureManager::GetTexture(Texture texture) {
 
 		switch (texture)
 		{
-		case TextureManager::Texture::ViewDepth:
-		case TextureManager::Texture::ClipDepth:
+		case RenderTarget::ViewDepth:
+		case RenderTarget::ClipDepth:
 			desc.format = nvrhi::Format::R32_FLOAT;
 			break;
-		case TextureManager::Texture::MotionVectors3D:
+		case RenderTarget::MotionVectors3D:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
-		case TextureManager::Texture::DiffuseRadiance:
-		case TextureManager::Texture::SpecularRadiance:
+		case RenderTarget::DiffuseRadiance:
+		case RenderTarget::SpecularRadiance:
 		default:
 			break;
 		}

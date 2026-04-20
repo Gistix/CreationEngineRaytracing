@@ -16,11 +16,11 @@ namespace Pipeline
 		ShaderUtils::CompileShader(vertexBlob, L"data/shaders/ModelSpaceToTangent.hlsl", {}, L"vs_6_5", L"MainVS");
 		ShaderUtils::CompileShader(pixelBlob, L"data/shaders/ModelSpaceToTangent.hlsl", {}, L"ps_6_5", L"MainPS");
 
-		m_MSNVertexShader = device->createShader({ nvrhi::ShaderType::Vertex, "", "MainVS" }, vertexBlob->GetBufferPointer(), vertexBlob->GetBufferSize());
-		m_MSNPixelShader = device->createShader({ nvrhi::ShaderType::Pixel, "", "MainPS" }, pixelBlob->GetBufferPointer(), pixelBlob->GetBufferSize());
+		m_VertexShader = device->createShader({ nvrhi::ShaderType::Vertex, "", "MainVS" }, vertexBlob->GetBufferPointer(), vertexBlob->GetBufferSize());
+		m_PixelShader = device->createShader({ nvrhi::ShaderType::Pixel, "", "MainPS" }, pixelBlob->GetBufferPointer(), pixelBlob->GetBufferSize());
 
 		// Create sampler
-		m_MSNSampler = device->createSampler(
+		m_Sampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
@@ -32,12 +32,12 @@ namespace Pipeline
 			.addItem(nvrhi::BindingLayoutItem::Texture_SRV(0))
 			.addItem(nvrhi::BindingLayoutItem::Sampler(0));
 
-		m_MSNBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+		m_BindingLayout = device->createBindingLayout(bindingLayoutDesc);
 	}
 
-	void MSNConverter::Allocate(DescriptorIndex descriptorIndex, ID3D11Texture2D* texture)
+	void MSNConverter::Allocate(DescriptorIndex descriptorIndex, ID3D11Resource* texture)
 	{
-		m_MSNAllocationMap.emplace(descriptorIndex, texture);
+		m_AllocationMap.emplace(descriptorIndex, texture);
 	}
 
 	void MSNConverter::Convert(Model* model, nvrhi::ICommandList* commandList, SceneGraph* sceneGraph)
@@ -62,11 +62,11 @@ namespace Pipeline
 		auto& triangleDescriptors = sceneGraph->GetTriangleDescriptors();
 		auto& vertexDescriptors = sceneGraph->GetVertexDescriptors();
 
-		auto& normapMaps = sceneGraph->GetNormalMaps();
+		auto& normapMaps = sceneGraph->GetTextureManager()->m_NormalMaps;
 
 		for (auto& [allocationIdx, meshes] : msnGroups) {
-			auto msnIt = m_MSNAllocationMap.find(allocationIdx);
-			if (msnIt == m_MSNAllocationMap.end())
+			auto msnIt = m_AllocationMap.find(allocationIdx);
+			if (msnIt == m_AllocationMap.end())
 				continue;
 
 			auto normalMapIt = normapMaps.find(msnIt->second);
@@ -80,25 +80,25 @@ namespace Pipeline
 
 			// Create framebuffer for this render target
 			auto framebuffer = device->createFramebuffer(
-				nvrhi::FramebufferDesc().addColorAttachment(normalMap->convertedTexture));
+				nvrhi::FramebufferDesc().addColorAttachment(normalMap->texture));
 
 			const auto& fbinfo = framebuffer->getFramebufferInfo();
 
 			// Create pipeline lazily (all converted textures share R10G10B10A2_UNORM)
-			if (!m_MSNGraphicsPipeline) {
+			if (!m_GraphicsPipeline) {
 				nvrhi::GraphicsPipelineDesc pipelineDesc;
-				pipelineDesc.VS = m_MSNVertexShader;
-				pipelineDesc.PS = m_MSNPixelShader;
+				pipelineDesc.VS = m_VertexShader;
+				pipelineDesc.PS = m_PixelShader;
 				pipelineDesc.primType = nvrhi::PrimitiveType::TriangleList;
 				pipelineDesc.bindingLayouts = {
-					m_MSNBindingLayout,
+					m_BindingLayout,
 					triangleDescriptors->m_Layout,
 					vertexDescriptors->m_Layout
 				};
 				pipelineDesc.renderState.depthStencilState.depthTestEnable = false;
 				pipelineDesc.renderState.rasterState.setCullNone();
 
-				m_MSNGraphicsPipeline = device->createGraphicsPipeline(pipelineDesc, fbinfo);
+				m_GraphicsPipeline = device->createGraphicsPipeline(pipelineDesc, fbinfo);
 			}
 
 			// Create binding set with the source MSN texture
@@ -106,18 +106,18 @@ namespace Pipeline
 			bindingSetDesc.bindings = {
 				nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)),
 				nvrhi::BindingSetItem::Texture_SRV(0, normalMap->sourceTexture),
-				nvrhi::BindingSetItem::Sampler(0, m_MSNSampler)
+				nvrhi::BindingSetItem::Sampler(0, m_Sampler)
 			};
-			auto bindingSet = device->createBindingSet(bindingSetDesc, m_MSNBindingLayout);
+			auto bindingSet = device->createBindingSet(bindingSetDesc, m_BindingLayout);
 
 			// Clear RT to flat normal (0.5, 0.5, 1.0, 1.0)
-			commandList->clearTextureFloat(normalMap->convertedTexture, nvrhi::AllSubresources, nvrhi::Color(0.5f, 0.5f, 1.0f, 1.0f));
+			commandList->clearTextureFloat(normalMap->texture, nvrhi::AllSubresources, nvrhi::Color(0.5f, 0.5f, 1.0f, 1.0f));
 
 			for (auto* mesh : meshes) {
 				uint32_t geometryIdx = mesh->m_DescriptorHandle.Get();
 
 				nvrhi::GraphicsState state;
-				state.pipeline = m_MSNGraphicsPipeline;
+				state.pipeline = m_GraphicsPipeline;
 				state.framebuffer = framebuffer;
 				state.bindings = {
 					bindingSet,
@@ -137,7 +137,7 @@ namespace Pipeline
 
 			normalMap->converted = true;
 			normalMap->sourceTexture->Release();
-			m_MSNAllocationMap.erase(allocationIdx);
+			m_AllocationMap.erase(allocationIdx);
 		}
 	}
 };

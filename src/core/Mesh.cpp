@@ -337,46 +337,15 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 	return triangles;
 }
 
-Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, [[maybe_unused]] bool modelSpaceNormalMap = false)
+Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType)
 {
 	if (!niPointer || !niPointer->rendererTexture)
 		return Texture(defaultDescHandle, nullptr);
 
-	eastl::shared_ptr<DescriptorHandle> result = nullptr;
+	auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
 
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-	auto* texture = niPointer->rendererTexture;
-
-	if (modelSpaceNormalMap)
-		result = sceneGraph->GetMSNormalMapDescriptor(this, texture);
-	else {
-		ID3D12Resource* d3d12Resource = nullptr;
-
-		if (texture->pad24 == 1)
-			d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
-
-		result = sceneGraph->GetTextureDescriptor(texture->texture, d3d12Resource);
-	}
-
-	if (!result)
-		return Texture(defaultDescHandle, nullptr);
-
-	return Texture(result, defaultDescHandle.get());
-}
-
-Texture Mesh::GetCubemapTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle)
-{
-	if (!niPointer || !niPointer->rendererTexture)
-		return Texture(defaultDescHandle, nullptr);
-
-	/*auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	auto result = sceneGraph->GetCubemapDescriptor(niPointer->rendererTexture->texture);
-
-	if (!result)
-		return Texture(defaultDescHandle, nullptr);
-
-	return Texture(result, defaultDescHandle.get());*/
+	if (auto result = textureManager->GetDescriptor(niPointer->rendererTexture, textureType))
+		return Texture(result, defaultDescHandle.get());
 
 	return Texture(defaultDescHandle, nullptr);
 }
@@ -580,9 +549,8 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 						if (const RE::BSLightingShaderMaterialBase* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 							textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
 
-							bool isModelSpaceNormalMap = shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals);
-
-							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, isModelSpaceNormalMap);
+							auto textureType = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
+							textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, textureType);
 
 							if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 								if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
@@ -604,14 +572,18 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
 							}
 
-							// Envmap / Eye
-							if (feature == Feature::kEnvironmentMap || feature == Feature::kEye) {
+							// Envmap
+							if (feature == Feature::kEnvironmentMap) {
 								if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial)) {
-									textures[4] = GetCubemapTexture(lightingEnvmapMaterial->envTexture, blackTexture);
+									textures[4] = GetTexture(lightingEnvmapMaterial->envTexture, blackTexture, TextureType::CubeMap);
 									textures[5] = GetTexture(lightingEnvmapMaterial->envMaskTexture, whiteTexture);
 								}
-								else if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
-									textures[4] = GetCubemapTexture(lightingEyeMaterial->envTexture, blackTexture);
+							}
+
+							// Eye
+							if (feature == Feature::kEye) {
+								if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
+									textures[4] = GetTexture(lightingEyeMaterial->envTexture, blackTexture, TextureType::CubeMap);
 									textures[5] = GetTexture(lightingEyeMaterial->envMaskTexture, whiteTexture);
 								}
 							}
@@ -649,7 +621,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 									if (Util::IsPlayer(form)) {
 										auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
 
-										auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptor(
+										auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->GetDescriptor(
 											gameRendererRuntimeData.renderTargets[RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT].texture
 										);
 

@@ -58,14 +58,8 @@ namespace Hooks
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
-		if (oThis && oThis->rendererTexture) {
-			if (auto resource = oThis->rendererTexture->texture) {
-				auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-				auto* texture = reinterpret_cast<ID3D11Texture2D*>(resource);
-				sceneGraph->ReleaseTexture(texture);
-				sceneGraph->ReleaseCubemap(texture);
-			}
-		}
+		if (oThis && oThis->rendererTexture)
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseTexture(oThis->rendererTexture);
 
 		func(oThis);
 	}

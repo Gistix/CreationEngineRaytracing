@@ -586,10 +586,10 @@ void Renderer::EndExecution()
 
 		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Mode == Mode::PathTracing) {
 			if (m_PTDepthCopyTargetTexture)
-				m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_TextureManager.GetTexture(TextureManager::Texture::ClipDepth), region);
+				m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth), region);
 	
 			if (m_PTMVCopyTargetTexture)
-				m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_TextureManager.GetTexture(TextureManager::Texture::MotionVectors3D), region);
+				m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D), region);
 		}
 	}
 

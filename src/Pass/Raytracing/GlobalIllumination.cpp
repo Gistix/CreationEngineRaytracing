@@ -195,10 +195,10 @@ namespace Pass::Raytracing
 
 		nvrhi::ITexture* diffuseTexture = nullptr;
 
-		auto& textureManager = renderer->GetTextureManager();
+		auto& textureManager = renderer->RenderTargetManager();
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR)
-			diffuseTexture = textureManager.GetTexture(TextureManager::Texture::DiffuseRadiance);
+			diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
 		else
 			diffuseTexture = renderer->GetMainTexture();
 
@@ -226,8 +226,8 @@ namespace Pass::Raytracing
 		};
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR) {
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(TextureManager::Texture::SpecularRadiance)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(TextureManager::Texture::ViewDepth)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
 		}
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
