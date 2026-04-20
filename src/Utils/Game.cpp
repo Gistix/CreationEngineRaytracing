@@ -40,7 +40,8 @@ namespace Util
 
 			// If object parent index is not active on its parent NiSwitchNode, it is effectively hidden
 			if (auto* switchNode = netimmerse_cast<RE::NiSwitchNode*>(object->parent)) {
-				if (static_cast<uint32_t>(switchNode->index) != object->parentIndex)
+				// This looks backwards, but its the way it seem to work
+				if (static_cast<uint32_t>(switchNode->index) == object->parentIndex)
 					return true;
 			}
 

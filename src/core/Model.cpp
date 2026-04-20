@@ -69,12 +69,8 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer)
 
 	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
 
-	// TODO: Proper fix for non-dynamic/non-skinned transform update
-	// Idealy all non-skinned geometries would be properly updated
-	auto updateTransform = meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned);
-
 	for (auto& mesh : meshes) {
-		auto dirtyFlags = mesh->Update(object, isPlayer, updateTransform);
+		auto dirtyFlags = mesh->Update(object, isPlayer, meshFlags.get());
 
 		bool vertexUpdate = (dirtyFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 		bool skinUpdate = (dirtyFlags & DirtyFlags::Skin) != DirtyFlags::None;
