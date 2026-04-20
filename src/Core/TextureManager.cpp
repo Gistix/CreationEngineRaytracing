@@ -37,6 +37,9 @@ TextureManager::TextureManager()
 
 void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 {
+	if (!texture)
+		return;
+
 	IUnknown* key = nullptr;
 
 	if (texture->pad24 == 1)
