@@ -122,7 +122,7 @@ struct Mesh
 
 	void UpdateDismember();
 
-	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer);
+	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer, bool updateTransform);
 
 	bool IsHidden() const;
 
