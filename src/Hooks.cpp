@@ -6,12 +6,17 @@
 
 namespace Hooks
 {
-	void TES_AttachModel::thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
+	struct TES_AttachModel
 	{
-		func(tes, refr, cell, queuedTree, a5, a6);
+		static void thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
+		{
+			func(tes, refr, cell, queuedTree, a5, a6);
 
-		Scene::GetSingleton()->AttachModel(refr);
-	}
+			Scene::GetSingleton()->AttachModel(refr);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	void Release3DRelatedData::thunk(RE::TESObjectREFR* refr)
 	{
@@ -58,8 +63,11 @@ namespace Hooks
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
-		if (oThis && oThis->rendererTexture)
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseTexture(oThis->rendererTexture);
+		if (oThis && oThis->rendererTexture) {
+			auto scene = Scene::GetSingleton();
+			auto sceneGraph = scene->GetSceneGraph();
+			sceneGraph->ReleaseTexture(oThis->rendererTexture);
+		}
 
 		func(oThis);
 	}
@@ -84,6 +92,28 @@ namespace Hooks
 
 		func(a_cell, a_refr, a_node);
 	}
+
+	struct TESObject_UnClone3D
+	{
+		static void thunk(RE::TESObject* a_object, RE::TESObjectREFR* a_refr)
+		{
+			logger::trace("TESObject::UnClone3D - Object {:0X} {}", a_object->formID, a_object->GetName());
+
+			if (a_refr) {
+				logger::trace("TESObject::UnClone3D - Refr {:0X}", a_refr->formID);
+
+				if (auto* baseObject = a_refr->GetBaseObject()) {
+					if (auto* model = baseObject->As<RE::TESModel>())
+						logger::trace("\tTESObject::UnClone3D - Model: {}", model->GetModel());
+				}
+
+				Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_refr, true);
+			}
+
+			func(a_object, a_refr);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 #if defined(SKYRIM)
 	HRESULT CreateTextureAndSRV::thunk(
@@ -680,13 +710,18 @@ namespace Hooks
 		func(pass, technique, alphaTest, renderFlags);
 	}
 
-	int AttachLOD::thunk(RE::BGSObjectLODAttachState* a_state, void* a_arg2, uint32_t a_arg3)
+	struct AttachLOD
 	{
-		if (!a_state->isAttached)
-			Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_state->objectNode);
+		static int thunk(RE::BGSObjectLODAttachState* a_state, void* a_arg2, uint32_t a_arg3)
+		{
+			if (!a_state->isAttached)
+				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_state->objectNode);
 
-		return func(a_state, a_arg2, a_arg3);
-	}
+			return func(a_state, a_arg2, a_arg3);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	struct LoadAndAttachAddon
 	{
@@ -760,14 +795,7 @@ namespace Hooks
 
 	void Install()
 	{
-		stl::write_vfunc<0x6B, Release3DRelatedData>(RE::VTABLE_TESObjectREFR[0]);
-
 		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
-
-		//stl::detour_thunk<ShadowSceneNode_AttachObject>(REL::RelocationID(99696, 106330));
-		//stl::detour_thunk<ShadowSceneNode_DetachObject>(REL::RelocationID(99705, 106339));
-
-		//stl::detour_thunk<TESObjectCELL_AddRefr>(REL::RelocationID(19003, 19411));
 
 #if defined(SKYRIM)
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
@@ -776,10 +804,10 @@ namespace Hooks
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
-		stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
+		//stl::write_vfunc<0x6B, Release3DRelatedData>(RE::VTABLE_TESObjectREFR[0]);
+		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 
-		// Destructor to remove instances (not models)
-		stl::detour_thunk<Destructor<RE::NiAVObject>>(REL::RelocationID(68924, 70275));
+		//stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
 
 		stl::detour_thunk<AttachLOD>(REL::RelocationID(30741, 31581));
 		

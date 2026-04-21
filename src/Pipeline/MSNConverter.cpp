@@ -136,7 +136,6 @@ namespace Pipeline
 			}
 
 			normalMap->converted = true;
-			normalMap->sourceTexture->Release();
 			m_AllocationMap.erase(allocationIdx);
 		}
 	}

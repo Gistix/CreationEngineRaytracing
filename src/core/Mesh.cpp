@@ -1091,9 +1091,9 @@ void Mesh::UpdateDismember()
 
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
 {
-	// Only this reference remains, so erase it
+	// This should never be true, but it often is, meaning we missed some logic that removes this mesh or the entire instance
 	if (bsGeometryPtr->GetRefCount() == 1) {
-		logger::warn("Mesh::Update - Released BSGeometry being referenced in {}", m_Name);
+		logger::trace("Mesh::Update - Released BSGeometry being referenced in 0x{:08X} {}", reinterpret_cast<uintptr_t>(bsGeometryPtr.get()), m_Name);
 		return DirtyFlags::None;
 	}
 
