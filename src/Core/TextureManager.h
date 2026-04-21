@@ -20,8 +20,8 @@ struct TextureManager
 		nvrhi::TextureHandle sourceTexture; // Original MSN texture
 		bool converted = false;
 
-		MSNReference(nvrhi::TextureHandle texture, DescriptorTableManager* manager) 
-			: TextureReference(texture, manager), sourceTexture(texture) { }
+		MSNReference(nvrhi::TextureHandle texture, nvrhi::TextureHandle sourceTexture, DescriptorTableManager* manager)
+			: TextureReference(texture, manager), sourceTexture(sourceTexture) { }
 	};
 
 	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;

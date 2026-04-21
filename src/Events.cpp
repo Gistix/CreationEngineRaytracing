@@ -11,11 +11,10 @@ namespace Events
 		if (!a_event)
 			return RE::BSEventNotifyControl::kContinue;
 
-		auto* eventRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_event->formID);
-
 		if (a_event->loaded)
 			return RE::BSEventNotifyControl::kContinue;
 
+		auto* eventRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_event->formID);
 		Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(eventRef, true);
 
 		return RE::BSEventNotifyControl::kContinue;
