@@ -37,6 +37,9 @@ TextureManager::TextureManager()
 
 void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 {
+	if (!texture)
+		return;
+
 	IUnknown* key = nullptr;
 
 	if (texture->pad24 == 1)
@@ -50,14 +53,11 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType)
 {
-	bool shareResource = true;
-
 	ID3D11Resource* d3d11Resource = texture->texture;
 	ID3D12Resource* d3d12Resource = nullptr;
 
 	// Texure was already loaded on DX12
 	if (texture->pad24 == 1) {
-		shareResource = false;
 		d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
 	}
 
@@ -126,11 +126,15 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 
 		d3d12Resource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
 	}
+	else if (!d3d12Resource) {
+		logger::error("TextureManager::GetDescriptor - D3D12Resource is null");
+		return nullptr;
+	}
 
 	// Create NVRHI handle for native texture
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
-	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
+	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format); // Line 138
 
 	if (formatIt == Renderer::GetFormatMapping().end()) {
 		logger::error("TextureManager::GetDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
@@ -167,16 +171,11 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 			.setIsRenderTarget(true)
 			.setDebugName("Converted MSN Texture"));
 
-		it->second = eastl::make_unique<MSNReference>(normalMapRT, m_TextureDescriptors->m_DescriptorTable.get());
-		it->second->sourceTexture = textureHandle;
+		it->second = eastl::make_unique<MSNReference>(normalMapRT, textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
 
 		m_MSNConverter->Allocate(it->second->descriptorHandle->Get(), d3d11Resource);
 	}
 	else {
-		// NVRHI now owns the texture
-		if (shareResource)
-			d3d12Resource->Release();
-
 		auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
 
 		if (!emplaced) {

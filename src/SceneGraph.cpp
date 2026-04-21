@@ -605,14 +605,19 @@ void SceneGraph::ReleaseObjectInstance(RE::NiAVObject* node, bool releaseModel)
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 	std::unique_lock releaseLock(m_ReleaseDataMutex);
 
-	auto& instance = instanceNodeIt->second;
+	auto* instance = instanceNodeIt->second;
 
-	auto refCount = instance->model->Release();
+	int refCount = 0;
+	eastl::string name;
+
+	if (instance->model) {
+		name = instance->model->m_Name;
+		refCount = instance->model->Release();
+		instance->model = nullptr;
+	}
 
 	if (refCount <= 0 && releaseModel) {
-		logger::debug("SceneGraph::ReleaseObjectInstance - {}", instance->model->m_Name);
-
-		auto modelIt = m_Models.find(instance->model->m_Name);
+		auto modelIt = m_Models.find(name);
 
 		if (modelIt != m_Models.end()) {
 			auto renderer = Renderer::GetSingleton();
@@ -633,7 +638,7 @@ void SceneGraph::ReleaseObjectInstance(RE::NiAVObject* node, bool releaseModel)
 	auto instIt = eastl::find_if(
 		m_Instances.begin(),
 		m_Instances.end(),
-		[&](auto& x) { return x.get() == instance; });
+		[instance](auto& x) { return x.get() == instance; });
 
 	if (instIt != m_Instances.end())
 		m_Instances.erase(instIt);
@@ -649,39 +654,47 @@ void SceneGraph::ReleaseFormInstances(RE::TESForm* form, bool releaseModel)
 
 	auto instanceFormIDsIt = m_InstancesFormIDs.find(formID);
 
-	// No instance to remove
-	if (instanceFormIDsIt == m_InstancesFormIDs.end())
+	if (instanceFormIDsIt == m_InstancesFormIDs.end()) {
+		logger::debug("SceneGraph::ReleaseFormInstances - Instance not found for {:0X}", formID);
 		return;
+	}
+
+	logger::trace("SceneGraph::ReleaseFormInstances - Releasing {} instances for {:0X}", instanceFormIDsIt->second.size(), formID);
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+	std::unique_lock releaseLock(m_ReleaseDataMutex);
 
 	auto renderer = Renderer::GetSingleton();
 
-	// A single form can hold multiple model instances
-	for (auto& instance : instanceFormIDsIt->second) {
+	// Safer iteration (copy pointer list)
+	auto instances = instanceFormIDsIt->second;
+
+	for (auto* instance : instances) {
 		m_InstanceNodes.erase(instance->m_Node);
 
-		auto refCount = instance->model->Release();
+		auto* model = instance->model;
 
-		if (refCount <= 0 && releaseModel) {
-			logger::debug("SceneGraph::ReleaseFormInstances - {}", instance->model->m_Name);
+		int refCount = 0;
+		if (model) {
+			refCount = model->Release();
+			instance->model = nullptr;
+		}
 
-			auto modelIt = m_Models.find(instance->model->m_Name);
+		if (refCount <= 0 && releaseModel && model) {
+			logger::debug("SceneGraph::ReleaseFormInstances - {}", model->m_Name);
+
+			auto modelIt = m_Models.find(model->m_Name);
 
 			if (modelIt != m_Models.end()) {
-				// Add to safe-release vector
 				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
-
-				// Erase from list
 				m_Models.erase(modelIt);
 			}
 		}
 
-		// Removes the original instance, all pointers past this point are invalid
 		auto instIt = eastl::find_if(
 			m_Instances.begin(),
 			m_Instances.end(),
-			[&](auto& x) { return x.get() == instance; });
+			[instance](auto& x) { return x.get() == instance; });
 
 		if (instIt != m_Instances.end())
 			m_Instances.erase(instIt);
@@ -991,25 +1004,21 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::str
 		logger::warn("SceneGraph::AddInstance - Emplace failed: {}", path);
 		return;
 	}
+
+	// Create instance
 	auto instance = eastl::make_unique<Instance>(formID, node, modelIt->second.get());
 
-	if (auto nodesIt = m_InstancesFormIDs.find(formID); nodesIt != m_InstancesFormIDs.end()) {
-		nodesIt->second.push_back(instance.get());
-	}
-	else {
-		m_InstancesFormIDs.try_emplace(formID, eastl::vector<Instance*>{ instance.get() });
-	}
-
+	// Add instance to FormID -> Instance map
+	m_InstancesFormIDs[formID].push_back(instance.get());
 	instanceIt->second = instance.get();
 
 	m_Instances.emplace_back(eastl::move(instance));
-
 	modelIt->second->AddRef();
 }
 
 void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
 {
-	std::shared_lock lock(m_ReleaseDataMutex);
+	std::unique_lock lock(m_ReleaseDataMutex);
 
 	for (auto it = m_ReleasedData.begin(); it != m_ReleasedData.end(); ) {
 		if (it->frameIndex < frameIndex - 1 && it->model->m_LastBLASUpdate < frameIndex - 1) {

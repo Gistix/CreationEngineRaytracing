@@ -5,12 +5,6 @@
 
 namespace Hooks
 {
-	struct TES_AttachModel
-	{
-		static void thunk(RE::TES* a1, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct Release3DRelatedData
 	{
 		static void thunk(RE::TESObjectREFR* oThis);
@@ -50,18 +44,6 @@ namespace Hooks
 	struct NiSourceTexture_Destructor
 	{
 		static void thunk(RE::NiSourceTexture* oThis);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	template <typename T>
-	struct Destructor
-	{
-		static void thunk(T* oThis)
-		{
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseObjectInstance(oThis);
-
-			func(oThis);
-		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
@@ -156,11 +138,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct AttachLOD
-	{
-		static int thunk(RE::BGSObjectLODAttachState* a_state, void* a_arg2, uint32_t a_arg3);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
 #elif defined(FALLOUT4)
 
 #endif
