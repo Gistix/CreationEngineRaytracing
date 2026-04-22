@@ -13,12 +13,14 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
 
-	auto* refr = form->AsReference();
+	if (form) {
+		auto* refr = form->AsReference();
 
-	if (refr && refr->extraList.HasType(RE::ExtraDataType::kEmittanceSource)) {
-		if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
-			if (auto* tesRegion = extra->source->As<RE::TESRegion>()) {
-				m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+		if (refr && refr->extraList.HasType(RE::ExtraDataType::kEmittanceSource)) {
+			if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
+				if (auto* tesRegion = extra->source->As<RE::TESRegion>()) {
+					m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+				}
 			}
 		}
 	}

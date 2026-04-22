@@ -13,15 +13,24 @@
 #include "Constants.h"
 #include "Types/BindlessTableManager.h"
 #include "Types/BindlessTable.h"
+#include "Types/LODBlockReference.h"
 #include "Types/ReleasedData.h"
 
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
 
 #include "Pipeline/MSNConverter.h"
+#include "Types/RE/RE.h"
 
 class SceneGraph
 {
+	enum class LODType {
+		None,
+		Object,
+		Landscape,
+		Tree
+	};
+
 	std::shared_mutex m_ReleaseDataMutex;
 
 	// Model Path, Model data ptr
@@ -33,6 +42,10 @@ class SceneGraph
 	eastl::vector<eastl::unique_ptr<Instance>> m_Instances;
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
+
+	// LOD
+	eastl::unordered_map<RE::BGSObjectBlock*, LODBlockReference> m_ObjectLODInstances;
+	eastl::unordered_map<RE::BGSTerrainBlock*, LODBlockReference> m_TerrainLODInstances;
 
 	// Actors
 	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
@@ -71,8 +84,17 @@ class SceneGraph
 
 	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
 	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
-	bool CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+
+	Instance* AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID);
+
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path);
+	void AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* path);
+	void AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model);
+	void AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model);
+
+	void ReleaseInstances(eastl::vector<Instance*> instances, bool releaseModel);
+	void ReleaseInstances(eastl::vector<Instance*> instances);
 public:
 	void Initialize();
 
@@ -102,10 +124,17 @@ public:
 	void ClearDirtyStates();
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
+
 	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
-	void CreateLODModel(RE::NiNode* node);
+
+	// LOD
+	void CreateLODModel(RE::BGSTerrainBlock* chunk);
+	void CreateLODModel(RE::BGSObjectBlock* chunk);
+
+	template <typename T>
+	void CreateLODModelImpl(T* chunk);
 
 	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
@@ -118,10 +147,20 @@ public:
 	// releaseModel is to be used by water and only water.
 	void ReleaseObjectInstance(RE::NiAVObject* object, bool releaseModel = false);
 
-	// Releases all instances of a form, and optionally releases the model and mesh data if there are no remaining instances using it.
-	void ReleaseFormInstances(RE::TESForm* form, bool releaseModel);
+	// Releases all instances of a form and optionally releases the model and mesh data if there are no remaining instances using it
+	void ReleaseInstances(RE::TESForm* form, bool releaseModel);
+
+	// Releases all instances of a terrain block (LOD)
+	void ReleaseInstances(RE::BGSTerrainBlock* block);
+
+	// Releases all instances of an object block (LOD)
+	void ReleaseInstances(RE::BGSObjectBlock* block);
 
 	void SetInstanceDetached(RE::TESForm* form, bool detached);
+
+	void SetLODDetached(RE::BGSTerrainBlock* block, bool detached);
+
+	void SetLODDetached(RE::BGSObjectBlock* block, bool detached);
 
 	void RunGarbageCollection(uint64_t frameIndex);
 };
