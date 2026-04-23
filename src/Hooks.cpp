@@ -56,7 +56,7 @@ namespace Hooks
 
 	void TESWaterSystem_RemoveWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj)
 	{
-		Scene::GetSingleton()->GetSceneGraph()->ReleaseObjectInstance(a_waterObj, true);
+		Scene::GetSingleton()->GetSceneGraph()->ReleaseWaterInstance(a_waterObj);
 
 		func(a_waterSystem, a_waterObj);
 	};
@@ -714,10 +714,8 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
 		{
-			if (!a_block->attached) {
-				logger::info("BGSObjectBlock::Load - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+			if (!a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-			}
 
 			func(a_block, a_arg2, a_firstAvail);
 		}
@@ -729,10 +727,8 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
 		{
-			if (!a_block->attached) {
-				logger::info("BGSObjectBlock::Attach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+			if (!a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
-			}
 
 			func(a_block, a_arg2, a_firstAvail);
 		}
@@ -744,10 +740,8 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block)
 		{
-			if (a_block->attached) {
-				logger::info("BGSObjectBlock::Detach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+			if (a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
-			}
 
 			func(a_block);
 		}
@@ -759,10 +753,8 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			if (a_block->loaded && !a_block->attached && a_block->chunk) {
-				logger::info("BGSTerrainBlock::Load - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+			if (a_block->loaded && !a_block->attached && a_block->chunk)
 				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-			}
 
 			func(a_block);
 		}
@@ -774,10 +766,8 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			if (a_block->loaded && !a_block->attached && a_block->chunk) {
-				logger::info("BGSTerrainBlock::Attach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+			if (a_block->loaded && !a_block->attached && a_block->chunk)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
-			}
 
 			func(a_block);
 		}
@@ -789,10 +779,8 @@ namespace Hooks
 	{
 		static RE::BSMultiBoundNode* thunk(RE::BGSTerrainBlock* a_block)
 		{
-			if (a_block->attached) {
-				logger::info("BGSTerrainBlock::Detach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+			if (a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
-			}
 
 			return func(a_block);
 		}

@@ -40,8 +40,10 @@ class SceneGraph
 
 	// Root node ptr, Instance data
 	eastl::vector<eastl::unique_ptr<Instance>> m_Instances;
-	eastl::unordered_map<RE::NiAVObject*, Instance*> m_InstanceNodes;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
+
+	// Water
+	eastl::unordered_map<RE::NiAVObject*, Instance*> m_WaterInstances;
 
 	// LOD
 	eastl::unordered_map<RE::BGSObjectBlock*, LODBlockReference> m_ObjectLODInstances;
@@ -93,8 +95,8 @@ class SceneGraph
 	void AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model);
 	void AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model);
 
-	void ReleaseInstances(eastl::vector<Instance*> instances, bool releaseModel);
-	void ReleaseInstances(eastl::vector<Instance*> instances);
+	void ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel);
+	void ReleaseInstances(eastl::vector<Instance*>& instances);
 public:
 	void Initialize();
 
@@ -143,18 +145,17 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 
-	// Releases an object instance while keeping the model and mesh data intact.
-	// releaseModel is to be used by water and only water.
-	void ReleaseObjectInstance(RE::NiAVObject* object, bool releaseModel = false);
-
 	// Releases all instances of a form and optionally releases the model and mesh data if there are no remaining instances using it
 	void ReleaseInstances(RE::TESForm* form, bool releaseModel);
 
+	// Release instance tied to water node
+	void ReleaseWaterInstance(RE::NiAVObject* object);
+
 	// Releases all instances of a terrain block (LOD)
-	void ReleaseInstances(RE::BGSTerrainBlock* block);
+	//void ReleaseInstances(RE::BGSTerrainBlock* block);
 
 	// Releases all instances of an object block (LOD)
-	void ReleaseInstances(RE::BGSObjectBlock* block);
+	//void ReleaseInstances(RE::BGSObjectBlock* block);
 
 	void SetInstanceDetached(RE::TESForm* form, bool detached);
 
