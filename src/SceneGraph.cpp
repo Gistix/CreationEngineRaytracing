@@ -295,6 +295,25 @@ void SceneGraph::UpdateActors()
 	}
 }
 
+void SceneGraph::UpdateLODVisibility()
+{
+	for (auto& [block, ref]: m_TerrainLODInstances)
+	{
+		if (!block->loaded || !block->attached)
+			continue;
+
+		ref.UpdateVisibility(block->chunk);
+	}
+
+	for (auto& [block, ref] : m_ObjectLODInstances)
+	{
+		if (!block->loaded || !block->attached)
+			continue;
+
+		ref.UpdateVisibility(block->chunk);
+	}
+}
+
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
@@ -826,13 +845,11 @@ void SceneGraph::ReleaseInstances(RE::TESForm* form, bool releaseModel)
 	m_InstancesFormIDs.erase(it);
 }
 
-/*void SceneGraph::ReleaseInstances(RE::BGSTerrainBlock* block)
+void SceneGraph::ReleaseInstances(RE::BGSTerrainBlock* block)
 {
 	auto it = m_TerrainLODInstances.find(block);
 	if (it == m_TerrainLODInstances.end())
 		return;
-
-	logger::info("SceneGraph::ReleaseInstances - Releasing {} instances for terrain block 0x{:08X}", it->second.instances.size(), reinterpret_cast<uintptr_t>(block));
 
 	ReleaseInstances(it->second.instances, true);
 
@@ -850,7 +867,7 @@ void SceneGraph::ReleaseInstances(RE::BGSObjectBlock* block)
 	ReleaseInstances(it->second.instances, true);
 
 	m_ObjectLODInstances.erase(it);
-}*/
+}
 
 void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 {

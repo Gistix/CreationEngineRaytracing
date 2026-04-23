@@ -15,7 +15,8 @@ struct Instance
 		None = 0,
 		Detached = 1 << 0,
 		FirstPersonHidden = 1 << 1,
-		DistanceHidden = 1 << 2
+		DistanceHidden = 1 << 2,
+		LODHidden = 1 << 3
 	};
 
 	// Instance form id
@@ -45,6 +46,8 @@ struct Instance
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) { }
 	
 	void SetDetached(bool detach);
+
+	void SetLODHidden(bool hidden);
 
 	bool IsDetached() const;
 

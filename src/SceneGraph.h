@@ -122,7 +122,13 @@ public:
 
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
+
+	// Update Actor equipment
 	void UpdateActors();
+
+	// Update LOD visibility
+	void UpdateLODVisibility();
+
 	void ClearDirtyStates();
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
@@ -152,10 +158,10 @@ public:
 	void ReleaseWaterInstance(RE::NiAVObject* object);
 
 	// Releases all instances of a terrain block (LOD)
-	//void ReleaseInstances(RE::BGSTerrainBlock* block);
+	void ReleaseInstances(RE::BGSTerrainBlock* block);
 
 	// Releases all instances of an object block (LOD)
-	//void ReleaseInstances(RE::BGSObjectBlock* block);
+	void ReleaseInstances(RE::BGSObjectBlock* block);
 
 	void SetInstanceDetached(RE::TESForm* form, bool detached);
 

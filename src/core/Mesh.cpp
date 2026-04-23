@@ -613,8 +613,6 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 								}
 							}
 
-							//							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
-
 							// FaceGen
 							if (feature == Feature::kFaceGen) {
 								if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {

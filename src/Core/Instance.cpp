@@ -8,13 +8,19 @@ void Instance::SetDetached(bool detached)
 	m_State.set(detached, State::Detached);
 }
 
+void Instance::SetLODHidden(bool hidden)
+{
+	m_State.set(hidden, State::LODHidden);
+}
+
 bool Instance::IsDetached() const
 {
 	return m_State.all(State::Detached);
 }
+
 bool Instance::IsHidden() const
 {
-	return m_State.any(State::Detached, State::FirstPersonHidden, State::DistanceHidden) || m_Node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
+	return m_State.any(State::Detached, State::FirstPersonHidden, State::DistanceHidden, State::LODHidden) || m_Node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
 }
 
 bool Instance::SkipUpdate()
