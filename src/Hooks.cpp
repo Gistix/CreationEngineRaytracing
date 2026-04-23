@@ -159,10 +159,10 @@ namespace Hooks
 			auto defaultTexture = stateRuntimeData.defaultTextureGrey->rendererTexture;
 
 			texture->texture = defaultTexture->texture;
-			texture->unk08 = defaultTexture->unk08;
+			texture->UAV = defaultTexture->UAV;
 			texture->resourceView = defaultTexture->resourceView;
 			texture->unk18 = defaultTexture->unk18;
-			texture->unk20 = defaultTexture->unk20;
+			texture->refCount = defaultTexture->refCount;
 
 			defaultTexture->texture->AddRef();
 			defaultTexture->resourceView->AddRef();
@@ -616,7 +616,7 @@ namespace Hooks
 			textureDesc->format = static_cast<uint8_t>(a_format);
 			textureDesc->unk1C = 1;
 			textureDesc->unk1E = 0;
-			texture->unk20 = 1;
+			texture->refCount = 1;
 
 			// SRV creation (skipped for staging)
 			if (a_usage != D3D11_USAGE_STAGING)
