@@ -2,9 +2,46 @@
 
 #include <PCH.h>
 #include "Framework/DescriptorTableManager.h"
-#include "Types/TextureReference.h"
 #include "Types/BindlessTableManager.h"
 #include "Pipeline/MSNConverter.h"
+
+#define NO_DX12RESOURCE 0
+#define NATIVE_DX12RESOURCE 1
+
+struct TextureReference
+{
+	nvrhi::TextureHandle texture;
+	eastl::shared_ptr<DescriptorHandle> descriptorHandle;
+
+	TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager) :
+		texture(texture)
+	{
+		descriptorHandle = eastl::make_shared<DescriptorHandle>(descriptorTableManager->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0, texture)));
+	}
+
+	virtual ~TextureReference()
+	{
+		if (ID3D12Resource* nativeTexture = texture->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource))
+			nativeTexture->Release();
+	}
+};
+
+struct MSNReference : TextureReference
+{
+	nvrhi::TextureHandle sourceTexture; // Original MSN texture
+	bool converted = false;
+
+	MSNReference(nvrhi::TextureHandle texture, nvrhi::TextureHandle sourceTexture, DescriptorTableManager* manager)
+		: TextureReference(texture, manager), sourceTexture(sourceTexture) {
+	}
+
+	virtual ~MSNReference()
+	{
+		if (ID3D12Resource* nativeSourceTexture = sourceTexture->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource))
+			nativeSourceTexture->Release();
+	}
+};
+
 
 struct TextureManager
 {
@@ -13,15 +50,6 @@ struct TextureManager
 		Standard,
 		ModelSpaceNormalMap,
 		CubeMap
-	};
-
-	struct MSNReference : TextureReference
-	{
-		nvrhi::TextureHandle sourceTexture; // Original MSN texture
-		bool converted = false;
-
-		MSNReference(nvrhi::TextureHandle texture, nvrhi::TextureHandle sourceTexture, DescriptorTableManager* manager)
-			: TextureReference(texture, manager), sourceTexture(sourceTexture) { }
 	};
 
 	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;

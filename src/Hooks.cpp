@@ -116,6 +116,38 @@ namespace Hooks
 	};
 
 #if defined(SKYRIM)
+	struct BSGraphicsTexture_Dtor
+	{
+		static void thunk(void* a1, RE::BSGraphics::Texture* a_texture)
+		{
+			if (a_texture->pad24 == NO_DX12RESOURCE)
+				func(a1, a_texture);
+
+			if (InterlockedExchangeAdd(&a_texture->refCount, 0xFFFFFFFF) == 1)
+			{
+				auto* d3d12Texture = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(a_texture);
+
+				if (d3d12Texture->d3d12Texture)
+					d3d12Texture->d3d12Texture->Release();
+
+				if (d3d12Texture->resourceView)
+					d3d12Texture->resourceView->Release();
+
+				if (d3d12Texture->texture)
+					d3d12Texture->texture->Release();
+
+				if (d3d12Texture->UAV)
+					d3d12Texture->UAV->Release();
+
+				auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+
+				// Doesn't take size to be freed?
+				scrapHeap->Deallocate(d3d12Texture);
+			}
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	HRESULT CreateTextureAndSRV::thunk(
 		ID3D11Device* a_device,
 		D3D11_RESOURCE_DIMENSION a_dimension,
@@ -131,8 +163,15 @@ namespace Hooks
 	) {
 		bool shareTexture = a_dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D && !a_cubemap;
 
-		if (!shareTexture)
-			return func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
+		if (!shareTexture) {
+			auto result = func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
+
+			// Enforce flag
+			if (SUCCEEDED(result))
+				(*a_outTexture)->pad24 = NO_DX12RESOURCE;
+
+			return result;
+		}
 
 		auto& expSettings = Scene::GetSingleton()->m_Settings.ExperimentalSettings;
 
@@ -168,7 +207,7 @@ namespace Hooks
 			defaultTexture->resourceView->AddRef();
 
 			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
-			texture->pad24 = 1;
+			texture->pad24 = NATIVE_DX12RESOURCE;
 
 			auto renderer = Renderer::GetSingleton();
 			auto device = renderer->GetDevice();
@@ -293,6 +332,8 @@ namespace Hooks
 				texture->texture->Release();
 				return srvResult;
 			}
+
+			texture->pad24 = NO_DX12RESOURCE;
 
 			*a_outTexture = texture;
 
@@ -799,15 +840,13 @@ namespace Hooks
 
 #if defined(SKYRIM)
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
+		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
-		//stl::write_vfunc<0x6B, Release3DRelatedData>(RE::VTABLE_TESObjectREFR[0]);
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
-
-		//stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
 
 		stl::detour_thunk<AttachLOD>(REL::RelocationID(30741, 31581));
 		

@@ -78,6 +78,19 @@ DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IB
     memset(m_Descriptors.data(), 0, sizeof(nvrhi::BindingSetItem) * capacity);
 }
 
+uint32_t DescriptorTableManager::GetAllocationCount() const
+{
+    uint32_t count = 0;
+
+    for (const auto& allocatedDesc: m_AllocatedDescriptors)
+    {
+        if (allocatedDesc)
+            count++;
+    }
+
+    return count;
+}
+
 DescriptorIndex DescriptorTableManager::CreateDescriptor(nvrhi::BindingSetItem item)
 {
     const auto& found = m_DescriptorIndexMap.find(item);
