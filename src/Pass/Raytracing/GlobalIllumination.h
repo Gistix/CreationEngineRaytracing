@@ -8,7 +8,7 @@
 #include "Util.h"
 
 #include "Pass/Raytracing/Common/SceneTLAS.h"
-#include "Pass/Raytracing/Common/SHaRC.h"
+#include "Pass/Raytracing/Common/SHaRCGI.h"
 
 #include "Events/ITLASUpdateListener.h"
 
@@ -29,14 +29,14 @@ namespace Pass::Raytracing
 		nvrhi::SamplerHandle m_LinearClampSampler;
 
 		SceneTLAS* m_SceneTLAS;
-		SHaRC* m_SHaRC;
+		Common::SHaRCGI* m_SHaRC;
 
 		bool m_DirtyBindings = true;
 
 		eastl::vector<ShaderDefine> m_Defines;
 
 	public:
-		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc);
+		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, Common::SHaRCGI* sharc);
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{

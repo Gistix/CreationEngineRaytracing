@@ -5,7 +5,7 @@
 
 namespace Pass::Raytracing
 {
-	GlobalIllumination::GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc)
+	GlobalIllumination::GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, Common::SHaRCGI* sharc)
 		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
 	{
 		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
@@ -18,7 +18,7 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
 
-		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
+		m_Defines = Util::Shader::GetGlobalIlluminationDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -32,7 +32,7 @@ namespace Pass::Raytracing
 
 	void GlobalIllumination::SettingsChanged(const Settings& settings)
 	{
-		auto defines = Util::Shader::GetRaytracingDefines(settings, m_SHaRC != nullptr, false);
+		auto defines = Util::Shader::GetGlobalIlluminationDefines(settings, m_SHaRC != nullptr, false);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;

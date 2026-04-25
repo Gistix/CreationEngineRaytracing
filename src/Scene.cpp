@@ -15,6 +15,7 @@
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
+#include "Pass/Raytracing/Common/SHaRCGI.h"
 
 #include "Pass/Utility/FaceNormals.h"
 #include "Pass/Raytracing/GlobalIllumination.h"
@@ -91,7 +92,7 @@ RenderNode* Scene::GetGlobalIllumination()
 		m_GlobalIllumination->AddNode({
 			true,
 			"SHaRC",
-			eastl::make_unique<Pass::SHaRC>(
+			eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(
 				renderer,
 				m_GlobalIllumination->GetPass<Pass::SceneTLAS>()
 			)
@@ -103,7 +104,7 @@ RenderNode* Scene::GetGlobalIllumination()
 			eastl::make_unique<Pass::Raytracing::GlobalIllumination>(
 				renderer,
 				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
-				m_GlobalIllumination->GetPass<Pass::SHaRC>()
+				m_GlobalIllumination->GetPass<Pass::Raytracing::Common::SHaRCGI>()
 			)			
 		});
 
