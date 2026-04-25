@@ -62,8 +62,9 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(7),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
+			nvrhi::BindingLayoutItem::Texture_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -220,8 +221,9 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(7, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetResolveBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetHashEntriesBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 
@@ -256,7 +258,7 @@ namespace Pass::Raytracing
 			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
-		auto resolution = Renderer::GetSingleton()->GetResolution();
+		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
 
 		if (m_RayPipeline)
 		{

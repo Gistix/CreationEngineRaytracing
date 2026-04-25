@@ -121,13 +121,12 @@ void Main()
     
     const unorm float linearRoughness = normalRoughness.w;
     
-    const unorm float4 normalMetalnessAO = GNMAO.SampleLevel(DefaultSampler, dynamicUV, 0);
+    const unorm float4 metalnessAO = MAO.SampleLevel(DefaultSampler, dynamicUV, 0);
 
-    const half3 geometryNormalVS = DecodeNormal((half2)normalMetalnessAO.xy);
-    const float3 geometryNormalWS = normalize(ViewToWorldVector(geometryNormalVS, Camera.ViewInverse));    
-    
-    const float metalness = normalMetalnessAO.z;
-    const float ao = 1.0f;
+    float3 faceNormal = FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f;
+
+    const float metalness = metalnessAO.x;
+    const float ao = metalnessAO.y;
     
     const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
     const float3 positionCS = ViewToWorldPosition(positionVS, Camera.ViewInverse);
@@ -144,12 +143,12 @@ void Main()
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
-    Surface sourceSurface = SurfaceMaker::make(positionWS, geometryNormalWS, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
+    Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     
     
-    //AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
+    AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
 
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     

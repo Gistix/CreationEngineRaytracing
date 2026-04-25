@@ -16,6 +16,7 @@
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
 
+#include "Pass/Utility/FaceNormals.h"
 #include "Pass/Raytracing/GlobalIllumination.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
@@ -79,6 +80,12 @@ RenderNode* Scene::GetGlobalIllumination()
 			true,
 			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"Face Normals",
+			eastl::make_unique<Pass::Utility::FaceNormals>(renderer)
 		});
 
 		m_GlobalIllumination->AddNode({
