@@ -518,7 +518,7 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 		if (!mesh)
 			continue;
 
-		CreateModelInternal(land, std::format("Landscape_{}_{}_Quad_{}", exteriorData->cellX, exteriorData->cellY, i).c_str(), mesh);
+		CreateModelInternal(land, std::format("Land_{:0X}_{}_{}_Quad_{}", land->GetFormID(), exteriorData->cellX, exteriorData->cellY, i).c_str(), mesh);
 	}
 }
 
@@ -666,28 +666,24 @@ void SceneGraph::ReleaseFormInstances(RE::TESForm* form, bool releaseModel)
 
 	auto renderer = Renderer::GetSingleton();
 
-	// Safer iteration (copy pointer list)
-	auto instances = instanceFormIDsIt->second;
-
-	for (auto* instance : instances) {
+	for (auto* instance : instanceFormIDsIt->second) {
 		m_InstanceNodes.erase(instance->m_Node);
 
 		auto* model = instance->model;
 
-		int refCount = 0;
 		if (model) {
-			refCount = model->Release();
+			int refCount = model->Release();
 			instance->model = nullptr;
-		}
 
-		if (refCount <= 0 && releaseModel && model) {
-			logger::debug("SceneGraph::ReleaseFormInstances - {}", model->m_Name);
+			if (refCount <= 0 && releaseModel) {
+				logger::debug("SceneGraph::ReleaseFormInstances - {}", model->m_Name);
 
-			auto modelIt = m_Models.find(model->m_Name);
+				auto modelIt = m_Models.find(model->m_Name);
 
-			if (modelIt != m_Models.end()) {
-				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
-				m_Models.erase(modelIt);
+				if (modelIt != m_Models.end()) {
+					m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
+					m_Models.erase(modelIt);
+				}
 			}
 		}
 
