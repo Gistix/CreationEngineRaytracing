@@ -33,18 +33,48 @@ namespace Hooks
 		func(a_actor, a_object, a_queue3DTasks);
 	}
 
-	void TESObjectLAND_Attach3D::thunk(RE::TESObjectLAND* oThis, bool a2)
+	struct TESObjectLAND_Attach3D
 	{
-		func(oThis, a2);
+		static RE::NiNode* GetCell3D(RE::TESObjectCELL* a_cell)
+		{
+			auto result = a_cell->GetRuntimeData().loadedData;
 
-		Scene::GetSingleton()->AttachLand(oThis);
+			if (result)
+				return result->cell3D.get();
+
+			return nullptr;
+		}
+
+		static void thunk(RE::TESObjectLAND* a_land, bool a_hasMopp)
+		{
+			bool hadMesh = a_land->loadedData->mesh[0];
+
+			func(a_land, a_hasMopp);
+
+			if (a_land->parentCell && GetCell3D(a_land->parentCell)) {
+				bool hasMesh = a_land->loadedData->mesh[0];
+
+				// Landscape mesh loaded
+				if (!hadMesh && hasMesh) {
+					// Attach3D will conditionally release landscape when loading another cell (going through doors)
+					// So release any related instances before attempting to attach
+					Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_land, true);
+					Scene::GetSingleton()->AttachLand(a_land);
+				}
+			}
+		};
+		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	void TESObjectLAND_Detach3D::thunk(RE::TESObjectLAND* oThis)
+	struct TESObjectLAND_Detach3D
 	{
-		func(oThis);
+		static void thunk(RE::TESObjectLAND* a_land)
+		{
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_land, true);
 
-		Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(oThis, true);
+			func(a_land);
+		};
+		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
 	void TESWaterSystem_AddWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural)

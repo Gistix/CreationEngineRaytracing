@@ -515,8 +515,10 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	for (uint i = 0; i < 4; i++) {
 		auto mesh = loadedData->mesh[i];
 
-		if (!mesh)
+		if (!mesh) {
+			logger::warn("SceneGraph::CreateLandModel - Mesh [{}] is nullptr", i);
 			continue;
+		}
 
 		CreateModelInternal(land, std::format("Land_{:0X}_{}_{}_Quad_{}", land->GetFormID(), exteriorData->cellX, exteriorData->cellY, i).c_str(), mesh);
 	}
