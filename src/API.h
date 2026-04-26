@@ -21,4 +21,5 @@ extern "C" {
 	CERT_API void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao, ID3D12Resource* diffuseAlbedo);
 	CERT_API void UpdateJitter(float2 jitter);
 	CERT_API void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
+	CERT_API uint32_t GetAccumulatedFrameCount();
 }

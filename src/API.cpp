@@ -1,6 +1,7 @@
 #include "API.h"
 #include "Scene.h"
 #include "Renderer.h"
+#include "Pass/Raytracing/Common/Accumulation.h"
 
 bool InitializeRenderer(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
@@ -108,4 +109,13 @@ void UpdateJitter(float2 jitter)
 void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget)
 {
 	Renderer::GetSingleton()->SetPTOutputTargets(depthTarget, mvTarget);
+}
+
+uint32_t GetAccumulatedFrameCount()
+{
+	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
+	auto* accumulationPass = rootNode->GetPass<Pass::Common::Accumulation>();
+	if (accumulationPass)
+		return accumulationPass->GetAccumulatedFrames();
+	return 0;
 }
