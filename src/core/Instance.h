@@ -15,8 +15,8 @@ struct Instance
 		None = 0,
 		Detached = 1 << 0,
 		FirstPersonHidden = 1 << 1,
-		DistanceHidden = 1 << 2,
-		HiddenModel = 1 << 3
+		HiddenModel = 1 << 2,
+		LODHidden = 1 << 3
 	};
 
 	// Instance form id
@@ -48,6 +48,8 @@ struct Instance
 	void SetDetached(bool detach);
 
 	void SetHiddenModel(bool hidden);
+
+	void SetLODHidden(bool hidden);
 
 	bool IsDetached() const;
 

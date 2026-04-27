@@ -20,7 +20,7 @@ namespace Hooks
 
 	void Release3DRelatedData::thunk(RE::TESObjectREFR* refr)
 	{
-		Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(refr, true);
+		Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(refr, true);
 
 		func(refr);
 	}
@@ -28,7 +28,7 @@ namespace Hooks
 	void Actor_Set3D::thunk(RE::Actor* a_actor, RE::NiAVObject* a_object, bool a_queue3DTasks)
 	{
 		if (!a_object)
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_actor, true);
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_actor, true);
 
 		func(a_actor, a_object, a_queue3DTasks);
 	}
@@ -58,7 +58,7 @@ namespace Hooks
 				if (!hadMesh && hasMesh) {
 					// Attach3D will conditionally release landscape when loading another cell (going through doors)
 					// So release any related instances before attempting to attach
-					Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_land, true);
+					Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_land, true);
 					Scene::GetSingleton()->AttachLand(a_land);
 				}
 			}
@@ -70,7 +70,7 @@ namespace Hooks
 	{
 		static void thunk(RE::TESObjectLAND* a_land)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_land, true);
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_land, true);
 
 			func(a_land);
 		};
@@ -86,7 +86,7 @@ namespace Hooks
 
 	void TESWaterSystem_RemoveWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj)
 	{
-		Scene::GetSingleton()->GetSceneGraph()->ReleaseObjectInstance(a_waterObj, true);
+		Scene::GetSingleton()->GetSceneGraph()->ReleaseWaterInstance(a_waterObj);
 
 		func(a_waterSystem, a_waterObj);
 	};
@@ -137,7 +137,7 @@ namespace Hooks
 						logger::trace("\tTESObject::UnClone3D - Model: {}", model->GetModel());
 				}
 
-				Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_refr, true);
+				Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_refr, true);
 			}
 
 			func(a_object, a_refr);
@@ -781,18 +781,106 @@ namespace Hooks
 		func(pass, technique, alphaTest, renderFlags);
 	}
 
-	struct AttachLOD
+	struct BGSObjectBlock_Load
 	{
-		static int thunk(RE::BGSObjectLODAttachState* a_state, void* a_arg2, uint32_t a_arg3)
+		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
 		{
-			if (!a_state->isAttached)
-				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_state->objectNode);
+			if (!a_block->attached)
+				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 
-			return func(a_state, a_arg2, a_arg3);
+			func(a_block, a_arg2, a_firstAvail);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+
+	struct BGSObjectBlock_Attach
+	{
+		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
+		{
+			if (!a_block->attached)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
+
+			logger::info("BGSObjectBlock::Attach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+
+			func(a_block, a_arg2, a_firstAvail);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSObjectBlock_Detach
+	{
+		static void thunk(RE::BGSObjectBlock* a_block)
+		{
+			if (a_block->attached)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
+
+			logger::info("BGSObjectBlock::Detach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+
+			func(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSTerrainBlock_Load
+	{
+		static void thunk(RE::BGSTerrainBlock* a_block)
+		{
+			if (a_block->loaded && !a_block->attached && a_block->chunk)
+				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+
+			func(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSTerrainBlock_Attach
+	{
+		static void thunk(RE::BGSTerrainBlock* a_block)
+		{
+			if (a_block->loaded && !a_block->attached && a_block->chunk)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
+
+			logger::info("BGSTerrainBlock::Attach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+
+			func(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSTerrainBlock_Detach
+	{
+		static RE::BSMultiBoundNode* thunk(RE::BGSTerrainBlock* a_block)
+		{
+			if (a_block->attached)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
+
+			logger::info("BGSTerrainBlock::Detach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+
+			return func(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSTerrainBlock_Dtor
+	{
+		static void thunk(RE::BGSTerrainBlock* a_block)
+		{
+			logger::info("BGSTerrainBlock::Dtor - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
+
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
+
+			return func(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 
 	struct LoadAndAttachAddon
 	{
@@ -878,8 +966,17 @@ namespace Hooks
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 
-		stl::detour_thunk<AttachLOD>(REL::RelocationID(30741, 31581));
-		
+		// Terrain LOD
+		stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
+		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
+		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
+		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
+
+		// Object LOD
+		stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
+		stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
+		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));
+
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
 		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));

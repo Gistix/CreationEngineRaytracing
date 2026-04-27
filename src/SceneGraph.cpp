@@ -8,6 +8,7 @@
 #include "Util.h"
 #include "ShaderUtils.h"
 
+#include "Types/RE/RE.h"
 #include "Types/CommunityShaders/LightLimitFix.h"
 #include "Types/CommunityShaders/ISLCommon.h"
 
@@ -295,6 +296,25 @@ void SceneGraph::UpdateActors()
 	}
 }
 
+void SceneGraph::UpdateLODVisibility()
+{
+	for (auto& [block, ref] : m_TerrainLODInstances)
+	{
+		if (!block->loaded || !block->attached)
+			continue;
+
+		ref.UpdateVisibility(block->chunk);
+	}
+
+	for (auto& [block, ref] : m_ObjectLODInstances)
+	{
+		if (!block->loaded || !block->attached)
+			continue;
+
+		ref.UpdateVisibility(block->chunk);
+	}
+}
+
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
@@ -469,9 +489,8 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 
 		auto object = actor->Get3D(firstPerson);
 
-		auto commited = CommitModel(name.c_str(), object, actor, meshes);
-
-		if (commited) {
+		if (auto* model = CommitModel(name.c_str(), object, actor, meshes)) {
+			AddInstance(actor->GetFormID(), object, model);
 			m_Actors.try_emplace(actor->GetFormID(), ActorReference(actor, firstPerson, faceMeshes, bipedMeshes));
 		}
 	}
@@ -532,24 +551,122 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	if (!Scene::GetSingleton()->m_Settings.AdvancedSettings.EnableWater)
 		return;
 
-	if (!water)
+	if (!water || !object)
 		return;
 
-	if (!object)
+	if (m_WaterInstances.contains(object))
 		return;
 
 	auto path = std::format("Water_0x{:08X}", reinterpret_cast<uintptr_t>(object));
 
 	logger::debug("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
 
-	CreateModelInternal(water, path.c_str(), object);
+	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
+	auto meshes = CreateMeshes(water, object);
+
+	if (auto* model = CommitModel(path.c_str(), object, water, meshes)) {
+		if (auto* instance = AddInstanceImpl(object, model, 0))
+			m_WaterInstances.emplace(object, instance);
+	}
 }
 
-void SceneGraph::CreateLODModel(RE::NiNode* node)
+void SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
 {
+	if (!m_TerrainLODInstances.contains(chunk))
+		CreateLODModelImpl(chunk);
+}
+
+void SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
+{
+	if (!m_ObjectLODInstances.contains(chunk))
+		CreateLODModelImpl(chunk);
+}
+
+template <typename T>
+void SceneGraph::CreateLODModelImpl(T* block)
+{
+	auto node = block->chunk;
+
 	if (!node)
 		return;
+
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	logger::debug("SceneGraph::CreateLODModel - {}, {}", node->name.c_str(), Util::Math::Float3(node->world.translate));
+
+	auto rootWorldInverse = node->world.Invert();
+
+	Util::Traversal::ScenegraphRTGeometries(node, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
+		if (pGeometry->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
+			return RE::BSVisit::BSVisitControl::kContinue;
+
+		logger::debug("\t{}, {}", pGeometry->name.c_str(), Util::Math::Float3(pGeometry->world.translate));
+
+		const auto& geometryRuntimeData = pGeometry->GetGeometryRuntimeData();
+
+		auto* triShapeRD = geometryRuntimeData.rendererData;
+
+		if (!triShapeRD)
+			return RE::BSVisit::BSVisitControl::kContinue;
+
+		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
+
+		float3x4 localToRoot;
+		XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+
+		auto triShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
+
+		const auto& triShapeRuntime = triShape->GetTrishapeRuntimeData();
+
+		const char* name = pGeometry->name.c_str();
+
+		if (pGeometry->GetType().all(RE::BSGeometry::Type::kSubIndexTriShape)) {
+			/*auto* subIndexTriShape = netimmerse_cast<RE::BSSubIndexTriShape*>(pGeometry);
+
+			for (size_t i = 0; i < subIndexTriShape->numSegments; i++)
+			{
+				auto& segment = subIndexTriShape->segmentData[i];
+
+				auto startIndex = segment.index;
+				auto numTriangles = segment.numTris;
+
+				const char* name = pGeometry->name.c_str();
+
+				auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, Mesh::Flags::ObjectLOD, name, pGeometry, localToRoot);
+
+				mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
+				mesh->BuildMaterial(geometryRuntimeData, nullptr);
+
+				meshes.push_back(eastl::move(mesh));
+			}*/
+
+			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, Mesh::Flags::LOD, name, pGeometry, localToRoot);
+
+			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
+			mesh->BuildMaterial(geometryRuntimeData, nullptr);
+
+			meshes.push_back(eastl::move(mesh));
+		}
+		else {
+			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, Mesh::Flags::LOD, name, pGeometry, localToRoot);
+
+			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
+			mesh->BuildMaterial(geometryRuntimeData, nullptr);
+
+			meshes.push_back(eastl::move(mesh));
+		}
+
+		auto path = std::format("{}_0x{:08X}", pGeometry->name.c_str(), reinterpret_cast<uintptr_t>(pGeometry));
+
+		if (auto* model = CommitModel(path.c_str(), pGeometry, nullptr, meshes))
+			AddInstance(block, pGeometry, model);
+
+		return RE::BSVisit::BSVisitControl::kContinue;
+		});
 }
+
+template void SceneGraph::CreateLODModelImpl(RE::BGSTerrainBlock*);
+template void SceneGraph::CreateLODModelImpl(RE::BGSObjectBlock*);
 
 void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
 {
@@ -600,44 +717,39 @@ void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
 	m_TextureManager->ReleaseTexture(texture);
 }
 
-void SceneGraph::ReleaseObjectInstance(RE::NiAVObject* node, bool releaseModel)
+void SceneGraph::ReleaseWaterInstance(RE::NiAVObject* node)
 {
-	auto instanceNodeIt = m_InstanceNodes.find(node);
-
-	if (instanceNodeIt == m_InstanceNodes.end())
+	auto it = m_WaterInstances.find(node);
+	if (it == m_WaterInstances.end())
 		return;
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 	std::unique_lock releaseLock(m_ReleaseDataMutex);
 
-	auto* instance = instanceNodeIt->second;
-
-	int refCount = 0;
-	eastl::string name;
+	auto* instance = it->second;
+	auto* model = instance->model;
 
 	if (instance->model) {
-		name = instance->model->m_Name;
-		refCount = instance->model->Release();
+		auto refCount = instance->model->Release();
+
+		if (refCount <= 0) {
+			auto modelIt = m_Models.find(model->m_Name);
+
+			if (modelIt != m_Models.end()) {
+				auto renderer = Renderer::GetSingleton();
+
+				// Add to safe-release vector
+				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
+
+				// Erase from list
+				m_Models.erase(modelIt);
+			}
+		}
+
 		instance->model = nullptr;
 	}
 
-	if (refCount <= 0 && releaseModel) {
-		auto modelIt = m_Models.find(name);
-
-		if (modelIt != m_Models.end()) {
-			auto renderer = Renderer::GetSingleton();
-
-			// Add to safe-release vector
-			m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
-
-			// Erase from list
-			m_Models.erase(modelIt);
-		}
-	}
-
-	m_InstanceNodes.erase(instanceNodeIt);
-
-	m_InstancesFormIDs.erase(instance->m_FormID);
+	m_WaterInstances.erase(it);
 
 	// Removes the original instance, all pointers past this point are invalid
 	auto instIt = eastl::find_if(
@@ -649,40 +761,21 @@ void SceneGraph::ReleaseObjectInstance(RE::NiAVObject* node, bool releaseModel)
 		m_Instances.erase(instIt);
 }
 
-void SceneGraph::ReleaseFormInstances(RE::TESForm* form, bool releaseModel)
+void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel)
 {
-	auto formID = form->GetFormID();
-
-	if (releaseModel) {
-		m_Actors.erase(formID);
-	}
-
-	auto instanceFormIDsIt = m_InstancesFormIDs.find(formID);
-
-	if (instanceFormIDsIt == m_InstancesFormIDs.end()) {
-		logger::debug("SceneGraph::ReleaseFormInstances - Instance not found for {:0X}", formID);
-		return;
-	}
-
-	logger::trace("SceneGraph::ReleaseFormInstances - Releasing {} instances for {:0X}", instanceFormIDsIt->second.size(), formID);
-
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 	std::unique_lock releaseLock(m_ReleaseDataMutex);
 
 	auto renderer = Renderer::GetSingleton();
 
-	for (auto* instance : instanceFormIDsIt->second) {
-		m_InstanceNodes.erase(instance->m_Node);
-
+	for (auto* instance : instances) {
 		auto* model = instance->model;
 
 		if (model) {
-			int refCount = model->Release();
+			auto refCount = model->Release();
 			instance->model = nullptr;
 
 			if (refCount <= 0 && releaseModel) {
-				logger::debug("SceneGraph::ReleaseFormInstances - {}", model->m_Name);
-
 				auto modelIt = m_Models.find(model->m_Name);
 
 				if (modelIt != m_Models.end()) {
@@ -700,8 +793,80 @@ void SceneGraph::ReleaseFormInstances(RE::TESForm* form, bool releaseModel)
 		if (instIt != m_Instances.end())
 			m_Instances.erase(instIt);
 	}
+}
 
-	m_InstancesFormIDs.erase(instanceFormIDsIt);
+void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances)
+{
+	auto renderer = Renderer::GetSingleton();
+
+	for (auto* instance : instances) {
+		auto* model = instance->model;
+
+		if (model) {
+			auto refCount = model->Release();
+			instance->model = nullptr;
+
+			if (refCount <= 0) {
+				auto modelIt = m_Models.find(model->m_Name);
+
+				if (modelIt != m_Models.end()) {
+					m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
+					m_Models.erase(modelIt);
+				}
+			}
+
+		}
+
+		auto instIt = eastl::find_if(
+			m_Instances.begin(),
+			m_Instances.end(),
+			[instance](auto& x) { return x.get() == instance; });
+
+		if (instIt != m_Instances.end())
+			m_Instances.erase(instIt);
+	}
+}
+
+void SceneGraph::ReleaseInstances(RE::TESForm* form, bool releaseModel)
+{
+	auto formID = form->GetFormID();
+
+	if (releaseModel) {
+		m_Actors.erase(formID);
+	}
+
+	auto it = m_InstancesFormIDs.find(formID);
+
+	if (it == m_InstancesFormIDs.end())
+		return;
+
+	ReleaseInstances(it->second, releaseModel);
+
+	m_InstancesFormIDs.erase(it);
+}
+
+void SceneGraph::ReleaseInstances(RE::BGSTerrainBlock* block)
+{
+	auto it = m_TerrainLODInstances.find(block);
+	if (it == m_TerrainLODInstances.end())
+		return;
+
+	ReleaseInstances(it->second.instances, true);
+
+	m_TerrainLODInstances.erase(it);
+}
+
+void SceneGraph::ReleaseInstances(RE::BGSObjectBlock* block)
+{
+	auto it = m_ObjectLODInstances.find(block);
+	if (it == m_ObjectLODInstances.end())
+		return;
+
+	logger::info("SceneGraph::ReleaseInstances - Releasing {} instances for object block 0x{:08X}", it->second.instances.size(), reinterpret_cast<uintptr_t>(block));
+
+	ReleaseInstances(it->second.instances, true);
+
+	m_ObjectLODInstances.erase(it);
 }
 
 void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
@@ -877,11 +1042,6 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 	if (!path || strlen(path) == 0)
 		return 0;
 
-	if (m_InstanceNodes.find(pRoot) != m_InstanceNodes.end()) {
-		logger::warn("SceneGraph::CreateModelInternal \"{}\" - Instance/Model for 0x{:08X} already present.", path, reinterpret_cast<uintptr_t>(pRoot));
-		return 0;
-	}
-	
 	auto formID = form->GetFormID();
 
 	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
@@ -906,12 +1066,15 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
 	auto meshes = CreateMeshes(form, pRoot);
 
-	CommitModel(path, pRoot, form, meshes);
+	auto numMeshes = static_cast<uint32_t>(meshes.size());
 
-	return static_cast<uint32_t>(meshes.size());
+	if (auto* model = CommitModel(path, pRoot, form, meshes))
+		AddInstance(form->GetFormID(), pRoot, model);
+
+	return numMeshes;
 }
 
-bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
+Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
 		auto model = eastl::make_unique<Model>(path, object, form, meshes);
 
@@ -964,13 +1127,9 @@ bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 
 			device->waitForIdle();
 
-			auto formID = form->GetFormID();
-
-			AddInstance(formID, object, modelName);
-
 			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 
-			return true;
+			return modelPtr;
 		}
 		else {
 			logger::warn("SceneGraph::CreateModelInternal - Emplace failed for {} TriShapes", shapeCount);
@@ -980,53 +1139,130 @@ bool SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESFo
 		logger::debug("SceneGraph::CreateModelInternal - No TriShapes to commit");
 	}
 
-	return false;
+	return nullptr;
+}
+
+Instance* SceneGraph::AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID)
+{
+	auto& instance = m_Instances.emplace_back(eastl::make_unique<Instance>(formID, node, model));
+	instance->model->AddRef();
+
+	return instance.get();
 }
 
 void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path)
 {
-	logger::debug("SceneGraph::AddInstance [0x{:08X}] - {}, Path: {}", formID, node->name, path);
-
-	auto instanceNodeIt = m_InstanceNodes.find(node);
-	if (instanceNodeIt != m_InstanceNodes.end()) {
-		logger::warn("SceneGraph::AddInstance - Node already exists: {}", path);
-		return;
-	}
-
 	auto modelIt = m_Models.find(path);
-	if (modelIt == m_Models.end()) {
-		logger::warn("SceneGraph::AddInstance - Model doesn't exists: {}", path);
+	if (modelIt == m_Models.end())
 		return;
+
+	if (auto* instance = AddInstanceImpl(node, modelIt->second.get(), formID))
+		m_InstancesFormIDs[formID].push_back(instance);
+}
+
+void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* model)
+{
+	if (auto* instance = AddInstanceImpl(node, model, formID))
+		m_InstancesFormIDs[formID].push_back(instance);
+}
+
+void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model)
+{
+	if (auto* instance = AddInstanceImpl(node, model, 0))
+		m_ObjectLODInstances[block].instances.push_back(instance);
+}
+
+void SceneGraph::AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model)
+{
+	if (auto* instance = AddInstanceImpl(node, model, 0))
+		m_TerrainLODInstances[block].instances.push_back(instance);
+}
+
+void SceneGraph::SetLODDetached(RE::BGSTerrainBlock* block, bool detached)
+{
+	auto it = m_TerrainLODInstances.find(block);
+	if (it == m_TerrainLODInstances.end())
+		return;
+
+	Scene::GetSingleton()->m_SceneMutex.lock();
+
+	for (auto& instance : it->second.instances) {
+		instance->SetDetached(detached);
 	}
 
-	auto [instanceIt, emplaced] = m_InstanceNodes.try_emplace(node, nullptr);
-	if (!emplaced) {
-		logger::warn("SceneGraph::AddInstance - Emplace failed: {}", path);
+	Scene::GetSingleton()->m_SceneMutex.unlock();
+
+	if (detached && detached != it->second.detached)
+		it->second.detachedTime = std::chrono::steady_clock::now();
+
+	it->second.detached = detached;
+}
+
+void SceneGraph::SetLODDetached(RE::BGSObjectBlock* block, bool detached)
+{
+	auto it = m_ObjectLODInstances.find(block);
+	if (it == m_ObjectLODInstances.end())
 		return;
+
+	Scene::GetSingleton()->m_SceneMutex.lock();
+
+	for (auto& instance : it->second.instances) {
+		instance->SetDetached(detached);
 	}
 
-	// Create instance
-	auto instance = eastl::make_unique<Instance>(formID, node, modelIt->second.get());
+	Scene::GetSingleton()->m_SceneMutex.unlock();
 
-	// Add instance to FormID -> Instance map
-	m_InstancesFormIDs[formID].push_back(instance.get());
-	instanceIt->second = instance.get();
+	if (detached && detached != it->second.detached)
+		it->second.detachedTime = std::chrono::steady_clock::now();
 
-	m_Instances.emplace_back(eastl::move(instance));
-	modelIt->second->AddRef();
+	it->second.detached = detached;
 }
 
 void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
 {
-	std::unique_lock lock(m_ReleaseDataMutex);
+	m_ReleaseDataMutex.lock();
 
-	for (auto it = m_ReleasedData.begin(); it != m_ReleasedData.end(); ) {
-		if (it->frameIndex < frameIndex - 1 && it->model->m_LastBLASUpdate < frameIndex - 1) {
-			logger::debug("SceneGraph::RunGarbageCollection - Frame Index {}, Last Update {}, {}", it->frameIndex, it->model->m_LastBLASUpdate, it->model->m_Name);
-			it = m_ReleasedData.erase(it);
+	// Clear LOD
+	{
+		using namespace std::chrono;
+		const auto now = steady_clock::now();
+
+		// Object LOD
+		for (auto it = m_ObjectLODInstances.begin(); it != m_ObjectLODInstances.end(); ) {
+			if (it->second.detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
+				ReleaseInstances(it->second.instances);
+				it = m_ObjectLODInstances.erase(it);
+			}
+			else {
+				++it;
+			}
 		}
-		else {
-			++it;
+
+		// Terrain LOD
+		for (auto it = m_TerrainLODInstances.begin(); it != m_TerrainLODInstances.end(); ) {
+			if (it->second.detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
+				ReleaseInstances(it->second.instances);
+				it = m_TerrainLODInstances.erase(it);
+			}
+			else {
+				++it;
+			}
 		}
 	}
+
+	// Clear Released Data
+	{
+
+		for (auto it = m_ReleasedData.begin(); it != m_ReleasedData.end(); ) {
+			if (it->frameIndex < frameIndex - 1 && it->model->m_LastBLASUpdate < frameIndex - 1) {
+				logger::debug("SceneGraph::RunGarbageCollection - Frame Index {}, Last Update {}, {}", it->frameIndex, it->model->m_LastBLASUpdate, it->model->m_Name);
+				it = m_ReleasedData.erase(it);
+			}
+			else {
+				++it;
+			}
+		}
+	}
+
+	m_ReleaseDataMutex.unlock();
 }
