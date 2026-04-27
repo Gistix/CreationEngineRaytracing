@@ -50,8 +50,13 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild | (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
-	else
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+	else {
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+
+		// BLASes built with allow compaction cannot be rebuilt
+		if (meshFlags.none(Mesh::Flags::LOD))
+			blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+	}
 
 	return blasDesc;
 }

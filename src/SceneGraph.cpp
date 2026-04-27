@@ -621,31 +621,55 @@ void SceneGraph::CreateLODModelImpl(T* block)
 		const char* name = pGeometry->name.c_str();
 
 		if (pGeometry->GetType().all(RE::BSGeometry::Type::kSubIndexTriShape)) {
-			/*auto* subIndexTriShape = netimmerse_cast<RE::BSSubIndexTriShape*>(pGeometry);
+			auto* subIndexTriShape = netimmerse_cast<RE::BSSubIndexTriShape*>(pGeometry);
 
-			for (size_t i = 0; i < subIndexTriShape->numSegments; i++)
-			{
-				auto& segment = subIndexTriShape->segmentData[i];
+			if (subIndexTriShape) {
+				stl::enumeration<Mesh::Flags> flags = Mesh::Flags::LOD;
+				auto vertexData = Mesh::BuildVertices(flags, pGeometry, triShapeRD, triShapeRuntime.vertexCount, 0);
+				auto triangleData = Mesh::BuildTriangles(flags.get(), triShapeRD, triShapeRuntime.triangleCount);
 
-				auto startIndex = segment.index;
-				auto numTriangles = segment.numTris;
+				auto& runtimeData = subIndexTriShape->GetSubIndexedTrishapeRuntimeData();
+				
+				logger::debug("SubIndexTriShape - Triangles: {}", triShapeRuntime.triangleCount);
 
-				const char* name = pGeometry->name.c_str();
+				logger::debug("SubIndexTriShape - Segments: {}, UnkSegments: {}, Unk170: {}, NonSegmented: {}",
+					runtimeData.numSegments, runtimeData.unkSegCount, runtimeData.unk170, runtimeData.nonSegmented);
 
-				auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, Mesh::Flags::ObjectLOD, name, pGeometry, localToRoot);
+				for (size_t i = 0; i < runtimeData.numSegments; i++)
+				{
+					// The first segment contains all triangles (it is the equivalent of all other segments combine)
+					if (i == 0 && runtimeData.numSegments > 1)
+						continue;
 
-				mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
-				mesh->BuildMaterial(geometryRuntimeData, nullptr);
+					auto& segment = runtimeData.segmentData[i];
 
-				meshes.push_back(eastl::move(mesh));
-			}*/
+					// Invalid segment
+					if (segment.unkTriCount == 0)
+						continue;
 
-			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, Mesh::Flags::LOD, name, pGeometry, localToRoot);
+					logger::debug("\tSegment[{}]: Index: {}, UnkTriCount: {}, UnkFlags: 0x{:08X}, NumTris: {}, Flags: 0x{:08X}",
+						i, segment.index, segment.unkTriCount, segment.unkFlags, segment.numTris, segment.flags);
 
-			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
-			mesh->BuildMaterial(geometryRuntimeData, nullptr);
+					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, flags.get(), name, pGeometry, localToRoot, i);
 
-			meshes.push_back(eastl::move(mesh));
+					// Copy triangles to segment triangles
+					Mesh::TriangleData segmentTriData{};
+					{
+						auto startTriangle = segment.index / 3;
+						auto numTriangles = segment.numTris;
+
+						segmentTriData.triangles.resize(segment.numTris);
+						memcpy(segmentTriData.triangles.data(), triangleData.triangles.data() + startTriangle, numTriangles * sizeof(Triangle));
+
+						segmentTriData.count = numTriangles;
+					}
+
+					mesh->BuildMesh(vertexData, segmentTriData, triShapeRD->vertexDesc);
+					mesh->BuildMaterial(geometryRuntimeData, nullptr);
+
+					meshes.push_back(eastl::move(mesh));
+				}
+			}
 		}
 		else {
 			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, Mesh::Flags::LOD, name, pGeometry, localToRoot);

@@ -801,8 +801,6 @@ namespace Hooks
 			if (!a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
 
-			logger::info("BGSObjectBlock::Attach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
-
 			func(a_block, a_arg2, a_firstAvail);
 		}
 
@@ -815,8 +813,6 @@ namespace Hooks
 		{
 			if (a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
-
-			logger::info("BGSObjectBlock::Detach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
 
 			func(a_block);
 		}
@@ -844,8 +840,6 @@ namespace Hooks
 			if (a_block->loaded && !a_block->attached && a_block->chunk)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
 
-			logger::info("BGSTerrainBlock::Attach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
-
 			func(a_block);
 		}
 
@@ -859,8 +853,6 @@ namespace Hooks
 			if (a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
 
-			logger::info("BGSTerrainBlock::Detach - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
-
 			return func(a_block);
 		}
 
@@ -871,8 +863,6 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			logger::info("BGSTerrainBlock::Dtor - 0x{:08X}", reinterpret_cast<uintptr_t>(a_block));
-
 			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
 
 			return func(a_block);
@@ -967,10 +957,10 @@ namespace Hooks
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 
 		// Terrain LOD
-		stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
+		/*stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
 		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
 		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
-		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
+		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));*/
 
 		// Object LOD
 		stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
