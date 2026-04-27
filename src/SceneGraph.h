@@ -69,6 +69,9 @@ class SceneGraph
 
 	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
+	uint32_t m_NumMeshes = 0;
+	uint32_t m_NumInstances = 0;
+
 	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
 	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	bool CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
@@ -91,8 +94,12 @@ public:
 	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
+	inline auto& GetModels() { return m_Models; }
 	inline auto& GetInstances() const { return m_Instances; }
 	inline auto& GetLights() { return m_Lights; }
+
+	inline auto& GetNumMeshesFrame() const { return m_NumMeshes; }
+	inline auto& GetNumInstancesFrame() const { return m_NumInstances; }
 
 	inline auto& GetTextureManager() { return m_TextureManager; }
 

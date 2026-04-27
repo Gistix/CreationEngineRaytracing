@@ -299,14 +299,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
 
-	uint32_t meshIndex = 0;
-	uint32_t instanceIndex = 0;
+	m_NumMeshes = 0;
+	m_NumInstances = 0;
 
 	eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
 	for (auto& instance : m_Instances)
 	{
-		instance->Update(instanceIndex);
+		instance->Update(m_NumInstances);
 
 		if (instance->IsHidden())
 			continue;
@@ -316,13 +316,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		// Update if applicabe and queue skinning/dynamic update
 		instance->model->Update(instance->m_Node, isPlayer);
 
-		uint32_t firstMeshIndex = meshIndex;
+		uint32_t firstMeshIndex = m_NumMeshes;
 
 		// Get mesh data
-		instance->model->SetData(m_MeshData.data(), meshIndex);
+		instance->model->SetData(m_MeshData.data(), m_NumMeshes);
+
+		// No visible meshes in instance
+		bool hiddenModel = m_NumMeshes == firstMeshIndex;
+		instance->SetHiddenModel(hiddenModel);
 		
-		// No visible shape in instance
-		if (meshIndex == firstMeshIndex)
+		if (instance->SkipAS())
 			continue;
 
 		uint8_t numLights = 0u;
@@ -341,21 +344,21 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			}
 		}
 
-		m_InstanceData[instanceIndex] = {
+		m_InstanceData[m_NumInstances] = {
 			instance->m_Transform,
 			instance->m_PrevTransform,
 			InstanceLightData(lights.data(), numLights),
 			firstMeshIndex
 		};
 
-		instanceIndex++;
+		m_NumInstances++;
 	}
 
-	if (meshIndex > 0)
-		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), meshIndex * sizeof(MeshData));
+	if (m_NumMeshes > 0)
+		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
 
-	if (instanceIndex > 0)
-		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), instanceIndex * sizeof(InstanceData));
+	if (m_NumInstances > 0)
+		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 }
 
 void SceneGraph::ClearDirtyStates()

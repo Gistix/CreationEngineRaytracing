@@ -15,7 +15,8 @@ struct Instance
 		None = 0,
 		Detached = 1 << 0,
 		FirstPersonHidden = 1 << 1,
-		DistanceHidden = 1 << 2
+		DistanceHidden = 1 << 2,
+		HiddenModel = 1 << 3
 	};
 
 	// Instance form id
@@ -46,9 +47,15 @@ struct Instance
 	
 	void SetDetached(bool detach);
 
+	void SetHiddenModel(bool hidden);
+
 	bool IsDetached() const;
 
+	// A hidden instance is not updated and does not go in AS, this is set externaly
 	bool IsHidden() const;
+
+	// Skip AS but still update since this depends on states updated post instance update
+	bool SkipAS() const;
 
 	nvrhi::rt::InstanceDesc GetInstanceDesc() const
 	{
