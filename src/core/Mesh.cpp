@@ -12,27 +12,27 @@
 #include "Utils/CalcTangents.h"
 #include "Core/D3D12Texture.h"
 
-void Mesh::BuildVertices(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
+Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
 {
-	vertexData = {};
+	VertexData vertexData{};
 
 	auto vertexDesc = rendererData->vertexDesc;
 
-	vertexFlags = vertexDesc.GetFlags();
+	auto vertexFlags = vertexDesc.GetFlags();
 
 	bool hasNormal = vertexFlags & RE::BSGraphics::Vertex::VF_NORMAL;
 	bool hasTangent = vertexFlags & RE::BSGraphics::Vertex::VF_TANGENT;
 
 	bool dynamic = false;
-	bool skinned = flags.any(Flags::Skinned);
+	bool skinned = flags.all(Flags::Skinned);
 
-	if (flags.any(Flags::Dynamic)) {
+	if (flags.all(Flags::Dynamic)) {
 		vertexData.dynamicPosition.resize(vertexCountIn);
 
 		static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
 
-		if (bsGeometryPtr->GetRTTI() == dynamicTriShapeRTTI.get()) {
-			auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
+		if (geometry->GetRTTI() == dynamicTriShapeRTTI.get()) {
+			auto* pDynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(geometry);
 
 			if (pDynamicTriShape) {
 				auto& dynTriShapeRuntime = pDynamicTriShape->GetDynamicTrishapeRuntimeData();
@@ -195,14 +195,16 @@ void Mesh::BuildVertices(RE::BSGraphics::TriShape* rendererData, const uint32_t&
 	}
 
 	vertexData.count = vertexCountIn;
+
+	return vertexData;
 }
 
-void Mesh::BuildTriangles(RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn)
+Mesh::TriangleData Mesh::BuildTriangles(Mesh::Flags flags, RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn)
 {
-	triangleData = {};
+	TriangleData triangleData{};
 
 	// Landscape contains no triangles, so we copy from a pre-built vector
-	if (flags.any(Flags::Landscape)) {
+	if ((flags & Flags::Landscape) != Flags::None) {
 		triangleData.triangles = GetLandscapeTriangles();
 	}
 	else {
@@ -211,6 +213,8 @@ void Mesh::BuildTriangles(RE::BSGraphics::TriShape* rendererData, const uint32_t
 	}
 
 	triangleData.count = triangleCountIn;
+
+	return triangleData;
 }
 
 void Mesh::ClearUnusedVertices()
@@ -287,8 +291,8 @@ void Mesh::ClearUnusedVertices()
 
 void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex)
 {
-	BuildVertices(rendererData, vertexCountIn, bonesPerVertex);
-	BuildTriangles(rendererData, triangleCountIn);
+	vertexData = BuildVertices(flags, bsGeometryPtr.get(), rendererData, vertexCountIn, bonesPerVertex);
+	triangleData = BuildTriangles(flags.get(), rendererData, triangleCountIn);
 
 	// Clear unused partition vertices
 	if (flags.all(Mesh::Flags::Skinned))
