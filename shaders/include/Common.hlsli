@@ -124,4 +124,47 @@ float computeClipDepth(float3 posW)
     return clipPos.z / clipPos.w;
 }
 
+float3 GetWorldPosition(const int2 id, const float depth)
+{
+    const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
+    
+    const float2 uv = clamp(float2(id + 0.5f) / Camera.RenderSize, float2(0.0f, 0.0f), float2(1.0f, 1.0f));
+    
+    const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
+    const float3 positionCS = ViewToWorldPosition(positionVS, Camera.ViewInverse);
+    return positionCS + Camera.Position.xyz;
+}
+
+float GetDepthClamped(const Texture2D<float> depth, in int2 id)
+{
+    return depth[clamp(id, int2(0, 0), (int2)Camera.RenderSize)];
+}
+
+// https://atyuwen.github.io/posts/normal-reconstruction/
+float3 ComputeNormalImproved(const Texture2D<float> depth, in float2 id, in int2 depthID)
+{
+    float c0 = GetDepthClamped(depth, depthID);
+    float l2 = GetDepthClamped(depth, depthID - int2(2, 0));
+    float l1 = GetDepthClamped(depth, depthID - int2(1, 0));
+    float r1 = GetDepthClamped(depth, depthID + int2(1, 0));
+    float r2 = GetDepthClamped(depth, depthID + int2(2, 0));
+    float b2 = GetDepthClamped(depth, depthID - int2(0, 2));
+    float b1 = GetDepthClamped(depth, depthID - int2(0, 1));
+    float t1 = GetDepthClamped(depth, depthID + int2(0, 1));
+    float t2 = GetDepthClamped(depth, depthID + int2(0, 2));
+    
+    float dl = abs(l1 * l2 / (2.0 * l2 - l1) - c0);
+    float dr = abs(r1 * r2 / (2.0 * r2 - r1) - c0);
+    float db = abs(b1 * b2 / (2.0 * b2 - b1) - c0);
+    float dt = abs(t1 * t2 / (2.0 * t2 - t1) - c0);
+    
+    float3 ce = GetWorldPosition(id, c0);
+
+    float3 dpdx = (dl < dr) ? ce - GetWorldPosition(id - int2(1, 0), l1) :
+                          -ce + GetWorldPosition(id + int2(1, 0), r1);
+    float3 dpdy = (db < dt) ? ce - GetWorldPosition(id - int2(0, 1), b1) :
+                          -ce + GetWorldPosition(id + int2(0, 1), t1);
+
+    return normalize(cross(dpdx, dpdy));
+}
 #endif // COMMON_HLSLI

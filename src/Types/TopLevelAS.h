@@ -51,6 +51,9 @@ public:
 			if (instance->IsHidden())
 				continue;
 
+			if (instance->SkipAS())
+				continue;
+
 			// Skip non-effect models with kRefraction when Path Tracing is active
 			if (cullRefraction &&
 				instance->model->GetShaderFlags().any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction) &&
@@ -65,6 +68,9 @@ public:
 		commandList->endMarker();
 
 		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
+
+		if (scene->GetSceneGraph()->GetNumInstancesFrame() != topLevelInstances)
+			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances and TLAS instances.");
 
 		if (!m_Handle || topLevelInstances > m_NumInstances - Constants::TLAS_INSTANCES_THRESHOLD) {
 			float topLevelInstancesRatio = std::ceil(topLevelInstances / static_cast<float>(Constants::TLAS_INSTANCES_STEP));

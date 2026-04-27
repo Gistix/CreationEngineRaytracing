@@ -6,6 +6,7 @@ struct RenderTargetManager
 	{
 		ViewDepth,
 		ClipDepth,
+		FaceNormals,
 		MotionVectors3D,
 		DiffuseRadiance,
 		SpecularRadiance,

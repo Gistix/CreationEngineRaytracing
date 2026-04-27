@@ -3,13 +3,14 @@
 #include "Pass/RenderPass.h"
 #include "Util.h"
 #include "CameraData.hlsli"
+
+#include "Core/TextureManager.h"
+
 #include "Types/RendererParams.h"
-#include "Types/TextureReference.h"
 #include "Types/SupportedFeatures.h"
 #include "Types/PassTiming.h"
 
 #include "Renderer/RenderGraph.h"
-
 #include "Renderer/RenderTargetManager.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback

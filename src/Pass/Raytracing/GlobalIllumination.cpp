@@ -5,7 +5,7 @@
 
 namespace Pass::Raytracing
 {
-	GlobalIllumination::GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc)
+	GlobalIllumination::GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, Common::SHaRCGI* sharc)
 		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
 	{
 		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
@@ -18,7 +18,7 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
 
-		m_Defines = Util::Shader::GetRaytracingDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
+		m_Defines = Util::Shader::GetGlobalIlluminationDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -32,7 +32,7 @@ namespace Pass::Raytracing
 
 	void GlobalIllumination::SettingsChanged(const Settings& settings)
 	{
-		auto defines = Util::Shader::GetRaytracingDefines(settings, m_SHaRC != nullptr, false);
+		auto defines = Util::Shader::GetGlobalIlluminationDefines(settings, m_SHaRC != nullptr, false);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
@@ -62,10 +62,11 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(7),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),
+			nvrhi::BindingLayoutItem::Texture_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
-			nvrhi::BindingLayoutItem::Texture_SRV(12),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
 			nvrhi::BindingLayoutItem::Texture_SRV(13),
+			nvrhi::BindingLayoutItem::Texture_SRV(14),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -222,10 +223,11 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(7, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, m_SHaRC->GetResolveBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetHashEntriesBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(12, scene->GetPhysicalSkyTrLUTTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(13, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(13, scene->GetPhysicalSkyTrLUTTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 
@@ -260,7 +262,7 @@ namespace Pass::Raytracing
 			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
-		auto resolution = Renderer::GetSingleton()->GetResolution();
+		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
 
 		if (m_RayPipeline)
 		{

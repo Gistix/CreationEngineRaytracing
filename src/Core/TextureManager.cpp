@@ -42,7 +42,7 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 
 	IUnknown* key = nullptr;
 
-	if (texture->pad24 == 1)
+	if (texture->pad24 == NATIVE_DX12RESOURCE)
 		key = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
 	else
 		key = texture->texture;
@@ -57,7 +57,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 	ID3D12Resource* d3d12Resource = nullptr;
 
 	// Texure was already loaded on DX12
-	if (texture->pad24 == 1) {
+	if (texture->pad24 == NATIVE_DX12RESOURCE) {
 		d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
 	}
 
@@ -66,6 +66,10 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource, TextureType textureType)
 {
+	if (textureType == TextureType::CubeMap)
+		return nullptr;
+
+	// If d3d12Resource is null we need to get the texture handle from dx11
 	bool shareResource = d3d12Resource == nullptr;
 
 	if (shareResource && !d3d11Resource)

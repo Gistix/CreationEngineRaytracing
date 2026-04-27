@@ -33,18 +33,48 @@ namespace Hooks
 		func(a_actor, a_object, a_queue3DTasks);
 	}
 
-	void TESObjectLAND_Attach3D::thunk(RE::TESObjectLAND* oThis, bool a2)
+	struct TESObjectLAND_Attach3D
 	{
-		func(oThis, a2);
+		static RE::NiNode* GetCell3D(RE::TESObjectCELL* a_cell)
+		{
+			auto result = a_cell->GetRuntimeData().loadedData;
 
-		Scene::GetSingleton()->AttachLand(oThis);
+			if (result)
+				return result->cell3D.get();
+
+			return nullptr;
+		}
+
+		static void thunk(RE::TESObjectLAND* a_land, bool a_hasMopp)
+		{
+			bool hadMesh = a_land->loadedData->mesh[0];
+
+			func(a_land, a_hasMopp);
+
+			if (a_land->parentCell && GetCell3D(a_land->parentCell)) {
+				bool hasMesh = a_land->loadedData->mesh[0];
+
+				// Landscape mesh loaded
+				if (!hadMesh && hasMesh) {
+					// Attach3D will conditionally release landscape when loading another cell (going through doors)
+					// So release any related instances before attempting to attach
+					Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_land, true);
+					Scene::GetSingleton()->AttachLand(a_land);
+				}
+			}
+		};
+		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	void TESObjectLAND_Detach3D::thunk(RE::TESObjectLAND* oThis)
+	struct TESObjectLAND_Detach3D
 	{
-		func(oThis);
+		static void thunk(RE::TESObjectLAND* a_land)
+		{
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(a_land, true);
 
-		Scene::GetSingleton()->GetSceneGraph()->ReleaseFormInstances(oThis, true);
+			func(a_land);
+		};
+		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
 	void TESWaterSystem_AddWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural)
@@ -116,6 +146,38 @@ namespace Hooks
 	};
 
 #if defined(SKYRIM)
+	struct BSGraphicsTexture_Dtor
+	{
+		static void thunk(void* a1, RE::BSGraphics::Texture* a_texture)
+		{
+			if (a_texture->pad24 == NO_DX12RESOURCE)
+				func(a1, a_texture);
+
+			if (InterlockedExchangeAdd(&a_texture->refCount, 0xFFFFFFFF) == 1)
+			{
+				auto* d3d12Texture = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(a_texture);
+
+				if (d3d12Texture->d3d12Texture)
+					d3d12Texture->d3d12Texture->Release();
+
+				if (d3d12Texture->resourceView)
+					d3d12Texture->resourceView->Release();
+
+				if (d3d12Texture->texture)
+					d3d12Texture->texture->Release();
+
+				if (d3d12Texture->UAV)
+					d3d12Texture->UAV->Release();
+
+				auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+
+				// Doesn't take size to be freed?
+				scrapHeap->Deallocate(d3d12Texture);
+			}
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	HRESULT CreateTextureAndSRV::thunk(
 		ID3D11Device* a_device,
 		D3D11_RESOURCE_DIMENSION a_dimension,
@@ -131,8 +193,15 @@ namespace Hooks
 	) {
 		bool shareTexture = a_dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D && !a_cubemap;
 
-		if (!shareTexture)
-			return func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
+		if (!shareTexture) {
+			auto result = func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
+
+			// Enforce flag
+			if (SUCCEEDED(result))
+				(*a_outTexture)->pad24 = NO_DX12RESOURCE;
+
+			return result;
+		}
 
 		auto& expSettings = Scene::GetSingleton()->m_Settings.ExperimentalSettings;
 
@@ -159,16 +228,16 @@ namespace Hooks
 			auto defaultTexture = stateRuntimeData.defaultTextureGrey->rendererTexture;
 
 			texture->texture = defaultTexture->texture;
-			texture->unk08 = defaultTexture->unk08;
+			texture->UAV = defaultTexture->UAV;
 			texture->resourceView = defaultTexture->resourceView;
 			texture->unk18 = defaultTexture->unk18;
-			texture->unk20 = defaultTexture->unk20;
+			texture->refCount = defaultTexture->refCount;
 
 			defaultTexture->texture->AddRef();
 			defaultTexture->resourceView->AddRef();
 
 			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
-			texture->pad24 = 1;
+			texture->pad24 = NATIVE_DX12RESOURCE;
 
 			auto renderer = Renderer::GetSingleton();
 			auto device = renderer->GetDevice();
@@ -293,6 +362,8 @@ namespace Hooks
 				texture->texture->Release();
 				return srvResult;
 			}
+
+			texture->pad24 = NO_DX12RESOURCE;
 
 			*a_outTexture = texture;
 
@@ -616,7 +687,7 @@ namespace Hooks
 			textureDesc->format = static_cast<uint8_t>(a_format);
 			textureDesc->unk1C = 1;
 			textureDesc->unk1E = 0;
-			texture->unk20 = 1;
+			texture->refCount = 1;
 
 			// SRV creation (skipped for staging)
 			if (a_usage != D3D11_USAGE_STAGING)
@@ -799,15 +870,13 @@ namespace Hooks
 
 #if defined(SKYRIM)
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
+		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
-		//stl::write_vfunc<0x6B, Release3DRelatedData>(RE::VTABLE_TESObjectREFR[0]);
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
-
-		//stl::detour_thunk<Actor_Set3D>(REL::RelocationID(36199, 37178));
 
 		stl::detour_thunk<AttachLOD>(REL::RelocationID(30741, 31581));
 		

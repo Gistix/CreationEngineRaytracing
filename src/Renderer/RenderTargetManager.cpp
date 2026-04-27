@@ -4,9 +4,9 @@
 nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 	auto& textureHandle = m_Textures[static_cast<size_t>(texture)];
 
-	auto* renderer = Renderer::GetSingleton();
-
 	if (!textureHandle) {
+		auto* renderer = Renderer::GetSingleton();
+
 		auto resolution = renderer->GetResolution();
 		nvrhi::TextureDesc desc{};
 
@@ -25,11 +25,16 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		case RenderTarget::ClipDepth:
 			desc.format = nvrhi::Format::R32_FLOAT;
 			break;
+		case RenderTarget::FaceNormals:
+			desc.format = nvrhi::Format::R11G11B10_FLOAT;
+			break;
 		case RenderTarget::MotionVectors3D:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
 		case RenderTarget::DiffuseRadiance:
 		case RenderTarget::SpecularRadiance:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			break;
 		default:
 			break;
 		}

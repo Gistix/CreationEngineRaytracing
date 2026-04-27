@@ -299,14 +299,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
 
-	uint32_t meshIndex = 0;
-	uint32_t instanceIndex = 0;
+	m_NumMeshes = 0;
+	m_NumInstances = 0;
 
 	eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
 	for (auto& instance : m_Instances)
 	{
-		instance->Update(instanceIndex);
+		instance->Update(m_NumInstances);
 
 		if (instance->IsHidden())
 			continue;
@@ -316,13 +316,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		// Update if applicabe and queue skinning/dynamic update
 		instance->model->Update(instance->m_Node, isPlayer);
 
-		uint32_t firstMeshIndex = meshIndex;
+		uint32_t firstMeshIndex = m_NumMeshes;
 
 		// Get mesh data
-		instance->model->SetData(m_MeshData.data(), meshIndex);
+		instance->model->SetData(m_MeshData.data(), m_NumMeshes);
+
+		// No visible meshes in instance
+		bool hiddenModel = m_NumMeshes == firstMeshIndex;
+		instance->SetHiddenModel(hiddenModel);
 		
-		// No visible shape in instance
-		if (meshIndex == firstMeshIndex)
+		if (instance->SkipAS())
 			continue;
 
 		uint8_t numLights = 0u;
@@ -341,21 +344,21 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			}
 		}
 
-		m_InstanceData[instanceIndex] = {
+		m_InstanceData[m_NumInstances] = {
 			instance->m_Transform,
 			instance->m_PrevTransform,
 			InstanceLightData(lights.data(), numLights),
 			firstMeshIndex
 		};
 
-		instanceIndex++;
+		m_NumInstances++;
 	}
 
-	if (meshIndex > 0)
-		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), meshIndex * sizeof(MeshData));
+	if (m_NumMeshes > 0)
+		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
 
-	if (instanceIndex > 0)
-		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), instanceIndex * sizeof(InstanceData));
+	if (m_NumInstances > 0)
+		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 }
 
 void SceneGraph::ClearDirtyStates()
@@ -515,10 +518,12 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 	for (uint i = 0; i < 4; i++) {
 		auto mesh = loadedData->mesh[i];
 
-		if (!mesh)
+		if (!mesh) {
+			logger::warn("SceneGraph::CreateLandModel - Mesh [{}] is nullptr", i);
 			continue;
+		}
 
-		CreateModelInternal(land, std::format("Landscape_{}_{}_Quad_{}", exteriorData->cellX, exteriorData->cellY, i).c_str(), mesh);
+		CreateModelInternal(land, std::format("Land_{:0X}_{}_{}_Quad_{}", land->GetFormID(), exteriorData->cellX, exteriorData->cellY, i).c_str(), mesh);
 	}
 }
 
@@ -666,28 +671,24 @@ void SceneGraph::ReleaseFormInstances(RE::TESForm* form, bool releaseModel)
 
 	auto renderer = Renderer::GetSingleton();
 
-	// Safer iteration (copy pointer list)
-	auto instances = instanceFormIDsIt->second;
-
-	for (auto* instance : instances) {
+	for (auto* instance : instanceFormIDsIt->second) {
 		m_InstanceNodes.erase(instance->m_Node);
 
 		auto* model = instance->model;
 
-		int refCount = 0;
 		if (model) {
-			refCount = model->Release();
+			int refCount = model->Release();
 			instance->model = nullptr;
-		}
 
-		if (refCount <= 0 && releaseModel && model) {
-			logger::debug("SceneGraph::ReleaseFormInstances - {}", model->m_Name);
+			if (refCount <= 0 && releaseModel) {
+				logger::debug("SceneGraph::ReleaseFormInstances - {}", model->m_Name);
 
-			auto modelIt = m_Models.find(model->m_Name);
+				auto modelIt = m_Models.find(model->m_Name);
 
-			if (modelIt != m_Models.end()) {
-				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
-				m_Models.erase(modelIt);
+				if (modelIt != m_Models.end()) {
+					m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
+					m_Models.erase(modelIt);
+				}
 			}
 		}
 
@@ -749,24 +750,23 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 		const auto& geometryRuntimeData = pGeometry->GetGeometryRuntimeData();
 
-		auto* effect = geometryRuntimeData.properties[RE::BSGeometry::States::kEffect].get();
+		auto* shaderProperty = geometryRuntimeData.shaderProperty.get();
 
-		if (!effect) {
+		if (!shaderProperty) {
 			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - No Effect");
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
 
-		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(effect) != nullptr;
-		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(effect) != nullptr;
-		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(effect) != nullptr;
+		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
+		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
+		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
 
 		// Only lighting and effect shader for now
 		if (!isLightingShader && !isEffectShader && !isWaterShader) {
-			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", effect->GetRTTI()->name);
+			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
 
-		auto shaderProperty = netimmerse_cast<RE::BSShaderProperty*>(effect);
 		bool skinned = shaderProperty && shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kSkinned);
 
 		auto& geomFlags = pGeometry->GetFlags();

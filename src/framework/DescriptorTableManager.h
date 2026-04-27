@@ -100,6 +100,8 @@ public:
     ~DescriptorTableManager();
         
     nvrhi::IDescriptorTable* GetDescriptorTable() const { return m_DescriptorTable; }
+    uint32_t GetCapacity() const { return m_DescriptorTable->getCapacity(); }
+    uint32_t GetAllocationCount() const;
 
     DescriptorIndex CreateDescriptor(nvrhi::BindingSetItem item);
     DescriptorHandle CreateDescriptorHandle(nvrhi::BindingSetItem item);

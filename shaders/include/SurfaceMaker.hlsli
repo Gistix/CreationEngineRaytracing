@@ -286,7 +286,7 @@ struct SurfaceMaker
         return surface; 
     }    
     
-    static Surface make(float3 position, float3 geomNormal, float3 normal, float3 tangent, float3 bitangent, float3 albedo, float roughness, float metallic, float3 emissive, float ao) 
+    static Surface make(float3 position, float3 faceNormal, float3 normal, float3 tangent, float3 bitangent, float3 albedo, float roughness, float metallic, float3 emissive, float ao) 
     { 
         Surface surface;         
 
@@ -300,14 +300,14 @@ struct SurfaceMaker
         surface.Position = position;
         surface.PrevPosition = position;
 
-        surface.FaceNormal = geomNormal;
+        surface.FaceNormal = faceNormal;
 
         surface.MipLevel = 0.0f + Raytracing.TexLODBias;
         surface.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
 #if USE_SIA_INTERPOLATION
         surface.SIAOffset = 0.0f; // No SIA data available in hybrid path
 #endif
-        surface.GeomNormal = geomNormal;
+        surface.GeomNormal = faceNormal;
         surface.GeomTangent = tangent; // not needed for hybrid
 
         surface.Normal = normal;

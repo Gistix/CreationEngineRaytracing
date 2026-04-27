@@ -17,18 +17,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct TESObjectLAND_Attach3D
-	{
-		static void thunk(RE::TESObjectLAND* oThis, bool a2);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct TESObjectLAND_Detach3D
-	{
-		static void thunk(RE::TESObjectLAND* oThis);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct TESWaterSystem_AddWater
 	{
 		static void thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural);
