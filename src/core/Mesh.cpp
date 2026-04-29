@@ -736,7 +736,6 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 		alphaFlags = Material::AlphaFlags::Transmission;
 	}
 
-	// Fallback to alpha test if possible
 	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
 	blendMaterial |= shaderFlags.any(EShaderPropertyFlag::kDecal, EShaderPropertyFlag::kDynamicDecal);
 
@@ -753,7 +752,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
 	// so the any-hit shader can compute transmittance for shadow rays
-	bool isWindow = (feature == Feature::kGlowMap || (pbrFlags & PBRShaderFlags::HasEmissive)) &&
+	bool isWindow = (feature == Feature::kGlowMap || pbrFlags.any(PBRShaderFlags::HasEmissive)) &&
 	                shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask);
 	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
 		alphaFlags |= Material::AlphaFlags::Transmission;
