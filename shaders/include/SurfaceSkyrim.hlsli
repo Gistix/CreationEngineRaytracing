@@ -278,7 +278,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
             tintColor = tintColor * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor) * 2.0f;
+            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor);
                 
         }
         else if (material.Feature == Feature::kSkinTint)
@@ -287,7 +287,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             
             float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor)) * 2.0f;
+            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor));
         }
         
          [branch]
