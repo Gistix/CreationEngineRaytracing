@@ -178,6 +178,8 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 		it->second = eastl::make_unique<MSNReference>(normalMapRT, textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
 
 		m_MSNConverter->Allocate(it->second->descriptorHandle->Get(), d3d11Resource);
+
+		return it->second->descriptorHandle;
 	}
 	else {
 		auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
