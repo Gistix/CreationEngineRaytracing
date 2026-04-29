@@ -300,18 +300,12 @@ void SceneGraph::UpdateLODVisibility()
 {
 	for (auto& [block, ref] : m_TerrainLODInstances)
 	{
-		if (!block->loaded || !block->attached)
-			continue;
-
-		ref.UpdateVisibility(block->chunk);
+		ref.UpdateVisibility();
 	}
 
 	for (auto& [block, ref] : m_ObjectLODInstances)
 	{
-		if (!block->loaded || !block->attached)
-			continue;
-
-		ref.UpdateVisibility(block->chunk);
+		ref.UpdateVisibility();
 	}
 }
 
@@ -1192,14 +1186,20 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* mod
 
 void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, 0))
-		m_ObjectLODInstances[block].instances.push_back(instance);
+	if (auto* instance = AddInstanceImpl(node, model, 0)) {
+		auto& blockRefr = m_ObjectLODInstances[block];
+		blockRefr.block = block;
+		blockRefr.instances.push_back(instance);
+	}
 }
 
 void SceneGraph::AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, 0))
-		m_TerrainLODInstances[block].instances.push_back(instance);
+	if (auto* instance = AddInstanceImpl(node, model, 0)) {
+		auto& blockRefr = m_TerrainLODInstances[block];
+		blockRefr.block = block;
+		blockRefr.instances.push_back(instance);
+	}
 }
 
 void SceneGraph::SetLODDetached(RE::BGSTerrainBlock* block, bool detached)

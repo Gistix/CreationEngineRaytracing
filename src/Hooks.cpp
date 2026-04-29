@@ -825,7 +825,8 @@ namespace Hooks
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
 			if (a_block->loaded && !a_block->attached && a_block->chunk)
-				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+				if (a_block->node && a_block->node->GetLODLevel() != 4)
+					Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 
 			func(a_block);
 		}
@@ -837,10 +838,9 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			if (a_block->loaded && !a_block->attached && a_block->chunk)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
-
 			func(a_block);
+
+			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -850,10 +850,11 @@ namespace Hooks
 	{
 		static RE::BSMultiBoundNode* thunk(RE::BGSTerrainBlock* a_block)
 		{
-			if (a_block->attached)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
+			auto result = func(a_block);
 
-			return func(a_block);
+			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+
+			return result;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -957,10 +958,10 @@ namespace Hooks
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 
 		// Terrain LOD
-		/*stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
+		stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
 		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
 		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
-		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));*/
+		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
 		stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
