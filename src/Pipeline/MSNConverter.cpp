@@ -70,13 +70,16 @@ namespace Pipeline
 				continue;
 
 			auto normalMapIt = normapMaps.find(msnIt->second);
-			if (normalMapIt == normapMaps.end())
+			if (normalMapIt == normapMaps.end()) {
+				m_AllocationMap.erase(msnIt);
 				continue;
+			}
 
 			auto* normalMap = normalMapIt->second.get();
-
-			if (normalMap->converted)
+			if (normalMap->converted) {
+				m_AllocationMap.erase(msnIt);
 				continue;
+			}
 
 			// Create framebuffer for this render target
 			auto framebuffer = device->createFramebuffer(
@@ -136,7 +139,7 @@ namespace Pipeline
 			}
 
 			normalMap->converted = true;
-			m_AllocationMap.erase(allocationIdx);
+			m_AllocationMap.erase(msnIt);
 		}
 	}
 };
