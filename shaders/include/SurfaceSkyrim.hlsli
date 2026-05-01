@@ -193,22 +193,9 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 specularColor *= normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).a;
             }
     
-#if ALT_PBR_CONV_METALLIC || ALT_PBR_CONV_ROUGHNESS
-	        float specularity = CalcSpecularity(specularColor, material.SpecularColor().a);            
-	        float roughnessFromShininess = material.RoughnessScale();            
-#endif
-            
-#if ALT_PBR_CONV_METALLIC          
-            surface.Metallic = CalcMetallic(surface.Albedo, specularity, roughnessFromShininess);
-#endif
-            
-#if ALT_PBR_CONV_ROUGHNESS
-            surface.Roughness =  CalcRoughness(roughnessFromShininess, specularity);
-            surface.F0 = clamp(0.08f * specularColor, 0.02f, 0.08f);           
-#else
-            surface.Roughness = material.RoughnessScale();
-            surface.F0 = clamp(0.08f * specularColor * material.SpecularColor().a, 0.02f, 0.08f);
-#endif       
+            float3 finalSpecularColor = specularColor * material.SpecularColor().a;
+            surface.Roughness = saturate(material.RoughnessScale() + (1.0f - Color::RGBToLuminance(finalSpecularColor)) * 0.25f);
+            surface.F0 = clamp(0.08f * finalSpecularColor, 0.02f, 0.08f);
         }
          
         [branch]
