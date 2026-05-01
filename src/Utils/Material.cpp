@@ -9,11 +9,7 @@ namespace Util
 	{
 		float ShininessToRoughness(float shininess)
 		{
-			// make sure shininess within valid range (0 - 1023), otherwise set to 1.0f
-			if (shininess <= 0.0f || shininess > 1023.0f) {
-				return 1.0f;
-			}
-			return std::pow(2.0f / (shininess + 2.0f), 0.25f);
+			return std::pow(2.0f / (std::min(std::abs(shininess), 1024.0f) + 2.0f), 0.25f);
 		}
 
 		stl::enumeration<PBRShaderFlags, uint32_t> GetPBRShaderFlags(const BSLightingShaderMaterialPBR* pbrMaterial)
