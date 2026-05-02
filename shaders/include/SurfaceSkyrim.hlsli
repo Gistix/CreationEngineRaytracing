@@ -180,22 +180,26 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         if (material.ShaderFlags & ShaderFlags::kSpecular)
         {
             float3 specularColor = material.SpecularColor().rgb;
+            float specularStrength = 0;
             
             [branch]
             if (material.ShaderFlags & ShaderFlags::kModelSpaceNormals)
             {
                 Texture2D specularTexture = Textures[NonUniformResourceIndex(material.SpecularTexture())];
-                specularColor *= specularTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
+                specularStrength = specularTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
             }
             else
             {
                 Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
-                specularColor *= normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).a;
+                specularStrength = normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).a;
             }
+            specularColor *= specularStrength;
     
-            float3 finalSpecularColor = specularColor * material.SpecularColor().a;
-            surface.Roughness = saturate(material.RoughnessScale() + (1.0f - Color::RGBToLuminance(finalSpecularColor)) * 0.25f);
-            surface.F0 = clamp(0.08f * finalSpecularColor, 0.02f, 0.08f);
+            float roughnessFromShininess = material.RoughnessScale();
+            float roughnessFromSpecularTexture = pow(1.0f - specularStrength, 2);
+
+            surface.Roughness = lerp(roughnessFromSpecularTexture, roughnessFromShininess, specularStrength);
+            surface.F0 = clamp(0.08f * specularColor * material.SpecularColor().a, 0.02f, 0.08f);
         }
          
         [branch]
