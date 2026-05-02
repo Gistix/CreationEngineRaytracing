@@ -349,6 +349,28 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             alpha *= vertexColor.a;
 
         [branch]
+        if (material.AlphaFlags & AlphaFlags::Additive)
+        {
+            alpha = 0.0f;
+            surface.Albedo = 0.0f;
+            surface.Metallic = 0.0f;
+            surface.Roughness = 0.0f;
+            surface.TransmissionColor = 1.0f;
+            surface.SpecTrans = 1.0f;
+
+            surface.SubsurfaceData.HasSubsurface = 0;
+            surface.SubsurfaceData.TransmissionColor = 0.0f;
+            surface.SubsurfaceData.ScatteringColor = 0.0f;
+            surface.SubsurfaceData.Scale = 0.0f;
+            surface.SubsurfaceData.Anisotropy = 0.0f;
+
+            surface.CoatColor = 1.0f;
+            surface.CoatStrength = 0.0f;
+            surface.CoatRoughness = 0.0f;
+            surface.CoatF0 = 0.0f;
+        }
+
+        [branch]
         if (material.AlphaFlags & AlphaFlags::Transmission)
         {
             surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);

@@ -429,7 +429,15 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 	// Set alpha flags
 	if (alphaProperty) {
 		if (alphaProperty->GetAlphaBlending()) {
-			alphaFlags |= Material::AlphaFlags::Blend;
+			using AlphaFunction = RE::NiAlphaProperty::AlphaFunction;
+
+			if (alphaProperty->GetDestBlendMode() == AlphaFunction::kOne) {
+				alphaFlags |= Material::AlphaFlags::Additive;
+				alphaFlags |= Material::AlphaFlags::Transmission;
+			}
+			else {
+				alphaFlags |= Material::AlphaFlags::Blend;
+			}
 		}
 
 		if (alphaProperty->GetAlphaTesting()) {
@@ -739,7 +747,11 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
 	blendMaterial |= shaderFlags.any(EShaderPropertyFlag::kDecal, EShaderPropertyFlag::kDynamicDecal);
 
-	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
+	if ((alphaFlags & Material::AlphaFlags::Additive) != Material::AlphaFlags::None) {
+		alphaFlags &= ~Material::AlphaFlags::Blend;
+		alphaFlags |= Material::AlphaFlags::Transmission;
+	}
+	else if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
 		alphaFlags &= ~Material::AlphaFlags::Blend;
 
 		alphaFlags |= Material::AlphaFlags::Transmission;  // I want them to behave like glass for now

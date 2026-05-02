@@ -95,7 +95,8 @@ namespace AlphaFlags
 	static const uint16_t None = 0;
 	static const uint16_t Blend = (1 << 0);
 	static const uint16_t Test = (1 << 1);
-	static const uint16_t Transmission = (1 << 2);	
+	static const uint16_t Transmission = (1 << 2);
+	static const uint16_t Additive = (1 << 3);	
 }
 #endif
 
