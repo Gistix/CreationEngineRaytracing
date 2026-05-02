@@ -67,13 +67,21 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
 			nvrhi::BindingLayoutItem::Texture_SRV(13),
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
-			nvrhi::BindingLayoutItem::Texture_UAV(0)
+			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
 		};
 
 		auto* scene = Scene::GetSingleton();
 		auto& settings = scene->m_Settings;
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR || settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // ViewZ
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(3)); // Diffuse Factor
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Specular Factor
+
+		}
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1));
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2));
 		}
@@ -234,6 +242,8 @@ namespace Pass::Raytracing
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::SpecularFactor)));
 		}
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {

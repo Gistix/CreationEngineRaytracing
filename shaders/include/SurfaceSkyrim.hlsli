@@ -186,22 +186,26 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         if (material.ShaderFlags & ShaderFlags::kSpecular)
         {
             float3 specularColor = material.SpecularColor().rgb;
+            float specularStrength = 0;
             
             [branch]
             if (material.ShaderFlags & ShaderFlags::kModelSpaceNormals)
             {
                 Texture2D specularTexture = Textures[NonUniformResourceIndex(material.SpecularTexture())];
-                specularColor *= specularTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
+                specularStrength = specularTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
             }
             else
             {
                 Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
-                specularColor *= normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).a;
+                specularStrength = normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).a;
             }
+            specularColor *= specularStrength;
     
-            float3 finalSpecularColor = specularColor * material.SpecularColor().a;
-            surface.Roughness = saturate(material.RoughnessScale() + (1.0f - Color::RGBToLuminance(finalSpecularColor)) * 0.25f);
-            surface.F0 = clamp(0.08f * finalSpecularColor, 0.02f, 0.08f);
+            float roughnessFromShininess = material.RoughnessScale();
+            float roughnessFromSpecularTexture = pow(1.0f - specularStrength, 2);
+
+            surface.Roughness = lerp(roughnessFromSpecularTexture, roughnessFromShininess, specularStrength);
+            surface.F0 = clamp(0.08f * specularColor * material.SpecularColor().a, 0.02f, 0.08f);
         }
          
         [branch]
@@ -376,6 +380,28 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         [branch]
         if ((material.ShaderFlags & ShaderFlags::kVertexAlpha) && !(material.ShaderFlags & ShaderFlags::kTreeAnim))
             alpha *= vertexColor.a;
+
+        [branch]
+        if (material.AlphaFlags & AlphaFlags::Additive)
+        {
+            alpha = 0.0f;
+            surface.Albedo = 0.0f;
+            surface.Metallic = 0.0f;
+            surface.Roughness = 0.0f;
+            surface.TransmissionColor = 1.0f;
+            surface.SpecTrans = 1.0f;
+
+            surface.SubsurfaceData.HasSubsurface = 0;
+            surface.SubsurfaceData.TransmissionColor = 0.0f;
+            surface.SubsurfaceData.ScatteringColor = 0.0f;
+            surface.SubsurfaceData.Scale = 0.0f;
+            surface.SubsurfaceData.Anisotropy = 0.0f;
+
+            surface.CoatColor = 1.0f;
+            surface.CoatStrength = 0.0f;
+            surface.CoatRoughness = 0.0f;
+            surface.CoatF0 = 0.0f;
+        }
 
         [branch]
         if (material.AlphaFlags & AlphaFlags::Transmission)

@@ -23,7 +23,8 @@ struct Material
 		None = 0,
 		Blend = 1 << 0,
 		Test = 1 << 1,
-		Transmission = 1 << 2
+		Transmission = 1 << 2,
+		Additive = 1 << 3
 	};
 
 	enum ShaderType : uint16_t
