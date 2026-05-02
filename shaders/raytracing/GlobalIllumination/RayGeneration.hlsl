@@ -87,8 +87,9 @@ void Main()
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
-#if defined(RAW_RADIANCE) && defined(NRD_REBLUR)    
-    ViewDepth[idx] = depthVS;
+#if defined(RAW_RADIANCE) && defined(NRD_REBLUR)
+    const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0) * DEPTH_SCALE;   
+    ViewDepth[idx] = ScreenToViewDepth(depthJittered, Camera.CameraData);
 #endif 
     
     [branch]
