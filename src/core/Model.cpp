@@ -13,12 +13,15 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
 
-	auto* refr = form->AsReference();
+	// Water and LOD models have no form
+	if (form) {
+		auto* refr = form->AsReference();
 
-	if (refr && refr->extraList.HasType(RE::ExtraDataType::kEmittanceSource)) {
-		if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
-			if (auto* tesRegion = extra->source->As<RE::TESRegion>()) {
-				m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+		if (refr && refr->extraList.HasType(RE::ExtraDataType::kEmittanceSource)) {
+			if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
+				if (auto* tesRegion = extra->source->As<RE::TESRegion>()) {
+					m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+				}
 			}
 		}
 	}
@@ -47,8 +50,13 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild | (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
-	else
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace | nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+	else {
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+
+		// BLASes built with allow compaction cannot be rebuilt
+		if (meshFlags.none(Mesh::Flags::LOD))
+			blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
+	}
 
 	return blasDesc;
 }

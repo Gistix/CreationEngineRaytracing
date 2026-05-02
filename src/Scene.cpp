@@ -305,6 +305,8 @@ void Scene::Execute()
 
 	sceneGraph->UpdateActors();
 
+	sceneGraph->UpdateLODVisibility();
+
 	auto* renderer = Renderer::GetSingleton();
 
 	auto* commandList = renderer->StartExecution();

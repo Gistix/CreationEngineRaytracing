@@ -199,22 +199,9 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 specularColor *= normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).a;
             }
     
-#if ALT_PBR_CONV_METALLIC || ALT_PBR_CONV_ROUGHNESS
-	        float specularity = CalcSpecularity(specularColor, material.SpecularColor().a);            
-	        float roughnessFromShininess = material.RoughnessScale();            
-#endif
-            
-#if ALT_PBR_CONV_METALLIC          
-            surface.Metallic = CalcMetallic(surface.Albedo, specularity, roughnessFromShininess);
-#endif
-            
-#if ALT_PBR_CONV_ROUGHNESS
-            surface.Roughness =  CalcRoughness(roughnessFromShininess, specularity);
-            surface.F0 = clamp(0.08f * specularColor, 0.02f, 0.08f);           
-#else
-            surface.Roughness = material.RoughnessScale();
-            surface.F0 = clamp(0.08f * specularColor * material.SpecularColor().a, 0.02f, 0.08f);
-#endif       
+            float3 finalSpecularColor = specularColor * material.SpecularColor().a;
+            surface.Roughness = saturate(material.RoughnessScale() + (1.0f - Color::RGBToLuminance(finalSpecularColor)) * 0.25f);
+            surface.F0 = clamp(0.08f * finalSpecularColor, 0.02f, 0.08f);
         }
          
         [branch]
@@ -284,7 +271,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
             tintColor = tintColor * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor) * 2.0f;
+            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor);
                 
         }
         else if (material.Feature == Feature::kSkinTint)
@@ -293,7 +280,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             
             float3 tintColor = material.BaseColor().rgb * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor)) * 2.0f;
+            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor));
         }
         
          [branch]

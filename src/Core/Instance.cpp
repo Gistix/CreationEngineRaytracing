@@ -8,6 +8,11 @@ void Instance::SetDetached(bool detached)
 	m_State.set(detached, State::Detached);
 }
 
+void Instance::SetLODHidden(bool hidden)
+{
+	m_State.set(hidden, State::LODHidden);
+}
+
 void Instance::SetHiddenModel(bool hidden)
 {
 	m_State.set(hidden, State::HiddenModel);
@@ -20,7 +25,7 @@ bool Instance::IsDetached() const
 
 bool Instance::IsHidden() const
 {
-	return m_State.any(State::Detached, State::FirstPersonHidden, State::DistanceHidden) || m_Node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
+	return m_State.any(State::Detached, State::FirstPersonHidden, State::LODHidden) || m_Node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
 }
 
 bool Instance::SkipAS() const
@@ -62,17 +67,6 @@ void Instance::Update(uint32_t tlasInstanceID)
 	// TODO: Update logic for first person model support (both shares the same form id of the player)
 	if (Util::IsPlayerFormID(m_FormID)) {
 		m_State.set(!player->Is3rdPersonVisible(), State::FirstPersonHidden);
-	}
-
-	if (model->GetMeshFlags().none(Mesh::Flags::Landscape) && !IsDetached())
-	{
-		auto distance = player->Get3D(false)->world.translate.GetDistance(m_Node->world.translate);
-		bool hide = distance > 40000;
-
-		if (hide && m_State.none(State::DistanceHidden))
-			logger::warn("Instance::Update - Instance of {} hidden due to its distance from player of: {}", model->m_Name, distance);
-
-		m_State.set(hide, State::DistanceHidden);
 	}
 
 	if (IsHidden())

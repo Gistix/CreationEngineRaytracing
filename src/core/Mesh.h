@@ -33,14 +33,16 @@ struct Mesh
 		DoubleSidedGeom = 1 << 5,
 		Water = 1 << 6,
 		Remapped = 1 << 7,
-		Origin = 1 << 8
+		Origin = 1 << 8,
+		LOD = 1 << 9
 	};
 
 	enum class State : uint8_t
 	{
 		None = 0,
 		Hidden = 1 << 0,
-		DismemberHidden = 1 << 1
+		DismemberHidden = 1 << 1,
+		SubIndexHidden = 1 << 2
 	};
 
 	eastl::string m_Name;
@@ -101,7 +103,7 @@ struct Mesh
 	static VertexData BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex);
 	static TriangleData BuildTriangles(Mesh::Flags flags, RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn);
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
-
+	void BuildMesh(VertexData a_VertexData, TriangleData a_TriangleData, RE::BSGraphics::VertexDesc vertexDesc);
 	void ClearUnusedVertices();
 
 	void CalculateNormals();
@@ -121,6 +123,8 @@ struct Mesh
 	bool UpdateTransform(RE::NiAVObject* object);
 
 	void UpdateDismember();
+
+	void UpdateSubIndex();
 
 	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags);
 

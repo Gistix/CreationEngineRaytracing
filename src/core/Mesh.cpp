@@ -313,6 +313,28 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 		Util::CalcTangents(this);
 }
 
+void Mesh::BuildMesh(VertexData a_VertexData, TriangleData a_TriangleData, RE::BSGraphics::VertexDesc vertexDesc)
+{
+	vertexData = a_VertexData;
+	triangleData = a_TriangleData;
+
+	// Clear unused partition vertices
+	if (flags.all(Mesh::Flags::Skinned))
+		ClearUnusedVertices();
+
+	if (flags.none(Flags::Landscape, Flags::Water) && Util::Geometry::HasDoubleSidedGeom(this))
+		flags.set(Mesh::Flags::DoubleSidedGeom);
+
+	bool hasNormal = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_NORMAL;
+	bool hasTangent = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_TANGENT;
+
+	if (!hasNormal)
+		CalculateNormals();
+
+	if (!hasTangent)
+		Util::CalcTangents(this);
+}
+
 eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 {
 	static const eastl::vector<Triangle> triangles = [] {
@@ -610,12 +632,10 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 							}
 						}
 
-						//							textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
-
 						// FaceGen
 						if (feature == Feature::kFaceGen) {
 							if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {
-								if (Util::IsPlayer(form)) {
+								if (form && Util::IsPlayer(form)) {
 									auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
 
 									auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->GetDescriptor(
@@ -728,8 +748,9 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 		alphaFlags = Material::AlphaFlags::Transmission;
 	}
 
-	// Fallback to alpha test if possible
 	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
+	blendMaterial |= shaderFlags.any(EShaderPropertyFlag::kDecal, EShaderPropertyFlag::kDynamicDecal);
+
 	if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
 		alphaFlags &= ~Material::AlphaFlags::Blend;
 
@@ -743,7 +764,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 
 	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
 	// so the any-hit shader can compute transmittance for shadow rays
-	bool isWindow = (feature == Feature::kGlowMap || (pbrFlags & PBRShaderFlags::HasEmissive)) &&
+	bool isWindow = (feature == Feature::kGlowMap || pbrFlags.any(PBRShaderFlags::HasEmissive)) &&
 	                shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask);
 	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
 		alphaFlags |= Material::AlphaFlags::Transmission;
@@ -1073,9 +1094,6 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 
 void Mesh::UpdateDismember()
 {
-	if (!bsGeometryPtr)
-		return;
-
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
 
 	if (!skinInstance)
@@ -1097,6 +1115,28 @@ void Mesh::UpdateDismember()
 	m_PendingState.set(!partition.editorVisible, State::DismemberHidden);
 }
 
+void Mesh::UpdateSubIndex()
+{
+	auto* subIndex = bsGeometryPtr->AsSubIndexTriShape();
+
+	if (!subIndex)
+		return;
+
+	auto& runtimeData = subIndex->GetSubIndexedTrishapeRuntimeData();
+
+	auto& firstSegment = runtimeData.segmentData[0];
+
+	// The first segment references all triangles, if it is visible unhide all segments
+	if (firstSegment.flags == 1) {
+		m_PendingState.set(false, State::SubIndexHidden);
+		return;
+	}
+
+	auto& segment = runtimeData.segmentData[m_Partition];
+
+	m_PendingState.set(segment.unkFlags == 0, State::SubIndexHidden);
+}
+
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
 {
 	// This should never be true, but it often is, meaning we missed some logic that removes this mesh or the entire instance
@@ -1107,6 +1147,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
+	const auto lod = flags.all(Mesh::Flags::LOD);
 
 	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
 	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
@@ -1118,6 +1159,9 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	if (skinned)
 		UpdateDismember();
+
+	if (lod)
+		UpdateSubIndex();
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
@@ -1172,7 +1216,7 @@ MeshData Mesh::GetData(const float3 externalEmittance)
 
 bool Mesh::IsHidden() const
 {
-	return m_State.any(State::Hidden,State::DismemberHidden);
+	return m_State.any(State::Hidden, State::DismemberHidden, State::SubIndexHidden);
 }
 
 void Mesh::CalculateNormals()

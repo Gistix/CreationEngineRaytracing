@@ -2,5 +2,5 @@
 
 #include "PCH.h"
 
-#include "BGSObjectLODAttachState.h"
+#include "BGSObjectBlock.h"
 #include "CellAttachDetachEvent.h"
