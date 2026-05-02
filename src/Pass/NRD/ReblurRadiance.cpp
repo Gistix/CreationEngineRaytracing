@@ -395,9 +395,6 @@ namespace Pass::NRD
 		std::memcpy(m_CommonSettings.worldToViewMatrixPrev, m_CommonSettings.worldToViewMatrix, sizeof(float4x4));
 		std::memcpy(m_CommonSettings.viewToClipMatrixPrev, m_CommonSettings.viewToClipMatrix, sizeof(float4x4));
 
-		// Load engine's view matrix (rotation-only)
-		DirectX::XMMATRIX viewRotMat = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(&cameraData.viewMat));
-
 		// Get camera's world position
 		float3 cameraWorldPos = Util::Math::Float3(runtimeData.posAdjust.getEye());
 
@@ -407,14 +404,13 @@ namespace Pass::NRD
 		// Combine view rotation with translation to get the full world-to-view matrix
 		// NRD expects worldToViewMatrix to transform from world space to camera space, including translation.
 		// So, V_full = ViewRotationMatrix * TranslationMatrix(-CameraWorldPosition)
-		DirectX::XMMATRIX worldToViewMatFull = DirectX::XMMatrixMultiply(translationMat, viewRotMat);
+		DirectX::XMMATRIX worldToViewMatFull = DirectX::XMMatrixMultiply(translationMat, cameraData.viewMat);
 
-		// Transpose for NRD's column-major expectation
-		DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(m_CommonSettings.worldToViewMatrix), worldToViewMatFull);
+		// Set full world to view
+		std::memcpy(m_CommonSettings.worldToViewMatrix, &worldToViewMatFull, sizeof(float4x4));
 
-		// Load and transpose projection matrix for NRD
-		DirectX::XMMATRIX projMat = DirectX::XMLoadFloat4x4(reinterpret_cast<const DirectX::XMFLOAT4X4*>(&cameraData.projMat));
-		DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(m_CommonSettings.viewToClipMatrix), projMat);
+		// Set poriginal projection
+		std::memcpy(m_CommonSettings.viewToClipMatrix, &cameraData.projMat, sizeof(float4x4));
 
 		const auto resolution = renderer->GetResolution();
 		const auto dynamicResolution = renderer->GetDynamicResolution();
