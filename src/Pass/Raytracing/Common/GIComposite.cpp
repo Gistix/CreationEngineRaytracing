@@ -22,6 +22,8 @@ namespace Pass::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
 			nvrhi::BindingLayoutItem::Texture_SRV(3),
+			nvrhi::BindingLayoutItem::Texture_SRV(4),
+			nvrhi::BindingLayoutItem::Texture_SRV(5),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -33,7 +35,7 @@ namespace Pass::Common
 		auto device = GetRenderer()->GetDevice();
 
 		winrt::com_ptr<IDxcBlob> shaderBlob;
-		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/GIComposite.hlsl", { { L"NRD_REBLUR", L"1" } }, L"cs_6_5");
+		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/GIComposite.hlsl", { { L"NRD", L"1" }, { L"NRD_REBLUR", L"1" } }, L"cs_6_5");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
@@ -61,6 +63,8 @@ namespace Pass::Common
 
 		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
 		auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
+		auto* diffuseFactor = textureManager.GetTexture(RenderTarget::DiffuseFactor);
+		auto* specularFactor = textureManager.GetTexture(RenderTarget::SpecularFactor);
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -70,6 +74,8 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::Texture_SRV(1, renderTargets->gnmao),
 			nvrhi::BindingSetItem::Texture_SRV(2, diffuseTexture),
 			nvrhi::BindingSetItem::Texture_SRV(3, specularTexture),
+			nvrhi::BindingSetItem::Texture_SRV(4, diffuseFactor),
+			nvrhi::BindingSetItem::Texture_SRV(5, specularFactor),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 

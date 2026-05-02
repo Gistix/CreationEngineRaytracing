@@ -10,6 +10,8 @@ struct RenderTargetManager
 		MotionVectors3D,
 		DiffuseRadiance,
 		SpecularRadiance,
+		DiffuseFactor,
+		SpecularFactor,
 		Total
 	};
 

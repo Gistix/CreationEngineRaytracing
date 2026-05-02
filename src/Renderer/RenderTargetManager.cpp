@@ -35,6 +35,10 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		case RenderTarget::SpecularRadiance:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
+		case RenderTarget::DiffuseFactor:
+		case RenderTarget::SpecularFactor:
+			desc.format = nvrhi::Format::R11G11B10_FLOAT;
+			break;		
 		default:
 			break;
 		}

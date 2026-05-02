@@ -504,14 +504,15 @@ void Main()
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
 
     diffuseRadiance /= diffFactor;
+    specularRadiance /= specFactor;
     
-    // This removes envBRDF, only viable if we apply back it during composite
-    //specularRadiance /= specFactor;
-    
-#          if defined(NRD_REBLUR)
+#           if defined(NRD_REBLUR)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
-    SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);    
+    SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
 #           endif // NRD_REBLUR 
+    
+    DiffuseFactor[idx] = diffFactor;
+    SpecularFactor[idx] = specFactor;  
     
 #       else // !NRD
     DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);

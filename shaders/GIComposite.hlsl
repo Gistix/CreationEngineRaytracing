@@ -9,6 +9,11 @@ Texture2D<unorm float4> GNMAO           : register(t1);
 Texture2D<float4> DiffuseIndirect       : register(t2);
 Texture2D<float4> SpecularIndirect      : register(t3);
 
+#if defined(NRD)
+Texture2D<float3> DiffuseFactor         : register(t4);
+Texture2D<float3> SpecularFactor        : register(t5);
+#endif
+
 RWTexture2D<float4> Output              : register(u0);
 
 #include "include/ColorConversions.hlsli"
@@ -25,18 +30,26 @@ void Main(uint2 idx : SV_DispatchThreadID)
     if (any(idx >= size))
         return;
     
+    float4 diffuseIndirect = DiffuseIndirect[idx];
+    float4 specularIndirect = SpecularIndirect[idx];
+
+#if defined(NRD)
+    
+#   if defined(NRD_REBLUR)
+    diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
+    specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect); 
+#   endif
+    
+     diffuseIndirect *= float4(DiffuseFactor[idx], 1.0f);
+     specularIndirect *= float4(SpecularFactor[idx], 1.0f);
+#else   
     const float3 albedo = LLGammaToTrueLinear(Albedo[idx].rgb);
     const float metalness = GNMAO[idx].z;
     
     const float3 diffuseAlbedo = albedo * (1.0f - metalness);
     
-    float4 diffuseIndirect = DiffuseIndirect[idx];
-    float4 specularIndirect = SpecularIndirect[idx];
-    
-#if defined(NRD_REBLUR)
-    diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
-    specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);   
+    diffuseIndirect *= float4(diffuseAlbedo, 1.0f);
 #endif
     
-    Output[idx] = float4(diffuseIndirect.rgb * diffuseAlbedo + specularIndirect.rgb, 1.0f);
+    Output[idx] = float4(diffuseIndirect.rgb + specularIndirect.rgb, 1.0f);
 }
