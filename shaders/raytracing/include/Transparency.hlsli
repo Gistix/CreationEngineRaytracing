@@ -42,6 +42,9 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
         if (alpha < material.AlphaThreshold)
             return false;
     }
+
+	if (material.AlphaFlags & AlphaFlags::Additive)
+		alpha = 0.0f;
     
     if (material.AlphaFlags & AlphaFlags::Blend)
     {
@@ -109,6 +112,9 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             if (alpha < material.AlphaThreshold)
                 return false;
         }
+
+        if (material.AlphaFlags & AlphaFlags::Additive)
+            alpha = 0.0f;
     
         if (material.AlphaFlags & AlphaFlags::Blend)
         {
