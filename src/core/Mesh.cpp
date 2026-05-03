@@ -1005,7 +1005,7 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
 }
 
-bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
+bool Mesh::UpdateSkinning(bool isPlayer)
 {
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
@@ -1177,7 +1177,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning(instanceRoot, isPlayer))
+	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
 	if (skinnedModel && UpdateTransform(instanceRoot))
