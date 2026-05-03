@@ -922,6 +922,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
 		const char* name = pGeometry->name.c_str();
 
+		if (strcmp(name, "EditorMarker") == 0 || strcmp(name, "LRTMarker") == 0 || strcmp(name, "AnimInteractionMarker") == 0 || strcmp(name, "FurnitureMarker") == 0) {
+			return RE::BSVisit::BSVisitControl::kContinue;
+		}
+
 		logger::trace("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - {}", name);
 
 		const auto& geometryType = pGeometry->GetType();
@@ -949,6 +953,11 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
+
+		// Ignore effect shader with alpha blend
+		if (isEffectShader && geometryRuntimeData.alphaProperty)
+			if (geometryRuntimeData.alphaProperty->GetAlphaBlending())
+				return RE::BSVisit::BSVisitControl::kContinue;
 
 		bool skinned = shaderProperty && shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kSkinned);
 
@@ -1071,13 +1080,6 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 	}
 
 	logger::trace("SceneGraph::CreateModelInternal \"{}\"", typeid(*pRoot).name());
-
-	const auto* bsxFlags = pRoot->GetExtraData<RE::BSXFlags>("BSX");
-
-	if (bsxFlags) {
-		if (static_cast<int32_t>(bsxFlags->value) & static_cast<int32_t>(RE::BSXFlags::Flag::kEditorMarker))
-			return 0;
-	}
 
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
 
