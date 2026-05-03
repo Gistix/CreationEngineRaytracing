@@ -1005,7 +1005,7 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
 }
 
-bool Mesh::UpdateSkinning([[maybe_unused]] RE::NiAVObject* object, bool isPlayer)
+bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 {
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
@@ -1062,7 +1062,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] RE::NiAVObject* object, bool isPlayer
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
 {
-	if (flags.any(Flags::Landscape, Flags::Water))
+	if (flags.any(Flags::Landscape, Flags::Water, Flags::Origin))
 		return false;
 
 	float3x4 localToRoot;

@@ -33,7 +33,8 @@ struct Mesh
 		DoubleSidedGeom = 1 << 5,
 		Water = 1 << 6,
 		Remapped = 1 << 7,
-		LOD = 1 << 8
+		Origin = 1 << 8,
+		LOD = 1 << 9
 	};
 
 	enum class State : uint8_t
