@@ -44,7 +44,6 @@ public:
 		commandList->beginMarker("BLAS Update");
 
 		auto* scene = Scene::GetSingleton();
-		bool cullRefraction = scene->IsPathTracingActive();
 
 		for (auto& instance : instances)
 		{
@@ -52,12 +51,6 @@ public:
 				continue;
 
 			if (instance->SkipAS())
-				continue;
-
-			// Skip non-effect models with kRefraction when Path Tracing is active
-			if (cullRefraction &&
-				instance->model->GetShaderFlags().any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction) &&
-				!(instance->model->GetShaderTypes() & RE::BSShader::Type::Effect))
 				continue;
 
 			instance->model->UpdateBLAS(commandList);
