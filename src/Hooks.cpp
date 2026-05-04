@@ -823,7 +823,7 @@ namespace Hooks
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
 			if (a_block->loaded && !a_block->attached && a_block->chunk)
-				if (a_block->node && a_block->node->GetLODLevel() != 4)
+				if (a_block->node)
 					Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 
 			func(a_block);
@@ -956,13 +956,13 @@ namespace Hooks
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 
 		// Terrain LOD
-		/*stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
+		stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
 		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
 		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
+		/*stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
 		stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
 		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));*/
 
