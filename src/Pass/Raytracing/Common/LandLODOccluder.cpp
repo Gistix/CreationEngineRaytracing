@@ -52,6 +52,7 @@ namespace Pass
 	{
 		uint32_t meshIndex = 0;
 
+		// TODO: Make updates lazy
 		const auto& terrainLODInstances = Scene::GetSingleton()->GetSceneGraph()->GetTerrainLodInstances();
 		for (auto& [block, blockRefr] : terrainLODInstances) {
 			if (block->node->GetLODLevel() != 4)
@@ -59,6 +60,8 @@ namespace Pass
 
 			for (auto& instance : blockRefr.instances)
 			{
+				auto firstMeshIndex = meshIndex;
+
 				for (auto& mesh : instance->model->meshes) {
 					if (meshIndex >= MAX_MESHES - 1) {
 						logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
@@ -73,6 +76,10 @@ namespace Pass
 						instance->m_Transform,
 						mesh->m_LocalToRoot);
 				}
+
+				// Marks Vertex as dirty, triggering a BLAS update on SceneTLAS pass
+				if (meshIndex > firstMeshIndex)
+					instance->model->TerrainLODUpdated();
 			}
 		}
 
@@ -112,7 +119,8 @@ namespace Pass
 		if (!PrepareResources(commandList, numMeshes, vertexCount))
 			return;
 
-		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+		auto* scene = Scene::GetSingleton();
+		auto* sceneGraph = scene->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
 			m_BindingSet,
@@ -125,15 +133,10 @@ namespace Pass
 		state.bindings = bindings;
 		commandList->setComputeState(state);
 
-		auto postAdjust = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData().posAdjust.getEye(0);
-		auto& loadedRange = RE::BSShaderManager::State::GetSingleton().loadedRange;
+		float4 loadedRange = *reinterpret_cast<float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
 
-		float4 highDetailRange = {
-			loadedRange.red - postAdjust.x,
-			loadedRange.green - postAdjust.y,
-			loadedRange.blue - 15.0f,
-			loadedRange.alpha - 15.0f
-		};
+		// The original code subtracts posAdjust.x/y but the world matrix used in the original shader does not contain translation (posAdjust)
+		float4 highDetailRange = loadedRange - float4(0, 0, 15.0f, 15.0f);
 		commandList->setPushConstants(&highDetailRange, sizeof(float4));
 
 		auto vertexGroups = Util::Math::DivideRoundUp(vertexCount, 32u);

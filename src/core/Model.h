@@ -93,6 +93,11 @@ struct Model
 		return m_DirtyFlags;
 	}
 
+	auto TerrainLODUpdated()
+	{
+		m_DirtyFlags.set(DirtyFlags::Vertex);
+	}
+
 	void ClearDirtyState() 
 	{ 
 		m_DirtyFlags = DirtyFlags::None;
@@ -105,6 +110,7 @@ struct Model
 private:
 	stl::enumeration<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	stl::enumeration<Mesh::Flags> meshFlags = Mesh::Flags::None;
+	stl::enumeration<Mesh::Type> m_MeshTypes = Mesh::Type::Default;
 	uint32_t shaderTypes = RE::BSShader::Type::None;
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;

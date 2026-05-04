@@ -141,7 +141,7 @@ public:
 	void CreateLODModel(RE::BGSObjectBlock* chunk);
 
 	template <typename T>
-	void CreateLODModelImpl(T* chunk);
+	void CreateLODModelImpl(T* chunk, Mesh::Type type);
 
 	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);

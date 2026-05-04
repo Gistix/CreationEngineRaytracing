@@ -18,7 +18,7 @@ namespace Pass
 {
 	class LandLODOccluder : public RenderPass
 	{
-		static constexpr uint MAX_MESHES = 16;
+		static constexpr uint MAX_MESHES = 256;
 
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::ShaderHandle m_ComputeShader;
