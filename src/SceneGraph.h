@@ -111,6 +111,8 @@ public:
 
 	inline auto& GetModels() { return m_Models; }
 	inline auto& GetInstances() const { return m_Instances; }
+	inline auto& GetTerrainLodInstances() const { return m_TerrainLODInstances; }
+
 	inline auto& GetLights() { return m_Lights; }
 
 	inline auto& GetNumMeshesFrame() const { return m_NumMeshes; }
