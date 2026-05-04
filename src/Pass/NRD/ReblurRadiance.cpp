@@ -404,12 +404,12 @@ namespace Pass::NRD
 		// Combine view rotation with translation to get the full world-to-view matrix
 		// NRD expects worldToViewMatrix to transform from world space to camera space, including translation.
 		// So, V_full = ViewRotationMatrix * TranslationMatrix(-CameraWorldPosition)
-		DirectX::XMMATRIX worldToViewMatFull = DirectX::XMMatrixMultiply(translationMat, cameraData.viewMat);
+		DirectX::XMMATRIX worldToViewMat = DirectX::XMMatrixMultiply(translationMat, cameraData.viewMat);
 
 		// Set full world to view
-		std::memcpy(m_CommonSettings.worldToViewMatrix, &worldToViewMatFull, sizeof(float4x4));
+		std::memcpy(m_CommonSettings.worldToViewMatrix, &worldToViewMat, sizeof(float4x4));
 
-		// Set poriginal projection
+		// Set original projection
 		std::memcpy(m_CommonSettings.viewToClipMatrix, &cameraData.projMat, sizeof(float4x4));
 
 		const auto resolution = renderer->GetResolution();
