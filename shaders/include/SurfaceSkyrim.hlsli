@@ -67,31 +67,25 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         surface.AO = rmaos.z;
         surface.F0 = material.SpecularLevel() * rmaos.w;
 
-        if ((material.PBRFlags & PBR::Flags::Subsurface) && !(material.ShaderFlags & ShaderFlags::kTwoSided))
+        if (material.PBRFlags & PBR::Flags::Subsurface)
         {
             Texture2D subsurfaceTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];
 
             float4 subsurfaceColor = subsurfaceTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
             float thickness = subsurfaceColor.a * material.SubsurfaceScale();
-            surface.SubsurfaceData.ScatteringColor = subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb;
-            surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+            surface.TransmissionColor = surface.Albedo;
+            surface.DiffTrans = 0.5f;
 
-            surface.TransmissionColor = surface.SubsurfaceData.ScatteringColor;
+            if (!(material.ShaderFlags & ShaderFlags::kTwoSided))
+            {
+                surface.SubsurfaceData.ScatteringColor = subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb;
+                surface.SubsurfaceData.TransmissionColor = surface.Albedo;
 
-            surface.SubsurfaceData.Scale = 40.0f;
-            surface.SubsurfaceData.Anisotropy = 0.0f;
+                surface.SubsurfaceData.Scale = 40.0f;
+                surface.SubsurfaceData.Anisotropy = 0.0f;
 
-            surface.SubsurfaceData.HasSubsurface = any(surface.SubsurfaceData.ScatteringColor) > 0.0f ? 1 : 0;
-        }
-        else if ((material.PBRFlags & PBR::Flags::Subsurface) && (material.ShaderFlags & ShaderFlags::kTwoSided))
-        {
-            // Two sided subsurface - for leaves and thin objects
-            Texture2D subsurfaceTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];
-            // Just use simple diffuse transmission for thin objects
-            float4 subsurfaceColor = subsurfaceTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-            float thickness = subsurfaceColor.a * material.SubsurfaceScale();
-            surface.TransmissionColor = subsurfaceColor.rgb * material.SubsurfaceScatteringColor().rgb;
-            surface.DiffTrans = 1 - thickness;
+                surface.SubsurfaceData.HasSubsurface = any(surface.SubsurfaceData.ScatteringColor) > 0.0f ? 1 : 0;
+            }
         }
 
         // Coat (TwoLayer)
@@ -311,15 +305,21 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.CoatRoughness = 0.0f;
             surface.CoatF0 = 0.026f;
         }
-        else if (material.ShaderFlags & ShaderFlags::kSoftLighting)
+        else if (material.ShaderFlags & ShaderFlags::kSoftLighting || material.ShaderFlags & ShaderFlags::kBackLighting)
         {
-            surface.SubsurfaceData.HasSubsurface = 1;
-            surface.SubsurfaceData.Anisotropy = -0.5f;
+            surface.TransmissionColor = surface.Albedo;
+            surface.DiffTrans = 0.5f;
+            
+            if (!(material.ShaderFlags & ShaderFlags::kTwoSided) && (material.ShaderFlags & ShaderFlags::kSoftLighting))
+            {
+                surface.SubsurfaceData.HasSubsurface = 1;
+                surface.SubsurfaceData.Anisotropy = -0.5f;
 
-            Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];
-            surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
-            surface.SubsurfaceData.TransmissionColor = surface.Albedo;
-            surface.SubsurfaceData.Scale = 1.f;
+                Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.SubsurfaceTexture())];
+                surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
+                surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+                surface.SubsurfaceData.Scale = 1.f;
+            }
         }
 
         [branch]
