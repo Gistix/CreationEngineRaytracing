@@ -1017,7 +1017,7 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
 }
 
-bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
+bool Mesh::UpdateSkinning(bool isPlayer)
 {
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
@@ -1047,18 +1047,6 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 
 	m_FrameID = frameID;
 
-	auto skinRoot = rootParent->world;
-
-	static auto identity = RE::NiTransform();
-
-	// If skin transform is identity it will break skinning
-	if (skinRoot == identity)
-		return false;
-
-	// Part 2 of COtR fix
-	if (unparentedPlayer)
-		skinRoot = object->world;
-
 	auto* skinData = skinInstance->skinData.get();
 
 	if (!skinData)
@@ -1070,7 +1058,7 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 	if (skinData->bones == 0)
 		return false;
 
-	auto skinRootInverse = skinRoot.Invert();
+	auto geometryWorldInverse = bsGeometryPtr->world.Invert();
 
 	if (m_BoneMatrices.empty() || skinData->bones != m_BoneMatrices.size())
 		m_BoneMatrices.resize(skinData->bones);
@@ -1078,7 +1066,7 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 	for (uint i = 0; i < skinData->bones; i++) {
 		auto boneWorld = *skinInstance->boneWorldTransforms[i];
 		auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
-		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(skinRootInverse * boneMatrix));
+		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(geometryWorldInverse * boneMatrix));
 	}
 
 	return true;
@@ -1086,7 +1074,7 @@ bool Mesh::UpdateSkinning(RE::NiAVObject* object, bool isPlayer)
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
 {
-	if (flags.any(Flags::Skinned, Flags::Landscape, Flags::Water, Flags::Origin))
+	if (flags.any(Flags::Landscape, Flags::Water, Flags::Origin))
 		return false;
 
 	float3x4 localToRoot;
@@ -1201,10 +1189,10 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (dynamic && UpdateDynamicPosition())
 		updateFlags |= DirtyFlags::Vertex;
 
-	if (skinned && UpdateSkinning(instanceRoot, isPlayer))
+	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	if (!skinned && skinnedModel && UpdateTransform(instanceRoot))
+	if (skinnedModel && UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
 
 	geometryDesc.setTransform(m_LocalToRoot.f);

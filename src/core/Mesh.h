@@ -118,7 +118,7 @@ struct Mesh
 
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
 
-	bool UpdateSkinning(RE::NiAVObject* object, bool isPlayer);
+	bool UpdateSkinning(bool isPlayer);
 
 	bool UpdateTransform(RE::NiAVObject* object);
 
