@@ -795,7 +795,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned);
+	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;
 
 	logger::debug("Mesh::CreateBuffers - {}", m_Name);
 

@@ -823,7 +823,7 @@ namespace Hooks
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
 			if (a_block->loaded && !a_block->attached && a_block->chunk)
-				if (a_block->node && a_block->node->GetLODLevel() != 4)
+				if (a_block->node)
 					Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 
 			func(a_block);
@@ -956,13 +956,13 @@ namespace Hooks
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 
 		// Terrain LOD
-		/*stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
+		stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
 		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
 		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
+		/*stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
 		stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
 		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));*/
 
@@ -987,7 +987,7 @@ namespace Hooks
 		scene->g_FlowMapSourceTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(527694, 414616).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
-		
+
 		stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
 
 		if (REL::Module::IsSE())
