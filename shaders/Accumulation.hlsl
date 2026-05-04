@@ -6,11 +6,12 @@ Texture2D<float4>    CurrentFrame       : register(t0);
 
 RWTexture2D<float4>  AccumulationBuffer : register(u0);
 
-cbuffer AccumulationConstants           : register(b1)
+struct AccumulationConstants
 {
-    uint  AccumulatedFrames;   // Number of frames already accumulated (0 = first frame)
-    uint3 _Pad;
+    uint AccumulatedFrames;   // Number of frames already accumulated (0 = first frame)
 };
+
+ConstantBuffer<AccumulationConstants> PC : register(b1);
 
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
@@ -22,7 +23,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
     
     float4 currentSample = CurrentFrame[idx];
     
-    if (AccumulatedFrames == 0)
+    if (PC.AccumulatedFrames == 0)
     {
         // First frame: initialize accumulation buffer directly
         AccumulationBuffer[idx] = currentSample;
@@ -32,7 +33,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
         // Subsequent frames: blend with running average
         // Formula: result = lerp(history, new, 1 / (N + 1))
         // This is equivalent to: result = (history * N + new) / (N + 1)
-        float blend = 1.0f / (float(AccumulatedFrames) + 1.0f);
+        float blend = 1.0f / (float(PC.AccumulatedFrames) + 1.0f);
         float4 history = AccumulationBuffer[idx];
         float4 accumulated = lerp(history, currentSample, blend);
         

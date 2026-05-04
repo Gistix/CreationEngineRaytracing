@@ -5,12 +5,6 @@
 
 namespace Pass::Common
 {
-	struct AccumulationConstants
-	{
-		uint32_t AccumulatedFrames;
-		uint32_t _Pad[3];
-	};
-
 	Accumulation::Accumulation(Renderer* renderer)
 		: RenderPass(renderer)
 	{
@@ -23,10 +17,10 @@ namespace Pass::Common
 		nvrhi::BindingLayoutDesc bindingLayoutDesc;
 		bindingLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		bindingLayoutDesc.bindings = {
-			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),  // CameraData
-			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),  // AccumulationConstants
-			nvrhi::BindingLayoutItem::Texture_SRV(0),             // CurrentFrame
-			nvrhi::BindingLayoutItem::Texture_UAV(0)              // AccumulationBuffer
+			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),	    // CameraData
+			nvrhi::BindingLayoutItem::PushConstants(1, sizeof(float)),  // AccumulationConstants
+			nvrhi::BindingLayoutItem::Texture_SRV(0),				    // CurrentFrame
+			nvrhi::BindingLayoutItem::Texture_UAV(0)					// AccumulationBuffer
 		};
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(bindingLayoutDesc);
@@ -48,9 +42,6 @@ namespace Pass::Common
 			.addBindingLayout(m_BindingLayout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
-
-		m_ConstantBuffer = device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
-			sizeof(AccumulationConstants), "Accumulation Constants", 16));
 	}
 
 	void Accumulation::CheckBindings()
@@ -79,7 +70,7 @@ namespace Pass::Common
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
-			nvrhi::BindingSetItem::ConstantBuffer(1, m_ConstantBuffer),
+			nvrhi::BindingSetItem::PushConstants(1, sizeof(float4)),
 			nvrhi::BindingSetItem::Texture_SRV(0, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(0, m_AccumulationTexture)
 		};
@@ -162,12 +153,6 @@ namespace Pass::Common
 		if (DetectCameraChange())
 			m_AccumulatedFrames = 0;
 
-		// Update constant buffer
-		AccumulationConstants constants;
-		constants.AccumulatedFrames = m_AccumulatedFrames;
-		constants._Pad[0] = constants._Pad[1] = constants._Pad[2] = 0;
-		commandList->writeBuffer(m_ConstantBuffer, &constants, sizeof(constants));
-
 		// Dispatch compute shader
 		auto resolution = GetRenderer()->GetDynamicResolution();
 
@@ -175,6 +160,9 @@ namespace Pass::Common
 		state.pipeline = m_ComputePipeline;
 		state.bindings = { m_BindingSet };
 		commandList->setComputeState(state);
+
+		// Update push constants
+		commandList->setPushConstants(&m_AccumulatedFrames, sizeof(m_AccumulatedFrames));
 
 		auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 8);
 		commandList->dispatch(threadGroupSize.x, threadGroupSize.y);

@@ -17,7 +17,6 @@ namespace Pass::Common
 		nvrhi::BindingSetHandle m_BindingSet;
 
 		nvrhi::TextureHandle m_AccumulationTexture;
-		nvrhi::BufferHandle m_ConstantBuffer;
 
 		bool m_DirtyBindings = true;
 
