@@ -64,11 +64,11 @@ namespace Pass
 		if (queuedMeshes.empty())
 			return false;
 
-		uint32_t shapeIndex = 0;
+		uint32_t meshIndex = 0;
 		uint32_t boneMatrixIndex = 0;
 
 		for (auto& [mesh, queuedMesh] : queuedMeshes) {
-			if (shapeIndex >= MAX_GEOMETRY - 1) {
+			if (meshIndex > MAX_GEOMETRY - 1) {
 				logger::critical("SkinningPipeline::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_GEOMETRY);
 				break;
 			}
@@ -79,17 +79,13 @@ namespace Pass
 			numVertices = std::max(numVertices, mesh->vertexData.count);
 			uint32_t numBoneMatrices = skinUpdate ? static_cast<uint32_t>(mesh->m_BoneMatrices.size()) : 0;
 
-			auto& vertexUpdateData = m_VertexUpdateData[shapeIndex];
-
-			vertexUpdateData = VertexUpdateData(
+			m_VertexUpdateData[meshIndex++] = VertexUpdateData(
 				mesh->m_DescriptorHandle.Get(),
 				static_cast<uint32_t>(queuedMesh.updateFlags),
 				mesh->vertexData.count,
 				boneMatrixIndex,
 				mesh->flags.underlying(),
 				numBoneMatrices);
-
-			shapeIndex++;
 
 			// Dynamic TriShapes
 			if (vertexUpdate)
@@ -112,7 +108,7 @@ namespace Pass
 			}
 		}
 
-		commandList->writeBuffer(m_VertexUpdateBuffer, m_VertexUpdateData.data(), sizeof(VertexUpdateData) * shapeIndex);
+		commandList->writeBuffer(m_VertexUpdateBuffer, m_VertexUpdateData.data(), sizeof(VertexUpdateData) * meshIndex);
 		if (boneMatrixIndex > 0)
 			commandList->writeBuffer(m_BoneMatrixBuffer, m_BoneMatrixData.data(), sizeof(BoneMatrix) * boneMatrixIndex);
 
