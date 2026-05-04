@@ -73,8 +73,8 @@ namespace Pass
 					m_VertexUpdateData[meshIndex++] = LandLODUpdate(
 						mesh->m_DescriptorHandle.Get(),
 						mesh->vertexData.count,
-						instance->m_Transform,
-						mesh->m_LocalToRoot);
+						mesh->m_LocalToRoot,
+						instance->m_Transform);
 				}
 
 				// Marks Vertex as dirty, triggering a BLAS update on SceneTLAS pass
