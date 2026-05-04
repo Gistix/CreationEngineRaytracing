@@ -919,6 +919,9 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
+	if (object->HasExtraData("HDT Skinned Mesh Physics Object"))
+		return meshes;
+
 	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
 		const char* name = pGeometry->name.c_str();
 
