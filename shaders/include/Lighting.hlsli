@@ -83,7 +83,8 @@ float3 EvalLight(in float3 l, in Material material, in Surface surface, in BRDFC
 #if LIGHTEVAL_MODE == LIGHTEVAL_MODE_DIFFUSE
     return EvalDiffuse(l, surface, brdfContext);
 #else
-    float4 bsdfEval = bsdf.Eval(brdfContext, material, surface, l) * ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal);
+    float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
+    float4 bsdfEval = bsdf.Eval(brdfContext, material, surface, l) * shadowTerminator;
     return bsdfEval.xyz;
 #endif
 }
