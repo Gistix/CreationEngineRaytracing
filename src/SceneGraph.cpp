@@ -987,6 +987,15 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			0.0f, 1.0f, 0.0f, 0.0f,
 			0.0f, 0.0f, 1.0f, 0.0f);
 
+		const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
+
+		// Some plants have parts with geometry world position of [0, 0, 0]
+		// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
+		if (!isOrigin || isOrigin && isRootOrigin)
+			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+		else
+			flags |= Mesh::Flags::Origin;
+
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
 
@@ -1001,15 +1010,6 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
-
-			const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
-
-			// Some plants have parts with geometry world position of [0, 0, 0]
-			// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
-			if (!isOrigin || isOrigin && isRootOrigin)
-				XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
-			else
-				flags |= Mesh::Flags::Origin;
 
 			auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot);
 
