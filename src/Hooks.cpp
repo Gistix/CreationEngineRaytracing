@@ -721,7 +721,7 @@ namespace Hooks
 
 	void BSFadeNodeCuller_AppendVirtual::thunk(RE::BSFadeNodeCuller* culler, RE::BSGeometry& geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull())
+		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(culler, geometry, a_arg2);
@@ -729,7 +729,7 @@ namespace Hooks
 
 	void NiCullingProcess_AppendVirtual::thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull())
+		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(cullingProcess, geometry, a_arg2);
@@ -746,24 +746,16 @@ namespace Hooks
 
 		auto* scene = Scene::GetSingleton();
 
-		if (scene->IsPathTracingActive() && scene->m_Settings.AdvancedSettings.EnableWater) {
-			if (shaderType == RE::BSShader::Type::Water)
-				return;
-		}
-
-		// Cull non-effect models with kRefraction when Path Tracing is active
-		if (scene->IsPathTracingActive() && shaderType != RE::BSShader::Type::Effect && pass->shaderProperty) {
-			if (pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
-				return;
-		}
-
 		// Skip rendering geometry that has been determined to be occluded
 		// Never cull during reflection rendering - reflections need all visible geometry
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && pass->shader && pass->geometry) {
-			switch (pass->shader->shaderType.get()) {
+		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry) {
+			switch (shaderType) {
+			case RE::BSShader::Type::Water:
+				if (scene->m_Settings.AdvancedSettings.EnableWater)
+					return;
+				break;
 			case RE::BSShader::Type::Grass:
 			case RE::BSShader::Type::Sky:
-			case RE::BSShader::Type::Water:
 				break;  // Never cull: batched/infinite/reflections
 			case RE::BSShader::Type::Utility:
 				return;
@@ -775,6 +767,12 @@ namespace Hooks
 			default:  // Lighting, DistantTree, BloodSplatter
 				return;
 				break;
+			}
+
+			// Cull non-effect models with kRefraction when Path Tracing is active
+			if (shaderType != RE::BSShader::Type::Effect && pass->shaderProperty) {
+				if (pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+					return;
 			}
 		}
 
