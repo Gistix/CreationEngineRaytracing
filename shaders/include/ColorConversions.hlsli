@@ -65,7 +65,7 @@ float3 GlowToLinear(float3 color)
 
 float VanillaDiffuseColorMult()
 {
-    return LLON ? LLSETTINGS.vanillaDiffuseColorMult : PBRLightingScaleRcp;
+    return LLON ? LLSETTINGS.vanillaDiffuseColorMult : 1.0f;
 }
 
 float3 VanillaDiffuseColor(float3 color)

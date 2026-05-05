@@ -84,7 +84,7 @@ float3 EvalLight(in float3 l, in Material material, in Surface surface, in BRDFC
     return EvalDiffuse(l, surface, brdfContext);
 #else
     float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
-    float4 bsdfEval = bsdf.Eval(brdfContext, material, surface, l) * shadowTerminator;
+    float4 bsdfEval = bsdf.Eval(brdfContext, material, surface, l) * shadowTerminator * (material.ShaderType == ShaderType::TruePBR ? 1.0f : PBRLightingCompensation * PBRLightingScale);
     return bsdfEval.xyz;
 #endif
 }
