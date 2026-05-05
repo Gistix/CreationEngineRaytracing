@@ -7,18 +7,22 @@
 #define LLSETTINGS Features.LinearLighting
 #define LLON LLSETTINGS.enableLinearLighting
 
-// Light multiplier to match vanilla raster
-#define DIRECTIONAL_LIGHT_MULTIPLIER (K_4PI)
-#define POINT_LIGHT_MULTIPLIER (1.0f) // K_PI
-
-#define DIFFUSE_MULTIPLIER (K_PI_2)
-
 // Attempt to match vanilla materials that are darker than PBR
-const static float PBRLightingScale = LLON ? 1.0 : 0.65;
+const static float PBRLightingScale = LLON ? 1.0f : 0.65f;
 	
 const static float PBRLightingScaleRcp = 1.0f / PBRLightingScale;
 
 const static float PBRLightingCompensation = LLON ? 1.0 : K_PI;
+
+float3 PBRColorScale(float3 color)
+{
+    return color * PBRLightingScale;
+}
+
+float4 PBRColorScale(float4 color)
+{
+    return float4(PBRColorScale(color.rgb), color.a);
+}
 
 float3 ColorToGamma(float3 color)
 {
@@ -42,14 +46,14 @@ float3 LightToLinear(float3 color)
 
 float3 PointLightToLinear(float3 color, bool isLinear)
 {
-    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : POINT_LIGHT_MULTIPLIER;   
+    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : K_PI;
     float3 finalColor = (isLinear && LLON) ? color : LightToLinear(color);
     return finalColor * mult;
 }
 
 float3 DirLightToLinear(float3 color)
 {
-    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : DIRECTIONAL_LIGHT_MULTIPLIER;
+    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : K_PI;
     float3 finalColor = (LLSETTINGS.isDirLightLinear && LLON) ? color : LightToLinear(color);
     return finalColor * mult;
 }
@@ -61,7 +65,7 @@ float3 GlowToLinear(float3 color)
 
 float VanillaDiffuseColorMult()
 {
-    return LLON ? LLSETTINGS.vanillaDiffuseColorMult : DIFFUSE_MULTIPLIER;
+    return LLON ? LLSETTINGS.vanillaDiffuseColorMult : PBRLightingScaleRcp;
 }
 
 float3 VanillaDiffuseColor(float3 color)

@@ -581,11 +581,12 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 						lightingPBRMaterialLand->roughnessScales[5]
 					};
 
+					// LODTexParams - TerrainTexOffset in xy, LodBlendingEnabled in z
 					vectors[4] = {
 						lightingPBRMaterialLand->terrainTexOffsetX,
 						lightingPBRMaterialLand->terrainTexOffsetY,
-						lightingPBRMaterialLand->terrainTexFade,
-						0
+						0,
+						lightingPBRMaterialLand->terrainTexFade
 					};
 
 					// Enforce TruePBR flag

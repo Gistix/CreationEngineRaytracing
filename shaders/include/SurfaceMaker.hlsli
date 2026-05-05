@@ -182,7 +182,7 @@ struct SurfaceMaker
         surface.FuzzWeight = 0.0f;
     
 #   if defined(SKYRIM)
-        if (material.Feature == Feature::kMultiTexLandLODBlend)
+        if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
         {
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
