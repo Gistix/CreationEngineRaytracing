@@ -30,12 +30,14 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 void Model::UpdateMeshFlags()
 {
 	meshFlags.reset();
+	m_MeshTypes.reset();
 	shaderTypes = RE::BSShader::Type::None;
 	features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	shaderFlags.reset();
 
 	for (auto& mesh : meshes) {
 		meshFlags.set(mesh->flags.get());
+		m_MeshTypes.set(mesh->m_Type);
 		shaderTypes |= mesh->material.shaderType;
 		features |= static_cast<int>(mesh->material.Feature);
 		shaderFlags.set(mesh->material.shaderFlags.get());
@@ -48,7 +50,7 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 		.setIsTopLevel(false)
 		.setDebugName(std::format("{} - BLAS", m_Name.c_str()));
 
-	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) || m_MeshTypes.any(Mesh::Type::LandLOD))
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild | (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
 	else {
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
@@ -133,7 +135,7 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
 		update = false;
 	else {
-		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) && m_MeshTypes.none(Mesh::Type::LandLOD))
 			return;
 
 		// TODO: Add transform updates to non-skinned/non-dynamic meshes

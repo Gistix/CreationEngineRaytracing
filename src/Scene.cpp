@@ -24,8 +24,9 @@
 #include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/ReblurRadiance.h"
-#include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
+#include "Pass/Raytracing/Common/GIComposite.h"
+#include "Pass/Raytracing/Common/LandLODOccluder.h"
 
 Scene::Scene()
 {
@@ -76,7 +77,13 @@ RenderNode* Scene::GetGlobalIllumination()
 			true,
 			"Skinning",
 			eastl::make_unique<Pass::Skinning>(renderer)
-			});
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"LandLOD Occluder",
+			eastl::make_unique<Pass::LandLODOccluder>(renderer)
+		});
 
 		m_GlobalIllumination->AddNode({
 			true,
@@ -137,6 +144,12 @@ RenderNode* Scene::GetPathTracing()
 			"Skinning",
 			eastl::make_unique<Pass::Skinning>(renderer)
 			});
+
+		m_PathTracing->AddNode({
+			true,
+			"LandLOD Occluder",
+			eastl::make_unique<Pass::LandLODOccluder>(renderer)
+		});
 
 		m_PathTracing->AddNode({
 			true,

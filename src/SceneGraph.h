@@ -111,6 +111,8 @@ public:
 
 	inline auto& GetModels() { return m_Models; }
 	inline auto& GetInstances() const { return m_Instances; }
+	inline auto& GetTerrainLodInstances() const { return m_TerrainLODInstances; }
+
 	inline auto& GetLights() { return m_Lights; }
 
 	inline auto& GetNumMeshesFrame() const { return m_NumMeshes; }
@@ -135,11 +137,11 @@ public:
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 
 	// LOD
-	void CreateLODModel(RE::BGSTerrainBlock* chunk);
-	void CreateLODModel(RE::BGSObjectBlock* chunk);
+	bool CreateLODModel(RE::BGSTerrainBlock* chunk);
+	bool CreateLODModel(RE::BGSObjectBlock* chunk);
 
 	template <typename T>
-	void CreateLODModelImpl(T* chunk);
+	void CreateLODModelImpl(T* chunk, Mesh::Type type);
 
 	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);

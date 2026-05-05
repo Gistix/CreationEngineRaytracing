@@ -542,9 +542,6 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 
 void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
 {
-	if (!Scene::GetSingleton()->m_Settings.AdvancedSettings.EnableWater)
-		return;
-
 	if (!water || !object)
 		return;
 
@@ -564,20 +561,28 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	}
 }
 
-void SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
+bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
 {
-	if (!m_TerrainLODInstances.contains(chunk))
-		CreateLODModelImpl(chunk);
+	if (!m_TerrainLODInstances.contains(chunk)) {
+		CreateLODModelImpl(chunk, Mesh::Type::LandLOD);
+		return false;
+	}
+
+	return true;
 }
 
-void SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
+bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
 {
-	if (!m_ObjectLODInstances.contains(chunk))
-		CreateLODModelImpl(chunk);
+	if (!m_ObjectLODInstances.contains(chunk)) {
+		CreateLODModelImpl(chunk, Mesh::Type::ObjectLOD);
+		return false;
+	}
+
+	return true;
 }
 
 template <typename T>
-void SceneGraph::CreateLODModelImpl(T* block)
+void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 {
 	auto node = block->chunk;
 
@@ -644,7 +649,7 @@ void SceneGraph::CreateLODModelImpl(T* block)
 					logger::debug("\tSegment[{}]: Index: {}, UnkTriCount: {}, UnkFlags: 0x{:08X}, NumTris: {}, Flags: 0x{:08X}",
 						i, segment.index, segment.unkTriCount, segment.unkFlags, segment.numTris, segment.flags);
 
-					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, flags.get(), name, pGeometry, localToRoot, i);
+					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, flags.get(), name, pGeometry, localToRoot, i);
 
 					// Copy triangles to segment triangles
 					Mesh::TriangleData segmentTriData{};
@@ -666,7 +671,7 @@ void SceneGraph::CreateLODModelImpl(T* block)
 			}
 		}
 		else {
-			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, Mesh::Flags::LOD, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, Mesh::Flags::LOD, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, nullptr);
@@ -680,11 +685,8 @@ void SceneGraph::CreateLODModelImpl(T* block)
 			AddInstance(block, pGeometry, model);
 
 		return RE::BSVisit::BSVisitControl::kContinue;
-		});
+	});
 }
-
-template void SceneGraph::CreateLODModelImpl(RE::BGSTerrainBlock*);
-template void SceneGraph::CreateLODModelImpl(RE::BGSObjectBlock*);
 
 void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
 {
@@ -1011,7 +1013,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
 
-			auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, form);
@@ -1049,7 +1051,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				if (partition.bonesPerVertex > 0)
 					flags |= Mesh::Flags::Skinned;
 
-				auto mesh = eastl::make_unique<Mesh>(baseFormType, flags, name, pGeometry, localToRoot, i);
+				auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot, i);
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, form);

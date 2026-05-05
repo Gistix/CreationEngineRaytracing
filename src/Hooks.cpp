@@ -742,37 +742,32 @@ namespace Hooks
 			return;
 		}
 
-		auto shaderType = pass->shader->shaderType.get();
-
+		const auto shaderType = pass->shader->shaderType.get();
 		auto* scene = Scene::GetSingleton();
 
-		// Skip rendering geometry that has been determined to be occluded
-		// Never cull during reflection rendering - reflections need all visible geometry
-		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry) {
-			switch (shaderType) {
-			case RE::BSShader::Type::Water:
-				if (scene->m_Settings.AdvancedSettings.EnableWater)
-					return;
-				break;
-			case RE::BSShader::Type::Grass:
-			case RE::BSShader::Type::Sky:
-				break;  // Never cull: batched/infinite/reflections
-			case RE::BSShader::Type::Utility:
-				return;
-				break;
-			case RE::BSShader::Type::Particle:
-			case RE::BSShader::Type::Effect:
-				//return;
-				break;
-			default:  // Lighting, DistantTree, BloodSplatter
-				return;
-				break;
-			}
+		const bool pathTracingActive = scene->IsPathTracingActive();
 
-			// Cull non-effect models with kRefraction when Path Tracing is active
-			if (shaderType != RE::BSShader::Type::Effect && pass->shaderProperty) {
-				if (pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
-					return;
+		// Water rendering toggle during path tracing
+		if (pathTracingActive && shaderType == RE::BSShader::Type::Water)
+			return;
+
+		// Cull non-effect refractive geometry during path tracing
+		if (pathTracingActive && shaderType != RE::BSShader::Type::Effect)
+			if (pass->shaderProperty && pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+				return;
+
+		// Path tracing occlusion-based culling
+		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry)
+		{
+			switch (shaderType) {
+			case RE::BSShader::Type::Sky:
+			case RE::BSShader::Type::Water:
+			case RE::BSShader::Type::Effect:
+			case RE::BSShader::Type::Particle:
+				break;
+			default:
+				// Utility, Lighting, DistantTree, BloodSplatter, etc.
+				return;
 			}
 		}
 
@@ -818,27 +813,23 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSTerrainBlock_Load
-	{
-		static void thunk(RE::BGSTerrainBlock* a_block)
-		{
-			if (a_block->loaded && !a_block->attached && a_block->chunk)
-				if (a_block->node && a_block->node->GetLODLevel() != 4)
-					Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-
-			func(a_block);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BGSTerrainBlock_Attach
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
+			bool isMapLOD = a_block->node->mapTerrain && a_block == a_block->node->mapTerrain->block;
+			bool valid = a_block->node && !isMapLOD;
+			bool existed = true;
+
+			if (valid && a_block->loaded && a_block->chunk) {
+				if (!a_block->attached)
+					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+			}
+
 			func(a_block);
 
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			if (valid && existed)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -956,13 +947,12 @@ namespace Hooks
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 
 		// Terrain LOD
-		/*stl::write_thunk_call<BGSTerrainBlock_Load>(REL::RelocationID(31090, 31888).address() + REL::Relocate(0x11, 0x11));
 		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
 		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
+		/*stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
 		stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
 		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));*/
 
@@ -987,7 +977,7 @@ namespace Hooks
 		scene->g_FlowMapSourceTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(527694, 414616).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
-		
+
 		stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
 
 		if (REL::Module::IsSE())

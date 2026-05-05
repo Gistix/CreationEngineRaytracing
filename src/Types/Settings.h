@@ -173,7 +173,6 @@ struct AdvancedSettings
 	HairBSDF HairBSDF = HairBSDF::FarFieldBCSDF;
 	DiffuseBRDF DiffuseBRDF = DiffuseBRDF::Burley;
 	SSSSettings SSSSettings;
-	bool EnableWater = false;
 	bool StablePlanes = false;
 };
 
