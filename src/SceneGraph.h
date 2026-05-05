@@ -137,8 +137,8 @@ public:
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
 
 	// LOD
-	void CreateLODModel(RE::BGSTerrainBlock* chunk);
-	void CreateLODModel(RE::BGSObjectBlock* chunk);
+	bool CreateLODModel(RE::BGSTerrainBlock* chunk);
+	bool CreateLODModel(RE::BGSObjectBlock* chunk);
 
 	template <typename T>
 	void CreateLODModelImpl(T* chunk, Mesh::Type type);

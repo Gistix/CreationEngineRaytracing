@@ -564,16 +564,24 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	}
 }
 
-void SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
+bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
 {
-	if (!m_TerrainLODInstances.contains(chunk))
+	if (!m_TerrainLODInstances.contains(chunk)) {
 		CreateLODModelImpl(chunk, Mesh::Type::LandLOD);
+		return false;
+	}
+
+	return true;
 }
 
-void SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
+bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
 {
-	if (!m_ObjectLODInstances.contains(chunk))
+	if (!m_ObjectLODInstances.contains(chunk)) {
 		CreateLODModelImpl(chunk, Mesh::Type::ObjectLOD);
+		return false;
+	}
+
+	return true;
 }
 
 template <typename T>
