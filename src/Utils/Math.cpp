@@ -37,6 +37,15 @@ namespace Util
 #endif
 		}
 
+		float4 Float4(RE::NiColorA niColor)
+		{
+#if defined(SKYRIM)
+			return float4(niColor.red, niColor.green, niColor.blue, niColor.alpha);
+#elif defined(FALLOUT4)
+			return float4(niColor.r, niColor.g, niColor.b, niColor.a);
+#endif
+		}
+
 		float3 Normalize(float3 vector)
 		{
 			vector.Normalize();

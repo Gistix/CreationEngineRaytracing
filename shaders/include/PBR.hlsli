@@ -20,6 +20,22 @@ namespace PBR
         static const uint16_t ProjectedGlint = (1 << 12);
     }
 
+    namespace TerrainFlags
+    {
+        static const uint16_t LandTile0PBR = (1 << 0);
+        static const uint16_t LandTile1PBR = (1 << 1);
+        static const uint16_t LandTile2PBR = (1 << 2);
+        static const uint16_t LandTile3PBR = (1 << 3);
+        static const uint16_t LandTile4PBR = (1 << 4);
+        static const uint16_t LandTile5PBR = (1 << 5);
+        static const uint16_t LandTile0HasGlint = (1 << 6);
+        static const uint16_t LandTile1HasGlint = (1 << 7);
+        static const uint16_t LandTile2HasGlint = (1 << 8);
+        static const uint16_t LandTile3HasGlint = (1 << 9);
+        static const uint16_t LandTile4HasGlint = (1 << 10);
+        static const uint16_t LandTile5HasGlint = (1 << 11);
+    }
+    
     namespace Defaults
     {
         static const float Roughness = 1.0f;

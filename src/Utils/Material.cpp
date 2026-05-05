@@ -74,6 +74,22 @@ namespace Util
 
 			return pbrFlags;
 		}
+
+		stl::enumeration<PBRShaderFlags, uint32_t> GetPBRShaderFlags(const BSLightingShaderMaterialPBRLandscape* pbrMaterial)
+		{
+			stl::enumeration<PBRShaderFlags, uint32_t> pbrFlags;
+
+			for (uint32_t textureIndex = 0; textureIndex < BSLightingShaderMaterialPBRLandscape::NumTiles; ++textureIndex) {
+				if (pbrMaterial->isPbr[textureIndex]) {
+					pbrFlags |= static_cast<PBRShaderFlags>(1 << textureIndex);
+					if (pbrMaterial->glintParameters[textureIndex].enabled) {
+						pbrFlags |= static_cast<PBRShaderFlags>(1 << (BSLightingShaderMaterialPBRLandscape::NumTiles + textureIndex));
+					}
+				}
+			}
+
+			return pbrFlags;
+		}
 	}
 #elif defined(FALLOUT4)
 #endif

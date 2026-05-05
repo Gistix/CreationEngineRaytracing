@@ -13,6 +13,13 @@
 
 #define DIFFUSE_MULTIPLIER (K_PI_2)
 
+// Attempt to match vanilla materials that are darker than PBR
+const static float PBRLightingScale = LLON ? 1.0 : 0.65;
+	
+const static float PBRLightingScaleRcp = 1.0f / PBRLightingScale;
+
+const static float PBRLightingCompensation = LLON ? 1.0 : K_PI;
+
 float3 ColorToGamma(float3 color)
 {
     return pow(abs(color), 1.0f / (LLON ? LLSETTINGS.colorGamma : 2.2f));
@@ -60,6 +67,11 @@ float VanillaDiffuseColorMult()
 float3 VanillaDiffuseColor(float3 color)
 {
     return ColorToLinear(color) * VanillaDiffuseColorMult();
+}
+
+float4 VanillaDiffuseColor(float4 color)
+{
+    return float4(VanillaDiffuseColor(color.rgb), color.a);
 }
 
 float3 VanillaDiffuseColorGamma(float3 color)
