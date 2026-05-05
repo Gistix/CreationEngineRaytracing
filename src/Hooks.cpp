@@ -748,7 +748,7 @@ namespace Hooks
 		const bool pathTracingActive = scene->IsPathTracingActive();
 
 		// Water rendering toggle during path tracing
-		if (pathTracingActive && scene->m_Settings.AdvancedSettings.EnableWater && shaderType == RE::BSShader::Type::Water)
+		if (pathTracingActive && shaderType == RE::BSShader::Type::Water)
 			return;
 
 		// Cull non-effect refractive geometry during path tracing

@@ -542,9 +542,6 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 
 void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object)
 {
-	if (!Scene::GetSingleton()->m_Settings.AdvancedSettings.EnableWater)
-		return;
-
 	if (!water || !object)
 		return;
 
