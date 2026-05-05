@@ -774,45 +774,6 @@ namespace Hooks
 		func(pass, technique, alphaTest, renderFlags);
 	}
 
-	struct BGSObjectBlock_Load
-	{
-		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
-		{
-			if (!a_block->attached)
-				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-
-			func(a_block, a_arg2, a_firstAvail);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSObjectBlock_Attach
-	{
-		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
-		{
-			if (!a_block->attached)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
-
-			func(a_block, a_arg2, a_firstAvail);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSObjectBlock_Detach
-	{
-		static void thunk(RE::BGSObjectBlock* a_block)
-		{
-			if (a_block->attached)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
-
-			func(a_block);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BGSTerrainBlock_Attach
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
@@ -861,6 +822,40 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BGSObjectBlock_Attach
+	{
+		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
+		{
+			bool isMapLOD = a_block->node->mapTerrain && a_block == a_block->node->mapObjects->block;
+			bool valid = a_block->node && !isMapLOD;
+			bool existed = true;
+
+			if (valid && a_block->loaded && a_block->chunk) {
+				if (!a_block->attached)
+					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+			}
+
+			func(a_block, a_arg2, a_firstAvail);
+
+			if (valid && existed)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSObjectBlock_Detach
+	{
+		static void thunk(RE::BGSObjectBlock* a_block)
+		{
+			if (a_block->attached)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
+
+			func(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	struct LoadAndAttachAddon
 	{
@@ -952,9 +947,8 @@ namespace Hooks
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		/*stl::write_thunk_call<BGSObjectBlock_Load>(REL::RelocationID(31100, 31908).address() + REL::Relocate(0x5c, 0x49));
 		stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
-		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));*/
+		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));
 
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
