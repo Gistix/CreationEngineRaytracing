@@ -112,7 +112,7 @@ namespace Pass
 		if (boneMatrixIndex > 0)
 			commandList->writeBuffer(m_BoneMatrixBuffer, m_BoneMatrixData.data(), sizeof(BoneMatrix) * boneMatrixIndex);
 
-		numMeshes = shapeIndex;
+		numMeshes = meshIndex;
 
 		return true;
 	}
