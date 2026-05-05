@@ -742,37 +742,32 @@ namespace Hooks
 			return;
 		}
 
-		auto shaderType = pass->shader->shaderType.get();
-
+		const auto shaderType = pass->shader->shaderType.get();
 		auto* scene = Scene::GetSingleton();
 
-		// Skip rendering geometry that has been determined to be occluded
-		// Never cull during reflection rendering - reflections need all visible geometry
-		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry) {
-			switch (shaderType) {
-			case RE::BSShader::Type::Water:
-				if (scene->m_Settings.AdvancedSettings.EnableWater)
-					return;
-				break;
-			case RE::BSShader::Type::Grass:
-			case RE::BSShader::Type::Sky:
-				break;  // Never cull: batched/infinite/reflections
-			case RE::BSShader::Type::Utility:
-				return;
-				break;
-			case RE::BSShader::Type::Particle:
-			case RE::BSShader::Type::Effect:
-				//return;
-				break;
-			default:  // Lighting, DistantTree, BloodSplatter
-				return;
-				break;
-			}
+		const bool pathTracingActive = scene->IsPathTracingActive();
 
-			// Cull non-effect models with kRefraction when Path Tracing is active
-			if (shaderType != RE::BSShader::Type::Effect && pass->shaderProperty) {
-				if (pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
-					return;
+		// Water rendering toggle during path tracing
+		if (pathTracingActive && scene->m_Settings.AdvancedSettings.EnableWater && shaderType == RE::BSShader::Type::Water)
+			return;
+
+		// Cull non-effect refractive geometry during path tracing
+		if (pathTracingActive && shaderType != RE::BSShader::Type::Effect)
+			if (pass->shaderProperty && pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+				return;
+
+		// Path tracing occlusion-based culling
+		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry)
+		{
+			switch (shaderType) {
+			case RE::BSShader::Type::Sky:
+			case RE::BSShader::Type::Water:
+			case RE::BSShader::Type::Effect:
+			case RE::BSShader::Type::Particle:
+				break;
+			default:
+				// Utility, Lighting, DistantTree, BloodSplatter, etc.
+				return;
 			}
 		}
 
