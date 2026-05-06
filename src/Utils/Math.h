@@ -14,6 +14,8 @@ namespace Util
 
 		float3 Float3(RE::NiColor niColor);
 
+		float4 Float4(RE::NiColorA niColor);
+
 		float3 Normalize(float3 vector);
 
 		DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);

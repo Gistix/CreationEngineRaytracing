@@ -37,7 +37,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 #else
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
 
-    vertexColor = saturate(vertexColor / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
+    vertexColor.rgb = saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
     
     const bool isWindows = (material.Feature == Feature::kGlowMap || material.PBRFlags & PBR::Flags::HasEmissive) && material.ShaderFlags & ShaderFlags::kAssumeShadowmask;
     float3 windowAlpha = float3(0.0f, 0.0f, 0.0f);
@@ -52,6 +52,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         Texture2D emissiveTexture = Textures[NonUniformResourceIndex(material.EmissiveTexture())];
 
         float4 albedo = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel) * material.BaseColor();
+        albedo.rgb = PBRColorScale(albedo.rgb);
         alpha = albedo.a;
         
         float4 rmaos = rmaosTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
@@ -713,6 +714,9 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     Texture2D overlayTexture = Textures[NonUniformResourceIndex(material.OverlayTexture())];
     Texture2D noiseTexture = Textures[NonUniformResourceIndex(material.NoiseTexture())];
 
+    //float2 gridOffset = LandBlendParams.zw - surface.Position.xy;
+    //float lodLandBlendFactor = LODTexParams.z * (1 - saturate(0.000375600968 * (9625.59961 - length(gridOffset))));
+    
 	// Normalise blend weights
     float totalWeight = landBlend0.x + landBlend0.y + landBlend0.z +
 	                    landBlend0.w + landBlend1.x + landBlend1.y;
@@ -720,47 +724,112 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     landBlend0 /= totalWeight;
     landBlend1.xy /= totalWeight;
 
-    float3 baseColor = BlendLandTexture(material.Texture0, texCoord0, landBlend0.x, mipLevel).rgb + BlendLandTexture(material.Texture1, texCoord0, landBlend0.y, mipLevel).rgb +
-                        BlendLandTexture(material.Texture2, texCoord0, landBlend0.z, mipLevel).rgb + BlendLandTexture(material.Texture3, texCoord0, landBlend0.w, mipLevel).rgb +
-                        BlendLandTexture(material.Texture4, texCoord0, landBlend1.x, mipLevel).rgb + BlendLandTexture(material.Texture5, texCoord0, landBlend1.y, mipLevel).rgb;
-
-    baseColor *= vertexColor.rgb;
-
+    float4 blendedNormal = 
+        BlendLandTexture(material.Texture6, texCoord0, landBlend0.x, mipLevel) + 
+        BlendLandTexture(material.Texture7, texCoord0, landBlend0.y, mipLevel) +
+        BlendLandTexture(material.Texture8, texCoord0, landBlend0.z, mipLevel) + 
+        BlendLandTexture(material.Texture9, texCoord0, landBlend0.w, mipLevel) +
+        BlendLandTexture(material.Texture10, texCoord0, landBlend1.x, mipLevel) + 
+        BlendLandTexture(material.Texture11, texCoord0, landBlend1.y, mipLevel);
+        
+    float specularStrength = blendedNormal.a;
+    
+    float4 land1 = BlendLandTexture(material.Texture0, texCoord0, landBlend0.x, mipLevel);
+    float4 land2 = BlendLandTexture(material.Texture1, texCoord0, landBlend0.y, mipLevel);
+    float4 land3 = BlendLandTexture(material.Texture2, texCoord0, landBlend0.z, mipLevel);
+    float4 land4 = BlendLandTexture(material.Texture3, texCoord0, landBlend0.w, mipLevel);
+    float4 land5 = BlendLandTexture(material.Texture4, texCoord0, landBlend1.x, mipLevel);
+    float4 land6 = BlendLandTexture(material.Texture5, texCoord0, landBlend1.y, mipLevel);
+    
+    float4 blendedLand = float4(0, 0, 0, 0);
+    
     [branch]
     if (material.ShaderType == ShaderType::TruePBR)
     {
-        surface.Albedo = GamutTransform(baseColor);
+        bool land1PBR = (material.PBRFlags & PBR::TerrainFlags::LandTile0PBR) != 0;
+        bool land2PBR = (material.PBRFlags & PBR::TerrainFlags::LandTile1PBR) != 0;
+        bool land3PBR = (material.PBRFlags & PBR::TerrainFlags::LandTile2PBR) != 0;
+        bool land4PBR = (material.PBRFlags & PBR::TerrainFlags::LandTile3PBR) != 0;
+        bool land5PBR = (material.PBRFlags & PBR::TerrainFlags::LandTile4PBR) != 0;
+        bool land6PBR = (material.PBRFlags & PBR::TerrainFlags::LandTile5PBR) != 0;
 
-        float4 rmaos = BlendLandTexture(material.Texture12, texCoord0, landBlend0.x, mipLevel) + BlendLandTexture(material.Texture13, texCoord0, landBlend0.y, mipLevel) +
-                        BlendLandTexture(material.Texture14, texCoord0, landBlend0.z, mipLevel) + BlendLandTexture(material.Texture15, texCoord0, landBlend0.w, mipLevel) +
-                        BlendLandTexture(material.Texture16, texCoord0, landBlend1.x, mipLevel) + BlendLandTexture(material.Texture17, texCoord0, landBlend1.y, mipLevel);
-
-        surface.Roughness = saturate(rmaos.x * 1.0f); // material.RoughnessScale()
+        blendedLand += (land1PBR ? PBRColorScale(land1) : VanillaDiffuseColor(land1));
+        blendedLand += (land2PBR ? PBRColorScale(land2) : VanillaDiffuseColor(land2));
+        blendedLand += (land3PBR ? PBRColorScale(land3) : VanillaDiffuseColor(land3));
+        blendedLand += (land4PBR ? PBRColorScale(land4) : VanillaDiffuseColor(land4));
+        blendedLand += (land5PBR ? PBRColorScale(land5) : VanillaDiffuseColor(land5));
+        blendedLand += (land6PBR ? PBRColorScale(land6) : VanillaDiffuseColor(land6));
+        
+        blendedLand.rgb *= saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
+        
+        // What even is this?
+        float glossiness = 0;
+        
+        float4 rmaos = float4(0, 0, 0, 0);
+        if (land1PBR)
+            rmaos += BlendLandTexture(material.Texture12, texCoord0, landBlend0.x, mipLevel) * float4(material.Vector2.z, 1.0f, 1.0, material.Vector1.x);
+        else
+            rmaos += landBlend0.x * float4(1 - glossiness, 0, 1, 0);
+        
+        if (land2PBR)
+            rmaos += BlendLandTexture(material.Texture13, texCoord0, landBlend0.y, mipLevel) * float4(material.Vector2.w, 1.0f, 1.0, material.Vector1.y);
+        else
+            rmaos += landBlend0.y * float4(1 - glossiness, 0, 1, 0);
+        
+        if (land3PBR)       
+            rmaos += BlendLandTexture(material.Texture14, texCoord0, landBlend0.z, mipLevel) * float4(material.Vector3.x, 1.0f, 1.0, material.Vector1.z);
+        else
+            rmaos += landBlend0.z * float4(1 - glossiness, 0, 1, 0);
+        
+        if (land4PBR)            
+            rmaos += BlendLandTexture(material.Texture15, texCoord0, landBlend0.w, mipLevel) * float4(material.Vector3.y, 1.0f, 1.0, material.Vector1.w);
+        else
+            rmaos += landBlend0.w * float4(1 - glossiness, 0, 1, 0);
+        
+        if (land5PBR)           
+            rmaos += BlendLandTexture(material.Texture16, texCoord0, landBlend1.x, mipLevel) * float4(material.Vector3.z, 1.0f, 1.0, material.Vector2.x);
+        else
+            rmaos += landBlend1.x * float4(1 - glossiness, 0, 1, 0);
+        
+        if (land6PBR)           
+            rmaos += BlendLandTexture(material.Texture17, texCoord0, landBlend1.y, mipLevel) * float4(material.Vector3.w, 1.0f, 1.0, material.Vector2.y);
+        else
+            rmaos += landBlend1.y * float4(1 - glossiness, 0, 1, 0);
+        
+        surface.Roughness = saturate(rmaos.x);
         surface.Metallic = saturate(rmaos.y);
         surface.AO = rmaos.z;
-        surface.F0 = PBR::Defaults::F0 * rmaos.w; //material.SpecularLevel()
+        surface.F0 = rmaos.w; // Already Specular Level * RMAOS.w
     }
     else if (material.ShaderType == ShaderType::Lighting)
     {
-        surface.Albedo = GamutTransform(baseColor); // GammaToTrueLinear looks wonky
+        blendedLand = VanillaDiffuseColor(land1 + land2 + land3 + land4 + land5 + land6);
+        blendedLand.rgb *= VanillaDiffuseColor(vertexColor.rgb);
+        
+        float3 specularColor = material.SpecularColor().rgb * specularStrength;
+
+        float roughnessFromShininess = 
+            material.Vector2.z * landBlend0.x + 
+            material.Vector2.w * landBlend0.y +
+            material.Vector3.x * landBlend0.z +
+	        material.Vector3.y * landBlend0.w +
+            material.Vector3.z * landBlend1.x +
+            material.Vector3.w * landBlend1.y;
+        
+        float roughnessFromSpecularTexture = pow(1.0f - specularStrength, 2);
+
+        surface.Roughness = lerp(roughnessFromSpecularTexture, roughnessFromShininess, specularStrength);
+        surface.F0 = clamp(0.08f * specularColor * material.SpecularColor().a, 0.02f, 0.08f);
     }
 
-#if defined(DEBUG_NONORMALMAP)
-    Normal = normalWS;
-    Tangent = tangentWS;
-    Bitangent = bitangentWS;
-#else          
-    float3 normal = BlendLandTexture(material.Texture6, texCoord0, landBlend0.x, mipLevel).rgb + BlendLandTexture(material.Texture7, texCoord0, landBlend0.y, mipLevel).rgb +
-                    BlendLandTexture(material.Texture8, texCoord0, landBlend0.z, mipLevel).rgb + BlendLandTexture(material.Texture9, texCoord0, landBlend0.w, mipLevel).rgb +
-                    BlendLandTexture(material.Texture10, texCoord0, landBlend1.x, mipLevel).rgb + BlendLandTexture(material.Texture11, texCoord0, landBlend1.y, mipLevel).rgb;
-        
+    surface.Albedo = GamutTransform(blendedLand.rgb);
+           
     NormalMap(
-        normal,
+        blendedNormal.xyz,
         handedness,
         normalWS, tangentWS, bitangentWS,
         surface.Normal, surface.Tangent, surface.Bitangent
     );
-#endif
 
     // ---- Wetness Effects ----
     {

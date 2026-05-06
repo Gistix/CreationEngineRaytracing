@@ -4,6 +4,7 @@
 
 #if defined(SKYRIM)
 #	include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
+#	include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 #endif
 
 namespace Util
@@ -14,6 +15,8 @@ namespace Util
 		float ShininessToRoughness(float shininess);
 
 		stl::enumeration<PBRShaderFlags, uint32_t> GetPBRShaderFlags(const BSLightingShaderMaterialPBR* pbrMaterial);
+
+		stl::enumeration<PBRShaderFlags, uint32_t> GetPBRShaderFlags(const BSLightingShaderMaterialPBRLandscape* pbrMaterial);
 	}
 #elif defined(FALLOUT4)
 #endif

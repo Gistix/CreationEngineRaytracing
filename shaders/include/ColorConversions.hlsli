@@ -15,11 +15,22 @@ float3 GamutTransform(float3 linearColor)
     return LLACESCG ? sRGBToAP1(linearColor) : linearColor;
 }
 
-// Light multiplier to match vanilla raster
-#define DIRECTIONAL_LIGHT_MULTIPLIER (K_4PI)
-#define POINT_LIGHT_MULTIPLIER (1.0f) // K_PI
+// Attempt to match vanilla materials that are darker than PBR
+const static float PBRLightingScale = LLON ? 1.0f : 0.65f;
+	
+const static float PBRLightingScaleRcp = 1.0f / PBRLightingScale;
 
-#define DIFFUSE_MULTIPLIER (K_PI_2)
+const static float PBRLightingCompensation = LLON ? 1.0 : K_PI;
+
+float3 PBRColorScale(float3 color)
+{
+    return color * PBRLightingScale;
+}
+
+float4 PBRColorScale(float4 color)
+{
+    return float4(PBRColorScale(color.rgb), color.a);
+}
 
 float3 ColorToGamma(float3 color)
 {
@@ -43,14 +54,14 @@ float3 LightToLinear(float3 color)
 
 float3 PointLightToLinear(float3 color, bool isLinear)
 {
-    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : POINT_LIGHT_MULTIPLIER;
+    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : K_PI;
     float3 finalColor = (isLinear && LLON) ? GamutTransform(color) : LightToLinear(color);
     return finalColor * mult;
 }
 
 float3 DirLightToLinear(float3 color)
 {
-    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : DIRECTIONAL_LIGHT_MULTIPLIER;
+    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : K_PI;
     float3 finalColor = (LLSETTINGS.isDirLightLinear && LLON) ? GamutTransform(color) : LightToLinear(color);
     return finalColor * mult;
 }
@@ -62,12 +73,17 @@ float3 GlowToLinear(float3 color)
 
 float VanillaDiffuseColorMult()
 {
-    return LLON ? LLSETTINGS.vanillaDiffuseColorMult : DIFFUSE_MULTIPLIER;
+    return LLON ? LLSETTINGS.vanillaDiffuseColorMult : 1.0f;
 }
 
 float3 VanillaDiffuseColor(float3 color)
 {
     return LLON ? GamutTransform(pow(abs(color), LLSETTINGS.colorGamma)) * LLSETTINGS.vanillaDiffuseColorMult : ColorToLinear(color) * VanillaDiffuseColorMult();
+}
+
+float4 VanillaDiffuseColor(float4 color)
+{
+    return float4(VanillaDiffuseColor(color.rgb), color.a);
 }
 
 float3 VanillaDiffuseColorGamma(float3 color)
