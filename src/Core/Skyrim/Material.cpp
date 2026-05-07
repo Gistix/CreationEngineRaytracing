@@ -23,20 +23,16 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	if (!bsWaterMaterial)
 		return;
 
-	auto normalScroll1 = *reinterpret_cast<float2*>(&bsWaterMaterial->unk100);
-	auto normalScroll2 = *reinterpret_cast<float2*>(&bsWaterMaterial->unk108);
-	auto normalScroll3 = *reinterpret_cast<float2*>(&bsWaterMaterial->unk110);
-
 	// NormalsScroll0
-	Vectors[0].x = normalScroll1.x;
-	Vectors[0].y = normalScroll1.y;
+	Vectors[0].x = bsWaterMaterial->normalScroll1.x;
+	Vectors[0].y = bsWaterMaterial->normalScroll1.y;
 
-	Vectors[0].z = normalScroll2.x;
-	Vectors[0].w = normalScroll2.y;
+	Vectors[0].z = bsWaterMaterial->normalScroll2.x;
+	Vectors[0].w = bsWaterMaterial->normalScroll2.y;
 
 	// NormalsScroll1
-	Vectors[1].x = normalScroll3.x;
-	Vectors[1].y = normalScroll3.y;
+	Vectors[1].x = bsWaterMaterial->normalScroll3.x;
+	Vectors[1].y = bsWaterMaterial->normalScroll3.y;
 
 	// CellTexCoordOffset 
 	Vectors[3] = {

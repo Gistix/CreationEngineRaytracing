@@ -376,7 +376,7 @@ Texture Mesh::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eas
 	return Texture(defaultDescHandle, nullptr);
 }
 
-void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form)
+void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::FormID formID)
 {
 	auto* renderer = Renderer::GetSingleton();
 
@@ -718,7 +718,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 						// FaceGen
 						if (feature == Feature::kFaceGen) {
 							if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {
-								if (form && Util::IsPlayer(form)) {
+								if (Util::IsPlayerFormID(formID)) {
 									auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
 
 									auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->GetDescriptor(
@@ -812,6 +812,12 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 				textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
 				textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
 			}
+		}
+		else if (auto* distantTreeProp = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty)) {
+			shaderType = RE::BSShader::Type::DistantTree;
+
+			auto* treeLODAtlas = Scene::GetSingleton()->g_TreeLODAtlasTex;
+			textures[0] = GetTexture(*treeLODAtlas, blackTexture);
 		}
 	}
 

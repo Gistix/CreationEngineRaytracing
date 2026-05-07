@@ -197,7 +197,10 @@ struct SurfaceMaker
         {
             WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);
         }
-        else
+        else if (material.ShaderType == ShaderType::DistantTree)
+        {
+            DistantTreeMaterial(surface, texCoord0, material);
+        } else
         {
             DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
         }

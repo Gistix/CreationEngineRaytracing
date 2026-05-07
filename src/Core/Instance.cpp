@@ -68,6 +68,20 @@ bool Instance::SkipUpdate()
 	return false;
 }
 
+void Instance::UpdateTransform()
+{
+	if (memcmp(&m_NiTransform, &m_Node->world, sizeof(RE::NiTransform)) != 0)
+		m_DirtyFlags |= DirtyFlags::Transform;
+
+	m_DirtyFlags |= model->GetDirtyFlags().get();
+
+	// Update transform for BLAS instance
+	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(m_Node->world));
+	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_Node->previousWorld));
+
+	m_NiTransform = m_Node->world;
+}
+
 void Instance::Update(uint32_t tlasInstanceID)
 {
 	auto* player = RE::PlayerCharacter::GetSingleton();
@@ -84,19 +98,7 @@ void Instance::Update(uint32_t tlasInstanceID)
 	if (SkipUpdate())
 		return;
 
-	if (memcmp(&m_NiTransform, &m_Node->world, sizeof(RE::NiTransform)) != 0)
-		m_DirtyFlags |= DirtyFlags::Transform;
-
-	m_DirtyFlags |= model->GetDirtyFlags().get();
-
-	if (m_DirtyFlags != DirtyFlags::None)
-		logger::trace("Instance::Update - {}: {}", model->m_Name, Util::GetFlagsString<DirtyFlags>(static_cast<uint8_t>(m_DirtyFlags)));
-
-	// Update transform for BLAS instance
-	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(m_Node->world));
-	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_Node->previousWorld));
-
-	m_NiTransform = m_Node->world;
+	UpdateTransform();
 
 	m_TLASInstanceID = tlasInstanceID;
 }

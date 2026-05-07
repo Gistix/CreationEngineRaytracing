@@ -230,7 +230,11 @@ namespace Hooks
 			texture->texture = defaultTexture->texture;
 			texture->UAV = defaultTexture->UAV;
 			texture->resourceView = defaultTexture->resourceView;
-			texture->unk18 = defaultTexture->unk18;
+			texture->width = defaultTexture->width;
+			texture->height = defaultTexture->height;
+			texture->format = defaultTexture->format;
+			texture->mips = defaultTexture->mips;
+			texture->unk1E = defaultTexture->unk1E;
 			texture->refCount = defaultTexture->refCount;
 
 			defaultTexture->texture->AddRef();
@@ -680,13 +684,12 @@ namespace Hooks
 			if (FAILED(hr))
 				return texture;
 
-			// Store Texture Desc 
-			auto* textureDesc = reinterpret_cast<RE::BSGraphics::TextureData*>(&texture->unk18);
-			textureDesc->width = static_cast<uint16_t>(a_width);
-			textureDesc->height = static_cast<uint16_t>(a_height);
-			textureDesc->format = static_cast<uint8_t>(a_format);
-			textureDesc->unk1C = 1;
-			textureDesc->unk1E = 0;
+			// Store Texture Desc
+			texture->width = static_cast<uint16_t>(a_width);
+			texture->height = static_cast<uint16_t>(a_height);
+			texture->format = static_cast<uint8_t>(a_format);
+			texture->mips = 1;
+			texture->unk1E = 0;
 			texture->refCount = 1;
 
 			// SRV creation (skipped for staging)
@@ -826,7 +829,7 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
 		{
-			bool isMapLOD = a_block->node->mapTerrain && a_block == a_block->node->mapObjects->block;
+			bool isMapLOD = a_block->node->mapObjects && a_block == a_block->node->mapObjects->block;
 			bool valid = a_block->node && !isMapLOD;
 			bool existed = true;
 
@@ -847,6 +850,66 @@ namespace Hooks
 	struct BGSObjectBlock_Detach
 	{
 		static void thunk(RE::BGSObjectBlock* a_block)
+		{
+			if (a_block->attached)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
+
+			func(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSDistantTreeBlock_AttachSE
+	{
+		static void thunk(RE::BGSDistantTreeBlock* a_block, float a2)
+		{
+			bool isMapLOD = a_block->node->mapTerrain;
+			bool valid = a_block->node && !isMapLOD;
+			bool attached = a_block->attached;
+			bool existed = true;
+
+			func(a_block, a2);
+
+			if (valid && a_block->doneLoading && !attached) {
+				if (!a_block->treeGroups.empty())
+					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+			}
+
+			/*if (valid && existed)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);*/
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSDistantTreeBlock_AttachAE
+	{
+		static void thunk(RE::BGSDistantTreeBlock* a_block)
+		{
+			bool isMapLOD = a_block->node->mapTerrain;
+			bool valid = a_block->node && !isMapLOD;
+			bool attached = a_block->attached;
+			bool existed = true;
+
+			func(a_block);
+
+			// Model is only valid post attach
+			if (valid && a_block->doneLoading && !attached) {
+				if (!a_block->treeGroups.empty())
+					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+			}
+
+			if (valid && existed)
+				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSDistantTreeBlock_Detach
+	{
+		static void thunk(RE::BGSDistantTreeBlock* a_block)
 		{
 			if (a_block->attached)
 				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
@@ -950,6 +1013,14 @@ namespace Hooks
 		stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
 		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));
 
+		// Tree LOD
+		if (REL::Module::IsSE())
+			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
+		else
+			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
+
+		stl::detour_thunk<BGSDistantTreeBlock_Detach>(REL::RelocationID(30830, 31651));
+
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
 		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
@@ -971,6 +1042,8 @@ namespace Hooks
 		scene->g_FlowMapSourceTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(527694, 414616).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
+
+		scene->g_TreeLODAtlasTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(528222, 415172).address());
 
 		stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
 

@@ -3,15 +3,14 @@
 #include "Core/Instance.h"
 
 // Since we have no release function we use a timer to track LOD lifetime
-struct LODBlockReference
+struct LODBlockReferenceBase
 {
 	inline static auto maxDetachedTime = std::chrono::seconds(15);
 
-	std::variant<RE::BGSTerrainBlock*, RE::BGSObjectBlock*, RE::BGSDistantTreeBlock*> block;
 	eastl::vector<Instance*> instances;
 	bool detached;
 	bool m_Hidden;
 	std::chrono::time_point<std::chrono::steady_clock> detachedTime;
 
-	void UpdateVisibility();
+	virtual void UpdateVisibility() { };
 };

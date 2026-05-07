@@ -41,6 +41,9 @@ struct Scene
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
 	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
 
+	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasTex = nullptr;
+	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasNormalTex = nullptr;
+
 	Settings m_Settings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;

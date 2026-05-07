@@ -8,7 +8,6 @@ void LODBlockReference::UpdateVisibility()
 		return;
 
 	RE::BSMultiBoundNode* object = nullptr;
-
 	bool hidden = false;
 
 	if (auto terrainBlockPtr = get_if<RE::BGSTerrainBlock*>(&block)) {
@@ -20,6 +19,7 @@ void LODBlockReference::UpdateVisibility()
 		}
 
 		object = terrainBlock->chunk;
+
 	} else 	if (auto objectBlockPtr = get_if<RE::BGSObjectBlock*>(&block)) {
 		auto* objectBlock = *objectBlockPtr;
 

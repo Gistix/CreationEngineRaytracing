@@ -3,8 +3,12 @@
 #include "core/Model.h"
 #include "core/Instance.h"
 #include "core/Light.h"
-#include "Core/ActorReference.h"
 #include "Core/TextureManager.h"
+#include "core/TreeLODInstance.h"
+
+#include "Core/Reference/ActorReference.h"
+#include "Core/Reference/LODBlockReference.h"
+#include "Core/Reference/TreeLODBlockReference.h"
 
 #include "Light.hlsli"
 #include "Mesh.hlsli"
@@ -13,7 +17,6 @@
 #include "Constants.h"
 #include "Types/BindlessTableManager.h"
 #include "Types/BindlessTable.h"
-#include "Types/LODBlockReference.h"
 #include "Types/ReleasedData.h"
 
 #include <eastl/vector_set.h>
@@ -40,6 +43,7 @@ class SceneGraph
 	// LOD
 	eastl::unordered_map<RE::BGSObjectBlock*, LODBlockReference> m_ObjectLODInstances;
 	eastl::unordered_map<RE::BGSTerrainBlock*, LODBlockReference> m_TerrainLODInstances;
+	eastl::unordered_map<RE::BGSDistantTreeBlock*, TreeLODBlockReference> m_TreeLODInstances;
 
 	// Actors
 	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
@@ -79,7 +83,7 @@ class SceneGraph
 	uint32_t m_NumMeshes = 0;
 	uint32_t m_NumInstances = 0;
 
-	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::TESForm* form, RE::NiAVObject* object);
+	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::NiAVObject* object, RE::TESForm* form);
 	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
@@ -139,6 +143,7 @@ public:
 	// LOD
 	bool CreateLODModel(RE::BGSTerrainBlock* chunk);
 	bool CreateLODModel(RE::BGSObjectBlock* chunk);
+	bool CreateLODModel(RE::BGSDistantTreeBlock* chunk);
 
 	template <typename T>
 	void CreateLODModelImpl(T* chunk, Mesh::Type type);
@@ -168,6 +173,8 @@ public:
 	void SetLODDetached(RE::BGSTerrainBlock* block, bool detached);
 
 	void SetLODDetached(RE::BGSObjectBlock* block, bool detached);
+
+	void SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached);
 
 	void RunGarbageCollection(uint64_t frameIndex);
 };

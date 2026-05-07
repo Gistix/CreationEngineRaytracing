@@ -794,4 +794,13 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     }
 }
 
+void DistantTreeMaterial(inout Surface surface, in float2 texCoord0, in Material material)
+{
+    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
+    float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
+    float alpha = diffuse.a * material.BaseColor().a;
+
+    surface.Albedo = diffuse.rgb;
+}
+
 #endif // SURFACE_SKYRIM_HLSL

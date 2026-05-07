@@ -307,6 +307,11 @@ void SceneGraph::UpdateLODVisibility()
 	{
 		ref.UpdateVisibility();
 	}
+
+	for (auto& [block, ref] : m_TreeLODInstances)
+	{
+		ref.UpdateVisibility();
+	}
 }
 
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
@@ -452,7 +457,7 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object, int i = -1) {
 			logger::debug("Appending {}: {}", magic_enum::enum_name(form->GetFormType()), object->name);
 
-			for (auto& mesh : CreateMeshes(form, object))
+			for (auto& mesh : CreateMeshes(object, form))
 			{
 				if (i == -1)
 					faceMeshes.push_back(mesh.get());
@@ -553,7 +558,7 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	logger::debug("SceneGraph::CreateWaterModel - FormID 0x{:08X}, {}", water->GetFormID(), path.c_str());
 
 	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
-	auto meshes = CreateMeshes(water, object);
+	auto meshes = CreateMeshes(object, water);
 
 	if (auto* model = CommitModel(path.c_str(), object, water, meshes)) {
 		if (auto* instance = AddInstanceImpl(object, model, 0))
@@ -579,6 +584,52 @@ bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
 	}
 
 	return true;
+}
+
+bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
+{
+	// This prevents modifications while rendering is running
+	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	if (m_TreeLODInstances.contains(block))
+		return true;
+
+	for (const auto& group: block->treeGroups)
+	{
+		if (!group->geometry)
+			continue;
+
+		auto* geometry = group->geometry.get();
+
+		auto modelNameTmp = std::format("TreeLOD_{}", group->treeType);
+		auto modelName = eastl::string(modelNameTmp.c_str());
+
+		Model* model = nullptr;
+		if (auto it = m_Models.find(modelName); it != m_Models.end()) {
+			model = it->second.get();
+		}
+		else {
+			auto meshes = CreateMeshes(geometry, nullptr);
+			model = CommitModel(modelName.c_str(), geometry, nullptr, meshes);
+		}
+
+		if (!model)
+			logger::warn("SceneGraph::CreateLODModel - Tree lod model {} is null", group->treeType);
+
+		auto& blockRefr = m_TreeLODInstances[block];
+		blockRefr.block = block;
+
+		for (auto& instanceData: group->instances)
+		{
+			auto& instance = m_Instances.emplace_back(eastl::make_unique<TreeLODInstance>(instanceData, geometry, model));
+			instance->model->AddRef();
+
+			blockRefr.instances.push_back(instance.get());
+			blockRefr.treeInstanceData.push_back(&instanceData);
+		}
+	}
+
+	return false;
 }
 
 template <typename T>
@@ -664,7 +715,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 					}
 
 					mesh->BuildMesh(vertexData, segmentTriData, triShapeRD->vertexDesc);
-					mesh->BuildMaterial(geometryRuntimeData, nullptr);
+					mesh->BuildMaterial(geometryRuntimeData, 0);
 
 					meshes.push_back(eastl::move(mesh));
 				}
@@ -674,7 +725,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, Mesh::Flags::LOD, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
-			mesh->BuildMaterial(geometryRuntimeData, nullptr);
+			mesh->BuildMaterial(geometryRuntimeData, 0);
 
 			meshes.push_back(eastl::move(mesh));
 		}
@@ -701,7 +752,7 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObj
 	if (it == m_InstancesFormIDs.end())
 		return;
 
-	auto meshes = CreateMeshes(a_form, a_object);
+	auto meshes = CreateMeshes(a_object, a_form);
 
 	for (const auto& mesh: meshes)
 		a_meshes.push_back(mesh.get());
@@ -905,14 +956,16 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 	}
 }
 
-eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* form, RE::NiAVObject* object)
+eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* object, RE::TESForm* form)
 {
-	auto formType = form->GetFormType();
+	auto formType = form ? form->GetFormType() : RE::FormType::None;
 	auto baseFormType = formType;
 
-	if (auto* refr = form->AsReference()) {
-		if (auto* baseObject = refr->GetBaseObject())
-			baseFormType = baseObject->GetFormType();
+	if (form) {
+		if (auto* refr = form->AsReference()) {
+			if (auto* baseObject = refr->GetBaseObject())
+				baseFormType = baseObject->GetFormType();
+		}
 	}
 
 	auto rootWorldInverse = object->world.Invert();
@@ -935,7 +988,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 
 		const auto& geometryType = pGeometry->GetType();
 
-		if (geometryType.none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape)) {
+		if (geometryType.none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kMultiStreamInstanceTriShape)) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported Geometry: {} for {}", magic_enum::enum_name(geometryType.get()), name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
@@ -952,9 +1005,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
 		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
+		bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
 
 		// Only lighting and effect shader for now
-		if (!isLightingShader && !isEffectShader && !isWaterShader) {
+		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
@@ -1016,7 +1070,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 			auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
-			mesh->BuildMaterial(geometryRuntimeData, form);
+			mesh->BuildMaterial(geometryRuntimeData, form ? form->formID : 0);
 
 			meshes.push_back(eastl::move(mesh));
 		}
@@ -1054,7 +1108,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::TESForm* for
 				auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot, i);
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
-				mesh->BuildMaterial(geometryRuntimeData, form);
+				mesh->BuildMaterial(geometryRuntimeData, form ? form->formID : 0);
 
 				meshes.push_back(eastl::move(mesh));
 			}
@@ -1089,7 +1143,7 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
 
 	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
-	auto meshes = CreateMeshes(form, pRoot);
+	auto meshes = CreateMeshes(pRoot, form);
 
 	auto numMeshes = static_cast<uint32_t>(meshes.size());
 
@@ -1152,16 +1206,16 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 
 			device->waitForIdle();
 
-			logger::debug("SceneGraph::CreateModelInternal - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
+			logger::debug("SceneGraph::CommitModel - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 
 			return modelPtr;
 		}
 		else {
-			logger::warn("SceneGraph::CreateModelInternal - Emplace failed for {} TriShapes", shapeCount);
+			logger::warn("SceneGraph::CommitModel - Emplace failed for {} TriShapes", shapeCount);
 		}
 	}
 	else {
-		logger::debug("SceneGraph::CreateModelInternal - No TriShapes to commit");
+		logger::debug("SceneGraph::CommitModel - No TriShapes to commit");
 	}
 
 	return nullptr;
@@ -1233,6 +1287,26 @@ void SceneGraph::SetLODDetached(RE::BGSObjectBlock* block, bool detached)
 {
 	auto it = m_ObjectLODInstances.find(block);
 	if (it == m_ObjectLODInstances.end())
+		return;
+
+	Scene::GetSingleton()->m_SceneMutex.lock();
+
+	for (auto& instance : it->second.instances) {
+		instance->SetDetached(detached);
+	}
+
+	Scene::GetSingleton()->m_SceneMutex.unlock();
+
+	if (detached && detached != it->second.detached)
+		it->second.detachedTime = std::chrono::steady_clock::now();
+
+	it->second.detached = detached;
+}
+
+void SceneGraph::SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached)
+{
+	auto it = m_TreeLODInstances.find(block);
+	if (it == m_TreeLODInstances.end())
 		return;
 
 	Scene::GetSingleton()->m_SceneMutex.lock();
