@@ -14,7 +14,8 @@
 
 bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed)
 {
-    Mesh mesh = GetMesh(instanceIndex, geometryIndex);
+    Instance instance;
+    Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
     
     Vertex v0, v1, v2;
     GetVertices(mesh.GeometryIdx, primitiveIndex, v0, v1, v2);
@@ -31,7 +32,7 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     
     float alpha = Textures[NonUniformResourceIndex(material.BaseTexture())].SampleLevel(DefaultSampler, texCoord, 0).a;
     
-    alpha *= material.BaseColor().a;
+    alpha *= material.BaseColor().a * instance.Alpha;
     
     if ((material.ShaderFlags & ShaderFlags::kVertexAlpha) && !(material.ShaderFlags & ShaderFlags::kTreeAnim))
         alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
@@ -101,7 +102,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     {   
         float alpha = Textures[NonUniformResourceIndex(material.BaseTexture())].SampleLevel(DefaultSampler, texCoord, 0).a;
     
-        alpha *= material.BaseColor().a;
+        alpha *= material.BaseColor().a * instance.Alpha;
     
         if ((material.ShaderFlags & ShaderFlags::kVertexAlpha) && !(material.ShaderFlags & ShaderFlags::kTreeAnim))
             alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);

@@ -3,13 +3,13 @@
 void TreeLODInstance::UpdateTransform()
 {
 	half3 position;
-	std::memcpy(&position, &m_Data.x, sizeof(half3));
+	std::memcpy(&position, &m_Data->x, sizeof(half3));
 
 	half rotZ;
-	std::memcpy(&rotZ, &m_Data.rotZ, sizeof(half));
+	std::memcpy(&rotZ, &m_Data->rotZ, sizeof(half));
 
 	half scale;
-	std::memcpy(&scale, &m_Data.scale, sizeof(half));
+	std::memcpy(&scale, &m_Data->scale, sizeof(half));
 
 	auto instanceTransform = RE::NiTransform();
 	instanceTransform.rotate = RE::NiMatrix3(0.0f, 0.0f, rotZ * (180.0f / std::numbers::pi_v<float>));

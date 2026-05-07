@@ -19,6 +19,7 @@ void TreeLODBlockReference::UpdateVisibility()
 		return;
 	}
 
+	// This could probably be moved into TreeLODInstance::SkipAS
 	for (size_t i = 0; i < numInstances; i++)
 	{
 		auto* instance = instances[i];

@@ -83,6 +83,8 @@ struct Instance
 
 	void Update(uint32_t tlasInstanceID);
 
+	virtual float GetAlpha() { return 1.0f; };
+
 	auto GetDirtyFlags() const { return m_DirtyFlags; };
 
 	void ClearDirtyState() { m_DirtyFlags = DirtyFlags::None; };

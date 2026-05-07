@@ -54,6 +54,7 @@ INTEROP_DATA_STRUCT(Instance, 4)
 	INTEROP_ROW_MAJOR(float3x4) PrevTransform;
     InstanceLightData LightData;
 	uint FirstGeometryID;
+    float Alpha;
 };
 VALIDATE_ALIGNMENT(InstanceData, 4);
 

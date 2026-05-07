@@ -367,7 +367,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			instance->m_Transform,
 			instance->m_PrevTransform,
 			InstanceLightData(lights.data(), numLights),
-			firstMeshIndex
+			firstMeshIndex,
+			instance->GetAlpha()
 		};
 
 		m_NumInstances++;
@@ -621,11 +622,13 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 
 		for (auto& instanceData: group->instances)
 		{
-			auto& instance = m_Instances.emplace_back(eastl::make_unique<TreeLODInstance>(instanceData, geometry, model));
+			auto* instanceDataPtr = &instanceData;
+
+			auto& instance = m_Instances.emplace_back(eastl::make_unique<TreeLODInstance>(instanceDataPtr, geometry, model));
 			instance->model->AddRef();
 
 			blockRefr.instances.push_back(instance.get());
-			blockRefr.treeInstanceData.push_back(&instanceData);
+			blockRefr.treeInstanceData.push_back(instanceDataPtr);
 		}
 	}
 
