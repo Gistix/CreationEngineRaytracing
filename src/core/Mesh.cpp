@@ -1216,7 +1216,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
-	const auto lod = flags.all(Mesh::Flags::LOD);
+	const bool objectLOD = m_Type == Mesh::Type::ObjectLOD;
 
 	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
 	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
@@ -1229,7 +1229,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (skinned)
 		UpdateDismember();
 
-	if (lod)
+	if (objectLOD)
 		UpdateSubIndex();
 
 	// Store previous hidden state

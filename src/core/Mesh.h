@@ -42,7 +42,8 @@ struct Mesh
 		Default,
 		LandLOD,
 		ObjectLOD,
-		TreeLOD
+		TreeLOD,
+		Grass
 	};
 
 	enum class State : uint8_t

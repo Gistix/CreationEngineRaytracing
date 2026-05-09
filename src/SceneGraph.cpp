@@ -325,6 +325,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	for (auto& instance : m_Instances)
 	{
+		if (m_NumInstances > Constants::NUM_INSTANCES_MAX - 1)
+			logger::critical("Number of instances exceeds the maximum allocated size of {}.", Constants::NUM_INSTANCES_MAX);
+
 		instance->Update(m_NumInstances);
 
 		if (instance->IsHidden())
@@ -614,8 +617,10 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 			model = CommitModel(modelName.c_str(), geometry, nullptr, meshes);
 		}
 
-		if (!model)
-			logger::warn("SceneGraph::CreateLODModel - Tree lod model {} is null", group->treeType);
+		if (!model) {
+			logger::critical("SceneGraph::CreateLODModel - Tree lod model {} is null", group->treeType);
+			continue;
+		}
 
 		auto& blockRefr = m_TreeLODInstances[block];
 		blockRefr.block = block;
@@ -740,6 +745,80 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 		return RE::BSVisit::BSVisitControl::kContinue;
 	});
+}
+
+void SceneGraph::BeginAddingInstances(RE::BSMultiStreamInstanceTriShape* geometry)
+{
+	m_GrassInstances[geometry].BeginAddingInstances();
+}
+
+void SceneGraph::CreateGrassModel(RE::FormID formID, RE::BSMultiStreamInstanceTriShape* geometry, [[maybe_unused]] uint32_t instanceCount, [[maybe_unused]] RE::BGSGrassManager::InstanceData* instanceData)
+{
+	//logger::info("{:0X}", formID);
+
+	auto* grassForm = RE::TESForm::LookupByID<RE::TESGrass>(formID);
+	if (!grassForm || grassForm->model.empty())
+		return;
+
+	//std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
+
+	//logger::info("FormID: {}, Model: {}", formID, grassForm->model);
+
+	auto modelName = eastl::string(grassForm->model.c_str());
+
+	Model* model = nullptr;
+	if (auto it = m_Models.find(modelName); it != m_Models.end()) {
+		model = it->second.get();
+	}
+	else {
+		logger::info("FormID: {}, Model: {}", formID, grassForm->model);
+
+		auto meshes = CreateMeshes(geometry, grassForm);
+		model = CommitModel(modelName.c_str(), geometry, grassForm, meshes);
+
+		logger::info("Model Flags: {}", Util::GetFlagsString<Mesh::Flags>(model->GetMeshFlags()));
+	}
+
+	if (!model) {
+		logger::critical("SceneGraph::CreateLODModel - Grass model {} is null", modelName);
+		return;
+	}
+
+	auto& runtimeData = geometry->GetMultiStreamTrishapeRuntimeData();
+
+	auto instanceStart = runtimeData.instanceCount;
+
+	/*
+	logger::info("Instance Count: {}", instanceCount);
+
+	logger::info("{:08X}, Groups: {}, instanceGroupCount: {}, unk17C: {}, unk184: {}, instanceCount: {}, unk198: {}",
+		reinterpret_cast<uintptr_t>(geometry),
+		runtimeData.unk160.size(),
+		runtimeData.groupBaseOffset,
+		runtimeData.maxInstancesPerGroup,
+		runtimeData.unk184,
+		runtimeData.instanceCount,
+		runtimeData.unk198);*/
+
+	auto& grassInstance = m_GrassInstances[geometry];
+
+	if (grassInstance.GetCurrentGroup().size() != instanceStart) {
+		logger::critical("SceneGraph::CreateGrassModel - {} grass instances vs {} geometry instances", grassInstance.GetCurrentGroup().size(), instanceStart);
+	}
+
+	for (uint32_t i = 0; i < instanceCount; i++)
+	{
+		half3 position;
+		std::memcpy(&position, &instanceData[i].x, sizeof(half3));
+
+		//logger::info("\tInstance {}: {}", i, float3(position));
+
+		auto& instance = m_Instances.emplace_back(eastl::make_unique<GrassInstance>(instanceData[i], geometry, model));
+		instance->model->AddRef();
+
+		auto instanceIndex = instanceStart + i;
+		grassInstance.GetCurrentGroup()[instanceIndex] = reinterpret_cast<GrassInstance*>(instance.get());
+	}
 }
 
 void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
@@ -1009,9 +1088,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
 		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
 		bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
+		bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
 
 		// Only lighting and effect shader for now
-		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader) {
+		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader && !isGrassShader) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
@@ -1040,6 +1120,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
+
+		auto type = Mesh::Type::Default;
+		if (baseFormType == RE::FormType::Grass)
+			type |= Mesh::Type::Grass;
 
 		auto localToRoot = float3x4(
 			1.0f, 0.0f, 0.0f, 0.0f,
@@ -1070,7 +1154,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 				return RE::BSVisit::BSVisitControl::kContinue;
 			}
 
-			auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(baseFormType, type, flags, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, form ? form->formID : 0);
@@ -1108,7 +1192,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 				if (partition.bonesPerVertex > 0)
 					flags |= Mesh::Flags::Skinned;
 
-				auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot, i);
+				auto mesh = eastl::make_unique<Mesh>(baseFormType, type, flags, name, pGeometry, localToRoot, i);
 
 				mesh->BuildMesh(partition.buffData, skinPartition->vertexCount, partition.triangles, partition.bonesPerVertex);
 				mesh->BuildMaterial(geometryRuntimeData, form ? form->formID : 0);

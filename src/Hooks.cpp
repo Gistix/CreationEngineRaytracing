@@ -920,6 +920,36 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BGSGrassManager_SetupGrass
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_triShape, uint32_t a_instanceCount, RE::BGSGrassManager::InstanceData* a_instanceData)
+		{
+			auto* grassManager = RE::BGSGrassManager::GetSingleton();
+			for (const auto& [key, value] : grassManager->grassTypes)
+			{
+				if (value->typeShape == a_triShape) {
+					Scene::GetSingleton()->GetSceneGraph()->CreateGrassModel(key.id, value->typeShape, a_instanceCount, a_instanceData);
+					break;
+				}
+			}
+
+			func(a_triShape, a_instanceCount, a_instanceData);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSGrassManager_BeginAddingInstances
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_triShape, std::uint32_t a_numFloatsPerInstance)
+		{		
+			Scene::GetSingleton()->GetSceneGraph()->BeginAddingInstances(a_triShape);
+			a_triShape->BeginAddingInstances(a_numFloatsPerInstance);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct LoadAndAttachAddon
 	{
 		static RE::NiAVObject* thunk(RE::TESModel* a_model, RE::BIPED_OBJECT a_bipedObj, RE::TESObjectREFR* a_actor, RE::BSTSmartPointer<RE::BipedAnim>& a_biped, RE::NiAVObject* a_root)
@@ -1020,6 +1050,10 @@ namespace Hooks
 			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
 
 		stl::detour_thunk<BGSDistantTreeBlock_Detach>(REL::RelocationID(30830, 31651));
+
+		stl::detour_thunk<BGSGrassManager_SetupGrass>(REL::RelocationID(74591, 76319));
+
+		stl::write_thunk_call<BGSGrassManager_BeginAddingInstances, 6>(REL::RelocationID(15204, 15372).address() + REL::Relocate(0x322, 0x322));
 
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));

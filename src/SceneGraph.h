@@ -2,11 +2,13 @@
 
 #include "core/Model.h"
 #include "core/Instance.h"
+#include "core/GrassInstance.h"
 #include "core/Light.h"
 #include "Core/TextureManager.h"
 #include "core/TreeLODInstance.h"
 
 #include "Core/Reference/ActorReference.h"
+#include "Core/Reference/GrassReference.h"
 #include "Core/Reference/LODBlockReference.h"
 #include "Core/Reference/TreeLODBlockReference.h"
 
@@ -44,6 +46,9 @@ class SceneGraph
 	eastl::unordered_map<RE::BGSObjectBlock*, LODBlockReference> m_ObjectLODInstances;
 	eastl::unordered_map<RE::BGSTerrainBlock*, LODBlockReference> m_TerrainLODInstances;
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, TreeLODBlockReference> m_TreeLODInstances;
+
+	// Grass
+	eastl::unordered_map<RE::BSMultiStreamInstanceTriShape*, GrassReference> m_GrassInstances;
 
 	// Actors
 	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
@@ -147,6 +152,9 @@ public:
 
 	template <typename T>
 	void CreateLODModelImpl(T* chunk, Mesh::Type type);
+
+	void BeginAddingInstances(RE::BSMultiStreamInstanceTriShape* shape);
+	void CreateGrassModel(RE::FormID formID, RE::BSMultiStreamInstanceTriShape* shape, uint32_t instanceCount, RE::BGSGrassManager::InstanceData* instanceData);
 
 	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
