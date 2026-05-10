@@ -323,12 +323,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
-	for (auto& instance : m_Instances)
-	{
+	m_Instances.ApplyChanges();
+
+	m_Instances.Read([&](auto& instance) {
 		instance->Update(m_NumInstances);
 
 		if (instance->IsHidden())
-			continue;
+			return safe::Iterator::Continue;
 
 		bool isPlayer = Util::IsPlayerFormID(instance->m_FormID);
 
@@ -343,9 +344,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		// No visible meshes in instance
 		bool hiddenModel = m_NumMeshes == firstMeshIndex;
 		instance->SetHiddenModel(hiddenModel);
-		
+
 		if (instance->SkipAS())
-			continue;
+			return safe::Iterator::Continue;
 
 		uint8_t numLights = 0u;
 
@@ -372,7 +373,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		};
 
 		m_NumInstances++;
-	}
+		return safe::Iterator::Continue;
+	});
 
 	if (m_NumMeshes > 0)
 		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
@@ -388,10 +390,11 @@ void SceneGraph::ClearDirtyStates()
 		model->ClearDirtyState();
 	}
 
-	for (auto& instance : m_Instances)
-	{
+	m_Instances.Read([&](auto& instance) {
 		instance->ClearDirtyState();
-	}
+
+		return safe::Iterator::Continue;
+	});
 }
 
 void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root)
@@ -624,11 +627,13 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 		{
 			auto* instanceDataPtr = &instanceData;
 
-			auto& instance = m_Instances.emplace_back(eastl::make_unique<TreeLODInstance>(instanceDataPtr, geometry, model));
+			auto instance = eastl::make_unique<TreeLODInstance>(instanceDataPtr, geometry, model);
 			instance->model->AddRef();
 
 			blockRefr.instances.push_back(instance.get());
 			blockRefr.treeInstanceData.push_back(instanceDataPtr);
+
+			m_Instances.Add(eastl::move(instance));
 		}
 	}
 
@@ -826,13 +831,7 @@ void SceneGraph::ReleaseWaterInstance(RE::NiAVObject* node)
 	m_WaterInstances.erase(it);
 
 	// Removes the original instance, all pointers past this point are invalid
-	auto instIt = eastl::find_if(
-		m_Instances.begin(),
-		m_Instances.end(),
-		[instance](auto& x) { return x.get() == instance; });
-
-	if (instIt != m_Instances.end())
-		m_Instances.erase(instIt);
+	m_Instances.Remove(instance);
 }
 
 void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel)
@@ -859,13 +858,7 @@ void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances, bool rele
 			}
 		}
 
-		auto instIt = eastl::find_if(
-			m_Instances.begin(),
-			m_Instances.end(),
-			[instance](auto& x) { return x.get() == instance; });
-
-		if (instIt != m_Instances.end())
-			m_Instances.erase(instIt);
+		m_Instances.Remove(instance);
 	}
 }
 
@@ -891,13 +884,7 @@ void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances)
 
 		}
 
-		auto instIt = eastl::find_if(
-			m_Instances.begin(),
-			m_Instances.end(),
-			[instance](auto& x) { return x.get() == instance; });
-
-		if (instIt != m_Instances.end())
-			m_Instances.erase(instIt);
+		m_Instances.Remove(instance);
 	}
 }
 
@@ -1226,10 +1213,14 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 
 Instance* SceneGraph::AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID)
 {
-	auto& instance = m_Instances.emplace_back(eastl::make_unique<Instance>(formID, node, model));
+	auto instance = eastl::make_unique<Instance>(formID, node, model);
 	instance->model->AddRef();
 
-	return instance.get();
+	auto instancePtr = instance.get();
+
+	m_Instances.Add(eastl::move(instance));
+
+	return instancePtr;
 }
 
 void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, eastl::string path)

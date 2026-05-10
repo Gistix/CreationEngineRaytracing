@@ -13,16 +13,17 @@ void Light::UpdateInstances()
 
 	auto& position = m_Light->light->world.translate;
 
-	for (auto& instance : sceneGraph->GetInstances())
-	{
+	sceneGraph->GetInstances().Read([&](const auto& instance) {
 		auto& center = instance->m_Node->worldBound.center;
 		float radius = instance->m_Node->worldBound.radius;
 
 		if ((center - position).Length() > radius + runtimeData.radius.x)
-			continue;
+			return safe::Iterator::Continue;
 
 		m_Instances.emplace(instance.get());
-	}
+
+		return safe::Iterator::Continue;
+	});
 }
 
 void Light::UpdateTLAS(nvrhi::ICommandList* commandList)

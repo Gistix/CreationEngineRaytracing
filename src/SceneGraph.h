@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/Model.h"
-#include "core/Instance.h"
 #include "core/Light.h"
 #include "Core/TextureManager.h"
 #include "core/TreeLODInstance.h"
@@ -17,7 +16,9 @@
 #include "Constants.h"
 #include "Types/BindlessTableManager.h"
 #include "Types/BindlessTable.h"
+#include "Types/VectorStorage.h"
 #include "Types/ReleasedData.h"
+#include "Types/safe.h"
 
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
@@ -33,8 +34,7 @@ class SceneGraph
 
 	eastl::vector<ReleasedData> m_ReleasedData;
 
-	// Root node ptr, Instance data
-	eastl::vector<eastl::unique_ptr<Instance>> m_Instances;
+	VectorStorage<Instance> m_Instances;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
 	// Water
@@ -114,7 +114,7 @@ public:
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
 	inline auto& GetModels() { return m_Models; }
-	inline auto& GetInstances() const { return m_Instances; }
+	inline auto& GetInstances() { return m_Instances; }
 	inline auto& GetTerrainLodInstances() const { return m_TerrainLODInstances; }
 
 	inline auto& GetLights() { return m_Lights; }

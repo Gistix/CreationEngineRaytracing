@@ -36,27 +36,28 @@ public:
 		eastl::erase(m_Listeners, listener);
 	}
 
-	void Update(nvrhi::ICommandList* commandList, const eastl::vector<eastl::unique_ptr<Instance>>& instances)
+	void Update(nvrhi::ICommandList* commandList, const VectorStorage<Instance>& instances)
 	{
 		m_InstanceDescs.clear();
-		m_InstanceDescs.reserve(instances.size());
+		m_InstanceDescs.reserve(instances.Size());
 
 		commandList->beginMarker("BLAS Update");
 
 		auto* scene = Scene::GetSingleton();
 
-		for (auto& instance : instances)
-		{
+		instances.Read([&](const auto& instance) {
 			if (instance->IsHidden())
-				continue;
+				return safe::Iterator::Continue;
 
 			if (instance->SkipAS())
-				continue;
+				return safe::Iterator::Continue;
 
 			instance->model->UpdateBLAS(commandList);
 
 			m_InstanceDescs.push_back(instance->GetInstanceDesc());
-		}
+
+			return safe::Iterator::Continue;
+		});
 
 		commandList->endMarker();
 
