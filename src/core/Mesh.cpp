@@ -537,12 +537,12 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 						Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[5])
 					};
 
-					vectors[4] = {
+					/*vectors[4] = {
 						lightingBaseMaterialLand->terrainTexOffsetX,
 						lightingBaseMaterialLand->terrainTexOffsetY,
 						lightingBaseMaterialLand->terrainTexFade,
 						0
-					};
+					};*/
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape)) {
 					const auto* lightingPBRMaterialLand = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
@@ -582,12 +582,12 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 					};
 
 					// LODTexParams - TerrainTexOffset in xy, LodBlendingEnabled in z
-					vectors[4] = {
+					/*vectors[4] = {
 						lightingPBRMaterialLand->terrainTexOffsetX,
 						lightingPBRMaterialLand->terrainTexOffsetY,
 						0,
 						lightingPBRMaterialLand->terrainTexFade
-					};
+					};*/
 
 					// Enforce TruePBR flag
 					shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
