@@ -14,8 +14,6 @@
 
 struct Scene
 {
-	std::shared_mutex m_SceneMutex;
-
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
 	eastl::unique_ptr<RenderNode> m_GlobalIllumination;

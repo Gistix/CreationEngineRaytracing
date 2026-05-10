@@ -558,10 +558,6 @@ void Renderer::SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* m
 
 nvrhi::ICommandList* Renderer::StartExecution()
 {
-	auto* scene = Scene::GetSingleton();
-
-	scene->m_SceneMutex.lock_shared();
-
 	logger::trace("Renderer::ExecutePasses - Begin");
 
 	auto& stateRuntime = RE::BSGraphics::State::GetSingleton()->GetRuntimeData();
@@ -649,8 +645,6 @@ void Renderer::PostExecution()
 	scene->GetSceneGraph()->RunGarbageCollection(m_FrameIndex);
 
 	logger::trace("Renderer::ExecutePasses - Post");
-
-	scene->m_SceneMutex.unlock_shared();
 }
 
 nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)

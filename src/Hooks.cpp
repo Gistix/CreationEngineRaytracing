@@ -298,8 +298,6 @@ namespace Hooks
 
 			// Upload Texture Data
 			{
-				std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
-
 				auto commandList = renderer->GetGraphicsCommandList();
 
 				commandList->open();

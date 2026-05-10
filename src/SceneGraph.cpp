@@ -592,9 +592,6 @@ bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
 
 bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 {
-	// This prevents modifications while rendering is running
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
-
 	if (m_TreeLODInstances.contains(block))
 		return true;
 
@@ -647,8 +644,6 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 	if (!node)
 		return;
-
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 
 	logger::debug("SceneGraph::CreateLODModel - {}, {}", node->name.c_str(), Util::Math::Float3(node->world.translate));
 
@@ -765,8 +760,6 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObj
 	for (const auto& mesh: meshes)
 		a_meshes.push_back(mesh.get());
 
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
-
 	for (const auto& instance : it->second) {
 		if (instance->model->m_FirstPerson == firstPerson) {
 			instance->model->AppendMeshes(this, meshes);
@@ -792,7 +785,6 @@ void SceneGraph::ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
 {
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 	m_TextureManager->ReleaseTexture(texture);
 }
 
@@ -802,7 +794,6 @@ void SceneGraph::ReleaseWaterInstance(RE::NiAVObject* node)
 	if (it == m_WaterInstances.end())
 		return;
 
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 	std::unique_lock releaseLock(m_ReleaseDataMutex);
 
 	auto* instance = it->second;
@@ -836,7 +827,6 @@ void SceneGraph::ReleaseWaterInstance(RE::NiAVObject* node)
 
 void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel)
 {
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
 	std::unique_lock releaseLock(m_ReleaseDataMutex);
 
 	auto renderer = Renderer::GetSingleton();
@@ -1120,8 +1110,6 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 
 	auto formID = form->GetFormID();
 
-	std::unique_lock lock(Scene::GetSingleton()->m_SceneMutex);
-
 	// We only need one buffer per model
 	if (auto it = m_Models.find(path); it != m_Models.end()) {
 		AddInstance(formID, pRoot, path);
@@ -1263,13 +1251,9 @@ void SceneGraph::SetLODDetached(RE::BGSTerrainBlock* block, bool detached)
 	if (it == m_TerrainLODInstances.end())
 		return;
 
-	Scene::GetSingleton()->m_SceneMutex.lock();
-
 	for (auto& instance : it->second.instances) {
 		instance->SetDetached(detached);
 	}
-
-	Scene::GetSingleton()->m_SceneMutex.unlock();
 
 	if (detached && detached != it->second.detached)
 		it->second.detachedTime = std::chrono::steady_clock::now();
@@ -1283,13 +1267,9 @@ void SceneGraph::SetLODDetached(RE::BGSObjectBlock* block, bool detached)
 	if (it == m_ObjectLODInstances.end())
 		return;
 
-	Scene::GetSingleton()->m_SceneMutex.lock();
-
 	for (auto& instance : it->second.instances) {
 		instance->SetDetached(detached);
 	}
-
-	Scene::GetSingleton()->m_SceneMutex.unlock();
 
 	if (detached && detached != it->second.detached)
 		it->second.detachedTime = std::chrono::steady_clock::now();
@@ -1303,13 +1283,9 @@ void SceneGraph::SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached)
 	if (it == m_TreeLODInstances.end())
 		return;
 
-	Scene::GetSingleton()->m_SceneMutex.lock();
-
 	for (auto& instance : it->second.instances) {
 		instance->SetDetached(detached);
 	}
-
-	Scene::GetSingleton()->m_SceneMutex.unlock();
 
 	if (detached && detached != it->second.detached)
 		it->second.detachedTime = std::chrono::steady_clock::now();
