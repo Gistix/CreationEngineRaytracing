@@ -199,6 +199,8 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 			.setInitialState(nvrhi::ResourceStates::ShaderResource)
 			.setKeepInitialState(true)
 			.setIsRenderTarget(true)
+			.setClearValue(nvrhi::Color(0.5f, 0.5f, 1.0f, 1.0f))
+			.setUseClearValue(true)
 			.setDebugName("Converted MSN Texture"));
 
 		it->second = eastl::make_unique<MSNReference>(normalMapRT, textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
