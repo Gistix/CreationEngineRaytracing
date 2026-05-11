@@ -9,11 +9,27 @@ class SceneGraph;
 
 struct Model
 {
+	struct Flags {
+		enum Flag
+		{
+			None = 0,
+			BLASBuilt = 1 << 0
+		};
+	};
+
+	using Flag = Flags::Flag;
+
 	eastl::string m_Name;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
 	nvrhi::rt::AccelStructHandle blas;
+	
+	nvrhi::CommandListHandle m_BufferCopyCommandList;
+	uint64_t m_SubmittedCopyInstance = 0;
+
+	nvrhi::CommandListHandle m_BLASBuildCommandList;
+	nvrhi::EventQueryHandle m_BLASBuildQuery;
 
 	uint64_t m_LastUpdate = 0;
 
@@ -22,15 +38,17 @@ struct Model
 	// Meant to used for the player
 	bool m_FirstPerson = false;
 
+	Flag m_Flags = Flags::None;
+
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	void UpdateMeshFlags();
 
 	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool update);
 
-	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
+	void CreateBuffers(SceneGraph* sceneGraph);
 
-	void BuildBLAS(nvrhi::ICommandList* commandList);
+	void BuildBLAS();
 
 	static std::string KeySuffix(RE::NiAVObject* root)
 	{

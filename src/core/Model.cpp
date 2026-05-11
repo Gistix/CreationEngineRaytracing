@@ -63,15 +63,34 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 	return blasDesc;
 }
 
-void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
+void Model::CreateBuffers(SceneGraph* sceneGraph)
 {
+	auto* renderer = Renderer::GetSingleton();
+	m_BufferCopyCommandList = renderer->GetCopyCommandList();
+	m_BufferCopyCommandList->open();
+
 	for (auto& mesh : meshes) {
-		mesh->CreateBuffers(sceneGraph, commandList);
+		mesh->CreateBuffers(sceneGraph, m_BufferCopyCommandList);
 	}
+
+	m_BufferCopyCommandList->close();
+	m_SubmittedCopyInstance = renderer->GetDevice()->executeCommandList(m_BufferCopyCommandList, nvrhi::CommandQueue::Copy);
 }
 
 void Model::Update(RE::NiAVObject* object, bool isPlayer)
 {
+	if (!(m_Flags & Flags::BLASBuilt)) {
+		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BLASBuildQuery)) {
+			m_Flags |= Flags::BLASBuilt;
+
+			m_BufferCopyCommandList->Release();
+			m_BufferCopyCommandList = nullptr;
+
+			m_BLASBuildCommandList->Release();
+			m_BLASBuildCommandList = nullptr;
+		}
+	}
+
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
 	if (m_LastUpdate == frameIndex)
@@ -108,7 +127,7 @@ void Model::SetData(MeshData* meshData, uint32_t& index)
 	}
 }
 
-void Model::BuildBLAS(nvrhi::ICommandList* commandList)
+void Model::BuildBLAS()
 {
 	auto blasDesc = MakeBLASDesc(false);
 
@@ -120,10 +139,24 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 	}
 
 	auto* renderer = Renderer::GetSingleton();
+	auto device = renderer->GetDevice();
 
 	blas = renderer->GetDevice()->createAccelStruct(blasDesc);
 
-	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+	// Compute Command - Waits for copy
+	m_BLASBuildCommandList = renderer->GetComputeCommandList();
+	m_BLASBuildCommandList->open();
+
+	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, blas, blasDesc);
+
+	m_BLASBuildCommandList->compactBottomLevelAccelStructs();
+
+	m_BLASBuildCommandList->close();
+	device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
+	auto computeSubmittedInstance = device->executeCommandList(m_BLASBuildCommandList, nvrhi::CommandQueue::Compute);
+
+	m_BLASBuildQuery = device->createEventQuery();
+	device->setEventQuery(m_BLASBuildQuery, nvrhi::CommandQueue::Compute, computeSubmittedInstance);
 
 	m_LastBLASUpdate = renderer->GetFrameIndex();
 }

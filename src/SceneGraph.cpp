@@ -1165,32 +1165,12 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 
 		if (emplaced) {
 			// Copy Command
-			auto copyCommandList = Renderer::GetSingleton()->GetCopyCommandList();
-			copyCommandList->open();
+			modelPtr->CreateBuffers(this);
 
-			modelPtr->CreateBuffers(this, copyCommandList);
+			// Compute Command - Waits for copy
+			modelPtr->BuildBLAS();
 
-			copyCommandList->close();
-
-			auto device = Renderer::GetSingleton()->GetDevice();
-
-			auto copySubmittedInstance = device->executeCommandList(copyCommandList, nvrhi::CommandQueue::Copy);
-
-			// Compute Command
-			auto computeCommandList = Renderer::GetSingleton()->GetComputeCommandList();
-			computeCommandList->open();
-
-			modelPtr->BuildBLAS(computeCommandList);
-
-			computeCommandList->compactBottomLevelAccelStructs();
-
-			computeCommandList->close();
-
-			device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, copySubmittedInstance);
-
-			auto computeSubmittedInstance = device->executeCommandList(computeCommandList, nvrhi::CommandQueue::Compute);
-
-			// MSN Conversion - must happen after buffers are uploaded and GPU is idle
+			// MSN Conversion - waits for copy
 			if (modelPtr->ShouldQueueMSNConversion()) {
 				auto graphicsCommandList = Renderer::GetSingleton()->GetGraphicsCommandList();
 				graphicsCommandList->open();
@@ -1199,12 +1179,10 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 
 				graphicsCommandList->close();
 
-				device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Compute, computeSubmittedInstance);
-
+				auto device = Renderer::GetSingleton()->GetDevice();
+				device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Copy, modelPtr->m_SubmittedCopyInstance);
 				device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
 			}
-
-			device->waitForIdle();
 
 			logger::debug("SceneGraph::CommitModel - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));
 
