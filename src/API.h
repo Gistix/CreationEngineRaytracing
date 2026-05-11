@@ -22,4 +22,5 @@ extern "C" {
 	CERT_API void UpdateJitter(float2 jitter);
 	CERT_API void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 	CERT_API uint32_t GetAccumulatedFrameCount();
+	CERT_API uint64_t GetFakeDoubledVRAMUsage();
 }

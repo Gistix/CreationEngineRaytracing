@@ -2,6 +2,13 @@
 #include "Core/D3D12Texture.h"
 #include "Renderer.h"
 
+TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager) :
+	texture(texture)
+{
+	descriptorHandle = eastl::make_shared<DescriptorHandle>(descriptorTableManager->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0, texture)));
+	size = Renderer::GetSingleton()->GetDevice()->getTextureMemoryRequirements(texture).size;
+}
+
 TextureManager::TextureManager()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
@@ -33,6 +40,25 @@ TextureManager::TextureManager()
 	}
 
 	m_MSNConverter = eastl::make_unique<Pipeline::MSNConverter>();
+}
+
+uint64_t TextureManager::GetFakeDoubledVRAMUsage()
+{
+	uint64_t vramUsage = 0;
+
+	for (const auto& [key, texture]: m_Textures)
+	{
+		if (texture)
+			vramUsage += texture->size;
+	}
+
+	for (const auto& [key, normalMap] : m_NormalMaps)
+	{
+		if (normalMap)
+			vramUsage += normalMap->size;
+	}
+
+	return vramUsage;
 }
 
 void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)

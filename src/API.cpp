@@ -119,3 +119,18 @@ uint32_t GetAccumulatedFrameCount()
 		return accumulationPass->GetAccumulatedFrames();
 	return 0;
 }
+
+uint64_t GetFakeDoubledVRAMUsage()
+{
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+	if (!sceneGraph)
+		return 0;
+
+	auto& textureManager = sceneGraph->GetTextureManager();
+
+	if (!textureManager)
+		return 0;
+
+	return textureManager->GetFakeDoubledVRAMUsage();
+}

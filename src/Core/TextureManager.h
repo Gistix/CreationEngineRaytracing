@@ -12,12 +12,9 @@ struct TextureReference
 {
 	nvrhi::TextureHandle texture;
 	eastl::shared_ptr<DescriptorHandle> descriptorHandle;
+	uint64_t size;
 
-	TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager) :
-		texture(texture)
-	{
-		descriptorHandle = eastl::make_shared<DescriptorHandle>(descriptorTableManager->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0, texture)));
-	}
+	TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager);
 
 	virtual ~TextureReference()
 	{
@@ -61,6 +58,7 @@ struct TextureManager
 	eastl::unique_ptr<Pipeline::MSNConverter> m_MSNConverter;
 
 	TextureManager();
+	uint64_t GetFakeDoubledVRAMUsage();
 	eastl::shared_ptr<DescriptorHandle> GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType = TextureType::Standard);
 	eastl::shared_ptr<DescriptorHandle> GetDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr, TextureType textureType = TextureType::Standard);
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
