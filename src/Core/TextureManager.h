@@ -39,7 +39,6 @@ struct MSNReference : TextureReference
 	}
 };
 
-
 struct TextureManager
 {
 	enum class TextureType
