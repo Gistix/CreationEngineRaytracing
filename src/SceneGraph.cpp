@@ -794,10 +794,19 @@ void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
 	m_TextureManager->ReleaseTexture(texture);
 }
 
-void SceneGraph::ReleaseModel(const eastl::string& path)
+void SceneGraph::ReleaseModel(const Model* model)
 {
-	std::scoped_lock lock(m_ModelMutex);
-	m_Models.erase(path);
+	std::scoped_lock modelLock(m_ModelMutex);
+
+	auto it = m_Models.find(model->m_Name);
+	if (!(model->m_Flags & Model::Flags::BuffersUploaded) || !(model->m_Flags & Model::Flag::BLASBuilt))
+	{
+		std::scoped_lock releaseLock(m_ModelReleaseMutex);
+		m_ReleasedModels.push_back(eastl::move(it->second));
+		logger::warn("SceneGraph::ReleaseModel - Model {} has pending command list actions, released will be delayed until done.", model->m_Name);
+	}
+
+	m_Models.erase(it);
 }
 
 void SceneGraph::ReleaseWaterInstance(RE::NiAVObject* node)
@@ -1247,5 +1256,29 @@ void SceneGraph::RunGarbageCollection()
 				++it;
 			}
 		}
+	}
+
+	// Clear Models
+	{
+		std::scoped_lock modelLock(m_ModelReleaseMutex);
+
+		for (auto it = m_ReleasedModels.begin(); it != m_ReleasedModels.end(); ) {
+			bool release = true;
+
+			auto* model = it->get();
+
+			model->UpdateFlags();
+
+			if (!(model->m_Flags & Model::Flags::BuffersUploaded))
+				release = false;
+
+			if (!(model->m_Flags & Model::Flags::BLASBuilt))
+				release = false;
+
+			if (release)			
+				it = m_ReleasedModels.erase(it);
+			else
+				++it;
+		}		
 	}
 }

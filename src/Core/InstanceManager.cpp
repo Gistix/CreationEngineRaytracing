@@ -9,7 +9,7 @@ void InstanceManager::EraseModel(Instance* instance)
         instance->model = nullptr;
 
         if (refCount <= 0) {
-            Scene::GetSingleton()->GetSceneGraph()->ReleaseModel(model->m_Name);
+            Scene::GetSingleton()->GetSceneGraph()->ReleaseModel(model);
         }
     }
 }

@@ -82,7 +82,7 @@ void Model::CreateBuffers(SceneGraph* sceneGraph)
 	device->setEventQuery(m_BufferUploadQuery, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
 }
 
-void Model::Update(RE::NiAVObject* object, bool isPlayer)
+void Model::UpdateFlags()
 {
 	if (!(m_Flags & Flags::BuffersUploaded)) {
 		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BufferUploadQuery)) {
@@ -101,6 +101,11 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer)
 			m_BLASBuildCommandList = nullptr;
 		}
 	}
+}
+
+void Model::Update(RE::NiAVObject* object, bool isPlayer)
+{
+	UpdateFlags();
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 

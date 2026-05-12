@@ -31,6 +31,9 @@ class SceneGraph
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 	mutable std::mutex m_ModelMutex;
 
+	eastl::vector<eastl::unique_ptr<Model>> m_ReleasedModels;
+	mutable std::mutex m_ModelReleaseMutex;
+
 	InstanceManager m_Instances;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
@@ -151,7 +154,7 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 
-	void ReleaseModel(const eastl::string& path);
+	void ReleaseModel(const Model* model);
 
 	// Releases an object instance while keeping the model and mesh data intact.
 	// releaseModel is to be used by water and only water.

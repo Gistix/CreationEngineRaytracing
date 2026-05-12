@@ -54,6 +54,8 @@ struct Model
 
 	bool IsReady() const;
 
+	void UpdateFlags();
+
 	static std::string KeySuffix(RE::NiAVObject* root)
 	{
 		return std::format("_{:08X}", reinterpret_cast<uintptr_t>(root));
