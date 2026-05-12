@@ -13,10 +13,10 @@ struct Instance
 	enum State : uint8_t
 	{
 		None = 0,
-		Detached = 1 << 0,
-		FirstPersonHidden = 1 << 1,
+		Detached = 1 << 0, // Cell containing this instance was detached from the engines scenegraph
+		FirstPersonHidden = 1 << 1, // Hidden when the camera goes into first person
 		HiddenModel = 1 << 2,
-		LODHidden = 1 << 3
+		LODHidden = 1 << 3 // Hidden externally by LODReference
 	};
 
 	// Instance form id

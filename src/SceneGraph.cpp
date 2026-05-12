@@ -794,99 +794,35 @@ void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
 	m_TextureManager->ReleaseTexture(texture);
 }
 
+void SceneGraph::ReleaseModel(const eastl::string& path)
+{
+	std::scoped_lock lock(m_ModelMutex);
+	m_Models.erase(path);
+}
+
 void SceneGraph::ReleaseWaterInstance(RE::NiAVObject* node)
 {
 	auto it = m_WaterInstances.find(node);
 	if (it == m_WaterInstances.end())
 		return;
 
-	std::unique_lock releaseLock(m_ReleaseDataMutex);
-
-	auto* instance = it->second;
-	auto* model = instance->model;
-
-	if (instance->model) {
-		auto refCount = instance->model->Release();
-
-		if (refCount <= 0) {
-			std::scoped_lock lock(m_ModelMutex);
-
-			auto modelIt = m_Models.find(model->m_Name);
-
-			if (modelIt != m_Models.end()) {
-				auto renderer = Renderer::GetSingleton();
-
-				// Add to safe-release vector
-				m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
-
-				// Erase from list
-				m_Models.erase(modelIt);
-			}
-		}
-
-		instance->model = nullptr;
-	}
-
 	m_WaterInstances.erase(it);
 
-	// Removes the original instance, all pointers past this point are invalid
-	m_Instances.Remove(instance);
+	// Removes the original instance
+	m_Instances.Remove(InstanceManager::RemoveParams(it->second, true));
 }
 
 void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel)
 {
-	std::unique_lock releaseLock(m_ReleaseDataMutex);
-
-	auto renderer = Renderer::GetSingleton();
-
 	for (auto* instance : instances) {
-		auto* model = instance->model;
-
-		if (model) {
-			auto refCount = model->Release();
-			instance->model = nullptr;
-
-			if (refCount <= 0 && releaseModel) {
-				std::scoped_lock lock(m_ModelMutex);
-
-				auto modelIt = m_Models.find(model->m_Name);
-
-				if (modelIt != m_Models.end()) {
-					m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
-					m_Models.erase(modelIt);
-				}
-			}
-		}
-
-		m_Instances.Remove(instance);
+		m_Instances.Remove(InstanceManager::RemoveParams(instance, releaseModel));
 	}
 }
 
 void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances)
 {
-	auto renderer = Renderer::GetSingleton();
-
 	for (auto* instance : instances) {
-		auto* model = instance->model;
-
-		if (model) {
-			auto refCount = model->Release();
-			instance->model = nullptr;
-
-			if (refCount <= 0) {
-				std::scoped_lock lock(m_ModelMutex);
-
-				auto modelIt = m_Models.find(model->m_Name);
-
-				if (modelIt != m_Models.end()) {
-					m_ReleasedData.emplace_back(renderer->GetFrameIndex(), eastl::move(modelIt->second));
-					m_Models.erase(modelIt);
-				}
-			}
-
-		}
-
-		m_Instances.Remove(instance);
+		m_Instances.Remove(InstanceManager::RemoveParams(instance, true));
 	}
 }
 
@@ -1283,10 +1219,8 @@ void SceneGraph::SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached)
 	it->second.detached = detached;
 }
 
-void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
+void SceneGraph::RunGarbageCollection()
 {
-	m_ReleaseDataMutex.lock();
-
 	// Clear LOD
 	{
 		using namespace std::chrono;
@@ -1314,20 +1248,4 @@ void SceneGraph::RunGarbageCollection(uint64_t frameIndex)
 			}
 		}
 	}
-
-	// Clear Released Data
-	{
-
-		for (auto it = m_ReleasedData.begin(); it != m_ReleasedData.end(); ) {
-			if (it->frameIndex < frameIndex - 1 && it->model->m_LastBLASUpdate < frameIndex - 1) {
-				logger::debug("SceneGraph::RunGarbageCollection - Frame Index {}, Last Update {}, {}", it->frameIndex, it->model->m_LastBLASUpdate, it->model->m_Name);
-				it = m_ReleasedData.erase(it);
-			}
-			else {
-				++it;
-			}
-		}
-	}
-
-	m_ReleaseDataMutex.unlock();
 }

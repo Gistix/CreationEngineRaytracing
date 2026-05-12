@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/InstanceManager.h"
 #include "core/Model.h"
 #include "core/Light.h"
 #include "Core/TextureManager.h"
@@ -26,15 +27,11 @@
 
 class SceneGraph
 {
-	std::shared_mutex m_ReleaseDataMutex;
-
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 	mutable std::mutex m_ModelMutex;
 
-	eastl::vector<ReleasedData> m_ReleasedData;
-
-	VectorStorage<Instance> m_Instances;
+	InstanceManager m_Instances;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
 	// Water
@@ -154,6 +151,8 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 
+	void ReleaseModel(const eastl::string& path);
+
 	// Releases an object instance while keeping the model and mesh data intact.
 	// releaseModel is to be used by water and only water.
 	void ReleaseWaterInstance(RE::NiAVObject* object);
@@ -175,5 +174,5 @@ public:
 
 	void SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached);
 
-	void RunGarbageCollection(uint64_t frameIndex);
+	void RunGarbageCollection();
 };

@@ -13,7 +13,8 @@ struct Model
 		enum Flag
 		{
 			None = 0,
-			BLASBuilt = 1 << 0
+			BuffersUploaded = 1 << 0,
+			BLASBuilt = 1 << 1
 		};
 	};
 
@@ -25,7 +26,8 @@ struct Model
 
 	nvrhi::rt::AccelStructHandle blas;
 	
-	nvrhi::CommandListHandle m_BufferCopyCommandList;
+	nvrhi::CommandListHandle m_BufferUploadCommandList;
+	nvrhi::EventQueryHandle m_BufferUploadQuery;
 	uint64_t m_SubmittedCopyInstance = 0;
 
 	nvrhi::CommandListHandle m_BLASBuildCommandList;
@@ -49,6 +51,8 @@ struct Model
 	void CreateBuffers(SceneGraph* sceneGraph);
 
 	void BuildBLAS();
+
+	bool IsReady() const;
 
 	static std::string KeySuffix(RE::NiAVObject* root)
 	{

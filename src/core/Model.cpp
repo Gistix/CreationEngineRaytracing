@@ -66,25 +66,36 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 void Model::CreateBuffers(SceneGraph* sceneGraph)
 {
 	auto* renderer = Renderer::GetSingleton();
-	m_BufferCopyCommandList = renderer->GetCopyCommandList();
-	m_BufferCopyCommandList->open();
+	auto device = renderer->GetDevice();
+
+	m_BufferUploadCommandList = renderer->GetCopyCommandList();
+	m_BufferUploadCommandList->open();
 
 	for (auto& mesh : meshes) {
-		mesh->CreateBuffers(sceneGraph, m_BufferCopyCommandList);
+		mesh->CreateBuffers(sceneGraph, m_BufferUploadCommandList);
 	}
 
-	m_BufferCopyCommandList->close();
-	m_SubmittedCopyInstance = renderer->GetDevice()->executeCommandList(m_BufferCopyCommandList, nvrhi::CommandQueue::Copy);
+	m_BufferUploadCommandList->close();
+	m_SubmittedCopyInstance = device->executeCommandList(m_BufferUploadCommandList, nvrhi::CommandQueue::Copy);
+
+	m_BufferUploadQuery = device->createEventQuery();
+	device->setEventQuery(m_BufferUploadQuery, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
 }
 
 void Model::Update(RE::NiAVObject* object, bool isPlayer)
 {
+	if (!(m_Flags & Flags::BuffersUploaded)) {
+		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BufferUploadQuery)) {
+			m_Flags |= Flags::BuffersUploaded;
+
+			m_BufferUploadCommandList->Release();
+			m_BufferUploadCommandList = nullptr;
+		}
+	}
+
 	if (!(m_Flags & Flags::BLASBuilt)) {
 		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BLASBuildQuery)) {
 			m_Flags |= Flags::BLASBuilt;
-
-			m_BufferCopyCommandList->Release();
-			m_BufferCopyCommandList = nullptr;
 
 			m_BLASBuildCommandList->Release();
 			m_BLASBuildCommandList = nullptr;
@@ -149,16 +160,25 @@ void Model::BuildBLAS()
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, blas, blasDesc);
 
-	m_BLASBuildCommandList->compactBottomLevelAccelStructs();
-
 	m_BLASBuildCommandList->close();
 	device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
-	auto computeSubmittedInstance = device->executeCommandList(m_BLASBuildCommandList, nvrhi::CommandQueue::Compute);
+	auto submittedComputeInstance = device->executeCommandList(m_BLASBuildCommandList, nvrhi::CommandQueue::Compute);
 
 	m_BLASBuildQuery = device->createEventQuery();
-	device->setEventQuery(m_BLASBuildQuery, nvrhi::CommandQueue::Compute, computeSubmittedInstance);
+	device->setEventQuery(m_BLASBuildQuery, nvrhi::CommandQueue::Compute, submittedComputeInstance);
 
 	m_LastBLASUpdate = renderer->GetFrameIndex();
+}
+
+bool Model::IsReady() const
+{
+	if (!(m_Flags & Model::Flags::BuffersUploaded))
+		return false;
+
+	if (!(m_Flags & Model::Flags::BLASBuilt))
+		return false;
+
+	return true;
 }
 
 void Model::UpdateBLAS(nvrhi::ICommandList* commandList)

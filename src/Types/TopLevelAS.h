@@ -36,7 +36,7 @@ public:
 		eastl::erase(m_Listeners, listener);
 	}
 
-	void Update(nvrhi::ICommandList* commandList, const VectorStorage<Instance>& instances)
+	void Update(nvrhi::ICommandList* commandList, const InstanceManager& instances)
 	{
 		m_InstanceDescs.clear();
 		m_InstanceDescs.reserve(instances.Size());

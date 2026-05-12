@@ -30,7 +30,7 @@ bool Instance::IsHidden() const
 
 bool Instance::SkipAS() const
 {
-	if (!(model->m_Flags & Model::Flags::BLASBuilt))
+	if (!model->IsReady())
 		return true;
 
 	bool isPTActive = Scene::GetSingleton()->IsPathTracingActive();
