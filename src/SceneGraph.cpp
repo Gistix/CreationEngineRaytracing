@@ -1256,6 +1256,17 @@ void SceneGraph::RunGarbageCollection()
 				++it;
 			}
 		}
+
+		// Tree LOD
+		for (auto it = m_TreeLODInstances.begin(); it != m_TreeLODInstances.end(); ) {
+			if (it->second.detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
+				ReleaseInstances(it->second.instances);
+				it = m_TreeLODInstances.erase(it);
+			}
+			else {
+				++it;
+			}
+		}
 	}
 
 	// Clear Models
