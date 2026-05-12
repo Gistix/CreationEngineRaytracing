@@ -1263,17 +1263,13 @@ void SceneGraph::RunGarbageCollection()
 		std::scoped_lock modelLock(m_ModelReleaseMutex);
 
 		for (auto it = m_ReleasedModels.begin(); it != m_ReleasedModels.end(); ) {
-			bool release = true;
-
 			auto* model = it->get();
 
 			model->UpdateFlags();
 
-			if (!(model->m_Flags & Model::Flags::BuffersUploaded))
-				release = false;
-
-			if (!(model->m_Flags & Model::Flags::BLASBuilt))
-				release = false;
+			const bool release =
+				(model->m_Flags & Model::Flags::BuffersUploaded) &&
+				(model->m_Flags & Model::Flags::BLASBuilt);
 
 			if (release)			
 				it = m_ReleasedModels.erase(it);
