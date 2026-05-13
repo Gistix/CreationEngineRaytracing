@@ -573,23 +573,17 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
         float reflectionColorW = material.Color2.a;
         
-        // Hardcoded for now, but so is the original (in the executable)
-        const float2 flowmapDimensions = float2(320, 320);
+        const float2 flowmapDimensions = objectUV.xx;
         float2 uvShift = 1 / (128 * flowmapDimensions);
         
         float2 normalMul = 0.5 + -(-0.5 + abs(frac(flowCoord.xy * (64 * flowmapDimensions)) * 2 - 1));
         
         Texture2D normals04Texture = Textures[NonUniformResourceIndex(material.Texture3)];
         
-        float2 normalCoord1 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, uvShift, 9.92, 0, reflectionColorW);
-        float2 normalCoord2 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, reflectionColorW);
-        float2 normalCoord3 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, float2(0, 0), 8, 0, reflectionColorW);
-        float2 normalCoord4 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, float2(uvShift.x, 0), 8.48, 0.62, reflectionColorW);
-        
-        float3 normals1 = normals04Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz;
-        float3 normals2 = normals04Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz;
-        float3 normals3 = normals04Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz;
-        float3 normals4 = normals04Texture.SampleLevel(DefaultSampler, normalCoord4, mipLevel).xyz;
+        float3 normals1 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, uvShift, 9.92, 0, reflectionColorW, mipLevel);
+        float3 normals2 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, reflectionColorW, mipLevel);
+        float3 normals3 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, float2(0, 0), 8, 0, reflectionColorW, mipLevel);
+        float3 normals4 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, float2(uvShift.x, 0), 8.48, 0.62, reflectionColorW, mipLevel);
         
         float2 flowmapNormalWeighted =
 		    normalMul.y * (normalMul.x * normals3.xy + (1 - normalMul.x) * normals4.xy) +

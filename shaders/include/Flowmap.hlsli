@@ -86,12 +86,14 @@ FlowmapData GetFlowmapDataWorldSpace(FlowmapData textureSpaceData)
 	return data;
 }
 
-float2 GetFlowmappedUV(
-	Texture2D<float4> flowMapTex, SamplerState flowMapSampler,
-	float4 flowCoord, float2 uvShift, float multiplier, float offset, float reflectionColorW)
+float3 GetFlowmapNormal(
+	Texture2D<float4> flowMapNormalsTex, Texture2D<float4> flowMapTex, SamplerState defaultSampler,
+	float4 flowCoord, float2 uvShift, float multiplier, float offset, float reflectionColorW, float mipLevel)
 {
-    FlowmapData flowData = GetFlowmapDataUV(flowMapTex, flowMapSampler, flowCoord, uvShift);
-    return offset + (flowData.flowVector - float2(multiplier * ((0.001 * reflectionColorW) * flowData.color.w), 0));
+    FlowmapData flowData = GetFlowmapDataUV(flowMapTex, defaultSampler, flowCoord, uvShift);
+    float2 uv = offset + (flowData.flowVector - float2(multiplier * ((0.001 * reflectionColorW) * flowData.color.w), 0));
+
+    return float3(flowMapNormalsTex.SampleLevel(defaultSampler, uv, mipLevel).xy, flowData.color.z);
 }
 
 #endif // FLOWMAP_HLSLI

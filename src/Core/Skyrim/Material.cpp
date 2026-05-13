@@ -11,9 +11,17 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	int32_t flowMapSize = *scene->g_FlowMapSize;
 
 	// ObjectUV
-	Vectors[2].y = static_cast<float>(flowMapSize);
-	Vectors[2].z = scene->g_DisplacementMeshFlowCellOffset->x,
-	Vectors[2].w = 1.0f - scene->g_DisplacementMeshFlowCellOffset->y;
+	if (waterShaderFlags.all(WaterShaderFlags::kVertexUV)) {
+		Vectors[2].y = 1.0f;
+	}
+	else if (waterShaderFlags.all(WaterShaderFlags::kEnableFlowmap)) {
+		Vectors[2].y = static_cast<float>(flowMapSize);
+		Vectors[2].z = scene->g_DisplacementMeshFlowCellOffset->x,
+		Vectors[2].w = 1.0f - scene->g_DisplacementMeshFlowCellOffset->y;
+	}
+	else {
+		Vectors[2].y = 0.0f;
+	}
 
 	auto* bsWaterProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 	if (!bsWaterProperty)
@@ -43,6 +51,15 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	};
 
 	Colors[2].w = *scene->g_FlowUnkown;
+
+	if (waterShaderFlags.all(WaterShaderFlags::kEnableFlowmap)) {
+		auto* defaultNormal = RE::BSGraphics::State::GetSingleton()->GetRuntimeData().defaultTextureNormalMap.get();
+
+		if (bsWaterMaterial->normalTexture4.get() && bsWaterMaterial->normalTexture4.get() != defaultNormal) {
+			auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureIndex();
+			Textures[3] = Mesh::GetTexture(bsWaterMaterial->normalTexture4, normalTexture);
+		}
+	}
 }
 
 MaterialData Material::GetData(const float3 externalEmittance, RE::BSShaderProperty* shaderProperty)
