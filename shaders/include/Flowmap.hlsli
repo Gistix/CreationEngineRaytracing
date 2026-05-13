@@ -86,4 +86,12 @@ FlowmapData GetFlowmapDataWorldSpace(FlowmapData textureSpaceData)
 	return data;
 }
 
+float2 GetFlowmappedUV(
+	Texture2D<float4> flowMapTex, SamplerState flowMapSampler,
+	float4 flowCoord, float2 uvShift, float multiplier, float offset, float reflectionColorW)
+{
+    FlowmapData flowData = GetFlowmapDataUV(flowMapTex, flowMapSampler, flowCoord, uvShift);
+    return offset + (flowData.flowVector - float2(multiplier * ((0.001 * reflectionColorW) * flowData.color.w), 0));
+}
+
 #endif // FLOWMAP_HLSLI

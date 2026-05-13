@@ -41,6 +41,8 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 		static_cast<float>(bsWaterProperty->cellX),
 		static_cast<float>(-bsWaterProperty->cellY)
 	};
+
+	Colors[2].w = *scene->g_FlowUnkown;
 }
 
 MaterialData Material::GetData(const float3 externalEmittance, RE::BSShaderProperty* shaderProperty)

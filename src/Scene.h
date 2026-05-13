@@ -30,14 +30,15 @@ struct Scene
 	ID3D12Resource* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
 
-	ID3D12Resource* m_FlowMapResource = nullptr;
-	nvrhi::TextureHandle m_FlowMapTexture;
+	ID3D12Resource* m_WaterFlowMapResource = nullptr;
+	nvrhi::TextureHandle m_WaterFlowMapTexture;
 
 	int32_t* g_FlowMapSize = nullptr;
-	RE::NiPointer<RE::NiSourceTexture>* g_FlowMapSourceTex = nullptr;
 	float4* g_DisplacementCellTexCoordOffset = nullptr;
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
 	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
+
+	float* g_FlowUnkown = nullptr;
 
 	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasTex = nullptr;
 	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasNormalTex = nullptr;
@@ -77,7 +78,7 @@ struct Scene
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
 
-	nvrhi::ITexture* GetFlowMapTexture();
+	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 
 	RenderNode* GetGlobalIllumination();
 
@@ -104,6 +105,8 @@ struct Scene
 	void UpdateFeatureData(void* data, uint32_t size);
 
 	void SetSkyHemisphere(ID3D12Resource* skyHemi);
+
+	void SetWaterFlowMap(ID3D12Resource* skyHemi);
 
 	void UpdateSettings(Settings settings);
 };

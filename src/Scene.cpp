@@ -195,68 +195,6 @@ RenderNode* Scene::GetPathTracing()
 	return m_PathTracing.get();
 }
 
-nvrhi::ITexture* Scene::GetFlowMapTexture()
-{
-	if (!g_FlowMapSourceTex->get())
-		return Renderer::GetSingleton()->GetBlackTexture();
-
-	if (!m_FlowMapTexture) {		
-		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(g_FlowMapSourceTex->get()->rendererTexture->texture);
-
-		winrt::com_ptr<IDXGIResource> dxgiResource;
-		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
-
-		if (FAILED(hr)) {
-			logger::error("Scene::GetFlowMapTexture - Failed to query interface.");
-			return nullptr;
-		}
-
-		HANDLE sharedHandle = nullptr;
-		hr = dxgiResource->GetSharedHandle(&sharedHandle);
-
-		if (FAILED(hr) || !sharedHandle) {
-			D3D11_TEXTURE2D_DESC desc;
-			d3d11Texture->GetDesc(&desc);
-
-			logger::debug("Scene::GetFlowMapTexture - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
-			return nullptr;
-		}
-
-		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
-
-		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&m_FlowMapResource));
-
-		if (FAILED(hr)) {
-			logger::error("Scene::GetFlowMapTexture - Failed to open shared handle.");
-			return nullptr;
-		}
-
-		if (!m_FlowMapResource) {
-			logger::error("Scene::GetFlowMapTexture - Failed to adquire DX12 texture.");
-			return nullptr;
-		}
-
-		D3D12_RESOURCE_DESC nativeTexDesc = m_FlowMapResource->GetDesc();
-		auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
-
-		if (formatIt == Renderer::GetFormatMapping().end()) {
-			logger::error("Scene::GetFlowMapTexture - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
-			return nullptr;
-		}
-
-		auto& textureDesc = nvrhi::TextureDesc()
-			.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
-			.setHeight(nativeTexDesc.Height)
-			.setFormat(formatIt->second)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
-			.setDebugName("FlowMap Texture");
-
-		m_FlowMapTexture = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(m_FlowMapResource), textureDesc);
-	}
-
-	return m_FlowMapTexture;
-}
-
 RenderNode* Scene::GetModeNode(Mode mode)
 {
 	if (mode == Mode::GlobalIllumination)
@@ -526,9 +464,34 @@ void Scene::SetSkyHemisphere(ID3D12Resource* skyHemi)
 	desc.dimension = nvrhi::TextureDimension::Texture2D;
 	desc.initialState = nvrhi::ResourceStates::ShaderResource;
 	desc.keepInitialState = true;
-	desc.debugName = "Copy Target Texture";
+	desc.debugName = "NVRHI Sky Hemisphere Texture";
 
 	m_SkyHemisphereTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skyHemi, desc);
+}
+
+void Scene::SetWaterFlowMap(ID3D12Resource* waterFlowMap)
+{
+	if (waterFlowMap == m_WaterFlowMapResource)
+		return;
+
+	m_WaterFlowMapResource = waterFlowMap;
+
+	auto* renderer = Renderer::GetSingleton();
+
+	auto targetDesc = waterFlowMap->GetDesc();
+
+	nvrhi::TextureDesc desc{};
+	desc.width = static_cast<uint32_t>(targetDesc.Width);
+	desc.height = targetDesc.Height;
+	desc.format = renderer->GetFormat(targetDesc.Format);
+	desc.mipLevels = targetDesc.MipLevels;
+	desc.arraySize = targetDesc.DepthOrArraySize;
+	desc.dimension = nvrhi::TextureDimension::Texture2D;
+	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.keepInitialState = true;
+	desc.debugName = "NVRHI Water FlowMap Texture";
+
+	m_WaterFlowMapTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, waterFlowMap, desc);
 }
 
 void Scene::UpdateSettings(Settings settings)
