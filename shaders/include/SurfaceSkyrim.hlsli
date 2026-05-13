@@ -583,13 +583,13 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         
         float2 normalCoord1 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, uvShift, 9.92, 0, reflectionColorW);
         float2 normalCoord2 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, reflectionColorW);
-        float2 normalCoord3 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, 0.0.xx, 8, 0, reflectionColorW);
+        float2 normalCoord3 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, float2(0, 0), 8, 0, reflectionColorW);
         float2 normalCoord4 = GetFlowmappedUV(WaterFlowMap, DefaultSampler, flowCoord, float2(uvShift.x, 0), 8.48, 0.62, reflectionColorW);
         
-        float3 normals1 = normals04Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 - 1.0;
-        float3 normals2 = normals04Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
-        float3 normals3 = normals04Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
-        float3 normals4 = normals04Texture.SampleLevel(DefaultSampler, normalCoord4, mipLevel).xyz * 2.0 - 1.0;
+        float3 normals1 = normals04Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz;
+        float3 normals2 = normals04Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz;
+        float3 normals3 = normals04Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz;
+        float3 normals4 = normals04Texture.SampleLevel(DefaultSampler, normalCoord4, mipLevel).xyz;
         
         float2 flowmapNormalWeighted =
 		    normalMul.y * (normalMul.x * normals3.xy + (1 - normalMul.x) * normals4.xy) +

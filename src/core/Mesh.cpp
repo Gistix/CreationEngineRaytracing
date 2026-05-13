@@ -811,6 +811,16 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 				textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
 				textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
 				textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
+
+				auto* defaultNormal = RE::BSGraphics::State::GetSingleton()->GetRuntimeData().defaultTextureNormalMap.get();
+				
+				logger::info("EnableFlowmap: {}", waterShaderFlags.all(Material::WaterShaderFlags::kEnableFlowmap));
+
+				logger::info("Normal1: {}, Normal2: {}, Normal3: {}, Normal4: {}", 
+					waterMaterial->normalTexture1.get() != defaultNormal,
+					waterMaterial->normalTexture2.get() != defaultNormal,
+					waterMaterial->normalTexture3.get() != defaultNormal,
+					waterMaterial->normalTexture4.get() != defaultNormal);
 			}
 		}
 		else if (auto* distantTreeProp = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty)) {
