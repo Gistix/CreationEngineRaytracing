@@ -74,5 +74,6 @@ TextureCube<float4>                         CubeTextures[]              : regist
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);
+SamplerState                                PointWrapSampler            : register(s2);
 
 #endif // REGISTERS_HLSLI

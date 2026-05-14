@@ -580,10 +580,10 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         
         Texture2D normals04Texture = Textures[NonUniformResourceIndex(material.Texture3)];
         
-        float3 normals1 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, uvShift, 9.92, 0, reflectionColorW, mipLevel);
-        float3 normals2 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, reflectionColorW, mipLevel);
-        float3 normals3 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, float2(0, 0), 8, 0, reflectionColorW, mipLevel);
-        float3 normals4 = GetFlowmapNormal(normals04Texture, WaterFlowMap, DefaultSampler, flowCoord, float2(uvShift.x, 0), 8.48, 0.62, reflectionColorW, mipLevel);
+        float3 normals1 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, uvShift, 9.92, 0, reflectionColorW, mipLevel);
+        float3 normals2 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, reflectionColorW, mipLevel);
+        float3 normals3 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(0, 0), 8, 0, reflectionColorW, mipLevel);
+        float3 normals4 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(uvShift.x, 0), 8.48, 0.62, reflectionColorW, mipLevel);
         
         float2 flowmapNormalWeighted =
 		    normalMul.y * (normalMul.x * normals3.xy + (1 - normalMul.x) * normals4.xy) +

@@ -68,16 +68,6 @@ FlowmapData GetFlowmapDataUV(Texture2D<float4> flowMapTex, SamplerState flowMapS
 	return flowTexData;
 }
 
-/**
- * Generates flowmap-based normal (no parallax - flowmap normals are not parallax-shifted)
- * Uses mip clamping to preserve detail at distance and prevent over-blurring
- */
-/*float3 GetFlowmapNormal(FlowmapData flowUVData, Texture2D<float4> flowMapNormalsTex, SamplerState flowMapNormalsSampler, float multiplier, float offset)
-{
-	float2 uv = offset + (flowUVData.flowVector - float2(multiplier * ((0.001 * ReflectionColor.w) * flowUVData.color.w), 0));
-	return float3(flowMapNormalsTex.SampleBias(flowMapNormalsSampler, uv, SharedData::MipBias).xy, flowUVData.color.z);
-}*/
-
 FlowmapData GetFlowmapDataWorldSpace(FlowmapData textureSpaceData)
 {
 	FlowmapData data = textureSpaceData;
@@ -86,11 +76,15 @@ FlowmapData GetFlowmapDataWorldSpace(FlowmapData textureSpaceData)
 	return data;
 }
 
-float3 GetFlowmapNormal(
-	Texture2D<float4> flowMapNormalsTex, Texture2D<float4> flowMapTex, SamplerState defaultSampler,
+/**
+ * Generates flowmap-based normal (no parallax - flowmap normals are not parallax-shifted)
+ * No mip clamping
+ */
+float3 GetFlowmapNormal(Texture2D<float4> flowMapTex, SamplerState pointSampler,
+	Texture2D<float4> flowMapNormalsTex, SamplerState defaultSampler,
 	float4 flowCoord, float2 uvShift, float multiplier, float offset, float reflectionColorW, float mipLevel)
 {
-    FlowmapData flowData = GetFlowmapDataUV(flowMapTex, defaultSampler, flowCoord, uvShift);
+    FlowmapData flowData = GetFlowmapDataUV(flowMapTex, pointSampler, flowCoord, uvShift);
     float2 uv = offset + (flowData.flowVector - float2(multiplier * ((0.001 * reflectionColorW) * flowData.color.w), 0));
 
     return float3(flowMapNormalsTex.SampleLevel(defaultSampler, uv, mipLevel).xy, flowData.color.z);

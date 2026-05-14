@@ -39,6 +39,7 @@ namespace Pass::Raytracing::Common
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 		nvrhi::SamplerHandle m_LinearClampSampler;
+		nvrhi::SamplerHandle m_PointWrapSampler;
 
 		nvrhi::BufferHandle m_HashEntriesBuffer;
 		nvrhi::BufferHandle m_LockBuffer;

@@ -8,15 +8,22 @@ namespace Pass
 	PathTracing::PathTracing(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc)
 		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
 	{
-		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
+		auto device = renderer->GetDevice();
+
+		m_LinearWrapSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_LinearClampSampler = GetRenderer()->GetDevice()->createSampler(
+		m_LinearClampSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
+
+		m_PointWrapSampler = device->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
+			.setAllFilters(false));
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
@@ -58,6 +65,7 @@ namespace Pass
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
+			nvrhi::BindingLayoutItem::Sampler(2),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -252,6 +260,7 @@ namespace Pass
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
+			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),

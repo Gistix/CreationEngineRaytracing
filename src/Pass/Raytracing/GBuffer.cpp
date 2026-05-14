@@ -7,15 +7,22 @@ namespace Pass::Raytracing
 	GBuffer::GBuffer(Renderer* renderer, SceneTLAS* sceneTLAS)
 		: RenderPass(renderer), m_SceneTLAS(sceneTLAS)
 	{
-		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
+		auto device = GetRenderer()->GetDevice();
+
+		m_LinearWrapSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_LinearClampSampler = GetRenderer()->GetDevice()->createSampler(
+		m_LinearClampSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
+
+		m_PointWrapSampler = device->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
+			.setAllFilters(false));
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -66,6 +73,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
+			nvrhi::BindingLayoutItem::Sampler(2),
 			nvrhi::BindingLayoutItem::Texture_UAV(0),
 			nvrhi::BindingLayoutItem::Texture_UAV(1),
 			nvrhi::BindingLayoutItem::Texture_UAV(2),
@@ -219,6 +227,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearClampSampler),
+			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, m_ViewDepth),
 			nvrhi::BindingSetItem::Texture_UAV(1, gBufferOutput->motionVectors),
 			nvrhi::BindingSetItem::Texture_UAV(2, gBufferOutput->albedo),

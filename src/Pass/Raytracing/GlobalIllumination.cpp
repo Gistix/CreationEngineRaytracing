@@ -8,15 +8,22 @@ namespace Pass::Raytracing
 	GlobalIllumination::GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, Common::SHaRCGI* sharc)
 		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
 	{
-		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
+		auto device = renderer->GetDevice();
+
+		m_LinearWrapSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_LinearClampSampler = GetRenderer()->GetDevice()->createSampler(
+		m_LinearClampSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
+
+		m_PointWrapSampler = device->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
+			.setAllFilters(false));
 
 		m_Defines = Util::Shader::GetGlobalIlluminationDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
@@ -48,6 +55,7 @@ namespace Pass::Raytracing
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
+			nvrhi::BindingLayoutItem::Sampler(2),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -215,6 +223,7 @@ namespace Pass::Raytracing
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
+			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
