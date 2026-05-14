@@ -872,8 +872,8 @@ namespace Hooks
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
 
-		REL::Relocation<float*> g_FlowScroll{ REL::RelocationID(513213, 390953) };
-		scene->g_FlowScroll = g_FlowScroll.get();
+		REL::Relocation<float*> g_Time{ REL::RelocationID(513213, 390953) };
+		scene->g_Time = g_Time.get();
 		
 		scene->g_TreeLODAtlasTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(528222, 415172).address());
 

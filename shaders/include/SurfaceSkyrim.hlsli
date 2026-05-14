@@ -572,7 +572,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         }
 
         // ReflectionColor.w
-        float flowScroll = material.FlowScroll();
+        const float flowScroll = Camera.Time;
         
         const float2 flowmapDimensions = objectUV.xx;
         float2 uvShift = 1 / (128 * flowmapDimensions);

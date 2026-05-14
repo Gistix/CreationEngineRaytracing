@@ -358,6 +358,10 @@ void Scene::UpdateCameraData() const
 
 	m_CameraData->PositionPrev = Util::Math::Float3(runtimeData.previousPosAdjust.getEye());
 
+	// Used by water FlowMap
+	if (g_Time)
+		m_CameraData->Time = *g_Time;
+
 	// Used by raster gbuffer
 	m_CameraData->ViewProj = cameraData.viewProjMatrixUnjittered;
 	m_CameraData->PrevViewProj = cameraData.previousViewProjMatrixUnjittered;

@@ -41,9 +41,6 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 			static_cast<float>(-bsWaterProperty->cellY)
 		};
 
-		if (scene->g_FlowScroll)
-			Colors[2].w = *scene->g_FlowScroll;
-
 		auto* defaultNormal = RE::BSGraphics::State::GetSingleton()->GetRuntimeData().defaultTextureNormalMap.get();
 
 		if (bsWaterMaterial->normalTexture4.get() && bsWaterMaterial->normalTexture4.get() != defaultNormal) {

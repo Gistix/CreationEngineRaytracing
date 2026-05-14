@@ -38,7 +38,8 @@ struct Scene
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
 	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
 
-	float* g_FlowScroll = nullptr;
+	// High Resolution time, updated every frame
+	float* g_Time = nullptr;
 
 	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasTex = nullptr;
 	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasNormalTex = nullptr;

@@ -789,7 +789,7 @@ void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRu
 					waterMaterial->reflectionColor.red,
 					waterMaterial->reflectionColor.green,
 					waterMaterial->reflectionColor.blue,
-					waterMaterial->reflectionColor.alpha // Replaced by unknown variable
+					waterMaterial->reflectionColor.alpha
 				};
 
 				// NormalsAmplitude
