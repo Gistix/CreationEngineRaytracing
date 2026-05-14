@@ -226,7 +226,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
-			nvrhi::BindingSetItem::Sampler(0, m_LinearClampSampler),
+			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
 			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),
 			nvrhi::BindingSetItem::Texture_UAV(0, m_ViewDepth),
 			nvrhi::BindingSetItem::Texture_UAV(1, gBufferOutput->motionVectors),
