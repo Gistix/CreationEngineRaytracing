@@ -82,10 +82,10 @@ FlowmapData GetFlowmapDataWorldSpace(FlowmapData textureSpaceData)
  */
 float3 GetFlowmapNormal(Texture2D<float4> flowMapTex, SamplerState pointSampler,
 	Texture2D<float4> flowMapNormalsTex, SamplerState defaultSampler,
-	float4 flowCoord, float2 uvShift, float multiplier, float offset, float reflectionColorW, float mipLevel)
+	float4 flowCoord, float2 uvShift, float multiplier, float offset, float scroll, float mipLevel)
 {
     FlowmapData flowData = GetFlowmapDataUV(flowMapTex, pointSampler, flowCoord, uvShift);
-    float2 uv = offset + (flowData.flowVector - float2(multiplier * ((0.001 * reflectionColorW) * flowData.color.w), 0));
+    float2 uv = offset + (flowData.flowVector - float2(multiplier * ((0.001f * scroll) * flowData.color.w), 0));
 
     return float3(flowMapNormalsTex.SampleLevel(defaultSampler, uv, mipLevel).xy, flowData.color.z);
 }

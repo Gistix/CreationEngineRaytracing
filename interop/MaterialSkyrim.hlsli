@@ -242,6 +242,12 @@ INTEROP_DATA_STRUCT(Material, 4)
 		return Texture19;
 	}
 
+	// Water
+    half FlowScroll()
+    {
+        return Color2.w;
+    }
+	
 	// True PBR
     half RoughnessScale()
     {

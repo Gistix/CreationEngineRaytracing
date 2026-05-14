@@ -8,6 +8,14 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 {
 	auto* scene = Scene::GetSingleton();
 
+	auto* bsWaterProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
+	if (!bsWaterProperty)
+		return;
+
+	auto* bsWaterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(bsWaterProperty->material);
+	if (!bsWaterMaterial)
+		return;
+
 	int32_t flowMapSize = *scene->g_FlowMapSize;
 
 	// ObjectUV
@@ -23,42 +31,37 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 		Vectors[2].y = 0.0f;
 	}
 
-	auto* bsWaterProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
-	if (!bsWaterProperty)
-		return;
-
-	auto* bsWaterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(bsWaterProperty->material);
-	if (!bsWaterMaterial)
-		return;
-
-	// NormalsScroll0
-	Vectors[0].x = bsWaterMaterial->normalScroll1.x;
-	Vectors[0].y = bsWaterMaterial->normalScroll1.y;
-
-	Vectors[0].z = bsWaterMaterial->normalScroll2.x;
-	Vectors[0].w = bsWaterMaterial->normalScroll2.y;
-
-	// NormalsScroll1
-	Vectors[1].x = bsWaterMaterial->normalScroll3.x;
-	Vectors[1].y = bsWaterMaterial->normalScroll3.y;
-
-	// CellTexCoordOffset 
-	Vectors[3] = {
-		static_cast<float>(bsWaterProperty->flowX),
-		static_cast<float>(flowMapSize - bsWaterProperty->flowY - 1),
-		static_cast<float>(bsWaterProperty->cellX),
-		static_cast<float>(-bsWaterProperty->cellY)
-	};
-
-	Colors[2].w = *scene->g_FlowUnkown;
 
 	if (waterShaderFlags.all(WaterShaderFlags::kEnableFlowmap)) {
+		// CellTexCoordOffset 
+		Vectors[3] = {
+			static_cast<float>(bsWaterProperty->flowX),
+			static_cast<float>(flowMapSize - bsWaterProperty->flowY - 1),
+			static_cast<float>(bsWaterProperty->cellX),
+			static_cast<float>(-bsWaterProperty->cellY)
+		};
+
+		if (scene->g_FlowScroll)
+			Colors[2].w = *scene->g_FlowScroll;
+
 		auto* defaultNormal = RE::BSGraphics::State::GetSingleton()->GetRuntimeData().defaultTextureNormalMap.get();
 
 		if (bsWaterMaterial->normalTexture4.get() && bsWaterMaterial->normalTexture4.get() != defaultNormal) {
 			auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureIndex();
 			Textures[3] = Mesh::GetTexture(bsWaterMaterial->normalTexture4, normalTexture);
 		}
+	}
+	else {
+		// NormalsScroll0
+		Vectors[0].x = bsWaterMaterial->normalScroll1.x;
+		Vectors[0].y = bsWaterMaterial->normalScroll1.y;
+
+		Vectors[0].z = bsWaterMaterial->normalScroll2.x;
+		Vectors[0].w = bsWaterMaterial->normalScroll2.y;
+
+		// NormalsScroll1
+		Vectors[1].x = bsWaterMaterial->normalScroll3.x;
+		Vectors[1].y = bsWaterMaterial->normalScroll3.y;
 	}
 }
 
