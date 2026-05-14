@@ -65,6 +65,12 @@ void SetSkyHemisphere(ID3D12Resource* skyHemi)
 	scene->SetSkyHemisphere(skyHemi);
 }
 
+void SetWaterFlowMap(ID3D12Resource* waterFlowMap)
+{
+	auto* scene = Scene::GetSingleton();
+	scene->SetWaterFlowMap(waterFlowMap);
+}
+
 void GetPassTimings(eastl::vector<PassTiming>& passTimings)
 {
 	passTimings = Renderer::GetSingleton()->GetPassTimings();

@@ -14,7 +14,7 @@ INTEROP_STRUCT(CameraData, 16)
     uint2 ScreenSize;
     uint2 RenderSize;
     float3 PositionPrev;
-    uint Pad0;
+    float Time;
     float4x4 ViewProj;
     float4x4 PrevViewProj;
     float4x4 PrevViewInverse;

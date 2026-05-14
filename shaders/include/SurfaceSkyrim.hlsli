@@ -515,7 +515,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.IOR = 1.33f;
  
     const bool hasFlowMap = (material.ShaderFlags & WaterShaderFlags::kEnableFlowmap) != 0;
-    const bool hasBlendNormals = (material.ShaderFlags & WaterShaderFlags::kBlendNormals) != 0;
+    const bool hasBlendNormals = true; // Should come from WaterShaderFlags::kBlendNormals but it is always false for some reason
     const bool hasNormalTexcoord = (material.ShaderFlags & WaterShaderFlags::kVertexUV) != 0;
     
     const bool hasWading = false;
@@ -552,10 +552,6 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         scrollAdjust3 = surface.Position.xy / normalsScale.zz;        
     }
 
-    float2 normalCoord1;
-    float2 normalCoord2;
-    float2 normalCoord3;    
-     
     if (hasFlowMap)
     {
         float4 flowCoord = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -574,48 +570,65 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
             flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
         }
-        
-        float reflectionColorW = 1.0f;
-        
-        FlowmapData flowData1 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll1);         
-        normalCoord1 = (flowData1.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData1.color.w), 0)) + scrollAdjust1;
-  
-        FlowmapData flowData2 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll2);         
-        normalCoord2 = (flowData2.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData2.color.w), 0)) + scrollAdjust2;
-        
-        FlowmapData flowData3 = GetFlowmapDataUV(WaterFlowMap, DefaultSampler, flowCoord, normalScroll3);         
-        normalCoord3 = (flowData3.flowVector - float2(8 * ((0.001 * reflectionColorW) * flowData3.color.w), 0)) + scrollAdjust3;       
-    } else
-    {
-        normalCoord1 = normalScroll1 + scrollAdjust1;
-        normalCoord2 = normalScroll2 + scrollAdjust2;
-        normalCoord3 = normalScroll3 + scrollAdjust3;
-    }
-    
-    Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
-    float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 + float3(-1, -1, -2);    
-    
-    if ((hasFlowMap && hasBlendNormals) || !hasFlowMap)
-    {             
-        Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
-        Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
-    
-        float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
-        float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
 
-        surface.Normal = normalize(
-            float3(0, 0, 1) +
-            material.Scalar0 * normals1 +
-            material.Scalar1 * normals2 +
-            material.Scalar2 * normals3
-        );        
+        // ReflectionColor.w
+        const float flowScroll = Camera.Time;
+        
+        const float2 flowmapDimensions = objectUV.xx;
+        float2 uvShift = 1 / (128 * flowmapDimensions);
+        
+        float2 normalMul = 0.5 + -(-0.5 + abs(frac(flowCoord.xy * (64 * flowmapDimensions)) * 2 - 1));
+        
+        Texture2D normals04Texture = Textures[NonUniformResourceIndex(material.Texture3)];
+        
+        float3 normals1 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, uvShift, 9.92, 0, flowScroll, mipLevel);
+        float3 normals2 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, flowScroll, mipLevel);
+        float3 normals3 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(0, 0), 8, 0, flowScroll, mipLevel);
+        float3 normals4 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(uvShift.x, 0), 8.48, 0.62, flowScroll, mipLevel);
+        
+        float2 flowmapNormalWeighted =
+		    normalMul.y * (normalMul.x * normals3.xy + (1 - normalMul.x) * normals4.xy) +
+		    (1 - normalMul.y) *
+			    (normalMul.x * normals2.xy + (1 - normalMul.x) * normals1.xy);
+        
+        float2 flowmapDenominator = sqrt(normalMul * normalMul + (1 - normalMul) * (1 - normalMul));
+        
+        float3 flowmapNormal = float3(((-0.5 + flowmapNormalWeighted) / (flowmapDenominator.x * flowmapDenominator.y)), 0);     
+        flowmapNormal.z = sqrt(1 - flowmapNormal.x * flowmapNormal.x - flowmapNormal.y * flowmapNormal.y);
+        
+        surface.Normal = normalize(flowmapNormal);
     } else
     {
-        surface.Normal = normalize(
-            float3(0, 0, 1) + normals1
-        ); 
+        float2 normalCoord1 = normalScroll1 + scrollAdjust1;
+        Texture2D normals01Texture = Textures[NonUniformResourceIndex(material.Texture0)];
+        float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
+        
+        if (hasBlendNormals)
+        {
+            float2 normalCoord2 = normalScroll2 + scrollAdjust2;
+            float2 normalCoord3 = normalScroll3 + scrollAdjust3;
+        
+            Texture2D normals02Texture = Textures[NonUniformResourceIndex(material.Texture1)];
+            Texture2D normals03Texture = Textures[NonUniformResourceIndex(material.Texture2)];
+    
+            float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
+            float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
+        
+            surface.Normal = normalize(
+                float3(0, 0, 1) +
+                material.Scalar0 * normals1 +
+                material.Scalar1 * normals2 +
+                material.Scalar2 * normals3
+            );
+        }
+        else
+        {
+            surface.Normal = normalize(
+                float3(0, 0, 1) + normals1
+            );
+        }
     }
-  
+
     // ---- Rain ripples on water surface ----
     if (surface.Primary && Features.WetnessEffects.Raining > 0.0 && Features.WetnessEffects.EnableRaindropFx)
     {
