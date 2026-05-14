@@ -515,7 +515,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.IOR = 1.33f;
  
     const bool hasFlowMap = (material.ShaderFlags & WaterShaderFlags::kEnableFlowmap) != 0;
-    const bool hasBlendNormals = (material.ShaderFlags & WaterShaderFlags::kBlendNormals) != 0;
+    const bool hasBlendNormals = true; // Should come from WaterShaderFlags::kBlendNormals but it is always false for some reason
     const bool hasNormalTexcoord = (material.ShaderFlags & WaterShaderFlags::kVertexUV) != 0;
     
     const bool hasWading = false;
