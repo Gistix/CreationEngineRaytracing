@@ -60,7 +60,7 @@ Texture2D<float4>                           SkyHemisphere               : regist
 Texture2D<float4>                           WaterFlowMap                : register(t2);
 StructuredBuffer<Light>                     Lights                      : register(t3);
 StructuredBuffer<Instance>                  Instances                   : register(t4);
-StructuredBuffer<Mesh>                      Meshes                      : register(t5);
+ByteAddressBuffer                           MeshIndex                   : register(t5);
 
 #if defined(SHARC)
 StructuredBuffer<SharcPackedData>           SharcResolvedBuffer         : register(t6);
@@ -70,14 +70,15 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 #   endif
 #endif
 
-StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
-StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
-StructuredBuffer<Material>                  Materials[]                 : register(t0, space3);
+StructuredBuffer<Mesh>                      Meshes[]                    : register(t0, space1);
+StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space2);
+StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space3);
+StructuredBuffer<Material>                  Materials[]                 : register(t0, space4);
 
-Texture2D<float4>                           Textures[]                  : register(t0, space4);
-RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space5);
-StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space6);
-TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
+Texture2D<float4>                           Textures[]                  : register(t0, space5);
+RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space6);
+StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space7);
+TextureCube<float4>                         CubeTextures[]              : register(t0, space8);
 
 #define HAS_PREV_POSITIONS
 

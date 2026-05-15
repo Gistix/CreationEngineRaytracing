@@ -134,14 +134,13 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* c
 	m_LastUpdate = frameIndex;
 }
 
-void Model::SetData(MeshData* meshData, uint32_t& index)
+void Model::SetData(uint32_t* meshIndex, uint32_t& index)
 {
 	for (auto& mesh : meshes) {
 		if (mesh->IsHidden())
 			continue;
 
-		meshData[index] = mesh->GetData();
-		index++;
+		meshIndex[index++] = static_cast<uint32_t>(mesh->m_DescriptorHandle.Get());
 	}
 }
 

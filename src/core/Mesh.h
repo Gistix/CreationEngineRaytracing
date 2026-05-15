@@ -83,6 +83,7 @@ struct Mesh
 		nvrhi::BufferHandle prevPositionBuffer;
 		nvrhi::BufferHandle triangleBuffer;
 		nvrhi::BufferHandle skinningBuffer;
+		nvrhi::BufferHandle meshBuffer;
 	} buffers;
 
 	eastl::vector<float3x4> m_BoneMatrices;

@@ -6,8 +6,8 @@
 
 INTEROP_DATA_STRUCT(Mesh, 4)
 { 
-    uint GeometryIdx;
     uint Flags;
+    uint Pad;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
     INTEROP_ROW_MAJOR(float3x4) PrevTransform;
 };

@@ -21,13 +21,33 @@ void SceneGraph::Initialize()
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	// Mesh Data Buffer
-	m_MeshBuffer = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
+	{
+		auto bufferDesc = nvrhi::BufferDesc()
+			.setByteSize(sizeof(uint32_t) * Constants::NUM_MESHES_MAX)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+			.setDebugName("Mesh Index Buffer");
+
+		m_MeshIndexBuffer = device->createBuffer(bufferDesc);
+	}
 
 	// Instance Data Buffer
 	m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 
 	// Mesh Data Buffer
 	m_LightBuffer = Util::CreateStructuredBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
+
+	// Mesh bindless descriptor table
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
+		};
+
+		m_MeshDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
 
 	// Triangle bindless descriptor table
 	{
@@ -36,7 +56,7 @@ void SceneGraph::Initialize()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2).setSize(UINT_MAX)
 		};
 
 		m_TriangleDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
@@ -49,7 +69,7 @@ void SceneGraph::Initialize()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3).setSize(UINT_MAX)
 		};
 
 		m_VertexDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
@@ -62,7 +82,7 @@ void SceneGraph::Initialize()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4).setSize(UINT_MAX)
 		};
 
 		m_MaterialDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
@@ -127,7 +147,7 @@ void SceneGraph::Initialize()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7).setSize(UINT_MAX)
 		};
 
 		m_PrevPositionDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
@@ -352,7 +372,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		uint32_t firstMeshIndex = m_NumMeshes;
 
 		// Get mesh data
-		instance->model->SetData(m_MeshData.data(), m_NumMeshes);
+		instance->model->SetData(m_MeshIndex.data(), m_NumMeshes);
 
 		// No visible meshes in instance
 		bool hiddenModel = m_NumMeshes == firstMeshIndex;
@@ -390,7 +410,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	});
 
 	if (m_NumMeshes > 0)
-		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
+		commandList->writeBuffer(m_MeshIndexBuffer, m_MeshIndex.data(), m_NumMeshes * sizeof(uint32_t));
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));

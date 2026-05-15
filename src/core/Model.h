@@ -73,7 +73,7 @@ struct Model
 
 	void Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList);
 
-	void SetData(MeshData* meshData, uint32_t& index);
+	void SetData(uint32_t* meshIndex, uint32_t& index);
 
 	void UpdateBLAS(nvrhi::ICommandList* commandList);
 

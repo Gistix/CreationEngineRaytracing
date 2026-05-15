@@ -55,8 +55,8 @@ class SceneGraph
 	nvrhi::BufferHandle m_LightBuffer;
 
 	// Mesh
-	eastl::array<MeshData, Constants::NUM_MESHES_MAX> m_MeshData;
-	nvrhi::BufferHandle m_MeshBuffer;
+	eastl::array<uint32_t, Constants::NUM_MESHES_MAX> m_MeshIndex;
+	nvrhi::BufferHandle m_MeshIndexBuffer;
 
 	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
@@ -66,6 +66,7 @@ class SceneGraph
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
+	eastl::unique_ptr<BindlessTable> m_MeshDescriptors;
 	eastl::unique_ptr<BindlessTable> m_MaterialDescriptors;
 	
 	eastl::unique_ptr<BindlessTable> m_DynamicVertexDescriptors;
@@ -96,6 +97,7 @@ public:
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
+	inline auto& GetMeshDescriptors() const { return m_MeshDescriptors; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialDescriptors; }
 	inline auto& GetTextureDescriptors() const { return m_TextureManager->m_TextureDescriptors; }
 	inline auto& GetCubemapDescriptors() const { return m_TextureManager->m_CubemapDescriptors; }
@@ -107,7 +109,7 @@ public:
 	inline auto& GetPrevPositionWriteDescriptors() const { return m_PrevPositionWriteDescriptors; }
 
 	inline auto& GetLightBuffer() const { return m_LightBuffer; }
-	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
+	inline auto& GetMeshBuffer() const { return m_MeshIndexBuffer; }
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
 	inline auto& GetModels() { return m_Models; }

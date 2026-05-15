@@ -609,10 +609,8 @@ void Material::UpdateData(nvrhi::ICommandList * commandList, const float3& exter
 	m_MaterialData->PBRFlags = pbrFlags.underlying();
 	m_MaterialData->ShaderFlags = GetShaderFlags();
 
-	MaterialData* materialData = m_MaterialData.get();
-	MaterialData* prevMaterialData = m_PrevMaterialData.get();
 
-	if (*materialData == *prevMaterialData)
+	if (*m_MaterialData.get() == *m_PrevMaterialData.get())
 		return;
 
 	commandList->writeBuffer(buffer, GetData(), sizeof(MaterialData));
