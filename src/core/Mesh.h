@@ -83,6 +83,7 @@ struct Mesh
 		nvrhi::BufferHandle prevPositionBuffer;
 		nvrhi::BufferHandle triangleBuffer;
 		nvrhi::BufferHandle skinningBuffer;
+		nvrhi::BufferHandle materialBuffer;
 	} buffers;
 
 	eastl::vector<float3x4> m_BoneMatrices;
@@ -138,7 +139,7 @@ struct Mesh
 
 	bool IsHidden() const;
 
-	MeshData GetData(const float3 externalEmittance);
+	MeshData GetData();
 
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:

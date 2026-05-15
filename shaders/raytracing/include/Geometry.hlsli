@@ -6,8 +6,6 @@
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
 
-#include "raytracing/include/Registers.hlsli"
-
 float3 GetBary(float2 barycentrics)
 {
     return float3(
@@ -238,9 +236,9 @@ Mesh GetMesh(in Payload payload, out Instance instance)
     return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + payload.GeometryIndex())];
 }
 
-Triangle GetTriangle(in uint shapeIdx, in uint primitiveIdx)
+Triangle GetTriangle(in uint meshIndex, in uint primitiveIdx)
 {
-    return Triangles[NonUniformResourceIndex(shapeIdx)][primitiveIdx];
+    return Triangles[NonUniformResourceIndex(meshIndex)][primitiveIdx];
 }
 
 void GetVertices(in uint meshIndex, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
@@ -251,6 +249,10 @@ void GetVertices(in uint meshIndex, in uint primitiveIndex, out Vertex v0, out V
     v0 = vertices[NonUniformResourceIndex(geomTriangle.x)];
     v1 = vertices[NonUniformResourceIndex(geomTriangle.y)];
     v2 = vertices[NonUniformResourceIndex(geomTriangle.z)];
+}
+Material GetMaterial(in uint meshIndex)
+{
+    return Materials[NonUniformResourceIndex(meshIndex)][0];
 }
 
 #if defined(HAS_PREV_POSITIONS)

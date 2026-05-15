@@ -20,7 +20,7 @@ TextureManager::TextureManager()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_TEXTURES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::Texture_SRV(3).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::Texture_SRV(4).setSize(UINT_MAX)
 		};
 
 		m_TextureDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
@@ -33,7 +33,7 @@ TextureManager::TextureManager()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_CUBEMAPS_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::Texture_SRV(6).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::Texture_SRV(7).setSize(UINT_MAX)
 		};
 
 		m_CubemapDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);

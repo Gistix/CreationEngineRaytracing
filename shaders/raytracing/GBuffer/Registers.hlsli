@@ -21,8 +21,10 @@ StructuredBuffer<Mesh>                      Meshes                      : regist
 
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
 StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
-Texture2D<float4>                           Textures[]                  : register(t0, space3);
-TextureCube<float4>                         CubeTextures[]              : register(t0, space6);
+StructuredBuffer<Material>                  Materials[]                 : register(t0, space3);
+
+Texture2D<float4>                           Textures[]                  : register(t0, space4);
+TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
 
 RWTexture2D<float>                          Depth                       : register(u0);
 RWTexture2D<float3>                         MotionVectors               : register(u1);

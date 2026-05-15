@@ -51,7 +51,7 @@ namespace Pipeline
 			if (mesh->material->shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals))
 				continue;
 
-			auto descHandle = mesh->material->Textures[Constants::Material::NORMALMAP_TEXTURE].texture.lock();
+			auto descHandle = mesh->material->textures[Constants::Material::NORMALMAP_TEXTURE].texture.lock();
 			if (!descHandle)
 				continue;
 

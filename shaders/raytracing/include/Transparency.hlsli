@@ -22,7 +22,7 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     
     float3 uvw = GetBary(barycentrics);
 
-    Material material = mesh.Material;   
+    Material material = GetMaterial(mesh.GeometryIdx);
     
     if (material.ShaderType == ShaderType::Water) {
         return true;
@@ -67,7 +67,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     
     float3 uvw = GetBary(barycentrics);
 
-    Material material = mesh.Material;
+    Material material = GetMaterial(mesh.GeometryIdx);
 
 #if defined(EFFECT_PASSTHROUGH)      
     if (material.ShaderType == ShaderType::Effect)

@@ -59,7 +59,7 @@ struct SurfaceMaker
 
         float3 uvw = GetBary(payload.Barycentrics());
 
-        material = mesh.Material;
+        material = GetMaterial(mesh.GeometryIdx);
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
@@ -232,7 +232,7 @@ struct SurfaceMaker
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
-        Material material = mesh.Material;
+        Material material = GetMaterial(mesh.GeometryIdx);
 
         float2 texCoord0 = material.TexCoord(texCoord);
 

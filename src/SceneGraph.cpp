@@ -55,6 +55,19 @@ void SceneGraph::Initialize()
 		m_VertexDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
 
+	// Material bindless descriptor table
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3).setSize(UINT_MAX)
+		};
+
+		m_MaterialDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
 	// Dynamic Vertex bindless descriptor table
 	{
 		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
@@ -114,7 +127,7 @@ void SceneGraph::Initialize()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6).setSize(UINT_MAX)
 		};
 
 		m_PrevPositionDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);

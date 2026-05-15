@@ -144,6 +144,7 @@ namespace Pass::Raytracing
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
+			sceneGraph->GetMaterialDescriptors()->m_Layout,
 			sceneGraph->GetTextureDescriptors()->m_Layout,
 			sceneGraph->GetCubemapDescriptors()->m_Layout
 		};
@@ -189,6 +190,7 @@ namespace Pass::Raytracing
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
 
@@ -273,6 +275,7 @@ namespace Pass::Raytracing
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};

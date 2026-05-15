@@ -524,6 +524,25 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		}
 	}
 
+	// Material Buffer
+	{
+		const size_t size = sizeof(MaterialData);
+
+		auto& bufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size)
+			.setStructStride(size)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Material Buffer)", m_Name.c_str()));
+
+		buffers.materialBuffer = device->createBuffer(bufferDesc);
+
+		const auto& materialData = material->GetData();
+		commandList->writeBuffer(buffers.materialBuffer, &materialData, size);
+
+		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.materialBuffer);
+		device->writeDescriptorTable(sceneGraph->GetMaterialDescriptors()->m_DescriptorTable, bindingSet);
+	}
+
 	// Geometry description
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
@@ -771,15 +790,11 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	return updateFlags;
 }
 
-MeshData Mesh::GetData(const float3 externalEmittance)
+MeshData Mesh::GetData()
 {
-	auto* bsMaterial = bsGeometryPtr->GetGeometryRuntimeData().shaderProperty.get();
-
 	return MeshData(
-		material->GetData(externalEmittance, bsMaterial),
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
 		static_cast<uint32_t>(flags.get()),
-		0u,
 		m_LocalToRoot,
 		m_PrevLocalToRoot
 	);

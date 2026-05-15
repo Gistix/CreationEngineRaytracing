@@ -537,7 +537,7 @@ void Material::Update(const float3& externalEmittance, RE::BSShaderProperty* sha
 
 }
 
-MaterialData Material::GetData() const
+MaterialData Material::GetData(const float3 externalEmittance, RE::BSShaderProperty* shaderProperty)
 {
 	return MaterialData(
 		texCoordOffsetScale[0], texCoordOffsetScale[1],

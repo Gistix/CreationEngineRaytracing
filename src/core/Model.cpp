@@ -132,13 +132,11 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer)
 
 void Model::SetData(MeshData* meshData, uint32_t& index)
 {
-	float3 externalEmittance = GetExternalEmittance();
-
 	for (auto& mesh : meshes) {
 		if (mesh->IsHidden())
 			continue;
 
-		meshData[index] = mesh->GetData(externalEmittance);
+		meshData[index] = mesh->GetData();
 		index++;
 	}
 }

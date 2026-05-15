@@ -54,10 +54,6 @@ class SceneGraph
 	eastl::array<LightData, Constants::LIGHTS_MAX> m_LightData;
 	nvrhi::BufferHandle m_LightBuffer;
 
-	// Material
-	eastl::array<MaterialData, Constants::NUM_MESHES_MAX> m_MaterialData;
-	nvrhi::BufferHandle m_MaterialBuffer;
-
 	// Mesh
 	eastl::array<MeshData, Constants::NUM_MESHES_MAX> m_MeshData;
 	nvrhi::BufferHandle m_MeshBuffer;
@@ -70,7 +66,8 @@ class SceneGraph
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
-
+	eastl::unique_ptr<BindlessTable> m_MaterialDescriptors;
+	
 	eastl::unique_ptr<BindlessTable> m_DynamicVertexDescriptors;
 	eastl::unique_ptr<BindlessTable> m_SkinningDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexCopyDescriptors;
@@ -99,6 +96,7 @@ public:
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
+	inline auto& GetMaterialDescriptors() const { return m_MaterialDescriptors; }
 	inline auto& GetTextureDescriptors() const { return m_TextureManager->m_TextureDescriptors; }
 	inline auto& GetCubemapDescriptors() const { return m_TextureManager->m_CubemapDescriptors; }
 	inline auto& GetDynamicVertexDescriptors() const { return m_DynamicVertexDescriptors; }

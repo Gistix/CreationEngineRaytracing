@@ -43,6 +43,8 @@ struct Material : MaterialBase
 
 	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
 
+	void Update(const float3& externalEmittance, RE::BSShaderProperty* shaderProperty);
+
 	// We have a limited number of bits and not all types are necessary
 	ShaderType GetShaderType() const
 	{
@@ -244,7 +246,7 @@ struct Material : MaterialBase
 
 	void UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty);
 
-	MaterialData GetData(const float3 externalEmittance, RE::BSShaderProperty* shaderProperty);
+	MaterialData GetData() const;
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);
