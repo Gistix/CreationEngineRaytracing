@@ -83,7 +83,6 @@ struct Mesh
 		nvrhi::BufferHandle prevPositionBuffer;
 		nvrhi::BufferHandle triangleBuffer;
 		nvrhi::BufferHandle skinningBuffer;
-		nvrhi::BufferHandle materialBuffer;
 	} buffers;
 
 	eastl::vector<float3x4> m_BoneMatrices;
@@ -136,6 +135,8 @@ struct Mesh
 	void UpdateSubIndex();
 
 	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags);
+
+	void UpdateData(nvrhi::ICommandList* commandList, float3 externalEmittance);
 
 	bool IsHidden() const;
 

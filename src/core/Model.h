@@ -71,7 +71,7 @@ struct Model
 		return false;
 	}
 
-	void Update(RE::NiAVObject* object, bool isPlayer);
+	void Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList);
 
 	void SetData(MeshData* meshData, uint32_t& index);
 

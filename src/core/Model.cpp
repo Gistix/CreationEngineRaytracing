@@ -103,16 +103,18 @@ void Model::UpdateFlags()
 	}
 }
 
-void Model::Update(RE::NiAVObject* object, bool isPlayer)
+void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList)
 {
-	UpdateFlags();
-
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
 	if (m_LastUpdate == frameIndex)
 		return;
 
+	UpdateFlags();
+
 	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
+
+	auto externalEmittance = GetExternalEmittance();
 
 	for (auto& mesh : meshes) {
 		auto dirtyFlags = mesh->Update(object, isPlayer, meshFlags.get());
@@ -123,6 +125,8 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer)
 		if (skinningPass && (vertexUpdate || skinUpdate)) {
 			skinningPass->QueueUpdate(dirtyFlags, mesh.get());
 		}
+
+		mesh->UpdateData(commandList, externalEmittance);
 
 		m_DirtyFlags |= dirtyFlags;
 	}

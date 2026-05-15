@@ -41,9 +41,22 @@ struct Material : MaterialBase
 		Particle = 7
 	};
 
+	eastl::unique_ptr<MaterialData> m_MaterialData;
+	eastl::unique_ptr<MaterialData> m_PrevMaterialData;
+
+	nvrhi::BufferHandle buffer;
+
 	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
 
-	void Update(const float3& externalEmittance, RE::BSShaderProperty* shaderProperty);
+	void CreateBuffer(const eastl::string& name, DescriptorIndex descriptorIndex);
+
+	void UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty);
+
+	void Update(RE::BSShaderProperty* shaderProperty);
+
+	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance) const;
+
+	MaterialData* GetData() const;
 
 	// We have a limited number of bits and not all types are necessary
 	ShaderType GetShaderType() const
@@ -243,10 +256,6 @@ struct Material : MaterialBase
 		else
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
-
-	void UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty);
-
-	MaterialData GetData() const;
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);

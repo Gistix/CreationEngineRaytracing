@@ -338,7 +338,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_Instances.ApplyChanges();
 
-	m_Instances.Read([&](auto& instance) {
+	m_Instances.Read([&](const eastl::unique_ptr<Instance>& instance) {
 		instance->Update(m_NumInstances);
 
 		if (instance->IsHidden())
@@ -346,8 +346,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		bool isPlayer = Util::IsPlayerFormID(instance->m_FormID);
 
-		// Update if applicabe and queue skinning/dynamic update
-		instance->model->Update(instance->m_Node, isPlayer);
+		// Update if applicable, and queue skinning/dynamic update
+		instance->model->Update(instance->m_Node, isPlayer, commandList);
 
 		uint32_t firstMeshIndex = m_NumMeshes;
 

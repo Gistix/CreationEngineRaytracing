@@ -27,6 +27,8 @@ struct half
 		v = DirectX::PackedVector::XMConvertFloatToHalf(fv);
 	}
 
+	bool operator==(const half&) const = default;
+
 	operator float() const
 	{
 		return DirectX::PackedVector::XMConvertHalfToFloat(v);
@@ -74,6 +76,8 @@ struct half2
 	half2(const float2& v) :
 		x(v.x), y(v.y) {}
 
+	bool operator==(const half2&) const = default;
+
 	operator float2() const
 	{
 		return float2(
@@ -106,6 +110,8 @@ struct half3
 
 	half3(const float3& v) :
 		x(v.x), y(v.y), z(v.z) {}
+
+	bool operator==(const half3&) const = default;
 
 	operator float3() const
 	{
@@ -149,6 +155,8 @@ struct half4
 
 	half4(const float4& v) :
 		x(v.x), y(v.y), z(v.z), w(v.w) {}
+
+	bool operator==(const half4&) const = default;
 
 	operator float4() const
 	{

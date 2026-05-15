@@ -525,23 +525,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	}
 
 	// Material Buffer
-	{
-		const size_t size = sizeof(MaterialData);
-
-		auto& bufferDesc = nvrhi::BufferDesc()
-			.setByteSize(size)
-			.setStructStride(size)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-			.setDebugName(std::format("{} (Material Buffer)", m_Name.c_str()));
-
-		buffers.materialBuffer = device->createBuffer(bufferDesc);
-
-		const auto& materialData = material->GetData();
-		commandList->writeBuffer(buffers.materialBuffer, &materialData, size);
-
-		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.materialBuffer);
-		device->writeDescriptorTable(sceneGraph->GetMaterialDescriptors()->m_DescriptorTable, bindingSet);
-	}
+	material->CreateBuffer(m_Name, descriptorIndex);
 
 	// Geometry description
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
@@ -735,6 +719,8 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 		return DirtyFlags::None;
 	}
 
+	material->Update(bsGeometryPtr->GetGeometryRuntimeData().shaderProperty.get());
+
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 	const auto lod = flags.all(Mesh::Flags::LOD);
@@ -788,6 +774,12 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	geometryDesc.setTransform(m_LocalToRoot.f);
 
 	return updateFlags;
+}
+
+void Mesh::UpdateData(nvrhi::ICommandList* commandList, float3 externalEmittance)
+{
+
+	material->UpdateData(commandList, externalEmittance);
 }
 
 MeshData Mesh::GetData()
