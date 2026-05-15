@@ -89,7 +89,7 @@ struct Mesh
 
 	nvrhi::rt::GeometryDesc geometryDesc;
 
-	Material material;
+	eastl::unique_ptr<Material> material;
 
 	stl::enumeration<Flags> flags = Flags::None;
 
@@ -117,8 +117,6 @@ struct Mesh
 	void ClearUnusedVertices();
 
 	void CalculateNormals();
-
-	static Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType = TextureType::Standard);
 
 	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::FormID formID);
 

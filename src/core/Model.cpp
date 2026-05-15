@@ -38,9 +38,9 @@ void Model::UpdateMeshFlags()
 	for (auto& mesh : meshes) {
 		meshFlags.set(mesh->flags.get());
 		m_MeshTypes.set(mesh->m_Type);
-		shaderTypes |= mesh->material.shaderType;
-		features |= static_cast<int>(mesh->material.Feature);
-		shaderFlags.set(mesh->material.shaderFlags.get());
+		shaderTypes |= mesh->material->shaderType;
+		features |= static_cast<int>(mesh->material->feature);
+		shaderFlags.set(mesh->material->shaderFlags.get());
 	}
 }
 

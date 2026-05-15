@@ -64,7 +64,7 @@ struct Model
 	bool ShouldQueueMSNConversion() const
 	{
 		for (auto& mesh : meshes) {
-			if (mesh->material.shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals))
+			if (mesh->material->shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals))
 				return true;
 		}
 

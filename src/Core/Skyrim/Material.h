@@ -8,12 +8,14 @@
 #include "Skinning.hlsli"
 #include "Material.hlsli"
 #include "Framework/DescriptorTableManager.h"
+
+#include "Core/MaterialBase.h"
 #include "Core/Texture.h"
 
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 
-struct Material
+struct Material : MaterialBase
 {
 	static constexpr uint MAX_LAND_TEXTURES = 5u;
 	static constexpr uint MAX_PBRLAND_TEXTURES = 6u;
@@ -38,6 +40,8 @@ struct Material
 		DistantTree = 6,
 		Particle = 7
 	};
+
+	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
 
 	// We have a limited number of bits and not all types are necessary
 	ShaderType GetShaderType() const
@@ -114,21 +118,21 @@ struct Material
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
 	RE::BSShader::Type shaderType;
-	RE::BSShaderMaterial::Feature Feature;
-	stl::enumeration<PBRShaderFlags, uint16_t> PBRFlags;
+	RE::BSShaderMaterial::Feature feature;
+	stl::enumeration<PBRShaderFlags, uint16_t> pbrFlags;
 
 	AlphaFlags alphaFlags = AlphaFlags::None;
 
 	half alphaThreshold;
 
-	eastl::array<half4, 3> Colors;
-	eastl::array<half, 3> Scalars;
+	eastl::array<half4, 3> colors;
+	eastl::array<half, 3> scalars;
 
-	eastl::array<half4, 4> Vectors;
+	eastl::array<half4, 4> vectors;
 
-	eastl::array<half4, 2> TexCoordOffsetScale;
+	eastl::array<half4, 2> texCoordOffsetScale;
 
-	eastl::array<Texture, 20> Textures;
+	eastl::array<Texture, 20> textures;
 
 	uint32_t GetShaderFlags() const
 	{
@@ -228,7 +232,7 @@ struct Material
 
 	uint16_t GetTextureDescriptorIndex(uint32_t index) const
 	{
-		auto& texture = Textures[index];
+		auto& texture = textures[index];
 
 		auto locked = texture.texture.lock();
 
