@@ -6,7 +6,6 @@
 
 #include "raytracing/Include/AdvancedSettings.hlsli"
 
-#include "raytracing/include/Registers.hlsli"
 #include "raytracing/include/Common.hlsli"
 #include "include/ColorConversions.hlsli"
 #include "raytracing/include/Common.hlsli"
