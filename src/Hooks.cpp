@@ -876,12 +876,12 @@ namespace Hooks
 		
 		scene->g_TreeLODAtlasTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(528222, 415172).address());
 
-		stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
+		/*stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
 
 		if (REL::Module::IsSE())
 			stl::detour_thunk<DetachAddonSE>(REL::RelocationID(42412, 0));
 		else
-			stl::detour_thunk<DetachAddonAE>(REL::RelocationID(0, 43585));
+			stl::detour_thunk<DetachAddonAE>(REL::RelocationID(0, 43585));*/
 
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)

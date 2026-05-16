@@ -398,15 +398,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 void SceneGraph::ClearDirtyStates()
 {
-	{
-		std::scoped_lock lock(m_ModelMutex);
-
-		for (auto& [path, model] : m_Models)
-		{
-			model->ClearDirtyState();
-		}
-	}
-
 	m_Instances.Read([&](auto& instance) {
 		instance->ClearDirtyState();
 		return Iterator::Continue;

@@ -45,7 +45,7 @@ public:
 
 		auto* scene = Scene::GetSingleton();
 
-		instances.Read([&](const auto& instance) {
+		instances.Read([&](const eastl::unique_ptr<Instance>& instance) {
 			if (instance->IsHidden())
 				return Iterator::Continue;
 

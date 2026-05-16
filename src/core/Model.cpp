@@ -88,7 +88,6 @@ void Model::UpdateFlags()
 		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BufferUploadQuery)) {
 			m_Flags |= Flags::BuffersUploaded;
 
-			m_BufferUploadCommandList->Release();
 			m_BufferUploadCommandList = nullptr;
 		}
 	}
@@ -97,7 +96,6 @@ void Model::UpdateFlags()
 		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BLASBuildQuery)) {
 			m_Flags |= Flags::BLASBuilt;
 
-			m_BLASBuildCommandList->Release();
 			m_BLASBuildCommandList = nullptr;
 		}
 	}
@@ -147,6 +145,9 @@ void Model::SetData(MeshData* meshData, uint32_t& index)
 
 void Model::BuildBLAS()
 {
+	if (blas)
+		return;
+
 	auto blasDesc = MakeBLASDesc(false);
 
 	for (auto& mesh: meshes) {
@@ -190,6 +191,11 @@ bool Model::IsReady() const
 
 void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 {
+	auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+
+	if (frameIndex == m_LastBLASUpdate)
+		return;
+
 	bool update;
 
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
@@ -219,7 +225,11 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
 
-	m_LastBLASUpdate = Renderer::GetSingleton()->GetFrameIndex();
+	// Consume all flags after BLAS is updated/rebuilt
+	m_DirtyFlags.reset(DirtyFlags::Visibility, DirtyFlags::Mesh);
+	m_DirtyFlags.reset(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
+
+	m_LastBLASUpdate = frameIndex;
 }
 
 void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& a_meshes)
