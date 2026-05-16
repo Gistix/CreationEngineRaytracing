@@ -338,7 +338,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_Instances.ApplyChanges();
 
-	m_Instances.Read([&](const eastl::unique_ptr<Instance>& instance) {
+	m_Instances.Write([&](eastl::unique_ptr<Instance>& instance) {
 		instance->Update(m_NumInstances);
 
 		if (instance->IsHidden())

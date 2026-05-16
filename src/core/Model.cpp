@@ -50,15 +50,13 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 		.setIsTopLevel(false)
 		.setDebugName(std::format("{} - BLAS", m_Name.c_str()));
 
+	// We want things frequent updates/rebuilts to be fast, without neglecting those who are more static
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) || m_MeshTypes.any(Mesh::Type::LandLOD))
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild | (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
-	else {
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild;
+	else
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 
-		// BLASes built with allow compaction cannot be rebuilt
-		if (meshFlags.none(Mesh::Flags::LOD))
-			blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
-	}
+	blasDesc.buildFlags |= (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
 
 	return blasDesc;
 }
@@ -201,11 +199,6 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
 		update = false;
 	else {
-		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) && m_MeshTypes.none(Mesh::Type::LandLOD))
-			return;
-
-		// TODO: Add transform updates to non-skinned/non-dynamic meshes
-		// Attempting it on other model types currenty causes device disconnection
 		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
 			return;
 

@@ -744,6 +744,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	// Update states
 	m_State = m_PendingState;
+	m_PendingState = State::None;
 
 	// Current hidden state
 	bool isHidden = IsHidden();
