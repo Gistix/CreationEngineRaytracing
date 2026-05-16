@@ -8,7 +8,7 @@ void TreeLODBlockReference::UpdateVisibility()
 		return;
 
 	if (!block->attached) {
-		logger::info("Unattached object block");
+		logger::info("Unattached tree block");
 		return;
 	}
 

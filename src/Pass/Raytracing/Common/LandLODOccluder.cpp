@@ -52,11 +52,16 @@ namespace Pass
 	{
 		uint32_t meshIndex = 0;
 
-		// TODO: Make updates lazy
 		const auto& terrainLODInstances = Scene::GetSingleton()->GetSceneGraph()->GetTerrainLodInstances();
 		for (auto& [block, blockRefr] : terrainLODInstances) {
 			if (block->node->GetLODLevel() != 4)
 				continue;
+
+			// Only process terrain that is intersecting (or that intersected the last frame) against loaded range
+			if (!blockRefr.intersecting && !blockRefr.prevIntersecting)
+				continue;
+
+			logger::info("LandLODOccluder::PrepareResources - {}, {}", blockRefr.intersecting, blockRefr.prevIntersecting);
 
 			for (auto& instance : blockRefr.instances)
 			{

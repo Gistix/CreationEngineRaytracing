@@ -1,12 +1,16 @@
 #pragma once
 
-#include "Core/Reference/LODBlockReferenceBase.h"
 #include "Core/Instance.h"
 
 // Since we have no release function we use a timer to track LOD lifetime
-struct LODBlockReference : LODBlockReferenceBase
+struct LODBlockReference
 {
-	std::variant<RE::BGSTerrainBlock*, RE::BGSObjectBlock*, RE::BGSDistantTreeBlock*> block;
+	inline static auto maxDetachedTime = std::chrono::seconds(15);
 
-	virtual void UpdateVisibility() override;
+	eastl::vector<Instance*> instances;
+	bool detached;
+	bool m_Hidden;
+	std::chrono::time_point<std::chrono::steady_clock> detachedTime;
+
+	virtual void UpdateVisibility() { };
 };

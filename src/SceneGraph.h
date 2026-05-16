@@ -7,7 +7,8 @@
 #include "core/TreeLODInstance.h"
 
 #include "Core/Reference/ActorReference.h"
-#include "Core/Reference/LODBlockReference.h"
+#include "Core/Reference/ObjectLODBlockReference.h"
+#include "Core/Reference/TerrainLODBlockReference.h"
 #include "Core/Reference/TreeLODBlockReference.h"
 
 #include "Light.hlsli"
@@ -41,8 +42,8 @@ class SceneGraph
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_WaterInstances;
 
 	// LOD
-	eastl::unordered_map<RE::BGSObjectBlock*, LODBlockReference> m_ObjectLODInstances;
-	eastl::unordered_map<RE::BGSTerrainBlock*, LODBlockReference> m_TerrainLODInstances;
+	eastl::unordered_map<RE::BGSObjectBlock*, ObjectLODBlockReference> m_ObjectLODInstances;
+	eastl::unordered_map<RE::BGSTerrainBlock*, TerrainLODBlockReference> m_TerrainLODInstances;
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, TreeLODBlockReference> m_TreeLODInstances;
 
 	// Actors
