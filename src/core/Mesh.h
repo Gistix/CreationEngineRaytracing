@@ -142,16 +142,6 @@ struct Mesh
 
 	MeshData GetData();
 
-	auto GetPendingState()
-	{
-		return m_PendingState.get();
-	}
-
-	auto GetState()
-	{
-		return m_State.get();
-	}
-
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
 	// State is pending until BLASRebuild
