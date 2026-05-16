@@ -8,6 +8,9 @@ project(
     LANGUAGES CXX
 )
 
+# Make INSTALL depend on ALL build targets (default, but force it explicitly)
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY OFF CACHE BOOL "" FORCE)
+
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 set(DEPLOY_DIR $ENV{DEPLOY_DIR})
