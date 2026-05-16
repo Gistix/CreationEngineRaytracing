@@ -61,8 +61,6 @@ namespace Pass
 			if (!blockRefr.intersecting && !blockRefr.prevIntersecting)
 				continue;
 
-			logger::info("LandLODOccluder::PrepareResources - {}, {}", blockRefr.intersecting, blockRefr.prevIntersecting);
-
 			for (auto& instance : blockRefr.instances)
 			{
 				auto firstMeshIndex = meshIndex;
