@@ -921,9 +921,8 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
 		const char* name = pGeometry->name.c_str();
 
-		if (strcmp(name, "EditorMarker") == 0 || strcmp(name, "LRTMarker") == 0 || strcmp(name, "AnimInteractionMarker") == 0 || strcmp(name, "FurnitureMarker") == 0) {
+		if (Util::Geometry::IsBlocklisted(name))
 			return RE::BSVisit::BSVisitControl::kContinue;
-		}
 
 		logger::trace("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - {}", name);
 

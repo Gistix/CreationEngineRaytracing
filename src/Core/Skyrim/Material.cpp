@@ -441,7 +441,6 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 	}
 	else if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
 		alphaFlags &= ~Material::AlphaFlags::Blend;
-
 		alphaFlags |= Material::AlphaFlags::Transmission;  // I want them to behave like glass for now
 	}
 
