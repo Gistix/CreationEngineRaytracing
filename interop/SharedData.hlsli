@@ -13,7 +13,7 @@ struct CPMSettings
 {
     BOOL EnableComplexMaterial;
     BOOL EnableParallax;
-    BOOL EnableTerrainParallax;
+    BOOL EnableTerrain;
     BOOL EnableHeightBlending;
     BOOL EnableShadows;
     BOOL ExtendShadows;
@@ -113,10 +113,10 @@ static_assert(sizeof(HairSpecularSettings) % 16 == 0);
 
 struct ExtendedTranslucencySettings
 {
-    uint MaterialModel; // [0,1,2,3] The MaterialModel
-    float Reduction; // [0, 1.0] The factor to reduce the transparency to matain the average transparency [0,1]
-    float Softness; // [0, 2.0] The soft remap upper limit [0,2]
-    float Strength; // [0, 1.0] The inverse blend weight of the effect
+    uint AlphaMode; // [0,1,2,3] The MaterialModel
+    float AlphaReduction; // [0, 1.0] The factor to reduce the transparency to matain the average transparency [0,1]
+    float AlphaSoftness; // [0, 2.0] The soft remap upper limit [0,2]
+    float AlphaStrength; // [0, 1.0] The inverse blend weight of the effect
 };
 #ifdef __cplusplus
 static_assert(sizeof(ExtendedTranslucencySettings) % 16 == 0);
@@ -125,7 +125,6 @@ static_assert(sizeof(ExtendedTranslucencySettings) % 16 == 0);
 struct LinearLightingSettings
 {
 	uint enableLinearLighting;
-	uint enableGammaCorrection;
 	uint enableACEScg;
 	uint isDirLightLinear;
 	float dirLightMult;
@@ -153,9 +152,6 @@ struct LinearLightingSettings
 	float projectedEffectMult;
 	float deferredEffectMult;
 	float otherEffectMult;
-	float _pad0;
-	float _pad1;
-	float _pad2;
 };
 #ifdef __cplusplus
 static_assert(sizeof(LinearLightingSettings) % 16 == 0);
@@ -178,7 +174,26 @@ struct ExponentialHeightFogSettings
     uint disableVanillaFog;
     float4 fogInscatteringColor;
     float originalFogColorAmount;
-    float3 pad;
+    uint volumetricFogEnabled;
+    uint volumetricGridPixelSize;
+    uint volumetricGridSizeZ;
+    float volumetricFogDistance;
+    float volumetricFogStartDistance;
+    float volumetricFogNearFadeInDistance;
+    float volumetricFogExtinctionScale;
+    float4 volumetricFogAlbedo;
+    float4 volumetricFogEmissive;
+    float volumetricDirectionalScatteringIntensity;
+    float volumetricShadowBias;
+    float volumetricDepthDistributionScale;
+    float volumetricSkyLightingIntensity;
+    float volumetricFogScatteringDistribution;
+    float volumetricHistoryWeight;
+    uint volumetricHistoryMissSampleCount;
+    float volumetricSampleJitterMultiplier;
+    float volumetricUpsampleJitterMultiplier;
+    float volumetricLocalLightScatteringIntensity;
+    float2 pad0;
 };
 #ifdef __cplusplus
 static_assert(sizeof(ExponentialHeightFogSettings) % 16 == 0);
@@ -236,6 +251,12 @@ struct PhysSkyData
     float cloudOriginalMix;
     float silverLiningMix;
     float silverLiningSpread;
+
+    // SETTINGS
+    uint lightSkyStatics;
+    uint pad0;
+    uint pad1;
+    uint pad2;
 };
 #ifdef __cplusplus
 static_assert(sizeof(PhysSkyData) % 16 == 0);
