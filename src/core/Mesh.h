@@ -89,7 +89,7 @@ struct Mesh
 
 	nvrhi::rt::GeometryDesc geometryDesc;
 
-	Material material;
+	eastl::unique_ptr<Material> material;
 
 	stl::enumeration<Flags> flags = Flags::None;
 
@@ -118,9 +118,7 @@ struct Mesh
 
 	void CalculateNormals();
 
-	Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType = TextureType::Standard);
-
-	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::TESForm* form);
+	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::FormID formID);
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
@@ -138,9 +136,11 @@ struct Mesh
 
 	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags);
 
+	void UpdateData(nvrhi::ICommandList* commandList, float3 externalEmittance);
+
 	bool IsHidden() const;
 
-	MeshData GetData(const float3 externalEmittance);
+	MeshData GetData();
 
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:

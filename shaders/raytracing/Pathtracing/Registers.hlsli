@@ -73,10 +73,12 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
 StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
-Texture2D<float4>                           Textures[]                  : register(t0, space3);
-RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space4);
-StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space5);
-TextureCube<float4>                         CubeTextures[]              : register(t0, space6);
+StructuredBuffer<Material>                  Materials[]                 : register(t0, space3);
+
+Texture2D<float4>                           Textures[]                  : register(t0, space4);
+RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space5);
+StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space6);
+TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
 
 #define HAS_PREV_POSITIONS
 Texture2D<float4>                           PhysicalSkyTrLUT            : register(t8);
@@ -84,5 +86,6 @@ Texture2D<float4>                           SkinDetailNormal            : regist
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);
+SamplerState                                PointWrapSampler            : register(s2);
 
 #endif // REGISTERS_HLSLI

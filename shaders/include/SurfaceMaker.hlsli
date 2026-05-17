@@ -59,7 +59,7 @@ struct SurfaceMaker
 
         float3 uvw = GetBary(payload.Barycentrics());
 
-        material = mesh.Material;
+        material = GetMaterial(mesh.GeometryIdx);
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
@@ -197,7 +197,10 @@ struct SurfaceMaker
         {
             WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);
         }
-        else
+        else if (material.ShaderType == ShaderType::DistantTree)
+        {
+            DistantTreeMaterial(surface, texCoord0, material);
+        } else
         {
             DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
         }
@@ -229,7 +232,7 @@ struct SurfaceMaker
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
-        Material material = mesh.Material;
+        Material material = GetMaterial(mesh.GeometryIdx);
 
         float2 texCoord0 = material.TexCoord(texCoord);
 

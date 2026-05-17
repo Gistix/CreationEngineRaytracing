@@ -21,5 +21,7 @@ namespace Util
 		DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);
 
 		bool MatrixNearEqual(const float3x4& a, const float3x4& b, float epsilon = 1e-5f);
+
+		bool Intersects(const float2& aCenter, const float2& aSize, const float2& bCenter, const float2& bSize);
 	}
 }

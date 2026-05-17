@@ -70,23 +70,6 @@ namespace Events
 
 		return RE::BSEventNotifyControl::kContinue;
 	}
-
-	RE::BSEventNotifyControl Events::TESEquipEventHandler::ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*)
-	{
-		if (!a_event)
-			return RE::BSEventNotifyControl::kContinue;
-
-
-		logger::info("TESEquipEventHandler::ProcessEvent - {} {}", magic_enum::enum_name(a_event->actor->GetFormType()), a_event->actor->GetName());
-
-		auto* baseObject = RE::TESForm::LookupByID(a_event->baseObject);
-
-		logger::info("TESEquipEventHandler::ProcessEvent - Type: {}, Name: {}, Equipped {}", magic_enum::enum_name(baseObject->GetFormType()), baseObject->GetName(), a_event->equipped);
-
-		//auto* equippedItem = RE::TESForm::LookupByID<RE::TESBoundObject>(a_event->baseObject);
-
-		return RE::BSEventNotifyControl::kContinue;
-	}
 #endif
 
 	void Register()

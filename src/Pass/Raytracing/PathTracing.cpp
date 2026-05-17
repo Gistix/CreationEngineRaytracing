@@ -8,15 +8,22 @@ namespace Pass
 	PathTracing::PathTracing(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc)
 		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
 	{
-		m_LinearWrapSampler = GetRenderer()->GetDevice()->createSampler(
+		auto device = renderer->GetDevice();
+
+		m_LinearWrapSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
-		m_LinearClampSampler = GetRenderer()->GetDevice()->createSampler(
+		m_LinearClampSampler = device->createSampler(
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
+
+		m_PointWrapSampler = device->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
+			.setAllFilters(false));
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
@@ -58,6 +65,7 @@ namespace Pass
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
+			nvrhi::BindingLayoutItem::Sampler(2),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -148,6 +156,7 @@ namespace Pass
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
+			sceneGraph->GetMaterialDescriptors()->m_Layout,
 			sceneGraph->GetTextureDescriptors()->m_Layout,
 			sceneGraph->GetPrevPositionDescriptors()->m_Layout,
 			sceneGraph->GetCubemapDescriptors()->m_Layout
@@ -212,6 +221,7 @@ namespace Pass
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
@@ -254,6 +264,7 @@ namespace Pass
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
+			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
@@ -324,6 +335,7 @@ namespace Pass
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
 			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()

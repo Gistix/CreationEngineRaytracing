@@ -13,5 +13,7 @@ namespace Util
 		uint16_t GetStoredVertexSize(uint64_t desc);
 
 		bool HasDoubleSidedGeom(Mesh* mesh);
+
+		bool IsBlocklisted(const char* name);
 	}
 }

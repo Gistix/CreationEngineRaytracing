@@ -109,5 +109,15 @@ namespace Util
 				XMVector4EqualInt(XMVectorNearEqual(a1, b1, eps), XMVectorTrueInt()) &&
 				XMVector4EqualInt(XMVectorNearEqual(a2, b2, eps), XMVectorTrueInt());
 		}
+
+		bool Intersects(const float2& aCenter, const float2& aSize, const float2& bCenter, const float2& bSize)
+		{
+			float2 aHalf = aSize * 0.5f;
+			float2 bHalf = bSize * 0.5f;
+
+			return
+				abs(aCenter.x - bCenter.x) <= (aHalf.x + bHalf.x) &&
+				abs(aCenter.y - bCenter.y) <= (aHalf.y + bHalf.y);
+		}
 	}
 }

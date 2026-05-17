@@ -27,6 +27,7 @@ namespace Pass::Raytracing
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 		nvrhi::SamplerHandle m_LinearClampSampler;
+		nvrhi::SamplerHandle m_PointWrapSampler;
 
 		SceneTLAS* m_SceneTLAS;
 		Common::SHaRCGI* m_SHaRC;

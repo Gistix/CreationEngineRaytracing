@@ -17,11 +17,14 @@ extern "C" {
 	CERT_API void SetSkyHemisphere(ID3D12Resource* skyHemi);
 	CERT_API void SetPhysicalSkyTrLUT(ID3D12Resource* trLut);
 	CERT_API void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
+	CERT_API void SetWaterFlowMap(ID3D12Resource* waterFlowMap);
 	CERT_API void GetPassTimings(eastl::vector<PassTiming>&);
+	CERT_API void GetSceneGraphCounters(uint32_t& textures, uint32_t& models, uint32_t& instances);
 	CERT_API void UpdateSettings(Settings);
 	CERT_API void GetRRInput(ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance);
 	CERT_API void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao, ID3D12Resource* diffuseAlbedo);
 	CERT_API void UpdateJitter(float2 jitter);
 	CERT_API void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 	CERT_API uint32_t GetAccumulatedFrameCount();
+	CERT_API uint64_t GetFakeDoubledVRAMUsage();
 }

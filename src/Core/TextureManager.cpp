@@ -2,6 +2,13 @@
 #include "Core/D3D12Texture.h"
 #include "Renderer.h"
 
+TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager) :
+	texture(texture)
+{
+	descriptorHandle = eastl::make_shared<DescriptorHandle>(descriptorTableManager->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0, texture)));
+	size = Renderer::GetSingleton()->GetDevice()->getTextureMemoryRequirements(texture).size;
+}
+
 TextureManager::TextureManager()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
@@ -13,7 +20,7 @@ TextureManager::TextureManager()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_TEXTURES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::Texture_SRV(3).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::Texture_SRV(4).setSize(UINT_MAX)
 		};
 
 		m_TextureDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
@@ -26,13 +33,32 @@ TextureManager::TextureManager()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_CUBEMAPS_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::Texture_SRV(6).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::Texture_SRV(7).setSize(UINT_MAX)
 		};
 
 		m_CubemapDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
 	}
 
 	m_MSNConverter = eastl::make_unique<Pipeline::MSNConverter>();
+}
+
+uint64_t TextureManager::GetFakeDoubledVRAMUsage()
+{
+	uint64_t vramUsage = 0;
+
+	for (const auto& [key, texture]: m_Textures)
+	{
+		if (texture)
+			vramUsage += texture->size;
+	}
+
+	for (const auto& [key, normalMap] : m_NormalMaps)
+	{
+		if (normalMap)
+			vramUsage += normalMap->size;
+	}
+
+	return vramUsage;
 }
 
 void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
@@ -173,6 +199,8 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 			.setInitialState(nvrhi::ResourceStates::ShaderResource)
 			.setKeepInitialState(true)
 			.setIsRenderTarget(true)
+			.setClearValue(nvrhi::Color(0.5f, 0.5f, 1.0f, 1.0f))
+			.setUseClearValue(true)
 			.setDebugName("Converted MSN Texture"));
 
 		it->second = eastl::make_unique<MSNReference>(normalMapRT, textureHandle, m_TextureDescriptors->m_DescriptorTable.get());

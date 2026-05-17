@@ -116,7 +116,7 @@ INTEROP_DATA_STRUCT(Material, 4)
 	half Scalar0;
 	half Scalar1;
 	half Scalar2;
-	
+
 	half4 Vector0;
 	half4 Vector1;
 	half4 Vector2;
@@ -153,6 +153,10 @@ INTEROP_DATA_STRUCT(Material, 4)
     uint16_t PBRFlags;
     uint32_t ShaderFlags;		// Max 32 flags
 
+#ifdef __cplusplus
+    bool operator==(const MaterialData&) const = default;
+#endif	
+	
 	// Shared
     half4 BaseColor()
     {

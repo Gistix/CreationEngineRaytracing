@@ -13,10 +13,10 @@ struct Instance
 	enum State : uint8_t
 	{
 		None = 0,
-		Detached = 1 << 0,
-		FirstPersonHidden = 1 << 1,
+		Detached = 1 << 0, // Cell containing this instance was detached from the engines scenegraph
+		FirstPersonHidden = 1 << 1, // Hidden when the camera goes into first person
 		HiddenModel = 1 << 2,
-		LODHidden = 1 << 3
+		LODHidden = 1 << 3 // Hidden externally by LODReference
 	};
 
 	// Instance form id
@@ -43,7 +43,10 @@ struct Instance
 
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
-	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) { }
+	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) 
+	{ 
+		UpdateTransform();
+	}
 	
 	void SetDetached(bool detach);
 
@@ -76,7 +79,11 @@ struct Instance
 
 	bool SkipUpdate();
 
+	virtual void UpdateTransform();
+
 	void Update(uint32_t tlasInstanceID);
+
+	virtual float GetAlpha() { return 1.0f; };
 
 	auto GetDirtyFlags() const { return m_DirtyFlags; };
 

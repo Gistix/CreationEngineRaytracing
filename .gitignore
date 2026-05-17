@@ -3,5 +3,7 @@ bin/
 dist/
 .vs*/
 
+*.TMP
+
 CMakeUserPresets.json
 shadertoolsconfig.json

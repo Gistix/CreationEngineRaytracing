@@ -8,6 +8,9 @@ project(
     LANGUAGES CXX
 )
 
+# Make INSTALL depend on ALL build targets (default, but force it explicitly)
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY OFF CACHE BOOL "" FORCE)
+
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 set(DEPLOY_DIR $ENV{DEPLOY_DIR})
@@ -70,6 +73,17 @@ target_link_libraries(
 	d3dcompiler.lib
     ${DETOURS_LIBRARY}
 )
+
+# Some third-party libs (e.g. nvrhi with dx12) are built with /GL.
+# In RelWithDebInfo, align linker options to avoid LNK4075/LNK1218 when warnings are treated as errors.
+if(MSVC)
+    target_link_options(
+        ${PROJECT_NAME}
+        PRIVATE
+            "$<$<CONFIG:RelWithDebInfo>:/LTCG>"
+            "$<$<CONFIG:RelWithDebInfo>:/INCREMENTAL:NO>"
+    )
+endif()
 
 include(NVRHI)
 

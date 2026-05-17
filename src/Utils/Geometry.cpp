@@ -115,5 +115,30 @@ namespace Util
 
 			return false;
 		}
+
+		bool IsBlocklisted(const char* name)
+		{
+			// Skyrim Markers
+			if (strcmp(name, "EditorMarker") == 0)
+				return true;
+
+			if (strcmp(name, "LRTMarker") == 0)
+				return true;
+
+			if (strcmp(name, "AnimInteractionMarker") == 0)
+				return true;
+
+			if (strcmp(name, "FurnitureMarker") == 0)
+				return true;
+
+			// TODO: Add support for an .ini or .json file
+			if (strcmp(name, "AEAC_LDD_Eye_Outer") == 0)
+				return true;
+
+			if (strcmp(name, "AEAC_LDD_Eye_Shadow") == 0)
+				return true;
+
+			return false;
+		}
 	}
 }

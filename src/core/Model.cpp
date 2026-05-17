@@ -38,9 +38,9 @@ void Model::UpdateMeshFlags()
 	for (auto& mesh : meshes) {
 		meshFlags.set(mesh->flags.get());
 		m_MeshTypes.set(mesh->m_Type);
-		shaderTypes |= mesh->material.shaderType;
-		features |= static_cast<int>(mesh->material.Feature);
-		shaderFlags.set(mesh->material.shaderFlags.get());
+		shaderTypes |= mesh->material->shaderType;
+		features |= static_cast<int>(mesh->material->feature);
+		shaderFlags.set(mesh->material->shaderFlags.get());
 	}
 }
 
@@ -50,34 +50,67 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 		.setIsTopLevel(false)
 		.setDebugName(std::format("{} - BLAS", m_Name.c_str()));
 
+	// We want things frequent updates/rebuilts to be fast, without neglecting those who are more static
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) || m_MeshTypes.any(Mesh::Type::LandLOD))
-		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild | (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
-	else {
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild;
+	else
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 
-		// BLASes built with allow compaction cannot be rebuilt
-		if (meshFlags.none(Mesh::Flags::LOD))
-			blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::AllowCompaction;
-	}
+	blasDesc.buildFlags |= (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
 
 	return blasDesc;
 }
 
-void Model::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
+void Model::CreateBuffers(SceneGraph* sceneGraph)
 {
+	auto* renderer = Renderer::GetSingleton();
+	auto device = renderer->GetDevice();
+
+	m_BufferUploadCommandList = renderer->GetCopyCommandList();
+	m_BufferUploadCommandList->open();
+
 	for (auto& mesh : meshes) {
-		mesh->CreateBuffers(sceneGraph, commandList);
+		mesh->CreateBuffers(sceneGraph, m_BufferUploadCommandList);
+	}
+
+	m_BufferUploadCommandList->close();
+	m_SubmittedCopyInstance = device->executeCommandList(m_BufferUploadCommandList, nvrhi::CommandQueue::Copy);
+
+	m_BufferUploadQuery = device->createEventQuery();
+	device->setEventQuery(m_BufferUploadQuery, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
+}
+
+void Model::UpdateFlags()
+{
+	if (!(m_Flags & Flags::BuffersUploaded)) {
+		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BufferUploadQuery)) {
+			m_Flags |= Flags::BuffersUploaded;
+
+			m_BufferUploadCommandList = nullptr;
+		}
+	}
+
+	if (!(m_Flags & Flags::BLASBuilt)) {
+		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BLASBuildQuery)) {
+			m_Flags |= Flags::BLASBuilt;
+
+			m_BLASBuildCommandList = nullptr;
+		}
 	}
 }
 
-void Model::Update(RE::NiAVObject* object, bool isPlayer)
+void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList)
 {
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
 	if (m_LastUpdate == frameIndex)
 		return;
 
+	UpdateFlags();
+
 	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
+
+	auto externalEmittance = GetExternalEmittance();
 
 	for (auto& mesh : meshes) {
 		auto dirtyFlags = mesh->Update(object, isPlayer, meshFlags.get());
@@ -89,6 +122,8 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer)
 			skinningPass->QueueUpdate(dirtyFlags, mesh.get());
 		}
 
+		mesh->UpdateData(commandList, externalEmittance);
+
 		m_DirtyFlags |= dirtyFlags;
 	}
 
@@ -97,19 +132,20 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer)
 
 void Model::SetData(MeshData* meshData, uint32_t& index)
 {
-	float3 externalEmittance = GetExternalEmittance();
-
 	for (auto& mesh : meshes) {
 		if (mesh->IsHidden())
 			continue;
 
-		meshData[index] = mesh->GetData(externalEmittance);
+		meshData[index] = mesh->GetData();
 		index++;
 	}
 }
 
-void Model::BuildBLAS(nvrhi::ICommandList* commandList)
+void Model::BuildBLAS()
 {
+	if (blas)
+		return;
+
 	auto blasDesc = MakeBLASDesc(false);
 
 	for (auto& mesh: meshes) {
@@ -120,26 +156,49 @@ void Model::BuildBLAS(nvrhi::ICommandList* commandList)
 	}
 
 	auto* renderer = Renderer::GetSingleton();
+	auto device = renderer->GetDevice();
 
 	blas = renderer->GetDevice()->createAccelStruct(blasDesc);
 
-	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+	// Compute Command - Waits for copy
+	m_BLASBuildCommandList = renderer->GetComputeCommandList();
+	m_BLASBuildCommandList->open();
+
+	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, blas, blasDesc);
+
+	m_BLASBuildCommandList->close();
+	device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
+	auto submittedComputeInstance = device->executeCommandList(m_BLASBuildCommandList, nvrhi::CommandQueue::Compute);
+
+	m_BLASBuildQuery = device->createEventQuery();
+	device->setEventQuery(m_BLASBuildQuery, nvrhi::CommandQueue::Compute, submittedComputeInstance);
 
 	m_LastBLASUpdate = renderer->GetFrameIndex();
 }
 
+bool Model::IsReady() const
+{
+	if (!(m_Flags & Model::Flags::BuffersUploaded))
+		return false;
+
+	if (!(m_Flags & Model::Flags::BLASBuilt))
+		return false;
+
+	return true;
+}
+
 void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 {
+	auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+
+	if (frameIndex == m_LastBLASUpdate)
+		return;
+
 	bool update;
 
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
 		update = false;
 	else {
-		if (meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) && m_MeshTypes.none(Mesh::Type::LandLOD))
-			return;
-
-		// TODO: Add transform updates to non-skinned/non-dynamic meshes
-		// Attempting it on other model types currenty causes device disconnection
 		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
 			return;
 
@@ -159,7 +218,11 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
 
-	m_LastBLASUpdate = Renderer::GetSingleton()->GetFrameIndex();
+	// Consume all flags after BLAS is updated/rebuilt
+	m_DirtyFlags.reset(DirtyFlags::Visibility, DirtyFlags::Mesh);
+	m_DirtyFlags.reset(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
+
+	m_LastBLASUpdate = frameIndex;
 }
 
 void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& a_meshes)
@@ -202,3 +265,5 @@ void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
 	if (meshes.size() != oldSize)	
 		m_DirtyFlags.set(DirtyFlags::Mesh);
 }
+
+DEFINE_ENUM_FLAG_OPERATORS(Model::Flags::Flag);

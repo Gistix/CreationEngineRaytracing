@@ -14,8 +14,6 @@
 
 struct Scene
 {
-	std::shared_mutex m_SceneMutex;
-
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
 	eastl::unique_ptr<RenderNode> m_GlobalIllumination;
@@ -36,14 +34,19 @@ struct Scene
 	ID3D12Resource* m_SkinDetailNormalResource = nullptr;
 	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
-	ID3D12Resource* m_FlowMapResource = nullptr;
-	nvrhi::TextureHandle m_FlowMapTexture;
+	ID3D12Resource* m_WaterFlowMapResource = nullptr;
+	nvrhi::TextureHandle m_WaterFlowMapTexture;
 
 	int32_t* g_FlowMapSize = nullptr;
-	RE::NiPointer<RE::NiSourceTexture>* g_FlowMapSourceTex = nullptr;
 	float4* g_DisplacementCellTexCoordOffset = nullptr;
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
 	RE::NiPoint2* g_DisplacementMeshFlowCellOffset = nullptr;
+
+	// High Resolution time, updated every frame
+	float* g_Time = nullptr;
+
+	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasTex = nullptr;
+	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasNormalTex = nullptr;
 
 	Settings m_Settings;
 
@@ -82,7 +85,7 @@ struct Scene
 	inline nvrhi::ITexture* GetPhysicalSkyTrLUTTexture() const { return m_PhysicalSkyTrLUTTexture; }
 	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
 
-	nvrhi::ITexture* GetFlowMapTexture();
+	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 
 	RenderNode* GetGlobalIllumination();
 
@@ -111,6 +114,8 @@ struct Scene
 	void SetSkyHemisphere(ID3D12Resource* skyHemi);
 	void SetPhysicalSkyTrLUT(ID3D12Resource* trLut);
 	void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
+
+	void SetWaterFlowMap(ID3D12Resource* skyHemi);
 
 	void UpdateSettings(Settings settings);
 };

@@ -77,9 +77,25 @@ void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
 	scene->SetSkinDetailNormal(skinDetailNormal);
 }
 
+void SetWaterFlowMap(ID3D12Resource* waterFlowMap)
+{
+	auto* scene = Scene::GetSingleton();
+	scene->SetWaterFlowMap(waterFlowMap);
+}
+
 void GetPassTimings(eastl::vector<PassTiming>& passTimings)
 {
 	passTimings = Renderer::GetSingleton()->GetPassTimings();
+}
+
+void GetSceneGraphCounters(uint32_t& textures, uint32_t& models, uint32_t& instances)
+{
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	auto& textureManager = sceneGraph->GetTextureManager();
+
+	textures = static_cast<uint32_t>(textureManager->m_Textures.size() + textureManager->m_NormalMaps.size());
+	models = static_cast<uint32_t>(sceneGraph->GetModels().size());
+	instances = static_cast<uint32_t>(sceneGraph->GetInstances().Size());
 }
 
 void UpdateSettings(Settings settings)
@@ -130,4 +146,19 @@ uint32_t GetAccumulatedFrameCount()
 	if (accumulationPass)
 		return accumulationPass->GetAccumulatedFrames();
 	return 0;
+}
+
+uint64_t GetFakeDoubledVRAMUsage()
+{
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+	if (!sceneGraph)
+		return 0;
+
+	auto& textureManager = sceneGraph->GetTextureManager();
+
+	if (!textureManager)
+		return 0;
+
+	return textureManager->GetFakeDoubledVRAMUsage();
 }
