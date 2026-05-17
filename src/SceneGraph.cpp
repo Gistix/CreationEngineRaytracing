@@ -590,7 +590,7 @@ void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::Creat
 	// Generate the key exactly how its done by the engine
 	auto exteriorData = a_createGrassParams->land->parentCell->GetCoordinates();
 	auto keyX = exteriorData->cellX / 12;
-	auto keyY = exteriorData->cellX / 12;
+	auto keyY = exteriorData->cellY / 12;
 
 	auto grassKey = RE::GrassTypeKey(grassParams->grassFormID, static_cast<int16_t>(keyX), static_cast<int16_t>(keyY));
 
