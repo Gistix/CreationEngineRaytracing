@@ -816,6 +816,22 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+	
+	// 1401B6AF0 SE/140203810 AE
+	struct GrassManager_CreateInstances
+	{
+		static uint32_t thunk(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams)
+		{
+			auto instances = func(a_grassManager, a_createGrassParams);
+
+			if (instances > 0)
+				Scene::GetSingleton()->GetSceneGraph()->CreateGrassModel(a_grassManager, a_createGrassParams, instances);
+
+			return instances;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 #elif defined(FALLOUT4)
 
@@ -859,6 +875,9 @@ namespace Hooks
 		// Water
 		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
 		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
+
+		// Grass
+		stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);

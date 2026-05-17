@@ -10,6 +10,7 @@
 #include "Core/Reference/ObjectLODBlockReference.h"
 #include "Core/Reference/TerrainLODBlockReference.h"
 #include "Core/Reference/TreeLODBlockReference.h"
+#include "Core/Reference/GrassReference.h"
 
 #include "Light.hlsli"
 #include "Mesh.hlsli"
@@ -45,6 +46,9 @@ class SceneGraph
 	eastl::unordered_map<RE::BGSObjectBlock*, ObjectLODBlockReference> m_ObjectLODInstances;
 	eastl::unordered_map<RE::BGSTerrainBlock*, TerrainLODBlockReference> m_TerrainLODInstances;
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, TreeLODBlockReference> m_TreeLODInstances;
+
+	// Grass
+	eastl::unordered_map<GrassRefrKey, GrassReference> m_GrassInstances;
 
 	// Actors
 	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
@@ -137,6 +141,7 @@ public:
 	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
+	void CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances);
 
 	// LOD
 	bool CreateLODModel(RE::BGSTerrainBlock* chunk);

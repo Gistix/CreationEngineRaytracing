@@ -577,6 +577,64 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	}
 }
 
+void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances)
+{
+	auto* grassParams = a_createGrassParams->grassParam;
+
+	auto* grassForm = RE::TESForm::LookupByID<RE::TESGrass>(grassParams->grassFormID);
+	if (!grassForm || grassForm->model.empty())
+		return;
+
+	logger::info("SceneGraph::CreateGrassModel - Land: {:0X}, Quad: {}, Model: {}, Instances: {}", a_createGrassParams->land->GetFormID(), a_createGrassParams->quad, grassParams->modelName, numInstances);
+
+	// Generate the key exactly how its done by the engine
+	auto exteriorData = a_createGrassParams->land->parentCell->GetCoordinates();
+	auto keyX = exteriorData->cellX / 12;
+	auto keyY = exteriorData->cellX / 12;
+
+	// The hash map type used by clib is incorrect, cast to the correct type before attempting to use it
+	auto& grassTypes = *reinterpret_cast<RE::BSTCustomHashMap<RE::GrassTypeKey, RE::GrassType*>*>(&a_grassManager->unk10);
+
+	auto it = grassTypes.find(RE::GrassTypeKey(grassParams->grassFormID, static_cast<int16_t>(keyX), static_cast<int16_t>(keyY)));
+	if (it == grassTypes.end()) {
+		logger::warn("\tSceneGraph::CreateGrassModel - Grass Type not found for ({:0X}, [{}, {}])", grassParams->grassFormID, keyX, keyY);
+		return;
+	}
+
+	auto* grassShape = it->second->typeShape;
+	if (!grassShape) {
+		logger::warn("\tSceneGraph::CreateGrassModel - Grass Type is nullptr");
+		return;
+	}
+
+	auto modelName = eastl::string(grassForm->model.c_str());
+
+	Model* model = nullptr;
+	{
+		std::scoped_lock lock(m_ModelMutex);
+		if (auto modelIt = m_Models.find(modelName); modelIt != m_Models.end())
+			model = modelIt->second.get();
+	}
+
+	if (!model) {
+		auto meshes = CreateMeshes(grassShape, grassForm);
+		model = CommitModel(modelName.c_str(), grassShape, grassForm, meshes);
+	}
+
+	if (!model) {
+		logger::warn("SceneGraph::CreateGrassModel - Grass model {} is null", modelName);
+		return;
+	}
+
+	auto instanceData = reinterpret_cast<GrassReference::InstanceData*>(a_grassManager->instanceData);
+
+	for (size_t i = 0; i < numInstances; i++)
+	{
+		auto instance = instanceData[i];
+		logger::info("\t[{}] - Position: {}", i, instance.position);
+	}
+}
+
 bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
 {
 	if (!m_TerrainLODInstances.contains(chunk)) {
@@ -946,9 +1004,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
 		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
 		bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
+		bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
 
 		// Only lighting and effect shader for now
-		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader) {
+		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader && !isGrassShader) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
