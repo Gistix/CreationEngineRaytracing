@@ -28,3 +28,17 @@ namespace RE
 		}
 	};
 }
+
+namespace eastl
+{
+	template <>
+	struct hash<RE::GrassTypeKey>
+	{
+		size_t operator()(const RE::GrassTypeKey& k) const noexcept
+		{
+			uint64_t packed;
+			std::memcpy(&packed, &k, sizeof(k));
+			return eastl::hash<uint64_t>{}(packed);
+		}
+	};
+}

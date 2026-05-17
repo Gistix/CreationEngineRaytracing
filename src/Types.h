@@ -121,6 +121,14 @@ struct half3
 			static_cast<float>(z));
 	}
 
+	operator RE::NiPoint3() const
+	{
+		return RE::NiPoint3(
+			static_cast<float>(x),
+			static_cast<float>(y),
+			static_cast<float>(z));
+	}
+
 	half3& operator+=(const half3& rhs)
 	{
 		x += rhs.x;

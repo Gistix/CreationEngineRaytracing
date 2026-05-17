@@ -5,6 +5,7 @@
 #include "core/Light.h"
 #include "Core/TextureManager.h"
 #include "core/TreeLODInstance.h"
+#include "core/GrassInstance.h"
 
 #include "Core/Reference/ActorReference.h"
 #include "Core/Reference/ObjectLODBlockReference.h"
@@ -21,6 +22,7 @@
 #include "Types/BindlessTable.h"
 #include "Types/VectorStorage.h"
 #include "Types/ReleasedData.h"
+#include "Types/RE/RE.h"
 
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
@@ -48,7 +50,7 @@ class SceneGraph
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, TreeLODBlockReference> m_TreeLODInstances;
 
 	// Grass
-	eastl::unordered_map<GrassRefrKey, GrassReference> m_GrassInstances;
+	eastl::unordered_map<RE::GrassTypeKey, GrassReference> m_GrassInstances;
 
 	// Actors
 	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;

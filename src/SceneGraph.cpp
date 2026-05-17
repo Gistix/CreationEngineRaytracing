@@ -585,17 +585,19 @@ void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::Creat
 	if (!grassForm || grassForm->model.empty())
 		return;
 
-	logger::info("SceneGraph::CreateGrassModel - Land: {:0X}, Quad: {}, Model: {}, Instances: {}", a_createGrassParams->land->GetFormID(), a_createGrassParams->quad, grassParams->modelName, numInstances);
+	logger::debug("SceneGraph::CreateGrassModel - Land: {:0X}, Quad: {}, Model: {}, Instances: {}", a_createGrassParams->land->GetFormID(), a_createGrassParams->quad, grassParams->modelName, numInstances);
 
 	// Generate the key exactly how its done by the engine
 	auto exteriorData = a_createGrassParams->land->parentCell->GetCoordinates();
 	auto keyX = exteriorData->cellX / 12;
 	auto keyY = exteriorData->cellX / 12;
 
+	auto grassKey = RE::GrassTypeKey(grassParams->grassFormID, static_cast<int16_t>(keyX), static_cast<int16_t>(keyY));
+
 	// The hash map type used by clib is incorrect, cast to the correct type before attempting to use it
 	auto& grassTypes = *reinterpret_cast<RE::BSTCustomHashMap<RE::GrassTypeKey, RE::GrassType*>*>(&a_grassManager->unk10);
 
-	auto it = grassTypes.find(RE::GrassTypeKey(grassParams->grassFormID, static_cast<int16_t>(keyX), static_cast<int16_t>(keyY)));
+	auto it = grassTypes.find(grassKey);
 	if (it == grassTypes.end()) {
 		logger::warn("\tSceneGraph::CreateGrassModel - Grass Type not found for ({:0X}, [{}, {}])", grassParams->grassFormID, keyX, keyY);
 		return;
@@ -626,12 +628,21 @@ void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::Creat
 		return;
 	}
 
+	auto& grassInstance = m_GrassInstances[grassKey];
+
 	auto instanceData = reinterpret_cast<GrassReference::InstanceData*>(a_grassManager->instanceData);
 
 	for (size_t i = 0; i < numInstances; i++)
 	{
-		auto instance = instanceData[i];
-		logger::info("\t[{}] - Position: {}", i, instance.position);
+		auto instanceDataLocal = instanceData[i];
+
+		auto instance = eastl::make_unique<GrassInstance>(instanceDataLocal, grassParams->grassFormID, grassShape, model);
+		instance->model->AddRef();
+
+		grassInstance.m_Instances.push_back(instance.get());
+		grassInstance.m_InstanceData.push_back(instanceDataLocal);
+
+		m_Instances.Add(eastl::move(instance));
 	}
 }
 
