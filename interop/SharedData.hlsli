@@ -18,7 +18,7 @@ struct CPMSettings
     BOOL EnableShadows;
     BOOL ExtendShadows;
     BOOL EnableParallaxWarpingFix;
-    uint pad0;
+    BOOL pad0;
 };
 #ifdef __cplusplus
 static_assert(sizeof(CPMSettings) % 16 == 0);
@@ -125,7 +125,6 @@ static_assert(sizeof(ExtendedTranslucencySettings) % 16 == 0);
 struct LinearLightingSettings
 {
 	uint enableLinearLighting;
-	uint enableGammaCorrection;
 	uint isDirLightLinear;
 	float dirLightMult;
 	float lightGamma;
@@ -152,6 +151,7 @@ struct LinearLightingSettings
 	float projectedEffectMult;
 	float deferredEffectMult;
 	float otherEffectMult;
+	uint pad0;
 };
 #ifdef __cplusplus
 static_assert(sizeof(LinearLightingSettings) % 16 == 0);
@@ -166,12 +166,15 @@ struct ExponentialHeightFogSettings
     float fogHeightFalloff;
     float fogDensity;
     float directionalInscatteringMultiplier;
-    float directionalInscatteringExponent;
+    float directionalInscatteringAnisotropy;
     float4 inscatteringTint;
     float cubemapMipLevel;
-    float pad0;
-    float pad1;
-    float pad2;
+    float sunlightAttenuationAmount;
+    uint respectVanillaFogFade;
+    uint disableVanillaFog;
+    float4 fogInscatteringColor;
+    float originalFogColorAmount;
+    float3 pad;
 };
 #ifdef __cplusplus
 static_assert(sizeof(ExponentialHeightFogSettings) % 16 == 0);
