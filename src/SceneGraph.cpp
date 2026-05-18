@@ -24,7 +24,8 @@ void SceneGraph::Initialize()
 	m_MeshBuffer = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
 
 	// Instance Data Buffer
-	m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+	//m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+	m_InstanceBuffer = eastl::make_unique<TiledBuffer<InstanceData>>(device, Constants::NUM_INSTANCES_MIN, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 
 	// Mesh Data Buffer
 	m_LightBuffer = Util::CreateStructuredBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
@@ -349,14 +350,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		// Update if applicable, and queue skinning/dynamic update
 		instance->model->Update(instance->m_Node, isPlayer, commandList);
 
-		uint32_t firstMeshIndex = m_NumMeshes;
-
 		// Get mesh data
-		instance->model->SetData(m_MeshData.data(), m_NumMeshes);
+		auto params = instance->model->GetData(m_MeshData.data(), m_NumMeshes);
 
 		// No visible meshes in instance
-		bool hiddenModel = m_NumMeshes == firstMeshIndex;
-		instance->SetHiddenModel(hiddenModel);
+		instance->SetHiddenModel(params.hidden);
 
 		if (instance->SkipAS())
 			return Iterator::Continue;
@@ -371,7 +369,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			lights[numLights] = light.m_Index;
 			numLights++;
 
-			if (numLights > Constants::INSTANCE_LIGHTS_MAX) {
+			if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
 				logger::error("SceneGraph::Update - Number of lights per instance of {} exceeds the maximum of {}", numLights, Constants::INSTANCE_LIGHTS_MAX);
 				break;
 			}
@@ -381,7 +379,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			instance->m_Transform,
 			instance->m_PrevTransform,
 			InstanceLightData(lights.data(), numLights),
-			firstMeshIndex,
+			params.firstMeshID,
 			instance->GetAlpha()
 		};
 
@@ -389,11 +387,17 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		return Iterator::Continue;
 	});
 
+	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
+		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
+
 	if (m_NumMeshes > 0)
 		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
 
+	if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
+		logger::critical("SceneGraph::Update - Number of instances of {} exceeds the maximum of {}", m_NumInstances, Constants::NUM_INSTANCES_MAX);
+
 	if (m_NumInstances > 0)
-		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 }
 
 void SceneGraph::ClearDirtyStates()

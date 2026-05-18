@@ -119,5 +119,11 @@ namespace Util
 				abs(aCenter.x - bCenter.x) <= (aHalf.x + bHalf.x) &&
 				abs(aCenter.y - bCenter.y) <= (aHalf.y + bHalf.y);
 		}
+
+		uint64_t Align64KB(uint64_t size)
+		{
+			constexpr uint32_t ALIGNMENT = 64 * 1024; // 65536
+			return (size + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
+		}
 	}
 }

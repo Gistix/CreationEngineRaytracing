@@ -7,6 +7,13 @@
 
 class SceneGraph;
 
+struct DataParams
+{
+	bool alreadyUpdated;
+	bool hidden;
+	uint32_t firstMeshID;
+};
+
 struct Model
 {
 	struct Flags {
@@ -36,6 +43,10 @@ struct Model
 	uint64_t m_LastUpdate = 0;
 
 	uint64_t m_LastBLASUpdate = 0;
+
+	uint64_t m_LastDataUpload = 0;
+
+	DataParams m_DataParams;
 
 	// Meant to used for the player
 	bool m_FirstPerson = false;
@@ -73,7 +84,7 @@ struct Model
 
 	void Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList);
 
-	void SetData(MeshData* meshData, uint32_t& index);
+	DataParams GetData(MeshData* meshData, uint32_t& index);
 
 	void UpdateBLAS(nvrhi::ICommandList* commandList);
 

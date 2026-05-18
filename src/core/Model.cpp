@@ -130,8 +130,16 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* c
 	m_LastUpdate = frameIndex;
 }
 
-void Model::SetData(MeshData* meshData, uint32_t& index)
-{
+DataParams Model::GetData(MeshData* meshData, uint32_t& index)
+{	
+	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+
+	m_DataParams.alreadyUpdated = (m_LastDataUpload == frameIndex);
+	if (m_DataParams.alreadyUpdated)
+		return m_DataParams;
+
+	m_DataParams.firstMeshID = index;
+
 	for (auto& mesh : meshes) {
 		if (mesh->IsHidden())
 			continue;
@@ -139,6 +147,11 @@ void Model::SetData(MeshData* meshData, uint32_t& index)
 		meshData[index] = mesh->GetData();
 		index++;
 	}
+
+	m_DataParams.hidden = (m_DataParams.firstMeshID == index);
+
+	m_LastDataUpload = frameIndex;
+	return m_DataParams;
 }
 
 void Model::BuildBLAS()
