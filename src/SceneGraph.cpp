@@ -24,8 +24,7 @@ void SceneGraph::Initialize()
 	m_MeshBuffer = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
 
 	// Instance Data Buffer
-	//m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
-	m_InstanceBuffer = eastl::make_unique<TiledBuffer<InstanceData>>(device, Constants::NUM_INSTANCES_MIN, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+	m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 
 	// Mesh Data Buffer
 	m_LightBuffer = Util::CreateStructuredBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
@@ -397,7 +396,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		logger::critical("SceneGraph::Update - Number of instances of {} exceeds the maximum of {}", m_NumInstances, Constants::NUM_INSTANCES_MAX);
 
 	if (m_NumInstances > 0)
-		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 }
 
 void SceneGraph::ClearDirtyStates()

@@ -35,7 +35,7 @@ struct Instance
 	float3x4 m_PrevTransform;
 
 	// Makes sure we only update once per frame
-	uint64_t m_LastUpdate = 0;
+	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
 
 	uint32_t m_TLASInstanceID = 0;
 

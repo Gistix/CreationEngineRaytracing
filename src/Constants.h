@@ -27,7 +27,6 @@ namespace Constants
 	static constexpr uint32_t LIGHT_TLAS_INSTANCES_THRESHOLD = 16;
 	static constexpr uint32_t LIGHT_TLAS_INSTANCES_STEP = 32;
 
-	static constexpr uint32_t NUM_INSTANCES_MIN = 16 * 1024;
 	static constexpr uint32_t NUM_INSTANCES_MAX = 256 * 1024;
 
 	static constexpr uint32_t NUM_TEXTURES_MIN = 512;
@@ -36,6 +35,8 @@ namespace Constants
 	static constexpr uint32_t NUM_CUBEMAPS_MAX = 256;
 
 	static constexpr uint32_t INVALID_FRAME_ID = UINT32_MAX;
+
+	static constexpr uint64_t INVALID_FRAME_INDEX = UINT64_MAX;
 
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
 

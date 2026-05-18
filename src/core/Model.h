@@ -2,8 +2,9 @@
 
 #include <PCH.h>
 
-#include "Mesh.h"
+#include "Constants.h"
 #include "DirtyFlags.h"
+#include "Mesh.h"
 
 class SceneGraph;
 
@@ -40,11 +41,11 @@ struct Model
 	nvrhi::CommandListHandle m_BLASBuildCommandList;
 	nvrhi::EventQueryHandle m_BLASBuildQuery;
 
-	uint64_t m_LastUpdate = 0;
+	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
 
-	uint64_t m_LastBLASUpdate = 0;
+	uint64_t m_LastBLASUpdate = Constants::INVALID_FRAME_INDEX;
 
-	uint64_t m_LastDataUpload = 0;
+	uint64_t m_LastDataUpload = Constants::INVALID_FRAME_INDEX;
 
 	DataParams m_DataParams;
 

@@ -22,7 +22,6 @@
 #include "Types/BindlessTable.h"
 #include "Types/VectorStorage.h"
 #include "Types/ReleasedData.h"
-#include "Types/TiledBuffer.h"
 #include "Types/RE/RE.h"
 
 #include <eastl/vector_set.h>
@@ -68,7 +67,7 @@ class SceneGraph
 
 	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
-	eastl::unique_ptr<TiledBuffer<InstanceData>> m_InstanceBuffer;
+	nvrhi::BufferHandle m_InstanceBuffer;
 
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 
@@ -116,7 +115,7 @@ public:
 
 	inline auto& GetLightBuffer() const { return m_LightBuffer; }
 	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
-	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer->buffer; }
+	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
 	inline auto& GetModels() { return m_Models; }
 	inline auto& GetInstances() { return m_Instances; }
