@@ -143,7 +143,11 @@ void Renderer::InitDefaultTextures()
 	commandList->commitBarriers();
 
 	commandList->close();
-	GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
+
+	{
+		std::scoped_lock lock(m_ExecutionMutex);
+		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
+	}
 }
 
 nvrhi::ITexture* Renderer::GetDepthTexture() {
@@ -593,7 +597,10 @@ void Renderer::EndExecution()
 	m_CommandList->close();
 
 	// Execute it
-	m_LastSubmittedInstance = GetDevice()->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+	{
+		std::scoped_lock lock(m_ExecutionMutex);
+		m_LastSubmittedInstance = GetDevice()->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+	}
 
 	logger::trace("Renderer::ExecutePasses - End");
 }

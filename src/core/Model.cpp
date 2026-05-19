@@ -74,10 +74,15 @@ void Model::CreateBuffers(SceneGraph* sceneGraph)
 	}
 
 	m_BufferUploadCommandList->close();
-	m_SubmittedCopyInstance = device->executeCommandList(m_BufferUploadCommandList, nvrhi::CommandQueue::Copy);
 
-	m_BufferUploadQuery = device->createEventQuery();
-	device->setEventQuery(m_BufferUploadQuery, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
+	{
+		std::scoped_lock lock(renderer->GetExecutionMutex());
+
+		m_SubmittedCopyInstance = device->executeCommandList(m_BufferUploadCommandList, nvrhi::CommandQueue::Copy);
+
+		m_BufferUploadQuery = device->createEventQuery();
+		device->setEventQuery(m_BufferUploadQuery, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
+	}
 }
 
 void Model::UpdateFlags()
@@ -179,12 +184,16 @@ void Model::BuildBLAS()
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, blas, blasDesc);
 
-	m_BLASBuildCommandList->close();
-	device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
-	auto submittedComputeInstance = device->executeCommandList(m_BLASBuildCommandList, nvrhi::CommandQueue::Compute);
+	{
+		std::scoped_lock lock(renderer->GetExecutionMutex());
 
-	m_BLASBuildQuery = device->createEventQuery();
-	device->setEventQuery(m_BLASBuildQuery, nvrhi::CommandQueue::Compute, submittedComputeInstance);
+		m_BLASBuildCommandList->close();
+		device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
+		auto submittedComputeInstance = device->executeCommandList(m_BLASBuildCommandList, nvrhi::CommandQueue::Compute);
+
+		m_BLASBuildQuery = device->createEventQuery();
+		device->setEventQuery(m_BLASBuildQuery, nvrhi::CommandQueue::Compute, submittedComputeInstance);
+	}
 
 	m_LastBLASUpdate = renderer->GetFrameIndex();
 }
@@ -250,7 +259,12 @@ void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr
 	}
 
 	copyCommandList->close();
-	Renderer::GetSingleton()->GetDevice()->executeCommandList(copyCommandList, nvrhi::CommandQueue::Copy);
+
+	auto* renderer = Renderer::GetSingleton();
+	{
+		std::scoped_lock lock(renderer->GetExecutionMutex());
+		renderer->GetDevice()->executeCommandList(copyCommandList, nvrhi::CommandQueue::Copy);
+	}
 
 	UpdateMeshFlags();
 
