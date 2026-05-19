@@ -1127,9 +1127,14 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 
 				graphicsCommandList->close();
 
-				auto device = Renderer::GetSingleton()->GetDevice();
-				device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Copy, modelPtr->m_SubmittedCopyInstance);
-				device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
+				auto* renderer = Renderer::GetSingleton();
+				auto device = renderer->GetDevice();
+
+				{
+					std::scoped_lock lock(renderer->GetExecutionMutex());
+					device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Copy, modelPtr->m_SubmittedCopyInstance);
+					device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
+				}
 			}
 
 			logger::debug("SceneGraph::CommitModel - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));

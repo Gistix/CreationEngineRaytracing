@@ -54,6 +54,7 @@ class Renderer
 	SupportedFeatures m_SupportedFeatures;
 
 	uint64_t m_LastSubmittedInstance = 0;
+	mutable std::mutex m_ExecutionMutex;
 
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;
@@ -176,6 +177,8 @@ public:
 	bool Initialize(RendererParams parameters);
 
 	auto GetDevice() const { return m_NVRHIDevice; }
+
+	auto& GetExecutionMutex() const { return m_ExecutionMutex; };
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
 	static auto GetNativeD3D11Device() { return GetSingleton()->m_NativeD3D11Device; }
