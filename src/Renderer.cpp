@@ -110,7 +110,7 @@ void Renderer::InitDefaultTextures()
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
 	// Write the textures using a temporary CL
-	nvrhi::CommandListHandle commandList = m_NVRHIDevice->createCommandList();
+	nvrhi::CommandListHandle commandList = GetCopyCommandList();
 	commandList->open();
 
 	commandList->beginTrackingTextureState(m_WhiteTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
@@ -131,19 +131,19 @@ void Renderer::InitDefaultTextures()
 #endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
 
-	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::ShaderResource);
-	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::ShaderResource);
-	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::ShaderResource);
-	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::ShaderResource);
+	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::Common);
+	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::Common);
+	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::Common);
+	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::Common);
 #if defined(SKYRIM)
-	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::ShaderResource);
+	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::Common);
 #endif
-	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::ShaderResource);
+	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::Common);
 
 	commandList->commitBarriers();
 
 	commandList->close();
-	GetDevice()->executeCommandList(commandList);
+	GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
 }
 
 nvrhi::ITexture* Renderer::GetDepthTexture() {
