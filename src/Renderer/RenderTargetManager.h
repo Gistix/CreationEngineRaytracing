@@ -12,6 +12,7 @@ struct RenderTargetManager
 		ClipDepth,
 		FaceNormals,
 		MotionVectors3D,
+		PathTracingDirect,
 		DiffuseRadiance,
 		SpecularRadiance,
 		DiffuseFactor,

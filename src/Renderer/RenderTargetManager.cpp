@@ -31,13 +31,14 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 			break;
 		case RenderTarget::MotionVectors3D:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
-			break;
+			break;			
+		case RenderTarget::PathTracingDirect:
 		case RenderTarget::DiffuseRadiance:
 		case RenderTarget::SpecularRadiance:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
-		case RenderTarget::DiffuseFactor:
-		case RenderTarget::SpecularFactor:
+		case RenderTarget::DiffuseFactor:	// RRDiffuseAlbedo
+		case RenderTarget::SpecularFactor:  // RRSpecularAlbedo
 			desc.format = nvrhi::Format::R11G11B10_FLOAT;
 			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
 			break;
