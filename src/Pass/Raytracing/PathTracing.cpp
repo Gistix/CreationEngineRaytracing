@@ -254,8 +254,6 @@ namespace Pass
 
 		auto* rts = renderer->GetRenderTargets();
 
-		auto* rrInput = renderer->GetRRInput();
-
 		auto& textureManager = renderer->RenderTargetManager();
 
 		nvrhi::BindingSetDesc bindingSetDesc;
@@ -276,10 +274,10 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(7, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
-			nvrhi::BindingSetItem::Texture_UAV(1, rrInput->diffuseAlbedo),
-			nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularAlbedo),
+			nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::RRDiffuseAlbedo)),
+			nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)),
 			nvrhi::BindingSetItem::Texture_UAV(3, rts->normalRoughness),
-			nvrhi::BindingSetItem::Texture_UAV(4, rrInput->specularHitDistance),
+			nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)),
 			nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::MotionVectors3D)),
 			nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::ClipDepth))
 		};

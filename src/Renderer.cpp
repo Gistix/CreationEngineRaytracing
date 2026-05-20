@@ -40,6 +40,8 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	m_NativeD3D11Device = rendererParams.d3d11Device;
 	m_NativeD3D12Device = rendererParams.d3d12Device;
 
+	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
+
 	if (m_FormatMapping.empty())
 		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
 		{
@@ -220,29 +222,6 @@ void Renderer::InitGBufferOutput()
 	desc.clearValue = nvrhi::Color(1.f);
 	desc.debugName = "GBuffer Depth Texture";
 	m_GBufferOutput->depth = device->createTexture(desc);
-}
-
-void Renderer::InitRR()
-{
-	m_RayReconstructionInput = eastl::make_unique<RayReconstructionInput>();
-
-	auto device = GetDevice();
-
-	nvrhi::TextureDesc desc;
-	desc.width = m_RenderSize.x;
-	desc.height = m_RenderSize.y;
-	desc.initialState = nvrhi::ResourceStates::Common;
-	desc.keepInitialState = true;
-	desc.isUAV = true;
-	desc.mipLevels = 1;
-
-	desc.format = nvrhi::Format::R11G11B10_FLOAT;
-	desc.debugName = "RR Specular Albedo";
-	m_RayReconstructionInput->specularAlbedo = device->createTexture(desc);
-
-	desc.format = nvrhi::Format::R32_FLOAT;
-	desc.debugName = "RR Specular Hit Distance";
-	m_RayReconstructionInput->specularHitDistance = device->createTexture(desc);
 }
 
 void Renderer::InitStablePlanes()
@@ -443,11 +422,6 @@ void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRo
 	m_RenderTargets->albedo = CreateHandleForNativeTexture(albedo, "Albedo RenderTarget");
 	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
 	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget");
-}
-
-void Renderer::SetDiffuseAlbedo(ID3D12Resource* diffuseAlbedo)
-{
-	GetRRInput()->diffuseAlbedo = CreateHandleForNativeTexture(diffuseAlbedo, "Diffuse Albedo RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
 }
 
 void Renderer::SetResolution(uint2 resolution)

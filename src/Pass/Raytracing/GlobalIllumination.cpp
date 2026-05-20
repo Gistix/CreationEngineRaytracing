@@ -254,10 +254,8 @@ namespace Pass::Raytracing
 		}
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
-			auto* rrInput = renderer->GetRRInput();
-
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, rrInput->specularAlbedo));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, rrInput->specularHitDistance));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
 		}
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
