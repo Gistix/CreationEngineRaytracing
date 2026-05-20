@@ -28,8 +28,15 @@ RWStructuredBuffer<uint>                    SharcLockBuffer             : regist
 RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer     : register(u2);
 #else
 RWTexture2D<float4>                         Output                      : register(u0);
+
+#   if defined(NRD)
+RWTexture2D<float3>                         DiffuseFactor               : register(u1);
+RWTexture2D<float3>                         SpecularFactor              : register(u2);
+#else
 RWTexture2D<float3>                         DiffuseAlbedo               : register(u1);
 RWTexture2D<float3>                         SpecularAlbedo              : register(u2);
+#endif
+
 RWTexture2D<float4>                         NormalRoughness             : register(u3);
 RWTexture2D<float>                          SpecularHitDistance         : register(u4);
 
