@@ -250,9 +250,7 @@ namespace Pass::Raytracing
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::SpecularFactor)));
-		}
-
-		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
+		} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
 		}

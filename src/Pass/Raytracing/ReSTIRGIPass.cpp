@@ -238,7 +238,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(8, giRes->secondaryGBufferSpecularF0Roughness),
 			nvrhi::BindingSetItem::TypedBuffer_SRV(9, giRes->neighborOffsetBuffer),
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::MotionVectors3D)),
-			nvrhi::BindingSetItem::Texture_SRV(11, textureManager.GetTexture(RenderTarget::RRDiffuseAlbedo)),
+			nvrhi::BindingSetItem::Texture_SRV(11, textureManager.GetTexture(RenderTarget::DiffuseAlbedo)),
 			nvrhi::BindingSetItem::Texture_SRV(12, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(13, giRes->surfaceDataBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, giRes->reservoirBuffer),

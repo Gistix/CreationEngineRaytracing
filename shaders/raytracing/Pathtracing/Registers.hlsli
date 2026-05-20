@@ -29,24 +29,25 @@ RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer     : regist
 #else
 RWTexture2D<float4>                         Output                      : register(u0);
 
-#   if defined(NRD)
-RWTexture2D<float3>                         DiffuseFactor               : register(u1);
-RWTexture2D<float3>                         SpecularFactor              : register(u2);
-#else
-RWTexture2D<float3>                         DiffuseAlbedo               : register(u1);
-RWTexture2D<float3>                         SpecularAlbedo              : register(u2);
-#endif
+RWTexture2D<float4>                         NormalRoughness             : register(u1);
 
-RWTexture2D<float4>                         NormalRoughness             : register(u3);
-RWTexture2D<float>                          SpecularHitDistance         : register(u4);
+RWTexture2D<float4>                         MotionVectors               : register(u2); // PT Motion Vectors output (written by BUILD/REFERENCE pass)
+RWTexture2D<float>                          Depth                       : register(u3); // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
 
-RWTexture2D<float4>                         MotionVectors               : register(u5); // PT Motion Vectors output (written by BUILD/REFERENCE pass)
-RWTexture2D<float>                          Depth                       : register(u6); // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
+#   if defined(NRD) | defined(DLSS_RR)
+RWTexture2D<float3>                         DiffuseAlbedo               : register(u4);
 
-#   if defined(NRD)
-RWTexture2D<float>                          ViewDepth                   : register(u7);
-RWTexture2D<float4>                         DiffuseRadiance             : register(u8);
-RWTexture2D<float4>                         SpecularRadiance            : register(u9);
+#       if defined(NRD)
+RWTexture2D<float>                          ViewDepth                   : register(u5);
+RWTexture2D<float4>                         DiffuseRadiance             : register(u6);
+RWTexture2D<float4>                         SpecularRadiance            : register(u7);
+RWTexture2D<float3>                         DiffuseFactor               : register(u8);
+RWTexture2D<float3>                         SpecularFactor              : register(u9);
+#       else
+RWTexture2D<float3>                         SpecularAlbedo              : register(u5);
+RWTexture2D<float>                          SpecularHitDistance         : register(u6);
+#       endif
+
 #   endif
 
 #   if defined(STABLE_PLANES)

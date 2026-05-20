@@ -166,17 +166,20 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         
-#   if defined(NRD)
+#   if defined(NRD) | defined(DLSS_RR)
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f); 
+        
+#       if defined(NRD)
         DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
-#   else
-        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
+#       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-#   endif
+        SpecularHitDistance[idx] = RAY_TMAX;                
+#       endif              
+#   endif       
         
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        SpecularHitDistance[idx] = RAY_TMAX;
-        
+
         float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
         MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)    
@@ -246,17 +249,22 @@ void Main()
 #else
     #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(LLTrueLinearToGamma(skyRadiance), 1.0f);
-        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
-        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        SpecularHitDistance[idx] = RAY_TMAX;
         
         float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
         MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
         Depth[idx] = 1;
-#       if defined(NRD) 
+    
+#       if defined(NRD) | defined(DLSS_RR)   
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
+#           if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
-#       endif    
+#           else
+        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
+        SpecularHitDistance[idx] = RAY_TMAX;
+#           endif  
+#       endif
+    
     #endif
         return;
 #endif
@@ -281,11 +289,13 @@ void Main()
     // Coat-priority GBuffer: when coat is present, use coat normal/roughness for denoiser;
     // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
     const bool useCoat = sourceSurface.CoatStrength > 0;
-      
-#   if !defined(NRD)    
+  
+#   if defined(NRD) | defined(DLSS_RR)    
     const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
     DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+#   endif   
     
+#   if defined(DLSS_RR)    
     if (useCoat)
     {
         float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
@@ -1244,8 +1254,11 @@ void Main()
     SpecularFactor[idx] = specFactor;    
 #else    
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
-#endif
-    
+
+#   if defined(DLSS_RR)
     SpecularHitDistance[idx] = specHitDist;     
+#   endif    
+#endif
+        
 #endif    
 }

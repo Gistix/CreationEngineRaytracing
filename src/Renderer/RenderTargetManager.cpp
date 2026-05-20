@@ -33,18 +33,22 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;			
 		case RenderTarget::PathTracingDirect:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			break;
+		case RenderTarget::DiffuseAlbedo:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
+			break;
 		case RenderTarget::DiffuseRadiance:
 		case RenderTarget::SpecularRadiance:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
-		case RenderTarget::DiffuseFactor:	// RRDiffuseAlbedo
+		case RenderTarget::DiffuseFactor:
 		case RenderTarget::SpecularFactor:  // RRSpecularAlbedo
 			desc.format = nvrhi::Format::R11G11B10_FLOAT;
-			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
 			break;
 		case RenderTarget::RRSpecularHitDist:
 			desc.format = nvrhi::Format::R32_FLOAT;
-			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
 			break;
 		default:
 			break;
