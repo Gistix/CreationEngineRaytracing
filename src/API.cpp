@@ -94,27 +94,21 @@ void UpdateSettings(Settings settings)
 
 void GetRRInput(ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance)
 {
-	auto* rrInput = Renderer::GetSingleton()->GetRRInput();
-
-	if (rrInput) {
-		specularAlbedo = rrInput->specularAlbedo->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
-		specularHitDistance = rrInput->specularHitDistance->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
-	}
-	else
-	{
-		logger::error("GetRRInput failed, settings both textures to nullptr.");
-
-		specularAlbedo = nullptr;
-		specularHitDistance = nullptr;
-	}
+	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
+	specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+	specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
 }
 
-void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao, ID3D12Resource* diffuseAlbedo)
+void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
 {
 	auto* renderer = Renderer::GetSingleton();
-
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
-	renderer->SetDiffuseAlbedo(diffuseAlbedo);
+}
+
+void GetSharedTextures(SharedTexture& diffuseAlbedo)
+{
+	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
+	diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::RRDiffuseAlbedo);
 }
 
 void UpdateJitter(float2 jitter)
