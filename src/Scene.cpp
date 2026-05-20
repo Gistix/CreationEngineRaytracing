@@ -23,7 +23,7 @@
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raster/GBuffer.h"
-#include "Pass/NRD/ReblurRadiance.h"
+#include "Pass/NRD/NRDIntegration.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
@@ -119,7 +119,7 @@ RenderNode* Scene::GetGlobalIllumination()
 		m_GlobalIllumination->AddNode({
 			true,
 			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::ReblurRadiance>(renderer)
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
 		});
 
 		m_GlobalIllumination->AddNode({
@@ -183,6 +183,12 @@ RenderNode* Scene::GetPathTracing()
 				renderer,
 				m_PathTracing->GetPass<Pass::SceneTLAS>()
 			)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"NRD Reblur Radiance",
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
 		});
 
 		m_PathTracing->AddNode({
@@ -533,7 +539,7 @@ void Scene::UpdateSettings(Settings settings)
 	const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
 	
 	if (currentMode == Mode::GlobalIllumination) {
-		rootNode->SetEnabled<Pass::NRD::ReblurRadiance>(nrdReblur);
+		rootNode->SetEnabled<Pass::NRD::NRDIntegration>(nrdReblur);
 		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
 	}
 
