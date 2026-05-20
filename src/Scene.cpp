@@ -535,7 +535,7 @@ void Scene::UpdateSettings(Settings settings)
 	if (currentMode != previousMode || !rootNode->HasRenderNode())
 		UpdateMode(currentMode, previousMode);
 
-	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR;
+	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD;
 	const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
 	
 	if (currentMode == Mode::GlobalIllumination) {

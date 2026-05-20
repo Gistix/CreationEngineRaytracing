@@ -502,7 +502,7 @@ namespace Pass::NRD
 		if (!m_NRD)
 			return;
 
-		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
+		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD)
 			return;
 
 		auto* renderer = GetRenderer();

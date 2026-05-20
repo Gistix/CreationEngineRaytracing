@@ -34,7 +34,7 @@ namespace Util
 				defines.emplace_back(L"SHARC");
 
 			if (!sharcUpdate) {
-				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR) {
+				if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
 					
 					defines.emplace_back(L"NRD", L"1");
