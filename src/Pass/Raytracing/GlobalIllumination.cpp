@@ -84,7 +84,6 @@ namespace Pass::Raytracing
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // ViewZ
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(3)); // Diffuse Factor
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Specular Factor
-
 		}
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {

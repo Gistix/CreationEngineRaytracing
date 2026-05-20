@@ -78,31 +78,40 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),
-			nvrhi::BindingLayoutItem::Texture_UAV(0),
-			nvrhi::BindingLayoutItem::Texture_UAV(1),
-			nvrhi::BindingLayoutItem::Texture_UAV(2),
-			nvrhi::BindingLayoutItem::Texture_UAV(3),
-			nvrhi::BindingLayoutItem::Texture_UAV(4),
-			nvrhi::BindingLayoutItem::Texture_UAV(5),            // MotionVectors (RWTexture2D<float4>)
+			nvrhi::BindingLayoutItem::Texture_UAV(0),           // Color output
+			nvrhi::BindingLayoutItem::Texture_UAV(1),           // Diffuse Albedo
+			nvrhi::BindingLayoutItem::Texture_UAV(2),           // Specular Albedo (EnvBRDF)
+			nvrhi::BindingLayoutItem::Texture_UAV(3),           // Normal Roughness
+			nvrhi::BindingLayoutItem::Texture_UAV(4),			// Specular Hit Distance
+			nvrhi::BindingLayoutItem::Texture_UAV(5),           // MotionVectors (RWTexture2D<float4>)
 			nvrhi::BindingLayoutItem::Texture_UAV(6)            // Depth (RWTexture2D<float>)
 		};
 
+		auto* scene = Scene::GetSingleton();
+		auto& settings = scene->m_Settings;
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(7)); // ViewZ
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(8)); // Diffuse Factor
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9)); // Specular Factor
+		}
+
 		if (m_UseStablePlanes) {
 			// Stable Planes UAVs
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(7));
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(8));
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(10));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(11));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(12));
 		}
 
 		if (m_UseRestirGI) {
 			// ReSTIR GI: Secondary G-Buffer UAVs
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(10)); // SecondaryGBufPositionNormal
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(11)); // SecondaryGBufRadiance
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(12)); // SecondaryGBufDiffuseAlbedo
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(13)); // SecondaryGBufSpecularRough
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(13)); // SecondaryGBufPositionNormal
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(14)); // SecondaryGBufRadiance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(15)); // SecondaryGBufDiffuseAlbedo
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(16)); // SecondaryGBufSpecularRough
 
 			// ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(14)); // SurfaceDataBuffer
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(17)); // SurfaceDataBuffer
 		}
 
 #if defined(NVAPI)
@@ -282,24 +291,32 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::ClipDepth))
 		};
 
+		auto& settings = scene->m_Settings;
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, textureManager.GetTexture(RenderTarget::ViewDepth)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(8, textureManager.GetTexture(RenderTarget::DiffuseRadiance)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
+		}
+
 		if (m_UseStablePlanes) {
 			auto* sp = renderer->GetStablePlanes();
 
 			// Stable Planes UAVs
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, sp->header));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(8, sp->buffer));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, sp->stableRadiance));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(10, sp->header));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(11, sp->buffer));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(12, sp->stableRadiance));
 		}
 
 		if (m_UseRestirGI) {
 			auto* rgi = renderer->GetReSTIRGIResources();
 
 			// ReSTIR GI: Secondary G-Buffer UAVs
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(10, rgi->secondaryGBufferPositionNormal));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(11, rgi->secondaryGBufferRadiance));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(12, rgi->secondaryGBufferDiffuseAlbedo));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(13, rgi->secondaryGBufferSpecularF0Roughness));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(14, rgi->surfaceDataBuffer));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(13, rgi->secondaryGBufferPositionNormal));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(14, rgi->secondaryGBufferRadiance));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(15, rgi->secondaryGBufferDiffuseAlbedo));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(16, rgi->secondaryGBufferSpecularF0Roughness));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(17, rgi->surfaceDataBuffer));
 		}
 
 #if defined(NVAPI)
