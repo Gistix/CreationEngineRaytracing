@@ -890,11 +890,4 @@ namespace Hooks
 #endif
 		logger::info("[Raytracing] Installed hooks");
 	}
-
-	void InstallD3D11Hooks([[maybe_unused]]ID3D11Device* device)
-	{
-		//stl::detour_vfunc<5, ID3D11Device_CreateTexture2D>(device);
-
-		logger::info("[Raytracing] Installed D3D11 hooks");
-	}
 }
