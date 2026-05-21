@@ -258,7 +258,9 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 					if (const RE::BSLightingShaderMaterialBase* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 						textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
 
-						auto textureType = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
+						bool convertMSN = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) && shaderFlags.none(EShaderPropertyFlag::kLODLandscape);
+
+						auto textureType = convertMSN ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
 						textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, textureType);
 
 						if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {

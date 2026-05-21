@@ -29,7 +29,7 @@ namespace ShaderFlags
 	static const uint kModelSpaceNormals = (1 << 8);
     static const uint kRefraction = (1 << 9);
     static const uint kProjectedUV = (1 << 10);
-    static const uint kExternalEmittance = (1 << 11);	
+    static const uint kExternalEmittance = (1 << 11);
     static const uint kVertexColors = (1 << 12);
     static const uint kMultiTextureLandscape = (1 << 13);
     static const uint kEyeReflect = (1 << 14);
@@ -38,7 +38,8 @@ namespace ShaderFlags
 	static const uint kAssumeShadowmask = (1 << 17);
 	static const uint kBackLighting = (1 << 18);
 	static const uint kTreeAnim = (1 << 19);
-	static const uint kSoftLighting = (1 << 20);	
+	static const uint kSoftLighting = (1 << 20);
+    static const uint kLODLandscape = (1 << 21);
 }
 
 namespace WaterShaderFlags

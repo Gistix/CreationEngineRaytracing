@@ -39,6 +39,13 @@ void NormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 g
     bitangentWS = cross(normalWS, tangentWS) * handedness;
 }
 
+void ModelSpaceNormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
+{
+    normalWS = normalize(normalMap * 2.0f - 1.0f);
+    tangentWS = normalize(geomTangentWS - normalWS * dot(geomTangentWS, normalWS));
+    bitangentWS = cross(normalWS, tangentWS) * handedness;
+}
+
 float Remap(float x, float min, float max)
 {
     return clamp(min + saturate(x) * (max - min), min, max);

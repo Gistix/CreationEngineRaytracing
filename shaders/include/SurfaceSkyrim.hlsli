@@ -34,8 +34,10 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 #elif defined(DEBUG_NOSAMPLING)
     Albedo = float3(0.5f, 0.5f, 0.5f);
 #else
-    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
+    const Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
 
+    const bool clampSampler = material.ShaderFlags & ShaderFlags::kLODLandscape;
+    
     vertexColor.rgb = saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
     
     const bool isWindows = (material.Feature == Feature::kGlowMap || material.PBRFlags & PBR::Flags::HasEmissive) && material.ShaderFlags & ShaderFlags::kAssumeShadowmask;
@@ -160,7 +162,11 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     }
     else if (material.ShaderType == ShaderType::Lighting)
     {
-        float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+        float4 diffuse = 
+            clampSampler ? 
+            baseTexture.SampleLevel(ClampSampler, texCoord0, mipLevel) : 
+            baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+        
         alpha = diffuse.a * material.BaseColor().a;
         
         surface.Albedo = VanillaDiffuseColor(diffuse.rgb * vertexColor.rgb);
@@ -402,15 +408,30 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     Tangent = tangentWS;
     Bitangent = bitangentWS;
 #else
-    Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
-    float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
+    const Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
+    float3 normal = 
+        clampSampler ? 
+        normalTexture.SampleLevel(ClampSampler, texCoord0, mipLevel).xyz : 
+        normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
 
-    NormalMap(
-        normal,
-        handedness,
-        normalWS, tangentWS, bitangentWS,
-        surface.Normal, surface.Tangent, surface.Bitangent
-    );
+    if ((material.ShaderFlags & ShaderFlags::kModelSpaceNormals) && (material.ShaderFlags & ShaderFlags::kLODLandscape))
+    {
+        ModelSpaceNormalMap(
+            normal,
+            handedness,
+            normalWS, tangentWS, bitangentWS,
+            surface.Normal, surface.Tangent, surface.Bitangent
+        );
+    }
+    else
+    {
+        NormalMap(
+            normal,
+            handedness,
+            normalWS, tangentWS, bitangentWS,
+            surface.Normal, surface.Tangent, surface.Bitangent
+        );
+    }
 #endif
 
     // Hair flowmap processing
