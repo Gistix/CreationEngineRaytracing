@@ -572,7 +572,7 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	auto meshes = CreateMeshes(object, water);
 
 	if (auto* model = CommitModel(path.c_str(), object, water, meshes)) {
-		if (auto* instance = AddInstanceImpl(object, model, 0))
+		if (auto* instance = AddInstanceImpl<Instance>(object, model, 0))
 			m_WaterInstances.emplace(object, instance);
 	}
 }
@@ -1152,9 +1152,10 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 	return nullptr;
 }
 
-Instance* SceneGraph::AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID)
+template<typename T>
+T* SceneGraph::AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID)
 {
-	auto instance = eastl::make_unique<Instance>(formID, node, model);
+	auto instance = eastl::make_unique<T>(formID, node, model);
 	instance->model->AddRef();
 
 	auto instancePtr = instance.get();
@@ -1166,13 +1167,22 @@ Instance* SceneGraph::AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::Fo
 
 void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, formID))
+	if (formID != 0) {
+		auto* form = RE::TESForm::LookupByID(formID);
+		if (form->GetFormType() == RE::FormType::Land) {
+			if (auto* instance = AddInstanceImpl<LandInstance>(node, model, formID))
+				m_InstancesFormIDs[formID].push_back(instance);
+			return;
+		}
+	}
+
+	if (auto* instance = AddInstanceImpl<Instance>(node, model, formID))
 		m_InstancesFormIDs[formID].push_back(instance);
 }
 
 void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, 0)) {
+	if (auto* instance = AddInstanceImpl<Instance>(node, model, 0)) {
 		auto& blockRefr = m_ObjectLODInstances[block];
 		blockRefr.block = block;
 		blockRefr.instances.push_back(instance);
@@ -1181,7 +1191,7 @@ void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Mo
 
 void SceneGraph::AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, 0)) {
+	if (auto* instance = AddInstanceImpl<Instance>(node, model, 0)) {
 		auto& blockRefr = m_TerrainLODInstances[block];
 		blockRefr.block = block;
 		blockRefr.instances.push_back(instance);

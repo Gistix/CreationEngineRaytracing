@@ -4,7 +4,8 @@
 #include "core/Model.h"
 #include "core/Light.h"
 #include "Core/TextureManager.h"
-#include "core/TreeLODInstance.h"
+#include "core/Instance/LandInstance.h"
+#include "core/Instance/TreeLODInstance.h"
 
 #include "Core/Reference/ActorReference.h"
 #include "Core/Reference/ObjectLODBlockReference.h"
@@ -85,7 +86,8 @@ class SceneGraph
 	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
-	Instance* AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID);
+	template<typename T>
+	T* AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* path);
 	void AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model);
 	void AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model);
