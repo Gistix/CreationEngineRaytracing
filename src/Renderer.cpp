@@ -40,6 +40,7 @@ bool Renderer::Initialize(RendererParams rendererParams)
 
 	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
 
+	// Map DXGI_FORMAT to NVRHI formats
 	if (m_FormatMapping.empty())
 		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
 		{
