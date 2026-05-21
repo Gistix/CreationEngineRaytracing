@@ -151,14 +151,22 @@ void Main()
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
         // FILL: primary ray missed — output transparent like REFERENCE mode
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
-        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        SpecularHitDistance[idx] = RAY_TMAX;
         MotionVectors[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)    
-#   if defined(NRD) 
+        Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
+        
+#   if defined(NRD) | defined(DLSS_RR)
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
+        
+#       if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+        
+        DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
+        SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#       else
+        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
+        SpecularHitDistance[idx] = RAY_TMAX;        
+#       endif
 #   endif
         return;
 #else
@@ -634,16 +642,21 @@ void Main()
         if (sourceSurface.CoatStrength > 0)
         {
             float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
+#   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+#   endif
             NormalRoughness[idx] = float4(sourceSurface.CoatNormal, sourceSurface.CoatRoughness);
         }
         else
         {
+#   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+#   endif
             NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
         }
     }
 
+#   if defined(DLSS_RR) 
     if (sourceSurface.CoatStrength > 0)
     {
         float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
@@ -655,7 +668,8 @@ void Main()
         const float2 envBRDF2 = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
     }
-
+#   endif
+    
     // In FILL mode, emissive along delta paths was captured in BUILD → skip to avoid double-counting
     direct = 0;
 #endif // FILL
@@ -1197,9 +1211,8 @@ void Main()
             SecondaryGBufRadiance[idx] = float4(0, 0, 0, 0);
 #   endif
         
-#endif
-        
-#if defined(NRD)
+#elif PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE        
+#   if defined(NRD)
         float normHitDist = accumulatedHitDist;
         normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
         
@@ -1208,6 +1221,7 @@ void Main()
         } else {
             diffHitDist += normHitDist;
         }
+#   endif
 #endif        
         
         radiance += sampleRadiance;
@@ -1224,7 +1238,9 @@ void Main()
     {
         float3 totalRadiance = spCtx.GetAllRadiance(idx, true);
         Output[idx] = float4(LLTrueLinearToGamma(totalRadiance), 1.0f);
+#   if defined(DLSS_RR)    
         SpecularHitDistance[idx] = specHitDist;
+#   endif
     }
 #elif !(defined(SHARC) && SHARC_UPDATE)
     // REFERENCE mode output
