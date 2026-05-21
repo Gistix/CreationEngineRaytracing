@@ -25,7 +25,9 @@ namespace Pass::NRD
 
 		m_ReblurSettings = {};
 		m_ReblurSettings.checkerboardMode = nrd::CheckerboardMode::OFF;
-		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::OFF;
+
+		// Required when using probabilistic sampling
+		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
 
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
 		Setup();
