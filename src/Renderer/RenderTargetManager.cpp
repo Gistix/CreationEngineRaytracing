@@ -32,9 +32,6 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		case RenderTarget::MotionVectors3D:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;			
-		case RenderTarget::PathTracingDirect:
-			desc.format = nvrhi::Format::RGBA16_FLOAT;
-			break;
 		case RenderTarget::DiffuseAlbedo:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
