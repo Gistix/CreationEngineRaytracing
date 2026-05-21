@@ -438,6 +438,8 @@ namespace Pass::NRD
 
 		m_CommonSettings.rectSize[0] = static_cast<uint16_t>(dynamicResolution.x);
 		m_CommonSettings.rectSize[1] = static_cast<uint16_t>(dynamicResolution.y);
+
+		m_CommonSettings.denoisingRange = 1e6f;
 	}
 
 	nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
