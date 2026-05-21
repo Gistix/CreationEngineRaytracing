@@ -57,10 +57,10 @@ struct Instance
 	bool IsDetached() const;
 
 	// A hidden instance is not updated and does not go in AS, this is set externaly
-	virtual bool IsHidden() const;
+	bool IsHidden() const;
 
 	// Skip AS but still update since this depends on states updated post instance update
-	virtual bool SkipAS() const;
+	bool SkipAS() const;
 
 	nvrhi::rt::InstanceDesc GetInstanceDesc() const
 	{

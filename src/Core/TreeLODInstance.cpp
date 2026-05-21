@@ -1,4 +1,4 @@
-#include "core/Instance/TreeLODInstance.h"
+#include "core/TreeLODInstance.h"
 
 void TreeLODInstance::UpdateTransform()
 {
