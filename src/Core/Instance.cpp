@@ -25,6 +25,9 @@ bool Instance::IsDetached() const
 
 bool Instance::IsHidden() const
 {
+	if (model->GetMeshFlags().all(Mesh::Flags::Landscape) && m_Node->GetFlags().none(RE::NiAVObject::Flag::kAccumulated))
+		return true;
+
 	return m_State.any(State::Detached, State::FirstPersonHidden, State::LODHidden) || m_Node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
 }
 
