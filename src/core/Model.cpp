@@ -5,9 +5,14 @@
 #include "Pass/Raytracing/Common/Skinning.h"
 
 Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
-	m_Name(name), meshes(eastl::move(meshes))
+	m_Name(name), m_Meshes(eastl::move(meshes))
 {
 	UpdateMeshFlags();
+
+	// Initialize visibility state for BLAS creation
+	for (auto& mesh : m_Meshes) {
+		mesh->InitState(node, meshFlags.get());
+	}
 
 	// Models with these flags cannot be instanced directly
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
@@ -35,7 +40,7 @@ void Model::UpdateMeshFlags()
 	features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	shaderFlags.reset();
 
-	for (auto& mesh : meshes) {
+	for (auto& mesh : m_Meshes) {
 		meshFlags.set(mesh->flags.get());
 		m_MeshTypes.set(mesh->m_Type);
 		shaderTypes |= mesh->material->shaderType;
@@ -69,7 +74,7 @@ void Model::CreateBuffers(SceneGraph* sceneGraph)
 	m_BufferUploadCommandList = renderer->GetCopyCommandList();
 	m_BufferUploadCommandList->open();
 
-	for (auto& mesh : meshes)
+	for (auto& mesh : m_Meshes)
 		mesh->CreateBuffers(sceneGraph, m_BufferUploadCommandList);
 
 	m_BufferUploadCommandList->close();
@@ -107,18 +112,19 @@ void Model::UpdateFlags()
 
 void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList)
 {
-	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+	auto* renderer = Renderer::GetSingleton();
+	const auto frameIndex = renderer->GetFrameIndex();
 
 	if (m_LastUpdate == frameIndex)
 		return;
 
 	UpdateFlags();
 
-	auto skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
+	auto skinningPass = renderer->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
 
 	auto externalEmittance = GetExternalEmittance();
 
-	for (auto& mesh : meshes) {
+	for (auto& mesh : m_Meshes) {
 		auto dirtyFlags = mesh->Update(object, isPlayer, meshFlags.get());
 
 		bool vertexUpdate = (dirtyFlags & DirtyFlags::Vertex) != DirtyFlags::None;
@@ -128,7 +134,8 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* c
 			skinningPass->QueueUpdate(dirtyFlags, mesh.get());
 		}
 
-		mesh->UpdateData(commandList, externalEmittance);
+		if (!mesh->IsHidden())
+			mesh->UpdateData(commandList, externalEmittance);
 
 		m_DirtyFlags |= dirtyFlags;
 	}
@@ -146,7 +153,7 @@ DataParams Model::GetData(MeshData* meshData, uint32_t& index)
 
 	m_DataParams.firstMeshID = index;
 
-	for (auto& mesh : meshes) {
+	for (auto& mesh : m_Meshes) {
 		if (mesh->IsHidden())
 			continue;
 
@@ -167,7 +174,7 @@ void Model::BuildBLAS()
 
 	auto blasDesc = MakeBLASDesc(false);
 
-	for (auto& mesh: meshes) {
+	for (auto& mesh: m_Meshes) {
 		if (mesh->IsHidden())
 			continue;
 
@@ -214,8 +221,10 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 {
 	auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	if (frameIndex == m_LastBLASUpdate)
+	if (frameIndex == m_LastBLASUpdate) {
+		logger::critical("Model::UpdateBLAS called multiple times in the same frame for model {}. This should not happen and indicates a problem with the update logic.", m_Name);
 		return;
+	}
 
 	bool update;
 
@@ -231,7 +240,7 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 	// If update is false the BLAS will be rebuilt (vertex moves = update, mesh hidden = rebuild)
 	auto blasDesc = MakeBLASDesc(update);
 
-	for (auto& mesh: meshes)
+	for (auto& mesh: m_Meshes)
 	{
 		if (mesh->IsHidden())
 			continue;
@@ -256,7 +265,7 @@ void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr
 
 	for (auto& mesh : a_meshes) {
 		mesh->CreateBuffers(sceneGraph, copyCommandList);
-		meshes.push_back(eastl::move(mesh));
+		m_Meshes.push_back(eastl::move(mesh));
 	}
 
 	copyCommandList->close();
@@ -275,22 +284,22 @@ void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr
 
 void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
 {
-	auto oldSize = meshes.size();
+	auto oldSize = m_Meshes.size();
 
 	// Remove any unique_ptr whose raw pointer is in toRemove
-	meshes.erase(
-		eastl::remove_if(meshes.begin(), meshes.end(),
+	m_Meshes.erase(
+		eastl::remove_if(m_Meshes.begin(), m_Meshes.end(),
 			[&a_meshes](const auto& m)
 			{
 				return eastl::find(a_meshes.begin(), a_meshes.end(), m.get()) != a_meshes.end();
 			}),
-		meshes.end()
+		m_Meshes.end()
 	);
 
 	UpdateMeshFlags();
 
 	// Triggers a BLAS rebuild
-	if (meshes.size() != oldSize)	
+	if (m_Meshes.size() != oldSize)	
 		m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 

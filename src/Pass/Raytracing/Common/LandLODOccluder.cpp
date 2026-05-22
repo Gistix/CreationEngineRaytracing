@@ -65,7 +65,7 @@ namespace Pass
 			{
 				auto firstMeshIndex = meshIndex;
 
-				for (auto& mesh : instance->model->meshes) {
+				for (auto& mesh : instance->model->m_Meshes) {
 					if (meshIndex > MAX_MESHES - 1) {
 						logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
 						break;

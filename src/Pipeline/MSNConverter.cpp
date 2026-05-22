@@ -47,7 +47,7 @@ namespace Pipeline
 		// Group meshes by their converted normal map (descriptor index)
 		eastl::unordered_map<DescriptorIndex, eastl::vector<Mesh*>> msnGroups;
 
-		for (auto& mesh : model->meshes) {
+		for (auto& mesh : model->m_Meshes) {
 			if (mesh->material->shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals))
 				continue;
 

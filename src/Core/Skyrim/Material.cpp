@@ -8,6 +8,9 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 {
 	auto* renderer = Renderer::GetSingleton();
 
+	m_MaterialData = {};
+	m_PrevMaterialData = {};
+
 	auto& grayTexture = renderer->GetGrayTextureIndex();
 	auto& normalTexture = renderer->GetNormalTextureIndex();
 	auto& blackTexture = renderer->GetBlackTextureIndex();
@@ -542,7 +545,7 @@ void Material::Update(RE::BSShaderProperty* shaderProperty)
 		UpdateWaterMaterial(shaderProperty);
 }
 
-void Material::UpdateData(nvrhi::ICommandList * commandList, const float3& externalEmittance)
+void Material::UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance)
 {
 	auto color1 = colors[1];
 

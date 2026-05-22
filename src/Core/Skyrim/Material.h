@@ -250,7 +250,7 @@ struct Material : MaterialBase
 
 	uint16_t GetTextureDescriptorIndex(uint32_t index) const
 	{
-		auto& texture = textures[index];
+		const auto& texture = textures[index];
 
 		auto locked = texture.texture.lock();
 

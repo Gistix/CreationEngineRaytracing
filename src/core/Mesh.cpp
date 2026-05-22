@@ -666,49 +666,72 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 	return true;
 }
 
-void Mesh::UpdateDismember()
+bool Mesh::GetDismemberHidden() const
 {
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
-
 	if (!skinInstance)
-		return;
+		return false;
 
 	static REL::Relocation<const RE::NiRTTI*> dismemberRTTI{ RE::BSDismemberSkinInstance::Ni_RTTI };
-
 	if (skinInstance->GetRTTI() != dismemberRTTI.get())
-		return;
+		return false;
 
-	auto* dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
-	auto& dismemberRuntime = dismemberSkinInstance->GetRuntimeData();
-
+	auto& dismemberRuntime = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance)->GetRuntimeData();
 	if (dismemberRuntime.numPartitions == 0)
-		return;
+		return false;
 
 	auto& partition = dismemberRuntime.partitions[m_Partition];
 
-	m_PendingState.set(!partition.editorVisible, State::DismemberHidden);
+	return !partition.editorVisible;
 }
 
-void Mesh::UpdateSubIndex()
+bool Mesh::GetSubIndexHidden() const
 {
 	auto* subIndex = bsGeometryPtr->AsSubIndexTriShape();
 
 	if (!subIndex)
-		return;
+		return false;
 
 	auto& runtimeData = subIndex->GetSubIndexedTrishapeRuntimeData();
 
 	auto& firstSegment = runtimeData.segmentData[0];
 
 	// The first segment references all triangles, if it is visible unhide all segments
-	if (firstSegment.flags == 1) {
-		m_PendingState.set(false, State::SubIndexHidden);
-		return;
-	}
+	if (firstSegment.flags == 1)
+		return false;
 
 	auto& segment = runtimeData.segmentData[m_Partition];
+	return segment.unkFlags == 0;
+}
 
-	m_PendingState.set(segment.unkFlags == 0, State::SubIndexHidden);
+Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
+{
+	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
+	const auto skinned = flags.all(Mesh::Flags::Skinned);
+	const auto lod = flags.all(Mesh::Flags::LOD);
+
+	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
+	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
+
+	State state = State::None;
+
+	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
+	if (dynamic || skinned || dynamicModel || skinnedModel)
+		if (Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot))
+			state |= State::Hidden;
+
+	if (skinned && GetDismemberHidden())
+		state |= State::DismemberHidden;
+
+	if (lod && GetSubIndexHidden())
+		state |= State::SubIndexHidden;
+
+	return state;
+}
+
+void Mesh::InitState(RE::NiAVObject* instanceRoot, Flags modelFlags)
+{
+	m_State = GetState(instanceRoot, modelFlags);
 }
 
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
@@ -723,21 +746,11 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
-	const auto lod = flags.all(Mesh::Flags::LOD);
 
-	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
 	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
 
-	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
-	if (dynamic || skinned || dynamicModel || skinnedModel) {
-		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot), State::Hidden);
-	}
-
-	if (skinned)
-		UpdateDismember();
-
-	if (lod)
-		UpdateSubIndex();
+	// Get all states for the current frame and store as pending state
+	m_PendingState = GetState(instanceRoot, modelFlags);
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();

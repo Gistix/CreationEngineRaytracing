@@ -1145,7 +1145,7 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 
 	if (model) {
 		AddInstance(formID, pRoot, model);
-		return static_cast<uint32_t>(model->meshes.size());
+		return static_cast<uint32_t>(model->m_Meshes.size());
 	}
 
 	logger::trace("SceneGraph::CreateModelInternal \"{}\"", typeid(*pRoot).name());

@@ -30,7 +30,7 @@ struct Model
 
 	eastl::string m_Name;
 
-	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
+	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
 
 	nvrhi::rt::AccelStructHandle blas;
 	
@@ -75,7 +75,7 @@ struct Model
 
 	bool ShouldQueueMSNConversion() const
 	{
-		for (auto& mesh : meshes) {
+		for (auto& mesh : m_Meshes) {
 			if (mesh->material->shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals) && mesh->material->shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kLODLandscape))
 				return true;
 		}

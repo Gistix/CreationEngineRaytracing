@@ -122,6 +122,9 @@ struct Mesh
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
+	// Initialize state, must be ran before BLAS is built
+	void InitState(RE::NiAVObject* instanceRoot, Flags modelFlags);
+
 	bool UpdateDynamicPosition();
 
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);
@@ -129,10 +132,6 @@ struct Mesh
 	bool UpdateSkinning(bool isPlayer);
 
 	bool UpdateTransform(RE::NiAVObject* object);
-
-	void UpdateDismember();
-
-	void UpdateSubIndex();
 
 	DirtyFlags Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags);
 
@@ -148,7 +147,11 @@ private:
 	stl::enumeration<State> m_PendingState = State::None;
 	stl::enumeration<State> m_State = State::None;
 
-	void UpdateState();
+	bool GetDismemberHidden() const;
+
+	bool GetSubIndexHidden() const;
+
+	State GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const;
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Mesh::Flags);
