@@ -667,7 +667,6 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	dxgiResource->GetSharedHandle(&sharedHandle);
 
 	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
-	auto device = Renderer::GetSingleton()->GetDevice();
 
 	winrt::com_ptr<ID3D12Resource> d3d12Resource;
 	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
