@@ -17,16 +17,6 @@ struct DataParams
 
 struct Model
 {
-	struct Flags {
-		enum Flag
-		{
-			None = 0,
-			BuffersUploaded = 1 << 0
-		};
-	};
-
-	using Flag = Flags::Flag;
-
 	eastl::string m_Name;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
@@ -36,6 +26,7 @@ struct Model
 	nvrhi::CommandListHandle m_BufferUploadCommandList;
 	nvrhi::EventQueryHandle m_BufferUploadQuery;
 	uint64_t m_SubmittedCopyInstance = 0;
+	bool m_BuffersUploaded = false;
 
 	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
 
@@ -47,8 +38,6 @@ struct Model
 
 	// Meant to used for the player
 	bool m_FirstPerson = false;
-
-	Flag m_Flags = Flags::None;
 
 	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 

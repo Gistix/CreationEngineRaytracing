@@ -88,10 +88,9 @@ void Model::UpdateFlags()
 {
 	auto* device = Renderer::GetSingleton()->GetDevice();
 
-	if (!(m_Flags & Flags::BuffersUploaded)) {
+	if (!m_BuffersUploaded) {
 		if (device->pollEventQuery(m_BufferUploadQuery)) {
-			m_Flags |= Flags::BuffersUploaded;
-
+			m_BuffersUploaded = true;
 			m_BufferUploadCommandList = nullptr;
 		}
 	}
@@ -156,10 +155,7 @@ DataParams Model::GetData(MeshData* meshData, uint32_t& index)
 
 bool Model::IsReady() const
 {
-	if (!(m_Flags & Model::Flags::BuffersUploaded))
-		return false;
-
-	return true;
+	return m_BuffersUploaded;
 }
 
 void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
@@ -167,10 +163,8 @@ void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 	auto* renderer = Renderer::GetSingleton();
 	auto frameIndex = renderer->GetFrameIndex();
 
-	if (frameIndex == m_LastBLASUpdate) {
-		logger::critical("Model::UpdateBLAS called multiple times in the same frame for model {}. This should not happen and indicates a problem with the update logic.", m_Name);
+	if (frameIndex == m_LastBLASUpdate)
 		return;
-	}
 
 	bool update = false;
 	if (!m_BLAS || m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
@@ -247,8 +241,6 @@ void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
 	UpdateMeshFlags();
 
 	// Triggers a BLAS rebuild
-	if (m_Meshes.size() != oldSize)	
+	if (m_Meshes.size() != oldSize)
 		m_DirtyFlags.set(DirtyFlags::Mesh);
-}
-
-DEFINE_ENUM_FLAG_OPERATORS(Model::Flags::Flag);
+};

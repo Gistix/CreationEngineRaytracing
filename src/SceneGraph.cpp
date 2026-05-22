@@ -875,7 +875,7 @@ void SceneGraph::ReleaseModel(const Model* model)
 	std::scoped_lock modelLock(m_ModelMutex);
 
 	auto it = m_Models.find(model->m_Name);
-	if (!(model->m_Flags & Model::Flags::BuffersUploaded))
+	if (!model->m_BuffersUploaded)
 	{
 		std::scoped_lock releaseLock(m_ModelReleaseMutex);
 		m_ReleasedModels.push_back(eastl::move(it->second));
@@ -1347,9 +1347,7 @@ void SceneGraph::RunGarbageCollection()
 
 			model->UpdateFlags();
 
-			const bool release = (model->m_Flags & Model::Flags::BuffersUploaded);
-
-			if (release)			
+			if (model->m_BuffersUploaded)
 				it = m_ReleasedModels.erase(it);
 			else
 				++it;
