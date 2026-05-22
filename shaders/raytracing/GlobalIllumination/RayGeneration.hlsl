@@ -200,7 +200,7 @@ void Main()
 
 #if defined(NRD_REBLUR)
         float accumulatedHitDist = 0;
-#endif        
+#endif
 
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
         float3 throughput = float3(1.0f, 1.0f, 1.0f);

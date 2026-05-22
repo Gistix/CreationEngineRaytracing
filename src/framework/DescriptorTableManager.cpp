@@ -80,6 +80,8 @@ DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IB
 
 uint32_t DescriptorTableManager::GetAllocationCount() const
 {
+    std::shared_lock lock(m_Mutex);
+
     uint32_t count = 0;
 
     for (const auto& allocatedDesc: m_AllocatedDescriptors)
@@ -93,6 +95,8 @@ uint32_t DescriptorTableManager::GetAllocationCount() const
 
 DescriptorIndex DescriptorTableManager::CreateDescriptor(nvrhi::BindingSetItem item)
 {
+    std::unique_lock lock(m_Mutex);
+
     const auto& found = m_DescriptorIndexMap.find(item);
     if (found != m_DescriptorIndexMap.end())
         return found->second;
@@ -144,6 +148,8 @@ DescriptorHandle DescriptorTableManager::CreateDescriptorHandle(nvrhi::BindingSe
 
 nvrhi::BindingSetItem DescriptorTableManager::GetDescriptor(DescriptorIndex index)
 {
+    std::shared_lock lock(m_Mutex);
+
     if (size_t(index) >= m_Descriptors.size())
         return nvrhi::BindingSetItem::None(0);
 
@@ -152,6 +158,8 @@ nvrhi::BindingSetItem DescriptorTableManager::GetDescriptor(DescriptorIndex inde
 
 void DescriptorTableManager::ReleaseDescriptor(DescriptorIndex index)
 {
+    std::unique_lock lock(m_Mutex);
+
     nvrhi::BindingSetItem& descriptor = m_Descriptors[index];
 
     if (descriptor.resourceHandle)

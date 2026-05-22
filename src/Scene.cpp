@@ -23,10 +23,11 @@
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raster/GBuffer.h"
-#include "Pass/NRD/ReblurRadiance.h"
+#include "Pass/NRD/NRDIntegration.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
+#include "Pass/Raytracing/Common/PTComposite.h"
 
 Scene::Scene()
 {
@@ -119,7 +120,7 @@ RenderNode* Scene::GetGlobalIllumination()
 		m_GlobalIllumination->AddNode({
 			true,
 			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::ReblurRadiance>(renderer)
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
 		});
 
 		m_GlobalIllumination->AddNode({
@@ -183,6 +184,18 @@ RenderNode* Scene::GetPathTracing()
 				renderer,
 				m_PathTracing->GetPass<Pass::SceneTLAS>()
 			)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"NRD Reblur Radiance",
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"PT Composite",
+			eastl::make_unique<Pass::Common::PTComposite>(renderer)
 		});
 
 		m_PathTracing->AddNode({
@@ -504,24 +517,6 @@ void Scene::UpdateSettings(Settings settings)
 
 	m_Settings = settings;
 
-	// Toggle vanilla fog based on path tracing state
-	{
-		bool ptActive = IsPathTracingActive();
-
-		if (auto* imageSpaceManager = RE::ImageSpaceManager::GetSingleton()) {
-			auto& fogShader = !REL::Module::IsVR() ?
-				imageSpaceManager->GetRuntimeData().BSImagespaceShaderISSAOBlurH :
-				imageSpaceManager->GetVRRuntimeData().BSImagespaceShaderISSAOBlurH;
-
-			if (fogShader.get()) {
-				fogShader->active = !ptActive;
-			}
-		}
-
-		static auto& enableFog = (*(bool*)REL::RelocationID(528125, 415070).address());
-		enableFog = !ptActive;
-	}
-
 	auto currentMode = settings.GeneralSettings.Mode;
 
 	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
@@ -529,16 +524,18 @@ void Scene::UpdateSettings(Settings settings)
 	if (currentMode != previousMode || !rootNode->HasRenderNode())
 		UpdateMode(currentMode, previousMode);
 
-	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR;
-	const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
+	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD;
 	
 	if (currentMode == Mode::GlobalIllumination) {
-		rootNode->SetEnabled<Pass::NRD::ReblurRadiance>(nrdReblur);
+		rootNode->SetEnabled<Pass::NRD::NRDIntegration>(nrdReblur);
 		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
 	}
-
-	// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
-	rootNode->SetEnabled<Pass::Common::Accumulation>(accumulation && currentMode == Mode::PathTracing);
+	else if (currentMode == Mode::PathTracing) {
+		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
+		const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
+		rootNode->SetEnabled<Pass::Common::Accumulation>(accumulation);
+		rootNode->SetEnabled<Pass::Common::PTComposite>(nrdReblur);
+	}
 
 	rootNode->SettingsChanged(settings); 
 }

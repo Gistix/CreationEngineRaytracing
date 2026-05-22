@@ -168,7 +168,9 @@ public:
 
 	bool Initialize(RendererParams parameters);
 
-	auto GetDevice() const { return m_NVRHIDevice; }
+	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
+
+	auto& GetExecutionMutex() const { return m_ExecutionMutex; };
 
 	auto& GetExecutionMutex() const { return m_ExecutionMutex; };
 

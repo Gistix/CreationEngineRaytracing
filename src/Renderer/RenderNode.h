@@ -90,7 +90,6 @@ struct RenderNode : public IRenderNode
 
 	// Sets this node to enabled/disabled.
 	void SetEnabled(bool enabled) { 
-		logger::info("RenderNode::SetEnabled - Setting {} enabled to {}", m_Name, enabled);
 		m_Enabled = enabled; 
 	}
 

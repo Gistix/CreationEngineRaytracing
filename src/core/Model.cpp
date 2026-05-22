@@ -69,9 +69,8 @@ void Model::CreateBuffers(SceneGraph* sceneGraph)
 	m_BufferUploadCommandList = renderer->GetCopyCommandList();
 	m_BufferUploadCommandList->open();
 
-	for (auto& mesh : meshes) {
+	for (auto& mesh : meshes)
 		mesh->CreateBuffers(sceneGraph, m_BufferUploadCommandList);
-	}
 
 	m_BufferUploadCommandList->close();
 
@@ -87,8 +86,10 @@ void Model::CreateBuffers(SceneGraph* sceneGraph)
 
 void Model::UpdateFlags()
 {
+	auto* device = Renderer::GetSingleton()->GetDevice();
+
 	if (!(m_Flags & Flags::BuffersUploaded)) {
-		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BufferUploadQuery)) {
+		if (device->pollEventQuery(m_BufferUploadQuery)) {
 			m_Flags |= Flags::BuffersUploaded;
 
 			m_BufferUploadCommandList = nullptr;
@@ -96,7 +97,7 @@ void Model::UpdateFlags()
 	}
 
 	if (!(m_Flags & Flags::BLASBuilt)) {
-		if (Renderer::GetSingleton()->GetDevice()->pollEventQuery(m_BLASBuildQuery)) {
+		if (device->pollEventQuery(m_BLASBuildQuery)) {
 			m_Flags |= Flags::BLASBuilt;
 
 			m_BLASBuildCommandList = nullptr;

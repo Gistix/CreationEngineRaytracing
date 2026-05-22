@@ -407,7 +407,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		}
 	}
 
-	auto descriptorIndex = m_DescriptorHandle.Get();
+	const auto descriptorIndex = m_DescriptorHandle.Get();
 
 	if (flags.all(Flags::Dynamic)) {
 		const size_t size = sizeof(float4) * vertexData.count;

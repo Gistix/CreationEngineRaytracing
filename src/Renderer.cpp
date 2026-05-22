@@ -14,8 +14,6 @@ Renderer::Renderer()
 
 bool Renderer::Initialize(RendererParams rendererParams)
 {
-	Hooks::InstallD3D11Hooks(rendererParams.d3d11Device);
-
 	// NVRHI Device
 	nvrhi::d3d12::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
@@ -42,6 +40,7 @@ bool Renderer::Initialize(RendererParams rendererParams)
 
 	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
 
+	// Map DXGI_FORMAT to NVRHI formats
 	if (m_FormatMapping.empty())
 		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
 		{
@@ -668,7 +667,6 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	dxgiResource->GetSharedHandle(&sharedHandle);
 
 	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
-	auto device = Renderer::GetSingleton()->GetDevice();
 
 	winrt::com_ptr<ID3D12Resource> d3d12Resource;
 	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));

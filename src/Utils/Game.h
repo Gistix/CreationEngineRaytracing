@@ -19,6 +19,8 @@ namespace Util
 		constexpr float GAME_UNIT_TO_FEET = GAME_UNIT_TO_CM / 30.48f;
 		constexpr float GAME_UNIT_TO_INCHES = GAME_UNIT_TO_CM / 2.54f;
 
+		constexpr float M_TO_GAME_UNIT = 70.0f;
+
 		// Wind speed conversions
 		constexpr float WIND_RAW_TO_NORMALIZED = 1.0f / 255.0f;  // Raw to 0-1 scale
 		constexpr float WIND_RAW_TO_PERCENT = 100.0f / 255.0f;   // Raw to percentage

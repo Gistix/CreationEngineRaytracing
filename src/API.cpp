@@ -108,7 +108,7 @@ void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, 
 void GetSharedTextures(SharedTexture& diffuseAlbedo)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
-	diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::RRDiffuseAlbedo);
+	diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo);
 }
 
 void UpdateJitter(float2 jitter)

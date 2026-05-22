@@ -38,6 +38,8 @@
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
+#include "include/NRD.hlsli"
+
 #ifndef THREAD_GROUP_SIZE
 #define THREAD_GROUP_SIZE (32)
 #endif
@@ -149,25 +151,49 @@ void Main()
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
         // FILL: primary ray missed — output transparent like REFERENCE mode
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
-        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        SpecularHitDistance[idx] = RAY_TMAX;
         MotionVectors[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
+        
+#   if defined(NRD) | defined(DLSS_RR)
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
+        
+#       if defined(NRD) 
+        ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+        
+        DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
+        SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#       else
+        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
+        SpecularHitDistance[idx] = RAY_TMAX;        
+#       endif
+#   endif
         return;
 #else
         // REFERENCE: original behavior
 #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);   
-        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);    
-        NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        SpecularHitDistance[idx] = RAY_TMAX;
         
+#   if defined(NRD) | defined(DLSS_RR)
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f); 
+        
+#       if defined(NRD)
+        DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
+        SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#       else
+        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
+        SpecularHitDistance[idx] = RAY_TMAX;                
+#       endif              
+#   endif       
+        
+        NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+
         float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
         MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
-        Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)        
+        Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)    
+#   if defined(NRD) 
+        ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+#   endif        
 #endif
         return;
 #endif
@@ -231,14 +257,22 @@ void Main()
 #else
     #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(LLTrueLinearToGamma(skyRadiance), 1.0f);
-        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
-        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        SpecularHitDistance[idx] = RAY_TMAX;
         
         float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
         MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
-        Depth[idx] = 1;        
+        Depth[idx] = 1;
+    
+#       if defined(NRD) | defined(DLSS_RR)   
+        DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
+#           if defined(NRD) 
+        ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+#           else
+        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
+        SpecularHitDistance[idx] = RAY_TMAX;
+#           endif  
+#       endif
+    
     #endif
         return;
 #endif
@@ -262,30 +296,46 @@ void Main()
  #if !(defined(SHARC) && SHARC_UPDATE)
     // Coat-priority GBuffer: when coat is present, use coat normal/roughness for denoiser;
     // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
-    if (sourceSurface.CoatStrength > 0)
+    const bool useCoat = sourceSurface.CoatStrength > 0;
+  
+#   if defined(NRD) | defined(DLSS_RR)    
+    const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
+    DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+#   endif   
+    
+#   if defined(DLSS_RR)    
+    if (useCoat)
     {
-        float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
-        DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
         float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
-        const float2 coatEnvBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * coatEnvBRDF.x + coatEnvBRDF.y);
-        NormalRoughness[idx] = float4(sourceSurface.CoatNormal, sourceSurface.CoatRoughness);
+        const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * envBRDF.x + envBRDF.y);
     }
     else
     {
-        DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
         const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
-        NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
     }
+#   endif
+    
+    NormalRoughness[idx] = float4(
+        useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal, 
+        useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness
+    );
     
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
     float3 hitPosW = sourcePosition;
     float3 hitPrevPosW = sourceSurface.PrevPosition;
     MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPrevPosW), 0);
-    Depth[idx] = computeClipDepth(hitPosW);
-
+    
+    const float depth = computeClipDepth(hitPosW);
+    Depth[idx] = depth;
+    
+#   if defined(NRD) 
+    const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
+    ViewDepth[idx] = depthVS;
+#   endif
+    
 #       if defined(RESTIR_GI)    
     // Write packed surface data for ReSTIR GI (REFERENCE mode)
     SurfaceDataBuffer[surfBufIdx] = PSD_Pack(
@@ -301,7 +351,7 @@ void Main()
     bool isSssPath = false;
     
     float3 direct = sourceSurface.Emissive + primaryEffectEmissive;
-
+    
     // =========================================================================
     // BUILD MODE: Deterministic delta path exploration
     // =========================================================================
@@ -592,16 +642,21 @@ void Main()
         if (sourceSurface.CoatStrength > 0)
         {
             float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
+#   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+#   endif
             NormalRoughness[idx] = float4(sourceSurface.CoatNormal, sourceSurface.CoatRoughness);
         }
         else
         {
+#   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+#   endif
             NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
         }
     }
 
+#   if defined(DLSS_RR) 
     if (sourceSurface.CoatStrength > 0)
     {
         float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
@@ -613,7 +668,8 @@ void Main()
         const float2 envBRDF2 = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
     }
-
+#   endif
+    
     // In FILL mode, emissive along delta paths was captured in BUILD → skip to avoid double-counting
     direct = 0;
 #endif // FILL
@@ -658,7 +714,7 @@ void Main()
             direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
         }
     }
-
+    
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     // Accumulate primary surface direct lighting with plane throughput baked in
     // (GetAllRadiance no longer multiplies by stored thp)
@@ -671,7 +727,14 @@ void Main()
 
     float3 radiance = 0;
     bool isSpecular = false;
-    float specHitDist = 0;
+    bool isSpecularSample = false;
+    
+#if defined(NRD)
+     float diffHitDist = 0;     
+     float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+#else
+    float specHitDist = RAY_TMAX;
+#endif
 
     RayDesc ray;
     Payload payload;
@@ -702,6 +765,10 @@ void Main()
         brdfContext = sourceBRDFContext;
         bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
+        
+#if defined(NRD)
+        float accumulatedHitDist = 0;
+#endif        
         
         material = sourceMaterial;
         instance = sourceInstance;
@@ -780,6 +847,10 @@ void Main()
             
             bool isDelta = bsdfSample.isLobe(LobeType::Delta);
             isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
+            
+            if (j == 0)
+                isSpecularSample = isSpecular;         
+                  
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
             isPrimaryReplacement = surface.Primary && isDelta;
             arrivedViaDelta = isDelta;
@@ -878,9 +949,14 @@ void Main()
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
             }
             
-            if (isSpecular && j == 0)
-                specHitDist += payload.hitDistance;
-
+#if defined(NRD)
+            if (j == 0)
+                accumulatedHitDist = payload.hitDistance;
+#else
+            if (isSpecularSample)
+                specHitDist = min(specHitDist, payload.hitDistance);
+#endif               
+            
             if (!payload.Hit())
             {
                 float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
@@ -1135,7 +1211,19 @@ void Main()
             SecondaryGBufRadiance[idx] = float4(0, 0, 0, 0);
 #   endif
         
-#endif
+#elif PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE        
+#   if defined(NRD)
+        float normHitDist = accumulatedHitDist;
+        normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
+        
+        if (isSpecularSample) {
+            NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
+        } else {
+            diffHitDist += normHitDist;
+        }
+#   endif
+#endif        
+        
         radiance += sampleRadiance;
 
 #if defined(SHARC) && SHARC_UPDATE
@@ -1150,7 +1238,9 @@ void Main()
     {
         float3 totalRadiance = spCtx.GetAllRadiance(idx, true);
         Output[idx] = float4(LLTrueLinearToGamma(totalRadiance), 1.0f);
+#   if defined(DLSS_RR)    
         SpecularHitDistance[idx] = specHitDist;
+#   endif
     }
 #elif !(defined(SHARC) && SHARC_UPDATE)
     // REFERENCE mode output
@@ -1161,7 +1251,30 @@ void Main()
         direct *= primaryWaterAttenuation;
         radiance *= primaryWaterAttenuation;
     }
+    
+#if defined(NRD)
+    float3 diffuseRadiance = isSpecularSample ? 0.0.xxx : radiance;
+    float3 specularRadiance = isSpecularSample ? radiance : 0.0.xxx;
+    
+    float3 diffFactor, specFactor;
+    NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
+
+    diffuseRadiance /= diffFactor;
+    specularRadiance /= specFactor;    
+    
+    Output[idx] = float4(direct, 1.0f);
+    DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
+    SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
+    
+    DiffuseFactor[idx] = diffFactor;
+    SpecularFactor[idx] = specFactor;    
+#else    
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
+
+#   if defined(DLSS_RR)
     SpecularHitDistance[idx] = specHitDist;     
+#   endif    
+#endif
+        
 #endif    
 }

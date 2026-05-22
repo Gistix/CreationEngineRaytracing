@@ -47,7 +47,11 @@ namespace Pass
 		m_RaytracingData->WaterAbsorptionScale = settings.WaterSettings.AbsorptionScale;
 		m_RaytracingData->EnableReSTIRGI = settings.ReSTIRGI.Enabled ? 1 : 0;
 
-		m_RaytracingData->HitDistSettings = float4(3.0f, 0.1f, 20.0f, 0.0f);
+		m_RaytracingData->HitDistSettings = float4(
+			3.0f * Util::Units::M_TO_GAME_UNIT,  // (units > 0) - constant value
+			0.1f * Util::Units::M_TO_GAME_UNIT,  // (> 0) - viewZ based linear scale (1 m - 10 cm, 10 m - 1 m, 100 m - 10 m)
+			20.0f,								 // (>= 1) - roughness based scale, use values > 1 to clamp hit distance to a larger value for low roughness
+			0.0f);
 
 		// Directional Light
 		{

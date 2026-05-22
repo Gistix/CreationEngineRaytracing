@@ -1031,15 +1031,6 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 			if (geometryRuntimeData.alphaProperty->GetAlphaBlending())
 				return RE::BSVisit::BSVisitControl::kContinue;
 
-		bool skinned = shaderProperty && shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kSkinned);
-
-		auto& geomFlags = pGeometry->GetFlags();
-
-		if (geomFlags.any(RE::NiAVObject::Flag::kHidden) && !skinned) {
-			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Is Hidden");
-			return RE::BSVisit::BSVisitControl::kContinue;
-		}
-
 		auto flags = Mesh::Flags::None;
 
 		// Landscape needs special handling of triangles

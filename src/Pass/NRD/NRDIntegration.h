@@ -8,7 +8,7 @@
 
 namespace Pass::NRD
 {
-	class ReblurRadiance : public RenderPass
+	class NRDIntegration : public RenderPass
 	{
 		struct Pipeline
 		{
@@ -17,8 +17,8 @@ namespace Pass::NRD
 			eastl::string debugName;
 		};
 
-		static constexpr nrd::Denoiser kDenoiser = nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR;
-		static constexpr nrd::Identifier kDenoiserIdentifier = nrd::Identifier(kDenoiser);
+		nrd::Denoiser kDenoiser;
+		nrd::Identifier kDenoiserIdentifier;
 
 		nvrhi::SamplerHandle m_NearestClampSampler;
 		nvrhi::SamplerHandle m_LinearClampSampler;
@@ -59,8 +59,8 @@ namespace Pass::NRD
 		uint32_t GetMaxResourceCount(nrd::DescriptorType type) const;
 
 	public:
-		ReblurRadiance(Renderer* renderer);
-		~ReblurRadiance() override;
+		NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser);
+		~NRDIntegration() override;
 
 		void SettingsChanged(const Settings& settings) override;
 		void ResolutionChanged(uint2 resolution) override;
