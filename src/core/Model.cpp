@@ -169,7 +169,7 @@ DataParams Model::GetData(MeshData* meshData, uint32_t& index)
 
 void Model::BuildBLAS()
 {
-	if (blas)
+	if (m_BLAS)
 		return;
 
 	auto blasDesc = MakeBLASDesc(false);
@@ -184,13 +184,13 @@ void Model::BuildBLAS()
 	auto* renderer = Renderer::GetSingleton();
 	auto device = renderer->GetDevice();
 
-	blas = renderer->GetDevice()->createAccelStruct(blasDesc);
+	m_BLAS = renderer->GetDevice()->createAccelStruct(blasDesc);
 
 	// Compute Command - Waits for copy
 	m_BLASBuildCommandList = renderer->GetComputeCommandList();
 	m_BLASBuildCommandList->open();
 
-	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, blas, blasDesc);
+	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, m_BLAS, blasDesc);
 
 	{
 		std::scoped_lock lock(renderer->GetExecutionMutex());
@@ -248,7 +248,7 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}
 
-	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, blas, blasDesc);
+	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
 
 	// Consume all flags after BLAS is updated/rebuilt
 	m_DirtyFlags.reset(DirtyFlags::Visibility, DirtyFlags::Mesh);

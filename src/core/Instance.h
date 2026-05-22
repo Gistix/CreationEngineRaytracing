@@ -68,7 +68,7 @@ struct Instance
 			.setInstanceMask(1)
 			.setInstanceID(m_TLASInstanceID)
 			.setTransform(m_Transform.f)
-			.setBLAS(model->blas);
+			.setBLAS(model->m_BLAS);
 
 		// Culling adds additional overhead but some geometry (like vanilla hair) has duplicated double sided faces (as opposed to using the kTwoSided shader flag)
 		// Without culling this means we would render 4 faces (original back and front + other side of back and other side of front)

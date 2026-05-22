@@ -32,7 +32,7 @@ struct Model
 
 	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
 
-	nvrhi::rt::AccelStructHandle blas;
+	nvrhi::rt::AccelStructHandle m_BLAS;
 	
 	nvrhi::CommandListHandle m_BufferUploadCommandList;
 	nvrhi::EventQueryHandle m_BufferUploadQuery;
