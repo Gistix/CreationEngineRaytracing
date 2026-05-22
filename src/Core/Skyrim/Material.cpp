@@ -458,9 +458,6 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
 		alphaFlags |= Material::AlphaFlags::Transmission;
 	}
-
-	m_MaterialData = eastl::make_unique<MaterialData>();
-	m_PrevMaterialData = eastl::make_unique<MaterialData>();
 }
 
 void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
@@ -527,7 +524,7 @@ void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descripto
 
 	auto& bufferDesc = nvrhi::BufferDesc()
 		.setByteSize(size)
-		.setStructStride(size)
+		.setStructStride(static_cast<uint32_t>(size))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 		.setDebugName(std::format("{} (Material Buffer)", name.c_str()));
 
@@ -545,7 +542,7 @@ void Material::Update(RE::BSShaderProperty* shaderProperty)
 		UpdateWaterMaterial(shaderProperty);
 }
 
-void Material::UpdateData(nvrhi::ICommandList * commandList, const float3& externalEmittance) const
+void Material::UpdateData(nvrhi::ICommandList * commandList, const float3& externalEmittance)
 {
 	auto color1 = colors[1];
 
@@ -562,67 +559,64 @@ void Material::UpdateData(nvrhi::ICommandList * commandList, const float3& exter
 		}
 	}
 
-	m_MaterialData->TexCoordOffsetScale0 = texCoordOffsetScale[0];
-	m_MaterialData->TexCoordOffsetScale1 = texCoordOffsetScale[1];
+	m_MaterialData.TexCoordOffsetScale0 = texCoordOffsetScale[0];
+	m_MaterialData.TexCoordOffsetScale1 = texCoordOffsetScale[1];
 
-	m_MaterialData->Color0 = colors[0];
-	m_MaterialData->Color1 = color1;
-	m_MaterialData->Color2 = colors[2];
+	m_MaterialData.Color0 = colors[0];
+	m_MaterialData.Color1 = color1;
+	m_MaterialData.Color2 = colors[2];
 
-	m_MaterialData->AlphaThreshold = alphaThreshold;
+	m_MaterialData.AlphaThreshold = alphaThreshold;
 
-	m_MaterialData->Scalar0 = scalars[0];
-	m_MaterialData->Scalar1 = scalars[1];
-	m_MaterialData->Scalar2 = scalars[2];
+	m_MaterialData.Scalar0 = scalars[0];
+	m_MaterialData.Scalar1 = scalars[1];
+	m_MaterialData.Scalar2 = scalars[2];
 
-	m_MaterialData->Vector0 = vectors[0];
-	m_MaterialData->Vector1 = vectors[1];
-	m_MaterialData->Vector2 = vectors[2];
-	m_MaterialData->Vector3 = vectors[3];
+	m_MaterialData.Vector0 = vectors[0];
+	m_MaterialData.Vector1 = vectors[1];
+	m_MaterialData.Vector2 = vectors[2];
+	m_MaterialData.Vector3 = vectors[3];
 
-	m_MaterialData->Texture0 = GetTextureDescriptorIndex(0);
-	m_MaterialData->Texture1 = GetTextureDescriptorIndex(1);
-	m_MaterialData->Texture2 = GetTextureDescriptorIndex(2);
-	m_MaterialData->Texture3 = GetTextureDescriptorIndex(3);
-	m_MaterialData->Texture4 = GetTextureDescriptorIndex(4);
-	m_MaterialData->Texture5 = GetTextureDescriptorIndex(5);
+	m_MaterialData.Texture0 = GetTextureDescriptorIndex(0);
+	m_MaterialData.Texture1 = GetTextureDescriptorIndex(1);
+	m_MaterialData.Texture2 = GetTextureDescriptorIndex(2);
+	m_MaterialData.Texture3 = GetTextureDescriptorIndex(3);
+	m_MaterialData.Texture4 = GetTextureDescriptorIndex(4);
+	m_MaterialData.Texture5 = GetTextureDescriptorIndex(5);
 
-	m_MaterialData->Texture6 = GetTextureDescriptorIndex(6);
-	m_MaterialData->Texture7 = GetTextureDescriptorIndex(7);
-	m_MaterialData->Texture8 = GetTextureDescriptorIndex(8);
-	m_MaterialData->Texture9 = GetTextureDescriptorIndex(9);
-	m_MaterialData->Texture10 = GetTextureDescriptorIndex(10);
-	m_MaterialData->Texture11 = GetTextureDescriptorIndex(11);
+	m_MaterialData.Texture6 = GetTextureDescriptorIndex(6);
+	m_MaterialData.Texture7 = GetTextureDescriptorIndex(7);
+	m_MaterialData.Texture8 = GetTextureDescriptorIndex(8);
+	m_MaterialData.Texture9 = GetTextureDescriptorIndex(9);
+	m_MaterialData.Texture10 = GetTextureDescriptorIndex(10);
+	m_MaterialData.Texture11 = GetTextureDescriptorIndex(11);
 
-	m_MaterialData->Texture12 = GetTextureDescriptorIndex(12);
-	m_MaterialData->Texture13 = GetTextureDescriptorIndex(13);
-	m_MaterialData->Texture14 = GetTextureDescriptorIndex(14);
-	m_MaterialData->Texture15 = GetTextureDescriptorIndex(15);
-	m_MaterialData->Texture16 = GetTextureDescriptorIndex(16);
-	m_MaterialData->Texture17 = GetTextureDescriptorIndex(17);
+	m_MaterialData.Texture12 = GetTextureDescriptorIndex(12);
+	m_MaterialData.Texture13 = GetTextureDescriptorIndex(13);
+	m_MaterialData.Texture14 = GetTextureDescriptorIndex(14);
+	m_MaterialData.Texture15 = GetTextureDescriptorIndex(15);
+	m_MaterialData.Texture16 = GetTextureDescriptorIndex(16);
+	m_MaterialData.Texture17 = GetTextureDescriptorIndex(17);
 
-	m_MaterialData->Texture18 = GetTextureDescriptorIndex(18);
-	m_MaterialData->Texture19 = GetTextureDescriptorIndex(19);
+	m_MaterialData.Texture18 = GetTextureDescriptorIndex(18);
+	m_MaterialData.Texture19 = GetTextureDescriptorIndex(19);
 
-	m_MaterialData->AlphaFlags = static_cast<uint16_t>(alphaFlags);
-	m_MaterialData->ShaderType = GetShaderType();
-	m_MaterialData->Feature = static_cast<uint16_t>(feature);
-	m_MaterialData->PBRFlags = pbrFlags.underlying();
-	m_MaterialData->ShaderFlags = GetShaderFlags();
+	m_MaterialData.AlphaFlags = static_cast<uint16_t>(alphaFlags);
+	m_MaterialData.ShaderType = GetShaderType();
+	m_MaterialData.Feature = static_cast<uint16_t>(feature);
+	m_MaterialData.PBRFlags = pbrFlags.underlying();
+	m_MaterialData.ShaderFlags = GetShaderFlags();
 
-	MaterialData* materialData = m_MaterialData.get();
-	MaterialData* prevMaterialData = m_PrevMaterialData.get();
-
-	if (*materialData == *prevMaterialData)
+	if (m_MaterialData == m_PrevMaterialData)
 		return;
 
 	commandList->writeBuffer(buffer, GetData(), sizeof(MaterialData));
 
-	*m_PrevMaterialData.get() = *m_MaterialData.get();
+	m_PrevMaterialData = m_MaterialData;
 }
 
-MaterialData* Material::GetData() const
+MaterialData* Material::GetData()
 {
-	return m_MaterialData.get();
+	return &m_MaterialData;
 }
 #endif

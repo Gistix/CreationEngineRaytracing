@@ -41,8 +41,8 @@ struct Material : MaterialBase
 		Particle = 7
 	};
 
-	eastl::unique_ptr<MaterialData> m_MaterialData;
-	eastl::unique_ptr<MaterialData> m_PrevMaterialData;
+	MaterialData m_MaterialData;
+	MaterialData m_PrevMaterialData;
 
 	nvrhi::BufferHandle buffer;
 
@@ -54,9 +54,7 @@ struct Material : MaterialBase
 
 	void Update(RE::BSShaderProperty* shaderProperty);
 
-	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance) const;
-
-	MaterialData* GetData() const;
+	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance);
 
 	// We have a limited number of bits and not all types are necessary
 	ShaderType GetShaderType() const
@@ -246,7 +244,7 @@ struct Material : MaterialBase
 		if (shaderFlags.any(EShaderPropertyFlag::kLODLandscape)) {
 			shaderFlagsLocal |= ShaderFlags::kLODLandscape;
 		}
-		
+
 		return static_cast<uint32_t>(shaderFlagsLocal);
 	}
 
@@ -261,6 +259,9 @@ struct Material : MaterialBase
 		else
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
+
+private:
+	MaterialData* GetData();
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);
