@@ -9,11 +9,6 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 {
 	UpdateMeshFlags();
 
-	// Initialize visibility state for BLAS creation
-	for (auto& mesh : m_Meshes) {
-		mesh->InitState(node, meshFlags.get());
-	}
-
 	// Models with these flags cannot be instanced directly
 	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
 		m_Name.append(Model::KeySuffix(node).c_str());
@@ -100,14 +95,6 @@ void Model::UpdateFlags()
 			m_BufferUploadCommandList = nullptr;
 		}
 	}
-
-	if (!(m_Flags & Flags::BLASBuilt)) {
-		if (device->pollEventQuery(m_BLASBuildQuery)) {
-			m_Flags |= Flags::BLASBuilt;
-
-			m_BLASBuildCommandList = nullptr;
-		}
-	}
 }
 
 void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList)
@@ -167,68 +154,26 @@ DataParams Model::GetData(MeshData* meshData, uint32_t& index)
 	return m_DataParams;
 }
 
-void Model::BuildBLAS()
-{
-	if (m_BLAS)
-		return;
-
-	auto blasDesc = MakeBLASDesc(false);
-
-	for (auto& mesh: m_Meshes) {
-		if (mesh->IsHidden())
-			continue;
-
-		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
-	}
-
-	auto* renderer = Renderer::GetSingleton();
-	auto device = renderer->GetDevice();
-
-	m_BLAS = renderer->GetDevice()->createAccelStruct(blasDesc);
-
-	// Compute Command - Waits for copy
-	m_BLASBuildCommandList = renderer->GetComputeCommandList();
-	m_BLASBuildCommandList->open();
-
-	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, m_BLAS, blasDesc);
-
-	{
-		std::scoped_lock lock(renderer->GetExecutionMutex());
-
-		m_BLASBuildCommandList->close();
-		device->queueWaitForCommandList(nvrhi::CommandQueue::Compute, nvrhi::CommandQueue::Copy, m_SubmittedCopyInstance);
-		auto submittedComputeInstance = device->executeCommandList(m_BLASBuildCommandList, nvrhi::CommandQueue::Compute);
-
-		m_BLASBuildQuery = device->createEventQuery();
-		device->setEventQuery(m_BLASBuildQuery, nvrhi::CommandQueue::Compute, submittedComputeInstance);
-	}
-
-	m_LastBLASUpdate = renderer->GetFrameIndex();
-}
-
 bool Model::IsReady() const
 {
 	if (!(m_Flags & Model::Flags::BuffersUploaded))
 		return false;
 
-	if (!(m_Flags & Model::Flags::BLASBuilt))
-		return false;
-
 	return true;
 }
 
-void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
+void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 {
-	auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+	auto* renderer = Renderer::GetSingleton();
+	auto frameIndex = renderer->GetFrameIndex();
 
 	if (frameIndex == m_LastBLASUpdate) {
 		logger::critical("Model::UpdateBLAS called multiple times in the same frame for model {}. This should not happen and indicates a problem with the update logic.", m_Name);
 		return;
 	}
 
-	bool update;
-
-	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
+	bool update = false;
+	if (!m_BLAS || m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
 		update = false;
 	else {
 		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
@@ -248,13 +193,16 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}
 
+	if (!m_BLAS)
+		m_BLAS = renderer->GetDevice()->createAccelStruct(blasDesc);
+
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
 
 	// Consume all flags after BLAS is updated/rebuilt
 	m_DirtyFlags.reset(DirtyFlags::Visibility, DirtyFlags::Mesh);
 	m_DirtyFlags.reset(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
 
-	m_LastBLASUpdate = frameIndex;
+	m_LastBLASUpdate = Renderer::GetSingleton()->GetFrameIndex();
 }
 
 void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& a_meshes)

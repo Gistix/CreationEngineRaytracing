@@ -122,9 +122,6 @@ struct Mesh
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
-	// Initialize state, must be ran before BLAS is built
-	void InitState(RE::NiAVObject* instanceRoot, Flags modelFlags);
-
 	bool UpdateDynamicPosition();
 
 	void UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList);

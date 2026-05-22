@@ -21,8 +21,7 @@ struct Model
 		enum Flag
 		{
 			None = 0,
-			BuffersUploaded = 1 << 0,
-			BLASBuilt = 1 << 1
+			BuffersUploaded = 1 << 0
 		};
 	};
 
@@ -32,14 +31,11 @@ struct Model
 
 	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
 
-	nvrhi::rt::AccelStructHandle m_BLAS;
+	nvrhi::rt::AccelStructHandle m_BLAS = nullptr;
 	
 	nvrhi::CommandListHandle m_BufferUploadCommandList;
 	nvrhi::EventQueryHandle m_BufferUploadQuery;
 	uint64_t m_SubmittedCopyInstance = 0;
-
-	nvrhi::CommandListHandle m_BLASBuildCommandList;
-	nvrhi::EventQueryHandle m_BLASBuildQuery;
 
 	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
 
@@ -62,7 +58,8 @@ struct Model
 
 	void CreateBuffers(SceneGraph* sceneGraph);
 
-	void BuildBLAS();
+	// Builds the BLAS if m_BLAS is null, otherwise updates it if possible or rebuilds if necessary
+	void BuildUpdateBLAS(nvrhi::ICommandList* commandList);
 
 	bool IsReady() const;
 
@@ -86,8 +83,6 @@ struct Model
 	void Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList);
 
 	DataParams GetData(MeshData* meshData, uint32_t& index);
-
-	void UpdateBLAS(nvrhi::ICommandList* commandList);
 
 	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);

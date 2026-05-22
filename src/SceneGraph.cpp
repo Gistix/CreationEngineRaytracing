@@ -875,7 +875,7 @@ void SceneGraph::ReleaseModel(const Model* model)
 	std::scoped_lock modelLock(m_ModelMutex);
 
 	auto it = m_Models.find(model->m_Name);
-	if (!(model->m_Flags & Model::Flags::BuffersUploaded) || !(model->m_Flags & Model::Flag::BLASBuilt))
+	if (!(model->m_Flags & Model::Flags::BuffersUploaded))
 	{
 		std::scoped_lock releaseLock(m_ModelReleaseMutex);
 		m_ReleasedModels.push_back(eastl::move(it->second));
@@ -1179,9 +1179,6 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 			// Copy Command
 			modelPtr->CreateBuffers(this);
 
-			// Compute Command - Waits for copy
-			modelPtr->BuildBLAS();
-
 			// MSN Conversion - waits for copy
 			if (modelPtr->ShouldQueueMSNConversion()) {
 				auto graphicsCommandList = Renderer::GetSingleton()->GetGraphicsCommandList();
@@ -1350,9 +1347,7 @@ void SceneGraph::RunGarbageCollection()
 
 			model->UpdateFlags();
 
-			const bool release =
-				(model->m_Flags & Model::Flags::BuffersUploaded) &&
-				(model->m_Flags & Model::Flags::BLASBuilt);
+			const bool release = (model->m_Flags & Model::Flags::BuffersUploaded);
 
 			if (release)			
 				it = m_ReleasedModels.erase(it);

@@ -729,11 +729,6 @@ Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 	return state;
 }
 
-void Mesh::InitState(RE::NiAVObject* instanceRoot, Flags modelFlags)
-{
-	m_State = GetState(instanceRoot, modelFlags);
-}
-
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
 {
 	// This should never be true, but it often is, meaning we missed some logic that removes this mesh or the entire instance
