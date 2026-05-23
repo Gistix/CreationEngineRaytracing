@@ -161,7 +161,7 @@ bool Model::IsReady() const
 void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 {
 	auto* renderer = Renderer::GetSingleton();
-	auto frameIndex = renderer->GetFrameIndex();
+	const auto frameIndex = renderer->GetFrameIndex();
 
 	if (frameIndex == m_LastBLASUpdate)
 		return;
@@ -196,31 +196,19 @@ void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 	m_DirtyFlags.reset(DirtyFlags::Visibility, DirtyFlags::Mesh);
 	m_DirtyFlags.reset(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
 
-	m_LastBLASUpdate = Renderer::GetSingleton()->GetFrameIndex();
+	m_LastBLASUpdate = frameIndex;
 }
 
-void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& a_meshes)
+void Model::AppendMeshes(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList, eastl::vector<eastl::unique_ptr<Mesh>>& a_meshes)
 {
-	// Copy Command
-	auto copyCommandList = Renderer::GetSingleton()->GetCopyCommandList();
-	copyCommandList->open();
-
 	for (auto& mesh : a_meshes) {
-		mesh->CreateBuffers(sceneGraph, copyCommandList);
+		mesh->CreateBuffers(sceneGraph, commandList);
 		m_Meshes.push_back(eastl::move(mesh));
-	}
-
-	copyCommandList->close();
-
-	auto* renderer = Renderer::GetSingleton();
-	{
-		std::scoped_lock lock(renderer->GetExecutionMutex());
-		renderer->GetDevice()->executeCommandList(copyCommandList, nvrhi::CommandQueue::Copy);
 	}
 
 	UpdateMeshFlags();
 
-	// Triggers a BLAS rebuild
+	// Signals a BLAS rebuild
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
@@ -240,7 +228,7 @@ void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
 
 	UpdateMeshFlags();
 
-	// Triggers a BLAS rebuild
+	// Signals a BLAS rebuild
 	if (m_Meshes.size() != oldSize)
 		m_DirtyFlags.set(DirtyFlags::Mesh);
 };

@@ -267,13 +267,14 @@ void Scene::Execute()
 
 	auto* sceneGraph = GetSceneGraph();
 
-	sceneGraph->UpdateActors();
-
 	sceneGraph->UpdateLODVisibility();
 
 	auto* renderer = Renderer::GetSingleton();
 
 	auto* commandList = renderer->StartExecution();
+
+	// Update actor equipment and animation objects
+	sceneGraph->UpdateActors(commandList);
 
 	// Update all scene related data and their buffers
 	sceneGraph->Update(commandList);
