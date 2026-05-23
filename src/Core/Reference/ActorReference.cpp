@@ -3,7 +3,7 @@
 #include "Scene.h"
 #include "SceneGraph.h"
 
-void ActorReference::Update()
+void ActorReference::Update(nvrhi::ICommandList* commandList)
 {
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
@@ -11,10 +11,10 @@ void ActorReference::Update()
 
 	if (faceNode != m_FaceNode) {
 		if (m_FaceNode)
-			sceneGraph->ActorUnequip(m_Actor, m_FaceMeshes, m_FirstPerson);
+			sceneGraph->ActorUnequip(m_Instance, m_FaceMeshes, m_FirstPerson);
 
 		if (faceNode)
-			sceneGraph->ActorEquip(m_Actor, m_Actor, faceNode, m_FaceMeshes, m_FirstPerson);
+			sceneGraph->ActorEquip(commandList, m_Instance, m_Actor, faceNode, m_FaceMeshes, m_FirstPerson);
 
 		m_FaceNode = faceNode;
 	}
@@ -33,13 +33,13 @@ void ActorReference::Update()
 
 					// Remove previous valid object
 					if (prevObject.IsValid()) {
-						sceneGraph->ActorUnequip(m_Actor, m_ObjectMeshes[i], m_FirstPerson);
+						sceneGraph->ActorUnequip(m_Instance, m_ObjectMeshes[i], m_FirstPerson);
 						m_ObjectMeshes[i].clear();
 					}
 
 					// Add current valid object
 					if (curObject.IsValid())
-						sceneGraph->ActorEquip(m_Actor, curObject.item, curObject.partClone, m_ObjectMeshes[i], m_FirstPerson);
+						sceneGraph->ActorEquip(commandList, m_Instance, curObject.item, curObject.partClone, m_ObjectMeshes[i], m_FirstPerson);
 
 					prevObject = curObject;
 				}
@@ -48,29 +48,27 @@ void ActorReference::Update()
 	}
 }
 
-void ActorReference::AttachAnimObject(RE::TESObjectANIO* animObject, RE::NiAVObject* object)
+void ActorReference::AttachAnimObject(RE::TESObjectANIO* animObject, [[maybe_unused]] RE::NiAVObject* object)
 {
 	if (m_AnimatedObjectMeshes.find(animObject) != m_AnimatedObjectMeshes.end())
 		return;
 
 	auto [it, emplaced] = m_AnimatedObjectMeshes.try_emplace(animObject);
-
 	if (!emplaced)
 		return;
 
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	sceneGraph->ActorEquip(m_Actor, animObject, object, it->second, m_FirstPerson);
+	//auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	//sceneGraph->ActorEquip(m_Instance, animObject, object, it->second, m_FirstPerson);
 }
 
 void ActorReference::DetachAnimObject(RE::TESObjectANIO* animObject)
 {
 	auto it = m_AnimatedObjectMeshes.find(animObject);
-
 	if (it == m_AnimatedObjectMeshes.end())
 		return;
 
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	sceneGraph->ActorUnequip(m_Actor, it->second, m_FirstPerson);
+	//auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	//sceneGraph->ActorUnequip(m_Instance, it->second, m_FirstPerson);
 
 	m_AnimatedObjectMeshes.erase(it);
 }

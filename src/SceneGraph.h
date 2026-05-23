@@ -92,7 +92,7 @@ class SceneGraph
 	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	Instance* AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID);
-	void AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* path);
+	Instance* AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* path);
 	void AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model);
 	void AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model);
 
@@ -132,7 +132,7 @@ public:
 	void UpdateLights(nvrhi::ICommandList* commandList);
 
 	// Update Actor equipment
-	void UpdateActors();
+	void UpdateActors(nvrhi::ICommandList* commandList);
 
 	// Update LOD visibility
 	void UpdateLODVisibility();
@@ -153,8 +153,8 @@ public:
 	template <typename T>
 	void CreateLODModelImpl(T* chunk, Mesh::Type type);
 
-	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
-	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
+	void ActorEquip(nvrhi::ICommandList* commandList, Instance* a_instance, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
+	void ActorUnequip(Instance* a_instance, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 
 	ActorReference* GetActorRefr(RE::FormID a_formID);
 

@@ -46,8 +46,8 @@ struct BipObjectReference
 
 struct ActorReference
 {
-	ActorReference(RE::Actor* actor, bool firstPerson, eastl::vector<Mesh*> faceMeshes, eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> meshes)
-		: m_Actor(actor), m_FirstPerson(firstPerson), m_FaceMeshes(faceMeshes), m_ObjectMeshes(meshes)
+	ActorReference(RE::Actor* actor, bool firstPerson, Instance* instance, eastl::vector<Mesh*> faceMeshes, eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> meshes)
+		: m_Actor(actor), m_FirstPerson(firstPerson), m_Instance(instance), m_FaceMeshes(faceMeshes), m_ObjectMeshes(meshes)
 	{
 
 		if (auto* biped = m_Actor->GetBiped(false).get()) {
@@ -64,7 +64,7 @@ struct ActorReference
 
 	}
 
-	void Update();
+	void Update(nvrhi::ICommandList* commandList);
 	void AttachAnimObject(RE::TESObjectANIO* animatedObject, RE::NiAVObject* object);
 	void DetachAnimObject(RE::TESObjectANIO* animatedObject);
 	
@@ -73,6 +73,8 @@ struct ActorReference
 	bool m_Biped;
 
 	bool m_FirstPerson;
+
+	Instance* m_Instance;
 
 	// Face (Actually the head but whatever)
 	RE::NiAVObject* m_FaceNode;

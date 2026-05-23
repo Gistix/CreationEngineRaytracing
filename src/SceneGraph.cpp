@@ -301,11 +301,11 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), numLights * sizeof(LightData));
 }
 
-void SceneGraph::UpdateActors()
+void SceneGraph::UpdateActors(nvrhi::ICommandList* commandList)
 {
 	for (auto& [formID, actorRef]: m_Actors)
 	{
-		actorRef.Update();
+		actorRef.Update(commandList);
 	}
 }
 
@@ -504,8 +504,8 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 		auto object = actor->Get3D(firstPerson);
 
 		if (auto* model = CommitModel(name.c_str(), object, actor, meshes)) {
-			AddInstance(actor->GetFormID(), object, model);
-			m_Actors.try_emplace(actor->GetFormID(), ActorReference(actor, firstPerson, faceMeshes, bipedMeshes));
+			auto* instance = AddInstance(actor->GetFormID(), object, model);
+			m_Actors.try_emplace(actor->GetFormID(), ActorReference(actor, firstPerson, instance, faceMeshes, bipedMeshes));
 		}
 	}
 	else {
@@ -825,7 +825,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 	});
 }
 
-void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
+void SceneGraph::ActorEquip(nvrhi::ICommandList* commandList, Instance* a_instance, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson)
 {
 	if (!a_form)
 		return;
@@ -833,37 +833,23 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObj
 	if (!a_object)
 		return;
 
-	auto it = m_InstancesFormIDs.find(a_actor->GetFormID());
-
-	if (it == m_InstancesFormIDs.end())
-		return;
-
 	auto meshes = CreateMeshes(a_object, a_form);
 
 	for (const auto& mesh: meshes)
 		a_meshes.push_back(mesh.get());
 
-	for (const auto& instance : it->second) {
-		if (instance->model->m_FirstPerson == firstPerson) {
-			instance->model->AppendMeshes(this, meshes);
-			break;
-		}
-	}
-}
-
-void SceneGraph::ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson)
-{
-	auto it = m_InstancesFormIDs.find(a_actor->GetFormID());
-
-	if (it == m_InstancesFormIDs.end())
+	if (a_instance->model->m_FirstPerson != firstPerson)
 		return;
 
-	for (const auto& instance : it->second) {
-		if (instance->model->m_FirstPerson == firstPerson) {
-			instance->model->RemoveMeshes(a_meshes);
-			break;
-		}
-	}
+	a_instance->model->AppendMeshes(this, commandList, meshes);
+}
+
+void SceneGraph::ActorUnequip(Instance* a_instance, const eastl::vector<Mesh*>& a_meshes, bool firstPerson)
+{
+	if (a_instance->model->m_FirstPerson != firstPerson)
+		return;
+
+	a_instance->model->RemoveMeshes(a_meshes);
 }
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
@@ -1227,10 +1213,14 @@ Instance* SceneGraph::AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::Fo
 	return instancePtr;
 }
 
-void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* model)
+Instance* SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, formID))
+	if (auto* instance = AddInstanceImpl(node, model, formID)) {
 		m_InstancesFormIDs[formID].push_back(instance);
+		return instance;
+	}
+
+	return nullptr;
 }
 
 void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model)
