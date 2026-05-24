@@ -46,6 +46,29 @@ struct BipObjectReference
 
 struct ActorReference
 {
+	RE::Actor* m_Actor = nullptr;
+
+	bool m_Biped = false;
+
+	bool m_FirstPerson = false;
+
+	Instance* m_Instance = nullptr;
+
+	// Face (Actually the head but whatever)
+	RE::NiAVObject* m_FaceNode = nullptr;
+	eastl::vector<Mesh*> m_FaceMeshes;
+
+	// Biped Objects (equipable items)
+	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
+	eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> m_ObjectMeshes;
+
+	// Animated Objects (non-equipable animation-only items)
+	eastl::unordered_map<RE::TESObjectANIO*, eastl::vector<Mesh*>> m_AnimatedObjectMeshes;
+
+	eastl::unordered_map<RE::TESObjectANIO*, RE::NiAVObject*> m_AnimatedObjectAddQueue;
+	eastl::unordered_set<RE::TESObjectANIO*> m_AnimatedObjectRemoveQueue;
+	mutable std::mutex m_AnimatedObjectQueueMutex;
+
 	ActorReference(RE::Actor* actor, bool firstPerson, Instance* instance, eastl::vector<Mesh*> faceMeshes, eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> meshes)
 		: m_Actor(actor), m_FirstPerson(firstPerson), m_Instance(instance), m_FaceMeshes(faceMeshes), m_ObjectMeshes(meshes)
 	{
@@ -67,23 +90,4 @@ struct ActorReference
 	void Update(nvrhi::ICommandList* commandList);
 	void AttachAnimObject(RE::TESObjectANIO* animatedObject, RE::NiAVObject* object);
 	void DetachAnimObject(RE::TESObjectANIO* animatedObject);
-	
-	RE::Actor* m_Actor;
-
-	bool m_Biped;
-
-	bool m_FirstPerson;
-
-	Instance* m_Instance;
-
-	// Face (Actually the head but whatever)
-	RE::NiAVObject* m_FaceNode;
-	eastl::vector<Mesh*> m_FaceMeshes;
-
-	// Biped Objects (equipable items)
-	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
-	eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> m_ObjectMeshes;
-
-	// Animated Objects (non-equipable animation-only items)
-	eastl::unordered_map<RE::TESObjectANIO*, eastl::vector<Mesh*>> m_AnimatedObjectMeshes;
 };

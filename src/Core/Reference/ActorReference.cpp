@@ -46,29 +46,49 @@ void ActorReference::Update(nvrhi::ICommandList* commandList)
 			}
 		}
 	}
+
+	// Updade animated objects
+	{
+		eastl::unordered_map<RE::TESObjectANIO*, RE::NiAVObject*> addQueue;
+		eastl::unordered_set<RE::TESObjectANIO*> removeQueue;
+
+		{
+			std::scoped_lock lock(m_AnimatedObjectQueueMutex);
+			addQueue = eastl::move(m_AnimatedObjectAddQueue);
+			removeQueue = eastl::move(m_AnimatedObjectRemoveQueue);
+		}
+
+		for (auto& [animObject, object] : addQueue)
+		{
+			auto [it, emplaced] = m_AnimatedObjectMeshes.try_emplace(animObject);
+			if (!emplaced)
+				continue;
+
+			sceneGraph->ActorEquip(commandList, m_Instance, animObject, object, it->second, m_FirstPerson);
+		}
+
+		for (auto& animObject : removeQueue) {
+			auto it = m_AnimatedObjectMeshes.find(animObject);
+			if (it == m_AnimatedObjectMeshes.end())
+				continue;
+
+			sceneGraph->ActorUnequip(m_Instance, it->second, m_FirstPerson);
+
+			m_AnimatedObjectMeshes.erase(it);
+		}
+	}
 }
 
-void ActorReference::AttachAnimObject(RE::TESObjectANIO* animObject, [[maybe_unused]] RE::NiAVObject* object)
+void ActorReference::AttachAnimObject(RE::TESObjectANIO* animObject, RE::NiAVObject* object)
 {
-	if (m_AnimatedObjectMeshes.find(animObject) != m_AnimatedObjectMeshes.end())
-		return;
-
-	auto [it, emplaced] = m_AnimatedObjectMeshes.try_emplace(animObject);
-	if (!emplaced)
-		return;
-
-	//auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	//sceneGraph->ActorEquip(m_Instance, animObject, object, it->second, m_FirstPerson);
+	std::scoped_lock lock(m_AnimatedObjectQueueMutex);
+	m_AnimatedObjectAddQueue.emplace(animObject, object);
+	m_AnimatedObjectRemoveQueue.erase(animObject);
 }
 
 void ActorReference::DetachAnimObject(RE::TESObjectANIO* animObject)
 {
-	auto it = m_AnimatedObjectMeshes.find(animObject);
-	if (it == m_AnimatedObjectMeshes.end())
-		return;
-
-	//auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	//sceneGraph->ActorUnequip(m_Instance, it->second, m_FirstPerson);
-
-	m_AnimatedObjectMeshes.erase(it);
+	std::scoped_lock lock(m_AnimatedObjectQueueMutex);
+	m_AnimatedObjectRemoveQueue.emplace(animObject);
+	m_AnimatedObjectAddQueue.erase(animObject);
 }
