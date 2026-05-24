@@ -140,15 +140,11 @@ struct Mesh
 
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
-	// State is pending until BLASRebuild
-	stl::enumeration<State> m_PendingState = State::None;
 	stl::enumeration<State> m_State = State::None;
 
-	bool GetDismemberHidden() const;
+	void UpdateDismember();
 
-	bool GetSubIndexHidden() const;
-
-	State GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const;
+	void UpdateSubIndex();
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Mesh::Flags);

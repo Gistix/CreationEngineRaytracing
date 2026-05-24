@@ -44,7 +44,7 @@ void Model::UpdateMeshFlags()
 	}
 }
 
-nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
+nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool rebuild)
 {
 	auto blasDesc = nvrhi::rt::AccelStructDesc()
 		.setIsTopLevel(false)
@@ -56,7 +56,7 @@ nvrhi::rt::AccelStructDesc Model::MakeBLASDesc(bool update)
 	else
 		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 
-	blasDesc.buildFlags |= (update ? nvrhi::rt::AccelStructBuildFlags::PerformUpdate : nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
+	blasDesc.buildFlags |= (rebuild ? nvrhi::rt::AccelStructBuildFlags::AllowUpdate : nvrhi::rt::AccelStructBuildFlags::PerformUpdate);
 
 	return blasDesc;
 }
@@ -161,25 +161,32 @@ bool Model::IsReady() const
 void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 {
 	auto* renderer = Renderer::GetSingleton();
+	auto* device = renderer->GetDevice();
 	const auto frameIndex = renderer->GetFrameIndex();
 
 	if (frameIndex == m_LastBLASUpdate)
 		return;
 
-	bool update = false;
-	if (!m_BLAS || m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
-		update = false;
+	bool create = !m_BLAS;
+	bool rebuild = true;
+
+	if (create || m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh)) {
+		rebuild = true;
+	}
 	else {
+		// Must have a valid update flag
 		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
 			return;
 
-		update = true;
+		rebuild = false;
 	}
 
-	// If update is false the BLAS will be rebuilt (vertex moves = update, mesh hidden = rebuild)
-	auto blasDesc = MakeBLASDesc(update);
+	// If rebuild is true the BLAS will be build/rebuilt (mesh list changed = rebuild, vertex moved = update)
+	// TODO: We should probably rebuild periodically to avoid performance degradation (we had issues in the past with TLAS updates, so nowadays we always rebuild TLAS)
+	auto blasDesc = MakeBLASDesc(rebuild);
 
-	for (auto& mesh: m_Meshes)
+	// Collect geometry descriptions
+	for (auto& mesh : m_Meshes)
 	{
 		if (mesh->IsHidden())
 			continue;
@@ -187,9 +194,17 @@ void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}
 
-	if (!m_BLAS)
-		m_BLAS = renderer->GetDevice()->createAccelStruct(blasDesc);
+	if (!create && rebuild) {
+		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);
+		create = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
 
+		if (create)
+			logger::debug("Model::BuildUpdateBLAS - Required BLAS size of {} greater than previous size of {}, creating a new buffer.", prebuildInfo.resultMaxSizeInBytes, m_BLAS->getBufferSize());
+	}
+
+	if (create)
+		m_BLAS = device->createAccelStruct(blasDesc);
+	
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
 
 	// Consume all flags after BLAS is updated/rebuilt

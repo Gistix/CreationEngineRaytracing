@@ -43,7 +43,7 @@ struct Model
 
 	void UpdateMeshFlags();
 
-	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool update);
+	nvrhi::rt::AccelStructDesc MakeBLASDesc(bool rebuild);
 
 	void CreateBuffers(SceneGraph* sceneGraph);
 
