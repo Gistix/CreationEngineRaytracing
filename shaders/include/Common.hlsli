@@ -41,7 +41,8 @@ void NormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 g
 
 void ModelSpaceNormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
 {
-    normalWS = normalize(normalMap * 2.0f - 1.0f);
+    // Swizzle matches vanilla shaders
+    normalWS = normalize(normalMap.xzy * 2.0f - 1.0f);
     tangentWS = normalize(geomTangentWS - normalWS * dot(geomTangentWS, normalWS));
     bitangentWS = cross(normalWS, tangentWS) * handedness;
 }
