@@ -541,9 +541,8 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 	m_DynamicResolutionRatio = { stateRuntime.dynamicResolutionWidthRatio, stateRuntime.dynamicResolutionHeightRatio };
 
-	// Create a new command list
-	if (!m_CommandList)
-		m_CommandList = GetGraphicsCommandList();
+	// Get a new command list every frame, NVRHI command lists are single-use and they can hold stale scratch data
+	m_CommandList = GetGraphicsCommandList();
 
 	m_CommandList->open();
 
@@ -580,9 +579,6 @@ void Renderer::EndExecution()
 
 void Renderer::WaitExecution()
 {
-	// Wait for the last submitted command list to finish execution before proceeding
-	//m_NVRHIDevice->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
-
 	GetDevice()->waitForIdle();
 
 	PostExecution();
@@ -594,7 +590,7 @@ void Renderer::PostExecution()
 
 	auto* scene = Scene::GetSingleton();
 
-	auto timings = scene->m_Settings.DebugSettings.Timings;
+	const auto timings = scene->m_Settings.DebugSettings.Timings;
 
 	m_PassTimings.clear();
 
