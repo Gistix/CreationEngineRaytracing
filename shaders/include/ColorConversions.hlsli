@@ -46,15 +46,17 @@ float3 LightToLinear(float3 color)
 
 float3 PointLightToLinear(float3 color, bool isLinear)
 {
-    float mult = LLON ? (isLinear ? LLSETTINGS.pointLightMult : 1.0f) : K_PI;
-    float3 finalColor = (isLinear && LLON) ? color : LightToLinear(color);
+    float mult = LLON ? (isLinear ? 1.0f : LLSETTINGS.pointLightMult) : 1.0f;
+    float3 finalColor = isLinear ? color : LightToLinear(color);
     return finalColor * mult;
 }
 
 float3 DirLightToLinear(float3 color)
 {
-    float mult = LLON ? (LLSETTINGS.isDirLightLinear ? LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult : 1.0f) : K_PI;
-    float3 finalColor = (LLSETTINGS.isDirLightLinear && LLON) ? color : LightToLinear(color);
+    const bool isLinear = LLSETTINGS.isDirLightLinear;
+    
+    float mult = LLON ? (isLinear ? 1.0f : K_PI * LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult) : K_PI;
+    float3 finalColor = isLinear ? color : LightToLinear(color * PBRLightingScaleRcp);
     return finalColor * mult;
 }
 
