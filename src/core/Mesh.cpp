@@ -295,11 +295,11 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	triangleData = BuildTriangles(flags.get(), rendererData, triangleCountIn);
 
 	// Clear unused partition vertices
-	if (flags.all(Mesh::Flags::Skinned))
+	/*if (flags.all(Mesh::Flags::Skinned))
 		ClearUnusedVertices();
 
 	if (flags.none(Flags::Landscape, Flags::Water) && Util::Geometry::HasDoubleSidedGeom(this))
-		flags.set(Mesh::Flags::DoubleSidedGeom);
+		flags.set(Mesh::Flags::DoubleSidedGeom);*/
 
 	auto vertexDesc = rendererData->vertexDesc;
 
@@ -319,11 +319,11 @@ void Mesh::BuildMesh(VertexData a_VertexData, TriangleData a_TriangleData, RE::B
 	triangleData = a_TriangleData;
 
 	// Clear unused partition vertices
-	if (flags.all(Mesh::Flags::Skinned))
+	/*if (flags.all(Mesh::Flags::Skinned))
 		ClearUnusedVertices();
 
 	if (flags.none(Flags::Landscape, Flags::Water) && Util::Geometry::HasDoubleSidedGeom(this))
-		flags.set(Mesh::Flags::DoubleSidedGeom);
+		flags.set(Mesh::Flags::DoubleSidedGeom);*/
 
 	bool hasNormal = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_NORMAL;
 	bool hasTangent = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_TANGENT;
