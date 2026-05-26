@@ -470,7 +470,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		buffers.vertexCopyBuffer = device->createBuffer(vertexCopyBufferDesc);
 
-		commandList->writeBuffer(buffers.vertexCopyBuffer, vertexData.vertices.data(), size);
+		commandList->copyBuffer(buffers.vertexCopyBuffer, 0, buffers.vertexBuffer, 0, size);
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexCopyBuffer);
 		device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable, bindingSet);
@@ -506,7 +506,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 			buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
 
 			// Fixes motion vector for trees that are far away and havent updated yet
-			{
+			/*{
 				eastl::vector<float3> positions;
 				positions.resize(vertexData.count);
 
@@ -514,7 +514,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 					positions[i] = vertexData.vertices[i].Position;
 
 				commandList->writeBuffer(buffers.prevPositionBuffer, positions.data(), prevPosSize);
-			}
+			}*/
 
 			auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
 			device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
