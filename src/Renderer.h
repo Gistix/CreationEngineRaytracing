@@ -51,8 +51,6 @@ class Renderer
 	nvrhi::DeviceHandle m_NVRHIDevice;
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
-	//nvrhi::CommandListHandle m_ComputeCommandList = nullptr;
-	//nvrhi::CommandListHandle m_CopyCommandList = nullptr;
 
 	SupportedFeatures m_SupportedFeatures;
 
