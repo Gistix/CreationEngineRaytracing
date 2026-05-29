@@ -54,8 +54,11 @@ class Renderer
 
 	SupportedFeatures m_SupportedFeatures;
 
-	uint64_t m_LastSubmittedInstance = 0;
+	// Fence used to synchronize 'executeCommandList' since it is not thread safe and we need the returned fence value to synchronize GPU resources
 	mutable std::mutex m_ExecutionMutex;
+
+	uint64_t m_LastSubmittedInstance = 0;
+	nvrhi::EventQueryHandle m_RenderGraphQuery;
 
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;

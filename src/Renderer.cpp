@@ -70,6 +70,8 @@ bool Renderer::Initialize(RendererParams rendererParams)
 
 	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
 
+	m_RenderGraphQuery = m_NVRHIDevice->createEventQuery();
+
 	return true;
 }
 
@@ -568,18 +570,23 @@ void Renderer::EndExecution()
 	// Close it
 	m_CommandList->close();
 
+	auto device = GetDevice();
+
 	// Execute it
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
-		m_LastSubmittedInstance = GetDevice()->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+		m_LastSubmittedInstance = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
 	}
+
+	device->setEventQuery(m_RenderGraphQuery, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
 
 	logger::trace("Renderer::ExecutePasses - End");
 }
 
 void Renderer::WaitExecution()
 {
-	GetDevice()->waitForIdle();
+	// Fence only the render graph execution and not any of the others async command lists
+	GetDevice()->waitEventQuery(m_RenderGraphQuery);
 
 	PostExecution();
 }
