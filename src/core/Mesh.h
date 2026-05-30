@@ -144,8 +144,6 @@ struct Mesh
 
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
-	// State is pending until BLASRebuild
-	stl::enumeration<State> m_PendingState = State::None;
 	stl::enumeration<State> m_State = State::None;
 
 	bool GetDismemberHidden() const;

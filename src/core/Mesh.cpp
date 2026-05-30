@@ -749,15 +749,11 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
-	// Get all states for the current frame and store as pending state
-	m_PendingState = GetState(instanceRoot, modelFlags);
-
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
 
-	// Update states
-	m_State = m_PendingState;
-	m_PendingState = State::None;
+	// Update state
+	m_State = GetState(instanceRoot, modelFlags);
 
 	// Current hidden state
 	bool isHidden = IsHidden();
