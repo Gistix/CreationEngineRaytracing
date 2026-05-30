@@ -2,6 +2,7 @@
 #include "Interop/VertexUpdate.hlsli"
 #include "Interop/Skinning.hlsli"
 #include "Interop/BoneMatrix.hlsli"
+#include "Interop/Mesh.hlsli"
 
 StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
 StructuredBuffer<BoneMatrix> BoneMatrices               : register(t1);
@@ -12,18 +13,6 @@ StructuredBuffer<Skinning> MeshSkinning[]               : register(t0, space3);
 
 RWStructuredBuffer<Vertex> OutputVertices[]             : register(u0);
 RWStructuredBuffer<float3> PrevPositions[]              : register(u0, space1);
-
-namespace MeshFlags
-{
-    static const uint Dynamic = (1 << 1);
-    static const uint Skinned = (1 << 2);
-}
-
-namespace DirtyFlags
-{
-    static const uint Skin = (1 << 1);    
-    static const uint Vertex = (1 << 2);
-}
 
 float3x4 GetBoneTransformMatrix(Skinning skinning, uint boneOffset)
 {
@@ -70,7 +59,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
     uint shapeIndex = NonUniformResourceIndex(updateData.index);
 
     // Save the current skinned position as previous before overwriting
-    if (updateData.shapeFlags & MeshFlags::Skinned)
+    if ((updateData.shapeFlags & MeshFlags::Skinned) || (updateData.shapeFlags & MeshFlags::Dynamic))
         PrevPositions[shapeIndex][vertexIndex] = OutputVertices[shapeIndex][vertexIndex].Position;
 
     Vertex vertex = Vertices[shapeIndex][vertexIndex];

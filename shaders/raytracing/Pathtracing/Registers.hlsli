@@ -93,8 +93,6 @@ RaytracingAccelerationStructure             LightTLAS[]                 : regist
 StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space6);
 TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
 
-#define HAS_PREV_POSITIONS
-
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);
 SamplerState                                PointWrapSampler            : register(s2);

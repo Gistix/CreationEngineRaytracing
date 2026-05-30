@@ -28,8 +28,6 @@ struct Instance
 	// Model ptr
 	Model* model;
 
-	RE::NiTransform m_NiTransform;
-
 	// Used for BLAS instance
 	float3x4 m_Transform;
 	float3x4 m_PrevTransform;
@@ -41,6 +39,7 @@ struct Instance
 
 	stl::enumeration<State> m_State = State::None;
 
+	// Used by light TLAS
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) 

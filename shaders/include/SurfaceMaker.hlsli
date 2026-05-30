@@ -51,7 +51,7 @@ struct SurfaceMaker
 #if defined(HAS_PREV_POSITIONS)
         float3 prevPos0, prevPos1, prevPos2;
         
-        if (mesh.Flags & MeshDataFlags::Skinned)
+        if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
             GetVertices(mesh.GeometryIdx, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
         else
 #endif        
@@ -117,7 +117,7 @@ struct SurfaceMaker
         {
             float3 objectSpacePos = float3(0.0f, 0.0f, 0.0f);
         
-            if (mesh.Flags & MeshDataFlags::Skinned)
+            if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
                 // Per-vertex: read previous skinned positions from PrevPositions buffer
                 objectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);     
             else
