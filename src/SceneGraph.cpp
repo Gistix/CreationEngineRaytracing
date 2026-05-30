@@ -1149,8 +1149,6 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 		return static_cast<uint32_t>(model->m_Meshes.size());
 	}
 
-	logger::trace("SceneGraph::CreateModelInternal \"{}\"", typeid(*pRoot).name());
-
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
 
 	// Creates all meshes, one for each valid BSGeometry found in the NiAVObject hierarchy
