@@ -355,6 +355,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		// No visible meshes in instance
 		instance->SetHiddenModel(params.hidden);
 
+		// Post update since these states are set by update itself
 		if (instance->SkipAS())
 			return Iterator::Continue;
 

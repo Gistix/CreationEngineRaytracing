@@ -76,16 +76,19 @@ bool Instance::SkipUpdate()
 
 void Instance::UpdateTransform()
 {
-	if (memcmp(&m_NiTransform, &m_Node->world, sizeof(RE::NiTransform)) != 0)
-		m_DirtyFlags |= DirtyFlags::Transform;
+	// Update previous transform
+	m_PrevTransform = m_Transform;
 
-	m_DirtyFlags |= model->GetDirtyFlags().get();
+	float3x4 transform;
+	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_Node->world));
 
-	// Update transform for BLAS instance
-	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(m_Node->world));
-	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_Node->previousWorld));
+	if (Util::Math::MatrixNearEqual(transform, m_Transform))
+		return;
 
-	m_NiTransform = m_Node->world;
+	m_DirtyFlags |= DirtyFlags::Transform;
+
+	// Update transform
+	m_Transform = transform;
 }
 
 void Instance::Update(uint32_t tlasInstanceID)
@@ -105,6 +108,8 @@ void Instance::Update(uint32_t tlasInstanceID)
 		return;
 
 	UpdateTransform();
+
+	m_DirtyFlags |= model->GetDirtyFlags().get();
 
 	m_TLASInstanceID = tlasInstanceID;
 }

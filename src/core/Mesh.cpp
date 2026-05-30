@@ -56,6 +56,9 @@ Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeome
 	if (skinned)
 		vertexData.skinning.resize(vertexCountIn);
 
+	if (skinned || dynamic)
+		vertexData.position.resize(vertexCountIn);
+
 	auto vertexSize = Util::Geometry::GetSkyrimVertexSize(vertexFlags);
 	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
 
@@ -97,7 +100,13 @@ Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeome
 		}
 
 		if (hasPosition || dynamic) {
-			vertex.Position = { pos.x, pos.y, pos.z };
+			const float3 position = { pos.x, pos.y, pos.z };
+			vertex.Position = position;
+
+			// Used to populate 'prevPositionBuffer' for motion vectors
+			if (skinned || dynamic) {
+				vertexData.position[i] = vertex.Position;
+			}
 		}
 
 		if (vertexFlags & RE::BSGraphics::Vertex::VF_UV) {
@@ -491,37 +500,28 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
 		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
+	}
 
-		// Previous position buffer for per-vertex motion vectors
-		{
-			const size_t prevPosSize = sizeof(float3) * vertexData.count;
+	// Previous position buffer for per-vertex motion vectors
+	if (flags.any(Flags::Skinned, Flags::Dynamic)) {
+		const size_t prevPosSize = sizeof(float3) * vertexData.count;
 
-			auto& prevPositionBufferDesc = nvrhi::BufferDesc()
-				.setByteSize(prevPosSize)
-				.setStructStride(sizeof(float3))
-				.setCanHaveUAVs(true)
-				.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-				.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()));
+		auto& prevPositionBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(prevPosSize)
+			.setStructStride(sizeof(float3))
+			.setCanHaveUAVs(true)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()));
 
-			buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
+		buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
 
-			// Fixes motion vector for trees that are far away and havent updated yet
-			/*{
-				eastl::vector<float3> positions;
-				positions.resize(vertexData.count);
+		commandList->writeBuffer(buffers.prevPositionBuffer, vertexData.position.data(), prevPosSize);
+		
+		auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
+		device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
 
-				for (size_t i = 0; i < vertexData.count; i++)
-					positions[i] = vertexData.vertices[i].Position;
-
-				commandList->writeBuffer(buffers.prevPositionBuffer, positions.data(), prevPosSize);
-			}*/
-
-			auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
-			device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
-
-			auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
-			device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
-		}
+		auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
+		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
 	}
 
 	// Material Buffer
@@ -648,8 +648,11 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
 {
-	if (flags.any(Flags::Landscape, Flags::Water, Flags::Origin))
+	if (flags.any(Flags::Origin))
 		return false;
+
+	// Update previous transform
+	m_PrevLocalToRoot = m_LocalToRoot;
 
 	float3x4 localToRoot;
 	XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
@@ -657,11 +660,10 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 	if (Util::Math::MatrixNearEqual(localToRoot, m_LocalToRoot))
 		return false;
 
-	// Update previous transform
-	m_PrevLocalToRoot = m_LocalToRoot;
-
 	// Update transform
 	m_LocalToRoot = localToRoot;
+
+	geometryDesc.setTransform(m_LocalToRoot.f);
 
 	return true;
 }
@@ -767,10 +769,8 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	if (skinnedModel && UpdateTransform(instanceRoot))
+	if (UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
-
-	geometryDesc.setTransform(m_LocalToRoot.f);
 
 	return updateFlags;
 }
@@ -785,7 +785,7 @@ MeshData Mesh::GetData()
 {
 	return MeshData(
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
-		static_cast<uint32_t>(flags.get()),
+		flags.underlying(),
 		m_LocalToRoot,
 		m_PrevLocalToRoot
 	);

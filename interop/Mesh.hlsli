@@ -14,11 +14,17 @@ INTEROP_DATA_STRUCT(Mesh, 4)
 VALIDATE_ALIGNMENT(MeshData, 4);
 
 #ifndef __cplusplus
-namespace MeshDataFlags
+namespace MeshFlags
 {
-    static const uint Dynamic = 1u << 1;
-    static const uint Skinned = 1u << 2;
-    static const uint DoubleSidedGeom = 1u << 5;
+    static const uint Dynamic = (1 << 1);
+    static const uint Skinned = (1 << 2);
+    static const uint DoubleSidedGeom = (1 << 5);
+}
+
+namespace DirtyFlags
+{
+    static const uint Skin = (1 << 1);
+    static const uint Vertex = (1 << 2);
 }
 #endif
 

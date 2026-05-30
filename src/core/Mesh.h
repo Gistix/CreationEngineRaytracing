@@ -67,6 +67,7 @@ struct Mesh
 		eastl::vector<Skinning> skinning;
 		eastl::vector<uint16_t> remap;
 		eastl::vector<float4> dynamicPositionRemapped;
+		eastl::vector<float3> position;
 	} vertexData;
 
 	struct TriangleData
