@@ -222,7 +222,6 @@ void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
 	auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
 	if (frameIndex == m_LastBLASUpdate) {
-		logger::critical("Model::UpdateBLAS called multiple times in the same frame for model {}. This should not happen and indicates a problem with the update logic.", m_Name);
 		return;
 	}
 
