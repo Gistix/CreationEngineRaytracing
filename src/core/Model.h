@@ -87,7 +87,7 @@ struct Model
 
 	DataParams GetData(MeshData* meshData, uint32_t& index);
 
-	void UpdateBLAS(nvrhi::ICommandList* commandList);
+	void BuildUpdateBLAS(nvrhi::ICommandList* commandList);
 
 	void AppendMeshes(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);
