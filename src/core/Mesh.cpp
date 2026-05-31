@@ -786,7 +786,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	if (instanced && UpdateTransform(instanceRoot))
+	if (!instanced && UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
 
 	return updateFlags;
