@@ -169,7 +169,20 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         
         alpha = diffuse.a * material.BaseColor().a;
         
-        surface.Albedo = VanillaDiffuseColor(diffuse.rgb * vertexColor.rgb);
+        float3 albedo = diffuse.rgb * vertexColor.rgb;
+        
+        if (material.ShaderFlags & ShaderFlags::kLODLandscape)
+        {
+            albedo = pow(albedo, Features.LODBlending.LODTerrainGamma) * Features.LODBlending.LODTerrainBrightness;
+
+        }
+        else if (material.ShaderFlags & ShaderFlags::kLODObjects)
+        {
+            albedo = pow(albedo, Features.LODBlending.LODObjectGamma) * Features.LODBlending.LODObjectBrightness;
+
+        }
+        
+        surface.Albedo = VanillaDiffuseColor(albedo);
 
         if (material.Feature == Feature::kHairTint)
         {

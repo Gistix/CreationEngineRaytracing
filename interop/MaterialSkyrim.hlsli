@@ -40,6 +40,7 @@ namespace ShaderFlags
 	static const uint kTreeAnim = (1 << 19);
 	static const uint kSoftLighting = (1 << 20);
     static const uint kLODLandscape = (1 << 21);
+    static const uint kLODObjects = (1 << 22);
 }
 
 namespace WaterShaderFlags

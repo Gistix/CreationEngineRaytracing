@@ -180,6 +180,21 @@ struct ExponentialHeightFogSettings
 static_assert(sizeof(ExponentialHeightFogSettings) % 16 == 0);
 #endif
 
+struct LODBlendingSettings
+{
+    float LODTerrainBrightness;
+    float LODObjectBrightness;
+    float LODObjectSnowBrightness;
+    uint DisableTerrainVertexColors;
+    float LODTerrainGamma;
+    float LODObjectGamma;
+    float LODObjectSnowGamma;
+    float pad;
+};
+#ifdef __cplusplus
+static_assert(sizeof(LODBlendingSettings) % 16 == 0);
+#endif
+
 INTEROP_STRUCT(FeatureData, 16)
 {
     CPMSettings ExtendedMaterial;
@@ -189,6 +204,7 @@ INTEROP_STRUCT(FeatureData, 16)
     ExtendedTranslucencySettings ExtendedTranslucency;
     LinearLightingSettings LinearLighting;
     ExponentialHeightFogSettings ExponentialHeightFog;
+    LODBlendingSettings LODBlending;
 };
 VALIDATE_CBUFFER(FeatureData, 16);
 
