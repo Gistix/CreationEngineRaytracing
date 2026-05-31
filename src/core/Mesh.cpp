@@ -736,6 +736,11 @@ void Mesh::InitState(RE::NiAVObject* instanceRoot, Flags modelFlags)
 	m_State = GetState(instanceRoot, modelFlags);
 }
 
+void Mesh::SetInstanced(bool instanced)
+{
+	flags.set(instanced, Flags::Instanced);
+}
+
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
 {
 	// This should never be true, but it often is, meaning we missed some logic that removes this mesh or the entire instance
@@ -746,8 +751,11 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	material->Update(bsGeometryPtr->GetGeometryRuntimeData().shaderProperty.get());
 
-	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
-	const auto skinned = flags.all(Mesh::Flags::Skinned);
+	const auto dynamic = flags.all(Flags::Dynamic);
+	const auto skinned = flags.all(Flags::Skinned);
+
+	// Instanced models cannot have their mesh transforms updated
+	const bool instanced = (modelFlags & Flags::Instanced) != Flags::None;
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
@@ -778,7 +786,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	if (UpdateTransform(instanceRoot))
+	if (instanced && UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
 
 	return updateFlags;
