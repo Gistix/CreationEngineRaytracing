@@ -9,17 +9,14 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 {
 	UpdateMeshFlags();
 
-	// Models with these flags cannot be instanced directly
-	const bool instanceable = meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned);
-
-	if (!instanceable)
-		m_Name.append(Model::KeySuffix(node).c_str());
-
 	// Initialize visibility state for BLAS creation
 	for (auto& mesh : m_Meshes) {
-		mesh->SetInstanced(instanceable);
 		mesh->InitState(node, meshFlags.get());
 	}
+
+	// Models with these flags cannot be instanced directly
+	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+		m_Name.append(Model::KeySuffix(node).c_str());
 
 	// Water and LOD models have no form
 	if (form) {

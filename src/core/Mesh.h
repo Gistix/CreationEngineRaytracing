@@ -34,8 +34,7 @@ struct Mesh
 		Water = 1 << 6,
 		Remapped = 1 << 7,
 		Origin = 1 << 8,
-		LOD = 1 << 9,
-		Instanced = 1 << 10
+		LOD = 1 << 9
 	};
 
 	enum class Type : uint8_t
@@ -126,8 +125,6 @@ struct Mesh
 
 	// Initialize state, must be ran before BLAS is built
 	void InitState(RE::NiAVObject* instanceRoot, Flags modelFlags);
-
-	void SetInstanced(bool instanced);
 
 	bool UpdateDynamicPosition();
 
