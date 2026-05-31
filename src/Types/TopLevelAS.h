@@ -52,7 +52,7 @@ public:
 			if (instance->SkipAS())
 				return Iterator::Continue;
 
-			instance->model->UpdateBLAS(commandList);
+			instance->model->BuildUpdateBLAS(commandList);
 
 			m_InstanceDescs.push_back(instance->GetInstanceDesc());
 

@@ -170,30 +170,32 @@ DataParams Model::GetData(MeshData* meshData, uint32_t& index)
 	return m_DataParams;
 }
 
+bool Model::IsReady() const
+{
+	if (!(m_Flags & Model::Flags::BuffersUploaded))
+		return false;
+
+	if (!(m_Flags & Model::Flags::BLASBuilt))
+		return false;
+
+	return true;
+}
+
 void Model::BuildBLAS()
 {
-	if (m_BLAS)
+	if (m_BLAS) {
+		logger::critical("Model::BuildBLAS - BLAS already exists for model '{}', skipping BLAS build.", m_Name.c_str());
 		return;
-
-	auto blasDesc = MakeBLASDesc(false);
-
-	for (auto& mesh: m_Meshes) {
-		if (mesh->IsHidden())
-			continue;
-
-		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}
 
 	auto* renderer = Renderer::GetSingleton();
 	auto device = renderer->GetDevice();
 
-	m_BLAS = renderer->GetDevice()->createAccelStruct(blasDesc);
-
 	// Compute Command - Waits for copy
 	m_BLASBuildCommandList = renderer->GetComputeCommandList();
 	m_BLASBuildCommandList->open();
 
-	nvrhi::utils::BuildBottomLevelAccelStruct(m_BLASBuildCommandList, m_BLAS, blasDesc);
+	BuildUpdateBLAS(m_BLASBuildCommandList);
 
 	{
 		std::scoped_lock lock(renderer->GetExecutionMutex());
@@ -209,46 +211,52 @@ void Model::BuildBLAS()
 	m_LastBLASUpdate = renderer->GetFrameIndex();
 }
 
-bool Model::IsReady() const
+void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 {
-	if (!(m_Flags & Model::Flags::BuffersUploaded))
-		return false;
+	auto* renderer = Renderer::GetSingleton();
+	auto* device = renderer->GetDevice();
+	const auto frameIndex = renderer->GetFrameIndex();
 
-	if (!(m_Flags & Model::Flags::BLASBuilt))
-		return false;
-
-	return true;
-}
-
-void Model::UpdateBLAS(nvrhi::ICommandList* commandList)
-{
-	auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
-
-	if (frameIndex == m_LastBLASUpdate) {
+	if (frameIndex == m_LastBLASUpdate)
 		return;
+
+	bool create = !m_BLAS;
+	bool rebuild = true;
+
+	if (create || m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh)) {
+		rebuild = true;
 	}
-
-	bool update;
-
-	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
-		update = false;
 	else {
+		// Must have a valid update flag
 		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
 			return;
 
-		update = true;
+		rebuild = false;
 	}
 
-	// If update is false the BLAS will be rebuilt (vertex moves = update, mesh hidden = rebuild)
-	auto blasDesc = MakeBLASDesc(update);
+	// If rebuild is true the BLAS will be build/rebuilt (mesh list changed = rebuild, vertex moved = update)
+	// TODO: We should probably rebuild periodically to avoid performance degradation (we had issues in the past with TLAS updates, so nowadays we always rebuild TLAS)
+	auto blasDesc = MakeBLASDesc(!rebuild);
 
-	for (auto& mesh: m_Meshes)
+	// Collect geometry descriptions
+	for (auto& mesh : m_Meshes)
 	{
 		if (mesh->IsHidden())
 			continue;
 
 		blasDesc.addBottomLevelGeometry(mesh->geometryDesc);
 	}
+
+	if (!create && rebuild) {
+		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);
+		create = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
+
+		if (create)
+			logger::debug("Model::BuildUpdateBLAS - Required BLAS size of {} greater than previous size of {}, creating a new buffer.", prebuildInfo.resultMaxSizeInBytes, m_BLAS->getBufferSize());
+	}
+
+	if (create)
+		m_BLAS = device->createAccelStruct(blasDesc);
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
 
