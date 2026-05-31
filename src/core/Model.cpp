@@ -288,7 +288,14 @@ void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr
 
 	UpdateMeshFlags();
 
-	// Triggers a BLAS rebuild
+	const bool instanceable = meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned);
+
+	// Set intanced flag
+	for (auto& mesh : m_Meshes) {
+		mesh->SetInstanced(instanceable);
+	}
+
+	// Signals a BLAS rebuild
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
@@ -308,8 +315,15 @@ void Model::RemoveMeshes(const eastl::vector<Mesh*>& a_meshes)
 
 	UpdateMeshFlags();
 
-	// Triggers a BLAS rebuild
-	if (m_Meshes.size() != oldSize)	
+	const bool instanceable = meshFlags.none(Mesh::Flags::Dynamic, Mesh::Flags::Skinned);
+
+	// Set intanced flag
+	for (auto& mesh : m_Meshes) {
+		mesh->SetInstanced(instanceable);
+	}
+
+	// Signals a BLAS rebuild
+	if (m_Meshes.size() != oldSize)
 		m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
