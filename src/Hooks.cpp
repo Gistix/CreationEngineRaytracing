@@ -585,10 +585,25 @@ namespace Hooks
 		if (pathTracingActive && shaderType == RE::BSShader::Type::Water)
 			return;
 
+		auto* shaderProperty = pass->shaderProperty;
+		if (!shaderProperty || !shaderProperty->material) {
+			func(pass, technique, alphaTest, renderFlags);
+			return;
+		}
+
 		// Cull non-effect refractive geometry during path tracing
 		if (pathTracingActive && shaderType != RE::BSShader::Type::Effect)
-			if (pass->shaderProperty && pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+			if (shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
 				return;
+
+		auto feature = shaderProperty->material->GetFeature();
+
+		// Cull eyes since they are transparent and draw after PT is composited
+		switch (feature) {
+		case RE::BSShaderMaterial::Feature::kEnvironmentMap: // Some mods use this flag for eyes,
+		case RE::BSShaderMaterial::Feature::kEye:
+			return;
+		}
 
 		// Path tracing occlusion-based culling
 		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry)
@@ -883,7 +898,7 @@ namespace Hooks
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
 		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
 
-		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));
+		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(0, 107644));
 
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());

@@ -600,9 +600,14 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	if (!skinInstance)
 		return false;
 
+	auto* scene = Scene::GetSingleton();
+	const bool isPathTracing = scene->IsPathTracingActive();
+	const bool applyPathTracingCull = scene->ApplyPathTracingCull();
+	const bool isCulled = applyPathTracingCull || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+
 	const auto frameID = skinInstance->frameID;
 
-	if (frameID == Constants::INVALID_FRAME_ID)
+	if (!isCulled && frameID == Constants::INVALID_FRAME_ID)
 		return false;
 
 	auto* rootParent = skinInstance->rootParent;
@@ -616,7 +621,7 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 
 	// Only update if the game has updated the animation
 	// Part 1 of COtR fix
-	if (!unparentedPlayer && m_FrameID == frameID)
+	if (!isCulled && !unparentedPlayer && m_FrameID == frameID)
 		return false;
 
 	m_FrameID = frameID;
