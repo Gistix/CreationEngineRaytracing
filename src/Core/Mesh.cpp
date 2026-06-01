@@ -631,7 +631,7 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	if (!skinData)
 		return false;
 
-	if (skinInstance->numMatrices != skinData->bones)
+	if (!isCulled && skinInstance->numMatrices != skinData->bones)
 		logger::warn("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
 
 	if (skinData->bones == 0)
