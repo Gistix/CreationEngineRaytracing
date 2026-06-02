@@ -591,18 +591,19 @@ namespace Hooks
 			return;
 		}
 
-		// Cull non-effect refractive geometry during path tracing
-		if (pathTracingActive && shaderType != RE::BSShader::Type::Effect)
-			if (shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+		if (pathTracingActive) {
+			// Cull non-effect refractive geometry during path tracing
+			if (shaderType != RE::BSShader::Type::Effect && shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+					return;
+
+			auto feature = shaderProperty->material->GetFeature();
+
+			// Cull eyes since they are transparent and draw after PT is composited
+			switch (feature) {
+			case RE::BSShaderMaterial::Feature::kEnvironmentMap: // Some mods use this flag for eyes,
+			case RE::BSShaderMaterial::Feature::kEye:
 				return;
-
-		auto feature = shaderProperty->material->GetFeature();
-
-		// Cull eyes since they are transparent and draw after PT is composited
-		switch (feature) {
-		case RE::BSShaderMaterial::Feature::kEnvironmentMap: // Some mods use this flag for eyes,
-		case RE::BSShaderMaterial::Feature::kEye:
-			return;
+			}
 		}
 
 		// Path tracing occlusion-based culling
