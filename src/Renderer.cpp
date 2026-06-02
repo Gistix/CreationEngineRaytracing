@@ -432,19 +432,6 @@ void Renderer::SetResolution(uint2 resolution)
 
 	m_RenderSize = resolution;
 
-	{
-		nvrhi::TextureDesc desc;
-		desc.width = m_RenderSize.x;
-		desc.height = m_RenderSize.y;
-		desc.isUAV = true;
-		desc.keepInitialState = true;
-		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		desc.debugName = "Main Texture";
-
-		m_MainTexture = m_NVRHIDevice->createTexture(desc);
-	}
-
 	m_RenderGraph->ResolutionChanged(m_RenderSize);
 
 	logger::info("Resolution set to {}x{}", resolution.x, resolution.y);
@@ -466,29 +453,6 @@ uint2 Renderer::GetDynamicResolution()
 void Renderer::SettingsChanged(const Settings& settings)
 {
 	m_RenderGraph->SettingsChanged(settings);
-}
-
-void Renderer::SetCopyTarget(ID3D12Resource* target)
-{
-	if (target == m_CopyTargetResource)
-		return;
-
-	m_CopyTargetResource = target;
-
-	auto targetDesc = target->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = nvrhi::Format::RGBA16_FLOAT;
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "Copy Target Texture";
-
-	m_CopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, target, desc);
 }
 
 void Renderer::SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget)
@@ -553,18 +517,14 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 void Renderer::EndExecution()
 {
-	if (m_CopyTargetTexture)
-	{
+	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Mode == Mode::PathTracing) {
 		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
-		m_CommandList->copyTexture(m_CopyTargetTexture, region, m_MainTexture, region);
 
-		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Mode == Mode::PathTracing) {
-			if (m_PTDepthCopyTargetTexture)
-				m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth), region);
+		if (m_PTDepthCopyTargetTexture)
+			m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth), region);
 	
-			if (m_PTMVCopyTargetTexture)
-				m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D), region);
-		}
+		if (m_PTMVCopyTargetTexture)
+			m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D), region);
 	}
 
 	// Close it

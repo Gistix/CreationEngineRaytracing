@@ -22,6 +22,13 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 
 		switch (texture)
 		{
+		case RenderTarget::Main:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
+			break;
+		case RenderTarget::Accumulation:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			break;
 		case RenderTarget::ViewDepth:
 		case RenderTarget::ClipDepth:
 			desc.format = nvrhi::Format::R32_FLOAT;
@@ -50,6 +57,12 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		default:
 			break;
 		}
+
+		logger::info("RenderTargetManager::GetTexture - Dimensions: [{}, {}], Format: {}, Shared: {} - {}", 
+			desc.width, desc.height,
+			magic_enum::enum_name(desc.format), 
+			(desc.sharedResourceFlags & nvrhi::SharedResourceFlags::Shared) != nvrhi::SharedResourceFlags::None,
+			desc.debugName);
 
 		if ((desc.sharedResourceFlags & nvrhi::SharedResourceFlags::Shared) == 0)
 			renderTarget.handle = device->createTexture(desc);

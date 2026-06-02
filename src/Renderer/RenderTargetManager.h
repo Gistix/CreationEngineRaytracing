@@ -8,6 +8,7 @@ struct RenderTargetManager
 {
 	enum class Texture
 	{
+		Main,
 		ViewDepth,
 		ClipDepth,
 		FaceNormals,
@@ -20,6 +21,7 @@ struct RenderTargetManager
 		SpecularFactor,
 		RRSpecularAlbedo = SpecularFactor,
 		RRSpecularHitDist,
+		Accumulation,
 		Total
 	};
 

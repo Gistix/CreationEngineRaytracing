@@ -48,11 +48,6 @@ void PostExecution()
 	Renderer::GetSingleton()->PostExecution();
 }
 
-void SetCopyTarget(ID3D12Resource* target)
-{
-	Renderer::GetSingleton()->SetCopyTarget(target);
-}
-
 void UpdateFeatureData(void* data, uint32_t size)
 {
 	auto* scene = Scene::GetSingleton();
@@ -105,9 +100,11 @@ void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, 
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
 }
 
-void GetSharedTextures(SharedTexture& diffuseAlbedo)
+void GetSharedTextures(SharedTexture& main, SharedTexture& diffuseAlbedo)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
+
+	main = textureManager.GetSharedTexture(RenderTarget::Main);
 	diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo);
 }
 

@@ -60,13 +60,9 @@ class Renderer
 	uint64_t m_LastSubmittedInstance = 0;
 	nvrhi::EventQueryHandle m_RenderGraphQuery;
 
+	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;
-
-	nvrhi::TextureHandle m_MainTexture;
-
-	ID3D12Resource* m_CopyTargetResource = nullptr;
-	nvrhi::TextureHandle m_CopyTargetTexture;
 
 	ID3D12Resource* m_PTDepthCopyTargetResource = nullptr;
 	nvrhi::TextureHandle m_PTDepthCopyTargetTexture;
@@ -207,7 +203,7 @@ public:
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();
 
-	inline auto GetMainTexture() { return m_MainTexture; }
+	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main); }
 
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
 
@@ -301,8 +297,6 @@ public:
 	uint2 GetResolution();
 
 	uint2 GetDynamicResolution();
-
-	void SetCopyTarget(ID3D12Resource* target);
 
 	void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 
