@@ -58,7 +58,7 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 			break;
 		}
 
-		logger::info("RenderTargetManager::GetTexture - Dimensions: [{}, {}], Format: {}, Shared: {} - {}", 
+		logger::debug("RenderTargetManager::GetTexture - Dimensions: [{}, {}], Format: {}, Shared: {} - {}", 
 			desc.width, desc.height,
 			magic_enum::enum_name(desc.format), 
 			(desc.sharedResourceFlags & nvrhi::SharedResourceFlags::Shared) != nvrhi::SharedResourceFlags::None,
