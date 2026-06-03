@@ -13,7 +13,6 @@ extern "C" {
 	CERT_API void GetResolution(uint32_t& width, uint32_t& height);
 	CERT_API void WaitExecution();
 	CERT_API void PostExecution();
-	CERT_API void SetCopyTarget(ID3D12Resource* target);
 	CERT_API void UpdateFeatureData(void* data, uint32_t size);
 	CERT_API void SetSkyHemisphere(ID3D12Resource* skyHemi);
 	CERT_API void SetWaterFlowMap(ID3D12Resource* skyHemi);
