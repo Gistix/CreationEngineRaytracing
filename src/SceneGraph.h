@@ -146,12 +146,12 @@ public:
 	void CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances);
 
 	// LOD
-	bool CreateLODModel(RE::BGSTerrainBlock* chunk);
-	bool CreateLODModel(RE::BGSObjectBlock* chunk);
-	bool CreateLODModel(RE::BGSDistantTreeBlock* chunk);
+	bool CreateLODModel(RE::BGSTerrainBlock* block);
+	bool CreateLODModel(RE::BGSObjectBlock* block);
+	bool CreateLODModel(RE::BGSDistantTreeBlock* block);
 
 	template <typename T>
-	void CreateLODModelImpl(T* chunk, Mesh::Type type);
+	void CreateLODModelImpl(T* block, Mesh::Type type);
 
 	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);

@@ -34,7 +34,8 @@ struct Mesh
 		Water = 1 << 6,
 		Remapped = 1 << 7,
 		Origin = 1 << 8,
-		LOD = 1 << 9
+		Dismember = 1 << 9,
+		SubIndex = 1 << 10
 	};
 
 	enum class Type : uint8_t
@@ -100,7 +101,7 @@ struct Mesh
 	float3x4 m_PrevLocalToRoot;
 
 	// DismemberSkinInstance slot
-	uint8_t m_Partition;
+	uint32_t m_Identifier;
 
 	uint32_t m_FrameID;
 
@@ -108,8 +109,8 @@ struct Mesh
 
 	RE::FormType m_FormType;
 
-	Mesh(RE::FormType formType, Type type, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint8_t partition = 0) :
-		m_FormType(formType), m_Type(type), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_Partition(partition) { }
+	Mesh(RE::FormType formType, Type type, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint32_t identifier = 0) :
+		m_FormType(formType), m_Type(type), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_Identifier(identifier) { }
 
 	static VertexData BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex);
 	static TriangleData BuildTriangles(Mesh::Flags flags, RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn);

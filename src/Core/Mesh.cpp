@@ -687,7 +687,7 @@ bool Mesh::GetDismemberHidden() const
 	if (dismemberRuntime.numPartitions == 0)
 		return false;
 
-	auto& partition = dismemberRuntime.partitions[m_Partition];
+	auto& partition = dismemberRuntime.partitions[m_Identifier];
 
 	return !partition.editorVisible;
 }
@@ -707,15 +707,26 @@ bool Mesh::GetSubIndexHidden() const
 	if (firstSegment.flags == 1)
 		return false;
 
-	auto& segment = runtimeData.segmentData[m_Partition];
-	return segment.unkFlags == 0;
+	auto index = static_cast<uint32_t>(m_Identifier >> 16) * 3;
+	auto numTris = static_cast<uint32_t>(m_Identifier & 0xFFFF);
+
+	// Segments can have their index and numTris changed around by the engine, lets find the one that matches our mesh
+	for (size_t i = 0; i < runtimeData.numSegments; i++)
+	{
+		auto& segment = runtimeData.segmentData[i];
+
+		if (segment.index == index && segment.numTris == numTris)
+			return segment.flags == 0;
+	}
+
+	return false;
 }
 
 Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 {
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
-	const auto lod = flags.all(Mesh::Flags::LOD);
+	const auto subIndexed = flags.all(Mesh::Flags::SubIndex);
 
 	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
 	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
@@ -730,7 +741,7 @@ Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 	if (skinned && GetDismemberHidden())
 		state |= State::DismemberHidden;
 
-	if (lod && GetSubIndexHidden())
+	if (subIndexed && GetSubIndexHidden())
 		state |= State::SubIndexHidden;
 
 	return state;

@@ -650,20 +650,20 @@ void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::Creat
 	}
 }
 
-bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
+bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* block)
 {
-	if (!m_TerrainLODInstances.contains(chunk)) {
-		CreateLODModelImpl(chunk, Mesh::Type::LandLOD);
+	if (!m_TerrainLODInstances.contains(block)) {
+		CreateLODModelImpl(block, Mesh::Type::LandLOD);
 		return false;
 	}
 
 	return true;
 }
 
-bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
+bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* block)
 {
-	if (!m_ObjectLODInstances.contains(chunk)) {
-		CreateLODModelImpl(chunk, Mesh::Type::ObjectLOD);
+	if (!m_ObjectLODInstances.contains(block)) {
+		CreateLODModelImpl(block, Mesh::Type::ObjectLOD);
 		return false;
 	}
 
@@ -742,8 +742,10 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 		auto* triShapeRD = geometryRuntimeData.rendererData;
 
-		if (!triShapeRD)
+		if (!triShapeRD) {
+			logger::info("\tInvalid LOD Render Data");
 			return RE::BSVisit::BSVisitControl::kContinue;
+		}
 
 		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
@@ -760,7 +762,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 			auto* subIndexTriShape = netimmerse_cast<RE::BSSubIndexTriShape*>(pGeometry);
 
 			if (subIndexTriShape) {
-				stl::enumeration<Mesh::Flags> flags = Mesh::Flags::LOD;
+				stl::enumeration<Mesh::Flags> flags = Mesh::Flags::SubIndex;
 				auto vertexData = Mesh::BuildVertices(flags, pGeometry, triShapeRD, triShapeRuntime.vertexCount, 0);
 				auto triangleData = Mesh::BuildTriangles(flags.get(), triShapeRD, triShapeRuntime.triangleCount);
 
@@ -773,20 +775,20 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 				for (size_t i = 0; i < runtimeData.numSegments; i++)
 				{
-					// The first segment contains all triangles (it is the equivalent of all other segments combine)
-					if (i == 0 && runtimeData.numSegments > 1)
-						continue;
-
 					auto& segment = runtimeData.segmentData[i];
 
-					// Invalid segment
-					if (segment.unkTriCount == 0)
+					// The first segment contains all triangles (it is the equivalent of all other segments combined)
+					if (i == 0 && runtimeData.numSegments > 1) {
+						continue;
+					} else if (segment.unkTriCount == 0 && segment.numTris == 0) // The first segments 'unkTriCount' is always 0, if not the first segment and the counts are 0, skip
 						continue;
 
 					logger::debug("\tSegment[{}]: Index: {}, UnkTriCount: {}, UnkFlags: 0x{:08X}, NumTris: {}, Flags: 0x{:08X}",
 						i, segment.index, segment.unkTriCount, segment.unkFlags, segment.numTris, segment.flags);
 
-					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, flags.get(), name, pGeometry, localToRoot, i);
+					auto identifier = static_cast<uint32_t>((segment.index / 3) << 16) | segment.numTris;
+
+					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, flags.get(), name, pGeometry, localToRoot, identifier);
 
 					// Copy triangles to segment triangles
 					Mesh::TriangleData segmentTriData{};
@@ -808,7 +810,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 			}
 		}
 		else {
-			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, Mesh::Flags::LOD, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, Mesh::Flags::None, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, 0);
