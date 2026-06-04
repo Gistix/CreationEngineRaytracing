@@ -628,8 +628,7 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			bool isMapLOD = a_block->node->mapTerrain && a_block == a_block->node->mapTerrain->block;
-			bool valid = a_block->node && !isMapLOD;
+			const bool valid = a_block->node;
 			bool existed = true;
 
 			if (valid && a_block->loaded && a_block->chunk) {
@@ -676,8 +675,7 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
 		{
-			bool isMapLOD = a_block->node->mapObjects && a_block == a_block->node->mapObjects->block;
-			bool valid = a_block->node && !isMapLOD;
+			const bool valid = a_block->node;
 			bool existed = true;
 
 			if (valid && a_block->loaded && a_block->chunk) {
