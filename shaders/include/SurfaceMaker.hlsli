@@ -161,6 +161,11 @@ struct SurfaceMaker
         surface.GeomNormal = normalWS;
         surface.GeomTangent = tangentWS;
 
+        // Set as defaults
+        surface.Normal = normalWS;
+        surface.Tangent = tangentWS;
+        surface.Bitangent = bitangentWS;
+        
         surface.Albedo = float3(1.0f, 1.0f, 1.0f);
         surface.Emissive = float3(0.0f, 0.0f, 0.0f);
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
