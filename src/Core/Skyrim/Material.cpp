@@ -65,6 +65,14 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 		if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
 			shaderType = RE::BSShader::Type::Lighting;
 
+			// Override shader type to Grass if it's a grass form
+			if (formID != 0) {
+				auto form = RE::TESForm::LookupByID(formID);
+
+				if (form && form->formType == RE::FormType::Grass) 
+				shaderType = RE::BSShader::Type::Grass;
+			}
+
 			colors[Constants::Material::EMISSIVE_COLOR] = {
 				lightingShaderProp->emissiveColor->red,
 				lightingShaderProp->emissiveColor->green,

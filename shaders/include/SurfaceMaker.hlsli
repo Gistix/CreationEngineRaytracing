@@ -205,7 +205,12 @@ struct SurfaceMaker
         else if (material.ShaderType == ShaderType::DistantTree)
         {
             DistantTreeMaterial(surface, texCoord0, material);
-        } else
+        }
+        else if (material.ShaderType == ShaderType::Grass)
+        {
+            GrassMaterial(surface, texCoord0, material);
+        }
+        else
         {
             DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
         }
