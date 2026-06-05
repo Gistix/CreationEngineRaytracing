@@ -428,51 +428,10 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 			}
 		}
 		else if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::Water;
-			waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
+			SetupWaterProperty(waterShaderProp);
 
-			if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material)) {
-				colors[0] = {
-					waterMaterial->shallowWaterColor.red,
-					waterMaterial->shallowWaterColor.green,
-					waterMaterial->shallowWaterColor.blue,
-					1.0f
-				};
-
-				colors[1] = {
-					waterMaterial->deepWaterColor.red,
-					waterMaterial->deepWaterColor.green,
-					waterMaterial->deepWaterColor.blue,
-					waterMaterial->deepWaterColor.alpha
-				};
-
-				colors[2] = {
-					waterMaterial->reflectionColor.red,
-					waterMaterial->reflectionColor.green,
-					waterMaterial->reflectionColor.blue,
-					waterMaterial->reflectionColor.alpha
-				};
-
-				// NormalsAmplitude
-				scalars[0] = waterMaterial->amplitudeA[0];
-				scalars[1] = waterMaterial->amplitudeA[1];
-				scalars[2] = waterMaterial->amplitudeA[2];
-
-				// NormalsScale
-				vectors[1].z = waterMaterial->uvScaleA[0];
-				vectors[1].w = waterMaterial->uvScaleA[1];
-				vectors[2].x = waterMaterial->uvScaleA[2];
-
-				// ObjectUV
-				vectors[2].y = 0.0f;
-				vectors[2].z = 0.0f;
-				vectors[2].w = 0.0f;
-
-				textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
-				textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
-				textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
-				textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
-			}
+			if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material))
+				SetupWaterMaterial(waterMaterial);
 		}
 		else if (auto* distantTreeProp = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty)) {
 			shaderType = RE::BSShader::Type::DistantTree;
@@ -512,6 +471,66 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 	}
 }
 
+void Material::SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp)
+{
+	shaderType = RE::BSShader::Type::Water;
+	waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
+}
+
+void Material::SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial)
+{
+	/*logger::info("BuildMaterial - Water shader flags: {}", Util::GetFlagsString<Material::WaterShaderFlags>(waterShaderFlags.underlying()));
+
+	if (formID != 0) {
+		if (auto waterForm = RE::TESForm::LookupByID<RE::TESWaterForm>(formID)) {
+			const bool enableFlowmap = waterForm->flags.all(RE::TESWaterForm::Flag::kEnableFlowmap);
+			logger::info("WaterForm Flowmap: {}", enableFlowmap);
+		}
+	}*/
+
+	colors[0] = {
+		waterMaterial->shallowWaterColor.red,
+		waterMaterial->shallowWaterColor.green,
+		waterMaterial->shallowWaterColor.blue,
+		1.0f
+	};
+
+	colors[1] = {
+		waterMaterial->deepWaterColor.red,
+		waterMaterial->deepWaterColor.green,
+		waterMaterial->deepWaterColor.blue,
+		waterMaterial->deepWaterColor.alpha
+	};
+
+	colors[2] = {
+		waterMaterial->reflectionColor.red,
+		waterMaterial->reflectionColor.green,
+		waterMaterial->reflectionColor.blue,
+		waterMaterial->reflectionColor.alpha
+	};
+
+	// NormalsAmplitude
+	scalars[0] = waterMaterial->amplitudeA[0];
+	scalars[1] = waterMaterial->amplitudeA[1];
+	scalars[2] = waterMaterial->amplitudeA[2];
+
+	// NormalsScale
+	vectors[1].z = waterMaterial->uvScaleA[0];
+	vectors[1].w = waterMaterial->uvScaleA[1];
+	vectors[2].x = waterMaterial->uvScaleA[2];
+
+	// ObjectUV
+	vectors[2].y = 0.0f;
+	vectors[2].z = 0.0f;
+	vectors[2].w = 0.0f;
+
+	auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureIndex();
+	textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
+	textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
+	textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
+	textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
+}
+
 void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 {
 	auto* scene = Scene::GetSingleton();
@@ -519,6 +538,8 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	auto* bsWaterProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 	if (!bsWaterProperty)
 		return;
+
+	SetupWaterProperty(bsWaterProperty);
 
 	auto* bsWaterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(bsWaterProperty->material);
 	if (!bsWaterMaterial)

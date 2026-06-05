@@ -48,6 +48,9 @@ struct Material : MaterialBase
 
 	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
 
+	void SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp);
+	void SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial);
+
 	void CreateBuffer(const eastl::string& name, DescriptorIndex descriptorIndex);
 
 	void UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty);
