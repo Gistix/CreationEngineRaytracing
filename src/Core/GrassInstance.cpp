@@ -8,28 +8,26 @@ void GrassInstance::UpdateTransform()
 		scaleMask.y = 0;
 	}
 
-	//float3 position = m_Data.position * (m_Data.heightScale * scaleMask + float3(1, 1, 1));
+	const float3 axisScale = m_Data.heightScale * scaleMask + float3(1.0f, 1.0f, 1.0f);
 
-	//auto rotation = RE::NiMatrix3(m_Data.rot1, m_Data.rot2, m_Data.rot3);
-	//auto transformedPosition = rotation * RE::NiPoint3(position.x, position.y, position.z);
-
-	auto instanceTransform = RE::NiTransform();
-	instanceTransform.rotate = RE::NiMatrix3(m_Data.rot1, m_Data.rot2, m_Data.rot3);
-	//instanceTransform.translate = RE::NiPoint3(m_Data.position) + transformedPosition;
-	instanceTransform.translate = m_Data.position;
-	instanceTransform.scale = 1.0f;
-
-	auto worldTransform = m_Node->local * instanceTransform;
-
-	/*logger::info("Position: {}", float3(position));
-	logger::info("Local: {}", Util::Math::Float3(m_Node->local.translate));
-	logger::info("World: {}", Util::Math::Float3(worldTransform.translate));*/
+	const float3 row0 = m_Data.rot1;
+	const float3 row1(m_Data.rot2.y, m_Data.rot2.z, m_Data.rot3.x);
+	const float3 row2(m_Data.rot3.z, m_Data.rot2.x, m_Data.rot3.y);
+	const float3 translation = m_Data.position;
 
 	// Update previous transform
 	m_PrevTransform = m_Transform;
 
+	float3x4 instanceTransform(
+		row0.x * axisScale.x, row0.y * axisScale.y, row0.z * axisScale.z, translation.x,
+		row1.x * axisScale.x, row1.y * axisScale.y, row1.z * axisScale.z, translation.y,
+		row2.x * axisScale.x, row2.y * axisScale.y, row2.z * axisScale.z, translation.z);
+
+	const auto localTransform = Util::Math::GetXMFromNiTransform(m_Node->local);
+	const auto grassTransform = DirectX::XMLoadFloat3x4(&instanceTransform);
+
 	float3x4 transform;
-	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(worldTransform));
+	DirectX::XMStoreFloat3x4(&transform, DirectX::XMMatrixMultiply(localTransform, grassTransform));
 
 	if (Util::Math::MatrixNearEqual(transform, m_Transform))
 		return;

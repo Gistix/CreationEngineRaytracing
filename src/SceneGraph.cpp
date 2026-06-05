@@ -634,6 +634,9 @@ void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::Creat
 
 	auto& grassInstance = m_GrassInstances[grassKey];
 
+	if (grassInstance.m_Instances.size() > 1000)
+		return;
+
 	auto instanceData = reinterpret_cast<GrassReference::InstanceData*>(a_grassManager->instanceData);
 
 	for (size_t i = 0; i < numInstances; i++)
