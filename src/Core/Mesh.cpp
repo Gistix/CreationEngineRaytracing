@@ -767,6 +767,8 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	const bool skinnedModel = (modelFlags & Flags::Skinned) != Flags::None;
 
+	const bool updateTransform = skinnedModel || (m_Type == Type::LandLOD) || (m_Type == Type::ObjectLOD);
+
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
 
@@ -796,9 +798,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	const auto lod = (m_Type == Type::LandLOD) || (m_Type == Type::ObjectLOD);
-
-	if (skinnedModel || lod && UpdateTransform(instanceRoot))
+	if (updateTransform && UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
 
 	return updateFlags;
