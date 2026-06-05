@@ -871,12 +871,12 @@ namespace Hooks
 		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));
 
 		// Tree LOD
-		/*if (REL::Module::IsSE())
+		if (REL::Module::IsSE())
 			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
 		else
 			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
 
-		stl::detour_thunk<BGSDistantTreeBlock_Detach>(REL::RelocationID(30830, 31651));*/
+		stl::detour_thunk<BGSDistantTreeBlock_Detach>(REL::RelocationID(30830, 31651));
 
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
