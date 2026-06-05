@@ -105,7 +105,8 @@ struct Material : MaterialBase
 		kTreeAnim = 1 << 19,
 		kSoftLighting = 1 << 20,
 		kLODLandscape = 1 << 21,
-		kLODObjects = 1 << 22
+		kLODObjects = 1 << 22,
+		kHDLODObjects = 1 << 23
 	};
 
 	enum class WaterShaderFlags : uint32_t
@@ -250,6 +251,10 @@ struct Material : MaterialBase
 			shaderFlagsLocal |= ShaderFlags::kLODObjects;
 		}
 
+		if (shaderFlags.any(EShaderPropertyFlag::kHDLODObjects)) {
+			shaderFlagsLocal |= ShaderFlags::kHDLODObjects;
+		}
+		
 		return static_cast<uint32_t>(shaderFlagsLocal);
 	}
 

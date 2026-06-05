@@ -41,6 +41,7 @@ namespace ShaderFlags
 	static const uint kSoftLighting = (1 << 20);
     static const uint kLODLandscape = (1 << 21);
     static const uint kLODObjects = (1 << 22);
+	static const uint kHDLODObjects = (1 << 23);
 }
 
 namespace WaterShaderFlags
@@ -274,6 +275,11 @@ INTEROP_DATA_STRUCT(Material, 4)
 		return Texture6;
 	}
 
+    uint16_t ProjNoiseTexture()
+    {
+		return Texture7;
+	}	
+	
 	half SubsurfaceScale()
 	{
 		return Scalar2;

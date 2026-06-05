@@ -75,6 +75,11 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 			if (auto shaderMaterial = lightingShaderProp->material) {
 				feature = shaderMaterial->GetFeature();
 
+				if (shaderFlags.all(EShaderPropertyFlag::kProjectedUV)) {
+					bool isPBR = typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR);
+					logger::info("BuildMaterial - Projected UV - PBR: {} - {}", isPBR, name.c_str());
+				}
+
 				// BSLightingShaderProperty with materialAlpha != 1 treated as alpha blending
 				if (const auto* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 					if (lightingBaseMaterial->materialAlpha != 1.0f && !alphaProperty) {
@@ -266,6 +271,7 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 						auto textureType = convertMSN ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
 						textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, textureType);
 
+						// Specular
 						if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 							if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
 								textures[3] = GetTexture(lightingBaseMaterial->specularBackLightingTexture, blackTexture);
@@ -282,8 +288,48 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 						}
 
 						// SSS color
-						if (lightingShaderProp->flags.all(EShaderPropertyFlag::kSoftLighting)) {
+						if (shaderFlags.all(EShaderPropertyFlag::kSoftLighting)) {
 							textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
+						}
+
+						// Projected UV
+						if (shaderFlags.all(EShaderPropertyFlag::kProjectedUV)) {
+
+							auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
+
+							auto oneMinusAlpha = 1.0f - params.w;
+
+							// ProjectedUVParams
+							vectors[0] = {
+								oneMinusAlpha * params.x,
+								0.0f,
+								params.z,
+								(oneMinusAlpha * params.y) + params.w
+							};
+
+							// ProjectedUVParams2
+							vectors[1] = Util::Math::Float4(lightingShaderProp->projectedUVColor);
+
+							// All yoinked from Nukem 
+							// https://github.com/Nukem9/skyrimse-test/blob/328916305165a46c4e4b527735bbcfd46b09a0ca/skyrim64_test/src/patches/TES/BSShader/Shaders/BSLightingShader.cpp#L883
+							{
+								auto renderFlags = 0; // ?
+								bool enableProjectedNormals = RE::GetINISetting("bEnableProjecteUVDiffuseNormals:Display")->GetBool() && (!(renderFlags & 0x8) || !RE::GetINISetting("bEnableProjecteUVDiffuseNormalsOnCubemap:Display")->GetBool());
+
+								// ProjectedUVParams3
+								vectors[2] = {
+									RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display")->GetFloat(),
+									RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display")->GetFloat(),
+									0,
+									enableProjectedNormals ? 1.0f : 0.0f
+								};
+							}
+
+							// Texture Projection - Non-Default if BSGeometry::IsMultiIndexTriShape() is true
+							vectors[3] = { 0.0f, 0.0f, 1.0f, 0.0f };
+
+							auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
+							textures[7] = GetTexture(projNoiseMap, blackTexture);
 						}
 
 						// Envmap
