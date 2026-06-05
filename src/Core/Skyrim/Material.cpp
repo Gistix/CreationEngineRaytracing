@@ -75,11 +75,6 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 			if (auto shaderMaterial = lightingShaderProp->material) {
 				feature = shaderMaterial->GetFeature();
 
-				if (shaderFlags.all(EShaderPropertyFlag::kProjectedUV)) {
-					bool isPBR = typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR);
-					logger::info("BuildMaterial - Projected UV - PBR: {} - {}", isPBR, name.c_str());
-				}
-
 				// BSLightingShaderProperty with materialAlpha != 1 treated as alpha blending
 				if (const auto* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 					if (lightingBaseMaterial->materialAlpha != 1.0f && !alphaProperty) {
