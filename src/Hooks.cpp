@@ -628,18 +628,16 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			const bool valid = a_block->node;
-			bool existed = true;
-
-			if (valid && a_block->loaded && a_block->chunk) {
-				if (!a_block->attached)
-					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-			}
+			const bool wasAttached = a_block->attached;
 
 			func(a_block);
 
-			if (valid && existed)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			if (a_block->loaded && a_block->chunk) {
+				if (!wasAttached && a_block->attached) {
+					if (Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block))
+						Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
+				}
+			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -675,18 +673,16 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
 		{
-			const bool valid = a_block->node;
-			bool existed = true;
-
-			if (valid && a_block->loaded && a_block->chunk) {
-				if (!a_block->attached)
-					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-			}
+			const bool wasAttached = a_block->attached;
 
 			func(a_block, a_arg2, a_firstAvail);
 
-			if (valid && existed)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			if (a_block->loaded && a_block->chunk) {
+				if (!wasAttached && a_block->attached) {
+					if (Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block))
+						Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
+				}
+			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
