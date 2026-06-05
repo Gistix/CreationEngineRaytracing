@@ -73,6 +73,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
+			nvrhi::BindingLayoutItem::Texture_SRV(14),
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
 		};
 
@@ -242,6 +243,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 

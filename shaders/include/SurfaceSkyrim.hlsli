@@ -16,6 +16,7 @@
 
 #define LIGHTINGSETTINGS Raytracing
 #define HAIRSETTINGS Features.HairSpecular
+#define SKINSETTINGS Features.Skin
 
 void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Material material)
 {
@@ -45,10 +46,25 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     Bitangent = bitangentWS;
 #else
     const Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
+    const bool skinEnabled =
+        material.ShaderType == ShaderType::Lighting &&
+        (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint) &&
+        SKINSETTINGS.skinParams.w > 0.0f;
     float3 normal =
         clampSampler ?
         normalTexture.SampleLevel(ClampSampler, texCoord0, mipLevel).xyz :
         normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
+
+#if SKIN_DETAIL_NORMAL
+    [branch]
+    if (SKINSETTINGS.skinDetailParams.w > 0.0f && skinEnabled)
+    {
+        float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
+        float3 detailNormal = float3(SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy, 0.5f);
+        detailNormal = (detailNormal * 2.0 - 1.0) * SKINSETTINGS.skinDetailParams.z;
+        normal = normalize(float3(ReorientNormal(detailNormal, (normal * 2 - 1)).xy, normal.z)) * 0.5f + 0.5f;
+    }
+#endif
 
     if ((material.ShaderFlags & ShaderFlags::kModelSpaceNormals) && (material.ShaderFlags & ShaderFlags::kLODLandscape))
     {
@@ -340,6 +356,32 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
+
+            if (skinEnabled)
+            {
+                Texture2D rfaosTexture = Textures[NonUniformResourceIndex(material.RFAOSTexture())];
+                uint2 rfaosDimensions;
+                rfaosTexture.GetDimensions(rfaosDimensions.x, rfaosDimensions.y);
+                bool hasValidRFAOS = rfaosDimensions.x > 32 && rfaosDimensions.y > 32;
+
+                surface.Albedo *= SKINSETTINGS.skinParams2.w;
+                surface.Roughness = SKINSETTINGS.skinParams.x;
+                surface.F0 = SKINSETTINGS.skinParams2.zzz;
+
+                // Skin coat layer (second specular lobe)
+                surface.CoatStrength = SKINSETTINGS.skinParams2.x;
+                surface.CoatRoughness = SKINSETTINGS.skinParams.y;
+                surface.CoatF0 = float3(0.04, 0.04, 0.04);
+
+                if (hasValidRFAOS)
+                {
+                    float4 rfaos = rfaosTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+                    surface.Roughness = rfaos.x * SKINSETTINGS.physicalParams.x;
+                    surface.CoatRoughness = rfaos.x * SKINSETTINGS.physicalParams.y;
+                    surface.F0 = 0.08 * rfaos.w * SKINSETTINGS.physicalParams.z;
+                    surface.AO = rfaos.z;
+                }
+            }
         }
         else if (material.Feature == Feature::kEye)
         {

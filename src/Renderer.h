@@ -223,6 +223,7 @@ public:
 	inline auto& GetWhiteTextureIndex() const { return m_WhiteTexture->descriptorHandle; }
 	inline auto& GetGrayTextureIndex() const { return m_GrayTexture->descriptorHandle; }
 	inline auto& GetNormalTextureIndex() const { return m_NormalTexture->descriptorHandle; }
+	inline nvrhi::ITexture* GetNormalTexture() const { return m_NormalTexture->texture; }
 	inline auto& GetBlackTextureIndex() const { return m_BlackTexture->descriptorHandle; }
 #if defined(SKYRIM)
 	inline auto& GetRMAOSTextureIndex() const { return m_RMAOSTexture->descriptorHandle; }

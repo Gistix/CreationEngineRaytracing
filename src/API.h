@@ -15,7 +15,8 @@ extern "C" {
 	CERT_API void PostExecution();
 	CERT_API void UpdateFeatureData(void* data, uint32_t size);
 	CERT_API void SetSkyHemisphere(ID3D12Resource* skyHemi);
-	CERT_API void SetWaterFlowMap(ID3D12Resource* skyHemi);
+	CERT_API void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
+	CERT_API void SetWaterFlowMap(ID3D12Resource* waterFlowMap);
 	CERT_API void GetPassTimings(eastl::vector<PassTiming>&);
 	CERT_API void GetSceneGraphCounters(uint32_t& textures, uint32_t& models, uint32_t& instances);
 	CERT_API void UpdateSettings(Settings);

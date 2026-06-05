@@ -403,6 +403,18 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 								colors[0].z = lightingFacegenTintMaterial->tintColor.blue;
 							}
 						}
+
+						if (feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint) {
+							// Community Shaders Skin stores RFAOS in the texture set's environment slot.
+							if (auto* textureSet = lightingBaseMaterial->textureSet.get()) {
+								const char* rfaosPath = textureSet->GetTexturePath(RE::BSTextureSet::Texture::kEnvironment);
+								if (rfaosPath && rfaosPath[0] != '\0') {
+									RE::NiPointer<RE::NiSourceTexture> rfaosTexture;
+									textureSet->SetTexture(RE::BSTextureSet::Texture::kEnvironment, rfaosTexture);
+									textures[7] = GetTexture(rfaosTexture, blackTexture);
+								}
+							}
+						}
 					}
 				}
 			}
