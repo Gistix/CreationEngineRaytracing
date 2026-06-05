@@ -887,7 +887,7 @@ namespace Hooks
 		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
 		// Grass
-		stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
+		//stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
 
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
