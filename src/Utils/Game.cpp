@@ -35,6 +35,11 @@ namespace Util
 			if (object->GetFlags().all(RE::NiAVObject::Flag::kHidden))
 				return true;
 
+			if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(object)) {
+				if (multiBoundNode->GetRuntimeData().cullingMode == RE::BSCullingProcess::BSCPCullingType::kAllFail)
+					return true;
+			}
+
 			if (!object->parent)
 				return false;
 

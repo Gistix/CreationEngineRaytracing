@@ -8,6 +8,9 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 {
 	auto* renderer = Renderer::GetSingleton();
 
+	m_MaterialData = {};
+	m_PrevMaterialData = {};
+
 	auto& grayTexture = renderer->GetGrayTextureIndex();
 	auto& normalTexture = renderer->GetNormalTextureIndex();
 	auto& blackTexture = renderer->GetBlackTextureIndex();
@@ -61,6 +64,14 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 
 		if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
 			shaderType = RE::BSShader::Type::Lighting;
+
+			// Override shader type to Grass if it's a grass form
+			if (formID != 0) {
+				auto form = RE::TESForm::LookupByID(formID);
+
+				if (form && form->formType == RE::FormType::Grass) 
+				shaderType = RE::BSShader::Type::Grass;
+			}
 
 			colors[Constants::Material::EMISSIVE_COLOR] = {
 				lightingShaderProp->emissiveColor->red,
@@ -258,9 +269,12 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 					if (const RE::BSLightingShaderMaterialBase* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 						textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
 
-						auto textureType = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
+						bool convertMSN = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) && shaderFlags.none(EShaderPropertyFlag::kLODLandscape);
+
+						auto textureType = convertMSN ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
 						textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, textureType);
 
+						// Specular
 						if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
 							if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
 								textures[3] = GetTexture(lightingBaseMaterial->specularBackLightingTexture, blackTexture);
@@ -277,8 +291,48 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 						}
 
 						// SSS color
-						if (lightingShaderProp->flags.all(EShaderPropertyFlag::kSoftLighting)) {
+						if (shaderFlags.all(EShaderPropertyFlag::kSoftLighting)) {
 							textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
+						}
+
+						// Projected UV
+						if (shaderFlags.all(EShaderPropertyFlag::kProjectedUV)) {
+
+							auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
+
+							auto oneMinusAlpha = 1.0f - params.w;
+
+							// ProjectedUVParams
+							vectors[0] = {
+								oneMinusAlpha * params.x,
+								0.0f,
+								params.z,
+								(oneMinusAlpha * params.y) + params.w
+							};
+
+							// ProjectedUVParams2
+							vectors[1] = Util::Math::Float4(lightingShaderProp->projectedUVColor);
+
+							// All yoinked from Nukem 
+							// https://github.com/Nukem9/skyrimse-test/blob/328916305165a46c4e4b527735bbcfd46b09a0ca/skyrim64_test/src/patches/TES/BSShader/Shaders/BSLightingShader.cpp#L883
+							{
+								auto renderFlags = 0; // ?
+								bool enableProjectedNormals = RE::GetINISetting("bEnableProjecteUVDiffuseNormals:Display")->GetBool() && (!(renderFlags & 0x8) || !RE::GetINISetting("bEnableProjecteUVDiffuseNormalsOnCubemap:Display")->GetBool());
+
+								// ProjectedUVParams3
+								vectors[2] = {
+									RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display")->GetFloat(),
+									RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display")->GetFloat(),
+									0,
+									enableProjectedNormals ? 1.0f : 0.0f
+								};
+							}
+
+							// Texture Projection - Non-Default if BSGeometry::IsMultiIndexTriShape() is true
+							vectors[3] = { 0.0f, 0.0f, 1.0f, 0.0f };
+
+							auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
+							textures[7] = GetTexture(projNoiseMap, blackTexture);
 						}
 
 						// Envmap
@@ -386,51 +440,10 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 			}
 		}
 		else if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::Water;
-			waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
+			SetupWaterProperty(waterShaderProp);
 
-			if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material)) {
-				colors[0] = {
-					waterMaterial->shallowWaterColor.red,
-					waterMaterial->shallowWaterColor.green,
-					waterMaterial->shallowWaterColor.blue,
-					1.0f
-				};
-
-				colors[1] = {
-					waterMaterial->deepWaterColor.red,
-					waterMaterial->deepWaterColor.green,
-					waterMaterial->deepWaterColor.blue,
-					waterMaterial->deepWaterColor.alpha
-				};
-
-				colors[2] = {
-					waterMaterial->reflectionColor.red,
-					waterMaterial->reflectionColor.green,
-					waterMaterial->reflectionColor.blue,
-					waterMaterial->reflectionColor.alpha
-				};
-
-				// NormalsAmplitude
-				scalars[0] = waterMaterial->amplitudeA[0];
-				scalars[1] = waterMaterial->amplitudeA[1];
-				scalars[2] = waterMaterial->amplitudeA[2];
-
-				// NormalsScale
-				vectors[1].z = waterMaterial->uvScaleA[0];
-				vectors[1].w = waterMaterial->uvScaleA[1];
-				vectors[2].x = waterMaterial->uvScaleA[2];
-
-				// ObjectUV
-				vectors[2].y = 0.0f;
-				vectors[2].z = 0.0f;
-				vectors[2].w = 0.0f;
-
-				textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
-				textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
-				textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
-				textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
-			}
+			if (auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(waterShaderProp->material))
+				SetupWaterMaterial(waterMaterial);
 		}
 		else if (auto* distantTreeProp = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty)) {
 			shaderType = RE::BSShader::Type::DistantTree;
@@ -468,9 +481,66 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
 		alphaFlags |= Material::AlphaFlags::Transmission;
 	}
+}
 
-	m_MaterialData = eastl::make_unique<MaterialData>();
-	m_PrevMaterialData = eastl::make_unique<MaterialData>();
+void Material::SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp)
+{
+	shaderType = RE::BSShader::Type::Water;
+	waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
+}
+
+void Material::SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial)
+{
+	/*logger::info("BuildMaterial - Water shader flags: {}", Util::GetFlagsString<Material::WaterShaderFlags>(waterShaderFlags.underlying()));
+
+	if (formID != 0) {
+		if (auto waterForm = RE::TESForm::LookupByID<RE::TESWaterForm>(formID)) {
+			const bool enableFlowmap = waterForm->flags.all(RE::TESWaterForm::Flag::kEnableFlowmap);
+			logger::info("WaterForm Flowmap: {}", enableFlowmap);
+		}
+	}*/
+
+	colors[0] = {
+		waterMaterial->shallowWaterColor.red,
+		waterMaterial->shallowWaterColor.green,
+		waterMaterial->shallowWaterColor.blue,
+		1.0f
+	};
+
+	colors[1] = {
+		waterMaterial->deepWaterColor.red,
+		waterMaterial->deepWaterColor.green,
+		waterMaterial->deepWaterColor.blue,
+		waterMaterial->deepWaterColor.alpha
+	};
+
+	colors[2] = {
+		waterMaterial->reflectionColor.red,
+		waterMaterial->reflectionColor.green,
+		waterMaterial->reflectionColor.blue,
+		waterMaterial->reflectionColor.alpha
+	};
+
+	// NormalsAmplitude
+	scalars[0] = waterMaterial->amplitudeA[0];
+	scalars[1] = waterMaterial->amplitudeA[1];
+	scalars[2] = waterMaterial->amplitudeA[2];
+
+	// NormalsScale
+	vectors[1].z = waterMaterial->uvScaleA[0];
+	vectors[1].w = waterMaterial->uvScaleA[1];
+	vectors[2].x = waterMaterial->uvScaleA[2];
+
+	// ObjectUV
+	vectors[2].y = 0.0f;
+	vectors[2].z = 0.0f;
+	vectors[2].w = 0.0f;
+
+	auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureIndex();
+	textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
+	textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
+	textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
+	textures[3] = GetTexture(waterMaterial->normalTexture4, normalTexture);
 }
 
 void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
@@ -480,6 +550,8 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	auto* bsWaterProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 	if (!bsWaterProperty)
 		return;
+
+	SetupWaterProperty(bsWaterProperty);
 
 	auto* bsWaterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(bsWaterProperty->material);
 	if (!bsWaterMaterial)
@@ -537,7 +609,7 @@ void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descripto
 
 	auto& bufferDesc = nvrhi::BufferDesc()
 		.setByteSize(size)
-		.setStructStride(size)
+		.setStructStride(static_cast<uint32_t>(size))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 		.setDebugName(std::format("{} (Material Buffer)", name.c_str()));
 
@@ -555,7 +627,7 @@ void Material::Update(RE::BSShaderProperty* shaderProperty)
 		UpdateWaterMaterial(shaderProperty);
 }
 
-void Material::UpdateData(nvrhi::ICommandList * commandList, const float3& externalEmittance) const
+void Material::UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance)
 {
 	auto color1 = colors[1];
 
@@ -572,67 +644,64 @@ void Material::UpdateData(nvrhi::ICommandList * commandList, const float3& exter
 		}
 	}
 
-	m_MaterialData->TexCoordOffsetScale0 = texCoordOffsetScale[0];
-	m_MaterialData->TexCoordOffsetScale1 = texCoordOffsetScale[1];
+	m_MaterialData.TexCoordOffsetScale0 = texCoordOffsetScale[0];
+	m_MaterialData.TexCoordOffsetScale1 = texCoordOffsetScale[1];
 
-	m_MaterialData->Color0 = colors[0];
-	m_MaterialData->Color1 = color1;
-	m_MaterialData->Color2 = colors[2];
+	m_MaterialData.Color0 = colors[0];
+	m_MaterialData.Color1 = color1;
+	m_MaterialData.Color2 = colors[2];
 
-	m_MaterialData->AlphaThreshold = alphaThreshold;
+	m_MaterialData.AlphaThreshold = alphaThreshold;
 
-	m_MaterialData->Scalar0 = scalars[0];
-	m_MaterialData->Scalar1 = scalars[1];
-	m_MaterialData->Scalar2 = scalars[2];
+	m_MaterialData.Scalar0 = scalars[0];
+	m_MaterialData.Scalar1 = scalars[1];
+	m_MaterialData.Scalar2 = scalars[2];
 
-	m_MaterialData->Vector0 = vectors[0];
-	m_MaterialData->Vector1 = vectors[1];
-	m_MaterialData->Vector2 = vectors[2];
-	m_MaterialData->Vector3 = vectors[3];
+	m_MaterialData.Vector0 = vectors[0];
+	m_MaterialData.Vector1 = vectors[1];
+	m_MaterialData.Vector2 = vectors[2];
+	m_MaterialData.Vector3 = vectors[3];
 
-	m_MaterialData->Texture0 = GetTextureDescriptorIndex(0);
-	m_MaterialData->Texture1 = GetTextureDescriptorIndex(1);
-	m_MaterialData->Texture2 = GetTextureDescriptorIndex(2);
-	m_MaterialData->Texture3 = GetTextureDescriptorIndex(3);
-	m_MaterialData->Texture4 = GetTextureDescriptorIndex(4);
-	m_MaterialData->Texture5 = GetTextureDescriptorIndex(5);
+	m_MaterialData.Texture0 = GetTextureDescriptorIndex(0);
+	m_MaterialData.Texture1 = GetTextureDescriptorIndex(1);
+	m_MaterialData.Texture2 = GetTextureDescriptorIndex(2);
+	m_MaterialData.Texture3 = GetTextureDescriptorIndex(3);
+	m_MaterialData.Texture4 = GetTextureDescriptorIndex(4);
+	m_MaterialData.Texture5 = GetTextureDescriptorIndex(5);
 
-	m_MaterialData->Texture6 = GetTextureDescriptorIndex(6);
-	m_MaterialData->Texture7 = GetTextureDescriptorIndex(7);
-	m_MaterialData->Texture8 = GetTextureDescriptorIndex(8);
-	m_MaterialData->Texture9 = GetTextureDescriptorIndex(9);
-	m_MaterialData->Texture10 = GetTextureDescriptorIndex(10);
-	m_MaterialData->Texture11 = GetTextureDescriptorIndex(11);
+	m_MaterialData.Texture6 = GetTextureDescriptorIndex(6);
+	m_MaterialData.Texture7 = GetTextureDescriptorIndex(7);
+	m_MaterialData.Texture8 = GetTextureDescriptorIndex(8);
+	m_MaterialData.Texture9 = GetTextureDescriptorIndex(9);
+	m_MaterialData.Texture10 = GetTextureDescriptorIndex(10);
+	m_MaterialData.Texture11 = GetTextureDescriptorIndex(11);
 
-	m_MaterialData->Texture12 = GetTextureDescriptorIndex(12);
-	m_MaterialData->Texture13 = GetTextureDescriptorIndex(13);
-	m_MaterialData->Texture14 = GetTextureDescriptorIndex(14);
-	m_MaterialData->Texture15 = GetTextureDescriptorIndex(15);
-	m_MaterialData->Texture16 = GetTextureDescriptorIndex(16);
-	m_MaterialData->Texture17 = GetTextureDescriptorIndex(17);
+	m_MaterialData.Texture12 = GetTextureDescriptorIndex(12);
+	m_MaterialData.Texture13 = GetTextureDescriptorIndex(13);
+	m_MaterialData.Texture14 = GetTextureDescriptorIndex(14);
+	m_MaterialData.Texture15 = GetTextureDescriptorIndex(15);
+	m_MaterialData.Texture16 = GetTextureDescriptorIndex(16);
+	m_MaterialData.Texture17 = GetTextureDescriptorIndex(17);
 
-	m_MaterialData->Texture18 = GetTextureDescriptorIndex(18);
-	m_MaterialData->Texture19 = GetTextureDescriptorIndex(19);
+	m_MaterialData.Texture18 = GetTextureDescriptorIndex(18);
+	m_MaterialData.Texture19 = GetTextureDescriptorIndex(19);
 
-	m_MaterialData->AlphaFlags = static_cast<uint16_t>(alphaFlags);
-	m_MaterialData->ShaderType = GetShaderType();
-	m_MaterialData->Feature = static_cast<uint16_t>(feature);
-	m_MaterialData->PBRFlags = pbrFlags.underlying();
-	m_MaterialData->ShaderFlags = GetShaderFlags();
+	m_MaterialData.AlphaFlags = static_cast<uint16_t>(alphaFlags);
+	m_MaterialData.ShaderType = GetShaderType();
+	m_MaterialData.Feature = static_cast<uint16_t>(feature);
+	m_MaterialData.PBRFlags = pbrFlags.underlying();
+	m_MaterialData.ShaderFlags = GetShaderFlags();
 
-	MaterialData* materialData = m_MaterialData.get();
-	MaterialData* prevMaterialData = m_PrevMaterialData.get();
-
-	if (*materialData == *prevMaterialData)
+	if (m_MaterialData == m_PrevMaterialData)
 		return;
 
 	commandList->writeBuffer(buffer, GetData(), sizeof(MaterialData));
 
-	*m_PrevMaterialData.get() = *m_MaterialData.get();
+	m_PrevMaterialData = m_MaterialData;
 }
 
-MaterialData* Material::GetData() const
+MaterialData* Material::GetData()
 {
-	return m_MaterialData.get();
+	return &m_MaterialData;
 }
 #endif

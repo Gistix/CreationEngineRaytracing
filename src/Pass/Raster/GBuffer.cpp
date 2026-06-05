@@ -145,13 +145,13 @@ namespace Pass::Raster
 		sceneGraph->GetInstances().Read([&](const auto& instance) {
 			const auto& model = instance->model;
 
-			for (uint m = 0; m < model->meshes.size(); m++)
+			for (uint m = 0; m < model->m_Meshes.size(); m++)
 			{
 				auto constants = uint2(i, m);
 				commandList->setPushConstants(&constants, sizeof(constants));
 
 				nvrhi::DrawArguments args;
-				args.vertexCount = model->meshes[m]->triangleData.count * 3;
+				args.vertexCount = model->m_Meshes[m]->triangleData.count * 3;
 				args.instanceCount = 1;
 				commandList->draw(args);
 			}

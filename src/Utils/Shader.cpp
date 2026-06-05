@@ -36,14 +36,12 @@ namespace Util
 				defines.emplace_back(L"SHARC");
 
 			if (!sharcUpdate) {
-				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_REBLUR) {
+				if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
 					
 					defines.emplace_back(L"NRD", L"1");
-					defines.emplace_back(L"NRD_REBLUR", L"1");
-				}
-
-				if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+					defines.emplace_back(L"NRD_REBLUR", L"1"); // TODO: Remove this define since Denoiser::NRD_REBLUR became Denoiser::NRD?
+				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
 			}
 
@@ -54,12 +52,19 @@ namespace Util
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
 
+			defines.emplace_back(L"HAS_PREV_POSITIONS", L"1");
+
 			defines.emplace_back(L"HAIR_MODE", static_cast<int>(settings.AdvancedSettings.HairBSDF));
 
 			if (settings.AdvancedSettings.SSSSettings.Enabled)
 				defines.emplace_back(L"SUBSURFACE_SCATTERING");
 
 			if (!sharc || (sharc && !sharcUpdate)) {
+				if (settings.GeneralSettings.Denoiser == Denoiser::NRD)
+					defines.emplace_back(L"NRD", L"1");
+				else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+					defines.emplace_back(L"DLSS_RR", L"1");
+
 				if (settings.AdvancedSettings.StablePlanes)
 					defines.emplace_back(L"STABLE_PLANES");
 

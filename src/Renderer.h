@@ -13,6 +13,8 @@
 #include "Renderer/RenderGraph.h"
 #include "Renderer/RenderTargetManager.h"
 
+#include <d3d12compatibility.h>
+
 struct MessageCallback : public nvrhi::IMessageCallback
 {
 	static MessageCallback& GetInstance()
@@ -44,24 +46,23 @@ class Renderer
 {
 	ID3D12Device5* m_NativeD3D12Device;
 	ID3D11Device5* m_NativeD3D11Device;
+	winrt::com_ptr<ID3D12CompatibilityDevice> m_CompatDevice;
 
 	nvrhi::DeviceHandle m_NVRHIDevice;
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
-	//nvrhi::CommandListHandle m_ComputeCommandList = nullptr;
-	//nvrhi::CommandListHandle m_CopyCommandList = nullptr;
 
 	SupportedFeatures m_SupportedFeatures;
 
-	uint64_t m_LastSubmittedInstance = 0;
+	// Fence used to synchronize 'executeCommandList' since it is not thread safe and we need the returned fence value to synchronize GPU resources
+	mutable std::mutex m_ExecutionMutex;
 
+	uint64_t m_LastSubmittedInstance = 0;
+	nvrhi::EventQueryHandle m_RenderGraphQuery;
+
+	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;
-
-	nvrhi::TextureHandle m_MainTexture;
-
-	ID3D12Resource* m_CopyTargetResource = nullptr;
-	nvrhi::TextureHandle m_CopyTargetTexture;
 
 	ID3D12Resource* m_PTDepthCopyTargetResource = nullptr;
 	nvrhi::TextureHandle m_PTDepthCopyTargetTexture;
@@ -96,7 +97,6 @@ class Renderer
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
 
 	void InitGBufferOutput();
-	void InitRR();
 
 public:
 	struct GBufferOutput
@@ -110,16 +110,6 @@ public:
 
 	// GBuffer output from raster pass
 	eastl::unique_ptr<GBufferOutput> m_GBufferOutput;
-
-	// Diffuse albedo and normal roughness comes from RenderTargets (which are created externaly)
-	struct RayReconstructionInput
-	{
-		nvrhi::TextureHandle diffuseAlbedo = nullptr;
-		nvrhi::TextureHandle specularAlbedo = nullptr;
-		nvrhi::TextureHandle specularHitDistance = nullptr;
-	};
-
-	eastl::unique_ptr<RayReconstructionInput> m_RayReconstructionInput;
 
 	struct RenderTargets
 	{
@@ -175,10 +165,14 @@ public:
 
 	bool Initialize(RendererParams parameters);
 
-	auto GetDevice() const { return m_NVRHIDevice; }
+	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
+
+	auto& GetExecutionMutex() const { return m_ExecutionMutex; };
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
 	static auto GetNativeD3D11Device() { return GetSingleton()->m_NativeD3D11Device; }
+
+	static auto GetCompatDevice() { return GetSingleton()->m_CompatDevice.get(); }
 
 	nvrhi::CommandListHandle GetGraphicsCommandList() const {
 		return GetDevice()->createCommandList(
@@ -209,7 +203,7 @@ public:
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();
 
-	inline auto GetMainTexture() { return m_MainTexture; }
+	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main); }
 
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
 
@@ -264,13 +258,6 @@ public:
 		return m_GBufferOutput.get();
 	}
 
-	auto GetRRInput() {
-		if (!m_RayReconstructionInput)
-			InitRR();
-
-		return m_RayReconstructionInput.get();
-	}
-
 	auto GetRenderTargets() {
 		if (!m_RenderTargets)
 			m_RenderTargets = eastl::make_unique<RenderTargets>();
@@ -298,8 +285,6 @@ public:
 
 	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
 
-	void SetDiffuseAlbedo(ID3D12Resource* diffuseAlbedo);
-
 	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
 
 	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState);
@@ -313,8 +298,6 @@ public:
 	uint2 GetResolution();
 
 	uint2 GetDynamicResolution();
-
-	void SetCopyTarget(ID3D12Resource* target);
 
 	void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 

@@ -2,10 +2,18 @@
 
 #include <PCH.h>
 
-#include "Mesh.h"
+#include "Constants.h"
 #include "DirtyFlags.h"
+#include "Mesh.h"
 
 class SceneGraph;
+
+struct DataParams
+{
+	bool alreadyUpdated;
+	bool hidden;
+	uint32_t firstMeshID;
+};
 
 struct Model
 {
@@ -22,9 +30,9 @@ struct Model
 
 	eastl::string m_Name;
 
-	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
+	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
 
-	nvrhi::rt::AccelStructHandle blas;
+	nvrhi::rt::AccelStructHandle m_BLAS;
 	
 	nvrhi::CommandListHandle m_BufferUploadCommandList;
 	nvrhi::EventQueryHandle m_BufferUploadQuery;
@@ -33,9 +41,13 @@ struct Model
 	nvrhi::CommandListHandle m_BLASBuildCommandList;
 	nvrhi::EventQueryHandle m_BLASBuildQuery;
 
-	uint64_t m_LastUpdate = 0;
+	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
 
-	uint64_t m_LastBLASUpdate = 0;
+	uint64_t m_LastBLASUpdate = Constants::INVALID_FRAME_INDEX;
+
+	uint64_t m_LastDataUpload = Constants::INVALID_FRAME_INDEX;
+
+	DataParams m_DataParams;
 
 	// Meant to used for the player
 	bool m_FirstPerson = false;
@@ -63,8 +75,8 @@ struct Model
 
 	bool ShouldQueueMSNConversion() const
 	{
-		for (auto& mesh : meshes) {
-			if (mesh->material->shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals))
+		for (auto& mesh : m_Meshes) {
+			if (mesh->material->shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals) && mesh->material->shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kLODLandscape))
 				return true;
 		}
 
@@ -73,9 +85,9 @@ struct Model
 
 	void Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* commandList);
 
-	void SetData(MeshData* meshData, uint32_t& index);
+	DataParams GetData(MeshData* meshData, uint32_t& index);
 
-	void UpdateBLAS(nvrhi::ICommandList* commandList);
+	void BuildUpdateBLAS(nvrhi::ICommandList* commandList);
 
 	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);

@@ -14,8 +14,6 @@ Renderer::Renderer()
 
 bool Renderer::Initialize(RendererParams rendererParams)
 {
-	Hooks::InstallD3D11Hooks(rendererParams.d3d11Device);
-
 	// NVRHI Device
 	nvrhi::d3d12::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
@@ -40,6 +38,9 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	m_NativeD3D11Device = rendererParams.d3d11Device;
 	m_NativeD3D12Device = rendererParams.d3d12Device;
 
+	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
+
+	// Map DXGI_FORMAT to NVRHI formats
 	if (m_FormatMapping.empty())
 		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
 		{
@@ -68,6 +69,8 @@ bool Renderer::Initialize(RendererParams rendererParams)
 		m_SupportedFeatures |= SupportedFeatures::ShaderExecutionReordering;
 
 	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
+
+	m_RenderGraphQuery = m_NVRHIDevice->createEventQuery();
 
 	return true;
 }
@@ -110,7 +113,7 @@ void Renderer::InitDefaultTextures()
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
 	// Write the textures using a temporary CL
-	nvrhi::CommandListHandle commandList = m_NVRHIDevice->createCommandList();
+	nvrhi::CommandListHandle commandList = GetCopyCommandList();
 	commandList->open();
 
 	commandList->beginTrackingTextureState(m_WhiteTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
@@ -131,19 +134,23 @@ void Renderer::InitDefaultTextures()
 #endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
 
-	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::ShaderResource);
-	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::ShaderResource);
-	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::ShaderResource);
-	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::ShaderResource);
+	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::Common);
+	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::Common);
+	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::Common);
+	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::Common);
 #if defined(SKYRIM)
-	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::ShaderResource);
+	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::Common);
 #endif
-	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::ShaderResource);
+	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::Common);
 
 	commandList->commitBarriers();
 
 	commandList->close();
-	GetDevice()->executeCommandList(commandList);
+
+	{
+		std::scoped_lock lock(m_ExecutionMutex);
+		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
+	}
 }
 
 nvrhi::ITexture* Renderer::GetDepthTexture() {
@@ -216,29 +223,6 @@ void Renderer::InitGBufferOutput()
 	desc.clearValue = nvrhi::Color(1.f);
 	desc.debugName = "GBuffer Depth Texture";
 	m_GBufferOutput->depth = device->createTexture(desc);
-}
-
-void Renderer::InitRR()
-{
-	m_RayReconstructionInput = eastl::make_unique<RayReconstructionInput>();
-
-	auto device = GetDevice();
-
-	nvrhi::TextureDesc desc;
-	desc.width = m_RenderSize.x;
-	desc.height = m_RenderSize.y;
-	desc.initialState = nvrhi::ResourceStates::Common;
-	desc.keepInitialState = true;
-	desc.isUAV = true;
-	desc.mipLevels = 1;
-
-	desc.format = nvrhi::Format::R11G11B10_FLOAT;
-	desc.debugName = "RR Specular Albedo";
-	m_RayReconstructionInput->specularAlbedo = device->createTexture(desc);
-
-	desc.format = nvrhi::Format::R32_FLOAT;
-	desc.debugName = "RR Specular Hit Distance";
-	m_RayReconstructionInput->specularHitDistance = device->createTexture(desc);
 }
 
 void Renderer::InitStablePlanes()
@@ -441,30 +425,12 @@ void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRo
 	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget");
 }
 
-void Renderer::SetDiffuseAlbedo(ID3D12Resource* diffuseAlbedo)
-{
-	GetRRInput()->diffuseAlbedo = CreateHandleForNativeTexture(diffuseAlbedo, "Diffuse Albedo RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
-}
-
 void Renderer::SetResolution(uint2 resolution)
 {
 	if (m_RenderSize == resolution)
 		return;
 
 	m_RenderSize = resolution;
-
-	{
-		nvrhi::TextureDesc desc;
-		desc.width = m_RenderSize.x;
-		desc.height = m_RenderSize.y;
-		desc.isUAV = true;
-		desc.keepInitialState = true;
-		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		desc.debugName = "Main Texture";
-
-		m_MainTexture = m_NVRHIDevice->createTexture(desc);
-	}
 
 	m_RenderGraph->ResolutionChanged(m_RenderSize);
 
@@ -487,29 +453,6 @@ uint2 Renderer::GetDynamicResolution()
 void Renderer::SettingsChanged(const Settings& settings)
 {
 	m_RenderGraph->SettingsChanged(settings);
-}
-
-void Renderer::SetCopyTarget(ID3D12Resource* target)
-{
-	if (target == m_CopyTargetResource)
-		return;
-
-	m_CopyTargetResource = target;
-
-	auto targetDesc = target->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = nvrhi::Format::RGBA16_FLOAT;
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "Copy Target Texture";
-
-	m_CopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, target, desc);
 }
 
 void Renderer::SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget)
@@ -564,9 +507,8 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 	m_DynamicResolutionRatio = { stateRuntime.dynamicResolutionWidthRatio, stateRuntime.dynamicResolutionHeightRatio };
 
-	// Create a new command list
-	if (!m_CommandList)
-		m_CommandList = GetGraphicsCommandList();
+	// Get a new command list every frame, NVRHI command lists are single-use and they can hold stale scratch data
+	m_CommandList = GetGraphicsCommandList();
 
 	m_CommandList->open();
 
@@ -575,35 +517,36 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 void Renderer::EndExecution()
 {
-	if (m_CopyTargetTexture)
-	{
+	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Mode == Mode::PathTracing) {
 		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
-		m_CommandList->copyTexture(m_CopyTargetTexture, region, m_MainTexture, region);
 
-		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Mode == Mode::PathTracing) {
-			if (m_PTDepthCopyTargetTexture)
-				m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth), region);
+		if (m_PTDepthCopyTargetTexture)
+			m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth), region);
 	
-			if (m_PTMVCopyTargetTexture)
-				m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D), region);
-		}
+		if (m_PTMVCopyTargetTexture)
+			m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D), region);
 	}
 
 	// Close it
 	m_CommandList->close();
 
+	auto device = GetDevice();
+
 	// Execute it
-	m_LastSubmittedInstance = GetDevice()->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+	{
+		std::scoped_lock lock(m_ExecutionMutex);
+		m_LastSubmittedInstance = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+	}
+
+	device->setEventQuery(m_RenderGraphQuery, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
 
 	logger::trace("Renderer::ExecutePasses - End");
 }
 
 void Renderer::WaitExecution()
 {
-	// Wait for the last submitted command list to finish execution before proceeding
-	//m_NVRHIDevice->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
-
-	GetDevice()->waitForIdle();
+	// Fence only the render graph execution and not any of the others async command lists
+	GetDevice()->waitEventQuery(m_RenderGraphQuery);
 
 	PostExecution();
 }
@@ -614,7 +557,7 @@ void Renderer::PostExecution()
 
 	auto* scene = Scene::GetSingleton();
 
-	auto timings = scene->m_Settings.DebugSettings.Timings;
+	const auto timings = scene->m_Settings.DebugSettings.Timings;
 
 	m_PassTimings.clear();
 
@@ -687,7 +630,6 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	dxgiResource->GetSharedHandle(&sharedHandle);
 
 	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
-	auto device = Renderer::GetSingleton()->GetDevice();
 
 	winrt::com_ptr<ID3D12Resource> d3d12Resource;
 	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));

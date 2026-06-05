@@ -12,6 +12,7 @@
 
 #include "include/FlowMap.hlsli"
 #include "include/Wetness.hlsli"
+#include "include/Common/Triplanar.hlsli"
 
 #define LIGHTINGSETTINGS Raytracing
 #define HAIRSETTINGS Features.HairSpecular
@@ -35,16 +36,63 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 #elif defined(DEBUG_NOSAMPLING)
     Albedo = float3(0.5f, 0.5f, 0.5f);
 #else
-    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
+    const Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
 
+    const bool clampSampler = material.ShaderFlags & ShaderFlags::kLODLandscape;
+    
+#if defined(DEBUG_NONORMALMAP)
+    Normal = normalWS;
+    Tangent = tangentWS;
+    Bitangent = bitangentWS;
+#else
+    const Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
+    const bool skinEnabled =
+        material.ShaderType == ShaderType::Lighting &&
+        (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint) &&
+        SKINSETTINGS.skinParams.w > 0.0f;
+    float3 normal =
+        clampSampler ?
+        normalTexture.SampleLevel(ClampSampler, texCoord0, mipLevel).xyz :
+        normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
+
+#if SKIN_DETAIL_NORMAL
+    [branch]
+    if (SKINSETTINGS.skinDetailParams.w > 0.0f && skinEnabled)
+    {
+        float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
+        float3 detailNormal = float3(SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy, 0.5f);
+        detailNormal = (detailNormal * 2.0 - 1.0) * SKINSETTINGS.skinDetailParams.z;
+        normal = normalize(float3(ReorientNormal(detailNormal, (normal * 2 - 1)).xy, normal.z)) * 0.5f + 0.5f;
+    }
+#endif
+
+    if ((material.ShaderFlags & ShaderFlags::kModelSpaceNormals) && (material.ShaderFlags & ShaderFlags::kLODLandscape))
+    {
+        ModelSpaceNormalMap(
+            normal,
+            handedness,
+            normalWS, tangentWS, bitangentWS,
+            surface.Normal, surface.Tangent, surface.Bitangent
+        );
+    }
+    else
+    {
+        NormalMap(
+            normal,
+            handedness,
+            normalWS, tangentWS, bitangentWS,
+            surface.Normal, surface.Tangent, surface.Bitangent
+        );
+    }
+#endif
+    
     vertexColor.rgb = saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
     
     const bool isWindows = (material.Feature == Feature::kGlowMap || material.PBRFlags & PBR::Flags::HasEmissive) && material.ShaderFlags & ShaderFlags::kAssumeShadowmask;
     float3 windowAlpha = float3(0.0f, 0.0f, 0.0f);
 
     float alpha = 1.0f;
-    
-    bool skinEnabled = false;
+
     [branch]
     if (material.ShaderType == ShaderType::TruePBR)
     {
@@ -166,11 +214,29 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     }
     else if (material.ShaderType == ShaderType::Lighting)
     {
-        float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+        float4 diffuse = 
+            clampSampler ? 
+            baseTexture.SampleLevel(ClampSampler, texCoord0, mipLevel) : 
+            baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+        
         alpha = diffuse.a * material.BaseColor().a;
         
-        surface.Albedo = VanillaDiffuseColor(diffuse.rgb * vertexColor.rgb);
+        float3 albedo = diffuse.rgb * vertexColor.rgb;
+        
+        [branch]
+        if (material.ShaderFlags & ShaderFlags::kLODLandscape)
+        {
+            albedo = pow(albedo, Features.LODBlending.LODTerrainGamma) * Features.LODBlending.LODTerrainBrightness;
 
+        }
+        else if ((material.ShaderFlags & ShaderFlags::kLODObjects) || (material.ShaderFlags & ShaderFlags::kHDLODObjects))
+        {
+            albedo = pow(albedo, Features.LODBlending.LODObjectGamma) * Features.LODBlending.LODObjectBrightness;
+        }
+        
+        surface.Albedo = VanillaDiffuseColor(albedo);
+
+        [branch]
         if (material.Feature == Feature::kHairTint)
         {
             float3 hairTint = material.BaseColor().rgb;
@@ -285,7 +351,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
          [branch]
         if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint)
         {
-            skinEnabled = SKINSETTINGS.skinParams.w > 0.0f;
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
             surface.SubsurfaceData.HasSubsurface = 1;
@@ -376,6 +441,46 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     }
 
     [branch]
+    if (material.ShaderFlags & ShaderFlags::kProjectedUV)
+    {
+        const float4 projectedUVParams = material.Vector0;
+        const float4 projectedUVParams2 = material.Vector1;
+        const float4 projectedUVParams3 = material.Vector2;
+            
+        float3 triWeights = Triplanar::GetWeights(surface.GeomNormal, surface.FaceNormal);
+        float projNoise = Triplanar::Sample(Textures[material.ProjNoiseTexture()], DefaultSampler, mipLevel, surface.Position, triWeights, projectedUVParams.z).x;
+            
+        float3 texProj = material.Vector3.xyz;
+             
+        float vertexAlpha;
+        if ((material.ShaderFlags & ShaderFlags::kTreeAnim) || (material.ShaderFlags & ShaderFlags::kHDLODObjects))
+            vertexAlpha = 1;
+        else
+            vertexAlpha = vertexColor.a;
+            
+        float projWeight = -projectedUVParams.x * projNoise + (dot(surface.Normal.xyz, texProj) * vertexAlpha - projectedUVParams.w);
+            
+        if (material.ShaderFlags & ShaderFlags::kHDLODObjects)
+            projWeight += (-0.5 + vertexColor.a) * 2.5;
+
+        if (projectedUVParams3.w > 0.5)
+        {
+
+        }
+        else
+        {
+            float3 projBaseColor = VanillaDiffuseColor(projectedUVParams2.xyz);
+            
+            if ((material.ShaderFlags & ShaderFlags::kLODObjects) || (material.ShaderFlags & ShaderFlags::kHDLODObjects))
+            {
+                projBaseColor = pow(projBaseColor, Features.LODBlending.LODObjectSnowGamma) * Features.LODBlending.LODObjectSnowBrightness;
+            }
+            
+            surface.Albedo = lerp(surface.Albedo, projBaseColor, projWeight > 0 ? 1.0f : 0.0f);
+        }      
+    }
+    
+    [branch]
     if (material.AlphaFlags != AlphaFlags::None)
     {
         [branch]
@@ -428,41 +533,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         surface.SpecTrans = 1.0f;
     }
 
-#endif
-
-#if defined(DEBUG_NONORMALMAP)
-    Normal = normalWS;
-    Tangent = tangentWS;
-    Bitangent = bitangentWS;
-#else
-    Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
-    float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
-
-#if SKIN_DETAIL_NORMAL
-    [branch]
-    if (SKINSETTINGS.skinDetailParams.w > 0.0f && skinEnabled)
-    {
-        float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
-        float3 detailNormal = float3(SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy, 0.5f);
-        detailNormal = (detailNormal * 2.0 - 1.0) * SKINSETTINGS.skinDetailParams.z;
-        normal = normalize(float3(ReorientNormal(detailNormal, (normal * 2 - 1)).xy, normal.z)) * 0.5f + 0.5f;
-    }
-#endif
-
-    NormalMap(
-        normal,
-        handedness,
-        normalWS, tangentWS, bitangentWS,
-        surface.Normal, surface.Tangent, surface.Bitangent
-    );
-
-    // Skin coat shares the base surface normal
-    if (skinEnabled)
-    {
-        surface.CoatNormal = surface.Normal;
-        surface.CoatTangent = surface.Tangent;
-        surface.CoatBitangent = surface.Bitangent;
-    }
 #endif
 
     // Hair flowmap processing
@@ -866,6 +936,15 @@ void DistantTreeMaterial(inout Surface surface, in float2 texCoord0, in Material
     float alpha = diffuse.a * material.BaseColor().a;
 
     surface.Albedo = diffuse.rgb;
+}
+
+void GrassMaterial(inout Surface surface, in float2 texCoord0, in Material material)
+{
+    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.BaseTexture())];
+    float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
+    float alpha = diffuse.a * material.BaseColor().a;
+
+    surface.Albedo = VanillaDiffuseColor(diffuse.rgb);
 }
 
 #endif // SURFACE_SKYRIM_HLSL

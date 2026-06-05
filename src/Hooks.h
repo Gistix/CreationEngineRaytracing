@@ -130,12 +130,6 @@ namespace Hooks
 
 #endif
 
-	struct ID3D11Device_CreateTexture2D
-	{
-		static HRESULT WINAPI thunk(ID3D11Device* This, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	void Install();
 	void InstallEarlyHooks();
 	void InstallD3D11Hooks(ID3D11Device* device);

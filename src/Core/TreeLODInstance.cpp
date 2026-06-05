@@ -18,14 +18,17 @@ void TreeLODInstance::UpdateTransform()
 
 	auto worldTransform = m_Node->local * instanceTransform;
 
-	if (memcmp(&m_NiTransform, &worldTransform, sizeof(RE::NiTransform)) != 0)
-		m_DirtyFlags |= DirtyFlags::Transform;
+	// Update previous transform
+	m_PrevTransform = m_Transform;
 
-	m_DirtyFlags |= model->GetDirtyFlags().get();
+	float3x4 transform;
+	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(worldTransform));
 
-	// Update transform for BLAS instance
-	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(worldTransform));
-	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_NiTransform));
+	if (Util::Math::MatrixNearEqual(transform, m_Transform))
+		return;
 
-	m_NiTransform = worldTransform;
+	m_DirtyFlags |= DirtyFlags::Transform;
+
+	// Update transform
+	m_Transform = transform;
 }

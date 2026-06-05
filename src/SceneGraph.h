@@ -5,11 +5,13 @@
 #include "core/Light.h"
 #include "Core/TextureManager.h"
 #include "core/TreeLODInstance.h"
+#include "core/GrassInstance.h"
 
 #include "Core/Reference/ActorReference.h"
 #include "Core/Reference/ObjectLODBlockReference.h"
 #include "Core/Reference/TerrainLODBlockReference.h"
 #include "Core/Reference/TreeLODBlockReference.h"
+#include "Core/Reference/GrassReference.h"
 
 #include "Light.hlsli"
 #include "Mesh.hlsli"
@@ -20,6 +22,7 @@
 #include "Types/BindlessTable.h"
 #include "Types/VectorStorage.h"
 #include "Types/ReleasedData.h"
+#include "Types/RE/RE.h"
 
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
@@ -45,6 +48,9 @@ class SceneGraph
 	eastl::unordered_map<RE::BGSObjectBlock*, ObjectLODBlockReference> m_ObjectLODInstances;
 	eastl::unordered_map<RE::BGSTerrainBlock*, TerrainLODBlockReference> m_TerrainLODInstances;
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, TreeLODBlockReference> m_TreeLODInstances;
+
+	// Grass
+	eastl::unordered_map<RE::GrassTypeKey, GrassReference> m_GrassInstances;
 
 	// Actors
 	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
@@ -137,14 +143,15 @@ public:
 	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
+	void CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances);
 
 	// LOD
-	bool CreateLODModel(RE::BGSTerrainBlock* chunk);
-	bool CreateLODModel(RE::BGSObjectBlock* chunk);
-	bool CreateLODModel(RE::BGSDistantTreeBlock* chunk);
+	bool CreateLODModel(RE::BGSTerrainBlock* block);
+	bool CreateLODModel(RE::BGSObjectBlock* block);
+	bool CreateLODModel(RE::BGSDistantTreeBlock* block);
 
 	template <typename T>
-	void CreateLODModelImpl(T* chunk, Mesh::Type type);
+	void CreateLODModelImpl(T* block, Mesh::Type type);
 
 	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
 	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);

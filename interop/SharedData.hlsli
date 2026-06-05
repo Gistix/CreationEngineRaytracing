@@ -199,6 +199,21 @@ struct ExponentialHeightFogSettings
 static_assert(sizeof(ExponentialHeightFogSettings) % 16 == 0);
 #endif
 
+struct LODBlendingSettings
+{
+    float LODTerrainBrightness;
+    float LODObjectBrightness;
+    float LODObjectSnowBrightness;
+    uint DisableTerrainVertexColors;
+    float LODTerrainGamma;
+    float LODObjectGamma;
+    float LODObjectSnowGamma;
+    float pad;
+};
+#ifdef __cplusplus
+static_assert(sizeof(LODBlendingSettings) % 16 == 0);
+#endif
+
 struct PhysSkyData
 {
     // DYNAMIC
@@ -285,6 +300,7 @@ INTEROP_STRUCT(FeatureData, 16)
     ExtendedTranslucencySettings ExtendedTranslucency;
     LinearLightingSettings LinearLighting;
     ExponentialHeightFogSettings ExponentialHeightFog;
+    LODBlendingSettings LODBlending;
     PhysSkyData PhysicalSky;
     SkinData Skin;
 };

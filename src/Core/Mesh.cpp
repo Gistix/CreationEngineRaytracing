@@ -56,6 +56,9 @@ Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeome
 	if (skinned)
 		vertexData.skinning.resize(vertexCountIn);
 
+	if (skinned || dynamic)
+		vertexData.position.resize(vertexCountIn);
+
 	auto vertexSize = Util::Geometry::GetSkyrimVertexSize(vertexFlags);
 	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
 
@@ -97,7 +100,13 @@ Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeome
 		}
 
 		if (hasPosition || dynamic) {
-			vertex.Position = { pos.x, pos.y, pos.z };
+			const float3 position = { pos.x, pos.y, pos.z };
+			vertex.Position = position;
+
+			// Used to populate 'prevPositionBuffer' for motion vectors
+			if (skinned || dynamic) {
+				vertexData.position[i] = vertex.Position;
+			}
 		}
 
 		if (vertexFlags & RE::BSGraphics::Vertex::VF_UV) {
@@ -295,11 +304,11 @@ void Mesh::BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& ver
 	triangleData = BuildTriangles(flags.get(), rendererData, triangleCountIn);
 
 	// Clear unused partition vertices
-	if (flags.all(Mesh::Flags::Skinned))
+	/*if (flags.all(Mesh::Flags::Skinned))
 		ClearUnusedVertices();
 
 	if (flags.none(Flags::Landscape, Flags::Water) && Util::Geometry::HasDoubleSidedGeom(this))
-		flags.set(Mesh::Flags::DoubleSidedGeom);
+		flags.set(Mesh::Flags::DoubleSidedGeom);*/
 
 	auto vertexDesc = rendererData->vertexDesc;
 
@@ -319,11 +328,11 @@ void Mesh::BuildMesh(VertexData a_VertexData, TriangleData a_TriangleData, RE::B
 	triangleData = a_TriangleData;
 
 	// Clear unused partition vertices
-	if (flags.all(Mesh::Flags::Skinned))
+	/*if (flags.all(Mesh::Flags::Skinned))
 		ClearUnusedVertices();
 
 	if (flags.none(Flags::Landscape, Flags::Water) && Util::Geometry::HasDoubleSidedGeom(this))
-		flags.set(Mesh::Flags::DoubleSidedGeom);
+		flags.set(Mesh::Flags::DoubleSidedGeom);*/
 
 	bool hasNormal = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_NORMAL;
 	bool hasTangent = vertexDesc.GetFlags() & RE::BSGraphics::Vertex::VF_TANGENT;
@@ -407,7 +416,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		}
 	}
 
-	auto descriptorIndex = m_DescriptorHandle.Get();
+	const auto descriptorIndex = m_DescriptorHandle.Get();
 
 	if (flags.all(Flags::Dynamic)) {
 		const size_t size = sizeof(float4) * vertexData.count;
@@ -470,7 +479,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		buffers.vertexCopyBuffer = device->createBuffer(vertexCopyBufferDesc);
 
-		commandList->writeBuffer(buffers.vertexCopyBuffer, vertexData.vertices.data(), size);
+		commandList->copyBuffer(buffers.vertexCopyBuffer, 0, buffers.vertexBuffer, 0, size);
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexCopyBuffer);
 		device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable, bindingSet);
@@ -491,37 +500,28 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
 		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
+	}
 
-		// Previous position buffer for per-vertex motion vectors
-		{
-			const size_t prevPosSize = sizeof(float3) * vertexData.count;
+	// Previous position buffer for per-vertex motion vectors
+	if (flags.any(Flags::Skinned, Flags::Dynamic)) {
+		const size_t prevPosSize = sizeof(float3) * vertexData.count;
 
-			auto& prevPositionBufferDesc = nvrhi::BufferDesc()
-				.setByteSize(prevPosSize)
-				.setStructStride(sizeof(float3))
-				.setCanHaveUAVs(true)
-				.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-				.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()));
+		auto& prevPositionBufferDesc = nvrhi::BufferDesc()
+			.setByteSize(prevPosSize)
+			.setStructStride(sizeof(float3))
+			.setCanHaveUAVs(true)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+			.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()));
 
-			buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
+		buffers.prevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
 
-			// Fixes motion vector for trees that are far away and havent updated yet
-			{
-				eastl::vector<float3> positions;
-				positions.resize(vertexData.count);
+		commandList->writeBuffer(buffers.prevPositionBuffer, vertexData.position.data(), prevPosSize);
+		
+		auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
+		device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
 
-				for (size_t i = 0; i < vertexData.count; i++)
-					positions[i] = vertexData.vertices[i].Position;
-
-				commandList->writeBuffer(buffers.prevPositionBuffer, positions.data(), prevPosSize);
-			}
-
-			auto prevPosSrvBinding = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.prevPositionBuffer);
-			device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable, prevPosSrvBinding);
-
-			auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
-			device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
-		}
+		auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
+		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
 	}
 
 	// Material Buffer
@@ -600,9 +600,14 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	if (!skinInstance)
 		return false;
 
+	auto* scene = Scene::GetSingleton();
+	const bool isPathTracing = scene->IsPathTracingActive();
+	const bool applyPathTracingCull = scene->ApplyPathTracingCull();
+	const bool isCulled = applyPathTracingCull || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+
 	const auto frameID = skinInstance->frameID;
 
-	if (frameID == Constants::INVALID_FRAME_ID)
+	if (!isCulled && frameID == Constants::INVALID_FRAME_ID)
 		return false;
 
 	auto* rootParent = skinInstance->rootParent;
@@ -616,7 +621,7 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 
 	// Only update if the game has updated the animation
 	// Part 1 of COtR fix
-	if (!unparentedPlayer && m_FrameID == frameID)
+	if (!isCulled && !unparentedPlayer && m_FrameID == frameID)
 		return false;
 
 	m_FrameID = frameID;
@@ -626,7 +631,7 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	if (!skinData)
 		return false;
 
-	if (skinInstance->numMatrices != skinData->bones)
+	if (!isCulled && skinInstance->numMatrices != skinData->bones)
 		logger::warn("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
 
 	if (skinData->bones == 0)
@@ -648,8 +653,11 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
 {
-	if (flags.any(Flags::Landscape, Flags::Water, Flags::Origin))
+	if (flags.any(Flags::Origin))
 		return false;
+
+	// Update previous transform
+	m_PrevLocalToRoot = m_LocalToRoot;
 
 	float3x4 localToRoot;
 	XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(object->world.Invert() * bsGeometryPtr->world));
@@ -657,58 +665,91 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 	if (Util::Math::MatrixNearEqual(localToRoot, m_LocalToRoot))
 		return false;
 
-	// Update previous transform
-	m_PrevLocalToRoot = m_LocalToRoot;
-
 	// Update transform
 	m_LocalToRoot = localToRoot;
+
+	geometryDesc.setTransform(m_LocalToRoot.f);
 
 	return true;
 }
 
-void Mesh::UpdateDismember()
+bool Mesh::GetDismemberHidden() const
 {
 	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
-
 	if (!skinInstance)
-		return;
+		return false;
 
 	static REL::Relocation<const RE::NiRTTI*> dismemberRTTI{ RE::BSDismemberSkinInstance::Ni_RTTI };
-
 	if (skinInstance->GetRTTI() != dismemberRTTI.get())
-		return;
+		return false;
 
-	auto* dismemberSkinInstance = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance);
-	auto& dismemberRuntime = dismemberSkinInstance->GetRuntimeData();
-
+	auto& dismemberRuntime = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance)->GetRuntimeData();
 	if (dismemberRuntime.numPartitions == 0)
-		return;
+		return false;
 
-	auto& partition = dismemberRuntime.partitions[m_Partition];
+	auto& partition = dismemberRuntime.partitions[m_Identifier];
 
-	m_PendingState.set(!partition.editorVisible, State::DismemberHidden);
+	return !partition.editorVisible;
 }
 
-void Mesh::UpdateSubIndex()
+bool Mesh::GetSubIndexHidden() const
 {
 	auto* subIndex = bsGeometryPtr->AsSubIndexTriShape();
 
 	if (!subIndex)
-		return;
+		return false;
 
 	auto& runtimeData = subIndex->GetSubIndexedTrishapeRuntimeData();
 
 	auto& firstSegment = runtimeData.segmentData[0];
 
 	// The first segment references all triangles, if it is visible unhide all segments
-	if (firstSegment.flags == 1) {
-		m_PendingState.set(false, State::SubIndexHidden);
-		return;
+	if (firstSegment.flags == 1)
+		return false;
+
+	auto index = static_cast<uint32_t>(m_Identifier >> 16) * 3;
+	auto numTris = static_cast<uint32_t>(m_Identifier & 0xFFFF);
+
+	// Segments can have their index and numTris changed around by the engine, lets find the one that matches our mesh
+	for (size_t i = 0; i < runtimeData.numSegments; i++)
+	{
+		auto& segment = runtimeData.segmentData[i];
+
+		if (segment.index == index && segment.numTris == numTris)
+			return segment.flags == 0;
 	}
 
-	auto& segment = runtimeData.segmentData[m_Partition];
+	return false;
+}
 
-	m_PendingState.set(segment.unkFlags == 0, State::SubIndexHidden);
+Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
+{
+	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
+	const auto skinned = flags.all(Mesh::Flags::Skinned);
+	const auto subIndexed = flags.all(Mesh::Flags::SubIndex);
+
+	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
+	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
+
+	State state = State::None;
+
+	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
+	if (dynamic || skinned || dynamicModel || skinnedModel)
+		if (Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot))
+			state |= State::Hidden;
+
+	if (skinned && GetDismemberHidden())
+		state |= State::DismemberHidden;
+
+	if (subIndexed && GetSubIndexHidden())
+		state |= State::SubIndexHidden;
+
+	return state;
+}
+
+void Mesh::InitState(RE::NiAVObject* instanceRoot, Flags modelFlags)
+{
+	m_State = GetState(instanceRoot, modelFlags);
 }
 
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
@@ -723,28 +764,16 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
-	const auto lod = flags.all(Mesh::Flags::LOD);
 
-	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
-	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
+	const bool skinnedModel = (modelFlags & Flags::Skinned) != Flags::None;
 
-	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
-	if (dynamic || skinned || dynamicModel || skinnedModel) {
-		m_PendingState.set(Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot), State::Hidden);
-	}
-
-	if (skinned)
-		UpdateDismember();
-
-	if (lod)
-		UpdateSubIndex();
+	const bool updateTransform = skinnedModel || (m_Type == Type::LandLOD) || (m_Type == Type::ObjectLOD);
 
 	// Store previous hidden state
 	bool wasHidden = IsHidden();
 
-	// Update states
-	m_State = m_PendingState;
-	m_PendingState = State::None;
+	// Update state
+	m_State = GetState(instanceRoot, modelFlags);
 
 	// Current hidden state
 	bool isHidden = IsHidden();
@@ -769,10 +798,8 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	if (skinned && UpdateSkinning(isPlayer))
 		updateFlags |= DirtyFlags::Skin;
 
-	if (skinnedModel && UpdateTransform(instanceRoot))
+	if (updateTransform && UpdateTransform(instanceRoot))
 		updateFlags |= DirtyFlags::Transform;
-
-	geometryDesc.setTransform(m_LocalToRoot.f);
 
 	return updateFlags;
 }
@@ -787,7 +814,7 @@ MeshData Mesh::GetData()
 {
 	return MeshData(
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
-		static_cast<uint32_t>(flags.get()),
+		flags.underlying(),
 		m_LocalToRoot,
 		m_PrevLocalToRoot
 	);

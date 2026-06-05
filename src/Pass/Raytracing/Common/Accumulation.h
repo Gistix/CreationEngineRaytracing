@@ -16,8 +16,6 @@ namespace Pass::Common
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		nvrhi::BindingSetHandle m_BindingSet;
 
-		nvrhi::TextureHandle m_AccumulationTexture;
-
 		bool m_DirtyBindings = true;
 
 		uint32_t m_AccumulatedFrames = 0;

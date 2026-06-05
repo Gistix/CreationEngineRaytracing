@@ -41,12 +41,15 @@ struct Material : MaterialBase
 		Particle = 7
 	};
 
-	eastl::unique_ptr<MaterialData> m_MaterialData;
-	eastl::unique_ptr<MaterialData> m_PrevMaterialData;
+	MaterialData m_MaterialData;
+	MaterialData m_PrevMaterialData;
 
 	nvrhi::BufferHandle buffer;
 
 	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
+
+	void SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp);
+	void SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial);
 
 	void CreateBuffer(const eastl::string& name, DescriptorIndex descriptorIndex);
 
@@ -54,9 +57,7 @@ struct Material : MaterialBase
 
 	void Update(RE::BSShaderProperty* shaderProperty);
 
-	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance) const;
-
-	MaterialData* GetData() const;
+	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance);
 
 	// We have a limited number of bits and not all types are necessary
 	ShaderType GetShaderType() const
@@ -105,7 +106,10 @@ struct Material : MaterialBase
 		kAssumeShadowmask = 1 << 17,
 		kBackLighting = 1 << 18,
 		kTreeAnim = 1 << 19,
-		kSoftLighting = 1 << 20
+		kSoftLighting = 1 << 20,
+		kLODLandscape = 1 << 21,
+		kLODObjects = 1 << 22,
+		kHDLODObjects = 1 << 23
 	};
 
 	enum class WaterShaderFlags : uint32_t
@@ -242,12 +246,24 @@ struct Material : MaterialBase
 			shaderFlagsLocal |= ShaderFlags::kSoftLighting;
 		}
 
+		if (shaderFlags.any(EShaderPropertyFlag::kLODLandscape)) {
+			shaderFlagsLocal |= ShaderFlags::kLODLandscape;
+		}
+		
+		if (shaderFlags.any(EShaderPropertyFlag::kLODObjects)) {
+			shaderFlagsLocal |= ShaderFlags::kLODObjects;
+		}
+
+		if (shaderFlags.any(EShaderPropertyFlag::kHDLODObjects)) {
+			shaderFlagsLocal |= ShaderFlags::kHDLODObjects;
+		}
+		
 		return static_cast<uint32_t>(shaderFlagsLocal);
 	}
 
 	uint16_t GetTextureDescriptorIndex(uint32_t index) const
 	{
-		auto& texture = textures[index];
+		const auto& texture = textures[index];
 
 		auto locked = texture.texture.lock();
 
@@ -256,6 +272,9 @@ struct Material : MaterialBase
 		else
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
+
+private:
+	MaterialData* GetData();
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);

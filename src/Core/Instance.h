@@ -28,19 +28,18 @@ struct Instance
 	// Model ptr
 	Model* model;
 
-	RE::NiTransform m_NiTransform;
-
 	// Used for BLAS instance
 	float3x4 m_Transform;
 	float3x4 m_PrevTransform;
 
 	// Makes sure we only update once per frame
-	uint64_t m_LastUpdate = 0;
+	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
 
 	uint32_t m_TLASInstanceID = 0;
 
 	stl::enumeration<State> m_State = State::None;
 
+	// Used by light TLAS
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) 
@@ -68,7 +67,7 @@ struct Instance
 			.setInstanceMask(1)
 			.setInstanceID(m_TLASInstanceID)
 			.setTransform(m_Transform.f)
-			.setBLAS(model->blas);
+			.setBLAS(model->m_BLAS);
 
 		// Culling adds additional overhead but some geometry (like vanilla hair) has duplicated double sided faces (as opposed to using the kTwoSided shader flag)
 		// Without culling this means we would render 4 faces (original back and front + other side of back and other side of front)

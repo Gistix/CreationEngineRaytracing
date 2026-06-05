@@ -1,4 +1,4 @@
-#include "ReblurRadiance.h"
+#include "NRDIntegration.h"
 
 #include "Renderer.h"
 #include "Scene.h"
@@ -6,8 +6,8 @@
 
 namespace Pass::NRD
 {
-	ReblurRadiance::ReblurRadiance(Renderer* renderer)
-		: RenderPass(renderer)
+	NRDIntegration::NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser)
+		: RenderPass(renderer), kDenoiser(denoiser)
 	{
 		auto device = GetRenderer()->GetDevice();
 
@@ -21,22 +21,24 @@ namespace Pass::NRD
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
 
+		kDenoiserIdentifier = nrd::Identifier(denoiser);
+
 		m_ReblurSettings = {};
 		m_ReblurSettings.checkerboardMode = nrd::CheckerboardMode::OFF;
-		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::OFF;
-		m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(30u, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
-		m_ReblurSettings.enableAntiFirefly = false;
+
+		// Required when using probabilistic sampling
+		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
 
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
 		Setup();
 	}
 
-	ReblurRadiance::~ReblurRadiance()
+	NRDIntegration::~NRDIntegration()
 	{
 		DestroyInstance();
 	}
 
-	void ReblurRadiance::DestroyInstance()
+	void NRDIntegration::DestroyInstance()
 	{
 		if (m_NRD) {
 			nrd::DestroyInstance(*m_NRD);
@@ -55,7 +57,7 @@ namespace Pass::NRD
 		m_FallbackUavTexture = nullptr;
 	}
 
-	void ReblurRadiance::Setup()
+	void NRDIntegration::Setup()
 	{
 		DestroyInstance();
 
@@ -69,7 +71,7 @@ namespace Pass::NRD
 
 		const nrd::Result result = nrd::CreateInstance(creationDesc, m_NRD);
 		if (result != nrd::Result::SUCCESS || !m_NRD) {
-			logger::error("ReblurRadiance: failed to create NRD instance ({})", uint32_t(result));
+			logger::error("NRDIntegration: failed to create NRD instance ({})", uint32_t(result));
 			return;
 		}
 
@@ -89,7 +91,7 @@ namespace Pass::NRD
 		CreateGlobalBindingSet();
 	}
 
-	void ReblurRadiance::CreateBindingLayouts()
+	void NRDIntegration::CreateBindingLayouts()
 	{
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
 
@@ -130,7 +132,7 @@ namespace Pass::NRD
 		m_ResourceBindingLayout = GetRenderer()->GetDevice()->createBindingLayout(resourceLayoutDesc);
 	}
 
-	uint32_t ReblurRadiance::GetMaxResourceCount(nrd::DescriptorType type) const
+	uint32_t NRDIntegration::GetMaxResourceCount(nrd::DescriptorType type) const
 	{
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
 		uint32_t maxCount = 0;
@@ -148,7 +150,7 @@ namespace Pass::NRD
 		return maxCount;
 	}
 
-	void ReblurRadiance::CreatePipelines()
+	void NRDIntegration::CreatePipelines()
 	{
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
 		auto device = GetRenderer()->GetDevice();
@@ -184,7 +186,7 @@ namespace Pass::NRD
 				}
 
 				if (tokens.empty()) {
-					logger::error("ReblurRadiance: invalid NRD shader identifier for pipeline {}", pipelineIndex);
+					logger::error("NRDIntegration: invalid NRD shader identifier for pipeline {}", pipelineIndex);
 					continue;
 				}
 
@@ -217,7 +219,7 @@ namespace Pass::NRD
 			}
 
 			if (!pipeline.shader) {
-				logger::error("ReblurRadiance: failed to create shader for pipeline {}", pipelineIndex);
+				logger::error("NRDIntegration: failed to create shader for pipeline {}", pipelineIndex);
 				continue;
 			}
 
@@ -230,7 +232,7 @@ namespace Pass::NRD
 		}
 	}
 
-	void ReblurRadiance::CreateResources()
+	void NRDIntegration::CreateResources()
 	{
 		if (!m_NRD)
 			return;
@@ -316,7 +318,7 @@ namespace Pass::NRD
 		m_ResourcesDirty = false;
 	}
 
-	void ReblurRadiance::CreateGlobalBindingSet()
+	void NRDIntegration::CreateGlobalBindingSet()
 	{
 		if (!m_NRD)
 			return;
@@ -342,7 +344,7 @@ namespace Pass::NRD
 		m_GlobalBindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_GlobalBindingLayout);
 	}
 
-	void ReblurRadiance::SettingsChanged([[maybe_unused]] const Settings& settings)
+	void NRDIntegration::SettingsChanged([[maybe_unused]] const Settings& settings)
 	{
 		auto& reblurSettings = settings.ReblurSettings;
 
@@ -379,12 +381,12 @@ namespace Pass::NRD
 		m_SettingsDirty = true;
 	}
 
-	void ReblurRadiance::ResolutionChanged([[maybe_unused]] uint2 resolution)
+	void NRDIntegration::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
 		m_ResourcesDirty = true;
 	}
 
-	void ReblurRadiance::UpdateCommonSettings()
+	void NRDIntegration::UpdateCommonSettings()
 	{
 		auto* renderer = Renderer::GetSingleton();
 
@@ -436,9 +438,11 @@ namespace Pass::NRD
 
 		m_CommonSettings.rectSize[0] = static_cast<uint16_t>(dynamicResolution.x);
 		m_CommonSettings.rectSize[1] = static_cast<uint16_t>(dynamicResolution.y);
+
+		m_CommonSettings.denoisingRange = 1e6f;
 	}
 
-	nvrhi::ITexture* ReblurRadiance::GetDispatchResource(const nrd::ResourceDesc& resource) const
+	nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
 	{
 		auto* renderer = Renderer::GetSingleton();
 		auto* renderTargets = renderer->GetRenderTargets();
@@ -469,12 +473,12 @@ namespace Pass::NRD
 		case nrd::ResourceType::PERMANENT_POOL:
 			return resource.indexInPool < m_PermanentPool.size() ? m_PermanentPool[resource.indexInPool] : nullptr;
 		default:
-			logger::error("ReblurRadiance::GetDispatchResource - Requested Unmapped Resource: {}", magic_enum::enum_name(resource.type));
+			logger::error("NRDIntegration::GetDispatchResource - Requested Unmapped Resource: {}", magic_enum::enum_name(resource.type));
 			return nullptr;
 		}
 	}
 
-	nvrhi::Format ReblurRadiance::GetFormat(nrd::Format format) const
+	nvrhi::Format NRDIntegration::GetFormat(nrd::Format format) const
 	{
 		switch (format) {
 		case nrd::Format::R8_UINT: return nvrhi::Format::R8_UINT;
@@ -492,17 +496,17 @@ namespace Pass::NRD
 		case nrd::Format::R10_G10_B10_A2_UNORM: return nvrhi::Format::R10G10B10A2_UNORM;
 		case nrd::Format::R11_G11_B10_UFLOAT: return nvrhi::Format::R11G11B10_FLOAT;
 		default:
-			logger::error("ReblurRadiance::GetFormat - Requested Unmapped Format: {}", magic_enum::enum_name(format));
+			logger::error("NRDIntegration::GetFormat - Requested Unmapped Format: {}", magic_enum::enum_name(format));
 			return nvrhi::Format::UNKNOWN;
 		}
 	}
 
-	void ReblurRadiance::Execute(nvrhi::ICommandList* commandList)
+	void NRDIntegration::Execute(nvrhi::ICommandList* commandList)
 	{
 		if (!m_NRD)
 			return;
 
-		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_REBLUR)
+		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD)
 			return;
 
 		auto* renderer = GetRenderer();
@@ -528,7 +532,7 @@ namespace Pass::NRD
 
 		const nrd::Result commonSettingsResult = nrd::SetCommonSettings(*m_NRD, m_CommonSettings);
 		if (commonSettingsResult != nrd::Result::SUCCESS) {
-			logger::error("ReblurRadiance: failed to set NRD common settings {}", magic_enum::enum_name(commonSettingsResult));
+			logger::error("NRDIntegration: failed to set NRD common settings {}", magic_enum::enum_name(commonSettingsResult));
 			return;
 		}
 
@@ -538,7 +542,7 @@ namespace Pass::NRD
 		auto computeDispatchesResult = nrd::GetComputeDispatches(*m_NRD, identifiers, 1, dispatchDescs, dispatchCount);
 
 		if (computeDispatchesResult != nrd::Result::SUCCESS) {
-			logger::error("ReblurRadiance: failed to get NRD dispatches {}", magic_enum::enum_name(computeDispatchesResult));
+			logger::error("NRDIntegration: failed to get NRD dispatches {}", magic_enum::enum_name(computeDispatchesResult));
 			return;
 		}
 
@@ -574,7 +578,7 @@ namespace Pass::NRD
 
 				for (uint32_t rangeResourceIndex = 0; rangeResourceIndex < rangeDesc.descriptorsNum; ++rangeResourceIndex) {
 					if (resourceCursor >= dispatchDesc.resourcesNum) {
-						logger::error("ReblurRadiance: resource range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+						logger::error("NRDIntegration: resource range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
 						return;
 					}
 
@@ -582,20 +586,20 @@ namespace Pass::NRD
 					nvrhi::ITexture* texture = GetDispatchResource(resourceDesc);
 
 					if (!texture) {
-						logger::warn("ReblurRadiance: missing resource type {} for dispatch {}", nrd::GetResourceTypeString(resourceDesc.type), dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+						logger::warn("NRDIntegration: missing resource type {} for dispatch {}", nrd::GetResourceTypeString(resourceDesc.type), dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
 						return;
 					}
 
 					if (rangeDesc.descriptorType == nrd::DescriptorType::TEXTURE) {
 						if (srvBase + rangeResourceIndex >= srvTextures.size()) {
-							logger::error("ReblurRadiance: SRV range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+							logger::error("NRDIntegration: SRV range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
 							return;
 						}
 
 						srvTextures[srvBase + rangeResourceIndex] = texture;
 					} else {
 						if (uavBase + rangeResourceIndex >= uavTextures.size()) {
-							logger::error("ReblurRadiance: UAV range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
+							logger::error("NRDIntegration: UAV range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
 							return;
 						}
 

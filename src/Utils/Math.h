@@ -23,5 +23,7 @@ namespace Util
 		bool MatrixNearEqual(const float3x4& a, const float3x4& b, float epsilon = 1e-5f);
 
 		bool Intersects(const float2& aCenter, const float2& aSize, const float2& bCenter, const float2& bSize);
+
+		uint64_t Align64KB(uint64_t size);
 	}
 }

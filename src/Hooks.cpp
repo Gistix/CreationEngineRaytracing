@@ -585,10 +585,26 @@ namespace Hooks
 		if (pathTracingActive && shaderType == RE::BSShader::Type::Water)
 			return;
 
-		// Cull non-effect refractive geometry during path tracing
-		if (pathTracingActive && shaderType != RE::BSShader::Type::Effect)
-			if (pass->shaderProperty && pass->shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+		auto* shaderProperty = pass->shaderProperty;
+		if (!shaderProperty || !shaderProperty->material) {
+			func(pass, technique, alphaTest, renderFlags);
+			return;
+		}
+
+		if (pathTracingActive) {
+			// Cull non-effect refractive geometry during path tracing
+			if (shaderType != RE::BSShader::Type::Effect && shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+					return;
+
+			auto feature = shaderProperty->material->GetFeature();
+
+			// Cull eyes since they are transparent and draw after PT is composited
+			switch (feature) {
+			case RE::BSShaderMaterial::Feature::kEnvironmentMap: // Some mods use this flag for eyes,
+			case RE::BSShaderMaterial::Feature::kEye:
 				return;
+			}
+		}
 
 		// Path tracing occlusion-based culling
 		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry)
@@ -612,19 +628,16 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			bool isMapLOD = a_block->node->mapTerrain && a_block == a_block->node->mapTerrain->block;
-			bool valid = a_block->node && !isMapLOD;
-			bool existed = true;
-
-			if (valid && a_block->loaded && a_block->chunk) {
-				if (!a_block->attached)
-					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-			}
+			const bool wasAttached = a_block->attached;
 
 			func(a_block);
 
-			if (valid && existed)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			if (a_block->loaded && a_block->chunk) {
+				if (!wasAttached && a_block->attached) {
+					if (Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block))
+						Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
+				}
+			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -660,19 +673,16 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
 		{
-			bool isMapLOD = a_block->node->mapObjects && a_block == a_block->node->mapObjects->block;
-			bool valid = a_block->node && !isMapLOD;
-			bool existed = true;
-
-			if (valid && a_block->loaded && a_block->chunk) {
-				if (!a_block->attached)
-					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-			}
+			const bool wasAttached = a_block->attached;
 
 			func(a_block, a_arg2, a_firstAvail);
 
-			if (valid && existed)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			if (a_block->loaded && a_block->chunk) {
+				if (!wasAttached && a_block->attached) {
+					if (Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block))
+						Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
+				}
+			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -816,6 +826,22 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+	
+	// 1401B6AF0 SE/140203810 AE
+	struct GrassManager_CreateInstances
+	{
+		static uint32_t thunk(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams)
+		{
+			auto instances = func(a_grassManager, a_createGrassParams);
+
+			if (instances > 0)
+				Scene::GetSingleton()->GetSceneGraph()->CreateGrassModel(a_grassManager, a_createGrassParams, instances);
+
+			return instances;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 #elif defined(FALLOUT4)
 
@@ -845,12 +871,12 @@ namespace Hooks
 		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));
 
 		// Tree LOD
-		/*if (REL::Module::IsSE())
+		if (REL::Module::IsSE())
 			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
 		else
 			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
 
-		stl::detour_thunk<BGSDistantTreeBlock_Detach>(REL::RelocationID(30830, 31651));*/
+		stl::detour_thunk<BGSDistantTreeBlock_Detach>(REL::RelocationID(30830, 31651));
 
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
@@ -860,11 +886,14 @@ namespace Hooks
 		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
 		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
+		// Grass
+		//stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
+
 		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
 		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
 		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
 
-		stl::write_thunk_call<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100852, 107642).address() + REL::Relocate(0x29E, 0x28F));
+		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(0, 107644));
 
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
@@ -889,12 +918,5 @@ namespace Hooks
 #	endif
 #endif
 		logger::info("[Raytracing] Installed hooks");
-	}
-
-	void InstallD3D11Hooks([[maybe_unused]]ID3D11Device* device)
-	{
-		//stl::detour_vfunc<5, ID3D11Device_CreateTexture2D>(device);
-
-		logger::info("[Raytracing] Installed D3D11 hooks");
 	}
 }

@@ -349,15 +349,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		// Update if applicable, and queue skinning/dynamic update
 		instance->model->Update(instance->m_Node, isPlayer, commandList);
 
-		uint32_t firstMeshIndex = m_NumMeshes;
-
 		// Get mesh data
-		instance->model->SetData(m_MeshData.data(), m_NumMeshes);
+		auto params = instance->model->GetData(m_MeshData.data(), m_NumMeshes);
 
 		// No visible meshes in instance
-		bool hiddenModel = m_NumMeshes == firstMeshIndex;
-		instance->SetHiddenModel(hiddenModel);
+		instance->SetHiddenModel(params.hidden);
 
+		// Post update since these states are set by update itself
 		if (instance->SkipAS())
 			return Iterator::Continue;
 
@@ -371,7 +369,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			lights[numLights] = light.m_Index;
 			numLights++;
 
-			if (numLights > Constants::INSTANCE_LIGHTS_MAX) {
+			if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
 				logger::error("SceneGraph::Update - Number of lights per instance of {} exceeds the maximum of {}", numLights, Constants::INSTANCE_LIGHTS_MAX);
 				break;
 			}
@@ -381,7 +379,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			instance->m_Transform,
 			instance->m_PrevTransform,
 			InstanceLightData(lights.data(), numLights),
-			firstMeshIndex,
+			params.firstMeshID,
 			instance->GetAlpha()
 		};
 
@@ -389,8 +387,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		return Iterator::Continue;
 	});
 
+	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
+		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
+
 	if (m_NumMeshes > 0)
 		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
+
+	if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
+		logger::critical("SceneGraph::Update - Number of instances of {} exceeds the maximum of {}", m_NumInstances, Constants::NUM_INSTANCES_MAX);
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
@@ -577,20 +581,92 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	}
 }
 
-bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* chunk)
+void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances)
 {
-	if (!m_TerrainLODInstances.contains(chunk)) {
-		CreateLODModelImpl(chunk, Mesh::Type::LandLOD);
+	auto* grassParams = a_createGrassParams->grassParam;
+
+	auto* grassForm = RE::TESForm::LookupByID<RE::TESGrass>(grassParams->grassFormID);
+	if (!grassForm || grassForm->model.empty())
+		return;
+
+	logger::debug("SceneGraph::CreateGrassModel - Land: {:0X}, Quad: {}, Model: {}, Instances: {}", a_createGrassParams->land->GetFormID(), a_createGrassParams->quad, grassParams->modelName, numInstances);
+
+	// Generate the key exactly how its done by the engine
+	auto exteriorData = a_createGrassParams->land->parentCell->GetCoordinates();
+	auto keyX = exteriorData->cellX / 12;
+	auto keyY = exteriorData->cellY / 12;
+
+	auto grassKey = RE::GrassTypeKey(grassParams->grassFormID, static_cast<int16_t>(keyX), static_cast<int16_t>(keyY));
+
+	// The hash map type used by clib is incorrect, cast to the correct type before attempting to use it
+	auto& grassTypes = *reinterpret_cast<RE::BSTCustomHashMap<RE::GrassTypeKey, RE::GrassType*>*>(&a_grassManager->unk10);
+
+	auto it = grassTypes.find(grassKey);
+	if (it == grassTypes.end()) {
+		logger::warn("\tSceneGraph::CreateGrassModel - Grass Type not found for ({:0X}, [{}, {}])", grassParams->grassFormID, keyX, keyY);
+		return;
+	}
+
+	auto* grassShape = it->second->typeShape;
+	if (!grassShape) {
+		logger::warn("\tSceneGraph::CreateGrassModel - Grass Type is nullptr");
+		return;
+	}
+
+	auto modelName = eastl::string(grassForm->model.c_str());
+
+	Model* model = nullptr;
+	{
+		std::scoped_lock lock(m_ModelMutex);
+		if (auto modelIt = m_Models.find(modelName); modelIt != m_Models.end())
+			model = modelIt->second.get();
+	}
+
+	if (!model) {
+		auto meshes = CreateMeshes(grassShape, grassForm);
+		model = CommitModel(modelName.c_str(), grassShape, grassForm, meshes);
+	}
+
+	if (!model) {
+		logger::warn("SceneGraph::CreateGrassModel - Grass model {} is null", modelName);
+		return;
+	}
+
+	auto& grassInstance = m_GrassInstances[grassKey];
+
+	if (grassInstance.m_Instances.size() > 10000)
+		return;
+
+	auto instanceData = reinterpret_cast<GrassReference::InstanceData*>(a_grassManager->instanceData);
+
+	for (size_t i = 0; i < numInstances; i++)
+	{
+		auto instanceDataLocal = instanceData[i];
+
+		auto instance = eastl::make_unique<GrassInstance>(instanceDataLocal, grassParams->grassFormID, grassShape, model);
+		instance->model->AddRef();
+
+		grassInstance.m_Instances.push_back(instance.get());
+		grassInstance.m_InstanceData.push_back(instanceDataLocal);
+
+		m_Instances.Add(eastl::move(instance));
+	}
+}
+
+bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* block)
+{
+	if (!m_TerrainLODInstances.contains(block)) {
+		CreateLODModelImpl(block, Mesh::Type::LandLOD);
 		return false;
 	}
 
 	return true;
 }
 
-bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* chunk)
+bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* block)
 {
-	if (!m_ObjectLODInstances.contains(chunk)) {
-		CreateLODModelImpl(chunk, Mesh::Type::ObjectLOD);
+	if (!m_ObjectLODInstances.contains(block)) {
+		CreateLODModelImpl(block, Mesh::Type::ObjectLOD);
 		return false;
 	}
 
@@ -669,8 +745,10 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 		auto* triShapeRD = geometryRuntimeData.rendererData;
 
-		if (!triShapeRD)
+		if (!triShapeRD) {
+			logger::info("\tInvalid LOD Render Data");
 			return RE::BSVisit::BSVisitControl::kContinue;
+		}
 
 		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
@@ -687,7 +765,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 			auto* subIndexTriShape = netimmerse_cast<RE::BSSubIndexTriShape*>(pGeometry);
 
 			if (subIndexTriShape) {
-				stl::enumeration<Mesh::Flags> flags = Mesh::Flags::LOD;
+				stl::enumeration<Mesh::Flags> flags = Mesh::Flags::SubIndex;
 				auto vertexData = Mesh::BuildVertices(flags, pGeometry, triShapeRD, triShapeRuntime.vertexCount, 0);
 				auto triangleData = Mesh::BuildTriangles(flags.get(), triShapeRD, triShapeRuntime.triangleCount);
 
@@ -700,20 +778,20 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 				for (size_t i = 0; i < runtimeData.numSegments; i++)
 				{
-					// The first segment contains all triangles (it is the equivalent of all other segments combine)
-					if (i == 0 && runtimeData.numSegments > 1)
-						continue;
-
 					auto& segment = runtimeData.segmentData[i];
 
-					// Invalid segment
-					if (segment.unkTriCount == 0)
+					// The first segment contains all triangles (it is the equivalent of all other segments combined)
+					if (i == 0 && runtimeData.numSegments > 1) {
+						continue;
+					} else if (segment.unkTriCount == 0 && segment.numTris == 0) // The first segments 'unkTriCount' is always 0, if not the first segment and the counts are 0, skip
 						continue;
 
 					logger::debug("\tSegment[{}]: Index: {}, UnkTriCount: {}, UnkFlags: 0x{:08X}, NumTris: {}, Flags: 0x{:08X}",
 						i, segment.index, segment.unkTriCount, segment.unkFlags, segment.numTris, segment.flags);
 
-					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, flags.get(), name, pGeometry, localToRoot, i);
+					auto identifier = static_cast<uint32_t>((segment.index / 3) << 16) | segment.numTris;
+
+					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, flags.get(), name, pGeometry, localToRoot, identifier);
 
 					// Copy triangles to segment triangles
 					Mesh::TriangleData segmentTriData{};
@@ -735,7 +813,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 			}
 		}
 		else {
-			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, Mesh::Flags::LOD, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, Mesh::Flags::None, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, 0);
@@ -946,9 +1024,10 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
 		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
 		bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
+		bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
 
 		// Only lighting and effect shader for now
-		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader) {
+		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader && !isGrassShader) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
 			return RE::BSVisit::BSVisitControl::kContinue;
 		}
@@ -957,15 +1036,6 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		if (isEffectShader && geometryRuntimeData.alphaProperty)
 			if (geometryRuntimeData.alphaProperty->GetAlphaBlending())
 				return RE::BSVisit::BSVisitControl::kContinue;
-
-		bool skinned = shaderProperty && shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kSkinned);
-
-		auto& geomFlags = pGeometry->GetFlags();
-
-		if (geomFlags.any(RE::NiAVObject::Flag::kHidden) && !skinned) {
-			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Is Hidden");
-			return RE::BSVisit::BSVisitControl::kContinue;
-		}
 
 		auto flags = Mesh::Flags::None;
 
@@ -1081,10 +1151,8 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 
 	if (model) {
 		AddInstance(formID, pRoot, model);
-		return static_cast<uint32_t>(model->meshes.size());
+		return static_cast<uint32_t>(model->m_Meshes.size());
 	}
-
-	logger::trace("SceneGraph::CreateModelInternal \"{}\"", typeid(*pRoot).name());
 
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
 
@@ -1127,9 +1195,14 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 
 				graphicsCommandList->close();
 
-				auto device = Renderer::GetSingleton()->GetDevice();
-				device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Copy, modelPtr->m_SubmittedCopyInstance);
-				device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
+				auto* renderer = Renderer::GetSingleton();
+				auto device = renderer->GetDevice();
+
+				{
+					std::scoped_lock lock(renderer->GetExecutionMutex());
+					device->queueWaitForCommandList(nvrhi::CommandQueue::Graphics, nvrhi::CommandQueue::Copy, modelPtr->m_SubmittedCopyInstance);
+					device->executeCommandList(graphicsCommandList, nvrhi::CommandQueue::Graphics);
+				}
 			}
 
 			logger::debug("SceneGraph::CommitModel - Commited {} TriShapes to [0x{:08X}]", shapeCount, reinterpret_cast<uintptr_t>(modelPtr));

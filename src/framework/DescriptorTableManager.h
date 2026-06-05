@@ -94,7 +94,8 @@ protected:
     eastl::unordered_map<nvrhi::BindingSetItem, DescriptorIndex, BindingSetItemHasher, BindingSetItemsEqual> m_DescriptorIndexMap;
     eastl::vector<bool> m_AllocatedDescriptors;
     int m_SearchStart = 0;
-        
+	mutable std::shared_mutex m_Mutex;
+
 public:
     DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IBindingLayout* layout, bool resizeToMaxCapacity);
     ~DescriptorTableManager();

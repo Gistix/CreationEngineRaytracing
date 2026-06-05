@@ -52,27 +52,14 @@ namespace Pass::Common
 		auto* scene = Scene::GetSingleton();
 		auto* renderer = GetRenderer();
 
-		// Create accumulation texture matching the main texture format
-		auto resolution = renderer->GetResolution();
-		{
-			nvrhi::TextureDesc desc;
-			desc.width = resolution.x;
-			desc.height = resolution.y;
-			desc.isUAV = true;
-			desc.keepInitialState = true;
-			desc.format = nvrhi::Format::RGBA32_FLOAT;
-			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-			desc.debugName = "Accumulation Texture";
-
-			m_AccumulationTexture = renderer->GetDevice()->createTexture(desc);
-		}
+		auto& textureManager = renderer->RenderTargetManager();
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::PushConstants(1, sizeof(float4)),
 			nvrhi::BindingSetItem::Texture_SRV(0, renderer->GetMainTexture()),
-			nvrhi::BindingSetItem::Texture_UAV(0, m_AccumulationTexture)
+			nvrhi::BindingSetItem::Texture_UAV(0, textureManager.GetTexture(RenderTarget::Accumulation))
 		};
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
@@ -168,9 +155,12 @@ namespace Pass::Common
 		commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 
 		// Copy accumulated result back to MainTexture
-		auto fullResolution = GetRenderer()->GetResolution();
+		auto* renderer = GetRenderer();
+		auto fullResolution = renderer->GetResolution();
 		auto copyRegion = nvrhi::TextureSlice{ 0, 0, 0, fullResolution.x, fullResolution.y, 1 };
-		commandList->copyTexture(GetRenderer()->GetMainTexture(), copyRegion, m_AccumulationTexture, copyRegion);
+
+		auto& textureManager = renderer->RenderTargetManager();
+		commandList->copyTexture(renderer->GetMainTexture(), copyRegion, textureManager.GetTexture(RenderTarget::Accumulation), copyRegion);
 
 		// Update camera state for next frame
 		auto* camera = Scene::GetSingleton()->GetCameraData();
