@@ -109,6 +109,11 @@ struct Model
 		return meshFlags;
 	}
 
+	auto GetMeshTypes() const
+	{
+		return m_MeshTypes;
+	}
+
 	uint32_t GetShaderTypes() const
 	{
 		return shaderTypes;

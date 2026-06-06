@@ -727,14 +727,15 @@ Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 	const auto subIndexed = flags.all(Mesh::Flags::SubIndex);
+	const auto water = flags.all(Mesh::Flags::Water);
 
 	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
 	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
 
 	State state = State::None;
 
-	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
-	if (dynamic || skinned || dynamicModel || skinnedModel)
+	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only a select few mesh types
+	if (dynamic || skinned || subIndexed || water || dynamicModel || skinnedModel)
 		if (Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot))
 			state |= State::Hidden;
 

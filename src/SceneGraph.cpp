@@ -680,8 +680,10 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 
 	for (const auto& group: block->treeGroups)
 	{
-		if (!group->geometry)
+		if (!group->geometry) {
+			logger::warn("SceneGraph::CreateLODModel - Tree lod group has no geometry");
 			continue;
+		}
 
 		auto* geometry = group->geometry.get();
 
@@ -704,6 +706,7 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 			logger::warn("SceneGraph::CreateLODModel - Tree lod model {} is null", group->treeType);
 
 		auto& blockRefr = m_TreeLODInstances[block];
+		blockRefr.m_Detached = !block->attached;
 		blockRefr.block = block;
 
 		for (auto& instanceData: group->instances)
@@ -712,6 +715,8 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 
 			auto instance = eastl::make_unique<TreeLODInstance>(instanceDataPtr, geometry, model);
 			instance->model->AddRef();
+
+			instance->SetDetached(!block->attached);
 
 			blockRefr.instances.push_back(instance.get());
 			blockRefr.treeInstanceData.push_back(instanceDataPtr);
@@ -728,8 +733,10 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 {
 	auto node = block->chunk;
 
-	if (!node)
+	if (!node) {
+		logger::info("SceneGraph::CreateLODModelImpl - Chunk is nullptr for {}", magic_enum::enum_name(type));
 		return;
+	}
 
 	logger::debug("SceneGraph::CreateLODModel - {}, {}", node->name.c_str(), Util::Math::Float3(node->world.translate));
 
@@ -1241,7 +1248,10 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* mod
 void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model)
 {
 	if (auto* instance = AddInstanceImpl(node, model, 0)) {
+		instance->SetDetached(!block->attached);
+
 		auto& blockRefr = m_ObjectLODInstances[block];
+		blockRefr.m_Detached = !block->attached;
 		blockRefr.block = block;
 		blockRefr.instances.push_back(instance);
 	}
@@ -1250,7 +1260,10 @@ void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Mo
 void SceneGraph::AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model)
 {
 	if (auto* instance = AddInstanceImpl(node, model, 0)) {
+		instance->SetDetached(!block->attached);
+
 		auto& blockRefr = m_TerrainLODInstances[block];
+		blockRefr.m_Detached = !block->attached;
 		blockRefr.block = block;
 		blockRefr.instances.push_back(instance);
 	}
@@ -1266,10 +1279,7 @@ void SceneGraph::SetLODDetached(RE::BGSTerrainBlock* block, bool detached)
 		instance->SetDetached(detached);
 	}
 
-	if (detached && detached != it->second.detached)
-		it->second.detachedTime = std::chrono::steady_clock::now();
-
-	it->second.detached = detached;
+	it->second.SetDetached(detached);
 }
 
 void SceneGraph::SetLODDetached(RE::BGSObjectBlock* block, bool detached)
@@ -1282,10 +1292,7 @@ void SceneGraph::SetLODDetached(RE::BGSObjectBlock* block, bool detached)
 		instance->SetDetached(detached);
 	}
 
-	if (detached && detached != it->second.detached)
-		it->second.detachedTime = std::chrono::steady_clock::now();
-
-	it->second.detached = detached;
+	it->second.SetDetached(detached);
 }
 
 void SceneGraph::SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached)
@@ -1298,10 +1305,7 @@ void SceneGraph::SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached)
 		instance->SetDetached(detached);
 	}
 
-	if (detached && detached != it->second.detached)
-		it->second.detachedTime = std::chrono::steady_clock::now();
-
-	it->second.detached = detached;
+	it->second.SetDetached(detached);
 }
 
 void SceneGraph::RunGarbageCollection()
@@ -1313,7 +1317,7 @@ void SceneGraph::RunGarbageCollection()
 
 		// Object LOD
 		for (auto it = m_ObjectLODInstances.begin(); it != m_ObjectLODInstances.end(); ) {
-			if (it->second.detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
+			if (it->second.m_Detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
 				ReleaseInstances(it->second.instances);
 				it = m_ObjectLODInstances.erase(it);
 			}
@@ -1324,7 +1328,7 @@ void SceneGraph::RunGarbageCollection()
 
 		// Terrain LOD
 		for (auto it = m_TerrainLODInstances.begin(); it != m_TerrainLODInstances.end(); ) {
-			if (it->second.detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
+			if (it->second.m_Detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
 				ReleaseInstances(it->second.instances);
 				it = m_TerrainLODInstances.erase(it);
 			}
@@ -1335,7 +1339,7 @@ void SceneGraph::RunGarbageCollection()
 
 		// Tree LOD
 		for (auto it = m_TreeLODInstances.begin(); it != m_TreeLODInstances.end(); ) {
-			if (it->second.detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
+			if (it->second.m_Detached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
 				ReleaseInstances(it->second.instances);
 				it = m_TreeLODInstances.erase(it);
 			}

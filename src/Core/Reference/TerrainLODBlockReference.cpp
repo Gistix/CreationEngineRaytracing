@@ -31,16 +31,20 @@ void TerrainLODBlockReference::UpdateIntersection()
 
 void TerrainLODBlockReference::UpdateVisibility()
 {
-	if (detached)
+	if (m_Detached) {
+		if (block->attached)
+			logger::info("TerrainLODBlockReference::UpdateVisibility - Detached object reference has attached block");
+
 		return;
+	}
 
 	if (!block->attached) {
-		logger::info("Unattached terrain block");
+		logger::info("TerrainLODBlockReference::UpdateVisibility - Attached object reference has detached block");
 		return;
 	}
 
 	if (!block->chunk) {
-		logger::info("Chunk is nullptr");
+		logger::info("TerrainLODBlockReference::UpdateVisibility - Chunk is nullptr");
 		return;
 	}
 

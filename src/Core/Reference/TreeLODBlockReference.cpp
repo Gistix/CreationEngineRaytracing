@@ -4,11 +4,15 @@
 
 void TreeLODBlockReference::UpdateVisibility()
 {
-	if (detached)
+	if (m_Detached) {
+		if (block->attached)
+			logger::info("TreeLODBlockReference::UpdateVisibility - Detached object reference has attached block");
+
 		return;
+	}
 
 	if (!block->attached) {
-		logger::info("Unattached tree block");
+		logger::info("TreeLODBlockReference::UpdateVisibility - Attached object reference has detached block");
 		return;
 	}
 
