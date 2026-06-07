@@ -42,6 +42,7 @@ namespace ShaderFlags
     static const uint kLODLandscape = (1 << 21);
     static const uint kLODObjects = (1 << 22);
 	static const uint kHDLODObjects = (1 << 23);
+    static const uint kSnow = (1 << 24);
 }
 
 namespace WaterShaderFlags

@@ -553,6 +553,7 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	if (!bsWaterMaterial)
 		return;
 
+	auto* scene = Scene::GetSingleton();
 	int32_t flowMapSize = *scene->g_FlowMapSize;
 
 	// ObjectUV
@@ -567,7 +568,6 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	else {
 		vectors[2].y = 0.0f;
 	}
-
 
 	if (waterShaderFlags.all(WaterShaderFlags::kEnableFlowmap)) {
 		// CellTexCoordOffset 
