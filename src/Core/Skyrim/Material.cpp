@@ -63,14 +63,14 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 		colors[0].w = shaderProperty->alpha;
 
 		if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::Lighting;
+			shaderType = ShaderType::Lighting;
 
 			// Override shader type to Grass if it's a grass form
 			if (formID != 0) {
 				auto form = RE::TESForm::LookupByID(formID);
 
 				if (form && form->formType == RE::FormType::Grass) 
-				shaderType = RE::BSShader::Type::Grass;
+				shaderType = ShaderType::Grass;
 			}
 
 			colors[Constants::Material::EMISSIVE_COLOR] = {
@@ -163,6 +163,8 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 					};*/
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape)) {
+					shaderType = ShaderType::TruePBR;
+
 					const auto* lightingPBRMaterialLand = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
 
 					for (uint i = 0; i < std::min(lightingPBRMaterialLand->numLandscapeTextures, Material::MAX_PBRLAND_TEXTURES); i++) {
@@ -206,13 +208,12 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 						0,
 						lightingPBRMaterialLand->terrainTexFade
 					};*/
-
-					// Enforce TruePBR flag
-					shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR)) {
 					// TrueBR - Tried to check for 'lightingShaderProp->flags.any(EShaderPropertyFlag::kMenuScreen)'
 					// but it did not work at all, skyrim_cast is not safe and will cast even if not PBR material (no RTTI?)
+
+					shaderType = ShaderType::TruePBR;
 
 					const auto* lightingPBRMaterial = static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
 
@@ -254,9 +255,6 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 						const auto& glint = lightingPBRMaterial->GetGlintParameters();
 						vectors[3] = { glint.screenSpaceScale, glint.logMicrofacetDensity, glint.microfacetRoughness, glint.densityRandomization };
 					}
-
-					// Enforce TruePBR flag
-					shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
 				}
 				else {
 					// Roughness Scale
@@ -411,7 +409,7 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 			}
 		}
 		else if (auto effectShaderProp = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::Effect;
+			shaderType = ShaderType::Effect;
 
 			if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->material)) {
 				colors[Constants::Material::EMISSIVE_COLOR] = {
@@ -434,14 +432,14 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 				SetupWaterMaterial(waterMaterial);
 		}
 		else if (auto* distantTreeProp = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::DistantTree;
+			shaderType = ShaderType::DistantTree;
 
 			auto* treeLODAtlas = Scene::GetSingleton()->g_TreeLODAtlasTex;
 			textures[0] = GetTexture(*treeLODAtlas, blackTexture);
 		}
 	}
 
-	if (shaderType == RE::BSShader::Type::Water) {
+	if (shaderType == ShaderType::Water) {
 		alphaFlags = Material::AlphaFlags::Transmission;
 	}
 
@@ -473,7 +471,7 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 
 void Material::SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp)
 {
-	shaderType = RE::BSShader::Type::Water;
+	shaderType = ShaderType::Water;
 	waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
 }
 
@@ -611,8 +609,25 @@ void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descripto
 
 void Material::Update(RE::BSShaderProperty* shaderProperty)
 {
-	if (shaderType == RE::BSShader::Type::Water)
+	if (shaderType == ShaderType::Water)
 		UpdateWaterMaterial(shaderProperty);
+	else {
+		const auto currentShaderFlags = shaderProperty->flags.get();
+
+		if (shaderFlags.get() != currentShaderFlags)
+		{
+			auto addedFlags = currentShaderFlags & ~shaderFlags.get();
+			auto removedFlags = shaderFlags.get() & ~currentShaderFlags;
+
+			logger::debug("Material::Update - {} Shader flags changed - Added: {}, Removed: {}",
+				magic_enum::enum_name(shaderType),
+				Util::GetFlagsString<RE::BSShaderProperty::EShaderPropertyFlag>(static_cast<uint64_t>(addedFlags)),
+				Util::GetFlagsString<RE::BSShaderProperty::EShaderPropertyFlag>(static_cast<uint64_t>(removedFlags)));
+
+			//SetupMaterial(shaderProperty);
+			shaderFlags = currentShaderFlags;
+		}
+	}
 }
 
 void Material::UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance)
@@ -675,7 +690,7 @@ void Material::UpdateData(nvrhi::ICommandList* commandList, const float3& extern
 	m_MaterialData.Texture19 = GetTextureDescriptorIndex(19);
 
 	m_MaterialData.AlphaFlags = static_cast<uint16_t>(alphaFlags);
-	m_MaterialData.ShaderType = GetShaderType();
+	m_MaterialData.ShaderType = static_cast<uint16_t>(shaderType);
 	m_MaterialData.Feature = static_cast<uint16_t>(feature);
 	m_MaterialData.PBRFlags = pbrFlags.underlying();
 	m_MaterialData.ShaderFlags = GetShaderFlags();

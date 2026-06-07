@@ -59,30 +59,6 @@ struct Material : MaterialBase
 
 	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance);
 
-	// We have a limited number of bits and not all types are necessary
-	ShaderType GetShaderType() const
-	{
-		if (shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kMenuScreen))
-			return ShaderType::TruePBR;
-
-		switch (shaderType) {
-		case RE::BSShader::Type::Grass:
-			return ShaderType::Grass;
-		case RE::BSShader::Type::Water:
-			return ShaderType::Water;
-		case RE::BSShader::Type::BloodSplatter:
-			return ShaderType::BloodSplatter;
-		case RE::BSShader::Type::Effect:
-			return ShaderType::Effect;
-		case RE::BSShader::Type::DistantTree:
-			return ShaderType::DistantTree;
-		case RE::BSShader::Type::Particle:
-			return ShaderType::Particle;
-		default:
-			return ShaderType::Lighting;
-		}
-	}
-
 	enum ShaderFlags : uint32_t
 	{
 		None = 0,
@@ -136,7 +112,7 @@ struct Material : MaterialBase
 
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
-	RE::BSShader::Type shaderType;
+	ShaderType shaderType;
 	RE::BSShaderMaterial::Feature feature;
 	stl::enumeration<PBRShaderFlags, uint16_t> pbrFlags;
 
@@ -155,7 +131,7 @@ struct Material : MaterialBase
 
 	uint32_t GetShaderFlags() const
 	{
-		if (GetShaderType() == ShaderType::Water)
+		if (shaderType == ShaderType::Water)
 			return waterShaderFlags.underlying();
 
 		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
