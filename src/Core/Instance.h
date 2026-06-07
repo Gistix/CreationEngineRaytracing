@@ -44,7 +44,7 @@ struct Instance
 
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) 
 	{ 
-		UpdateTransform();
+
 	}
 	
 	void SetDetached(bool detach);
