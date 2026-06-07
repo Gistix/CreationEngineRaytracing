@@ -17,6 +17,9 @@
 
 struct Material : MaterialBase
 {
+	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
+	using Feature = RE::BSShaderMaterial::Feature;
+
 	static constexpr uint MAX_LAND_TEXTURES = 5u;
 	static constexpr uint MAX_PBRLAND_TEXTURES = 6u;
 
@@ -48,8 +51,12 @@ struct Material : MaterialBase
 
 	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
 
+	void SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID);
+
 	void SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp);
 	void SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial);
+
+	void SetupProjectedUV(RE::BSLightingShaderProperty* lightingShaderProp);
 
 	void CreateBuffer(const eastl::string& name, DescriptorIndex descriptorIndex);
 
@@ -110,10 +117,10 @@ struct Material : MaterialBase
 		kBlendNormals = 1 << 16
 	};
 
-	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
 	ShaderType shaderType;
-	RE::BSShaderMaterial::Feature feature;
+	Feature feature;
 	stl::enumeration<PBRShaderFlags, uint16_t> pbrFlags;
 
 	AlphaFlags alphaFlags = AlphaFlags::None;
@@ -133,8 +140,6 @@ struct Material : MaterialBase
 	{
 		if (shaderType == ShaderType::Water)
 			return waterShaderFlags.underlying();
-
-		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 
 		auto shaderFlagsLocal = ShaderFlags::None;
 
