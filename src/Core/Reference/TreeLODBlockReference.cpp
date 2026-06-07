@@ -4,17 +4,15 @@
 
 void TreeLODBlockReference::UpdateVisibility()
 {
-	if (m_Detached) {
-		if (block->attached)
-			logger::info("TreeLODBlockReference::UpdateVisibility - Detached object reference has attached block");
+	if (m_Attached != block->attached) {
+		SetAttached(block->attached);
+	}
 
+	if (!m_Attached) {
 		return;
 	}
 
-	if (!block->attached) {
-		logger::info("TreeLODBlockReference::UpdateVisibility - Attached object reference has detached block");
-		return;
-	}
+	//logger::info("Block: 0x{:08X}, Groups: {}", reinterpret_cast<uintptr_t>(block), block->treeGroups.size());
 
 	auto numInstances = instances.size();
 

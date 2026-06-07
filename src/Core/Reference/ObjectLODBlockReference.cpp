@@ -4,15 +4,11 @@
 
 void ObjectLODBlockReference::UpdateVisibility()
 {
-	if (m_Detached) {
-		if (block->attached)
-			logger::info("ObjectLODBlockReference::UpdateVisibility - Detached object reference has attached block");
-
-		return;
+	if (m_Attached != block->attached) {
+		SetAttached(block->attached);
 	}
 
-	if (!block->attached) {
-		logger::info("ObjectLODBlockReference::UpdateVisibility - Attached object reference has detached block");
+	if (!m_Attached) {
 		return;
 	}
 

@@ -638,32 +638,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSTerrainBlock_Attach
-	{
-		static void thunk(RE::BGSTerrainBlock* a_block)
-		{
-			func(a_block);
-
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSTerrainBlock_Detach
-	{
-		static RE::BSMultiBoundNode* thunk(RE::BGSTerrainBlock* a_block)
-		{
-			auto result = func(a_block);
-
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
-
-			return result;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BGSTerrainBlock_Dtor
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
@@ -690,36 +664,10 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSObjectBlock_Attach
-	{
-		static void thunk(RE::BGSObjectBlock* a_block, void* a_arg2, bool a_firstAvail)
-		{
-			func(a_block, a_arg2, a_firstAvail);
-
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSObjectBlock_Detach
-	{
-		static void thunk(RE::BGSObjectBlock* a_block)
-		{
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
-
-			func(a_block);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BGSObjectBlock_Dtor
 	{
 		static void thunk(RE::BGSObjectBlock* a_block)
 		{
-			logger::info("BGSObjectBlock::Dtor");
-
 			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
 
 			return func(a_block);
@@ -754,9 +702,6 @@ namespace Hooks
 				if (!a_block->treeGroups.empty())
 					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 			}
-
-			if (existed)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -776,19 +721,16 @@ namespace Hooks
 				if (!a_block->treeGroups.empty())
 					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 			}
-
-			if (existed)
-				Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSDistantTreeBlock_Detach
+	struct BGSDistantTreeBlock_DtorSE
 	{
 		static void thunk(RE::BGSDistantTreeBlock* a_block)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
 
 			func(a_block);
 		}
@@ -796,6 +738,40 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BGSDistantTreeBlock_DtorAE
+	{
+		struct TreeBlockContainer {
+			uint32_t maskOrCapacity;
+			uint32_t pad4;
+			uint32_t pad8;
+			int32_t stateFlag;
+			uint32_t pad10;
+			uint32_t pad14;
+			uint32_t pad18;
+			uint32_t pad1C;
+			RE::NiRefObject* refCountObject; // 0x20
+			RE::BGSDistantTreeBlock* block;  // 0x28
+		};
+		static_assert(sizeof(TreeBlockContainer) == 0x30);
+
+		static void thunk(RE::BSResource::IEntryDB* a_entryDB, TreeBlockContainer* a2, int a3, void* a4)
+		{
+			RE::BGSDistantTreeBlock* block = nullptr;
+
+			if (a2)
+				block = a2->block;
+
+			func(a_entryDB, a2, a3, a4);
+
+			if (a2 && block) {
+				if (block != a2->block)
+					Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(block);
+			}
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+	
 	struct LoadAndAttachAddon
 	{
 		static RE::NiAVObject* thunk(RE::TESModel* a_model, RE::BIPED_OBJECT a_bipedObj, RE::TESObjectREFR* a_actor, RE::BSTSmartPointer<RE::BipedAnim>& a_biped, RE::NiAVObject* a_root)
@@ -899,25 +875,26 @@ namespace Hooks
 		// Terrain LOD
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
-		stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
-		stl::detour_thunk<BGSTerrainBlock_Detach>(REL::RelocationID(30936, 31739));
 
 		// Object LOD
 		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30739, 31575));
-		stl::detour_thunk<BGSObjectBlock_Dtor>(REL::RelocationID(30740, 31576));
-		stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
-		stl::detour_thunk<BGSObjectBlock_Detach>(REL::RelocationID(30739, 31577));
+		//stl::detour_thunk<BGSObjectBlock_Dtor>(REL::RelocationID(30740, 0));
+		//31634
+
+		stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD
 		//stl::detour_thunk<BGSDistantTreeBlock_LoadBinary>(REL::RelocationID(30836, 31657));
 
-		if (REL::Module::IsSE())
+		if (REL::Module::IsSE()) {
 			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
-		else
+			stl::detour_thunk<BGSDistantTreeBlock_DtorSE>(REL::RelocationID(30821, 0));
+		}
+		else {
 			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
-
-		stl::detour_thunk<BGSDistantTreeBlock_Detach>(REL::RelocationID(30830, 31651));
-
+			stl::detour_thunk<BGSDistantTreeBlock_DtorAE>(REL::RelocationID(0, 31717));
+		}
+		
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
 		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));

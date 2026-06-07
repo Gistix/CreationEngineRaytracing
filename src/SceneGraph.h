@@ -175,13 +175,10 @@ public:
 	// Releases all instances of an object block (LOD)
 	void ReleaseInstances(RE::BGSObjectBlock* block);
 
+	// Releases all instances of a distant tree block (LOD)
+	void ReleaseInstances(RE::BGSDistantTreeBlock* block);
+
 	void SetInstanceDetached(RE::TESForm* form, bool detached);
-
-	void SetLODDetached(RE::BGSTerrainBlock* block, bool detached);
-
-	void SetLODDetached(RE::BGSObjectBlock* block, bool detached);
-
-	void SetLODDetached(RE::BGSDistantTreeBlock* block, bool detached);
 
 	void RunGarbageCollection();
 };
