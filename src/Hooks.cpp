@@ -644,7 +644,7 @@ namespace Hooks
 		{
 			func(a_block);
 
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -656,7 +656,7 @@ namespace Hooks
 		{
 			auto result = func(a_block);
 
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
 
 			return result;
 		}
@@ -696,7 +696,7 @@ namespace Hooks
 		{
 			func(a_block, a_arg2, a_firstAvail);
 
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, false);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -706,9 +706,9 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block)
 		{
-			func(a_block);
+			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
 
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			func(a_block);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -788,9 +788,9 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSDistantTreeBlock* a_block)
 		{
-			func(a_block);
+			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, true);
 
-			Scene::GetSingleton()->GetSceneGraph()->SetLODDetached(a_block, !a_block->attached);
+			func(a_block);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
