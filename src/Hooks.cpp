@@ -676,18 +676,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSDistantTreeBlock_LoadBinary
-	{
-		static void thunk(RE::BGSDistantTreeBlock* a_block, RE::BSResourceNiBinaryStream* a_stream)
-		{
-			func(a_block, a_stream);
-
-			Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BGSDistantTreeBlock_AttachSE
 	{
 		static void thunk(RE::BGSDistantTreeBlock* a_block, float a2)
@@ -740,21 +728,9 @@ namespace Hooks
 
 	struct BGSDistantTreeBlock_DtorAE
 	{
-		struct TreeBlockContainer {
-			uint32_t maskOrCapacity;
-			uint32_t pad4;
-			uint32_t pad8;
-			int32_t stateFlag;
-			uint32_t pad10;
-			uint32_t pad14;
-			uint32_t pad18;
-			uint32_t pad1C;
-			RE::NiRefObject* refCountObject; // 0x20
-			RE::BGSDistantTreeBlock* block;  // 0x28
-		};
-		static_assert(sizeof(TreeBlockContainer) == 0x30);
+		static_assert(sizeof(RE::BGSTerrainNode::Layer<RE::BGSDistantTreeBlock>) == 0x30);
 
-		static void thunk(RE::BSResource::IEntryDB* a_entryDB, TreeBlockContainer* a2, int a3, void* a4)
+		static void thunk(RE::BSResource::IEntryDB* a_entryDB, RE::BGSTerrainNode::Layer<RE::BGSDistantTreeBlock>* a2, int a3, void* a4)
 		{
 			RE::BGSDistantTreeBlock* block = nullptr;
 
@@ -878,14 +854,11 @@ namespace Hooks
 
 		// Object LOD
 		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30739, 31575));
-		//stl::detour_thunk<BGSObjectBlock_Dtor>(REL::RelocationID(30740, 0));
-		//31634
 
+		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree, might be broken for SE
 		stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD
-		//stl::detour_thunk<BGSDistantTreeBlock_LoadBinary>(REL::RelocationID(30836, 31657));
-
 		if (REL::Module::IsSE()) {
 			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
 			stl::detour_thunk<BGSDistantTreeBlock_DtorSE>(REL::RelocationID(30821, 0));
