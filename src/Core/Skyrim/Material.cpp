@@ -541,8 +541,6 @@ void Material::SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial)
 
 void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 {
-	auto* scene = Scene::GetSingleton();
-
 	auto* bsWaterProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 	if (!bsWaterProperty)
 		return;
