@@ -18,11 +18,6 @@ void Instance::SetHiddenModel(bool hidden)
 	m_State.set(hidden, State::HiddenModel);
 }
 
-bool Instance::IsDetached() const
-{
-	return m_State.all(State::Detached);
-}
-
 bool Instance::IsHidden() const
 {
 	const bool needsAccumulated = model->GetMeshFlags().all(Mesh::Flags::Landscape) || model->GetMeshTypes().all(Mesh::Type::ObjectLOD);

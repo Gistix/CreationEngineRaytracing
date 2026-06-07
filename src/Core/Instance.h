@@ -53,8 +53,6 @@ struct Instance
 
 	void SetLODHidden(bool hidden);
 
-	bool IsDetached() const;
-
 	// A hidden instance is not updated and does not go in AS, this is set externaly
 	bool IsHidden() const;
 
