@@ -699,27 +699,29 @@ bool Mesh::GetSubIndexHidden() const
 	if (!subIndex)
 		return false;
 
+	const auto startTri = static_cast<uint32_t>(m_Identifier >> 16);
+	const auto numTris = static_cast<uint32_t>(m_Identifier & 0xFFFF);
+	const auto endTri = startTri + numTris;
+
 	auto& runtimeData = subIndex->GetSubIndexedTrishapeRuntimeData();
-
-	auto& firstSegment = runtimeData.segmentData[0];
-
-	// The first segment references all triangles, if it is visible unhide all segments
-	if (firstSegment.flags == 1)
-		return false;
-
-	auto index = static_cast<uint32_t>(m_Identifier >> 16) * 3;
-	auto numTris = static_cast<uint32_t>(m_Identifier & 0xFFFF);
-
-	// Segments can have their index and numTris changed around by the engine, lets find the one that matches our mesh
 	for (size_t i = 0; i < runtimeData.numSegments; i++)
 	{
-		auto& segment = runtimeData.segmentData[i];
+		const auto& segment = runtimeData.segmentData[i];
 
-		if (segment.index == index && segment.numTris == numTris)
-			return segment.flags == 0;
+		const bool visible = (segment.flags == 1u);
+
+		if (!visible)
+			continue;
+
+		// Index to Triangle
+		const auto segStartTri = segment.index / 3;
+		const auto segEndTri = segStartTri + segment.numTris;
+
+		if (startTri >= segStartTri && endTri <= segEndTri)
+			return false;
 	}
 
-	return false;
+	return true;
 }
 
 Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
@@ -734,7 +736,7 @@ Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 
 	State state = State::None;
 
-	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only a select few mesh types
+	// Not all meshes can be hidden due to instancing
 	if (dynamic || skinned || subIndexed || water || dynamicModel || skinnedModel)
 		if (Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot))
 			state |= State::Hidden;
