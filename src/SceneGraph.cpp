@@ -733,7 +733,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 	auto node = block->chunk;
 
 	if (!node) {
-		logger::info("SceneGraph::CreateLODModelImpl - Chunk is nullptr for {}", magic_enum::enum_name(type));
+		logger::warn("SceneGraph::CreateLODModelImpl - Chunk is nullptr for {}", magic_enum::enum_name(type));
 		return;
 	}
 
@@ -742,12 +742,20 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 	auto rootWorldInverse = node->world.Invert();
 
 	Util::Traversal::ScenegraphRTGeometries(node, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
-		if (pGeometry->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
+		if (type == Mesh::Type::LandLOD && pGeometry->parent && pGeometry->parent->name == "WATER")
 			return RE::BSVisit::BSVisitControl::kContinue;
 
-		logger::debug("\t{}, {}", pGeometry->name.c_str(), Util::Math::Float3(pGeometry->world.translate));
+		if (pGeometry->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kSubIndexTriShape)) {
+			logger::warn("SceneGraph::CreateLODModelImpl - Unsupported geometry type: {} for {}", magic_enum::enum_name(pGeometry->GetType().get()), magic_enum::enum_name(type));
+			return RE::BSVisit::BSVisitControl::kContinue;
+		}
+
+		logger::debug("\t{}: {}, {}", magic_enum::enum_name(pGeometry->GetType().get()), pGeometry->name.c_str(), Util::Math::Float3(pGeometry->world.translate));
 
 		const auto& geometryRuntimeData = pGeometry->GetGeometryRuntimeData();
+
+		if (!geometryRuntimeData.shaderProperty)
+			return RE::BSVisit::BSVisitControl::kContinue;
 
 		auto* triShapeRD = geometryRuntimeData.rendererData;
 
@@ -777,7 +785,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 				auto& runtimeData = subIndexTriShape->GetSubIndexedTrishapeRuntimeData();
 				
-				logger::debug("SubIndexTriShape - Triangles: {}", triShapeRuntime.triangleCount);
+				logger::debug("SubIndexTriShape - 0x{:08X} - Triangles: {}", reinterpret_cast<uintptr_t>(subIndexTriShape), triShapeRuntime.triangleCount);
 
 				logger::debug("SubIndexTriShape - Segments: {}, UnkSegments: {}, Unk170: {}, NonSegmented: {}",
 					runtimeData.numSegments, runtimeData.unkSegCount, runtimeData.unk170, runtimeData.nonSegmented);
@@ -1225,7 +1233,7 @@ Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TES
 			return modelPtr;
 		}
 		else {
-			logger::warn("SceneGraph::CommitModel - Emplace failed for {} TriShapes", shapeCount);
+			logger::warn("SceneGraph::CommitModel - {} failed emplace for {} TriShapes", model->m_Name, shapeCount);
 		}
 	}
 	else {
