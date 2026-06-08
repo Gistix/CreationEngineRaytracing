@@ -40,8 +40,13 @@ namespace Util
 					return true;
 			}
 
-			if (!object->parent)
+			if (!object->parent) {
+				// If the last node is not the WorldRoot Node, the object is detached
+				if (object != RE::Main::GetSingleton()->WorldRootNode())
+					return true;
+
 				return false;
+			}
 
 			// If object parent index is not active on its parent NiSwitchNode, it is effectively hidden
 			if (auto* switchNode = netimmerse_cast<RE::NiSwitchNode*>(object->parent)) {
