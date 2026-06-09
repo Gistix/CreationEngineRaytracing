@@ -64,7 +64,6 @@ target_link_libraries(
 	PRIVATE
 	Microsoft::DirectXTK
 	Microsoft::DirectX-Headers
-    Microsoft::DirectXShaderCompiler
     EASTL
 	d3d12.lib
 	magic_enum::magic_enum
