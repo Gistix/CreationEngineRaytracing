@@ -103,9 +103,7 @@ struct HairSpecularSettings
     float SelfShadowExponent;
     float SelfShadowScale;
     uint HairMode; // 0: Kajiya-Kay, 1: Marschner
-    uint pad0;
-    uint pad1;
-    uint pad2;
+    uint3 pad;
 };
 #ifdef __cplusplus
 static_assert(sizeof(HairSpecularSettings) % 16 == 0);
@@ -140,7 +138,7 @@ struct LinearLightingSettings
 	float waterGamma;
 	float vlGamma;
 	float vanillaDiffuseColorMult;
-	float directionalLightMult;  // Computed based on interior/exterior
+	float directionalLightMult;
 	float pointLightMult;
 	float ambientMult;
 	float emitColorMult;
@@ -174,7 +172,26 @@ struct ExponentialHeightFogSettings
     uint disableVanillaFog;
     float4 fogInscatteringColor;
     float originalFogColorAmount;
-    float3 pad;
+    uint volumetricFogEnabled;
+    uint volumetricGridPixelSize;
+    uint volumetricGridSizeZ;
+    float volumetricFogDistance;
+    float volumetricFogStartDistance;
+    float volumetricFogNearFadeInDistance;
+    float volumetricFogExtinctionScale;
+    float4 volumetricFogAlbedo;
+    float4 volumetricFogEmissive;
+    float volumetricDirectionalScatteringIntensity;
+    float volumetricShadowBias;
+    float volumetricDepthDistributionScale;
+    float volumetricSkyLightingIntensity;
+    float volumetricFogScatteringDistribution;
+    float volumetricHistoryWeight;
+    uint volumetricHistoryMissSampleCount;
+    float volumetricSampleJitterMultiplier;
+    float volumetricUpsampleJitterMultiplier;
+    float volumetricLocalLightScatteringIntensity;
+    float2 pad0;
 };
 #ifdef __cplusplus
 static_assert(sizeof(ExponentialHeightFogSettings) % 16 == 0);
@@ -195,6 +212,20 @@ struct LODBlendingSettings
 static_assert(sizeof(LODBlendingSettings) % 16 == 0);
 #endif
 
+struct SkinData
+{
+    float4 skinParams;
+    float4 skinParams2;
+    float4 skinDetailParams;
+    float4 sssParams;
+    float4 fuzzParams;
+    float4 physicalParams;
+    float4 wetParams;
+};
+#ifdef __cplusplus
+static_assert(sizeof(SkinData) % 16 == 0);
+#endif
+
 INTEROP_STRUCT(FeatureData, 16)
 {
     CPMSettings ExtendedMaterial;
@@ -205,6 +236,7 @@ INTEROP_STRUCT(FeatureData, 16)
     LinearLightingSettings LinearLighting;
     ExponentialHeightFogSettings ExponentialHeightFog;
     LODBlendingSettings LODBlending;
+    SkinData Skin;
 };
 VALIDATE_CBUFFER(FeatureData, 16);
 

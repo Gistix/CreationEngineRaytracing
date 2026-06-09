@@ -12,9 +12,10 @@ namespace Util
 				{ L"MAX_BOUNCES", settings.RaytracingSettings.Bounces },
 				{ L"MAX_SAMPLES", settings.RaytracingSettings.SamplesPerPixel },
 				{ L"SHARC_UPDATE", sharcUpdate ? L"1" : L"0" },
-				{ L"SHARC_RESOLVE", L"0" },
-				{ L"SHARC_DEBUG", L"0" },
-				{ L"DEBUG_TRACE_HEATMAP", L"0" }
+			{ L"SHARC_RESOLVE", L"0" },
+			{ L"SHARC_DEBUG", L"0" },
+			{ L"SKIN_DETAIL_NORMAL", L"1" },
+			{ L"DEBUG_TRACE_HEATMAP", L"0" }
 			};
 
 			if (settings.AdvancedSettings.GGXEnergyConservation)

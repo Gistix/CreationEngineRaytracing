@@ -29,6 +29,8 @@ struct Scene
 
 	ID3D12Resource* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
+	ID3D12Resource* m_SkinDetailNormalResource = nullptr;
+	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
 	ID3D12Resource* m_WaterFlowMapResource = nullptr;
 	nvrhi::TextureHandle m_WaterFlowMapTexture;
@@ -81,6 +83,7 @@ struct Scene
 	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.ExperimentalSettings.PathTracingCull; };
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
+	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
 
 	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 
@@ -109,6 +112,7 @@ struct Scene
 	void UpdateFeatureData(void* data, uint32_t size);
 
 	void SetSkyHemisphere(ID3D12Resource* skyHemi);
+	void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
 
 	void SetWaterFlowMap(ID3D12Resource* skyHemi);
 
