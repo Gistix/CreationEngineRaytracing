@@ -632,8 +632,18 @@ void Material::Update(RE::BSShaderProperty* shaderProperty)
 				Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(addedFlags)),
 				Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(removedFlags)));
 
-			//SetupMaterial(shaderProperty);
 			shaderFlags = currentShaderFlags;
+
+			if (shaderType == ShaderType::Lighting || shaderType == ShaderType::TruePBR) {
+				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
+
+				if (shaderType == ShaderType::Lighting) {
+					if (auto lightingMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(lightingShaderProp->material))
+						SetupLightingMaterial(lightingMaterial, 0);
+				}
+
+				SetupProjectedUV(lightingShaderProp);
+			} 
 		}
 	}
 }
