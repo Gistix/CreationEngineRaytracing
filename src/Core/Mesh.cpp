@@ -694,6 +694,9 @@ bool Mesh::GetDismemberHidden() const
 
 bool Mesh::GetSubIndexHidden() const
 {
+	if (*Scene::GetSingleton()->g_BypassSubIndexVisibility)
+		return false;
+
 	auto* subIndex = bsGeometryPtr->AsSubIndexTriShape();
 
 	if (!subIndex)

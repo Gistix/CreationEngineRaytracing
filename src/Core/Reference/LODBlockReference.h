@@ -7,22 +7,24 @@ struct LODBlockReference
 {
 	inline static auto maxDetachedTime = std::chrono::seconds(15);
 
-	eastl::vector<Instance*> instances;
-	bool m_Attached;
-	bool m_Hidden;
-	std::chrono::time_point<std::chrono::steady_clock> detachedTime;
+	LODBlockReference(bool attached)
+		: m_Attached(attached) { }
+
+	~LODBlockReference();
+
+	auto& GetInstances() const
+	{
+		return instances;
+	}
+
+	void AddInstance(Instance* instance);
 
 	virtual void UpdateVisibility() = 0;
 
-	void SetAttached(bool attached)
-	{
-		for (auto& instance : instances) {
-			instance->SetDetached(!attached);
-		}
+protected:
+	eastl::vector<Instance*> instances;
+	bool m_Attached;
+	bool m_Hidden;
 
-		if (!attached)
-			detachedTime = std::chrono::steady_clock::now();
-
-		m_Attached = attached;
-	}
+	void SetAttached(bool attached);
 };

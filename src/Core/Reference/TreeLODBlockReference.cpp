@@ -2,6 +2,11 @@
 #include "Util.h"
 #include "Types/RE/RE.h"
 
+void TreeLODBlockReference::AddTreeInstanceData(RE::BGSDistantTreeBlock::InstanceData* a_treeInstanceData)
+{
+	treeInstanceData.push_back(a_treeInstanceData);
+}
+
 void TreeLODBlockReference::UpdateVisibility()
 {
 	if (m_Attached != block->attached) {

@@ -58,10 +58,10 @@ namespace Pass
 				continue;
 
 			// Only process terrain that is intersecting (or that intersected the last frame) against loaded range
-			if (!blockRefr.intersecting && !blockRefr.prevIntersecting)
+			if (!blockRefr->intersecting && !blockRefr->prevIntersecting)
 				continue;
 
-			for (auto& instance : blockRefr.instances)
+			for (auto& instance : blockRefr->GetInstances())
 			{
 				auto firstMeshIndex = meshIndex;
 

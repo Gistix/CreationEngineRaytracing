@@ -624,6 +624,29 @@ namespace Hooks
 		func(pass, technique, alphaTest, renderFlags);
 	}
 
+
+	struct LoadBTRMeshSE
+	{
+		static void thunk(void* a1, char* a_path, void* a3, void* a4)
+		{
+			func(a1, a_path, a3, a4);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct LoadBTRMeshAE
+	{
+		static void thunk(void* a1, void* a2, char* a_path, void* a4, RE::BGSTerrainNode::Layer<RE::BGSTerrainBlock>* a_terrainLayer)
+		{
+			func(a1, a2, a_path, a4, a_terrainLayer);
+
+			Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_terrainLayer->block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct BGSTerrainBlock_Load
 	{
 		static RE::BGSTerrainBlock* thunk(RE::BGSTerrainBlock* a_block, RE::BGSTerrainManager* a_terrainManager, RE::BSStream* a_stream, int32_t a4, int32_t a5)
@@ -638,13 +661,26 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BGSTerrainBlock_Attach
+	{
+		static void thunk(RE::BGSTerrainBlock* a_block)
+		{
+			func(a_block);
+
+			if (a_block->loaded && a_block->attached && a_block->chunk)
+				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct BGSTerrainBlock_Dtor
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
 			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
 
-			return func(a_block);
+			func(a_block);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -659,6 +695,19 @@ namespace Hooks
 			Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 
 			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSObjectBlock_Attach
+	{
+		static void thunk(RE::BGSObjectBlock* a_block, void* a2, bool a_firstAvail)
+		{
+			func(a_block, a2, a_firstAvail);
+
+			if (a_block->loaded && a_block->attached && a_block->chunk)
+				Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -847,26 +896,33 @@ namespace Hooks
 
 		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
+	
+		/*if (REL::Module::IsSE())
+			stl::detour_thunk<LoadBTRMeshSE>(REL::RelocationID(30924, 0));
+		else
+			stl::detour_thunk<LoadBTRMeshAE>(REL::RelocationID(0, 31774));*/
 
 		// Terrain LOD
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
+		//stl::detour_thunk<BGSTerrainBlock_Attach>(REL::RelocationID(30934, 31737));
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
 		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30739, 31575));
+		//stl::detour_thunk<BGSObjectBlock_Attach>(REL::RelocationID(30741, 31581));
 
 		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree, might be broken for SE
 		stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD
-		if (REL::Module::IsSE()) {
+		/*if (REL::Module::IsSE()) {
 			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
 			stl::detour_thunk<BGSDistantTreeBlock_DtorSE>(REL::RelocationID(30821, 0));
 		}
 		else {
 			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
 			stl::detour_thunk<BGSDistantTreeBlock_DtorAE>(REL::RelocationID(0, 31717));
-		}
+		}*/
 		
 		// Landscape
 		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
@@ -894,6 +950,9 @@ namespace Hooks
 		scene->g_Time = g_Time.get();
 
 		scene->g_TreeLODAtlasTex = reinterpret_cast<RE::NiPointer<RE::NiSourceTexture>*>(REL::RelocationID(528222, 415172).address());
+
+		REL::Relocation<bool*> g_BypassSubIndexVisibility{ REL::RelocationID(524687, 411302) };
+		scene->g_BypassSubIndexVisibility = g_BypassSubIndexVisibility.get();
 
 		stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
 

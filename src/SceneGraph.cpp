@@ -313,17 +313,17 @@ void SceneGraph::UpdateLODVisibility()
 {
 	for (auto& [block, ref] : m_TerrainLODInstances)
 	{
-		ref.UpdateVisibility();
+		ref->UpdateVisibility();
 	}
 
 	for (auto& [block, ref] : m_ObjectLODInstances)
 	{
-		ref.UpdateVisibility();
+		ref->UpdateVisibility();
 	}
 
 	for (auto& [block, ref] : m_TreeLODInstances)
 	{
-		ref.UpdateVisibility();
+		ref->UpdateVisibility();
 	}
 }
 
@@ -678,6 +678,9 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 	if (m_TreeLODInstances.contains(block))
 		return true;
 
+	auto [it, inserted] = m_TreeLODInstances.emplace(block, eastl::make_unique<TreeLODBlockReference>(block));
+	auto blockRefr = it->second.get();
+
 	for (const auto& group: block->treeGroups)
 	{
 		if (!group->geometry) {
@@ -693,8 +696,8 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 		Model* model = nullptr;
 		{
 			std::scoped_lock lock(m_ModelMutex);
-			if (auto it = m_Models.find(modelName); it != m_Models.end())
-				model = it->second.get();
+			if (auto modelIt = m_Models.find(modelName); modelIt != m_Models.end())
+				model = modelIt->second.get();
 		}
 
 		if (!model) {
@@ -705,9 +708,6 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 		if (!model)
 			logger::warn("SceneGraph::CreateLODModel - Tree lod model {} is null", group->treeType);
 
-		auto& blockRefr = m_TreeLODInstances[block];
-		blockRefr.block = block;
-
 		for (auto& instanceData: group->instances)
 		{
 			auto* instanceDataPtr = &instanceData;
@@ -715,10 +715,8 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 			auto instance = eastl::make_unique<TreeLODInstance>(instanceDataPtr, geometry, model);
 			instance->model->AddRef();
 
-			instance->SetDetached(!blockRefr.m_Attached);
-
-			blockRefr.instances.push_back(instance.get());
-			blockRefr.treeInstanceData.push_back(instanceDataPtr);
+			blockRefr->AddInstance(instance.get());
+			blockRefr->AddTreeInstanceData(instanceDataPtr);
 
 			m_Instances.Add(eastl::move(instance));
 		}
@@ -924,13 +922,6 @@ void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances, bool rele
 	}
 }
 
-void SceneGraph::ReleaseInstances(eastl::vector<Instance*>& instances)
-{
-	for (auto* instance : instances) {
-		m_Instances.Remove(InstanceManager::RemoveParams(instance, true));
-	}
-}
-
 void SceneGraph::ReleaseInstances(RE::TESForm* form, bool releaseModel)
 {
 	auto formID = form->GetFormID();
@@ -951,35 +942,17 @@ void SceneGraph::ReleaseInstances(RE::TESForm* form, bool releaseModel)
 
 void SceneGraph::ReleaseInstances(RE::BGSTerrainBlock* block)
 {
-	auto it = m_TerrainLODInstances.find(block);
-	if (it == m_TerrainLODInstances.end())
-		return;
-
-	ReleaseInstances(it->second.instances, true);
-
-	m_TerrainLODInstances.erase(it);
+	m_TerrainLODInstances.erase(block);
 }
 
 void SceneGraph::ReleaseInstances(RE::BGSObjectBlock* block)
 {
-	auto it = m_ObjectLODInstances.find(block);
-	if (it == m_ObjectLODInstances.end())
-		return;
-
-	ReleaseInstances(it->second.instances, true);
-
-	m_ObjectLODInstances.erase(it);
+	m_ObjectLODInstances.erase(block);
 }
 
 void SceneGraph::ReleaseInstances(RE::BGSDistantTreeBlock* block)
 {
-	auto it = m_TreeLODInstances.find(block);
-	if (it == m_TreeLODInstances.end())
-		return;
-
-	ReleaseInstances(it->second.instances, true);
-
-	m_TreeLODInstances.erase(it);
+	m_TreeLODInstances.erase(block);
 }
 
 void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
@@ -1263,67 +1236,26 @@ void SceneGraph::AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* mod
 
 void SceneGraph::AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, 0)) {
-		auto& blockRefr = m_ObjectLODInstances[block];
-		blockRefr.block = block;
-		blockRefr.instances.push_back(instance);
+	auto* instance = AddInstanceImpl(node, model, 0);
+	if (!instance)
+		return;
 
-		instance->SetDetached(!blockRefr.m_Attached);
-	}
+	auto [it, inserted] = m_ObjectLODInstances.try_emplace(block, eastl::make_unique<ObjectLODBlockReference>(block));
+	it->second->AddInstance(instance);
 }
 
 void SceneGraph::AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model)
 {
-	if (auto* instance = AddInstanceImpl(node, model, 0)) {
-		auto& blockRefr = m_TerrainLODInstances[block];
-		blockRefr.block = block;
-		blockRefr.instances.push_back(instance);
+	auto* instance = AddInstanceImpl(node, model, 0);
+	if (!instance)
+		return;
 
-		instance->SetDetached(!blockRefr.m_Attached);
-	}
+	auto [it, inserted] = m_TerrainLODInstances.try_emplace(block, eastl::make_unique<TerrainLODBlockReference>(block));
+	it->second->AddInstance(instance);
 }
 
 void SceneGraph::RunGarbageCollection()
 {
-	// Clear LOD
-	{
-		using namespace std::chrono;
-		const auto now = steady_clock::now();
-
-		// Object LOD
-		for (auto it = m_ObjectLODInstances.begin(); it != m_ObjectLODInstances.end(); ) {
-			if (!it->second.m_Attached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
-				ReleaseInstances(it->second.instances);
-				it = m_ObjectLODInstances.erase(it);
-			}
-			else {
-				++it;
-			}
-		}
-
-		// Terrain LOD
-		for (auto it = m_TerrainLODInstances.begin(); it != m_TerrainLODInstances.end(); ) {
-			if (!it->second.m_Attached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
-				ReleaseInstances(it->second.instances);
-				it = m_TerrainLODInstances.erase(it);
-			}
-			else {
-				++it;
-			}
-		}
-
-		// Tree LOD
-		for (auto it = m_TreeLODInstances.begin(); it != m_TreeLODInstances.end(); ) {
-			if (!it->second.m_Attached && now - it->second.detachedTime > LODBlockReference::maxDetachedTime) {
-				ReleaseInstances(it->second.instances);
-				it = m_TreeLODInstances.erase(it);
-			}
-			else {
-				++it;
-			}
-		}
-	}
-
 	// Clear Models
 	{
 		std::scoped_lock modelLock(m_ModelReleaseMutex);

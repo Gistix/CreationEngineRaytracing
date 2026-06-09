@@ -45,9 +45,9 @@ class SceneGraph
 	eastl::unordered_map<RE::NiAVObject*, Instance*> m_WaterInstances;
 
 	// LOD
-	eastl::unordered_map<RE::BGSObjectBlock*, ObjectLODBlockReference> m_ObjectLODInstances;
-	eastl::unordered_map<RE::BGSTerrainBlock*, TerrainLODBlockReference> m_TerrainLODInstances;
-	eastl::unordered_map<RE::BGSDistantTreeBlock*, TreeLODBlockReference> m_TreeLODInstances;
+	eastl::unordered_map<RE::BGSObjectBlock*, eastl::unique_ptr<ObjectLODBlockReference>> m_ObjectLODInstances;
+	eastl::unordered_map<RE::BGSTerrainBlock*, eastl::unique_ptr<TerrainLODBlockReference>> m_TerrainLODInstances;
+	eastl::unordered_map<RE::BGSDistantTreeBlock*, eastl::unique_ptr<TreeLODBlockReference>> m_TreeLODInstances;
 
 	// Grass
 	eastl::unordered_map<RE::GrassTypeKey, GrassReference> m_GrassInstances;
@@ -95,9 +95,6 @@ class SceneGraph
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* path);
 	void AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model);
 	void AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model);
-
-	void ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel);
-	void ReleaseInstances(eastl::vector<Instance*>& instances);
 public:
 	void Initialize();
 
@@ -161,6 +158,8 @@ public:
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 
 	void ReleaseModel(const Model* model);
+
+	void ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel);
 
 	// Releases an object instance while keeping the model and mesh data intact.
 	// releaseModel is to be used by water and only water.
