@@ -434,6 +434,19 @@ void Material::SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingM
 			colors[0].z = lightingFacegenTintMaterial->tintColor.blue;
 		}
 	}
+
+	// Community Shaders 'Skin' feature
+	if (feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint) {
+		// RFAOS stored in the texture set's environment slot.
+		if (auto* textureSet = lightingMaterial->textureSet.get()) {
+			const char* rfaosPath = textureSet->GetTexturePath(RE::BSTextureSet::Texture::kEnvironment);
+			if (rfaosPath && rfaosPath[0] != '\0') {
+				RE::NiPointer<RE::NiSourceTexture> rfaosTexture;
+				textureSet->SetTexture(RE::BSTextureSet::Texture::kEnvironment, rfaosTexture);
+				textures[7] = GetTexture(rfaosTexture, blackTexture);
+			}
+		}
+	}
 }
 
 void Material::SetupProjectedUV(RE::BSLightingShaderProperty* lightingShaderProp)
