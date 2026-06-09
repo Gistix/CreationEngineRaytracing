@@ -20,3 +20,6 @@
 [submodule "extern/RTXDI-Library"]
 	path = extern/RTXDI-Library
 	url = https://github.com/NVIDIA-RTX/RTXDI-Library.git
+[submodule "extern/DirectXShaderCompiler"]
+	path = extern/DirectXShaderCompiler
+	url = https://github.com/microsoft/DirectXShaderCompiler.git
