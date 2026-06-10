@@ -81,36 +81,20 @@
             "inherits": "skyrim"
         },
         {
-            "name": "Fallout4PreNG",
+            "name": "Fallout4",
             "cacheVariables": {
-                "BUILD_PRE_NG": true,
-                "BUILD_POST_NG": false,
-                "BUILD_POST_AE": false,
                 "AUTO_PLUGIN_DEPLOYMENT": "OFF"
             },
             "inherits": "fallout4"
         },
         {
-            "name": "Fallout4PostNG",
+            "name": "Fallout4-VS2022",
+            "generator": "Visual Studio 17 2022",
             "cacheVariables": {
-                "BUILD_PRE_NG": false,
-                "BUILD_POST_NG": true,
-                "BUILD_POST_AE": false,
-                "AUTO_PLUGIN_DEPLOYMENT": "OFF"
-            },
-            "inherits": "fallout4"
-        },
-        {
-            "name": "Fallout4PostAE",
-            "cacheVariables": {
-                "BUILD_PRE_NG": false,
-                "BUILD_POST_NG": false,
-                "BUILD_POST_AE": true,
                 "AUTO_PLUGIN_DEPLOYMENT": "OFF"
             },
             "inherits": "fallout4"
         }
-
     ],
     "buildPresets": [
         {
@@ -135,24 +119,24 @@
             "targets": [ "CreationEngineRaytracing" ]
         },
         {
-            "name": "Fallout 4 Pre-NG",
+            "name": "Fallout 4 Dev",
             "description": "",
-            "configurePreset": "Fallout4PreNG",
+            "configurePreset": "Fallout4",
             "configuration": "Release",
             "targets": [ "CreationEngineRaytracing" ]
         },
         {
-            "name": "Fallout 4 Post-NG",
+            "name": "Fallout 4 Release",
             "description": "",
-            "configurePreset": "Fallout4PostNG",
+            "configurePreset": "Fallout4",
             "configuration": "Release",
             "targets": [ "CreationEngineRaytracing" ]
         },
         {
-            "name": "Fallout 4 Post-AE",
+            "name": "Fallout 4 Debug",
             "description": "",
-            "configurePreset": "Fallout4PostAE",
-            "configuration": "Release",
+            "configurePreset": "Fallout4",
+            "configuration": "Debug",
             "targets": [ "CreationEngineRaytracing" ]
         }
     ]

@@ -93,26 +93,71 @@ if(BUILD_SKYRIM)
 	set(CommonLibName "CommonLibSSE")
 	set(CommonLibPath "extern/CommonLibSSE-NG")
 	set(CommonLibTarget CommonLibSSE::CommonLibSSE)
+
+	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
 elseif(BUILD_FALLOUT4)
 	add_compile_definitions(FALLOUT4)
 
-	if(BUILD_PRE_NG)
-		add_compile_definitions(FALLOUT_PRE_NG)
-		set(CommonLibPath "extern/CommonLibF4PreNG/CommonLibF4")
-	elseif(BUILD_POST_NG)
-		add_compile_definitions(FALLOUT_POST_NG)
-		set(CommonLibPath "extern/CommonLibF4PostNG/CommonLibF4")
-	elseif(BUILD_POST_AE)
-		add_compile_definitions(FALLOUT_POST_NG)
-		add_compile_definitions(FALLOUT_POST_AE)
-		set(CommonLibPath "extern/CommonLibF4PostAE/CommonLibF4")
+	set(CommonLibFullPath "${CMAKE_SOURCE_DIR}/extern/commonlibf4")
+	set(CommonLibName "CommonLibF4")
+	set(CommonLibTarget CommonLibF4)
+
+	set(CommonLibSharedPath "${CommonLibFullPath}/lib/commonlib-shared")
+	set(CommonLibSharedName "CommonLibShared")
+	set(CommonLibSharedTarget CommonLibShared)
+
+	set(XMAKE_MODE
+		$<$<CONFIG:Debug>:debug>
+		$<$<CONFIG:Release>:release>
+		$<$<CONFIG:RelWithDebInfo>:releasedbg>
+	)
+
+	set(CommonLibBuildPath "${CommonLibFullPath}/build/windows/x64/${XMAKE_MODE}")
+
+	# Find xmake
+	find_program(XMAKE_EXE 
+		NAMES xmake xmake.exe
+		HINTS "C:/Program Files/xmake/"
+	)
+
+	if(NOT XMAKE_EXE OR XMAKE_EXE STREQUAL "XMAKE_EXE-NOTFOUND")
+		message(FATAL_ERROR "xmake.exe not found in PATH. Please install it or set XMAKE_EXE.")
+	else()
+		message(STATUS "Found xmake at: ${XMAKE_EXE}")
 	endif()
 
-	set(CommonLibName "CommonLibF4")
-	set(CommonLibTarget CommonLibF4::CommonLibF4)
-ENDIF()
+	include(ExternalProject)
 
-add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
+	ExternalProject_Add(
+		CommonLibF4Build
+		SOURCE_DIR ${CommonLibFullPath}
+		CONFIGURE_COMMAND ""
+		BUILD_COMMAND ${CMAKE_COMMAND} -E env
+			XMAKE_COLORTERM=nocolor
+			${XMAKE_EXE} -y
+		BUILD_IN_SOURCE 1
+		INSTALL_COMMAND ""
+	)
+
+	add_library(${CommonLibTarget} STATIC IMPORTED GLOBAL)
+	add_library(${CommonLibSharedTarget} STATIC IMPORTED GLOBAL)
+
+	set_target_properties(${CommonLibName} PROPERTIES
+		IMPORTED_LOCATION
+			"${CommonLibBuildPath}/commonlibf4.lib"
+		INTERFACE_INCLUDE_DIRECTORIES
+			"${CommonLibFullPath}/include"
+	)
+
+	set_target_properties(${CommonLibSharedName} PROPERTIES
+		IMPORTED_LOCATION
+			"${CommonLibBuildPath}/commonlib-shared.lib"
+		INTERFACE_INCLUDE_DIRECTORIES
+			"${CommonLibSharedPath}/include"
+	)
+
+	add_dependencies(${CommonLibTarget} CommonLibF4Build)
+endif()
 
 target_include_directories(
 	${PROJECT_NAME}
@@ -125,8 +170,17 @@ target_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(
-	${PROJECT_NAME}
-	PUBLIC
-	${CommonLibTarget}
-)
+if(BUILD_SKYRIM)
+	target_link_libraries(
+		${PROJECT_NAME}
+		PUBLIC
+		${CommonLibTarget}
+	)
+elseif(BUILD_FALLOUT4)
+	target_link_libraries(
+		${PROJECT_NAME}
+		PUBLIC
+		${CommonLibTarget}
+		${CommonLibSharedTarget}
+	)
+endif()
