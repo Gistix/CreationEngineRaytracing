@@ -13,7 +13,7 @@ namespace Util
 				return result;
 			}
 
-			auto fadeNode = Util::Adapter::CLib::AsFadeNode(a_object);
+			auto fadeNode = Util::Adapter::AsFadeNode(a_object);
 			if (fadeNode) {
 				result = a_func(fadeNode);
 
@@ -22,9 +22,9 @@ namespace Util
 				}
 			}
 
-			auto node = Util::Adapter::CLib::AsNode(a_object);
+			auto node = Util::Adapter::AsNode(a_object);
 			if (node) {
-				for (auto& child : Util::Adapter::CLib::GetChildren(node)) {
+				for (auto& child : Util::Adapter::GetChildren(node)) {
 					result = ScenegraphFadeNodes(child.get(), a_func);
 					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 						break;
@@ -44,7 +44,7 @@ namespace Util
 				return result;
 			}
 
-			auto geom = Util::Adapter::CLib::AsGeometry(a_object);
+			auto geom = Util::Adapter::AsGeometry(a_object);
 			if (geom) {
 				return a_func(geom);
 			}
@@ -62,15 +62,15 @@ namespace Util
 			if (rtti == orderedRTTI.get())
 				return result;
 
-			auto node = Util::Adapter::CLib::AsNode(a_object);
+			auto node = Util::Adapter::AsNode(a_object);
 
 			if (node) {
-				for (auto& child : Util::Adapter::CLib::GetChildren(node)) {
+				for (auto& child : Util::Adapter::GetChildren(node)) {
 					if (!child)
 						continue;
 
 					if (validFadeNode) {
-						if (auto fadeNode = Util::Adapter::CLib::AsFadeNode(child.get()); fadeNode && fadeNode != validFadeNode) {
+						if (auto fadeNode = Util::Adapter::AsFadeNode(child.get()); fadeNode && fadeNode != validFadeNode) {
 							continue;
 						}
 					}

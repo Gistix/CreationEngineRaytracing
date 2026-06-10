@@ -487,7 +487,7 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 
 		for (uint32_t i = 0; i < static_cast<int32_t>(RE::BIPED_OBJECT::kTotal); i++)
 		{
-			const auto& object = Util::Adapter::CLib::GetBipedObjects(biped)[i];
+			const auto& object = Util::Adapter::GetBipedObjects(biped)[i];
 
 			if (!object.item)
 				continue;
@@ -752,7 +752,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 		logger::debug("\t{}: {}, {}", magic_enum::enum_name(pGeometry->GetType().get()), pGeometry->name.c_str(), Util::Math::Float3(pGeometry->world.translate));
 
-		const auto& geometryRuntimeData = Util::Adapter::CLib::GetGeometryRuntimeData(pGeometry);
+		const auto& geometryRuntimeData = Util::Adapter::GetGeometryRuntimeData(pGeometry);
 
 		if (!geometryRuntimeData.shaderProperty)
 			return RE::BSVisit::BSVisitControl::kContinue;
@@ -981,7 +981,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 	auto baseFormType = formType;
 
 	if (form) {
-		if (auto* refr = Util::Adapter::CLib::AsReference(form)) {
+		if (auto* refr = Util::Adapter::AsReference(form)) {
 			if (auto* baseObject = refr->GetBaseObject())
 				baseFormType = baseObject->GetFormType();
 		}
@@ -1011,7 +1011,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
-		const auto& geometryRuntimeData = Util::Adapter::CLib::GetGeometryRuntimeData(pGeometry);
+		const auto& geometryRuntimeData = Util::Adapter::GetGeometryRuntimeData(pGeometry);
 
 		auto* shaderProperty = geometryRuntimeData.shaderProperty;
 

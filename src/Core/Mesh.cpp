@@ -83,7 +83,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, RE
 	}
 
 	for (uint32_t i = 0; i < vertexCountIn; i++) {
-		uint8_t* vtx = Util::Adapter::CLib::GetVertexData(rendererData) + i * vertexSize;
+		uint8_t* vtx = Util::Adapter::GetVertexData(rendererData) + i * vertexSize;
 
 		Vertex vertex{};
 
@@ -215,7 +215,7 @@ Mesh::TriangleData Mesh::BuildTriangles(Mesh::Flags flags, RE::BSGraphics::TriSh
 	}
 	else {
 		triangleData.triangles.resize(triangleCountIn);
-		std::memcpy(triangleData.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
+		std::memcpy(triangleData.triangles.data(), Util::Adapter::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
 	}
 
 	triangleData.count = triangleCountIn;
@@ -591,7 +591,7 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 bool Mesh::UpdateSkinning(bool isPlayer)
 {
 	// Update Bone matrices
-	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
+	auto* skinInstance = Util::Adapter::GetSkinInstance(bsGeometryPtr.get());
 
 	// RaceMenu crash fix
 	if (!skinInstance)
@@ -672,7 +672,7 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 
 bool Mesh::GetDismemberHidden() const
 {
-	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
+	auto* skinInstance = Util::Adapter::GetSkinInstance(bsGeometryPtr.get());
 	if (!skinInstance)
 		return false;
 
@@ -694,7 +694,7 @@ bool Mesh::GetSubIndexHidden() const
 	if (*Scene::GetSingleton()->g_BypassSubIndexVisibility)
 		return false;
 
-	auto* subIndex = Util::Adapter::CLib::AsSubIndexTriShape(bsGeometryPtr.get());
+	auto* subIndex = Util::Adapter::AsSubIndexTriShape(bsGeometryPtr.get());
 
 	if (!subIndex)
 		return false;
@@ -763,7 +763,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 		return DirtyFlags::None;
 	}
 
-	material->Update(Util::Adapter::CLib::GetGeometryRuntimeData(bsGeometryPtr.get()).shaderProperty);
+	material->Update(Util::Adapter::GetGeometryRuntimeData(bsGeometryPtr.get()).shaderProperty);
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);

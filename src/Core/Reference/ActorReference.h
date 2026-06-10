@@ -51,7 +51,7 @@ struct ActorReference
 	{
 
 		if (auto* biped = m_Actor->GetBiped(false).get()) {
-			const auto& bipedObjects = Util::Adapter::CLib::GetBipedObjects(biped);
+			const auto& bipedObjects = Util::Adapter::GetBipedObjects(biped);
 
 			for (int32_t i = 0; i < static_cast<int32_t>(RE::BIPED_OBJECT::kTotal); i++)
 			{

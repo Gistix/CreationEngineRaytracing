@@ -2,7 +2,7 @@
 
 namespace Util
 {
-	namespace Adapter::CLib
+	namespace Adapter
 	{
 		GeometryRuntimeData GetGeometryRuntimeData(RE::BSGeometry* a_geometry)
 		{
