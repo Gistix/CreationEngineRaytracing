@@ -14,7 +14,13 @@ namespace logger = SKSE::log;
 #	if defined(FALLOUT_POST_NG)
 #		include "REX/REX/Singleton.h"
 #	endif
-namespace logger = F4SE::log;
+namespace logger {
+	using info = REX::INFO<void>;
+	using debug = REX::DEBUG<void>;
+	using warn = REX::WARN<void>;
+	using error = REX::ERROR<void>;
+	using critical = REX::CRITICAL<void>;
+}
 #endif
 
 #pragma warning(pop)
