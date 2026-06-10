@@ -13,9 +13,10 @@
 #include "Core/Reference/ActorReference.h"
 #include "Core/Reference/ObjectLODBlockReference.h"
 #include "Core/Reference/TerrainLODBlockReference.h"
+#if defined(SKYRIM)
 #include "Core/Reference/TreeLODBlockReference.h"
 #include "Core/Reference/GrassReference.h"
-
+#endif
 #include "Light.hlsli"
 #include "Mesh.hlsli"
 #include "Instance.hlsli"

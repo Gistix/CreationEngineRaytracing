@@ -29,5 +29,6 @@ namespace Util
 #endif
 
 		RE::TESObjectREFR* AsReference(RE::TESForm* a_object);
+		RE::ExtraDataList* GetExtraDataList(RE::TESObjectREFR* a_refr);
 	}
 }

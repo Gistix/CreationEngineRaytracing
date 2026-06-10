@@ -14,7 +14,7 @@
 
 #include "Types/RE/RE.h"
 
-#include "Util.h"
+#include "Types/GeometryRuntimeData.h"
 
 struct Material : MaterialBase
 {
@@ -50,7 +50,7 @@ struct Material : MaterialBase
 
 	nvrhi::BufferHandle buffer;
 
-	Material(const eastl::string& name, const Util::Adapter::CLib::GeometryRuntimeData& runtimeData, RE::FormID formID);
+	Material(const eastl::string& name, const GeometryRuntimeData& runtimeData, RE::FormID formID);
 
 	void SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID);
 

@@ -21,9 +21,11 @@ void ActorReference::Update()
 
 	if (m_Biped) {
 		if (auto* biped = m_Actor->GetBiped(m_FirstPerson).get()) {
-			for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
+			const auto& objects = Util::Adapter::GetBipedObjects(biped);
+
+			for (size_t i = 0; i < static_cast<int32_t>(RE::BIPED_OBJECT::kTotal); i++)
 			{
-				auto& object = biped->objects[i];
+				auto& object = objects[i];
 
 				const auto& curObject = BipObjectReference(object);
 				auto& prevObject = m_Objects[i];

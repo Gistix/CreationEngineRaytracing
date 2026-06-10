@@ -152,9 +152,9 @@ private:
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	CESEAdapter::REX::EnumSet<Mesh::Flags> meshFlags = Mesh::Flags::None;
 	CESEAdapter::REX::EnumSet<Mesh::Type> m_MeshTypes = Mesh::Type::Default;
-	uint32_t shaderTypes = CESEAdapter::RE::ShaderType::None;
+	uint32_t shaderTypes = 0;
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
-	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	CESEAdapter::REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	eastl::atomic<int> refCount{ 0 };
 
 	// XEMI - This is used to control window emission in day/night tod

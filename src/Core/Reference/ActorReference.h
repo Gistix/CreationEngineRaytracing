@@ -9,13 +9,18 @@ struct BipObjectReference
 
 	BipObjectReference(const RE::BIPOBJECT& object)
 	{
+#if defined(SKYRIM)
 		item = object.item;
 		addon = object.addon;
+#elif defined(FALLOUT4)
+		item = object.parent.object;
+		addon = object.armorAddon;
+#endif
 		part = object.part;
 		partClone = object.partClone.get();
 
 		// Store form type for later comparison, since item pointer may become invalid
-		formType = object.item ? object.item->GetFormType() : RE::FormType::None;
+		formType = item ? item->GetFormType() : static_cast<RE::FormType>(0); // RE::FormType::None
 	}
 
 	bool operator==(const BipObjectReference& other) const

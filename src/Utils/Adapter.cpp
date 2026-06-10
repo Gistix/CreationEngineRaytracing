@@ -113,5 +113,14 @@ namespace Util
 			return a_object->IsReference();
 #endif		
 		}
+
+		RE::ExtraDataList* GetExtraDataList(RE::TESObjectREFR* a_refr)
+		{
+#if defined(SKYRIM)
+			return &a_refr->extraList;
+#elif defined(FALLOUT4)
+			return a_refr->extraList.get();
+#endif			
+		}
 	}
 }

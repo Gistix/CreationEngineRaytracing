@@ -33,8 +33,6 @@ namespace RE
 		bool          RegisterStreamables(NiStream& a_stream) override;   // 1A
 		void          SaveBinary(NiStream& a_stream) override;            // 1B
 		bool          IsEqual(NiObject* a_object) override;               // 1C
-		void OnVisible(NiCullingProcess& a_process, std::int32_t a_alphaGroupIndex) override;  // 34
-		void Unk_37(void) override;
 
 		// members
 		SegmentData*  segmentData;  /* 00 */

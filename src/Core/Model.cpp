@@ -20,12 +20,15 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 
 	// Water and LOD models have no form
 	if (form) {
-		auto* refr = form->AsReference();
+		auto* refr = Util::Adapter::AsReference(form);
 
-		if (refr && refr->extraList.HasType(RE::ExtraDataType::kEmittanceSource)) {
-			if (auto* extra = refr->extraList.GetByType<RE::ExtraEmittanceSource>()) {
-				if (auto* tesRegion = extra->source->As<RE::TESRegion>()) {
-					m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+		if (refr) {
+			auto extraDataList = Util::Adapter::GetExtraDataList(refr);
+			if (extraDataList && extraDataList->HasType(RE::ExtraDataType::kEmittanceSource)) {
+				if (auto* extra = extraDataList->GetByType<RE::ExtraEmittanceSource>()) {
+					if (auto* tesRegion = extra->source->As<RE::TESRegion>()) {
+						m_EmittanceColor = reinterpret_cast<float3*>(&tesRegion->emittanceColor);
+					}
 				}
 			}
 		}
@@ -36,7 +39,7 @@ void Model::UpdateMeshFlags()
 {
 	meshFlags.reset();
 	m_MeshTypes.reset();
-	shaderTypes = RE::BSShader::Type::None;
+	shaderTypes = 0;
 	features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	shaderFlags.reset();
 
