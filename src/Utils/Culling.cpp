@@ -6,8 +6,8 @@ namespace Util
 	{
 		bool ShouldCull(RE::BSGeometry& geometry)
 		{
-			static const REL::Relocation<const RE::NiRTTI*> skyRTTI{ RE::BSSkyShaderProperty::Ni_RTTI };
-			static const REL::Relocation<const RE::NiRTTI*> particleRTTI{ RE::BSParticleShaderProperty::Ni_RTTI };
+			static const REL::Relocation<const RE::NiRTTI*> skyRTTI{ NiRTTI(BSSkyShaderProperty) };
+			static const REL::Relocation<const RE::NiRTTI*> particleRTTI{ NiRTTI(BSParticleShaderProperty) };
 
 			auto* shaderPropertyRTTI = geometry.GetGeometryRuntimeData().shaderProperty->GetRTTI();
 

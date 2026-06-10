@@ -5,9 +5,9 @@ namespace Util
 	namespace Traversal
 	{
 
-		static RE::BSVisit::BSVisitControl ScenegraphFadeNodes(RE::NiAVObject* a_object, std::function<RE::BSVisit::BSVisitControl(RE::BSFadeNode*)> a_func)
+		static CESEAdapter::RE::BSVisitControl ScenegraphFadeNodes(RE::NiAVObject* a_object, std::function<CESEAdapter::RE::BSVisitControl(RE::BSFadeNode*)> a_func)
 		{
-			auto result = RE::BSVisit::BSVisitControl::kContinue;
+			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
 			if (!a_object) {
 				return result;
@@ -17,7 +17,7 @@ namespace Util
 			if (fadeNode) {
 				result = a_func(fadeNode);
 
-				if (result == RE::BSVisit::BSVisitControl::kStop) {
+				if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 					return result;
 				}
 			}
@@ -26,7 +26,7 @@ namespace Util
 			if (node) {
 				for (auto& child : Util::Adapter::CLib::GetChildren(node)) {
 					result = ScenegraphFadeNodes(child.get(), a_func);
-					if (result == RE::BSVisit::BSVisitControl::kStop) {
+					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 						break;
 					}
 				}
@@ -36,9 +36,9 @@ namespace Util
 		}
 
 		// A custom visit controller built to ignore billboard/particle geometry
-		static RE::BSVisit::BSVisitControl ScenegraphRTGeometries(RE::NiAVObject* a_object, RE::BSFadeNode* validFadeNode, std::function<RE::BSVisit::BSVisitControl(RE::BSGeometry*)> a_func)
+		static CESEAdapter::RE::BSVisitControl ScenegraphRTGeometries(RE::NiAVObject* a_object, RE::BSFadeNode* validFadeNode, std::function<CESEAdapter::RE::BSVisitControl(RE::BSGeometry*)> a_func)
 		{
-			auto result = RE::BSVisit::BSVisitControl::kContinue;
+			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
 			if (!a_object) {
 				return result;
@@ -76,7 +76,7 @@ namespace Util
 					}
 
 					result = ScenegraphRTGeometries(child.get(), validFadeNode, a_func);
-					if (result == RE::BSVisit::BSVisitControl::kStop) {
+					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 						break;
 					}
 				}

@@ -6,13 +6,10 @@
 #include "Renderer.h"
 #include "SceneGraph.h"
 
-#include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
-#include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
-
 #include "Utils/CalcTangents.h"
 #include "Core/D3D12Texture.h"
 
-Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
+Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
 {
 	VertexData vertexData{};
 
@@ -372,7 +369,7 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 	return triangles;
 }
 
-void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID)
+void Mesh::BuildMaterial(const GeometryRuntimeData& runtimeData, RE::FormID formID)
 {
 	material = eastl::make_unique<Material>(m_Name, runtimeData, formID);
 
@@ -697,7 +694,7 @@ bool Mesh::GetSubIndexHidden() const
 	if (*Scene::GetSingleton()->g_BypassSubIndexVisibility)
 		return false;
 
-	auto* subIndex = bsGeometryPtr->AsSubIndexTriShape();
+	auto* subIndex = Util::Adapter::CLib::AsSubIndexTriShape(bsGeometryPtr.get());
 
 	if (!subIndex)
 		return false;
@@ -766,7 +763,7 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 		return DirtyFlags::None;
 	}
 
-	material->Update(bsGeometryPtr->GetGeometryRuntimeData().shaderProperty.get());
+	material->Update(Util::Adapter::CLib::GetGeometryRuntimeData(bsGeometryPtr.get()).shaderProperty);
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);

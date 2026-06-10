@@ -4,7 +4,7 @@
 #include "Scene.h"
 #include "Renderer.h"
 
-Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID)
+Material::Material(const eastl::string& name, const GeometryRuntimeData& runtimeData, RE::FormID formID)
 {
 	auto* renderer = Renderer::GetSingleton();
 
@@ -30,7 +30,7 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 
 	textures.fill(Texture(blackTexture, nullptr));
 
-	auto* alphaProperty = runtimeData.alphaProperty.get();
+	auto* alphaProperty = runtimeData.alphaProperty;
 
 	// Set alpha flags
 	if (alphaProperty) {
@@ -52,7 +52,7 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 		}
 	}
 
-	auto* shaderProperty = runtimeData.shaderProperty.get();
+	auto* shaderProperty = runtimeData.shaderProperty;
 
 	if (shaderProperty) {
 		shaderFlags = shaderProperty->flags.get();

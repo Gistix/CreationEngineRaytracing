@@ -37,7 +37,7 @@ struct Instance
 
 	uint32_t m_TLASInstanceID = 0;
 
-	stl::enumeration<State> m_State = State::None;
+	CESEAdapter::REX::EnumSet<State> m_State = State::None;
 
 	// Used by light TLAS
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;

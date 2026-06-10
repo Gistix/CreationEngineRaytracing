@@ -149,10 +149,10 @@ struct Model
 		return m_EmittanceColor ? *m_EmittanceColor : float3(1.0f, 1.0f, 1.0f);
 	}
 private:
-	stl::enumeration<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
-	stl::enumeration<Mesh::Flags> meshFlags = Mesh::Flags::None;
-	stl::enumeration<Mesh::Type> m_MeshTypes = Mesh::Type::Default;
-	uint32_t shaderTypes = RE::BSShader::Type::None;
+	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
+	CESEAdapter::REX::EnumSet<Mesh::Flags> meshFlags = Mesh::Flags::None;
+	CESEAdapter::REX::EnumSet<Mesh::Type> m_MeshTypes = Mesh::Type::Default;
+	uint32_t shaderTypes = CESEAdapter::RE::ShaderType::None;
 	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	eastl::atomic<int> refCount{ 0 };

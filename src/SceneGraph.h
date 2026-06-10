@@ -4,8 +4,11 @@
 #include "core/Model.h"
 #include "core/Light.h"
 #include "Core/TextureManager.h"
+
+#if defined(SKYRIM)
 #include "core/TreeLODInstance.h"
 #include "core/GrassInstance.h"
+#endif
 
 #include "Core/Reference/ActorReference.h"
 #include "Core/Reference/ObjectLODBlockReference.h"
@@ -47,11 +50,12 @@ class SceneGraph
 	// LOD
 	eastl::unordered_map<RE::BGSObjectBlock*, eastl::unique_ptr<ObjectLODBlockReference>> m_ObjectLODInstances;
 	eastl::unordered_map<RE::BGSTerrainBlock*, eastl::unique_ptr<TerrainLODBlockReference>> m_TerrainLODInstances;
+#if defined(SKYRIM)
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, eastl::unique_ptr<TreeLODBlockReference>> m_TreeLODInstances;
 
 	// Grass
 	eastl::unordered_map<RE::GrassTypeKey, GrassReference> m_GrassInstances;
-
+#endif
 	// Actors
 	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
 
@@ -81,8 +85,6 @@ class SceneGraph
 	eastl::unique_ptr<BindlessTable> m_VertexWriteDescriptors;
 	eastl::unique_ptr<BindlessTable> m_PrevPositionDescriptors;
 	eastl::unique_ptr<BindlessTable> m_PrevPositionWriteDescriptors;
-
-	REL::Relocation<RE::BSGraphics::BSShaderAccumulator**> m_CurrentAccumulator;
 
 	uint32_t m_NumMeshes = 0;
 	uint32_t m_NumInstances = 0;
@@ -140,12 +142,18 @@ public:
 	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);
 	void CreateLandModel(RE::TESObjectLAND* land);
 	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
+
+#if defined(SKYRIM)
 	void CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances);
+#endif
 
 	// LOD
 	bool CreateLODModel(RE::BGSTerrainBlock* block);
 	bool CreateLODModel(RE::BGSObjectBlock* block);
+
+#if defined(SKYRIM)
 	bool CreateLODModel(RE::BGSDistantTreeBlock* block);
+#endif
 
 	template <typename T>
 	void CreateLODModelImpl(T* block, Mesh::Type type);
@@ -174,9 +182,10 @@ public:
 	// Releases all instances of an object block (LOD)
 	void ReleaseInstances(RE::BGSObjectBlock* block);
 
+#if defined(SKYRIM)
 	// Releases all instances of a distant tree block (LOD)
 	void ReleaseInstances(RE::BGSDistantTreeBlock* block);
-
+#endif
 	void SetInstanceDetached(RE::TESForm* form, bool detached);
 
 	void RunGarbageCollection();

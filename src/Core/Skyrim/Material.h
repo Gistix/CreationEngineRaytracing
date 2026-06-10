@@ -15,6 +15,8 @@
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 
+#include "Types/GeometryRuntimeData.h"
+
 struct Material : MaterialBase
 {
 	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
@@ -49,7 +51,7 @@ struct Material : MaterialBase
 
 	nvrhi::BufferHandle buffer;
 
-	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
+	Material(const eastl::string& name, const GeometryRuntimeData& runtimeData, RE::FormID formID);
 
 	void SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID);
 
@@ -118,11 +120,11 @@ struct Material : MaterialBase
 		kBlendNormals = 1 << 16
 	};
 
-	REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
-	REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
+	CESEAdapter::REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	CESEAdapter::REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
 	ShaderType shaderType;
 	Feature feature;
-	stl::enumeration<PBRShaderFlags, uint16_t> pbrFlags;
+	CESEAdapter::REX::EnumSet<PBRShaderFlags, uint16_t> pbrFlags;
 
 	AlphaFlags alphaFlags = AlphaFlags::None;
 

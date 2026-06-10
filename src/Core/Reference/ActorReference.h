@@ -46,15 +46,16 @@ struct BipObjectReference
 
 struct ActorReference
 {
-	ActorReference(RE::Actor* actor, bool firstPerson, eastl::vector<Mesh*> faceMeshes, eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> meshes)
+	ActorReference(RE::Actor* actor, bool firstPerson, eastl::vector<Mesh*> faceMeshes, eastl::array<eastl::vector<Mesh*>, static_cast<int32_t>(RE::BIPED_OBJECT::kTotal)> meshes)
 		: m_Actor(actor), m_FirstPerson(firstPerson), m_FaceMeshes(faceMeshes), m_ObjectMeshes(meshes)
 	{
 
 		if (auto* biped = m_Actor->GetBiped(false).get()) {
-			for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
-			{
-				auto& object = biped->objects[i];
+			const auto& bipedObjects = Util::Adapter::CLib::GetBipedObjects(biped);
 
+			for (int32_t i = 0; i < static_cast<int32_t>(RE::BIPED_OBJECT::kTotal); i++)
+			{
+				auto& object = bipedObjects[i];
 				m_Objects[i] = { object };
 			}
 
@@ -79,8 +80,8 @@ struct ActorReference
 	eastl::vector<Mesh*> m_FaceMeshes;
 
 	// Biped Objects (equipable items)
-	BipObjectReference m_Objects[RE::BIPED_OBJECTS::kTotal];
-	eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> m_ObjectMeshes;
+	BipObjectReference m_Objects[static_cast<int32_t>(RE::BIPED_OBJECT::kTotal)];
+	eastl::array<eastl::vector<Mesh*>, static_cast<int32_t>(RE::BIPED_OBJECT::kTotal)> m_ObjectMeshes;
 
 	// Animated Objects (non-equipable animation-only items)
 	eastl::unordered_map<RE::TESObjectANIO*, eastl::vector<Mesh*>> m_AnimatedObjectMeshes;

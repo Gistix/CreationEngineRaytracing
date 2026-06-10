@@ -8,10 +8,19 @@
 #include "Skinning.hlsli"
 #include "Material.hlsli"
 #include "Framework/DescriptorTableManager.h"
+
+#include "Core/MaterialBase.h"
 #include "Core/Texture.h"
 
-struct Material
+#include "Types/RE/RE.h"
+
+#include "Util.h"
+
+struct Material : MaterialBase
 {
+	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
+	using Feature = RE::BSShaderMaterial::Feature;
+
 	static constexpr uint MAX_LAND_TEXTURES = 5u;
 	static constexpr uint MAX_PBRLAND_TEXTURES = 6u;
 
@@ -36,29 +45,27 @@ struct Material
 		Particle = 7
 	};
 
-	// We have a limited number of bits and not all types are necessary
-	ShaderType GetShaderType() const
-	{
-		if (shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kMenuScreen))
-			return ShaderType::TruePBR;
+	MaterialData m_MaterialData;
+	MaterialData m_PrevMaterialData;
 
-		switch (shaderType) {
-		case RE::BSShader::Type::Grass:
-			return ShaderType::Grass;
-		case RE::BSShader::Type::Water:
-			return ShaderType::Water;
-		case RE::BSShader::Type::BloodSplatter:
-			return ShaderType::BloodSplatter;
-		case RE::BSShader::Type::Effect:
-			return ShaderType::Effect;
-		case RE::BSShader::Type::DistantTree:
-			return ShaderType::DistantTree;
-		case RE::BSShader::Type::Particle:
-			return ShaderType::Particle;
-		default:
-			return ShaderType::Lighting;
-		}
-	}
+	nvrhi::BufferHandle buffer;
+
+	Material(const eastl::string& name, const Util::Adapter::CLib::GeometryRuntimeData& runtimeData, RE::FormID formID);
+
+	void SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID);
+
+	void SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp);
+	void SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial);
+
+	void SetupProjectedUV(RE::BSLightingShaderProperty* lightingShaderProp);
+
+	void CreateBuffer(const eastl::string& name, DescriptorIndex descriptorIndex);
+
+	void UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty);
+
+	void Update(RE::BSShaderProperty* shaderProperty);
+
+	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance);
 
 	enum ShaderFlags : uint32_t
 	{
@@ -83,7 +90,11 @@ struct Material
 		kAssumeShadowmask = 1 << 17,
 		kBackLighting = 1 << 18,
 		kTreeAnim = 1 << 19,
-		kSoftLighting = 1 << 20
+		kSoftLighting = 1 << 20,
+		kLODLandscape = 1 << 21,
+		kLODObjects = 1 << 22,
+		kHDLODObjects = 1 << 23,
+		kSnow = 1 << 24
 	};
 
 	enum class WaterShaderFlags : uint32_t
@@ -108,30 +119,28 @@ struct Material
 		kBlendNormals = 1 << 16
 	};
 
-	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
-	REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
-	RE::BSShader::Type shaderType;
-	RE::BSShaderMaterial::Feature Feature;
+	CESEAdapter::REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	CESEAdapter::REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
+	ShaderType shaderType;
+	Feature feature;
 
 	AlphaFlags alphaFlags = AlphaFlags::None;
 
 	half alphaThreshold;
 
-	eastl::array<half4, 3> Colors;
-	eastl::array<half, 3> Scalars;
+	eastl::array<half4, 3> colors;
+	eastl::array<half, 3> scalars;
 
-	eastl::array<half4, 4> Vectors;
+	eastl::array<half4, 4> vectors;
 
-	eastl::array<half4, 2> TexCoordOffsetScale;
+	eastl::array<half4, 2> texCoordOffsetScale;
 
-	eastl::array<Texture, 20> Textures;
+	eastl::array<Texture, 20> textures;
 
 	uint32_t GetShaderFlags() const
 	{
-		if (GetShaderType() == ShaderType::Water)
+		if (shaderType == ShaderType::Water)
 			return waterShaderFlags.underlying();
-
-		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 
 		auto shaderFlagsLocal = ShaderFlags::None;
 
@@ -203,20 +212,16 @@ struct Material
 			shaderFlagsLocal |= ShaderFlags::kTwoSided;
 		}
 
-		if (shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask)) {
-			shaderFlagsLocal |= ShaderFlags::kAssumeShadowmask;
-		}
-
-		if (shaderFlags.any(EShaderPropertyFlag::kBackLighting)) {
-			shaderFlagsLocal |= ShaderFlags::kBackLighting;
-		}
-
 		if (shaderFlags.any(EShaderPropertyFlag::kTreeAnim)) {
 			shaderFlagsLocal |= ShaderFlags::kTreeAnim;
 		}
 
-		if (shaderFlags.any(EShaderPropertyFlag::kSoftLighting)) {
-			shaderFlagsLocal |= ShaderFlags::kSoftLighting;
+		if (shaderFlags.any(EShaderPropertyFlag::kLODLandscape)) {
+			shaderFlagsLocal |= ShaderFlags::kLODLandscape;
+		}
+
+		if (shaderFlags.any(EShaderPropertyFlag::kLODObjects)) {
+			shaderFlagsLocal |= ShaderFlags::kLODObjects;
 		}
 
 		return static_cast<uint32_t>(shaderFlagsLocal);
@@ -224,7 +229,7 @@ struct Material
 
 	uint16_t GetTextureDescriptorIndex(uint32_t index) const
 	{
-		auto& texture = Textures[index];
+		const auto& texture = textures[index];
 
 		auto locked = texture.texture.lock();
 
@@ -234,9 +239,8 @@ struct Material
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
 
-	void UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty);
-
-	MaterialData GetData(const float3 externalEmittance, RE::BSShaderProperty* shaderProperty);
+private:
+	MaterialData* GetData();
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(Material::AlphaFlags);

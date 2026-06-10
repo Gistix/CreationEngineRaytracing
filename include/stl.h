@@ -1,7 +1,5 @@
 #pragma once
 
-#include "REL.h"
-
 #if defined(SKYRIM)
 namespace CESE = SKSE;
 #elif defined(FALLOUT4)

@@ -11,17 +11,88 @@ namespace logger = SKSE::log;
 #elif defined(FALLOUT4)
 #	include "F4SE/F4SE.h"
 #	include "RE/Fallout.h"
-#	if defined(FALLOUT_POST_NG)
-#		include "REX/REX/Singleton.h"
-#	endif
-namespace logger {
-	using info = REX::INFO<void>;
-	using debug = REX::DEBUG<void>;
-	using warn = REX::WARN<void>;
-	using error = REX::ERROR<void>;
-	using critical = REX::CRITICAL<void>;
+namespace logger
+{
+    template <class... Args>
+    void trace(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::TRACE<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void trace(std::string_view msg)
+    {
+        REX::TRACE<void>{msg};
+    }
+
+    template <class... Args>
+    void debug(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::DEBUG<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void debug(std::string_view msg)
+    {
+        REX::DEBUG<void>{msg};
+    }
+
+    template <class... Args>
+    void info(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::INFO<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void info(std::string_view msg)
+    {
+        REX::INFO<void>{msg};
+    }
+
+    template <class... Args>
+    void warn(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::WARN<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void warn(std::string_view msg)
+    {
+        REX::WARN<void>{msg};
+    }
+
+    template <class... Args>
+    void error(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::ERROR<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void error(std::string_view msg)
+    {
+        REX::ERROR<void>{msg};
+    }
+
+    template <class... Args>
+    void critical(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::CRITICAL<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void critical(std::string_view msg)
+    {
+        REX::CRITICAL<void>{msg};
+    }
+
+    template <class... Args>
+    [[noreturn]] void fail(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::FAIL<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    [[noreturn]] inline void fail(std::string_view msg)
+    {
+        REX::FAIL<void>{msg};
+    }
 }
 #endif
+
+#include "adapter.h"
 
 #pragma warning(pop)
 
@@ -94,12 +165,6 @@ using float4 = DirectX::SimpleMath::Vector4;
 using float3x4 = DirectX::XMFLOAT3X4;
 using float4x4 = DirectX::SimpleMath::Matrix;
 using uint = uint32_t;
-
-#if defined(FALLOUT4)
-namespace RE {
-	using FormID = TESFormID;
-}
-#endif
 
 #include "Types.h"
 

@@ -16,8 +16,6 @@
 
 void SceneGraph::Initialize()
 {
-	m_CurrentAccumulator = { REL::RelocationID(527650, 414600) };
-
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	// Mesh Data Buffer
@@ -416,7 +414,7 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 	}
 
 	// TODO: Proper Model transform update, this whole section feels like hack
-	const REL::Relocation<const RE::NiRTTI*> rtti{ RE::NiMultiTargetTransformController::Ni_RTTI };
+	const REL::Relocation<const RE::NiRTTI*> rtti{ NiRTTI(NiMultiTargetTransformController) };
 	auto* controller = reinterpret_cast<RE::NiMultiTargetTransformController*>(root->GetController(rtti.get()));
 	
 	if (controller) {
@@ -458,7 +456,7 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 
 void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool firstPerson)
 {
-	auto name = std::format("{}{}_{:0X}", actor->GetName(), firstPerson ? "_1stPerson" : "", actor->GetFormID());
+	auto name = std::format("{}{}_{:0X}", actor->GetDisplayFullName(), firstPerson ? "_1stPerson" : "", actor->GetFormID());
 
 	auto* biped = actor->GetBiped(firstPerson).get();
 
@@ -467,7 +465,7 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 	if (biped) {
 		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 		eastl::vector<Mesh*> faceMeshes;
-		eastl::array<eastl::vector<Mesh*>, RE::BIPED_OBJECTS::kTotal> bipedMeshes;
+		eastl::array<eastl::vector<Mesh*>, static_cast<int32_t>(RE::BIPED_OBJECT::kTotal)> bipedMeshes;
 
 		auto createAppendMeshes = [&](RE::TESForm* form, RE::NiAVObject* object, int i = -1) {
 			logger::debug("Appending {}: {}", magic_enum::enum_name(form->GetFormType()), object->name);
@@ -487,9 +485,9 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 			if (auto* headNode = actor->GetFaceNodeSkinned())
 				createAppendMeshes(actor, headNode);
 
-		for (uint32_t i = 0; i < RE::BIPED_OBJECTS::kTotal; i++)
+		for (uint32_t i = 0; i < static_cast<int32_t>(RE::BIPED_OBJECT::kTotal); i++)
 		{
-			const auto& object = biped->objects[i];
+			const auto& object = Util::Adapter::CLib::GetBipedObjects(biped)[i];
 
 			if (!object.item)
 				continue;
@@ -509,13 +507,13 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 		}
 	}
 	else {
-		Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> RE::BSVisit::BSVisitControl {
+		Util::Traversal::ScenegraphFadeNodes(root, [&](RE::BSFadeNode* fadeNode) -> CESEAdapter::RE::BSVisitControl {
 			const bool isRoot = (fadeNode == root);
 
 			auto fadeNodeName = std::format("{}.{}", name, fadeNode->name.c_str());
 			CreateModelInternal(actor, isRoot ? name.c_str() : fadeNodeName.c_str(), fadeNode);
 
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 		});
 	}
 }
@@ -581,6 +579,7 @@ void SceneGraph::CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* objec
 	}
 }
 
+#if defined(SKYRIM)
 void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances)
 {
 	auto* grassParams = a_createGrassParams->grassParam;
@@ -652,6 +651,7 @@ void SceneGraph::CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::Creat
 		m_Instances.Add(eastl::move(instance));
 	}
 }
+#endif
 
 bool SceneGraph::CreateLODModel(RE::BGSTerrainBlock* block)
 {
@@ -673,6 +673,7 @@ bool SceneGraph::CreateLODModel(RE::BGSObjectBlock* block)
 	return true;
 }
 
+#if defined(SKYRIM)
 bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 {
 	if (m_TreeLODInstances.contains(block))
@@ -724,6 +725,7 @@ bool SceneGraph::CreateLODModel(RE::BGSDistantTreeBlock* block)
 
 	return false;
 }
+#endif
 
 template <typename T>
 void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
@@ -750,7 +752,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 		logger::debug("\t{}: {}, {}", magic_enum::enum_name(pGeometry->GetType().get()), pGeometry->name.c_str(), Util::Math::Float3(pGeometry->world.translate));
 
-		const auto& geometryRuntimeData = pGeometry->GetGeometryRuntimeData();
+		const auto& geometryRuntimeData = Util::Adapter::CLib::GetGeometryRuntimeData(pGeometry);
 
 		if (!geometryRuntimeData.shaderProperty)
 			return RE::BSVisit::BSVisitControl::kContinue;
@@ -950,10 +952,12 @@ void SceneGraph::ReleaseInstances(RE::BGSObjectBlock* block)
 	m_ObjectLODInstances.erase(block);
 }
 
+#if defined(SKYRIM)
 void SceneGraph::ReleaseInstances(RE::BGSDistantTreeBlock* block)
 {
 	m_TreeLODInstances.erase(block);
 }
+#endif
 
 void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 {
@@ -977,7 +981,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 	auto baseFormType = formType;
 
 	if (form) {
-		if (auto* refr = form->AsReference()) {
+		if (auto* refr = Util::Adapter::CLib::AsReference(form)) {
 			if (auto* baseObject = refr->GetBaseObject())
 				baseFormType = baseObject->GetFormType();
 		}
@@ -992,11 +996,11 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 	if (object->HasExtraData("HDT Skinned Mesh Physics Object"))
 		return meshes;
 
-	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
+	Util::Traversal::ScenegraphRTGeometries(object, nullptr, [&](RE::BSGeometry* pGeometry)->CESEAdapter::RE::BSVisitControl {
 		const char* name = pGeometry->name.c_str();
 
 		if (Util::Geometry::IsBlocklisted(name))
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 
 		logger::trace("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - {}", name);
 
@@ -1004,16 +1008,16 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 
 		if (geometryType.none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kMultiStreamInstanceTriShape)) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported Geometry: {} for {}", magic_enum::enum_name(geometryType.get()), name);
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
-		const auto& geometryRuntimeData = pGeometry->GetGeometryRuntimeData();
+		const auto& geometryRuntimeData = Util::Adapter::CLib::GetGeometryRuntimeData(pGeometry);
 
-		auto* shaderProperty = geometryRuntimeData.shaderProperty.get();
+		auto* shaderProperty = geometryRuntimeData.shaderProperty;
 
 		if (!shaderProperty) {
 			logger::debug("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - No Effect");
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
 		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
@@ -1025,13 +1029,13 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		// Only lighting and effect shader for now
 		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader && !isGrassShader) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
 		// Ignore effect shader with alpha blend
 		if (isEffectShader && geometryRuntimeData.alphaProperty)
 			if (geometryRuntimeData.alphaProperty->GetAlphaBlending())
-				return RE::BSVisit::BSVisitControl::kContinue;
+				return CESEAdapter::RE::BSVisitControl::kContinue;
 
 		auto flags = Mesh::Flags::None;
 
@@ -1065,12 +1069,12 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 
 			if (triShapeRuntime.vertexCount == 0) {
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Vertex count of 0 for {}", name ? name : "N/A");
-				return RE::BSVisit::BSVisitControl::kContinue;
+				return CESEAdapter::RE::BSVisitControl::kContinue;
 			}
 
 			if (triShapeRuntime.triangleCount == 0) {
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
-				return RE::BSVisit::BSVisitControl::kContinue;
+				return CESEAdapter::RE::BSVisitControl::kContinue;
 			}
 
 			auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot);
@@ -1080,17 +1084,17 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 
 			meshes.push_back(eastl::move(mesh));
 		}
-		else if (auto* skinInstance = geometryRuntimeData.skinInstance.get()) {  // Skinned
+		else if (auto* skinInstance = geometryRuntimeData.skinInstance) {  // Skinned
 			auto& skinPartition = skinInstance->skinPartition;
 
 			if (!skinPartition) {
 				logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Invalid SkinPartition");
-				return RE::BSVisit::BSVisitControl::kContinue;
+				return CESEAdapter::RE::BSVisitControl::kContinue;
 			}
 
 			if (skinPartition->vertexCount == 0) {
 				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Vertex count of 0 for {}", name ? name : "N/A");
-				return RE::BSVisit::BSVisitControl::kContinue;
+				return CESEAdapter::RE::BSVisitControl::kContinue;
 			}
 
 			const auto skinNumPartitions = skinPartition->numPartitions;
@@ -1120,7 +1124,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 			}
 		}
 
-		return RE::BSVisit::BSVisitControl::kContinue;
+		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
 
 	return meshes;
