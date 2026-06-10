@@ -2,15 +2,6 @@
 	path = extern/CommonLibSSE-NG
 	url = https://github.com/alandtse/CommonLibVR.git
 	branch = ng
-[submodule "extern/CommonLibF4PreNG"]
-	path = extern/CommonLibF4PreNG
-	url = https://github.com/powerof3/CommonLibF4.git
-[submodule "extern/CommonLibF4PostNG"]
-	path = extern/CommonLibF4PostNG
-	url = https://github.com/powerof3/CommonLibF4.git
-[submodule "extern/CommonLibF4PostAE"]
-	path = extern/CommonLibF4PostAE
-	url = https://github.com/powerof3/CommonLibF4.git
 [submodule "extern/NVRHI"]
 	path = extern/NVRHI
 	url = https://github.com/NVIDIA-RTX/NVRHI.git
