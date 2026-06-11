@@ -269,36 +269,58 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         if (material.ShaderFlags & ShaderFlags::kEnvMap || material.ShaderFlags & ShaderFlags::kEyeReflect)
         {
             Texture2D envMaskTexture = Textures[NonUniformResourceIndex(material.EnvMaskTexture())];
-            float envMask = envMaskTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
+            float4 envMask = envMaskTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
 
-            // Cubemap-based material override
-            TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(material.EnvTexture())];
-
-            // Dynamic Cubemap Creator sets mip 15 at (0,1,0) to black
-            float3 envColorTest = envCubemap.SampleLevel(DefaultSampler, float3(0.0, 1.0, 0.0), 15).xyz;
-            bool dynamicCubemap = all(envColorTest == 0.0);
-
-            if (dynamicCubemap)
+            // CM code yoinked from CS
+            bool complexMaterial = false;          
+            if (Features.ExtendedMaterial.EnableComplexMaterial)
             {
-                float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
-
-                if (envColorBase.a < 1.0)
-                {
-                    surface.F0 = lerp(surface.F0, ColorToLinear(envColorBase.rgb), envMask);
-                    surface.Roughness = lerp(surface.Roughness, envColorBase.a, envMask);
-                }
-                else
-                {
-                    surface.F0 = lerp(surface.F0, float3(1.0, 1.0, 1.0), envMask);
-                    surface.Roughness = lerp(surface.Roughness, 1.0 / 7.0, envMask);
-                }
+                const float kMaskEpsilon = (4.0 / 255.0);
+                complexMaterial = envMask.w < (1.0 - kMaskEpsilon);
+                
+		        // Detect texture saved in the wrong format
+                if ((abs(envMask.x - envMask.y) < kMaskEpsilon) &&
+			        (abs(envMask.x - envMask.z) < kMaskEpsilon) &&
+			        (abs(envMask.y - envMask.z) < kMaskEpsilon))
+                        complexMaterial = false;
+            }
+             
+            if (complexMaterial)
+            {
+                surface.Roughness = 1.0f - envMask.y;
+                surface.Metallic = envMask.z;
             }
             else
             {
-                // Static cubemap: use +X face average color as metallic tint
-                float3 faceAvg = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15).rgb;
-                surface.F0 = lerp(surface.F0, saturate(ColorToLinear(faceAvg)), envMask);
-                surface.Roughness = lerp(surface.Roughness, 0.0f, envMask);
+                // Cubemap-based material override
+                TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(material.EnvTexture())];
+
+                // Dynamic Cubemap Creator sets mip 15 at (0,1,0) to black
+                float3 envColorTest = envCubemap.SampleLevel(DefaultSampler, float3(0.0, 1.0, 0.0), 15).xyz;
+                bool dynamicCubemap = all(envColorTest == 0.0);
+
+                if (dynamicCubemap)
+                {
+                    float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
+
+                    if (envColorBase.a < 1.0)
+                    {
+                        surface.F0 = lerp(surface.F0, ColorToLinear(envColorBase.rgb), envMask.r);
+                        surface.Roughness = lerp(surface.Roughness, envColorBase.a, envMask.r);
+                    }
+                    else
+                    {
+                        surface.F0 = lerp(surface.F0, float3(1.0, 1.0, 1.0), envMask.r);
+                        surface.Roughness = lerp(surface.Roughness, 1.0 / 7.0, envMask.r);
+                    }
+                }
+                else
+                {
+                    // Static cubemap: use +X face average color as metallic tint
+                    float3 faceAvg = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15).rgb;
+                    surface.F0 = lerp(surface.F0, saturate(ColorToLinear(faceAvg)), envMask.r);
+                    surface.Roughness = lerp(surface.Roughness, 0.0f, envMask.r);
+                }
             }
         }
 
