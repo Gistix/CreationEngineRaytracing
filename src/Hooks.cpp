@@ -37,7 +37,11 @@ namespace Hooks
 	{
 		static RE::NiNode* GetCell3D(RE::TESObjectCELL* a_cell)
 		{
+#if defined(SKYRIM)
 			auto result = a_cell->GetRuntimeData().loadedData;
+#elif defined(FALLOUT4)
+			auto result = a_cell->loadedData;
+#endif
 
 			if (result)
 				return result->cell3D.get();
@@ -77,6 +81,7 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+#if defined(SKYRIM)
 	void TESWaterSystem_AddWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural)
 	{
 		func(a_waterSystem, a_waterObj, a_waterType, a_waterHeight, a_multiBoundShape, a_noDisplacement, a_isProcedural);
@@ -90,14 +95,17 @@ namespace Hooks
 
 		func(a_waterSystem, a_waterObj);
 	};
+#endif
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
+#if defined(SKYRIM)
 		if (oThis && oThis->rendererTexture) {
 			auto scene = Scene::GetSingleton();
 			auto sceneGraph = scene->GetSceneGraph();
 			sceneGraph->ReleaseTexture(oThis->rendererTexture);
 		}
+#endif
 
 		func(oThis);
 	}
@@ -118,7 +126,13 @@ namespace Hooks
 
 	void TESObjectCELL_AddRefr::thunk(RE::TESObjectCELL* a_cell, RE::TESObjectREFR* a_refr, RE::NiNode* a_node)
 	{
-		logger::info("TESObjectCELL::AddRefr - 0x{:08X} {} {}", a_refr->formID, a_refr->GetName(), a_node ? a_node->name.c_str() : "N/A");
+		logger::info("TESObjectCELL::AddRefr - 0x{:08X} {} {}", a_refr->formID,
+#if defined(SKYRIM)
+			a_refr->GetName(),
+#elif defined(FALLOUT4)
+			a_refr->GetDisplayFullName(),
+#endif
+			a_node ? a_node->name.c_str() : "N/A");
 
 		func(a_cell, a_refr, a_node);
 	}
@@ -127,13 +141,19 @@ namespace Hooks
 	{
 		static void thunk(RE::TESObject* a_object, RE::TESObjectREFR* a_refr)
 		{
-			logger::trace("TESObject::UnClone3D - Object {:0X} {}", a_object->formID, a_object->GetName());
+			logger::trace("TESObject::UnClone3D - Object {:0X} {}", a_object->formID,
+#if defined(SKYRIM)
+				a_object->GetName()
+#elif defined(FALLOUT4)
+				RE::TESFullName::GetFullName(*a_object)
+#endif
+			);
 
 			if (a_refr) {
 				logger::trace("TESObject::UnClone3D - Refr {:0X}", a_refr->formID);
 
-				if (auto* baseObject = a_refr->GetBaseObject()) {
-					if (auto* model = baseObject->As<RE::TESModel>())
+				if (auto* baseObject = Util::Adapter::GetBaseObject(a_refr)) {
+					if (auto* model = ce_cast<RE::TESModel*>(baseObject))
 						logger::trace("\tTESObject::UnClone3D - Model: {}", model->GetModel());
 				}
 
@@ -836,7 +856,9 @@ namespace Hooks
 
 	void Install()
 	{
+#if defined(SKYRIM)
 		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
+#endif
 
 #if defined(SKYRIM)
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));

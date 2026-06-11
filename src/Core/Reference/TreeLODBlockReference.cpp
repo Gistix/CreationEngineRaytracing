@@ -1,3 +1,5 @@
+#if defined(SKYRIM)
+
 #include "Core/Reference/TreeLODBlockReference.h"
 #include "Util.h"
 #include "Types/RE/RE.h"
@@ -35,3 +37,5 @@ void TreeLODBlockReference::UpdateVisibility()
 		instance->SetLODHidden(instanceData->hidden);
 	}
 }
+
+#endif

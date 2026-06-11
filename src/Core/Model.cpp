@@ -23,6 +23,7 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 		auto* refr = Util::Adapter::AsReference(form);
 
 		if (refr) {
+#if defined(SKYRIM)
 			auto extraDataList = Util::Adapter::GetExtraDataList(refr);
 			if (extraDataList && extraDataList->HasType(RE::ExtraDataType::kEmittanceSource)) {
 				if (auto* extra = extraDataList->GetByType<RE::ExtraEmittanceSource>()) {
@@ -31,6 +32,7 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 					}
 				}
 			}
+#endif
 		}
 	}
 }

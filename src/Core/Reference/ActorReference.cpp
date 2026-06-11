@@ -7,7 +7,11 @@ void ActorReference::Update()
 {
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
+#if defined(FALLOUT4)
+	auto* faceNode = reinterpret_cast<RE::NiAVObject*>(m_Actor->GetFaceNodeSkinned());
+#else
 	auto* faceNode = m_Actor->GetFaceNodeSkinned();
+#endif
 
 	if (faceNode != m_FaceNode) {
 		if (m_FaceNode)

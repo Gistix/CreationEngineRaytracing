@@ -297,14 +297,19 @@ void Scene::ClearDirtyStates()
 
 void Scene::AttachModel(RE::TESForm* form) 
 {
-	auto* refr = form->AsReference();
+	auto* refr = Util::Adapter::AsReference(form);
 
-	auto* baseObject = refr->GetBaseObject();
+	auto* baseObject = Util::Adapter::GetBaseObject(refr);
 
 	RE::FormType type = baseObject->GetFormType();
 
+#if defined(SKYRIM)
 	if (type == RE::FormType::IdleMarker)
 		return;
+#elif defined(FALLOUT4)
+	if (type == RE::FormType::kIDLM)
+		return;
+#endif
 
 	if (baseObject->IsMarker())
 		return;
@@ -314,7 +319,7 @@ void Scene::AttachModel(RE::TESForm* form)
 	if (!node)
 		return;
 
-	if (auto* model = baseObject->As<RE::TESModel>()) {
+	if (auto* model = ce_cast<RE::TESModel*>(baseObject)) {
 		GetSceneGraph()->CreateModel(refr, model->GetModel(), node);
 		return;
 	}
@@ -330,7 +335,7 @@ void Scene::AttachModel(RE::TESForm* form)
 		}
 	}
 
-	if (auto* actor = refr->As<RE::Actor>()) {
+	if (auto* actor = ce_cast<RE::Actor*>(refr)) {
 		GetSceneGraph()->CreateActorModel(actor, node);
 	}
 }
@@ -345,6 +350,7 @@ void Scene::AttachLand(RE::TESObjectLAND* land)
 
 void Scene::UpdateCameraData() const
 {
+#if defined(SKYRIM)
 	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
 
 	auto cameraData = runtimeData.cameraData.getEye();
@@ -444,6 +450,15 @@ void Scene::UpdateCameraData() const
 			}
 		}
 	}
+#elif defined(FALLOUT4)
+	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
+	m_CameraData->ViewInverse = float4x4();
+	m_CameraData->ProjInverse = float4x4();
+	m_CameraData->FrameIndex = 0;
+	m_CameraData->ScreenSize = uint2(1920, 1080);
+	m_CameraData->RenderSize = uint2(1920, 1080);
+	m_CameraData->Jitter = float2(0, 0);
+#endif
 }
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)

@@ -3,8 +3,9 @@
 #include "Core/TextureManager.h"
 #include "Scene.h"
 
-Texture MaterialBase::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType)
+Texture MaterialBase::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiSourceTexture>& niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, [[maybe_unused]] TextureType textureType)
 {
+#if defined(SKYRIM)
 	if (!niPointer || !niPointer->rendererTexture)
 		return Texture(defaultDescHandle, nullptr);
 
@@ -14,4 +15,7 @@ Texture MaterialBase::GetTexture(const RE::NiPointer<RE::NiSourceTexture> niPoin
 		return Texture(result, defaultDescHandle.get());
 
 	return Texture(defaultDescHandle, nullptr);
+#else
+	return Texture(defaultDescHandle, nullptr);
+#endif
 }

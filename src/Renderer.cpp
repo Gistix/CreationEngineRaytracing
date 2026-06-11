@@ -155,19 +155,20 @@ void Renderer::InitDefaultTextures()
 
 nvrhi::ITexture* Renderer::GetDepthTexture() {
 	if (!m_DepthTexture) {
-		auto& depthStencils = RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils;
-		m_DepthTexture = ShareTexture(depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::DepthWrite);
+		auto* d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(Util::Adapter::GetMainDepthStencilTexture());
+		m_DepthTexture = ShareTexture(d3d11Texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::DepthWrite);
 	}
 
 	return m_DepthTexture;
 }
 
 nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
+#if defined(SKYRIM)
 	if (!m_MotionVectorTexture) {
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
 		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector", nvrhi::Format::RG16_FLOAT, nvrhi::ResourceStates::ShaderResource);
 	}
-
+#endif
 	return m_MotionVectorTexture;
 }
 
@@ -415,14 +416,16 @@ void Renderer::InitReSTIRGI()
 	logger::info("ReSTIR GI resources created ({}x{})", width, height);
 }
 
-void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
+void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, [[maybe_unused]] ID3D12Resource* gnmao)
 {
 	if (!m_RenderTargets)
 		m_RenderTargets = eastl::make_unique<RenderTargets>();
 
 	m_RenderTargets->albedo = CreateHandleForNativeTexture(albedo, "Albedo RenderTarget");
 	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
+#if defined(SKYRIM)
 	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget");
+#endif
 }
 
 void Renderer::SetResolution(uint2 resolution)
@@ -503,9 +506,7 @@ nvrhi::ICommandList* Renderer::StartExecution()
 {
 	logger::trace("Renderer::ExecutePasses - Begin");
 
-	auto& stateRuntime = RE::BSGraphics::State::GetSingleton()->GetRuntimeData();
-
-	m_DynamicResolutionRatio = { stateRuntime.dynamicResolutionWidthRatio, stateRuntime.dynamicResolutionHeightRatio };
+	m_DynamicResolutionRatio = Util::Adapter::GetDynamicResolutionRatios();
 
 	// Get a new command list every frame, NVRHI command lists are single-use and they can hold stale scratch data
 	m_CommandList = GetGraphicsCommandList();

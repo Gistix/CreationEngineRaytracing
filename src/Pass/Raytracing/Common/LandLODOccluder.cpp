@@ -54,8 +54,12 @@ namespace Pass
 
 		const auto& terrainLODInstances = Scene::GetSingleton()->GetSceneGraph()->GetTerrainLodInstances();
 		for (auto& [block, blockRefr] : terrainLODInstances) {
+#if defined(SKYRIM)
 			if (block->node->GetLODLevel() != 4)
 				continue;
+#elif defined(FALLOUT4)
+			// BGSTerrainNode is only forward-declared in FO4, skip LOD level check
+#endif
 
 			// Only process terrain that is intersecting (or that intersected the last frame) against loaded range
 			if (!blockRefr->intersecting && !blockRefr->prevIntersecting)
@@ -136,7 +140,11 @@ namespace Pass
 		state.bindings = bindings;
 		commandList->setComputeState(state);
 
+#if defined(SKYRIM)
 		float4 loadedRange = *reinterpret_cast<float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
+#else
+		float4 loadedRange = { 0, 0, 0, 0 };
+#endif
 
 		// The original code subtracts posAdjust.x/y but the world matrix used in the original shader does not contain translation (posAdjust)
 		float4 highDetailRange = loadedRange - float4(0, 0, 15.0f, 15.0f);

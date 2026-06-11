@@ -10,6 +10,17 @@ namespace stl
 {
 #if defined(SKYRIM)
 	using namespace CESE::stl;
+#elif defined(FALLOUT4)
+	template <class E, class U = std::underlying_type_t<E>>
+	struct enumeration : public REX::TEnumSet<E, U>
+	{
+		using base = REX::TEnumSet<E, U>;
+		using base::base;
+
+		constexpr enumeration() noexcept = default;
+		constexpr enumeration(E a_val) noexcept : base(a_val) {}
+		constexpr enumeration(base a_val) noexcept : base(a_val) {}
+	};
 #endif
 
 	template <class T, std::size_t Size = 5>

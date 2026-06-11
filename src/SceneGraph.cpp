@@ -9,8 +9,10 @@
 #include "ShaderUtils.h"
 
 #include "Types/RE/RE.h"
+#if defined(SKYRIM)
 #include "Types/CommunityShaders/LightLimitFix.h"
 #include "Types/CommunityShaders/ISLCommon.h"
+#endif
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
@@ -147,9 +149,10 @@ void SceneGraph::Initialize()
 	m_TextureManager = eastl::make_unique<TextureManager>();
 }
 
-void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
+void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 {
-	auto& mainSSNRuntimeData = RE::BSShaderManager::State::GetSingleton().shadowSceneNode[0]->GetRuntimeData();
+#if defined(SKYRIM)
+	auto& mainSSNRuntimeData = Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData();
 
 	// Update Light Vector
 	{
@@ -188,9 +191,14 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 		auto niLight = bsLight->light.get();
 
+#if defined(SKYRIM)
 		if (niLight->GetFlags().any(RE::NiAVObject::Flag::kHidden))
+#elif defined(FALLOUT4)
+		if (niLight->GetFlags() & static_cast<uint64_t>(CESEAdapter::RE::NiAVObjectFlag::kHidden))
+#endif
 			light.m_Active = false;
 
+#if defined(SKYRIM)
 		if (bsLight->IsShadowLight())
 		{
 			auto* shadowLight = reinterpret_cast<RE::BSShadowLight*>(bsLight);
@@ -198,13 +206,16 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 			if (shadowLight->GetRuntimeData().maskIndex == 255)
 				light.m_Active = false;
 		}
+#endif
 
-		auto& runtimeData = niLight->GetLightRuntimeData();
+		auto runtimeData = Util::Adapter::GetLightRuntimeData(niLight);
 
+#if defined(SKYRIM)
 		auto flags = std::bit_cast<LightLimitFix::LightFlags>(runtimeData.ambient.red);
 
 		if (flags & LightLimitFix::LightFlags::Disabled)
 			light.m_Active = false;
+#endif
 
 		// Update Light Data
 		{
@@ -251,13 +262,9 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 				dir = Util::Math::Normalize(dir);
 				lightData.Direction = dir;
 
-				// NiSpotLight stores outerSpotAngle (half-angle in degrees) right after NiPointLight data
-				// NiPointLight size: 0x150 (SSE). NiSpotLight adds: outerSpotAngle at 0x14C, innerSpotAngle at 0x150
-				// These are accessible as POINT_LIGHT_RUNTIME_DATA is at 0x140, 3 floats (12 bytes) = ends at 0x14C
-				// Then: spotOuterAngle at 0x14C, spotInnerAngle at 0x150, spotExponent at 0x154
-				auto* pointLightData = reinterpret_cast<const float*>(&static_cast<RE::NiPointLight*>(niLight)->GetPointLightRuntimeData());
-				float outerAngleDeg = pointLightData[3]; // After constAtten, linearAtten, quadAtten
-				float innerAngleDeg = pointLightData[4];
+				auto pointLightData = Util::Adapter::GetPointLightRuntimeData(niLight);
+				float outerAngleDeg = pointLightData.spotOuterAngle;
+				float innerAngleDeg = pointLightData.spotInnerAngle;
 
 				// Clamp to valid range
 				outerAngleDeg = std::clamp(outerAngleDeg, 1.0f, 89.0f);
@@ -274,6 +281,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Flags = 0;
 
+#if defined(SKYRIM)
 			if (flags & LightLimitFix::LightFlags::InverseSquare) {
 				lightData.Flags |= LightFlags::ISL;
 
@@ -286,6 +294,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			if (flags & LightLimitFix::LightFlags::Linear)
 				lightData.Flags |= LightFlags::LinearLight;
+#endif
 		}
 
 		numLights++;
@@ -297,6 +306,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 	}
 
 	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), numLights * sizeof(LightData));
+#endif
 }
 
 void SceneGraph::UpdateActors()
@@ -319,10 +329,12 @@ void SceneGraph::UpdateLODVisibility()
 		ref->UpdateVisibility();
 	}
 
+#if defined(SKYRIM)
 	for (auto& [block, ref] : m_TreeLODInstances)
 	{
 		ref->UpdateVisibility();
 	}
+#endif
 }
 
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
@@ -413,6 +425,7 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 		return;
 	}
 
+#if defined(SKYRIM)
 	// TODO: Proper Model transform update, this whole section feels like hack
 	const REL::Relocation<const RE::NiRTTI*> rtti{ NiRTTI(NiMultiTargetTransformController) };
 	auto* controller = reinterpret_cast<RE::NiMultiTargetTransformController*>(root->GetController(rtti.get()));
@@ -439,7 +452,7 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 		}
 
 		for (auto* parent : parents) {
-			for (auto& child : parent->GetChildren()) {
+			for (auto& child : Util::Adapter::GetChildren(parent)) {
 				if (targets.find(child.get()) != targets.end())
 					continue;
 
@@ -450,6 +463,7 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 		if (createModels > 0)
 			return;
 	}
+#endif
 
 	CreateModelInternal(form, model, root);
 }
@@ -483,20 +497,24 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 
 		if (!firstPerson)
 			if (auto* headNode = actor->GetFaceNodeSkinned())
+#if defined(SKYRIM)
 				createAppendMeshes(actor, headNode);
+#elif defined(FALLOUT4)
+				createAppendMeshes(actor, reinterpret_cast<RE::NiAVObject*>(headNode));
+#endif
 
 		for (uint32_t i = 0; i < static_cast<int32_t>(RE::BIPED_OBJECT::kTotal); i++)
 		{
-			const auto& object = Util::Adapter::GetBipedObjects(biped)[i];
+			auto& object = Util::Adapter::GetBipedObjects(biped)[i];
 
-			if (!object.item)
+			if (!Util::Adapter::GetBipedObjectItem(&object))
 				continue;
 
 			if (!object.partClone)
 				continue;
 
 			logger::debug("\tSceneGraph::CreateActorModel - {}", magic_enum::enum_name(static_cast<RE::BIPED_OBJECT>(i)));
-			createAppendMeshes(object.item, object.partClone.get(), i);
+			createAppendMeshes(Util::Adapter::GetBipedObjectItem(&object), object.partClone.get(), i);
 		}
 
 		auto object = actor->Get3D(firstPerson);
@@ -532,12 +550,10 @@ void SceneGraph::CreateLandModel(RE::TESObjectLAND* land)
 {
 	auto* cell = land->parentCell;
 
-	if (!cell->IsExteriorCell())
+	if (!Util::Adapter::IsExteriorCell(cell))
 		return;
 
-	auto& runtimeData = cell->GetRuntimeData();
-
-	auto* exteriorData = runtimeData.cellData.exterior;
+	auto* exteriorData = Util::Adapter::GetCellExteriorData(cell);
 
 	auto* loadedData = land->loadedData;
 
@@ -737,31 +753,40 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 		return;
 	}
 
-	logger::debug("SceneGraph::CreateLODModel - {}, {}", node->name.c_str(), Util::Math::Float3(node->world.translate));
+	logger::debug("SceneGraph::CreateLODModel - {}", node->name.c_str());
 
 	auto rootWorldInverse = node->world.Invert();
 
-	Util::Traversal::ScenegraphRTGeometries(node, nullptr, [&](RE::BSGeometry* pGeometry)->RE::BSVisit::BSVisitControl {
+	Util::Traversal::ScenegraphRTGeometries(node, nullptr, [&](RE::BSGeometry* pGeometry)->CESEAdapter::RE::BSVisitControl {
 		if (type == Mesh::Type::LandLOD && pGeometry->parent && pGeometry->parent->name == "WATER")
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 
+#if defined(SKYRIM)
 		if (pGeometry->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kSubIndexTriShape)) {
 			logger::warn("SceneGraph::CreateLODModelImpl - Unsupported geometry type: {} for {}", magic_enum::enum_name(pGeometry->GetType().get()), magic_enum::enum_name(type));
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
 		logger::debug("\t{}: {}, {}", magic_enum::enum_name(pGeometry->GetType().get()), pGeometry->name.c_str(), Util::Math::Float3(pGeometry->world.translate));
+#elif defined(FALLOUT4)
+		if (pGeometry->type != 3 && pGeometry->type != 8) {
+			logger::warn("SceneGraph::CreateLODModelImpl - Unsupported geometry type: {} for {}", static_cast<int>(pGeometry->type), magic_enum::enum_name(type));
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+		}
+
+		logger::debug("\t{}: {}", static_cast<int>(pGeometry->type), pGeometry->name.c_str());
+#endif
 
 		const auto& geometryRuntimeData = Util::Adapter::GetGeometryRuntimeData(pGeometry);
 
 		if (!geometryRuntimeData.shaderProperty)
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 
 		auto* triShapeRD = geometryRuntimeData.rendererData;
 
 		if (!triShapeRD) {
 			logger::info("\tInvalid LOD Render Data");
-			return RE::BSVisit::BSVisitControl::kContinue;
+			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
 		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
@@ -771,21 +796,33 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 		auto triShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
 
+#if defined(SKYRIM)
 		const auto& triShapeRuntime = triShape->GetTrishapeRuntimeData();
+		const uint32_t vertexCount = triShapeRuntime.vertexCount;
+		const uint32_t triangleCount = triShapeRuntime.triangleCount;
+#elif defined(FALLOUT4)
+		const uint32_t vertexCount = triShape->numVertices;
+		const uint32_t triangleCount = triShape->numTriangles;
+#endif
 
 		const char* name = pGeometry->name.c_str();
 
+#if defined(SKYRIM)
 		if (pGeometry->GetType().all(RE::BSGeometry::Type::kSubIndexTriShape)) {
+#elif defined(FALLOUT4)
+		if (pGeometry->type == 8) {
+#endif
 			auto* subIndexTriShape = netimmerse_cast<RE::BSSubIndexTriShape*>(pGeometry);
 
 			if (subIndexTriShape) {
 				stl::enumeration<Mesh::Flags> flags = Mesh::Flags::SubIndex;
-				auto vertexData = Mesh::BuildVertices(flags, pGeometry, triShapeRD, triShapeRuntime.vertexCount, 0);
-				auto triangleData = Mesh::BuildTriangles(flags.get(), triShapeRD, triShapeRuntime.triangleCount);
+				auto vertexData = Mesh::BuildVertices(flags, pGeometry, triShapeRD, vertexCount, 0);
+				auto triangleData = Mesh::BuildTriangles(flags.get(), triShapeRD, triangleCount);
 
+#if defined(SKYRIM)
 				auto& runtimeData = subIndexTriShape->GetSubIndexedTrishapeRuntimeData();
 				
-				logger::debug("SubIndexTriShape - 0x{:08X} - Triangles: {}", reinterpret_cast<uintptr_t>(subIndexTriShape), triShapeRuntime.triangleCount);
+				logger::debug("SubIndexTriShape - 0x{:08X} - Triangles: {}", reinterpret_cast<uintptr_t>(subIndexTriShape), triangleCount);
 
 				logger::debug("SubIndexTriShape - Segments: {}, UnkSegments: {}, Unk170: {}, NonSegmented: {}",
 					runtimeData.numSegments, runtimeData.unkSegCount, runtimeData.unk170, runtimeData.nonSegmented);
@@ -805,7 +842,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 					auto identifier = static_cast<uint32_t>((segment.index / 3) << 16) | segment.numTris;
 
-					auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, flags.get(), name, pGeometry, localToRoot, identifier);
+					auto mesh = eastl::make_unique<Mesh>(RE::FormType{}, type, flags.get(), name, pGeometry, localToRoot, identifier);
 
 					// Copy triangles to segment triangles
 					Mesh::TriangleData segmentTriData{};
@@ -824,12 +861,18 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 					meshes.push_back(eastl::move(mesh));
 				}
+#elif defined(FALLOUT4)
+				auto mesh = eastl::make_unique<Mesh>(RE::FormType{}, type, flags.get(), name, pGeometry, localToRoot);
+				mesh->BuildMesh(triShapeRD, vertexCount, triangleCount, 0);
+				mesh->BuildMaterial(geometryRuntimeData, 0);
+				meshes.push_back(eastl::move(mesh));
+#endif
 			}
 		}
 		else {
-			auto mesh = eastl::make_unique<Mesh>(RE::FormType::None, type, Mesh::Flags::None, name, pGeometry, localToRoot);
+			auto mesh = eastl::make_unique<Mesh>(RE::FormType{}, type, Mesh::Flags::None, name, pGeometry, localToRoot);
 
-			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
+			mesh->BuildMesh(triShapeRD, vertexCount, triangleCount, 0);
 			mesh->BuildMaterial(geometryRuntimeData, 0);
 
 			meshes.push_back(eastl::move(mesh));
@@ -840,7 +883,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 		if (auto* model = CommitModel(path.c_str(), pGeometry, nullptr, meshes))
 			AddInstance(block, pGeometry, model);
 
-		return RE::BSVisit::BSVisitControl::kContinue;
+		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
 }
 
@@ -977,19 +1020,19 @@ void SceneGraph::SetInstanceDetached(RE::TESForm* form, bool detached)
 
 eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* object, RE::TESForm* form)
 {
-	auto formType = form ? form->GetFormType() : RE::FormType::None;
+	auto formType = form ? form->GetFormType() : RE::FormType{};
 	auto baseFormType = formType;
 
 	if (form) {
 		if (auto* refr = Util::Adapter::AsReference(form)) {
-			if (auto* baseObject = refr->GetBaseObject())
+			if (auto* baseObject = Util::Adapter::GetBaseObject(refr))
 				baseFormType = baseObject->GetFormType();
 		}
 	}
 
 	auto rootWorldInverse = object->world.Invert();
 
-	const bool isRootOrigin = object->world.translate == RE::NiPoint3::Zero();
+	const bool isRootOrigin = object->world.translate == Util::Adapter::GetNiPoint3Zero();
 
 	eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
@@ -1004,12 +1047,21 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 
 		logger::trace("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - {}", name);
 
+#if defined(SKYRIM)
 		const auto& geometryType = pGeometry->GetType();
 
 		if (geometryType.none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kMultiStreamInstanceTriShape)) {
 			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported Geometry: {} for {}", magic_enum::enum_name(geometryType.get()), name);
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
+#elif defined(FALLOUT4)
+		const uint8_t geometryType = pGeometry->type;
+
+		if (geometryType != 3 && geometryType != 4 && geometryType != 10) {
+			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported Geometry: {} for {}", static_cast<int>(geometryType), name);
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+		}
+#endif
 
 		const auto& geometryRuntimeData = Util::Adapter::GetGeometryRuntimeData(pGeometry);
 
@@ -1021,6 +1073,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		}
 
 		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
+#if defined(SKYRIM)
 		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
 		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
 		bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
@@ -1036,24 +1089,42 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		if (isEffectShader && geometryRuntimeData.alphaProperty)
 			if (geometryRuntimeData.alphaProperty->GetAlphaBlending())
 				return CESEAdapter::RE::BSVisitControl::kContinue;
+#elif defined(FALLOUT4)
+		if (!isLightingShader) {
+			logger::warn("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Unsupported shader type: {}", shaderProperty->GetRTTI()->name);
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+		}
+#endif
 
 		auto flags = Mesh::Flags::None;
 
 		// Landscape needs special handling of triangles
+#if defined(SKYRIM)
 		if (baseFormType == RE::FormType::Land)
 			flags |= Mesh::Flags::Landscape;
 		else if (baseFormType == RE::FormType::Water)
 			flags |= Mesh::Flags::Water;
+#elif defined(FALLOUT4)
+		if (baseFormType == RE::FormType_Land)
+			flags |= Mesh::Flags::Landscape;
+		else if (baseFormType == RE::FormType_Water)
+			flags |= Mesh::Flags::Water;
+#endif
 
+#if defined(SKYRIM)
 		if (geometryType.all(RE::BSGeometry::Type::kDynamicTriShape))
 			flags |= Mesh::Flags::Dynamic;
+#elif defined(FALLOUT4)
+		if (geometryType == 4)
+			flags |= Mesh::Flags::Dynamic;
+#endif
 
 		auto localToRoot = float3x4(
 			1.0f, 0.0f, 0.0f, 0.0f,
 			0.0f, 1.0f, 0.0f, 0.0f,
 			0.0f, 0.0f, 1.0f, 0.0f);
 
-		const bool isOrigin = pGeometry->world.translate == RE::NiPoint3::Zero();
+		const bool isOrigin = pGeometry->world.translate == Util::Adapter::GetNiPoint3Zero();
 
 		// Some plants have parts with geometry world position of [0, 0, 0]
 		// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
@@ -1065,6 +1136,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
 
+#if defined(SKYRIM)
 			const auto& triShapeRuntime = pTriShape->GetTrishapeRuntimeData();
 
 			if (triShapeRuntime.vertexCount == 0) {
@@ -1080,10 +1152,26 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 			auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot);
 
 			mesh->BuildMesh(triShapeRD, triShapeRuntime.vertexCount, triShapeRuntime.triangleCount, 0);
+#elif defined(FALLOUT4)
+			if (pTriShape->numVertices == 0) {
+				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Vertex count of 0 for {}", name ? name : "N/A");
+				return CESEAdapter::RE::BSVisitControl::kContinue;
+			}
+
+			if (pTriShape->numTriangles == 0) {
+				logger::error("\t\tSceneGraph::CreateMeshes::TraverseScenegraphGeometries - Triangle count of 0 for {}", name ? name : "N/A");
+				return CESEAdapter::RE::BSVisitControl::kContinue;
+			}
+
+			auto mesh = eastl::make_unique<Mesh>(baseFormType, Mesh::Type::Default, flags, name, pGeometry, localToRoot);
+
+			mesh->BuildMesh(triShapeRD, pTriShape->numVertices, pTriShape->numTriangles, 0);
+#endif
 			mesh->BuildMaterial(geometryRuntimeData, form ? form->formID : 0);
 
 			meshes.push_back(eastl::move(mesh));
 		}
+#if defined(SKYRIM)
 		else if (auto* skinInstance = geometryRuntimeData.skinInstance) {  // Skinned
 			auto& skinPartition = skinInstance->skinPartition;
 
@@ -1123,6 +1211,7 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 				meshes.push_back(eastl::move(mesh));
 			}
 		}
+#endif
 
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});

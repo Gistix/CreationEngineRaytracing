@@ -1,4 +1,5 @@
 #include "Game.h"
+#include "Utils/Adapter.h"
 
 namespace Util
 {
@@ -10,8 +11,8 @@ namespace Util
 			static float& cameraNear = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x40));
 			static float& cameraFar = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x44));
 #elif defined(FALLOUT4)
-			static float& cameraNear = *(float*)REL::RelocationID(57985, 2712882).address();
-			static float& cameraFar = *(float*)REL::RelocationID(958877, 2712883).address();
+			static float& cameraNear = *(float*)REL::ID(57985).address();
+			static float& cameraFar = *(float*)REL::ID(958877).address();
 #endif
 
 			float4 cameraData{};
@@ -23,20 +24,32 @@ namespace Util
 			return cameraData;
 		}
 
+#if defined(SKYRIM)
 		bool IsGlobalLight(RE::BSLight* a_light)
 		{
+#if defined(SKYRIM)
 			return !(a_light->portalStrict || !a_light->portalGraph);
+#elif defined(FALLOUT4)
+			return true;
+#endif
 		}
+#elif defined(FALLOUT4)
+		bool IsGlobalLight([[maybe_unused]] RE::BSLight* a_light)
+		{
+			// FO4 BSLight does not have portalStrict/portalGraph members
+			return true;
+		}
+#endif
 
 		bool IsHidden(RE::NiAVObject* object, RE::NiAVObject* root) {
 			if (!object)
 				return false;
 
-			if (object->GetFlags().all(RE::NiAVObject::Flag::kHidden))
+			if (Util::Adapter::IsNiAVObjectHidden(object))
 				return true;
 
 			if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(object)) {
-				if (multiBoundNode->GetRuntimeData().cullingMode == RE::BSCullingProcess::BSCPCullingType::kAllFail)
+				if (Util::Adapter::IsMultiBoundNodeAllFail(multiBoundNode))
 					return true;
 			}
 
@@ -48,12 +61,14 @@ namespace Util
 				return false;
 			}
 
+#if defined(SKYRIM)
 			// If object parent index is not active on its parent NiSwitchNode, it is effectively hidden
 			if (auto* switchNode = netimmerse_cast<RE::NiSwitchNode*>(object->parent)) {
 				// This looks backwards, but its the way it seem to work
 				if (static_cast<uint32_t>(switchNode->index) == object->parentIndex)
 					return true;
 			}
+#endif
 
 			// Stop recursion if parent is the root (do not check the root)
 			if (object->parent == root)

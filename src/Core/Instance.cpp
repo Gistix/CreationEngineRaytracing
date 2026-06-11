@@ -21,10 +21,18 @@ void Instance::SetHiddenModel(bool hidden)
 bool Instance::IsHidden() const
 {
 	const bool needsAccumulated = model->GetMeshFlags().all(Mesh::Flags::Landscape) || model->GetMeshTypes().all(Mesh::Type::ObjectLOD);
-	if (needsAccumulated && m_Node->GetFlags().none(RE::NiAVObject::Flag::kAccumulated))
+#if defined(SKYRIM)
+	if (needsAccumulated && m_Node->GetFlags().none(CESEAdapter::RE::NiAVObjectFlag::kAccumulated))
+#elif defined(FALLOUT4)
+	if (needsAccumulated && (m_Node->GetFlags() & static_cast<uint64_t>(CESEAdapter::RE::NiAVObjectFlag::kAccumulated)) == 0)
+#endif
 		return true;
 
-	return m_State.any(State::Detached, State::FirstPersonHidden, State::LODHidden) || m_Node->GetFlags().all(RE::NiAVObject::Flag::kHidden);
+#if defined(SKYRIM)
+	return m_State.any(State::Detached, State::FirstPersonHidden, State::LODHidden) || m_Node->GetFlags().all(CESEAdapter::RE::NiAVObjectFlag::kHidden);
+#elif defined(FALLOUT4)
+	return m_State.any(State::Detached, State::FirstPersonHidden, State::LODHidden) || (m_Node->GetFlags() & static_cast<uint64_t>(CESEAdapter::RE::NiAVObjectFlag::kHidden)) != 0;
+#endif
 }
 
 bool Instance::SkipAS() const
@@ -36,8 +44,11 @@ bool Instance::SkipAS() const
 
 	// Skip non-effect models with kRefraction when Path Tracing is active
 	if (isPTActive &&
-		model->GetShaderFlags().any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction) &&
-		!(model->GetShaderTypes() & RE::BSShader::Type::Effect))
+		model->GetShaderFlags().any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction)
+#if defined(SKYRIM)
+		&& !(model->GetShaderTypes() & RE::BSShader::Type::Effect)
+#endif
+		)
 		return true;
 
 	return m_State.all(State::HiddenModel);

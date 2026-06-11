@@ -156,6 +156,7 @@ void* operator new[](size_t size, size_t alignment, size_t alignmentOffset, cons
 #else
 #	include <spdlog/sinks/msvc_sink.h>
 #endif
+#include <spdlog/spdlog.h>
 
 #include "SimpleMath.h"
 

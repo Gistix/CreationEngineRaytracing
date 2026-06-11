@@ -11,12 +11,33 @@
 namespace RE {
 	using FormID = TESFormID;
 	using FormType = ENUM_FORM_ID;
+	inline constexpr FormType FormType_None = ENUM_FORM_ID::kNONE;
+	inline constexpr FormType FormType_Land = ENUM_FORM_ID::kLAND;
+	inline constexpr FormType FormType_Water = ENUM_FORM_ID::kWATR;
+	inline constexpr FormType FormType_Tree = ENUM_FORM_ID::kTREE;
+	static constexpr FormType IdleMarker = ENUM_FORM_ID::kIDLM;
+
+	inline const NiPoint3& NiPoint3_Zero()
+	{
+		return NiPoint3::ZERO;
+	}
 }
 
 namespace REL
 {
 	using RelocationID = ID;
 	using VariantOffset = Offset;
+}
+#endif
+
+// Cross-engine form cast (replaces skyrim_cast)
+#if defined(SKYRIM)
+#	define ce_cast ::skyrim_cast
+#elif defined(FALLOUT4)
+template <class To, class From>
+To ce_cast(From* a_from)
+{
+	return reinterpret_cast<To>(a_from);
 }
 #endif
 

@@ -4,6 +4,7 @@
 
 void TerrainLODBlockReference::UpdateIntersection()
 {
+#if defined(SKYRIM)
 	if (block->node->GetLODLevel() != 4)
 		return;
 
@@ -27,6 +28,10 @@ void TerrainLODBlockReference::UpdateIntersection()
 	prevIntersecting = intersecting;
 
 	intersecting = Util::Math::Intersects(loadedPosition, loadedExtents * 2.0f, lodPosition, lodSize);
+#else
+	prevIntersecting = intersecting;
+	intersecting = false;
+#endif
 }
 
 void TerrainLODBlockReference::UpdateVisibility()

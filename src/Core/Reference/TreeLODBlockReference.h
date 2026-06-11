@@ -1,4 +1,5 @@
 #pragma once
+#if defined(SKYRIM)
 
 #include <PCH.h>
 
@@ -18,3 +19,5 @@ struct TreeLODBlockReference : LODBlockReference
 
 	virtual void UpdateVisibility() override;
 };
+
+#endif

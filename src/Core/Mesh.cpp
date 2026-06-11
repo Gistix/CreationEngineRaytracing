@@ -26,6 +26,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, RE
 	if (flags.all(Flags::Dynamic)) {
 		vertexData.dynamicPosition.resize(vertexCountIn);
 
+#if defined(SKYRIM)
 		static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
 
 		if (geometry->GetRTTI() == dynamicTriShapeRTTI.get()) {
@@ -41,6 +42,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, RE
 				dynamic = true;
 			}
 		}
+#endif
 
 		// Clear Dynamic flag if geometry is not a valid BSDynamicTriShape.
 		// Enforces the invariant that when Flags::Dynamic is set, geometry is always a BSDynamicTriShape.
@@ -543,6 +545,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
+#if defined(SKYRIM)
 	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
@@ -567,6 +570,9 @@ bool Mesh::UpdateDynamicPosition()
 	runtimeData.lock.Unlock();
 
 	return true;
+#else
+	return false;
+#endif
 }
 
 void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
@@ -597,6 +603,7 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	if (!skinInstance)
 		return false;
 
+#if defined(SKYRIM)
 	auto* scene = Scene::GetSingleton();
 	const bool isPathTracing = scene->IsPathTracingActive();
 	const bool applyPathTracingCull = scene->ApplyPathTracingCull();
@@ -646,6 +653,9 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	}
 
 	return true;
+#else
+	return false;
+#endif
 }
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
@@ -676,6 +686,7 @@ bool Mesh::GetDismemberHidden() const
 	if (!skinInstance)
 		return false;
 
+#if defined(SKYRIM)
 	static REL::Relocation<const RE::NiRTTI*> dismemberRTTI{ RE::BSDismemberSkinInstance::Ni_RTTI };
 	if (skinInstance->GetRTTI() != dismemberRTTI.get())
 		return false;
@@ -687,6 +698,9 @@ bool Mesh::GetDismemberHidden() const
 	auto& partition = dismemberRuntime.partitions[m_Identifier];
 
 	return !partition.editorVisible;
+#else
+	return false;
+#endif
 }
 
 bool Mesh::GetSubIndexHidden() const
@@ -757,11 +771,13 @@ void Mesh::InitState(RE::NiAVObject* instanceRoot, Flags modelFlags)
 
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
 {
+#if defined(SKYRIM)
 	// This should never be true, but it often is, meaning we missed some logic that removes this mesh or the entire instance
 	if (bsGeometryPtr->GetRefCount() == 1) {
 		logger::trace("Mesh::Update - Released BSGeometry being referenced in 0x{:08X} {}", reinterpret_cast<uintptr_t>(bsGeometryPtr.get()), m_Name);
 		return DirtyFlags::None;
 	}
+#endif
 
 	material->Update(Util::Adapter::GetGeometryRuntimeData(bsGeometryPtr.get()).shaderProperty);
 

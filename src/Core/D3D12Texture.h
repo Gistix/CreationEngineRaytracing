@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(FALLOUT4)
+#include "Types/RE/FO4/BSGraphicsTexture.h"
+#endif
+
 namespace RE::BSGraphics 
 {
 	struct TextureData
@@ -16,5 +20,7 @@ namespace RE::BSGraphics
 	public:
 		ID3D12Resource* d3d12Texture;
 	};
+#if defined(SKYRIM)
 	static_assert(sizeof(D3D12Texture) == 0x30);
+#endif
 }

@@ -22,6 +22,16 @@ namespace RE
 		static constexpr auto VTABLE{ VTABLE::BSSubIndexTriShape };
 		static constexpr auto Ni_RTTI{ Ni_RTTI::BSSubIndexTriShape };
 
+		struct SUB_INDEX_TRISHAPE_RUNTIME_DATA
+		{
+			SegmentData*  segmentData;  /* 00 */
+			std::uint32_t numSegments;  /* 08 */
+			std::uint32_t unkSegCount;  /* 0C */
+			bool          unk170;       /* 10 */
+			bool          nonSegmented; /* 14 */
+		};
+		static_assert(sizeof(SUB_INDEX_TRISHAPE_RUNTIME_DATA) == 0x18);
+
 		BSSubIndexTriShape() { REX::EMPLACE_VTABLE(this); }
 		virtual ~BSSubIndexTriShape() = default;  // NOLINT(modernize-use-override) 00
 
@@ -33,6 +43,11 @@ namespace RE
 		bool          RegisterStreamables(NiStream& a_stream) override;   // 1A
 		void          SaveBinary(NiStream& a_stream) override;            // 1B
 		bool          IsEqual(NiObject* a_object) override;               // 1C
+
+		[[nodiscard]] SUB_INDEX_TRISHAPE_RUNTIME_DATA& GetSubIndexedTrishapeRuntimeData() noexcept
+		{
+			return reinterpret_cast<SUB_INDEX_TRISHAPE_RUNTIME_DATA&>(segmentData);
+		}
 
 		// members
 		SegmentData*  segmentData;  /* 00 */

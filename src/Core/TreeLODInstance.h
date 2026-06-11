@@ -1,4 +1,5 @@
 #pragma once
+#if defined(SKYRIM)
 
 #include "core/Instance.h"
 
@@ -16,3 +17,5 @@ struct TreeLODInstance : Instance
 
     virtual float GetAlpha() override { return m_Data->alpha; };
 };
+
+#endif

@@ -37,8 +37,8 @@ namespace RE
 		static NiSkinInstance* Create();
 
 		// members
-		NiPointer<NiSkinData>      skinData;                      // 10
-		NiPointer<NiSkinPartition> skinPartition;                 // 18
+		NiSkinData*                skinData;                      // 10
+		NiSkinPartition*           skinPartition;                 // 18
 		NiAVObject*                rootParent;                    // 20
 		NiAVObject**               bones;                         // 28
 		const NiTransform**        boneWorldTransforms;           // 30
