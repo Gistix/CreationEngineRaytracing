@@ -11,6 +11,6 @@
 [submodule "extern/RTXDI-Library"]
 	path = extern/RTXDI-Library
 	url = https://github.com/NVIDIA-RTX/RTXDI-Library.git
-[submodule "extern/commonlibf4"]
-	path = extern/commonlibf4
+[submodule "extern/CommonLibF4"]
+	path = extern/CommonLibF4
 	url = https://github.com/Dear-Modding-FO4/commonlibf4.git
