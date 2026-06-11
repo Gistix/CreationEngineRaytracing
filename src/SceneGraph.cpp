@@ -507,14 +507,16 @@ void SceneGraph::CreateActorModel(RE::Actor* actor, RE::NiAVObject* root, bool f
 		{
 			auto& object = Util::Adapter::GetBipedObjects(biped)[i];
 
-			if (!Util::Adapter::GetBipedObjectItem(&object))
+			auto objectItem = Util::Adapter::GetBipedObjectItem(object);
+
+			if (!objectItem)
 				continue;
 
 			if (!object.partClone)
 				continue;
 
 			logger::debug("\tSceneGraph::CreateActorModel - {}", magic_enum::enum_name(static_cast<RE::BIPED_OBJECT>(i)));
-			createAppendMeshes(Util::Adapter::GetBipedObjectItem(&object), object.partClone.get(), i);
+			createAppendMeshes(objectItem, object.partClone.get(), i);
 		}
 
 		auto object = actor->Get3D(firstPerson);

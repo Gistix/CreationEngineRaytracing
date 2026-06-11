@@ -15,7 +15,7 @@ namespace Util
 		PointLightRuntimeData GetPointLightRuntimeData(RE::NiLight* a_light);
 
 		RE::BIPOBJECT* GetBipedObjects(RE::BipedAnim* a_bipedAnim);
-		RE::TESForm* GetBipedObjectItem(RE::BIPOBJECT* a_bipObject);
+		RE::TESForm* GetBipedObjectItem(const RE::BIPOBJECT& a_bipObject);
 		RE::TESBoundObject* GetBaseObject(RE::TESObjectREFR* a_refr);
 
 		RE::BSGeometry* AsGeometry(RE::NiAVObject* a_object);
@@ -53,11 +53,11 @@ namespace Util
 #endif
 		}
 
-		REX::W32::ID3D11Texture2D* GetMainDepthStencilTexture();
+		ID3D11Texture2D* GetMainDepthStencilTexture();
 
 		float2 GetDynamicResolutionRatios();
 
-		const RE::BSGraphics::ViewData& GetCameraEyeViewData();
+		const RE::BSGraphics::ViewData GetCameraEyeViewData();
 
 		bool IsNiAVObjectHidden(const RE::NiAVObject* a_object);
 

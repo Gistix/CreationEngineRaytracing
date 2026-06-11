@@ -132,12 +132,12 @@ namespace Util
 #endif
 		}
 
-		RE::TESForm* GetBipedObjectItem(const RE::BIPOBJECT* a_bipObject)
+		RE::TESForm* GetBipedObjectItem(const RE::BIPOBJECT& a_bipObject)
 		{
 #if defined(SKYRIM)
-			return a_bipObject->item;
+			return a_bipObject.item;
 #elif defined(FALLOUT4)
-			return a_bipObject->parent.object;
+			return a_bipObject.parent.object;
 #endif
 		}
 
@@ -148,7 +148,7 @@ namespace Util
 			auto& rd = a_light->GetLightRuntimeData();
 			data.ambient = rd.ambient;
 			data.diffuse = rd.diffuse;
-			data.specular = rd.specular;
+			data.specular = { 0.0f, 0.0f, 0.0f };
 			data.radius = rd.radius;
 			data.fade = rd.fade;
 			data.fadeZone = 0.0f;
@@ -222,7 +222,7 @@ namespace Util
 #endif
 		}
 
-		REX::W32::ID3D11Texture2D* GetMainDepthStencilTexture()
+		ID3D11Texture2D* GetMainDepthStencilTexture()
 		{
 #if defined(SKYRIM)
 			return RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture;
@@ -242,7 +242,7 @@ namespace Util
 #endif
 		}
 
-		const RE::BSGraphics::ViewData& GetCameraEyeViewData()
+		const RE::BSGraphics::ViewData GetCameraEyeViewData()
 		{
 #if defined(SKYRIM)
 			return RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData().cameraData.getEye();
