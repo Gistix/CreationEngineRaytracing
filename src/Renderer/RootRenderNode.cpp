@@ -30,6 +30,9 @@ void RootRenderNode::ResolutionChanged(uint2 resolution)
 
 	for (auto* child : m_Children)
 	{
+		if (child)
+			continue;
+
 		child->ResolutionChanged(resolution);
 	}
 }
@@ -41,6 +44,9 @@ void RootRenderNode::SettingsChanged(const Settings& settings)
 
 	for (auto* child : m_Children)
 	{
+		if (!child)
+			continue;
+
 		child->SettingsChanged(settings);
 	}
 }
@@ -52,6 +58,9 @@ void RootRenderNode::Execute(nvrhi::ICommandList* commandList)
 
 	for (auto* child : m_Children)
 	{
+		if (!child)
+			continue;
+
 		child->Execute(commandList);
 	}
 }

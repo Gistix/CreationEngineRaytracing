@@ -563,12 +563,12 @@ void Renderer::PostExecution()
 	m_PassTimings.clear();
 
 	if (timings) {
-		auto* rootNode = m_RenderGraph->GetRootNode();
-
-		rootNode->ForEach([&](RenderNode* node) {
-			if (node->m_TimerQuery && device->pollTimerQuery(node->m_TimerQuery))
-				m_PassTimings.push_back(PassTiming(node->m_Name.c_str(), m_NVRHIDevice->getTimerQueryTime(node->m_TimerQuery) * 1000.0f));
-		});
+		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
+			rootNode->ForEach([&](RenderNode* node) {
+				if (node->m_TimerQuery && device->pollTimerQuery(node->m_TimerQuery))
+					m_PassTimings.push_back(PassTiming(node->m_Name.c_str(), m_NVRHIDevice->getTimerQueryTime(node->m_TimerQuery) * 1000.0f));
+			});
+		}
 	}
 
 	m_FrameIndex++;
