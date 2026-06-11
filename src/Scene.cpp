@@ -52,8 +52,13 @@ void Scene::DataLoaded()
 void Scene::SetLogLevel(spdlog::level::level_enum a_level)
 {
 	logLevel = a_level;
+
+#if defined(SKYRIM)
 	spdlog::set_level(logLevel);
 	spdlog::flush_on(logLevel);
+#elif defined(FALLOUT4)
+
+#endif
 	logger::info("Log Level set to {} ({})", magic_enum::enum_name(logLevel), magic_enum::enum_integer(logLevel));
 }
 

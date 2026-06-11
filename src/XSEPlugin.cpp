@@ -3,11 +3,6 @@
 #include "Util.h"
 #include "Plugin.h"
 
-#if defined(FALLOUT4)
-#	include "REX/W32/SHELL32.h"
-#	include "REX/W32/OLE32.h"
-#endif
-
 #define DLLEXPORT __declspec(dllexport)
 
 std::list<std::string> errors;
@@ -16,6 +11,7 @@ bool Load();
 
 void InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = spdlog::level::info)
 {
+#if defined(SKYRIM)
 #ifndef NDEBUG
 	auto sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
 #else
@@ -46,16 +42,21 @@ void InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = spdlog::
 	auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
 	log->set_level(level);
 	log->flush_on(spdlog::level::info);
-
 	spdlog::set_default_logger(std::move(log));
 	spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [%t] [%s:%#] %v");
+#endif
 }
 
-#if defined(SKYRIM)
-void MessageHandler(SKSE::MessagingInterface::Message* message)
+void MessageHandler(CESE::MessagingInterface::Message* message)
 {
+#if defined(SKYRIM)
+	static constexpr uint32_t CESE_MessagingInterface_Loaded = CESE::MessagingInterface::kDataLoaded;
+#elif defined(FALLOUT4)
+	static constexpr uint32_t CESE_MessagingInterface_Loaded = CESE::MessagingInterface::kGameLoaded;
+#endif
+
 	switch (message->type) {
-	case SKSE::MessagingInterface::kPostPostLoad:
+	case CESE::MessagingInterface::kPostPostLoad:
 	{
 		if (errors.empty()) {
 			Scene::GetSingleton()->PostPostLoad();
@@ -63,11 +64,17 @@ void MessageHandler(SKSE::MessagingInterface::Message* message)
 
 		break;
 	}
-	case SKSE::MessagingInterface::kDataLoaded:
+	case CESE_MessagingInterface_Loaded:
 	{
 		for (auto it = errors.begin(); it != errors.end(); ++it) {
 			auto& errorMessage = *it;
-			RE::DebugMessageBox(std::format("Creation Engine Renderer\n{}, will disable all hooks and features", errorMessage).c_str());
+
+#if defined(SKYRIM)			
+			RE::DebugMessageBox(std::format("Creation Engine Raytracing\n{}, will disable all hooks and features", errorMessage).c_str());
+#elif defined(FALLOUT4)
+			auto okText = RE::GameSettingCollection::GetSingleton()->GetSetting("sOk")->GetString();
+			RE::MessageMenuManager::GetSingleton()->Create(std::format("{}, will disable all hooks and features", errorMessage).c_str(), "Creation Engine Raytracing Error", nullptr, RE::WARNING_TYPES::kPlugins, okText.data());
+#endif
 		}
 
 		if (errors.empty()) {
@@ -81,13 +88,15 @@ void MessageHandler(SKSE::MessagingInterface::Message* message)
 
 bool Load()
 {
-	auto messaging = SKSE::GetMessagingInterface();
-	messaging->RegisterListener("SKSE", MessageHandler);
+	auto messaging = CESE::GetMessagingInterface();
+	messaging->RegisterListener(MessageHandler);
 
 	auto* scene = Scene::GetSingleton();
 
+#if defined(SKYRIM)
 	auto log = spdlog::default_logger();
 	log->set_level(scene->GetLogLevel());
+#endif
 
 	const std::array requiredDLLs = {
 		L"Data/SKSE/Plugins/EngineFixes.dll",
@@ -110,6 +119,7 @@ bool Load()
 	return true;
 }
 
+#if defined(SKYRIM)
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
 #ifndef NDEBUG
@@ -139,48 +149,6 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface*, 
 }
 
 #elif defined(FALLOUT4)
-void MessageHandler(F4SE::MessagingInterface::Message* message)
-{
-	switch (message->type) {
-	case F4SE::MessagingInterface::kPostPostLoad:
-	{
-		if (errors.empty()) {
-			Scene::GetSingleton()->PostPostLoad();
-		}
-
-		break;
-	}
-	case F4SE::MessagingInterface::kGameDataReady:
-	{
-		for (auto it = errors.begin(); it != errors.end(); ++it) {
-			auto& errorMessage = *it;
-			logger::error("Creation Engine Renderer\n{}, will disable all hooks and features", errorMessage);
-		}
-
-		if (errors.empty()) {
-			Scene::GetSingleton()->DataLoaded();
-		}
-
-		break;
-	}
-	}
-}
-
-bool Load()
-{
-	auto messaging = F4SE::GetMessagingInterface();
-	messaging->RegisterListener(MessageHandler);
-
-	auto* scene = Scene::GetSingleton();
-
-	auto log = spdlog::default_logger();
-	log->set_level(scene->GetLogLevel());
-
-	scene->Load();
-
-	return true;
-}
-
 extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f4se, [[maybe_unused]] bool a_isEditor)
 {
 #ifndef NDEBUG

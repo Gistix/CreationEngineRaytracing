@@ -21,6 +21,14 @@ namespace stl
 		constexpr enumeration(E a_val) noexcept : base(a_val) {}
 		constexpr enumeration(base a_val) noexcept : base(a_val) {}
 	};
+
+	[[nodiscard]] inline auto utf16_to_utf8(std::wstring_view a_in) noexcept
+		-> std::optional<std::string>
+	{
+		std::string out;
+		REX::UTF16_TO_UTF8(a_in, out);
+		return out;
+	}
 #endif
 
 	template <class T, std::size_t Size = 5>

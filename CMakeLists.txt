@@ -73,6 +73,20 @@ target_link_libraries(
     ${DETOURS_LIBRARY}
 )
 
+if(BUILD_FALLOUT4)
+    target_link_libraries(
+	    ${PROJECT_NAME}
+	    PRIVATE
+        spdlog::spdlog
+	    bcrypt.lib
+	    d3d11.lib
+	    dxgi.lib
+	    version.lib
+	    ws2_32.lib
+	    dbghelp.lib
+    )
+endif()
+
 # Some third-party libs (e.g. nvrhi with dx12) are built with /GL.
 # In RelWithDebInfo, align linker options to avoid LNK4075/LNK1218 when warnings are treated as errors.
 if(MSVC)
