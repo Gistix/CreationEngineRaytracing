@@ -11,26 +11,13 @@ bool Load();
 
 void InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = spdlog::level::info)
 {
-#if defined(SKYRIM)
 #ifndef NDEBUG
 	auto sink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
 #else
-	std::filesystem::path path;
-#ifdef SKYRIM
-	path = *logger::log_directory();
-#elif defined(FALLOUT4)
-	{
-		wchar_t* documentsPath = nullptr;
-		REX::W32::SHGetKnownFolderPath(REX::W32::FOLDERID_Documents, REX::W32::KF_FLAG_DEFAULT, nullptr, &documentsPath);
-		if (documentsPath) {
-			path = documentsPath;
-			REX::W32::CoTaskMemFree(documentsPath);
-		}
-		path /= "My Games/Fallout4/F4SE";
-	}
-#endif
-	path /= std::format("{}.log", Plugin::NAME);
-	auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path.string(), true);
+	auto path = logger::log_directory();
+
+	*path /= std::format("{}.log"sv, Plugin::NAME);
+	auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
 #endif
 
 #ifndef NDEBUG
@@ -44,7 +31,6 @@ void InitializeLog([[maybe_unused]] spdlog::level::level_enum a_level = spdlog::
 	log->flush_on(spdlog::level::info);
 	spdlog::set_default_logger(std::move(log));
 	spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [%t] [%s:%#] %v");
-#endif
 }
 
 void MessageHandler(CESE::MessagingInterface::Message* message)
@@ -93,10 +79,8 @@ bool Load()
 
 	auto* scene = Scene::GetSingleton();
 
-#if defined(SKYRIM)
 	auto log = spdlog::default_logger();
 	log->set_level(scene->GetLogLevel());
-#endif
 
 	const std::array requiredDLLs = {
 		L"Data/SKSE/Plugins/EngineFixes.dll",

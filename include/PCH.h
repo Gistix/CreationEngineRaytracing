@@ -12,6 +12,9 @@ namespace logger = SKSE::log;
 #	include "F4SE/F4SE.h"
 #	include "RE/Fallout.h"
 
+#   include "REX/W32/OLE32.h"
+#   include "REX/W32/SHELL32.h"
+#   include <spdlog/spdlog.h>;
 namespace logger
 {
     template <class... Args>
@@ -37,6 +40,21 @@ namespace logger
     template <class... Args>
     void critical(std::format_string<Args...> fmt, Args&&... args) {}
     inline void critical(std::string_view msg) {}
+
+    static std::optional<std::filesystem::path> log_directory()
+    {
+        wchar_t* buffer{ nullptr };
+        const auto result = REX::W32::SHGetKnownFolderPath(REX::W32::FOLDERID_Documents, REX::W32::KF_FLAG_DEFAULT, nullptr, std::addressof(buffer));
+        std::unique_ptr<wchar_t[], decltype(&REX::W32::CoTaskMemFree)> knownPath(buffer, REX::W32::CoTaskMemFree);
+        if (!knownPath || result != 0) {
+            error("Failed to get known folder path");
+            return std::nullopt;
+        }
+
+        std::filesystem::path path = knownPath.get();
+        path /= std::format("My Games/{}/F4SE", F4SE::GetSaveFolderName());
+        return path;
+    }
 }
 #endif
 
