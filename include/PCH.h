@@ -18,28 +18,70 @@ namespace logger = SKSE::log;
 namespace logger
 {
     template <class... Args>
-    void trace(std::format_string<Args...> fmt, Args&&... args) {}
-    inline void trace(std::string_view msg) {}
+    void trace(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::TRACE<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void trace(std::string_view msg)
+    {
+        REX::TRACE<void>{msg};
+    }
 
     template <class... Args>
-    void debug(std::format_string<Args...> fmt, Args&&... args) {}
-    inline void debug(std::string_view msg) {}
+    void debug(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::DEBUG<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void debug(std::string_view msg)
+    {
+        REX::DEBUG<void>{msg};
+    }
 
     template <class... Args>
-    void info(std::format_string<Args...> fmt, Args&&... args) {}
-    inline void info(std::string_view msg) {}
+    void info(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::INFO<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void info(std::string_view msg)
+    {
+        REX::INFO<void>{msg};
+    }
 
     template <class... Args>
-    void warn(std::format_string<Args...> fmt, Args&&... args) {}
-    inline void warn(std::string_view msg) {}
+    void warn(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::WARN<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void warn(std::string_view msg)
+    {
+        REX::WARN<void>{msg};
+    }
 
     template <class... Args>
-    void error(std::format_string<Args...> fmt, Args&&... args) {}
-    inline void error(std::string_view msg) {}
+    void error(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::ERROR<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void error(std::string_view msg)
+    {
+        REX::ERROR<void>{msg};
+    }
 
     template <class... Args>
-    void critical(std::format_string<Args...> fmt, Args&&... args) {}
-    inline void critical(std::string_view msg) {}
+    void critical(std::format_string<Args...> fmt, Args&&... args)
+    {
+        REX::CRITICAL<Args...>{fmt, std::forward<Args>(args)...};
+    }
+
+    inline void critical(std::string_view msg)
+    {
+        REX::CRITICAL<void>{msg};
+    }
 
     static std::optional<std::filesystem::path> log_directory()
     {
