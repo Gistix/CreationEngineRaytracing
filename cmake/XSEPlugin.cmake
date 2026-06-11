@@ -107,11 +107,8 @@ elseif(BUILD_FALLOUT4)
 	set(CommonLibSharedName "CommonLibShared")
 	set(CommonLibSharedTarget CommonLibShared)
 
-	set(XMAKE_MODE
-		$<$<CONFIG:Debug>:debug>
-		$<$<CONFIG:Release>:release>
-		$<$<CONFIG:RelWithDebInfo>:releasedbg>
-	)
+	# Hardcoded as release for now
+	set(XMAKE_MODE "release")
 
 	set(CommonLibBuildPath "${CommonLibFullPath}/build/windows/x64/${XMAKE_MODE}")
 

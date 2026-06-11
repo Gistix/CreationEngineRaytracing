@@ -227,7 +227,7 @@ namespace Util
 #if defined(SKYRIM)
 			return RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture;
 #elif defined(FALLOUT4)
-			return RE::BSGraphics::GetRendererData()->depthStencilTargets[0].texture;
+			return reinterpret_cast<ID3D11Texture2D*>(RE::BSGraphics::GetRendererData()->depthStencilTargets[0].texture);
 #endif
 		}
 

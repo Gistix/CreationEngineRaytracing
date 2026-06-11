@@ -9,7 +9,7 @@
 #include "Utils/CalcTangents.h"
 #include "Core/D3D12Texture.h"
 
-Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
+Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[maybe_unused]] RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
 {
 	VertexData vertexData{};
 
@@ -594,7 +594,7 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
 }
 
-bool Mesh::UpdateSkinning(bool isPlayer)
+bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 {
 	// Update Bone matrices
 	auto* skinInstance = Util::Adapter::GetSkinInstance(bsGeometryPtr.get());
