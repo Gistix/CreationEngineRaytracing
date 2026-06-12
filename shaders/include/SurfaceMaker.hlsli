@@ -280,8 +280,16 @@ struct SurfaceMaker
         float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
         
 #   if defined(SKYRIM)
-        if (material.Feature == Feature::kMultiTexLandLODBlend)
+        if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
+        else if (material.ShaderType == ShaderType::Effect)
+            EffectMaterial(surface, texCoord0, vertexColor, material);
+        else if (material.ShaderType == ShaderType::Water)
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);
+        else if (material.ShaderType == ShaderType::DistantTree)
+            DistantTreeMaterial(surface, texCoord0, material);
+        else if (material.ShaderType == ShaderType::Grass)
+            GrassMaterial(surface, texCoord0, material);
         else
             DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
 #   else   
