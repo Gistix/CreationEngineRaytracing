@@ -904,15 +904,32 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObj
 
 	auto meshes = CreateMeshes(a_object, a_form);
 
-	for (const auto& mesh: meshes)
-		a_meshes.push_back(mesh.get());
+	if (meshes.empty()) {
+		logger::info("SceneGraph::ActorEquip - Empty meshes for {}", Util::Adapter::GetName(a_actor));
+		return;
+	}
+
+	Model* targetModel = nullptr;
 
 	for (const auto& instance : it->second) {
+		if (!instance || !instance->model)
+			continue;
+
 		if (instance->model->m_FirstPerson == firstPerson) {
-			instance->model->AppendMeshes(this, meshes);
+			targetModel = instance->model;
 			break;
 		}
 	}
+
+	if (!targetModel) {
+		logger::info("SceneGraph::ActorEquip - Instance not found for {}, First Person: {}", Util::Adapter::GetName(a_actor), firstPerson);
+		return;
+	}
+
+	for (const auto& mesh: meshes)
+		a_meshes.push_back(mesh.get());
+
+	targetModel->AppendMeshes(this, meshes);
 }
 
 void SceneGraph::ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson)

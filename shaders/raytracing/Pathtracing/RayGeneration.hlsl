@@ -634,7 +634,9 @@ void Main()
         float3 domNormal = domSP.GetNormal();
         float3 domDiffEst, domSpecEst;
         UnpackTwoFp32ToFp16(domSP.DenoiserPackedBSDFEstimate, domDiffEst, domSpecEst);
+#   if defined(NRD) | defined(DLSS_RR)
         DiffuseAlbedo[idx] = domDiffEst;
+#   endif
         NormalRoughness[idx] = float4(domNormal, domRoughness);
     }
     else

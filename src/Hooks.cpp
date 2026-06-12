@@ -141,13 +141,7 @@ namespace Hooks
 	{
 		static void thunk(RE::TESObject* a_object, RE::TESObjectREFR* a_refr)
 		{
-			logger::trace("TESObject::UnClone3D - Object {:0X} {}", a_object->formID,
-#if defined(SKYRIM)
-				a_object->GetName()
-#elif defined(FALLOUT4)
-				RE::TESFullName::GetFullName(*a_object)
-#endif
-			);
+			logger::trace("TESObject::UnClone3D - Object {:0X} {}", a_object->formID, Util::Adapter::GetName(a_object));
 
 			if (a_refr) {
 				logger::trace("TESObject::UnClone3D - Refr {:0X}", a_refr->formID);

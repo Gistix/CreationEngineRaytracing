@@ -3,6 +3,76 @@
 #include "Geometry.h"
 #include "Core/Mesh.h"
 
+namespace
+{
+	enum class BlocklistMatch
+	{
+		Exact,
+		Contains
+	};
+
+	struct BlocklistedGeometryName
+	{
+		const char* name;
+		BlocklistMatch match;
+	};
+
+	constexpr BlocklistedGeometryName GEOMETRY_NAME_BLOCKLIST[] = {
+		// Skyrim Markers
+		{ "EditorMarker", BlocklistMatch::Exact },
+		{ "LRTMarker", BlocklistMatch::Exact },
+		{ "AnimInteractionMarker", BlocklistMatch::Exact },
+		{ "FurnitureMarker", BlocklistMatch::Exact },
+
+		// Eye overlays/shadows
+		{ "AEAC_LDD_Eye_Outer", BlocklistMatch::Exact },
+		{ "AEAC_LDD_Eye_Shadow", BlocklistMatch::Exact },
+		{ "FemaleEyesHuman_outer", BlocklistMatch::Contains },
+		{ "FemaleEyesHuman_shadows", BlocklistMatch::Contains },
+		{ "EyeShadow", BlocklistMatch::Contains }
+	};
+
+	char ToLower(char c)
+	{
+		return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+
+	bool EqualsIgnoreCase(const char* value, const char* pattern)
+	{
+		while (*value && *pattern) {
+			if (ToLower(*value) != ToLower(*pattern))
+				return false;
+
+			++value;
+			++pattern;
+		}
+
+		return *value == '\0' && *pattern == '\0';
+	}
+
+	bool ContainsIgnoreCase(const char* value, const char* pattern)
+	{
+		const auto patternLength = std::strlen(pattern);
+
+		if (patternLength == 0)
+			return true;
+
+		for (auto* valueIt = value; *valueIt; ++valueIt) {
+			size_t patternIndex = 0;
+			while (patternIndex < patternLength &&
+				valueIt[patternIndex] &&
+				ToLower(valueIt[patternIndex]) == ToLower(pattern[patternIndex])) {
+				++patternIndex;
+			}
+
+			if (patternIndex == patternLength)
+				return true;
+		}
+
+		return false;
+	}
+}
+
 namespace Util
 {
 	namespace Geometry
@@ -118,25 +188,21 @@ namespace Util
 
 		bool IsBlocklisted(const char* name)
 		{
-			// Skyrim Markers
-			if (strcmp(name, "EditorMarker") == 0)
-				return true;
+			if (!name)
+				return false;
 
-			if (strcmp(name, "LRTMarker") == 0)
-				return true;
-
-			if (strcmp(name, "AnimInteractionMarker") == 0)
-				return true;
-
-			if (strcmp(name, "FurnitureMarker") == 0)
-				return true;
-
-			// TODO: Add support for an .ini or .json file
-			if (strcmp(name, "AEAC_LDD_Eye_Outer") == 0)
-				return true;
-
-			if (strcmp(name, "AEAC_LDD_Eye_Shadow") == 0)
-				return true;
+			for (const auto& entry : GEOMETRY_NAME_BLOCKLIST) {
+				switch (entry.match) {
+				case BlocklistMatch::Exact:
+					if (EqualsIgnoreCase(name, entry.name))
+						return true;
+					break;
+				case BlocklistMatch::Contains:
+					if (ContainsIgnoreCase(name, entry.name))
+						return true;
+					break;
+				}
+			}
 
 			return false;
 		}

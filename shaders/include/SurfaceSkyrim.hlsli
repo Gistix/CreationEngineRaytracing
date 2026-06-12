@@ -394,6 +394,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 surface.CoatStrength = SKINSETTINGS.skinParams2.x;
                 surface.CoatRoughness = SKINSETTINGS.skinParams.y;
                 surface.CoatF0 = float3(0.04, 0.04, 0.04);
+                surface.CoatNormal = surface.Normal;
 
                 if (hasValidRFAOS)
                 {
