@@ -19,6 +19,8 @@
 
 #include "Core/TextureManager.h"
 
+#include "Types/GeometryRuntimeData.h"
+
 class SceneGraph;
 
 struct Mesh
@@ -93,7 +95,7 @@ struct Mesh
 
 	eastl::unique_ptr<Material> material;
 
-	stl::enumeration<Flags> flags = Flags::None;
+	CESEAdapter::REX::EnumSet<Flags> flags = Flags::None;
 
 	Type m_Type = Type::Default;
 
@@ -112,7 +114,7 @@ struct Mesh
 	Mesh(RE::FormType formType, Type type, Flags flags, const char* name, RE::BSGeometry* bsGeometryPtr, float3x4 localToRoot, uint32_t identifier = 0) :
 		m_FormType(formType), m_Type(type), flags(flags), m_Name(name), bsGeometryPtr(bsGeometryPtr), m_LocalToRoot(localToRoot), m_PrevLocalToRoot(localToRoot), m_Identifier(identifier) { }
 
-	static VertexData BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex);
+	static VertexData BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex);
 	static TriangleData BuildTriangles(Mesh::Flags flags, RE::BSGraphics::TriShape* rendererData, const uint32_t& triangleCountIn);
 	void BuildMesh(RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint32_t& triangleCountIn, const uint16_t& bonesPerVertex);
 	void BuildMesh(VertexData a_VertexData, TriangleData a_TriangleData, RE::BSGraphics::VertexDesc vertexDesc);
@@ -120,7 +122,7 @@ struct Mesh
 
 	void CalculateNormals();
 
-	void BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& geometryRuntimeData, RE::FormID formID);
+	void BuildMaterial(const GeometryRuntimeData& geometryRuntimeData, RE::FormID formID);
 
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
@@ -145,7 +147,7 @@ struct Mesh
 
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
-	stl::enumeration<State> m_State = State::None;
+	CESEAdapter::REX::EnumSet<State> m_State = State::None;
 
 	bool GetDismemberHidden() const;
 

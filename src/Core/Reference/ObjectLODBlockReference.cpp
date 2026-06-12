@@ -4,16 +4,16 @@
 
 void ObjectLODBlockReference::UpdateVisibility()
 {
-	if (detached)
-		return;
+	if (m_Attached != block->attached) {
+		SetAttached(block->attached);
+	}
 
-	if (!block->attached) {
-		logger::info("Unattached object block");
+	if (!m_Attached) {
 		return;
 	}
 
 	if (!block->chunk) {
-		logger::info("Chunk is nullptr");
+		logger::info("ObjectLODBlockReference::UpdateVisibility - Chunk is nullptr");
 		return;
 	}
 

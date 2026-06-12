@@ -37,14 +37,14 @@ struct Instance
 
 	uint32_t m_TLASInstanceID = 0;
 
-	stl::enumeration<State> m_State = State::None;
+	CESEAdapter::REX::EnumSet<State> m_State = State::None;
 
 	// Used by light TLAS
 	DirtyFlags m_DirtyFlags = DirtyFlags::None;
 
 	Instance(RE::FormID formID, RE::NiAVObject* node, Model* model) : m_FormID(formID), m_Node(node), model(model) 
 	{ 
-		UpdateTransform();
+
 	}
 	
 	void SetDetached(bool detach);
@@ -52,8 +52,6 @@ struct Instance
 	void SetHiddenModel(bool hidden);
 
 	void SetLODHidden(bool hidden);
-
-	bool IsDetached() const;
 
 	// A hidden instance is not updated and does not go in AS, this is set externaly
 	bool IsHidden() const;

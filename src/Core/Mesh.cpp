@@ -6,13 +6,10 @@
 #include "Renderer.h"
 #include "SceneGraph.h"
 
-#include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
-#include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
-
 #include "Utils/CalcTangents.h"
 #include "Core/D3D12Texture.h"
 
-Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
+Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[maybe_unused]] RE::BSGeometry* geometry, RE::BSGraphics::TriShape* rendererData, const uint32_t& vertexCountIn, const uint16_t& bonesPerVertex)
 {
 	VertexData vertexData{};
 
@@ -29,6 +26,7 @@ Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeome
 	if (flags.all(Flags::Dynamic)) {
 		vertexData.dynamicPosition.resize(vertexCountIn);
 
+#if defined(SKYRIM)
 		static REL::Relocation<const RE::NiRTTI*> dynamicTriShapeRTTI{ NiRTTI(BSDynamicTriShape) };
 
 		if (geometry->GetRTTI() == dynamicTriShapeRTTI.get()) {
@@ -44,6 +42,7 @@ Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeome
 				dynamic = true;
 			}
 		}
+#endif
 
 		// Clear Dynamic flag if geometry is not a valid BSDynamicTriShape.
 		// Enforces the invariant that when Flags::Dynamic is set, geometry is always a BSDynamicTriShape.
@@ -86,7 +85,7 @@ Mesh::VertexData Mesh::BuildVertices(stl::enumeration<Flags>& flags, RE::BSGeome
 	}
 
 	for (uint32_t i = 0; i < vertexCountIn; i++) {
-		uint8_t* vtx = Util::Adapter::CLib::GetVertexData(rendererData) + i * vertexSize;
+		uint8_t* vtx = Util::Adapter::GetVertexData(rendererData) + i * vertexSize;
 
 		Vertex vertex{};
 
@@ -218,7 +217,7 @@ Mesh::TriangleData Mesh::BuildTriangles(Mesh::Flags flags, RE::BSGraphics::TriSh
 	}
 	else {
 		triangleData.triangles.resize(triangleCountIn);
-		std::memcpy(triangleData.triangles.data(), Util::Adapter::CLib::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
+		std::memcpy(triangleData.triangles.data(), Util::Adapter::GetIndexData(rendererData), sizeof(Triangle) * triangleCountIn);
 	}
 
 	triangleData.count = triangleCountIn;
@@ -372,7 +371,7 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 	return triangles;
 }
 
-void Mesh::BuildMaterial(const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID)
+void Mesh::BuildMaterial(const GeometryRuntimeData& runtimeData, RE::FormID formID)
 {
 	material = eastl::make_unique<Material>(m_Name, runtimeData, formID);
 
@@ -546,6 +545,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 bool Mesh::UpdateDynamicPosition()
 {
+#if defined(SKYRIM)
 	auto* dynamicTriShape = reinterpret_cast<RE::BSDynamicTriShape*>(bsGeometryPtr.get());
 	auto& runtimeData = dynamicTriShape->GetDynamicTrishapeRuntimeData();
 
@@ -570,6 +570,9 @@ bool Mesh::UpdateDynamicPosition()
 	runtimeData.lock.Unlock();
 
 	return true;
+#else
+	return false;
+#endif
 }
 
 void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
@@ -591,15 +594,16 @@ void Mesh::UpdateUploadDynamicBuffers(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(buffers.dynamicPositionBuffer, vertexData.dynamicPosition.data(), sizeof(float4) * vertexData.count);
 }
 
-bool Mesh::UpdateSkinning(bool isPlayer)
+bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 {
 	// Update Bone matrices
-	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
+	auto* skinInstance = Util::Adapter::GetSkinInstance(bsGeometryPtr.get());
 
 	// RaceMenu crash fix
 	if (!skinInstance)
 		return false;
 
+#if defined(SKYRIM)
 	auto* scene = Scene::GetSingleton();
 	const bool isPathTracing = scene->IsPathTracingActive();
 	const bool applyPathTracingCull = scene->ApplyPathTracingCull();
@@ -649,6 +653,9 @@ bool Mesh::UpdateSkinning(bool isPlayer)
 	}
 
 	return true;
+#else
+	return false;
+#endif
 }
 
 bool Mesh::UpdateTransform(RE::NiAVObject* object)
@@ -675,10 +682,11 @@ bool Mesh::UpdateTransform(RE::NiAVObject* object)
 
 bool Mesh::GetDismemberHidden() const
 {
-	auto* skinInstance = Util::Adapter::CLib::GetSkinInstance(bsGeometryPtr.get());
+	auto* skinInstance = Util::Adapter::GetSkinInstance(bsGeometryPtr.get());
 	if (!skinInstance)
 		return false;
 
+#if defined(SKYRIM)
 	static REL::Relocation<const RE::NiRTTI*> dismemberRTTI{ RE::BSDismemberSkinInstance::Ni_RTTI };
 	if (skinInstance->GetRTTI() != dismemberRTTI.get())
 		return false;
@@ -690,36 +698,44 @@ bool Mesh::GetDismemberHidden() const
 	auto& partition = dismemberRuntime.partitions[m_Identifier];
 
 	return !partition.editorVisible;
+#else
+	return false;
+#endif
 }
 
 bool Mesh::GetSubIndexHidden() const
 {
-	auto* subIndex = bsGeometryPtr->AsSubIndexTriShape();
+	if (*Scene::GetSingleton()->g_BypassSubIndexVisibility)
+		return false;
+
+	auto* subIndex = Util::Adapter::AsSubIndexTriShape(bsGeometryPtr.get());
 
 	if (!subIndex)
 		return false;
 
+	const auto startTri = static_cast<uint32_t>(m_Identifier >> 16);
+	const auto numTris = static_cast<uint32_t>(m_Identifier & 0xFFFF);
+	const auto endTri = startTri + numTris;
+
 	auto& runtimeData = subIndex->GetSubIndexedTrishapeRuntimeData();
-
-	auto& firstSegment = runtimeData.segmentData[0];
-
-	// The first segment references all triangles, if it is visible unhide all segments
-	if (firstSegment.flags == 1)
-		return false;
-
-	auto index = static_cast<uint32_t>(m_Identifier >> 16) * 3;
-	auto numTris = static_cast<uint32_t>(m_Identifier & 0xFFFF);
-
-	// Segments can have their index and numTris changed around by the engine, lets find the one that matches our mesh
 	for (size_t i = 0; i < runtimeData.numSegments; i++)
 	{
-		auto& segment = runtimeData.segmentData[i];
+		const auto& segment = runtimeData.segmentData[i];
 
-		if (segment.index == index && segment.numTris == numTris)
-			return segment.flags == 0;
+		const bool visible = (segment.flags == 1u);
+
+		if (!visible)
+			continue;
+
+		// Index to Triangle
+		const auto segStartTri = segment.index / 3;
+		const auto segEndTri = segStartTri + segment.numTris;
+
+		if (startTri >= segStartTri && endTri <= segEndTri)
+			return false;
 	}
 
-	return false;
+	return true;
 }
 
 Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
@@ -727,14 +743,15 @@ Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 	const auto subIndexed = flags.all(Mesh::Flags::SubIndex);
+	const auto water = flags.all(Mesh::Flags::Water);
 
 	const bool dynamicModel = (modelFlags & Mesh::Flags::Dynamic) != Mesh::Flags::None;
 	const bool skinnedModel = (modelFlags & Mesh::Flags::Skinned) != Mesh::Flags::None;
 
 	State state = State::None;
 
-	// I don't know if kHidden is set on inner nodes for culling, so to be safe we check only for dynamic and skinned geometry
-	if (dynamic || skinned || dynamicModel || skinnedModel)
+	// Not all meshes can be hidden due to instancing
+	if (dynamic || skinned || subIndexed || water || dynamicModel || skinnedModel)
 		if (Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot))
 			state |= State::Hidden;
 
@@ -754,13 +771,15 @@ void Mesh::InitState(RE::NiAVObject* instanceRoot, Flags modelFlags)
 
 DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags modelFlags)
 {
+#if defined(SKYRIM)
 	// This should never be true, but it often is, meaning we missed some logic that removes this mesh or the entire instance
 	if (bsGeometryPtr->GetRefCount() == 1) {
 		logger::trace("Mesh::Update - Released BSGeometry being referenced in 0x{:08X} {}", reinterpret_cast<uintptr_t>(bsGeometryPtr.get()), m_Name);
 		return DirtyFlags::None;
 	}
+#endif
 
-	material->Update(bsGeometryPtr->GetGeometryRuntimeData().shaderProperty.get());
+	material->Update(Util::Adapter::GetGeometryRuntimeData(bsGeometryPtr.get()).shaderProperty);
 
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);

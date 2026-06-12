@@ -15,8 +15,13 @@
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 
+#include "Types/GeometryRuntimeData.h"
+
 struct Material : MaterialBase
 {
+	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
+	using Feature = RE::BSShaderMaterial::Feature;
+
 	static constexpr uint MAX_LAND_TEXTURES = 5u;
 	static constexpr uint MAX_PBRLAND_TEXTURES = 6u;
 
@@ -46,10 +51,14 @@ struct Material : MaterialBase
 
 	nvrhi::BufferHandle buffer;
 
-	Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID);
+	Material(const eastl::string& name, const GeometryRuntimeData& runtimeData, RE::FormID formID);
+
+	void SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID);
 
 	void SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp);
 	void SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial);
+
+	void SetupProjectedUV(RE::BSLightingShaderProperty* lightingShaderProp);
 
 	void CreateBuffer(const eastl::string& name, DescriptorIndex descriptorIndex);
 
@@ -58,30 +67,6 @@ struct Material : MaterialBase
 	void Update(RE::BSShaderProperty* shaderProperty);
 
 	void UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance);
-
-	// We have a limited number of bits and not all types are necessary
-	ShaderType GetShaderType() const
-	{
-		if (shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kMenuScreen))
-			return ShaderType::TruePBR;
-
-		switch (shaderType) {
-		case RE::BSShader::Type::Grass:
-			return ShaderType::Grass;
-		case RE::BSShader::Type::Water:
-			return ShaderType::Water;
-		case RE::BSShader::Type::BloodSplatter:
-			return ShaderType::BloodSplatter;
-		case RE::BSShader::Type::Effect:
-			return ShaderType::Effect;
-		case RE::BSShader::Type::DistantTree:
-			return ShaderType::DistantTree;
-		case RE::BSShader::Type::Particle:
-			return ShaderType::Particle;
-		default:
-			return ShaderType::Lighting;
-		}
-	}
 
 	enum ShaderFlags : uint32_t
 	{
@@ -109,7 +94,8 @@ struct Material : MaterialBase
 		kSoftLighting = 1 << 20,
 		kLODLandscape = 1 << 21,
 		kLODObjects = 1 << 22,
-		kHDLODObjects = 1 << 23
+		kHDLODObjects = 1 << 23,
+		kSnow = 1 << 24
 	};
 
 	enum class WaterShaderFlags : uint32_t
@@ -134,11 +120,11 @@ struct Material : MaterialBase
 		kBlendNormals = 1 << 16
 	};
 
-	REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
-	REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
-	RE::BSShader::Type shaderType;
-	RE::BSShaderMaterial::Feature feature;
-	stl::enumeration<PBRShaderFlags, uint16_t> pbrFlags;
+	CESEAdapter::REX::EnumSet<EShaderPropertyFlag, std::uint64_t> shaderFlags;
+	CESEAdapter::REX::EnumSet<WaterShaderFlags, std::uint32_t> waterShaderFlags;
+	ShaderType shaderType;
+	Feature feature;
+	CESEAdapter::REX::EnumSet<PBRShaderFlags, uint16_t> pbrFlags;
 
 	AlphaFlags alphaFlags = AlphaFlags::None;
 
@@ -155,10 +141,8 @@ struct Material : MaterialBase
 
 	uint32_t GetShaderFlags() const
 	{
-		if (GetShaderType() == ShaderType::Water)
+		if (shaderType == ShaderType::Water)
 			return waterShaderFlags.underlying();
-
-		using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 
 		auto shaderFlagsLocal = ShaderFlags::None;
 
@@ -257,7 +241,11 @@ struct Material : MaterialBase
 		if (shaderFlags.any(EShaderPropertyFlag::kHDLODObjects)) {
 			shaderFlagsLocal |= ShaderFlags::kHDLODObjects;
 		}
-		
+
+		if (shaderFlags.any(EShaderPropertyFlag::kSnow)) {
+			shaderFlagsLocal |= ShaderFlags::kSnow;
+		}
+
 		return static_cast<uint32_t>(shaderFlagsLocal);
 	}
 

@@ -115,9 +115,7 @@ public:
 	{
 		nvrhi::TextureHandle albedo = nullptr;
 		nvrhi::TextureHandle normalRoughness = nullptr;
-#if defined(SKYRIM)
 		nvrhi::TextureHandle gnmao = nullptr;
-#endif
 	};
 
 	// Stable Planes resources for path decomposition

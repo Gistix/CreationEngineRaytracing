@@ -9,13 +9,17 @@ void Light::UpdateInstances()
 {
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-	auto& runtimeData = m_Light->light->GetLightRuntimeData();
+	auto runtimeData = Util::Adapter::GetLightRuntimeData(m_Light->light.get());
 
 	auto& position = m_Light->light->world.translate;
 
 	sceneGraph->GetInstances().Read([&](const auto& instance) {
 		auto& center = instance->m_Node->worldBound.center;
+#if defined(SKYRIM)
 		float radius = instance->m_Node->worldBound.radius;
+#elif defined(FALLOUT4)
+		float radius = instance->m_Node->worldBound.fRadius;
+#endif
 
 		if ((center - position).Length() > radius + runtimeData.radius.x)
 			return Iterator::Continue;

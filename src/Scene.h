@@ -48,6 +48,9 @@ struct Scene
 	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasTex = nullptr;
 	RE::NiPointer<RE::NiSourceTexture>* g_TreeLODAtlasNormalTex = nullptr;
 
+	// Used to draw full LOD when world map is open
+	bool* g_BypassSubIndexVisibility = nullptr;
+
 	Settings m_Settings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;

@@ -30,8 +30,8 @@ namespace Pass
 
 		auto& settings = scene->m_Settings;
 
-		auto cameraData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData().cameraData.getEye();
-		m_RaytracingData->PixelConeSpreadAngle = std::atan((2.0f / cameraData.projMat.m[1][1]) / GetRenderer()->GetDynamicResolution().y);
+		auto& cameraData = Util::Adapter::GetCameraEyeViewData();
+		m_RaytracingData->PixelConeSpreadAngle = std::atan((2.0f / reinterpret_cast<const DirectX::XMFLOAT4X4&>(cameraData.projMat).m[1][1]) / GetRenderer()->GetDynamicResolution().y);
 		m_RaytracingData->TexLODBias = settings.AdvancedSettings.TexLODBias;
 
 		m_RaytracingData->NumLights = static_cast<uint32_t>(sceneGraph->GetLights().size());
@@ -54,9 +54,9 @@ namespace Pass
 			0.0f);
 
 		// Directional Light
+#if defined(SKYRIM)
 		{
-			//auto dirLight = skyrim_cast<RE::NiDirectionalLight*>(RE::DrawWorld::GetSingleton().mainShadowSceneNode->GetRuntimeData().sunLight->light.get());
-			auto dirLight = skyrim_cast<RE::NiDirectionalLight*>(RE::BSShaderManager::State::GetSingleton().shadowSceneNode[0]->GetRuntimeData().sunLight->light.get());
+			auto dirLight = ce_cast<RE::NiDirectionalLight*>(Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData().sunLight->light.get());
 
 			auto direction = Util::Math::Float3(dirLight->GetWorldDirection());
 			direction.Normalize();
@@ -66,6 +66,7 @@ namespace Pass
 			m_RaytracingData->DirectionalLight.Vector = -direction;
 			m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue);
 		}
+#endif
 
 		// SSS
 		{

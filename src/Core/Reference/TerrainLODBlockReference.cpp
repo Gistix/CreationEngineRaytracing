@@ -4,6 +4,7 @@
 
 void TerrainLODBlockReference::UpdateIntersection()
 {
+#if defined(SKYRIM)
 	if (block->node->GetLODLevel() != 4)
 		return;
 
@@ -27,20 +28,24 @@ void TerrainLODBlockReference::UpdateIntersection()
 	prevIntersecting = intersecting;
 
 	intersecting = Util::Math::Intersects(loadedPosition, loadedExtents * 2.0f, lodPosition, lodSize);
+#else
+	prevIntersecting = intersecting;
+	intersecting = false;
+#endif
 }
 
 void TerrainLODBlockReference::UpdateVisibility()
 {
-	if (detached)
-		return;
+	if (m_Attached != block->attached) {
+		SetAttached(block->attached);
+	}
 
-	if (!block->attached) {
-		logger::info("Unattached terrain block");
+	if (!m_Attached) {
 		return;
 	}
 
 	if (!block->chunk) {
-		logger::info("Chunk is nullptr");
+		logger::info("TerrainLODBlockReference::UpdateVisibility - Chunk is nullptr");
 		return;
 	}
 

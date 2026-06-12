@@ -4,7 +4,7 @@
 #include "Scene.h"
 #include "Renderer.h"
 
-Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUNTIME_DATA& runtimeData, RE::FormID formID)
+Material::Material(const eastl::string& name, const GeometryRuntimeData& runtimeData, RE::FormID formID)
 {
 	auto* renderer = Renderer::GetSingleton();
 
@@ -16,10 +16,6 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 	auto& blackTexture = renderer->GetBlackTextureIndex();
 	auto& whiteTexture = renderer->GetWhiteTextureIndex();
 	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
-	auto& detailTexture = renderer->GetDetailTextureIndex();
-
-	using Feature = RE::BSShaderMaterial::Feature;
-	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 
 	colors.fill(float4(1.0f, 1.0f, 1.0f, 1.0f));
 	colors[Constants::Material::EMISSIVE_COLOR] = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -34,7 +30,7 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 
 	textures.fill(Texture(blackTexture, nullptr));
 
-	auto* alphaProperty = runtimeData.alphaProperty.get();
+	auto* alphaProperty = runtimeData.alphaProperty;
 
 	// Set alpha flags
 	if (alphaProperty) {
@@ -56,29 +52,37 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 		}
 	}
 
-	auto* shaderProperty = runtimeData.shaderProperty.get();
+	auto* shaderProperty = runtimeData.shaderProperty;
 
 	if (shaderProperty) {
 		shaderFlags = shaderProperty->flags.get();
 		colors[0].w = shaderProperty->alpha;
 
 		if (RE::BSLightingShaderProperty* lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::Lighting;
+			shaderType = ShaderType::Lighting;
 
 			// Override shader type to Grass if it's a grass form
 			if (formID != 0) {
 				auto form = RE::TESForm::LookupByID(formID);
 
 				if (form && form->formType == RE::FormType::Grass) 
-				shaderType = RE::BSShader::Type::Grass;
+				shaderType = ShaderType::Grass;
 			}
 
-			colors[Constants::Material::EMISSIVE_COLOR] = {
-				lightingShaderProp->emissiveColor->red,
-				lightingShaderProp->emissiveColor->green,
-				lightingShaderProp->emissiveColor->blue,
-				lightingShaderProp->emissiveMult
-			};
+			auto& emissiveColor = colors[Constants::Material::EMISSIVE_COLOR];
+
+			if (lightingShaderProp->flags.all(EShaderPropertyFlag::kOwnEmit)) {
+				emissiveColor.x = lightingShaderProp->emissiveColor->red;
+				emissiveColor.y = lightingShaderProp->emissiveColor->green;
+				emissiveColor.z = lightingShaderProp->emissiveColor->blue;
+			}
+			else {
+				emissiveColor.x = 1.0f;
+				emissiveColor.y = 1.0f;
+				emissiveColor.z = 1.0f;
+			}
+
+			emissiveColor.w = lightingShaderProp->emissiveMult;
 
 			if (auto shaderMaterial = lightingShaderProp->material) {
 				feature = shaderMaterial->GetFeature();
@@ -163,6 +167,8 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 					};*/
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape)) {
+					shaderType = ShaderType::TruePBR;
+
 					const auto* lightingPBRMaterialLand = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
 
 					for (uint i = 0; i < std::min(lightingPBRMaterialLand->numLandscapeTextures, Material::MAX_PBRLAND_TEXTURES); i++) {
@@ -206,13 +212,12 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 						0,
 						lightingPBRMaterialLand->terrainTexFade
 					};*/
-
-					// Enforce TruePBR flag
-					shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR)) {
 					// TrueBR - Tried to check for 'lightingShaderProp->flags.any(EShaderPropertyFlag::kMenuScreen)'
 					// but it did not work at all, skyrim_cast is not safe and will cast even if not PBR material (no RTTI?)
+
+					shaderType = ShaderType::TruePBR;
 
 					const auto* lightingPBRMaterial = static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
 
@@ -251,179 +256,24 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 					}
 
 					if (pbrFlags & PBRShaderFlags::Glint) {
+						// Same slot as kProjectedUV 'direction' parameter
 						const auto& glint = lightingPBRMaterial->GetGlintParameters();
 						vectors[3] = { glint.screenSpaceScale, glint.logMicrofacetDensity, glint.microfacetRoughness, glint.densityRandomization };
 					}
-
-					// Enforce TruePBR flag
-					shaderFlags.set(EShaderPropertyFlag::kMenuScreen);
 				}
-				else {
-					// Roughness Scale
-					scalars[0] = 1.0f;
-
-					// Specular Level
-					scalars[1] = 0.04f;
-
+				else if (RE::BSLightingShaderMaterialBase* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 					// Vanilla Materials
-					if (const RE::BSLightingShaderMaterialBase* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
-						textures[0] = GetTexture(lightingBaseMaterial->diffuseTexture, grayTexture);
-
-						bool convertMSN = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) && shaderFlags.none(EShaderPropertyFlag::kLODLandscape);
-
-						auto textureType = convertMSN ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
-						textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingBaseMaterial->normalTexture, normalTexture, textureType);
-
-						// Specular
-						if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
-							if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
-								textures[3] = GetTexture(lightingBaseMaterial->specularBackLightingTexture, blackTexture);
-							}
-
-							colors[2] = {
-								lightingBaseMaterial->specularColor.red,
-								lightingBaseMaterial->specularColor.green,
-								lightingBaseMaterial->specularColor.blue,
-								lightingBaseMaterial->specularColorScale
-							};
-
-							scalars[0] = Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterial->specularPower);
-						}
-
-						// SSS color
-						if (shaderFlags.all(EShaderPropertyFlag::kSoftLighting)) {
-							textures[6] = GetTexture(lightingBaseMaterial->rimSoftLightingTexture, blackTexture);
-						}
-
-						// Projected UV
-						if (shaderFlags.all(EShaderPropertyFlag::kProjectedUV)) {
-
-							auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
-
-							auto oneMinusAlpha = 1.0f - params.w;
-
-							// ProjectedUVParams
-							vectors[0] = {
-								oneMinusAlpha * params.x,
-								0.0f,
-								params.z,
-								(oneMinusAlpha * params.y) + params.w
-							};
-
-							// ProjectedUVParams2
-							vectors[1] = Util::Math::Float4(lightingShaderProp->projectedUVColor);
-
-							// All yoinked from Nukem 
-							// https://github.com/Nukem9/skyrimse-test/blob/328916305165a46c4e4b527735bbcfd46b09a0ca/skyrim64_test/src/patches/TES/BSShader/Shaders/BSLightingShader.cpp#L883
-							{
-								auto renderFlags = 0; // ?
-								bool enableProjectedNormals = RE::GetINISetting("bEnableProjecteUVDiffuseNormals:Display")->GetBool() && (!(renderFlags & 0x8) || !RE::GetINISetting("bEnableProjecteUVDiffuseNormalsOnCubemap:Display")->GetBool());
-
-								// ProjectedUVParams3
-								vectors[2] = {
-									RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display")->GetFloat(),
-									RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display")->GetFloat(),
-									0,
-									enableProjectedNormals ? 1.0f : 0.0f
-								};
-							}
-
-							// Texture Projection - Non-Default if BSGeometry::IsMultiIndexTriShape() is true
-							vectors[3] = { 0.0f, 0.0f, 1.0f, 0.0f };
-
-							auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
-							textures[7] = GetTexture(projNoiseMap, blackTexture);
-						}
-
-						// Envmap
-						if (feature == Feature::kEnvironmentMap) {
-							if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial)) {
-								textures[4] = GetTexture(lightingEnvmapMaterial->envTexture, blackTexture, TextureType::CubeMap);
-								textures[5] = GetTexture(lightingEnvmapMaterial->envMaskTexture, whiteTexture);
-							}
-						}
-
-						// Eye
-						if (feature == Feature::kEye) {
-							if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial)) {
-								textures[4] = GetTexture(lightingEyeMaterial->envTexture, blackTexture, TextureType::CubeMap);
-								textures[5] = GetTexture(lightingEyeMaterial->envMaskTexture, whiteTexture);
-							}
-						}
-
-						// Glow
-						if (feature == Feature::kGlowMap) {
-							if (const auto* lightingGlowMaterial = skyrim_cast<RE::BSLightingShaderMaterialGlowmap*>(shaderMaterial)) {
-								if (lightingShaderProp->flags.none(EShaderPropertyFlag::kOwnEmit)) {
-									colors[Constants::Material::EMISSIVE_COLOR].x = 1.0f;
-									colors[Constants::Material::EMISSIVE_COLOR].y = 1.0f;
-									colors[Constants::Material::EMISSIVE_COLOR].z = 1.0f;
-								}
-
-								textures[2] = GetTexture(lightingGlowMaterial->glowTexture, blackTexture);
-							}
-						}
-
-						// Hair
-						if (feature == Feature::kHairTint) {
-							if (const auto* lightingHairTintMaterial = skyrim_cast<RE::BSLightingShaderMaterialHairTint*>(shaderMaterial)) {
-								colors[0].x = lightingHairTintMaterial->tintColor.red;
-								colors[0].y = lightingHairTintMaterial->tintColor.green;
-								colors[0].z = lightingHairTintMaterial->tintColor.blue;
-
-								// Load flowmap texture for hair (stored in specularBackLightingTexture slot)
-								textures[3] = GetTexture(lightingBaseMaterial->specularBackLightingTexture, blackTexture);
-							}
-						}
-
-						// FaceGen
-						if (feature == Feature::kFaceGen) {
-							if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial)) {
-								if (Util::IsPlayerFormID(formID)) {
-									auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
-
-									auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->GetDescriptor(
-										gameRendererRuntimeData.renderTargets[RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT].texture
-									);
-
-									textures[4] = faceTintDescriptor ? Texture(faceTintDescriptor, grayTexture.get()) : Texture(grayTexture, nullptr);
-								}
-								else
-									textures[4] = GetTexture(lightingFacegenMaterial->tintTexture, grayTexture);
-
-								textures[5] = GetTexture(lightingFacegenMaterial->detailTexture, detailTexture);
-							}
-						}
-
-						// Skin Tint
-						if (feature == Feature::kFaceGenRGBTint) {
-							if (const auto* lightingFacegenTintMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegenTint*>(shaderMaterial)) {
-								colors[0].x = lightingFacegenTintMaterial->tintColor.red;
-								colors[0].y = lightingFacegenTintMaterial->tintColor.green;
-								colors[0].z = lightingFacegenTintMaterial->tintColor.blue;
-							}
-						}
-
-						if (feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint) {
-							// Community Shaders Skin stores RFAOS in the texture set's environment slot.
-							if (auto* textureSet = lightingBaseMaterial->textureSet.get()) {
-								const char* rfaosPath = textureSet->GetTexturePath(RE::BSTextureSet::Texture::kEnvironment);
-								if (rfaosPath && rfaosPath[0] != '\0') {
-									RE::NiPointer<RE::NiSourceTexture> rfaosTexture;
-									textureSet->SetTexture(RE::BSTextureSet::Texture::kEnvironment, rfaosTexture);
-									textures[7] = GetTexture(rfaosTexture, blackTexture);
-								}
-							}
-						}
-					}
+					SetupLightingMaterial(lightingBaseMaterial, formID);
 				}
+
+				SetupProjectedUV(lightingShaderProp);
 			}
 			else {
 				logger::warn("[RT] BuildMaterial - BSShaderMaterial is nullptr");
 			}
 		}
 		else if (auto effectShaderProp = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::Effect;
+			shaderType = ShaderType::Effect;
 
 			if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->material)) {
 				colors[Constants::Material::EMISSIVE_COLOR] = {
@@ -446,14 +296,14 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 				SetupWaterMaterial(waterMaterial);
 		}
 		else if (auto* distantTreeProp = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty)) {
-			shaderType = RE::BSShader::Type::DistantTree;
+			shaderType = ShaderType::DistantTree;
 
 			auto* treeLODAtlas = Scene::GetSingleton()->g_TreeLODAtlasTex;
 			textures[0] = GetTexture(*treeLODAtlas, blackTexture);
 		}
 	}
 
-	if (shaderType == RE::BSShader::Type::Water) {
+	if (shaderType == ShaderType::Water) {
 		alphaFlags = Material::AlphaFlags::Transmission;
 	}
 
@@ -483,9 +333,168 @@ Material::Material(const eastl::string& name, const RE::BSGeometry::GEOMETRY_RUN
 	}
 }
 
+void Material::SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID)
+{
+	auto* renderer = Renderer::GetSingleton();
+
+	auto& grayTexture = renderer->GetGrayTextureIndex();
+	auto& normalTexture = renderer->GetNormalTextureIndex();
+	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& whiteTexture = renderer->GetWhiteTextureIndex();
+	auto& detailTexture = renderer->GetDetailTextureIndex();
+
+	textures[0] = GetTexture(lightingMaterial->diffuseTexture, grayTexture);
+
+	// There's no need to convert landscape LOD normals to tangent space
+	bool convertMSN = shaderFlags.all(EShaderPropertyFlag::kModelSpaceNormals) && shaderFlags.none(EShaderPropertyFlag::kLODLandscape);
+
+	auto textureType = convertMSN ? TextureType::ModelSpaceNormalMap : TextureType::Standard;
+	textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingMaterial->normalTexture, normalTexture, textureType);
+
+	// Specular
+	if (shaderFlags.any(EShaderPropertyFlag::kSpecular)) {
+		if (shaderFlags.any(EShaderPropertyFlag::kModelSpaceNormals)) {
+			textures[3] = GetTexture(lightingMaterial->specularBackLightingTexture, blackTexture);
+		}
+
+		colors[2] = {
+			lightingMaterial->specularColor.red,
+			lightingMaterial->specularColor.green,
+			lightingMaterial->specularColor.blue,
+			lightingMaterial->specularColorScale
+		};
+
+		scalars[0] = Util::Material::Skyrim::ShininessToRoughness(lightingMaterial->specularPower);
+	}
+
+	// SSS color
+	if (shaderFlags.all(EShaderPropertyFlag::kSoftLighting)) {
+		textures[6] = GetTexture(lightingMaterial->rimSoftLightingTexture, blackTexture);
+	}
+
+	// Envmap
+	if (feature == Feature::kEnvironmentMap) {
+		if (const auto* lightingEnvmapMaterial = skyrim_cast<RE::BSLightingShaderMaterialEnvmap*>(lightingMaterial)) {
+			textures[4] = GetTexture(lightingEnvmapMaterial->envTexture, blackTexture, TextureType::CubeMap);
+			textures[5] = GetTexture(lightingEnvmapMaterial->envMaskTexture, whiteTexture);
+		}
+	}
+
+	// Eye
+	if (feature == Feature::kEye) {
+		if (const auto* lightingEyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(lightingMaterial)) {
+			textures[4] = GetTexture(lightingEyeMaterial->envTexture, blackTexture, TextureType::CubeMap);
+			textures[5] = GetTexture(lightingEyeMaterial->envMaskTexture, whiteTexture);
+		}
+	}
+
+	// Glow
+	if (feature == Feature::kGlowMap) {
+		if (const auto* lightingGlowMaterial = skyrim_cast<RE::BSLightingShaderMaterialGlowmap*>(lightingMaterial)) {
+			textures[2] = GetTexture(lightingGlowMaterial->glowTexture, blackTexture);
+		}
+	}
+
+	// Hair
+	if (feature == Feature::kHairTint) {
+		if (const auto* lightingHairTintMaterial = skyrim_cast<RE::BSLightingShaderMaterialHairTint*>(lightingMaterial)) {
+			colors[0].x = lightingHairTintMaterial->tintColor.red;
+			colors[0].y = lightingHairTintMaterial->tintColor.green;
+			colors[0].z = lightingHairTintMaterial->tintColor.blue;
+
+			// Load flowmap texture for hair (stored in specularBackLightingTexture slot)
+			textures[3] = GetTexture(lightingMaterial->specularBackLightingTexture, blackTexture);
+		}
+	}
+
+	// FaceGen
+	if (feature == Feature::kFaceGen) {
+		if (const auto* lightingFacegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(lightingMaterial)) {
+			if (Util::IsPlayerFormID(formID)) {
+				auto& gameRendererRuntimeData = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData();
+
+				auto faceTintDescriptor = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->GetDescriptor(
+					gameRendererRuntimeData.renderTargets[RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT].texture
+				);
+
+				textures[4] = faceTintDescriptor ? Texture(faceTintDescriptor, grayTexture.get()) : Texture(grayTexture, nullptr);
+			}
+			else
+				textures[4] = GetTexture(lightingFacegenMaterial->tintTexture, grayTexture);
+
+			textures[5] = GetTexture(lightingFacegenMaterial->detailTexture, detailTexture);
+		}
+	}
+
+	// Skin Tint
+	if (feature == Feature::kFaceGenRGBTint) {
+		if (const auto* lightingFacegenTintMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegenTint*>(lightingMaterial)) {
+			colors[0].x = lightingFacegenTintMaterial->tintColor.red;
+			colors[0].y = lightingFacegenTintMaterial->tintColor.green;
+			colors[0].z = lightingFacegenTintMaterial->tintColor.blue;
+		}
+	}
+
+	// Community Shaders 'Skin' feature
+	if (feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint) {
+		// RFAOS stored in the texture set's environment slot.
+		if (auto* textureSet = lightingMaterial->textureSet.get()) {
+			const char* rfaosPath = textureSet->GetTexturePath(RE::BSTextureSet::Texture::kEnvironment);
+			if (rfaosPath && rfaosPath[0] != '\0') {
+				RE::NiPointer<RE::NiSourceTexture> rfaosTexture;
+				textureSet->SetTexture(RE::BSTextureSet::Texture::kEnvironment, rfaosTexture);
+				textures[7] = GetTexture(rfaosTexture, blackTexture);
+			}
+		}
+	}
+}
+
+void Material::SetupProjectedUV(RE::BSLightingShaderProperty* lightingShaderProp)
+{
+	// Projected UV
+	if (shaderFlags.all(EShaderPropertyFlag::kProjectedUV)) {
+
+		auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
+
+		auto oneMinusAlpha = 1.0f - params.w;
+
+		// ProjectedUVParams
+		vectors[0] = {
+			oneMinusAlpha * params.x,
+			0.0f,
+			params.z,
+			(oneMinusAlpha * params.y) + params.w
+		};
+
+		// ProjectedUVParams2
+		vectors[1] = Util::Math::Float4(lightingShaderProp->projectedUVColor);
+
+		// All yoinked from Nukem 
+		// https://github.com/Nukem9/skyrimse-test/blob/328916305165a46c4e4b527735bbcfd46b09a0ca/skyrim64_test/src/patches/TES/BSShader/Shaders/BSLightingShader.cpp#L883
+		{
+			auto renderFlags = 0; // ?
+			bool enableProjectedNormals = RE::GetINISetting("bEnableProjecteUVDiffuseNormals:Display")->GetBool() && (!(renderFlags & 0x8) || !RE::GetINISetting("bEnableProjecteUVDiffuseNormalsOnCubemap:Display")->GetBool());
+
+			// ProjectedUVParams3
+			vectors[2] = {
+				RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display")->GetFloat(),
+				RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display")->GetFloat(),
+				0,
+				enableProjectedNormals ? 1.0f : 0.0f
+			};
+		}
+
+		// Texture Projection - Non-Default if BSGeometry::IsMultiIndexTriShape() is true
+		vectors[3] = { 0.0f, 0.0f, 1.0f, 0.0f };
+
+		auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
+		textures[7] = GetTexture(projNoiseMap, Renderer::GetSingleton()->GetBlackTextureIndex());
+	}
+}
+
 void Material::SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp)
 {
-	shaderType = RE::BSShader::Type::Water;
+	shaderType = ShaderType::Water;
 	waterShaderFlags = static_cast<Material::WaterShaderFlags>(waterShaderProp->waterFlags.underlying());
 }
 
@@ -545,8 +554,6 @@ void Material::SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial)
 
 void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 {
-	auto* scene = Scene::GetSingleton();
-
 	auto* bsWaterProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 	if (!bsWaterProperty)
 		return;
@@ -557,6 +564,7 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	if (!bsWaterMaterial)
 		return;
 
+	auto* scene = Scene::GetSingleton();
 	int32_t flowMapSize = *scene->g_FlowMapSize;
 
 	// ObjectUV
@@ -571,7 +579,6 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	else {
 		vectors[2].y = 0.0f;
 	}
-
 
 	if (waterShaderFlags.all(WaterShaderFlags::kEnableFlowmap)) {
 		// CellTexCoordOffset 
@@ -623,16 +630,43 @@ void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descripto
 
 void Material::Update(RE::BSShaderProperty* shaderProperty)
 {
-	if (shaderType == RE::BSShader::Type::Water)
+	if (shaderType == ShaderType::Water)
 		UpdateWaterMaterial(shaderProperty);
+	else {
+		const auto currentShaderFlags = shaderProperty->flags.get();
+
+		if (shaderFlags.get() != currentShaderFlags)
+		{
+			auto addedFlags = currentShaderFlags & ~shaderFlags.get();
+			auto removedFlags = shaderFlags.get() & ~currentShaderFlags;
+
+			logger::debug("Material::Update - {} Shader flags changed - Added: {}, Removed: {}",
+				magic_enum::enum_name(shaderType),
+				Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(addedFlags)),
+				Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(removedFlags)));
+
+			shaderFlags = currentShaderFlags;
+
+			if (shaderType == ShaderType::Lighting || shaderType == ShaderType::TruePBR) {
+				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
+
+				if (shaderType == ShaderType::Lighting) {
+					if (auto lightingMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(lightingShaderProp->material))
+						SetupLightingMaterial(lightingMaterial, 0);
+				}
+
+				SetupProjectedUV(lightingShaderProp);
+			} 
+		}
+	}
 }
 
 void Material::UpdateData(nvrhi::ICommandList* commandList, const float3& externalEmittance)
 {
 	auto color1 = colors[1];
 
-	if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kExternalEmittance)) {
-		if (shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kOwnEmit)) {
+	if (shaderFlags.all(EShaderPropertyFlag::kExternalEmittance)) {
+		if (shaderFlags.all(EShaderPropertyFlag::kOwnEmit)) {
 			color1.x *= externalEmittance.x;
 			color1.y *= externalEmittance.y;
 			color1.z *= externalEmittance.z;
@@ -687,7 +721,7 @@ void Material::UpdateData(nvrhi::ICommandList* commandList, const float3& extern
 	m_MaterialData.Texture19 = GetTextureDescriptorIndex(19);
 
 	m_MaterialData.AlphaFlags = static_cast<uint16_t>(alphaFlags);
-	m_MaterialData.ShaderType = GetShaderType();
+	m_MaterialData.ShaderType = static_cast<uint16_t>(shaderType);
 	m_MaterialData.Feature = static_cast<uint16_t>(feature);
 	m_MaterialData.PBRFlags = pbrFlags.underlying();
 	m_MaterialData.ShaderFlags = GetShaderFlags();

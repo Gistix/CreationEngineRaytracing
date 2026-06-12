@@ -388,6 +388,7 @@ namespace Pass::NRD
 
 	void NRDIntegration::UpdateCommonSettings()
 	{
+#if defined(SKYRIM)
 		auto* renderer = Renderer::GetSingleton();
 
 		auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
@@ -440,6 +441,7 @@ namespace Pass::NRD
 		m_CommonSettings.rectSize[1] = static_cast<uint16_t>(dynamicResolution.y);
 
 		m_CommonSettings.denoisingRange = 1e6f;
+#endif
 	}
 
 	nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const

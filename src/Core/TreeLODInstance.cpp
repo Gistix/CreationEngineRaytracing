@@ -1,3 +1,5 @@
+#if defined(SKYRIM)
+
 #include "core/TreeLODInstance.h"
 
 void TreeLODInstance::UpdateTransform()
@@ -32,3 +34,5 @@ void TreeLODInstance::UpdateTransform()
 	// Update transform
 	m_Transform = transform;
 }
+
+#endif

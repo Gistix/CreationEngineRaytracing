@@ -74,53 +74,64 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 
 			D3D12_RESOURCE_STATES state = nvrhi::d3d12::convertResourceStates(desc.initialState);
 
-			D3D12_COMPATIBILITY_SHARED_FLAGS compatFlags = D3D12_COMPATIBILITY_SHARED_FLAG_NON_NT_HANDLE;
+			// Legacy shared textures have better format support, but require using compatibility device which may be unavailable (especially when using VKD3D)
+			auto compatDevice = Renderer::GetCompatDevice();
+			if (compatDevice) {
+				D3D11_RESOURCE_FLAGS flags11{};
+				flags11.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
-			D3D11_RESOURCE_FLAGS flags11{};
-			flags11.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+				if (nativeDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
+					flags11.BindFlags |= D3D11_BIND_RENDER_TARGET;
 
-			if (nativeDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
-				flags11.BindFlags |= D3D11_BIND_RENDER_TARGET;
+				if (nativeDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)
+					flags11.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
 
-			if (nativeDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)
-				flags11.BindFlags |= D3D11_BIND_DEPTH_STENCIL;
+				if (nativeDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+					flags11.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 
-			if (nativeDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-				flags11.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+				if (!(nativeDesc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))
+					flags11.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 
-			if (!(nativeDesc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))
-				flags11.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+				auto hr = compatDevice->CreateSharedResource(
+					&heapProps,
+					D3D12_HEAP_FLAG_SHARED,
+					&nativeDesc,
+					state,
+					nullptr,
+					&flags11,
+					D3D12_COMPATIBILITY_SHARED_FLAG_NON_NT_HANDLE,
+					nullptr,
+					nullptr,
+					IID_PPV_ARGS(renderTarget.d3d12Resource.put()));
 
-			auto hr = Renderer::GetCompatDevice()->CreateSharedResource(
-				&heapProps, 
-				D3D12_HEAP_FLAG_SHARED, 
-				&nativeDesc, 
-				state, 
-				nullptr, 
-				&flags11, 
-				compatFlags, 
-				nullptr, 
-				nullptr, 
-				IID_PPV_ARGS(renderTarget.d3d12Resource.put()));
+				if (FAILED(hr)) {
+					logger::info("RenderTargetManager::GetTexture - Create shared resource failed for {} with a hr of {:0X}", magic_enum::enum_name(texture), hr);
+					return nullptr;
+				}
 
-			if (FAILED(hr)) {
-				logger::info("RenderTargetManager::GetTexture - Create shared resource failed for {} with a hr of {:0X}", magic_enum::enum_name(texture), hr);
-				return nullptr;
+				renderTarget.handle = device->createHandleForNativeTexture(
+					nvrhi::ObjectTypes::D3D12_Resource,
+					nvrhi::Object(renderTarget.d3d12Resource.get()),
+					desc);
+
+				hr = compatDevice->ReflectSharedProperties(
+					renderTarget.d3d12Resource.get(),
+					D3D12_REFLECT_SHARED_PROPERTY_NON_NT_SHARED_HANDLE,
+					&renderTarget.sharedHandle, sizeof(HANDLE));
+
+				if (FAILED(hr)) {
+					logger::info("RenderTargetManager::GetTexture - Reflect shared properties failed for {} with a hr of {:0X}", magic_enum::enum_name(texture), hr);
+					return nullptr;
+				}
 			}
+			else {
+				logger::info("RenderTargetManager::GetTexture - D3D12 Compatibility Device is not available, falling back to standard NT shared texture");
 
-			renderTarget.handle = device->createHandleForNativeTexture(
-				nvrhi::ObjectTypes::D3D12_Resource, 
-				nvrhi::Object(renderTarget.d3d12Resource.get()), 
-				desc);
+				// Add Shared NT Handle flag
+				desc.sharedResourceFlags |= nvrhi::SharedResourceFlags::Shared_NTHandle;
 
-			hr = Renderer::GetCompatDevice()->ReflectSharedProperties(
-				renderTarget.d3d12Resource.get(), 
-				D3D12_REFLECT_SHARED_PROPERTY_NON_NT_SHARED_HANDLE, 
-				&renderTarget.sharedHandle, sizeof(HANDLE));
-
-			if (FAILED(hr)) {
-				logger::info("RenderTargetManager::GetTexture - Reflect shared properties failed for {} with a hr of {:0X}", magic_enum::enum_name(texture), hr);
-				return nullptr;
+				renderTarget.handle = device->createTexture(desc);
+				renderTarget.sharedHandle = renderTarget.handle->getNativeObject(nvrhi::ObjectTypes::SharedHandle);
 			}
 		}		
 	}
@@ -145,7 +156,12 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
 			return sharedTexture;
 		}
 
-		auto hr = Renderer::GetSingleton()->GetNativeD3D11Device()->OpenSharedResource(renderTarget.sharedHandle, IID_PPV_ARGS(renderTarget.d3d11Texture.put()));
+		HRESULT hr;
+		auto nativeD3D11Device = Renderer::GetSingleton()->GetNativeD3D11Device();
+		if ((renderTarget.handle->getDesc().sharedResourceFlags & nvrhi::SharedResourceFlags::Shared_NTHandle) != 0)
+			hr = nativeD3D11Device->OpenSharedResource1(renderTarget.sharedHandle, IID_PPV_ARGS(renderTarget.d3d11Texture.put()));
+		else
+			hr = nativeD3D11Device->OpenSharedResource(renderTarget.sharedHandle, IID_PPV_ARGS(renderTarget.d3d11Texture.put()));
 
 		if (FAILED(hr)) {
 			logger::info("RenderTargetManager::GetSharedTexture - Open shared resource failed for {} with a hr of {:0X}", magic_enum::enum_name(texture), hr);

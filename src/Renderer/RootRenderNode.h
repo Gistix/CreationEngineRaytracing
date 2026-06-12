@@ -18,6 +18,9 @@ public:
 	{
 		for (auto& child : m_Children)
 		{
+			if (!child)
+				continue;
+
 			if (auto* childPass = child->GetPass<T>())
 				return childPass;
 		}
@@ -30,6 +33,9 @@ public:
 	{
 		for (auto& child : m_Children)
 		{
+			if (!child)
+				continue;
+
 			if (auto* node = child.GetNode<T>())
 				return node;
 		}
@@ -42,6 +48,9 @@ public:
 	{
 		for (auto& child : m_Children)
 		{
+			if (!child)
+				continue;
+
 			if (child->SetEnabled<T>(enabled))
 				return true;
 		}
@@ -67,6 +76,9 @@ public:
 
 		for (auto* child : m_Children)
 		{
+			if (!child)
+				continue;
+
 			child->ForEach(func);
 		}
 	}

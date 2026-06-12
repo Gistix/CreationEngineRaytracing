@@ -1,16 +1,25 @@
+#if defined(SKYRIM)
+
 #include "Core/Reference/TreeLODBlockReference.h"
 #include "Util.h"
 #include "Types/RE/RE.h"
 
+void TreeLODBlockReference::AddTreeInstanceData(RE::BGSDistantTreeBlock::InstanceData* a_treeInstanceData)
+{
+	treeInstanceData.push_back(a_treeInstanceData);
+}
+
 void TreeLODBlockReference::UpdateVisibility()
 {
-	if (detached)
-		return;
+	if (m_Attached != block->attached) {
+		SetAttached(block->attached);
+	}
 
-	if (!block->attached) {
-		logger::info("Unattached tree block");
+	if (!m_Attached) {
 		return;
 	}
+
+	//logger::info("Block: 0x{:08X}, Groups: {}", reinterpret_cast<uintptr_t>(block), block->treeGroups.size());
 
 	auto numInstances = instances.size();
 
@@ -28,3 +37,5 @@ void TreeLODBlockReference::UpdateVisibility()
 		instance->SetLODHidden(instanceData->hidden);
 	}
 }
+
+#endif

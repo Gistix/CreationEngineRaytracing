@@ -164,6 +164,11 @@ struct half4
 	half4(const float4& v) :
 		x(v.x), y(v.y), z(v.z), w(v.w) {}
 
+	friend half4 operator*(half4 lhs, float rhs)
+	{
+		return float4(lhs) * rhs;
+	}
+
 	bool operator==(const half4&) const = default;
 
 	operator float4() const

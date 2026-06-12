@@ -11,7 +11,7 @@
 namespace magic_enum::customize
 {
 	template <>
-	struct enum_range<RE::NiAVObject::Flag>
+	struct enum_range<CESEAdapter::RE::NiAVObjectFlag>
 	{
 		static constexpr bool is_flags = true;
 	};
@@ -57,12 +57,6 @@ namespace magic_enum::customize
 	{
 		static constexpr bool is_flags = true;
 	};
-
-	template <>
-	struct enum_range<RE::BGSEquipSlot::Flag>
-	{
-		static constexpr bool is_flags = true;
-	};	
 
 	template <>
 	struct enum_range<SupportedFeatures>

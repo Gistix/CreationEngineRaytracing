@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(FALLOUT4)
+#include "Types/RE/FO4/BSLight.h"
+#endif
+
 namespace Util
 {
 	namespace Game

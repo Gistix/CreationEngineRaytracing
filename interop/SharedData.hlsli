@@ -103,9 +103,7 @@ struct HairSpecularSettings
     float SelfShadowExponent;
     float SelfShadowScale;
     uint HairMode; // 0: Kajiya-Kay, 1: Marschner
-    uint pad0;
-    uint pad1;
-    uint pad2;
+    uint3 pad;
 };
 #ifdef __cplusplus
 static_assert(sizeof(HairSpecularSettings) % 16 == 0);
@@ -141,7 +139,7 @@ struct LinearLightingSettings
 	float waterGamma;
 	float vlGamma;
 	float vanillaDiffuseColorMult;
-	float directionalLightMult;  // Computed based on interior/exterior
+	float directionalLightMult;
 	float pointLightMult;
 	float ambientMult;
 	float emitColorMult;

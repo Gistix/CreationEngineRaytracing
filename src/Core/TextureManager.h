@@ -39,28 +39,28 @@ struct MSNReference : TextureReference
 	}
 };
 
-struct TextureManager
-{
-	enum class TextureType
+	struct TextureManager
 	{
-		Standard,
-		ModelSpaceNormalMap,
-		CubeMap
+		enum class TextureType
+		{
+			Standard,
+			ModelSpaceNormalMap,
+			CubeMap
+		};
+
+		eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
+		eastl::unordered_map<IUnknown*, eastl::unique_ptr<MSNReference>> m_NormalMaps;
+
+		eastl::unique_ptr<BindlessTableManager> m_TextureDescriptors;
+		eastl::unique_ptr<BindlessTableManager> m_CubemapDescriptors;
+
+		eastl::unique_ptr<Pipeline::MSNConverter> m_MSNConverter;
+
+		TextureManager();
+		uint64_t GetFakeDoubledVRAMUsage();
+		eastl::shared_ptr<DescriptorHandle> GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType = TextureType::Standard);
+		eastl::shared_ptr<DescriptorHandle> GetDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr, TextureType textureType = TextureType::Standard);
+		void ReleaseTexture(RE::BSGraphics::Texture* texture);
 	};
-
-	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
-	eastl::unordered_map<IUnknown*, eastl::unique_ptr<MSNReference>> m_NormalMaps;
-
-	eastl::unique_ptr<BindlessTableManager> m_TextureDescriptors;
-	eastl::unique_ptr<BindlessTableManager> m_CubemapDescriptors;
-
-	eastl::unique_ptr<Pipeline::MSNConverter> m_MSNConverter;
-
-	TextureManager();
-	uint64_t GetFakeDoubledVRAMUsage();
-	eastl::shared_ptr<DescriptorHandle> GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType = TextureType::Standard);
-	eastl::shared_ptr<DescriptorHandle> GetDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr, TextureType textureType = TextureType::Standard);
-	void ReleaseTexture(RE::BSGraphics::Texture* texture);
-};
 
 using TextureType = TextureManager::TextureType;

@@ -5,28 +5,28 @@ namespace Util
 	namespace Traversal
 	{
 
-		static RE::BSVisit::BSVisitControl ScenegraphFadeNodes(RE::NiAVObject* a_object, std::function<RE::BSVisit::BSVisitControl(RE::BSFadeNode*)> a_func)
+		static CESEAdapter::RE::BSVisitControl ScenegraphFadeNodes(RE::NiAVObject* a_object, std::function<CESEAdapter::RE::BSVisitControl(RE::BSFadeNode*)> a_func)
 		{
-			auto result = RE::BSVisit::BSVisitControl::kContinue;
+			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
 			if (!a_object) {
 				return result;
 			}
 
-			auto fadeNode = Util::Adapter::CLib::AsFadeNode(a_object);
+			auto fadeNode = Util::Adapter::AsFadeNode(a_object);
 			if (fadeNode) {
 				result = a_func(fadeNode);
 
-				if (result == RE::BSVisit::BSVisitControl::kStop) {
+				if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 					return result;
 				}
 			}
 
-			auto node = Util::Adapter::CLib::AsNode(a_object);
+			auto node = Util::Adapter::AsNode(a_object);
 			if (node) {
-				for (auto& child : Util::Adapter::CLib::GetChildren(node)) {
+				for (auto& child : Util::Adapter::GetChildren(node)) {
 					result = ScenegraphFadeNodes(child.get(), a_func);
-					if (result == RE::BSVisit::BSVisitControl::kStop) {
+					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 						break;
 					}
 				}
@@ -36,15 +36,15 @@ namespace Util
 		}
 
 		// A custom visit controller built to ignore billboard/particle geometry
-		static RE::BSVisit::BSVisitControl ScenegraphRTGeometries(RE::NiAVObject* a_object, RE::BSFadeNode* validFadeNode, std::function<RE::BSVisit::BSVisitControl(RE::BSGeometry*)> a_func)
+		static CESEAdapter::RE::BSVisitControl ScenegraphRTGeometries(RE::NiAVObject* a_object, RE::BSFadeNode* validFadeNode, std::function<CESEAdapter::RE::BSVisitControl(RE::BSGeometry*)> a_func)
 		{
-			auto result = RE::BSVisit::BSVisitControl::kContinue;
+			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
 			if (!a_object) {
 				return result;
 			}
 
-			auto geom = Util::Adapter::CLib::AsGeometry(a_object);
+			auto geom = Util::Adapter::AsGeometry(a_object);
 			if (geom) {
 				return a_func(geom);
 			}
@@ -62,21 +62,21 @@ namespace Util
 			if (rtti == orderedRTTI.get())
 				return result;
 
-			auto node = Util::Adapter::CLib::AsNode(a_object);
+			auto node = Util::Adapter::AsNode(a_object);
 
 			if (node) {
-				for (auto& child : Util::Adapter::CLib::GetChildren(node)) {
+				for (auto& child : Util::Adapter::GetChildren(node)) {
 					if (!child)
 						continue;
 
 					if (validFadeNode) {
-						if (auto fadeNode = Util::Adapter::CLib::AsFadeNode(child.get()); fadeNode && fadeNode != validFadeNode) {
+						if (auto fadeNode = Util::Adapter::AsFadeNode(child.get()); fadeNode && fadeNode != validFadeNode) {
 							continue;
 						}
 					}
 
 					result = ScenegraphRTGeometries(child.get(), validFadeNode, a_func);
-					if (result == RE::BSVisit::BSVisitControl::kStop) {
+					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 						break;
 					}
 				}

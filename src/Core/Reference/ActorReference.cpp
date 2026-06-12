@@ -7,7 +7,11 @@ void ActorReference::Update()
 {
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
+#if defined(FALLOUT4)
+	auto* faceNode = reinterpret_cast<RE::NiAVObject*>(m_Actor->GetFaceNodeSkinned());
+#else
 	auto* faceNode = m_Actor->GetFaceNodeSkinned();
+#endif
 
 	if (faceNode != m_FaceNode) {
 		if (m_FaceNode)
@@ -21,9 +25,11 @@ void ActorReference::Update()
 
 	if (m_Biped) {
 		if (auto* biped = m_Actor->GetBiped(m_FirstPerson).get()) {
-			for (size_t i = 0; i < RE::BIPED_OBJECT::kTotal; i++)
+			const auto& objects = Util::Adapter::GetBipedObjects(biped);
+
+			for (size_t i = 0; i < static_cast<int32_t>(RE::BIPED_OBJECT::kTotal); i++)
 			{
-				auto& object = biped->objects[i];
+				auto& object = objects[i];
 
 				const auto& curObject = BipObjectReference(object);
 				auto& prevObject = m_Objects[i];

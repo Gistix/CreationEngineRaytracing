@@ -73,6 +73,7 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
 		/Zc:wchar_t
 		/wd4200 # nonstandard extension used : zero-sized array in struct/union
 		/arch:AVX
+		/utf-8
 	)
 
 	target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:DEBUG>:${SC_DEBUG_OPTS}>")
@@ -93,26 +94,21 @@ if(BUILD_SKYRIM)
 	set(CommonLibName "CommonLibSSE")
 	set(CommonLibPath "extern/CommonLibSSE-NG")
 	set(CommonLibTarget CommonLibSSE::CommonLibSSE)
+
+	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
 elseif(BUILD_FALLOUT4)
 	add_compile_definitions(FALLOUT4)
 
-	if(BUILD_PRE_NG)
-		add_compile_definitions(FALLOUT_PRE_NG)
-		set(CommonLibPath "extern/CommonLibF4PreNG/CommonLibF4")
-	elseif(BUILD_POST_NG)
-		add_compile_definitions(FALLOUT_POST_NG)
-		set(CommonLibPath "extern/CommonLibF4PostNG/CommonLibF4")
-	elseif(BUILD_POST_AE)
-		add_compile_definitions(FALLOUT_POST_NG)
-		add_compile_definitions(FALLOUT_POST_AE)
-		set(CommonLibPath "extern/CommonLibF4PostAE/CommonLibF4")
-	endif()
-
+	set(CommonLibFullPath "${CMAKE_SOURCE_DIR}/extern/commonlibf4")
 	set(CommonLibName "CommonLibF4")
-	set(CommonLibTarget CommonLibF4::CommonLibF4)
-ENDIF()
+	set(CommonLibTarget CommonLibF4)
 
-add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
+	set(CommonLibSharedPath "${CommonLibFullPath}/lib/commonlib-shared")
+	set(CommonLibSharedName "CommonLibShared")
+	set(CommonLibSharedTarget CommonLibShared)
+
+	include(CommonLibF4)
+endif()
 
 target_include_directories(
 	${PROJECT_NAME}
@@ -125,8 +121,17 @@ target_include_directories(
 	${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(
-	${PROJECT_NAME}
-	PUBLIC
-	${CommonLibTarget}
-)
+if(BUILD_SKYRIM)
+	target_link_libraries(
+		${PROJECT_NAME}
+		PUBLIC
+		${CommonLibTarget}
+	)
+elseif(BUILD_FALLOUT4)
+	target_link_libraries(
+		${PROJECT_NAME}
+		PUBLIC
+		${CommonLibTarget}
+		${CommonLibSharedTarget}
+	)
+endif()

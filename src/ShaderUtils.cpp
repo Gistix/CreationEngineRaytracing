@@ -2,7 +2,6 @@
 
 #include "ShaderUtils.h"
 #include "Util.h"
-#include <dxcapi.h>
 #include <shlwapi.h>
 
 #include "ShaderCache.h"
@@ -11,39 +10,12 @@ namespace ShaderUtils
 {
 	void CompileShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
 	{
-		if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
-			logger::error("Failed to initialize COM");
-			return;
-		}
-
-		std::string str = Util::WStringToString(FilePath);
-
-		if (!std::filesystem::exists(FilePath)) {
-			logger::error("Failed to compile shader; {} does not exist", str);
-			return;
-		}
-
-		winrt::com_ptr<IDxcUtils> utils;
-		if (FAILED(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils)))) {
-			logger::error("Failed to create DxcUtils");
-			return;
-		}
-
-		winrt::com_ptr<IDxcCompiler3> compiler;
-		if (FAILED(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler)))) {
-			logger::error("Failed to create DxcCompiler");
-			return;
-		}
+		auto dxc = DirectXShaderCompiler::GetSingleton();
 
 		winrt::com_ptr<IDxcBlobEncoding> source;
-		if (FAILED(utils->LoadFile(FilePath, nullptr, source.put()))) {
-			logger::error("Failed to load shader file");
-			return;
-		}
-
-		winrt::com_ptr<IDxcIncludeHandler> baseHandler;
-		if (FAILED(utils->CreateDefaultIncludeHandler(baseHandler.put()))) {
-			logger::error("Failed to create Include Handler");
+		if (FAILED(dxc->utils->LoadFile(FilePath, nullptr, source.put()))) {
+			std::string str = Util::WStringToString(FilePath);
+			logger::error("Failed to load shader file, check if {} exists.", str);
 			return;
 		}
 
@@ -66,7 +38,7 @@ namespace ShaderUtils
 		};
 
 		winrt::com_ptr<IDxcCompilerArgs> compilerArgs;
-		DxcCreateInstance(CLSID_DxcCompilerArgs, IID_PPV_ARGS(&compilerArgs));
+		dxc->DxcCreateInstance(CLSID_DxcCompilerArgs, IID_PPV_ARGS(&compilerArgs));
 
 		compilerArgs->AddArguments(args, _countof(args));
 
@@ -82,7 +54,7 @@ namespace ShaderUtils
 		compilerArgs->AddDefines(defines.data(), static_cast<uint>(defines.size()));
 
 		winrt::com_ptr<IDxcResult> result;
-		if (FAILED(compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), baseHandler.get(), IID_PPV_ARGS(&result)))) {
+		if (FAILED(dxc->compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), dxc->includeHandler.get(), IID_PPV_ARGS(&result)))) {
 			logger::error("Compile call failed");
 			return;
 		}

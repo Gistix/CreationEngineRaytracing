@@ -4,6 +4,8 @@
 
 namespace RE
 {
+    class BGSTerrainNode;
+
     class BGSObjectBlock {
     public:
         // members
