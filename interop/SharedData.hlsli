@@ -267,9 +267,8 @@ struct PhysSkyData
 
     // SETTINGS
     uint lightSkyStatics;
-    uint pad0;
-    uint pad1;
-    uint pad2;
+    float skyStaticsBrightness;
+    uint2 pad0;
 };
 #ifdef __cplusplus
 static_assert(sizeof(PhysSkyData) % 16 == 0);
