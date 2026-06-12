@@ -83,12 +83,12 @@ void Main()
     
     const float2 dynamicUVUnjittered = dynamicUV - (Camera.Jitter / Camera.ScreenSize);
 
-    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0) * DEPTH_SCALE;
+    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
 #if defined(RAW_RADIANCE) && defined(NRD_REBLUR)
-    const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0) * DEPTH_SCALE;   
+    const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0);   
     ViewDepth[idx] = ScreenToViewDepth(depthJittered, Camera.CameraData);
 #endif 
     
@@ -124,7 +124,7 @@ void Main()
     
     const unorm float4 metalnessAO = MAO.SampleLevel(DefaultSampler, dynamicUV, 0);
 
-    float3 faceNormal = FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f;
+    float3 faceNormal = normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
 
     const float metalness = metalnessAO.x;
     const float ao = metalnessAO.y;
@@ -327,7 +327,7 @@ void Main()
             }
 
             ray.Direction = direction;
-            ray.TMin = 0.0f;  // OffsetRay already handles precision, no additional offset needed
+            ray.TMin = (j == 0) ? 0.125f * M_TO_GAME_UNIT : 0.0f; // Depth precision offset
             ray.TMax = RAY_TMAX;
 
             if (!bsdfSample.isLobe(LobeType::Delta))
