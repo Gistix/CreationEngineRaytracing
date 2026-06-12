@@ -135,7 +135,7 @@ void Main()
     
     const float hitDistance = length(positionCS);
     
-    const snorm float3 normalWS = normalRoughness.xyz;    
+    const snorm float3 normalWS = normalRoughness.xyz;
     
     float3 tangentWS, bitangentWS;
     CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);    
@@ -147,6 +147,13 @@ void Main()
     Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
+#if !(defined(SHARC) && SHARC_UPDATE)
+#   if defined(DLSS_RR)
+    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
+    SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);    
+#   endif    
+#endif
+    
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     
     
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
@@ -490,11 +497,6 @@ void Main()
     radiance /= MAX_SAMPLES;
        
 #if !(defined(SHARC) && SHARC_UPDATE)
-#   if defined(DLSS_RR)
-    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-    const float3 specularAlbedo = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
-#   endif
-      
 #   if defined(RAW_RADIANCE)
     float3 diffuseRadiance = isSpecular ? 0.0.xxx : radiance;
     float3 specularRadiance = isSpecular ? radiance : 0.0.xxx;
@@ -523,7 +525,6 @@ void Main()
     Output[idx] = float4(radiance, 1.0f);
     
 #       if defined(DLSS_RR) 
-    SpecularAlbedo[idx] = specularAlbedo;
     SpecularHitDistance[idx] = specHitDist;
 #       endif
     
