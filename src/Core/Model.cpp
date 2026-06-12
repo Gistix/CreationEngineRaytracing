@@ -39,19 +39,6 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 
 void Model::UpdateMeshFlags()
 {
-	const auto oldSize = m_Meshes.size();
-	m_Meshes.erase(
-		eastl::remove_if(m_Meshes.begin(), m_Meshes.end(),
-			[](const auto& mesh)
-			{
-				return !mesh;
-			}),
-		m_Meshes.end()
-	);
-
-	if (m_Meshes.size() != oldSize)
-		logger::warn("Model::UpdateMeshFlags - Removed {} null meshes from model {}", oldSize - m_Meshes.size(), m_Name.c_str());
-
 	meshFlags.reset();
 	m_MeshTypes.reset();
 	shaderTypes = 0;
@@ -289,11 +276,6 @@ void Model::AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr
 	copyCommandList->open();
 
 	for (auto& mesh : a_meshes) {
-		if (!mesh) {
-			logger::warn("Model::AppendMeshes - Skipping null mesh for model {}", m_Name.c_str());
-			continue;
-		}
-
 		mesh->CreateBuffers(sceneGraph, copyCommandList);
 		m_Meshes.push_back(eastl::move(mesh));
 	}
