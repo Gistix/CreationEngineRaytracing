@@ -25,6 +25,15 @@ namespace Util
 			return runtimeData;
 		}
 
+		const char* GetName(RE::TESForm* a_form)
+		{
+#if defined(SKYRIM)
+			return a_form->GetName();
+#elif defined(FALLOUT4)
+			return a_form->GetFullName();
+#endif		
+		}
+
 		RE::BIPOBJECT* GetBipedObjects(RE::BipedAnim* a_bipedAnim)
 		{
 #if defined(SKYRIM)
