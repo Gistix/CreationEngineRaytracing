@@ -128,7 +128,7 @@ void Main()
 
     const float metalness = metalnessAO.x;
     const float ao = metalnessAO.y;
-    
+
     const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
     const float3 positionCS = ViewToWorldPosition(positionVS, Camera.ViewInverse);
     const float3 positionWS = positionCS + Camera.Position.xyz;    
@@ -145,10 +145,10 @@ void Main()
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
     Material sourceMaterial = (Material)0;
-    sourceMaterial.Feature == Feature::kDefault;
+    sourceMaterial.Feature = Feature::kDefault;
     
     Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
-    BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -normalize(positionCS));
+    BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     
     
