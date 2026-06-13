@@ -136,7 +136,7 @@ void Main()
     const float hitDistance = length(positionCS);
     
     const snorm float3 normalWS = normalRoughness.xyz;
-    
+
     float3 tangentWS, bitangentWS;
     CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);    
 
@@ -233,7 +233,7 @@ void Main()
         {
             BSDFSample bsdfSample;
                               
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
+            float3 faceNormalOriented = j == 0 || dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
        
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
             direction = surface.Mul(SampleCosineHemisphere(randomSeed));

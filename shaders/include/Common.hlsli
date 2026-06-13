@@ -171,6 +171,7 @@ float3 ComputeNormalImproved(const Texture2D<float> depth, in float2 id, in int2
     float3 dpdy = (db < dt) ? ce - GetWorldPosition(id - int2(0, 1), b1) :
                           -ce + GetWorldPosition(id + int2(0, 1), t1);
 
-    return normalize(cross(dpdx, dpdy));
+    // Invert normals so they match GBuffer
+    return normalize(cross(dpdy, dpdx));
 }
 #endif // COMMON_HLSLI

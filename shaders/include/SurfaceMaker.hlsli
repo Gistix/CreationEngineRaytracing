@@ -309,7 +309,7 @@ struct SurfaceMaker
     
     static Surface make(float3 position, float3 faceNormal, float3 normal, float3 tangent, float3 bitangent, float3 albedo, float roughness, float metallic, float3 emissive, float ao) 
     { 
-        Surface surface;         
+        Surface surface = (Surface)0;
 
         surface.Primary = false;        
         
