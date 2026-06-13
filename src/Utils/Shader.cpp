@@ -12,10 +12,10 @@ namespace Util
 				{ L"MAX_BOUNCES", settings.RaytracingSettings.Bounces },
 				{ L"MAX_SAMPLES", settings.RaytracingSettings.SamplesPerPixel },
 				{ L"SHARC_UPDATE", sharcUpdate ? L"1" : L"0" },
-			{ L"SHARC_RESOLVE", L"0" },
-			{ L"SHARC_DEBUG", L"0" },
-			{ L"SKIN_DETAIL_NORMAL", L"1" },
-			{ L"DEBUG_TRACE_HEATMAP", L"0" }
+				{ L"SHARC_RESOLVE", L"0" },
+				{ L"SHARC_DEBUG", L"0" },
+				{ L"SKIN_DETAIL_NORMAL", L"0" },
+				{ L"DEBUG_TRACE_HEATMAP", L"0" }
 			};
 
 			if (settings.AdvancedSettings.GGXEnergyConservation)
@@ -33,16 +33,6 @@ namespace Util
 
 			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
-
-			if (!sharcUpdate) {
-				if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
-					defines.emplace_back(L"RAW_RADIANCE", L"1");
-					
-					defines.emplace_back(L"NRD", L"1");
-					defines.emplace_back(L"NRD_REBLUR", L"1"); // TODO: Remove this define since Denoiser::NRD_REBLUR became Denoiser::NRD?
-				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
-					defines.emplace_back(L"DLSS_RR", L"1");
-			}
 
 			return defines;
 		}
@@ -77,6 +67,16 @@ namespace Util
 		eastl::vector<ShaderDefine> GetGlobalIlluminationDefines(const Settings& settings, bool sharc, bool sharcUpdate)
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
+
+			if (!sharc || (sharc && !sharcUpdate)) {
+				if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
+					defines.emplace_back(L"RAW_RADIANCE", L"1");
+
+					defines.emplace_back(L"NRD", L"1");
+				}
+				else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+					defines.emplace_back(L"DLSS_RR", L"1");
+			}
 
 			return defines;
 		}

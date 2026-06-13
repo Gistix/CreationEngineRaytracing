@@ -87,7 +87,7 @@ void Main()
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
-#if defined(RAW_RADIANCE) && defined(NRD_REBLUR)
+#if defined(RAW_RADIANCE) && defined(NRD)
     const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0);   
     ViewDepth[idx] = ScreenToViewDepth(depthJittered, Camera.CameraData);
 #endif 
@@ -97,13 +97,13 @@ void Main()
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
-#       if defined(NRD_REBLUR)
+#       if defined(NRD)
         DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
 #       else
         DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
-#       endif // NRD_REBLUR
+#       endif // NRD
         
 #   else // RAW_RADIANCE
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -143,6 +143,9 @@ void Main()
     float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(DefaultSampler, dynamicUV, 0).rgb);
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
+    
+    Material sourceMaterial = (Material)0;
+    sourceMaterial.Feature == Feature::kDefault;
     
     Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -normalize(positionCS));
@@ -186,7 +189,7 @@ void Main()
     SharcHitData sharcHitData;
 #endif    
     
-#if defined(NRD_REBLUR)
+#if defined(NRD)
      float diffHitDist = 0;     
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #else
@@ -205,10 +208,12 @@ void Main()
         bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
 
-#if defined(NRD_REBLUR)
+#if defined(NRD)
         float accumulatedHitDist = 0;
 #endif
 
+        material = sourceMaterial;
+        
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
         float materialRoughnessPrev = 0.0f;
@@ -367,7 +372,7 @@ void Main()
                 break;
             }
             
-#if defined(NRD_REBLUR)
+#if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
 #else
@@ -472,7 +477,7 @@ void Main()
         
         }
 
-#if defined(NRD_REBLUR)
+#if defined(NRD)
         float normHitDist = accumulatedHitDist;
         normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecular ? sourceSurface.Roughness : 1.0);
         
@@ -490,7 +495,7 @@ void Main()
 #endif
     }
 
-#if defined(NRD_REBLUR)
+#if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
 #endif
     
@@ -508,10 +513,10 @@ void Main()
     diffuseRadiance /= diffFactor;
     specularRadiance /= specFactor;
     
-#           if defined(NRD_REBLUR)
+#           if defined(NRD)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
-#           endif // NRD_REBLUR 
+#           endif // NRD 
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;  
