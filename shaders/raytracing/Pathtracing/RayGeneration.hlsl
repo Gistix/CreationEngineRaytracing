@@ -1085,6 +1085,11 @@ void Main()
             sharcHitData.positionWorld = surface.Position;
             sharcHitData.normalWorld = surface.GeomNormal;
 
+#   if SHARC_ENABLE_SH_ENCODING
+            sharcHitData.radianceDirectionWorld = -direction;
+            sharcHitData.radianceDirectionWeight = saturate(1.0f - materialRoughnessPrev);
+#   endif // SHARC_ENABLE_SH_ENCODING
+
 #   if SHARC_SEPARATE_EMISSIVE
             sharcHitData.emissive = surface.Emissive;
 #   endif // SHARC_SEPARATE_EMISSIVE

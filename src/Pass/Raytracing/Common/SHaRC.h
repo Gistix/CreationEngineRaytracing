@@ -50,9 +50,13 @@ namespace Pass
 
 		eastl::vector<ShaderDefine> m_Defines;
 
-	bool m_Enabled = true;
-	bool m_DirtyBindings = true;
-	uint32_t m_FrameCounter = 0;
+		bool m_Enabled = true;
+		bool m_DirtyBindings = true;
+		bool m_ResetCache = true;
+		uint32_t m_FrameCounter = 0;
+
+		void ClearCache(nvrhi::ICommandList* commandList);
+
 	public:
 		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS);
 

@@ -80,7 +80,7 @@ float VanillaDiffuseColorMult()
 
 float3 VanillaDiffuseColor(float3 color)
 {
-    return LLON ? GamutTransform(pow(abs(color), LLSETTINGS.colorGamma)) * LLSETTINGS.vanillaDiffuseColorMult : ColorToLinear(color) * VanillaDiffuseColorMult();
+    return saturate(LLON ? GamutTransform(pow(abs(color), LLSETTINGS.colorGamma)) * LLSETTINGS.vanillaDiffuseColorMult : ColorToLinear(color));
 }
 
 float4 VanillaDiffuseColor(float4 color)
