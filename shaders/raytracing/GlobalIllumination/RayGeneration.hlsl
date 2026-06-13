@@ -339,7 +339,7 @@ void Main()
             }
 
             ray.Direction = direction;
-            ray.TMin = 0.0f; // Depth precision offset
+            ray.TMin = 0.0f;
             ray.TMax = RAY_TMAX;
 
             if (!bsdfSample.isLobe(LobeType::Delta))
