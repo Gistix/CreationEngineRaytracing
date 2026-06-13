@@ -350,7 +350,7 @@ struct SurfaceMaker
         
         surface.DiffuseAlbedo = surface.Albedo * (1.0f - surface.Metallic);
 
-        surface.F0 = PBR::F0(albedo, metallic);
+        surface.F0 = PBR::F0(albedo, surface.Metallic);
         surface.IOR = F0toIOR(surface.F0);
 
         surface.CoatColor = float3(1.0f, 1.0f, 1.0f);

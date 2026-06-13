@@ -155,8 +155,8 @@ void Renderer::InitDefaultTextures()
 
 nvrhi::ITexture* Renderer::GetDepthTexture() {
 	if (!m_DepthTexture) {
-		auto* d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(Util::Adapter::GetMainDepthStencilTexture());
-		m_DepthTexture = ShareTexture(d3d11Texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::DepthWrite);
+		auto* d3d11Texture = Util::Adapter::GetMainDepthStencilTexture();
+		m_DepthTexture = ShareTexture(d3d11Texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::Common);
 	}
 
 	return m_DepthTexture;

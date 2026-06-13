@@ -443,7 +443,8 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 				continue;
 
 			auto [it, emplaced] = targets.emplace(target);
-			parents.emplace(target->parent);
+			if (target->parent)
+				parents.emplace(target->parent);
 
 			if (!emplaced)
 				continue;
@@ -453,6 +454,9 @@ void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObjec
 
 		for (auto* parent : parents) {
 			for (auto& child : Util::Adapter::GetChildren(parent)) {
+				if (!child)
+					continue;
+
 				if (targets.find(child.get()) != targets.end())
 					continue;
 

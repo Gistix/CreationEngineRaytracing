@@ -72,7 +72,6 @@ namespace Util
 			if (!sharc || (sharc && !sharcUpdate)) {
 				if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
-
 					defines.emplace_back(L"NRD", L"1");
 				}
 				else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
