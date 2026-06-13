@@ -1,7 +1,7 @@
 #pragma once
 
 #if defined(FALLOUT4)
-#include "Types/RE/FO4/BSGraphicsTexture.h"
+#include "Types/RE/FO4/BSGraphics.h"
 #endif
 
 namespace RE::BSGraphics 

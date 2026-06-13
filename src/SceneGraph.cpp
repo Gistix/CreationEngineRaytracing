@@ -904,8 +904,10 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObj
 
 	auto meshes = CreateMeshes(a_object, a_form);
 
-	if (meshes.empty())
+	if (meshes.empty()) {
+		logger::info("SceneGraph::ActorEquip - Empty meshes for {}", Util::Adapter::GetName(a_actor));
 		return;
+	}
 
 	Model* targetModel = nullptr;
 
@@ -919,8 +921,10 @@ void SceneGraph::ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObj
 		}
 	}
 
-	if (!targetModel)
+	if (!targetModel) {
+		logger::info("SceneGraph::ActorEquip - Instance not found for {}, First Person: {}", Util::Adapter::GetName(a_actor), firstPerson);
 		return;
+	}
 
 	for (const auto& mesh: meshes)
 		a_meshes.push_back(mesh.get());

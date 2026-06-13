@@ -3,8 +3,6 @@
 
 #include "Include/Common/Game.hlsli"
 
-#define DEPTH_SCALE (0.99998f)
-
 #define FP_VIEW_Z (16.5f)
 #define SKY_Z (0.9999f)
 

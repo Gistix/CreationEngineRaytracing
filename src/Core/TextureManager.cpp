@@ -68,9 +68,11 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 
 	IUnknown* key = nullptr;
 
+#if defined(SKYRIM)
 	if (texture->pad24 == NATIVE_DX12RESOURCE)
 		key = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
 	else
+#endif
 		key = texture->texture;
 
 	m_Textures.erase(key);
@@ -82,10 +84,12 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 	ID3D11Resource* d3d11Resource = texture->texture;
 	ID3D12Resource* d3d12Resource = nullptr;
 
+#if defined(SKYRIM)
 	// Texure was already loaded on DX12
 	if (texture->pad24 == NATIVE_DX12RESOURCE) {
 		d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
 	}
+#endif
 
 	return GetDescriptor(d3d11Resource, d3d12Resource, textureType);
 }

@@ -14,6 +14,8 @@ namespace Util
 		LightRuntimeData GetLightRuntimeData(RE::NiLight* a_light);
 		PointLightRuntimeData GetPointLightRuntimeData(RE::NiLight* a_light);
 
+		const char* GetName(RE::TESForm* a_form);
+
 		RE::BIPOBJECT* GetBipedObjects(RE::BipedAnim* a_bipedAnim);
 		RE::TESForm* GetBipedObjectItem(const RE::BIPOBJECT& a_bipObject);
 		RE::TESBoundObject* GetBaseObject(RE::TESObjectREFR* a_refr);

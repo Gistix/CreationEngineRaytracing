@@ -82,6 +82,7 @@ bool Load()
 	auto log = spdlog::default_logger();
 	log->set_level(scene->GetLogLevel());
 
+#if defined(SKYRIM)
 	const std::array requiredDLLs = {
 		L"Data/SKSE/Plugins/EngineFixes.dll",
 		L"Data/SKSE/Plugins/CrashLogger.dll",
@@ -99,6 +100,7 @@ bool Load()
 	if (errors.empty()) {
 		scene->Load();
 	}
+#endif
 
 	return true;
 }
@@ -149,7 +151,9 @@ extern "C" DLLEXPORT constinit auto F4SEPlugin_Version = []() noexcept {
 	v.PluginName(Plugin::NAME);
 	v.PluginVersion(Plugin::VERSION);
 	v.AuthorName("Unknown");
+	v.UsesAddressLibrary(true);
 	v.UsesAddressLibraryNG(true);
+	v.UsesAddressLibraryAE(true);
 	v.HasNoStructUse(true);
 	return v;
 	}();

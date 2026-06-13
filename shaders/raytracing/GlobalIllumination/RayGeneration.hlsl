@@ -83,12 +83,12 @@ void Main()
     
     const float2 dynamicUVUnjittered = dynamicUV - (Camera.Jitter / Camera.ScreenSize);
 
-    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0) * DEPTH_SCALE;
+    const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
-#if defined(RAW_RADIANCE) && defined(NRD_REBLUR)
-    const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0) * DEPTH_SCALE;   
+#if defined(RAW_RADIANCE) && defined(NRD)
+    const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0);   
     ViewDepth[idx] = ScreenToViewDepth(depthJittered, Camera.CameraData);
 #endif 
     
@@ -97,22 +97,22 @@ void Main()
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
-#       if defined(NRD_REBLUR)
+#       if defined(NRD)
         DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
 #       else
         DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
-#       endif // NRD_REBLUR
+#       endif // NRD
         
-#   else
+#   else // RAW_RADIANCE
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         
 #       if defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = RAY_TMAX;
-#       endif        
-#   endif
+#       endif // DLSS_RR
+#   endif // !RAW_RADIANCE
         
 #endif
         return;
@@ -124,18 +124,18 @@ void Main()
     
     const unorm float4 metalnessAO = MAO.SampleLevel(DefaultSampler, dynamicUV, 0);
 
-    float3 faceNormal = FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f;
+    float3 faceNormal = normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
 
     const float metalness = metalnessAO.x;
     const float ao = metalnessAO.y;
-    
+
     const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
     const float3 positionCS = ViewToWorldPosition(positionVS, Camera.ViewInverse);
     const float3 positionWS = positionCS + Camera.Position.xyz;    
     
     const float hitDistance = length(positionCS);
     
-    const snorm float3 normalWS = normalRoughness.xyz;    
+    const snorm float3 normalWS = normalRoughness.xyz;
     
     float3 tangentWS, bitangentWS;
     CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);    
@@ -144,6 +144,9 @@ void Main()
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
+    Material sourceMaterial = (Material)0;
+    sourceMaterial.Feature = Feature::kDefault;
+    
     Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
@@ -151,6 +154,13 @@ void Main()
     
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
 
+#if !(defined(SHARC) && SHARC_UPDATE)
+#   if defined(DLSS_RR)
+    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
+    SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
+#   endif    
+#endif   
+    
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
     bool isSssPath = false;
@@ -179,7 +189,7 @@ void Main()
     SharcHitData sharcHitData;
 #endif    
     
-#if defined(NRD_REBLUR)
+#if defined(NRD)
      float diffHitDist = 0;     
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #else
@@ -198,10 +208,12 @@ void Main()
         bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
 
-#if defined(NRD_REBLUR)
+#if defined(NRD)
         float accumulatedHitDist = 0;
 #endif
 
+        material = sourceMaterial;
+        
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
         float materialRoughnessPrev = 0.0f;
@@ -327,7 +339,7 @@ void Main()
             }
 
             ray.Direction = direction;
-            ray.TMin = 0.0f;  // OffsetRay already handles precision, no additional offset needed
+            ray.TMin = 0.0f; // Depth precision offset
             ray.TMax = RAY_TMAX;
 
             if (!bsdfSample.isLobe(LobeType::Delta))
@@ -360,7 +372,7 @@ void Main()
                 break;
             }
             
-#if defined(NRD_REBLUR)
+#if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
 #else
@@ -465,7 +477,7 @@ void Main()
         
         }
 
-#if defined(NRD_REBLUR)
+#if defined(NRD)
         float normHitDist = accumulatedHitDist;
         normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecular ? sourceSurface.Roughness : 1.0);
         
@@ -483,18 +495,13 @@ void Main()
 #endif
     }
 
-#if defined(NRD_REBLUR)
+#if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
 #endif
     
     radiance /= MAX_SAMPLES;
        
 #if !(defined(SHARC) && SHARC_UPDATE)
-#   if defined(DLSS_RR)
-    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-    const float3 specularAlbedo = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
-#   endif
-      
 #   if defined(RAW_RADIANCE)
     float3 diffuseRadiance = isSpecular ? 0.0.xxx : radiance;
     float3 specularRadiance = isSpecular ? radiance : 0.0.xxx;
@@ -506,10 +513,10 @@ void Main()
     diffuseRadiance /= diffFactor;
     specularRadiance /= specFactor;
     
-#           if defined(NRD_REBLUR)
+#           if defined(NRD)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
-#           endif // NRD_REBLUR 
+#           endif // NRD 
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;  
@@ -523,9 +530,8 @@ void Main()
     Output[idx] = float4(radiance, 1.0f);
     
 #       if defined(DLSS_RR) 
-    SpecularAlbedo[idx] = specularAlbedo;
     SpecularHitDistance[idx] = specHitDist;
-#       endif
+#       endif // DLSS_RR
     
 #   endif // RAW_RADIANCE
 #endif    
