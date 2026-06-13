@@ -20,5 +20,5 @@ void Main(uint2 id : SV_DispatchThreadID)
     
     const int2 depthID = dynamicUVUnjittered * Camera.ScreenSize;
     
-    FaceNormals[id] = ComputeNormalImproved(Depth, id, depthID);
+    FaceNormals[id] = ComputeNormalImproved(Depth, id, depthID) * 0.5f + 0.5f;
 }

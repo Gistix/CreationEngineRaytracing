@@ -124,7 +124,7 @@ void Main()
     
     const float3 metalnessAO = VAOMAO.SampleLevel(DefaultSampler, dynamicUV, 0);
 
-    const snorm float3 faceNormal = FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0);
+    float3 faceNormal = normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
 
     const unorm float metalness = saturate(metalnessAO.y);
     const unorm float ao = saturate(1.0f - metalnessAO.z);
