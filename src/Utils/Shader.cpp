@@ -14,7 +14,7 @@ namespace Util
 				{ L"SHARC_UPDATE", sharcUpdate ? L"1" : L"0" },
 				{ L"SHARC_RESOLVE", L"0" },
 				{ L"SHARC_DEBUG", L"0" },
-				{ L"SKIN_DETAIL_NORMAL", L"0" },
+				{ L"SKIN_DETAIL_NORMAL", L"1" },
 				{ L"DEBUG_TRACE_HEATMAP", L"0" }
 			};
 
@@ -71,7 +71,6 @@ namespace Util
 			if (!sharc || (sharc && !sharcUpdate)) {
 				if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
-
 					defines.emplace_back(L"NRD", L"1");
 				}
 				else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
