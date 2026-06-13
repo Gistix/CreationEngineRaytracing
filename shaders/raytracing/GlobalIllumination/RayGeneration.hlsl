@@ -120,14 +120,14 @@ void Main()
     
     const snorm float4 normalRoughness = NormalRoughness.SampleLevel(DefaultSampler, dynamicUV, 0);
     
-    const unorm float linearRoughness = normalRoughness.w;
+    const unorm float roughness = saturate(normalRoughness.w);
     
-    const unorm float4 metalnessAO = MAO.SampleLevel(DefaultSampler, dynamicUV, 0);
+    const float3 metalnessAO = VAOMAO.SampleLevel(DefaultSampler, dynamicUV, 0);
 
     float3 faceNormal = normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
 
-    const float metalness = metalnessAO.x;
-    const float ao = metalnessAO.y;
+    const unorm float metalness = saturate(metalnessAO.y);
+    const unorm float ao = saturate(1.0f - metalnessAO.z);
 
     const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
     const float3 positionCS = ViewToWorldPosition(positionVS, Camera.ViewInverse);
@@ -147,7 +147,7 @@ void Main()
     Material sourceMaterial = (Material)0;
     sourceMaterial.Feature = Feature::kDefault;
     
-    Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
+    Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, roughness, metalness, 0, ao);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     

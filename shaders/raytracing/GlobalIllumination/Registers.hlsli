@@ -55,7 +55,7 @@ StructuredBuffer<Mesh>                      Meshes                      : regist
 Texture2D<float>                            Depth                       : register(t6); // RENDER_TARGETS_DEPTHSTENCIL::kMAIN - R32
 Texture2D<float4>                           Albedo                      : register(t7); // ALBEDO - True albedo (not modulated by metalness)
 Texture2D<snorm float4>                     NormalRoughness             : register(t8); // "NORMALROUGHNESS" - World normals and roughness - Processed from GBuffer encoded view normals and smoothness
-Texture2D<unorm float4>                     MAO                         : register(t9); // MASKS2 - Metalness and AO
+Texture2D<float3>                           VAOMAO                      : register(t9); // MASKS2 - Metalness and AO
 Texture2D<float3>                           FaceNormals                 : register(t10);
 
 #if defined(SHARC)
