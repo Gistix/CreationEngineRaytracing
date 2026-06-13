@@ -32,16 +32,16 @@ RWTexture2D<float4>                         SpecularOutput              : regist
 RWTexture2D<float>                          ViewDepth                   : register(u2);
 RWTexture2D<float3>                         DiffuseFactor               : register(u3);
 RWTexture2D<float3>                         SpecularFactor              : register(u4);
-#       endif
+#       endif // NRD
 #   else
 RWTexture2D<float4>                         Output                      : register(u0);
 
 #       if defined(DLSS_RR)
 RWTexture2D<float3>                         SpecularAlbedo              : register(u1);
 RWTexture2D<float>                          SpecularHitDistance         : register(u2);
-#       endif
+#       endif // DLSS_RR
 
-#   endif
+#   endif // RAW_RADIANCE
 
 #endif
 

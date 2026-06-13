@@ -105,14 +105,14 @@ void Main()
         SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
 #       endif // NRD_REBLUR
         
-#   else
+#   else // RAW_RADIANCE
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         
 #       if defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = RAY_TMAX;
-#       endif        
-#   endif
+#       endif // DLSS_RR
+#   endif // !RAW_RADIANCE
         
 #endif
         return;
@@ -145,19 +145,19 @@ void Main()
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
     Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, linearRoughness, metalness, 0, ao);
-    BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
+    BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -normalize(positionCS));
 
-#if !(defined(SHARC) && SHARC_UPDATE)
-#   if defined(DLSS_RR)
-    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-    SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);    
-#   endif    
-#endif
-    
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     
     
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
 
+#if !(defined(SHARC) && SHARC_UPDATE)
+#   if defined(DLSS_RR)
+    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
+    SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
+#   endif    
+#endif   
+    
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
     bool isSssPath = false;
@@ -334,7 +334,7 @@ void Main()
             }
 
             ray.Direction = direction;
-            ray.TMin = (j == 0) ? 0.125f * M_TO_GAME_UNIT : 0.0f; // Depth precision offset
+            ray.TMin = 0.0f; // Depth precision offset
             ray.TMax = RAY_TMAX;
 
             if (!bsdfSample.isLobe(LobeType::Delta))
@@ -526,7 +526,7 @@ void Main()
     
 #       if defined(DLSS_RR) 
     SpecularHitDistance[idx] = specHitDist;
-#       endif
+#       endif // DLSS_RR
     
 #   endif // RAW_RADIANCE
 #endif    
