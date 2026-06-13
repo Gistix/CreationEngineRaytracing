@@ -1105,7 +1105,8 @@ void Main()
                 materialRoughnessPrev = min(materialRoughnessPrev, 0.99f);
                 float a2 = materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev;
                 float footprint = payload.hitDistance * sqrt(0.5f * a2 / max(1.0f - a2, DIV_EPSILON));
-                isValidHit &= footprint > voxelSize;
+                isValidHit &= footprint > voxelSize * M_TO_GAME_UNIT;
+                isValidHit &= material.Feature != Feature::kHairTint;
             }
 
             float3 sharcRadiance;
