@@ -17,7 +17,10 @@
 ConstantBuffer<CameraData>                  Camera                      : register(b0);
 ConstantBuffer<RaytracingData>              Raytracing                  : register(b1);
 ConstantBuffer<FeatureData>                 Features                    : register(b2);
+
+#if defined(SHARC)
 ConstantBuffer<SHaRCData>                   SHaRC                       : register(b3);
+#endif
 
 #if defined(SHARC) && SHARC_UPDATE
 RWStructuredBuffer<uint64_t>                SharcHashEntriesBuffer      : register(u0);

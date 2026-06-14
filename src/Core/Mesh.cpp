@@ -360,8 +360,14 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 				uint16_t v2 = v0 + VERTICES;
 				uint16_t v3 = v2 + 1;
 
-				t.emplace_back(v0, v1, v2);
-				t.emplace_back(v1, v3, v2);
+				if ((y ^ x) & 1) {
+					t.emplace_back(v2, v0, v1);  // BL, TL, TR
+					t.emplace_back(v1, v3, v2);  // TR, BR, BL
+				}
+				else {
+					t.emplace_back(v3, v2, v0);  // BR, BL, TL
+					t.emplace_back(v0, v1, v3);  // TL, TR, BR
+				}
 			}
 		}
 

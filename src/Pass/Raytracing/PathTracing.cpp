@@ -69,7 +69,6 @@ namespace Pass
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
-			nvrhi::BindingLayoutItem::VolatileConstantBuffer(3),
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
@@ -85,9 +84,10 @@ namespace Pass
 			nvrhi::BindingLayoutItem::Texture_UAV(3)            // Depth (RWTexture2D<float>)
 		};
 
-		auto* scene = Scene::GetSingleton();
-		auto& settings = scene->m_Settings;
+		const auto& settings = Scene::GetSingleton()->m_Settings;
 
+		if (settings.SHaRCSettings.Enabled)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
 
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
@@ -286,8 +286,7 @@ namespace Pass
 			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
-			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
-			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()),
+			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),		
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(2, scene->GetFlowMapTexture()),
@@ -303,7 +302,10 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::ClipDepth))
 		};
 
-		auto& settings = scene->m_Settings;
+		const auto& settings = scene->m_Settings;
+
+		if (settings.SHaRCSettings.Enabled)
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
 
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
