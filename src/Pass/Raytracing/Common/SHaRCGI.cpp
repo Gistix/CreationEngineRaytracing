@@ -37,18 +37,7 @@ namespace Pass::Raytracing::Common
 		m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
-		const auto& settings = Scene::GetSingleton()->m_Settings;
-		m_Enabled = settings.SHaRCSettings.Enabled;
-		m_SHaRCData->SceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
-		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
-		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
-		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
-		m_Defines = Util::Shader::GetGlobalIlluminationDefines(settings, true, true);
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
-
-		if (m_Enabled)
-			SetupUpdate();
-		SetupResolve();
 	}
 
 	void SHaRCGI::SettingsChanged(const Settings& settings)
@@ -74,12 +63,12 @@ namespace Pass::Raytracing::Common
 		auto defines = Util::Shader::GetGlobalIlluminationDefines(settings, true, true);
 		const bool definesChanged = defines != m_Defines;
 
+		m_Defines = defines;
+
 		if (m_Enabled && (!wasEnabled || definesChanged)) {
-			m_Defines = defines;
 			SetupUpdate();
+			SetupResolve();
 			m_DirtyBindings = true;
-		} else {
-			m_Defines = defines;
 		}
 
 		if (m_Enabled && (!wasEnabled || cacheSettingsChanged || definesChanged))
@@ -150,6 +139,9 @@ namespace Pass::Raytracing::Common
 
 	void SHaRCGI::SetupResolve()
 	{
+		if (m_ResolvePass.m_Initialized)
+			return;
+
 		auto device = GetRenderer()->GetDevice();
 
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
@@ -162,8 +154,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
 		};
 
-		m_ResolvePass.m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
-
+		m_ResolvePass.m_BindingLayout = device->createBindingLayout(globalBindingLayoutDesc);
 
 		const auto linearBlockSizeWStr = std::to_wstring(RESOLVE_LINEAR_BLOCK_SIZE);
 
@@ -184,7 +175,7 @@ namespace Pass::Raytracing::Common
 			.setComputeShader(m_ResolvePass.m_ComputeShader)
 			.addBindingLayout(m_ResolvePass.m_BindingLayout);
 
-		m_ResolvePass.m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
+		m_ResolvePass.m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -195,7 +186,9 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_ResolveBuffer),
 		};
 
-		m_ResolvePass.m_BindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_ResolvePass.m_BindingLayout);
+		m_ResolvePass.m_BindingSet = device->createBindingSet(bindingSetDesc, m_ResolvePass.m_BindingLayout);
+
+		m_ResolvePass.m_Initialized = true;
 	}
 
 	void SHaRCGI::CheckBindings()
