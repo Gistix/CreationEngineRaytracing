@@ -30,6 +30,9 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID)
     if (!RAB_IsSurfaceValid(rab))
         return;
 
+    if (RAB_IsUnsupportedGISurface(rab))
+        return;
+
     // Load the final reservoir
     RTXDI_GIReservoir finalReservoir = RTXDI_LoadGIReservoir(
         giParams.reservoirBufferParams,

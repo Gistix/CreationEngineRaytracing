@@ -37,28 +37,53 @@ namespace Pass::Raytracing::Common
 		m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
-		m_Defines = Util::Shader::GetGlobalIlluminationDefines(Scene::GetSingleton()->m_Settings, true, true);
-		m_SceneTLAS->GetTopLevelAS().AddListener(this);
-
-		SetupUpdate();
-		SetupResolve();
-	}
-
-	void SHaRCGI::SettingsChanged(const Settings& settings)
-	{
+		const auto& settings = Scene::GetSingleton()->m_Settings;
 		m_Enabled = settings.SHaRCSettings.Enabled;
 		m_SHaRCData->SceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
 		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
 		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
 		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
+		m_Defines = Util::Shader::GetGlobalIlluminationDefines(settings, true, true);
+		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
+		if (m_Enabled)
+			SetupUpdate();
+		SetupResolve();
+	}
+
+	void SHaRCGI::SettingsChanged(const Settings& settings)
+	{
+		const bool wasEnabled = m_Enabled;
+		const float sceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
+		const uint accumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
+		const uint staleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
+		const float radianceScale = settings.SHaRCSettings.RadianceScale;
+
+		const bool cacheSettingsChanged =
+			m_SHaRCData->SceneScale != sceneScale ||
+			m_SHaRCData->AccumFrameNum != accumFrameNum ||
+			m_SHaRCData->StaleFrameNum != staleFrameNum ||
+			m_SHaRCData->RadianceScale != radianceScale;
+
+		m_Enabled = settings.SHaRCSettings.Enabled;
+		m_SHaRCData->SceneScale = sceneScale;
+		m_SHaRCData->AccumFrameNum = accumFrameNum;
+		m_SHaRCData->StaleFrameNum = staleFrameNum;
+		m_SHaRCData->RadianceScale = radianceScale;
 
 		auto defines = Util::Shader::GetGlobalIlluminationDefines(settings, true, true);
+		const bool definesChanged = defines != m_Defines;
 
-		if (defines != m_Defines) {
+		if (m_Enabled && (!wasEnabled || definesChanged)) {
 			m_Defines = defines;
 			SetupUpdate();
 			m_DirtyBindings = true;
+		} else {
+			m_Defines = defines;
 		}
+
+		if (m_Enabled && (!wasEnabled || cacheSettingsChanged || definesChanged))
+			m_ResetCache = true;
 	}
 
 	void SHaRCGI::SetupUpdate()
@@ -103,6 +128,7 @@ namespace Pass::Raytracing::Common
 		defines.emplace_back(L"THREAD_GROUP_SIZE", threadGroupSizeWStr.c_str());
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
+		defines.emplace_back(L"SHARC_ENABLE_SH_ENCODING", L"1");
 
 		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
 		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
@@ -146,6 +172,7 @@ namespace Pass::Raytracing::Common
 			{ L"SHARC", L"" },
 			{ L"SHARC_UPDATE", L"0" },
 			{ L"SHARC_RESOLVE", L"1" },
+			{ L"SHARC_ENABLE_SH_ENCODING", L"1" },
 			{ L"SHARC_ENABLE_FADE_ACCELERATION", L"1" }
 		};
 
@@ -218,8 +245,24 @@ namespace Pass::Raytracing::Common
 		m_DirtyBindings = false;
 	}
 
+	void SHaRCGI::ClearCache(nvrhi::ICommandList* commandList)
+	{
+		commandList->clearBufferUInt(m_HashEntriesBuffer, 0);
+		commandList->clearBufferUInt(m_LockBuffer, 0);
+		commandList->clearBufferUInt(m_AccumulationBuffer, 0);
+		commandList->clearBufferUInt(m_ResolveBuffer, 0);
+		m_FrameCounter = 0;
+		m_ResetCache = false;
+	}
+
 	void SHaRCGI::Execute(nvrhi::ICommandList* commandList)
 	{
+		if (!m_Enabled)
+			return;
+
+		if (m_ResetCache)
+			ClearCache(commandList);
+
 		m_SHaRCData->FrameIndex = m_FrameCounter++;
 
 		commandList->writeBuffer(m_SHaRCBuffer, m_SHaRCData.get(), sizeof(SHaRCData));

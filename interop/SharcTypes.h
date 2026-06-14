@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
  *
  * NVIDIA CORPORATION and its licensors retain all intellectual property
  * and proprietary rights in and to this software, related documentation
@@ -11,14 +11,36 @@
 #ifndef SHARC_TYPES_H
 #define SHARC_TYPES_H
 
+#ifndef SHARC_ENABLE_SH_ENCODING
+#	define SHARC_ENABLE_SH_ENCODING 1
+#endif
+
+// SharcPackedData uses native float16_t storage. HLSL shaders that include this
+// header must be compiled with DXC -enable-16bit-types and, for DXIL, Shader
+// Model 6.2 or newer. The runtime device must support native 16-bit types.
+
 struct SharcAccumulationData
 {
+#if SHARC_ENABLE_SH_ENCODING
+#ifdef __cplusplus
 	uint4 data;
+	uint4 dataExt;
+#else   // !__cplusplus
+	int4 data;
+	int4 dataExt;
+#endif  // __cplusplus
+#else   // !SHARC_ENABLE_SH_ENCODING
+	uint4 data;
+#endif  // SHARC_ENABLE_SH_ENCODING
 };
 
 struct SharcPackedData
 {
 	float16_t4 radianceData;
+#if SHARC_ENABLE_SH_ENCODING
+	uint radianceDataExt;
+	uint sampleNumData;
+#endif  // SHARC_ENABLE_SH_ENCODING
 	uint sampleData;
 	uint sampleDataExt;
 };

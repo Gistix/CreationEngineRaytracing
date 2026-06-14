@@ -55,6 +55,7 @@ SharcResolveParameters GetSharcResolveParameters()
     SharcResolveParameters resolveParameters;
     {
         resolveParameters.accumulationFrameNum = SHaRC.AccumFrameNum;
+        resolveParameters.responsiveFrameNum = SHaRC.AccumFrameNum;
         resolveParameters.staleFrameNumMax = SHaRC.StaleFrameNum;
         resolveParameters.cameraPositionPrev = Camera.PositionPrev;
         resolveParameters.frameIndex = SHaRC.FrameIndex;

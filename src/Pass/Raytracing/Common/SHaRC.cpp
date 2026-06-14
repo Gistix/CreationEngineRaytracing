@@ -37,28 +37,53 @@ namespace Pass
 		m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
-		m_Defines = Util::Shader::GetPathTracingDefines(Scene::GetSingleton()->m_Settings, true, true);
-		m_SceneTLAS->GetTopLevelAS().AddListener(this);
-
-		SetupUpdate();
-		SetupResolve();
-	}
-
-	void SHaRC::SettingsChanged(const Settings& settings)
-	{
+		const auto& settings = Scene::GetSingleton()->m_Settings;
 		m_Enabled = settings.SHaRCSettings.Enabled;
 		m_SHaRCData->SceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
 		m_SHaRCData->AccumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
 		m_SHaRCData->StaleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
 		m_SHaRCData->RadianceScale = settings.SHaRCSettings.RadianceScale;
+		m_Defines = Util::Shader::GetPathTracingDefines(settings, true, true);
+		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
+		if (m_Enabled)
+			SetupUpdate();
+		SetupResolve();
+	}
+
+	void SHaRC::SettingsChanged(const Settings& settings)
+	{
+		const bool wasEnabled = m_Enabled;
+		const float sceneScale = settings.SHaRCSettings.SceneScale / Util::Units::GAME_UNIT_TO_M;
+		const uint accumFrameNum = static_cast<uint>(settings.SHaRCSettings.AccumFrameNum);
+		const uint staleFrameNum = static_cast<uint>(settings.SHaRCSettings.StaleFrameNum);
+		const float radianceScale = settings.SHaRCSettings.RadianceScale;
+
+		const bool cacheSettingsChanged =
+			m_SHaRCData->SceneScale != sceneScale ||
+			m_SHaRCData->AccumFrameNum != accumFrameNum ||
+			m_SHaRCData->StaleFrameNum != staleFrameNum ||
+			m_SHaRCData->RadianceScale != radianceScale;
+
+		m_Enabled = settings.SHaRCSettings.Enabled;
+		m_SHaRCData->SceneScale = sceneScale;
+		m_SHaRCData->AccumFrameNum = accumFrameNum;
+		m_SHaRCData->StaleFrameNum = staleFrameNum;
+		m_SHaRCData->RadianceScale = radianceScale;
 
 		auto defines = Util::Shader::GetPathTracingDefines(settings, true, true);
+		const bool definesChanged = defines != m_Defines;
 
-		if (defines != m_Defines) {
+		if (m_Enabled && (!wasEnabled || definesChanged)) {
 			m_Defines = defines;
 			SetupUpdate();
 			m_DirtyBindings = true;
+		} else {
+			m_Defines = defines;
 		}
+
+		if (m_Enabled && (!wasEnabled || cacheSettingsChanged || definesChanged))
+			m_ResetCache = true;
 	}
 
 	void SHaRC::SetupUpdate()
@@ -202,8 +227,24 @@ namespace Pass
 		m_DirtyBindings = false;
 	}
 
+	void SHaRC::ClearCache(nvrhi::ICommandList* commandList)
+	{
+		commandList->clearBufferUInt(m_HashEntriesBuffer, 0);
+		commandList->clearBufferUInt(m_LockBuffer, 0);
+		commandList->clearBufferUInt(m_AccumulationBuffer, 0);
+		commandList->clearBufferUInt(m_ResolveBuffer, 0);
+		m_FrameCounter = 0;
+		m_ResetCache = false;
+	}
+
 	void SHaRC::Execute(nvrhi::ICommandList* commandList)
 	{
+		if (!m_Enabled)
+			return;
+
+		if (m_ResetCache)
+			ClearCache(commandList);
+
 		m_SHaRCData->FrameIndex = m_FrameCounter++;
 
 		commandList->writeBuffer(m_SHaRCBuffer, m_SHaRCData.get(), sizeof(SHaRCData));

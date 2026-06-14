@@ -72,7 +72,7 @@ float VanillaDiffuseColorMult()
 
 float3 VanillaDiffuseColor(float3 color)
 {
-    return ColorToLinear(color) * VanillaDiffuseColorMult();
+    return saturate(ColorToLinear(color) * VanillaDiffuseColorMult());
 }
 
 float4 VanillaDiffuseColor(float4 color)
