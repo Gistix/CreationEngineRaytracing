@@ -20,7 +20,7 @@ void Instance::SetHiddenModel(bool hidden)
 
 bool Instance::IsHidden() const
 {
-	const bool needsAccumulated = model->GetMeshFlags().all(Mesh::Flags::Landscape) || model->GetMeshTypes().all(Mesh::Type::ObjectLOD);
+	const bool needsAccumulated = model->GetMeshFlags().all(Mesh::Flags::Landscape);
 #if defined(SKYRIM)
 	if (needsAccumulated && m_Node->GetFlags().none(CESEAdapter::RE::NiAVObjectFlag::kAccumulated))
 #elif defined(FALLOUT4)
@@ -43,12 +43,7 @@ bool Instance::SkipAS() const
 	bool isPTActive = Scene::GetSingleton()->IsPathTracingActive();
 
 	// Skip non-effect models with kRefraction when Path Tracing is active
-	if (isPTActive &&
-		model->GetShaderFlags().any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction)
-#if defined(SKYRIM)
-		&& !(model->GetShaderTypes() & RE::BSShader::Type::Effect)
-#endif
-		)
+	if (isPTActive && model->GetShaderFlags().any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction) && !model->GetShaderTypes().any(Material::ShaderType::Effect))
 		return true;
 
 	return m_State.all(State::HiddenModel);

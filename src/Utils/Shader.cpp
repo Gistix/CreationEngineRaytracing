@@ -1,5 +1,7 @@
 #include "Shader.h"
 
+#include "Types/InstanceMask.h"
+
 namespace Util
 {
 	namespace Shader
@@ -67,6 +69,10 @@ namespace Util
 		eastl::vector<ShaderDefine> GetGlobalIlluminationDefines(const Settings& settings, bool sharc, bool sharcUpdate)
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
+
+			// No water in GI
+			auto instanceMask = InstanceMask::All & ~InstanceMask::Water;
+			defines.emplace_back(L"INSTANCE_MASK", instanceMask);
 
 			if (!sharc || (sharc && !sharcUpdate)) {
 				if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {

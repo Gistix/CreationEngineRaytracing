@@ -41,15 +41,15 @@ void Model::UpdateMeshFlags()
 {
 	meshFlags.reset();
 	m_MeshTypes.reset();
+	m_AlphaFlags.reset();
 	shaderTypes = 0;
-	features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
 	shaderFlags.reset();
 
 	for (auto& mesh : m_Meshes) {
 		meshFlags.set(mesh->flags.get());
 		m_MeshTypes.set(mesh->m_Type);
-		shaderTypes |= mesh->material->shaderType;
-		features |= static_cast<int>(mesh->material->feature);
+		m_AlphaFlags.set(mesh->material->alphaFlags);
+		shaderTypes.set(mesh->material->shaderType);
 		shaderFlags.set(mesh->material->shaderFlags.get());
 	}
 }
