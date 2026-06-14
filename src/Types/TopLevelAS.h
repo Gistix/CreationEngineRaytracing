@@ -41,7 +41,10 @@ public:
 		m_InstanceDescs.clear();
 		m_InstanceDescs.reserve(instances.Size());
 
-		commandList->beginMarker("BLAS Update");
+		const auto& markers = Scene::GetSingleton()->m_Settings.DebugSettings.Markers;
+
+		if (markers)
+			commandList->beginMarker("BLAS Update");
 
 		auto* scene = Scene::GetSingleton();
 
@@ -59,7 +62,8 @@ public:
 			return Iterator::Continue;
 		});
 
-		commandList->endMarker();
+		if (markers)
+			commandList->endMarker();
 
 		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 
@@ -84,8 +88,12 @@ public:
 			NotifyResized();
 		}
 
-		commandList->beginMarker("TLAS Update");
+		if (markers)
+			commandList->beginMarker("TLAS Update");
+
 		commandList->buildTopLevelAccelStruct(m_Handle, m_InstanceDescs.data(), m_InstanceDescs.size(), nvrhi::rt::AccelStructBuildFlags::PreferFastTrace);
-		commandList->endMarker();
+
+		if (markers)
+			commandList->endMarker();
 	}
 };

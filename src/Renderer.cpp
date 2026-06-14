@@ -322,9 +322,9 @@ void Renderer::InitReSTIRGI()
 		m_ReSTIRGIResources->needsNeighborOffsetUpload = true;
 	}
 
-	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 48 bytes)
+	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 52 bytes)
 	{
-		constexpr uint surfaceDataStride = 48; // sizeof(PackedSurfaceData)
+		constexpr uint surfaceDataStride = 52; // sizeof(PackedSurfaceData)
 		nvrhi::BufferDesc desc;
 		desc.byteSize = 2u * width * height * surfaceDataStride;
 		desc.structStride = surfaceDataStride;

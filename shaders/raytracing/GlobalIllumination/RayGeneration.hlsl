@@ -136,7 +136,7 @@ void Main()
     const float hitDistance = length(positionCS);
     
     const snorm float3 normalWS = normalRoughness.xyz;
-    
+
     float3 tangentWS, bitangentWS;
     CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);    
 
@@ -339,7 +339,7 @@ void Main()
             }
 
             ray.Direction = direction;
-            ray.TMin = 0.0f; // Depth precision offset
+            ray.TMin = 0.0f;
             ray.TMax = RAY_TMAX;
 
             if (!bsdfSample.isLobe(LobeType::Delta))

@@ -31,9 +31,11 @@ struct RAB_Surface
 {
     Surface surface;
     BRDFContext brdfContext;
+    uint materialFeature;
+    bool hasSpecularTransmission;
     float viewDepth;
 
-    // Evaluate BSDF: transforms wi/wo to local frame, creates DefaultBSDF, calls Eval.
+    // Evaluate the default BSDF. Unsupported surfaces opt out of ReSTIR GI before this is used.
     // Returns float4(diffuse+specular, specularAvg).
     float4 Eval(float3 wo)
     {
@@ -126,6 +128,8 @@ RAB_Surface LoadSurfaceFromBuffer(uint2 pixelPosition, bool previousFrame)
         rab.surface.Normal = float3(0, 0, 1);
         rab.surface.FaceNormal = float3(0, 0, 1);
         rab.brdfContext = BRDFContext::make(rab.surface, float3(0, 0, 1));
+        rab.materialFeature = Feature::kDefault;
+        rab.hasSpecularTransmission = false;
         rab.viewDepth = RAB_BACKGROUND_DEPTH;
         return rab;
     }
@@ -133,6 +137,8 @@ RAB_Surface LoadSurfaceFromBuffer(uint2 pixelPosition, bool previousFrame)
     rab.surface = PSD_UnpackToSurface(packed);
     float3 viewDir = PSD_UnpackOct(packed.packedViewDir);
     rab.brdfContext = BRDFContext::make(rab.surface, viewDir);
+    rab.materialFeature = PSD_GetMaterialFeature(packed);
+    rab.hasSpecularTransmission = PSD_SurfaceHasSpecularTransmission(packed);
     rab.viewDepth = packed.viewDepth;
 
     return rab;
@@ -148,6 +154,8 @@ RAB_Surface RAB_EmptySurface()
     rab.surface.Normal = float3(0, 0, 1);
     rab.surface.FaceNormal = float3(0, 0, 1);
     rab.brdfContext = BRDFContext::make(rab.surface, float3(0, 0, 1));
+    rab.materialFeature = Feature::kDefault;
+    rab.hasSpecularTransmission = false;
     rab.viewDepth = RAB_BACKGROUND_DEPTH;
     return rab;
 }
@@ -155,6 +163,16 @@ RAB_Surface RAB_EmptySurface()
 bool RAB_IsSurfaceValid(RAB_Surface rab)
 {
     return rab.viewDepth < RAB_BACKGROUND_DEPTH;
+}
+
+bool RAB_IsHairSurface(RAB_Surface rab)
+{
+    return rab.materialFeature == Feature::kHairTint;
+}
+
+bool RAB_IsUnsupportedGISurface(RAB_Surface rab)
+{
+    return RAB_IsHairSurface(rab) || rab.hasSpecularTransmission;
 }
 
 float RAB_GetSurfaceLinearDepth(RAB_Surface rab)
@@ -195,6 +213,11 @@ RAB_Material RAB_GetMaterial(RAB_Surface rab)
 
 bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
 {
+    bool aIsHair = a.materialFeature == Feature::kHairTint;
+    bool bIsHair = b.materialFeature == Feature::kHairTint;
+    if (aIsHair || bIsHair || a.hasSpecularTransmission || b.hasSpecularTransmission)
+        return false;
+
     if (abs(a.surface.Roughness - b.surface.Roughness) > 0.5)
         return false;
 
@@ -218,6 +241,9 @@ bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
 // ---------------------------------------------------------------------------
 float RAB_GetGISampleTargetPdfForSurface(float3 samplePosition, float3 sampleRadiance, RAB_Surface rab)
 {
+    if (RAB_IsUnsupportedGISurface(rab))
+        return 0.0;
+
     float3 L = normalize(samplePosition - rab.surface.Position);
 
     float4 bsdfEval = rab.Eval(L);

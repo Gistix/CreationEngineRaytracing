@@ -343,6 +343,7 @@ void Main()
         sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection,
         sourceSurface.DiffuseAlbedo, sourceSurface.F0,
         sourceSurface.Roughness, sourceSurface.Metallic,
+        sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
         primarySceneDistance);
 #       endif  
 #   endif   
@@ -795,6 +796,8 @@ void Main()
         Surface giScatterSurface = (Surface)0;
         float3 giScatterViewDir = 0;
         float3 giScatterThp = 0;
+        uint giScatterFeature = Feature::kDefault;
+        bool giScatterHasSpecularTransmission = false;
 #endif
 
         // Water volume tracking for Beer-Lambert absorption
@@ -827,6 +830,8 @@ void Main()
                 giScatterSurface = surface;
                 giScatterViewDir = brdfContext.ViewDirection;
                 giScatterThp = throughput;
+                giScatterFeature = material.Feature;
+                giScatterHasSpecularTransmission = surface.SpecTrans > 0.0f;
             }
 #endif
 
@@ -1056,7 +1061,9 @@ void Main()
             // ReSTIR GI: capture secondary surface geometry before SHaRC may terminate the path
 #if defined(RESTIR_GI)              
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES     
-            if (Raytracing.EnableReSTIRGI && !giSecStarted && !arrivedViaDelta)
+            if (Raytracing.EnableReSTIRGI && !giSecStarted && !arrivedViaDelta &&
+                giScatterFeature != Feature::kHairTint && material.Feature != Feature::kHairTint &&
+                !giScatterHasSpecularTransmission && surface.SpecTrans <= 0.0f)
             {
                 // Write SurfaceDataBuffer with the scattering surface (primary for GI)
                 SurfaceDataBuffer[surfBufIdx] = PSD_Pack(
@@ -1065,6 +1072,7 @@ void Main()
                     giScatterSurface.FaceNormal, giScatterViewDir,
                     giScatterSurface.DiffuseAlbedo, giScatterSurface.F0,
                     giScatterSurface.Roughness, giScatterSurface.Metallic,
+                    giScatterFeature, giScatterHasSpecularTransmission,
                     fillSceneLength);
 
                 // Write secondary surface geometry (the hit surface)
