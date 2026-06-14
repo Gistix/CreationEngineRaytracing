@@ -16,7 +16,7 @@ namespace ShaderCache
 
 		// Return cached shader
 		if (auto it = m_Shaders.find(shaderKey); it != m_Shaders.end()) {
-			logger::info("ShaderCache::GetShader - Returning cached shader");
+			logger::debug("ShaderCache::GetShader - Returning cached shader");
 			return it->second.get();
 		}
 
@@ -32,7 +32,7 @@ namespace ShaderCache
 			return nullptr;
 		}
 
-		logger::info("ShaderCache::GetShader - Returning compiled shader");
+		logger::debug("ShaderCache::GetShader - Returning compiled shader");
 
 		return it->second.get();
 	}

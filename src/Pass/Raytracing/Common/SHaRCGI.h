@@ -27,6 +27,8 @@ namespace Pass::Raytracing::Common
 		nvrhi::BufferHandle m_SHaRCBuffer;
 
 		struct SubPass {
+			bool m_Initialized = false;
+
 			nvrhi::ShaderHandle m_ComputeShader;
 			nvrhi::ComputePipelineHandle m_ComputePipeline;
 
@@ -50,7 +52,7 @@ namespace Pass::Raytracing::Common
 
 		eastl::vector<ShaderDefine> m_Defines;
 
-		bool m_Enabled = true;
+		bool m_Enabled = false;
 		bool m_DirtyBindings = true;
 		bool m_ResetCache = true;
 		uint32_t m_FrameCounter = 0;

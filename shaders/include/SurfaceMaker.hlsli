@@ -115,17 +115,20 @@ struct SurfaceMaker
         // Compute previous world position for motion vectors
 #if defined(HAS_PREV_POSITIONS)
         {
-            float3 objectSpacePos = float3(0.0f, 0.0f, 0.0f);
+            float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
+            float3 currentRootSpacePos = mul(mesh.Transform, float4(currentObjectSpacePos, 1.0));
+            float3 currentWorldPosition = mul(instance.Transform, float4(currentRootSpacePos, 1.0));
+            float3 objectSpacePos = currentObjectSpacePos;
         
             if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
                 // Per-vertex: read previous skinned positions from PrevPositions buffer
                 objectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);     
-            else
-                // Per-object: use current vertex positions with previous instance transform
-                objectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
  
             float3 prevRootSpacePos = mul(mesh.PrevTransform, float4(objectSpacePos, 1.0));       
-            surface.PrevPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));       
+            float3 prevWorldPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));
+            // Payload barycentrics are quantized; preserve the exact ray hit residual
+            // so static geometry produces zero motion.
+            surface.PrevPosition = prevWorldPosition + (surface.Position - currentWorldPosition);
         }
 #endif
 
