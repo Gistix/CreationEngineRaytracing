@@ -4,7 +4,7 @@
 // Packed primary surface data for ReSTIR GI.
 // Written by path tracer into a ping-pong StructuredBuffer,
 // read by ReSTIR GI passes to reconstruct Surface + BRDFContext.
-// 48 bytes per pixel (12 uints).
+// 52 bytes per pixel (13 uints).
 
 #ifdef __cplusplus
 #include <cstdint>
@@ -20,11 +20,12 @@ struct PackedSurfaceData
     uint32_t diffuseAlbedo;     // 4  (R11G11B10 unorm)
     uint32_t specularF0;        // 4  (R11G11B10 unorm)
     uint32_t roughMetallic;     // 4  (fp16 roughness | fp16 metallic)
+    uint32_t materialData;      // 4  (low 16: material feature, high 16: surface flags)
     float    viewDepth;         // 4  (negative = empty)
 };
 
-static_assert(sizeof(PackedSurfaceData) == 48, "PackedSurfaceData must be 48 bytes");
-static constexpr uint32_t PACKED_SURFACE_DATA_STRIDE = 48;
+static_assert(sizeof(PackedSurfaceData) == 52, "PackedSurfaceData must be 52 bytes");
+static constexpr uint32_t PACKED_SURFACE_DATA_STRIDE = 52;
 
 #else // HLSL
 
@@ -39,6 +40,7 @@ struct PackedSurfaceData
     uint   diffuseAlbedo;
     uint   specularF0;
     uint   roughMetallic;
+    uint   materialData;
     float  viewDepth;           // negative = empty surface
 };
 
@@ -97,11 +99,32 @@ float3 PSD_UnpackColor(uint packed)
 // ---------------------------------------------------------------------------
 // Pack: Surface fields -> PackedSurfaceData
 // ---------------------------------------------------------------------------
+static const uint PSD_SURFACE_FLAG_SPECULAR_TRANSMISSION = 1u << 16;
+
+uint PSD_PackMaterialData(uint materialFeature, bool hasSpecularTransmission)
+{
+    uint data = materialFeature & 0xFFFFu;
+    if (hasSpecularTransmission)
+        data |= PSD_SURFACE_FLAG_SPECULAR_TRANSMISSION;
+    return data;
+}
+
+uint PSD_GetMaterialFeature(PackedSurfaceData d)
+{
+    return d.materialData & 0xFFFFu;
+}
+
+bool PSD_SurfaceHasSpecularTransmission(PackedSurfaceData d)
+{
+    return (d.materialData & PSD_SURFACE_FLAG_SPECULAR_TRANSMISSION) != 0u;
+}
+
 PackedSurfaceData PSD_Pack(
     float3 position, float3 normal, float3 tangent, float3 bitangent,
     float3 faceNormal, float3 viewDir,
     float3 diffAlbedo, float3 f0,
     float roughness, float metallic,
+    uint materialFeature, bool hasSpecularTransmission,
     float viewDepth)
 {
     PackedSurfaceData d;
@@ -114,6 +137,7 @@ PackedSurfaceData PSD_Pack(
     d.diffuseAlbedo    = PSD_PackColor(diffAlbedo);
     d.specularF0       = PSD_PackColor(f0);
     d.roughMetallic    = f32tof16(roughness) | (f32tof16(metallic) << 16);
+    d.materialData     = PSD_PackMaterialData(materialFeature, hasSpecularTransmission);
     d.viewDepth        = viewDepth;
     return d;
 }
