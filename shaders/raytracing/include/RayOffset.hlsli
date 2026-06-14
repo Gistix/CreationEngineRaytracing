@@ -105,8 +105,10 @@ float3 CalculateRayOffset(float positionError, float3 triangleNormal)
 // Described in Ray Tracing Gems, Chapter 6, "A Fast and Robust Method for Avoiding Self-Intersection" by Carsten Wächter and Nikolaus Binder.
 float3 OffsetRayAlt(float3 worldPosition, float3 faceNormal, bool hasTransmission = false)  // expects triangle faceNormal pointing towards the intended ray direction
 {
+    [branch]
     if (hasTransmission)
         faceNormal = -faceNormal;
+    
     const float origin = 1.f / 16.f;
     const float fScale = 3.f / 65536.f;
     const float iScale = 3 * 256.f;
