@@ -59,7 +59,6 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
-			nvrhi::BindingLayoutItem::VolatileConstantBuffer(3),
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
@@ -77,8 +76,10 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
 		};
 
-		auto* scene = Scene::GetSingleton();
-		auto& settings = scene->m_Settings;
+		const auto& settings = Scene::GetSingleton()->m_Settings;
+
+		if (settings.SHaRCSettings.Enabled)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
@@ -229,7 +230,6 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
-			nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(2, scene->GetFlowMapTexture()),
@@ -246,6 +246,9 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
+
+		if (settings.SHaRCSettings.Enabled)
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
