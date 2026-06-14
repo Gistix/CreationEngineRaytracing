@@ -284,7 +284,7 @@ StablePlanesHitResult StablePlanesHandleHit(
 
     uint waterFlags = (insideWaterVolume ? 1u : 0u) | (f32tof16(clamp(waterVolumeAbsorption.x, 0, HLF_MAX)) << 16);
     uint waterCounters = f32tof16(clamp(waterVolumeAbsorption.y, 0, HLF_MAX)) | (f32tof16(clamp(waterVolumeAbsorption.z, 0, HLF_MAX)) << 16);
-    bool isEnterSurface = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0;
+    bool isEnterSurface = bsdf.isEnter;
 
     // Coat-priority GBuffer: use coat layer properties for denoiser when coat is present
     bool hasCoat = surface.CoatStrength > 0;
@@ -324,8 +324,13 @@ StablePlanesHitResult StablePlanesHandleHit(
     float nonDeltaPart;
     bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
 
+    bool isInternalSpecularTransmission = surface.SpecTrans > 0.0f && !surface.IsThinSurface && !isEnterSurface;
     for (int k = 0; k < deltaLobeCount; k++)
     {
+        // Internal reflection/TIR in refractive media is not stable enough for PSR reuse.
+        if (isInternalSpecularTransmission && deltaLobes[k].transmission == 0)
+            deltaLobes[k].thp = 0;
+
         if (Average3(abs(deltaLobes[k].thp)) < 0.001)
             deltaLobes[k].thp = 0;
     }
