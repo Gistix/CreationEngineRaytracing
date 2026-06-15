@@ -188,27 +188,12 @@ void Material::SetupLandMaterial(const RE::BSLightingShaderMaterialLandscape* li
 	auto& normalTexture = renderer->GetNormalTextureIndex();
 	auto& blackTexture = renderer->GetBlackTextureIndex();
 
-	logger::info("SetupLandMaterial - {}", lightingBaseMaterialLand->numLandscapeTextures);
-
 	textures[0] = GetTexture(lightingBaseMaterialLand->diffuseTexture, grayTexture);
 	textures[Material::MAX_LAND_TEXTURES] = GetTexture(lightingBaseMaterialLand->normalTexture, normalTexture);
 
-	logger::info("Diffuse[0] - {}", reinterpret_cast<uintptr_t>(lightingBaseMaterialLand->diffuseTexture.get()));
-	logger::info("Normal[0] - {}", reinterpret_cast<uintptr_t>(lightingBaseMaterialLand->normalTexture.get()));
-
-	for (uint i = 0; i < Material::MAX_LAND_TEXTURES - 1u; i++) {
-		const bool valid = i < lightingBaseMaterialLand->numLandscapeTextures;
-
-		auto& landDiffuseTexture = valid ? lightingBaseMaterialLand->landscapeDiffuseTexture[i] : nullptr;
-		auto& landNormalTexture = valid ? lightingBaseMaterialLand->landscapeNormalTexture[i] : nullptr;
-
-		if (valid) {
-			logger::info("Diffuse[{}] - {}", i + 1, reinterpret_cast<uintptr_t>(landDiffuseTexture.get()));
-			logger::info("Normal[{}] - {}", i + 1, reinterpret_cast<uintptr_t>(landNormalTexture.get()));
-		}
-
-		textures[i + 1] = GetTexture(landDiffuseTexture, grayTexture);
-		textures[Material::MAX_LAND_TEXTURES + i + 1] = GetTexture(landNormalTexture, normalTexture);
+	for (uint i = 0; i < std::min(lightingBaseMaterialLand->numLandscapeTextures, Material::MAX_LAND_TEXTURES - 1u); i++) {
+		textures[i + 1] = GetTexture(lightingBaseMaterialLand->landscapeDiffuseTexture[i], grayTexture);
+		textures[Material::MAX_LAND_TEXTURES + i + 1] = GetTexture(lightingBaseMaterialLand->landscapeNormalTexture[i], normalTexture);
 	}
 
 	textures[Material::MAX_LAND_TEXTURES * 3] = GetTexture(lightingBaseMaterialLand->terrainOverlayTexture, blackTexture);
