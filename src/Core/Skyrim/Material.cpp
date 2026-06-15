@@ -66,7 +66,7 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 				auto form = RE::TESForm::LookupByID(formID);
 
 				if (form && form->formType == RE::FormType::Grass) 
-				shaderType = ShaderType::Grass;
+					shaderType = ShaderType::Grass;
 			}
 
 			auto& emissiveColor = colors[Constants::Material::EMISSIVE_COLOR];
@@ -115,70 +115,22 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 				}
 
 				// Landscape
-				if (const auto* lightingBaseMaterialLand = skyrim_cast<RE::BSLightingShaderMaterialLandscape*>(shaderMaterial)) {
-					textures[0] = GetTexture(lightingBaseMaterialLand->diffuseTexture, grayTexture);
-					textures[Material::MAX_PBRLAND_TEXTURES] = GetTexture(lightingBaseMaterialLand->normalTexture, normalTexture);
-
-					for (uint i = 0; i < std::min(lightingBaseMaterialLand->numLandscapeTextures, Material::MAX_LAND_TEXTURES); i++) {
-						textures[i + 1] = GetTexture(lightingBaseMaterialLand->landscapeDiffuseTexture[i], grayTexture);
-						textures[Material::MAX_PBRLAND_TEXTURES + i + 1] = GetTexture(lightingBaseMaterialLand->landscapeNormalTexture[i], normalTexture);
-					}
-
-					textures[Material::MAX_PBRLAND_TEXTURES * 3] = GetTexture(lightingBaseMaterialLand->terrainOverlayTexture, blackTexture);
-					textures[Material::MAX_PBRLAND_TEXTURES * 3 + 1] = GetTexture(lightingBaseMaterialLand->terrainNoiseTexture, blackTexture);
-
-					colors[2] = {
-						lightingBaseMaterialLand->specularColor.red,
-						lightingBaseMaterialLand->specularColor.green,
-						lightingBaseMaterialLand->specularColor.blue,
-						lightingBaseMaterialLand->specularColorScale
-					};
-
-					scalars[0] = Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->specularPower);
-
-					vectors[0] = Util::Math::Float4(lightingBaseMaterialLand->landBlendParams);
-
-					vectors[1] = {
-						lightingBaseMaterialLand->textureIsSnow[0],
-						lightingBaseMaterialLand->textureIsSnow[1],
-						lightingBaseMaterialLand->textureIsSnow[2],
-						lightingBaseMaterialLand->textureIsSnow[3]
-					};
-
-					vectors[2] = {
-						lightingBaseMaterialLand->textureIsSnow[4],
-						lightingBaseMaterialLand->textureIsSnow[5],
-						Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[0]),
-						Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[1])
-					};
-
-					vectors[3] = {
-						Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[2]),
-						Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[3]),
-						Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[4]),
-						Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[5])
-					};
-
-					/*vectors[4] = {
-						lightingBaseMaterialLand->terrainTexOffsetX,
-						lightingBaseMaterialLand->terrainTexOffsetY,
-						lightingBaseMaterialLand->terrainTexFade,
-						0
-					};*/
+				if (const auto* landMaterial = skyrim_cast<RE::BSLightingShaderMaterialLandscape*>(shaderMaterial)) {
+					SetupLandMaterial(landMaterial);
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape)) {
 					shaderType = ShaderType::TruePBR;
 
 					const auto* lightingPBRMaterialLand = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
 
-					for (uint i = 0; i < std::min(lightingPBRMaterialLand->numLandscapeTextures, Material::MAX_PBRLAND_TEXTURES); i++) {
+					for (uint i = 0; i < std::min(lightingPBRMaterialLand->numLandscapeTextures, Material::MAX_LAND_TEXTURES); i++) {
 						textures[i] = GetTexture(lightingPBRMaterialLand->landscapeBaseColorTextures[i], grayTexture);
-						textures[Material::MAX_PBRLAND_TEXTURES + i] = GetTexture(lightingPBRMaterialLand->landscapeNormalTextures[i], normalTexture);
-						textures[Material::MAX_PBRLAND_TEXTURES * 2 + i] = GetTexture(lightingPBRMaterialLand->landscapeRMAOSTextures[i], rmaosTexture);
+						textures[Material::MAX_LAND_TEXTURES + i] = GetTexture(lightingPBRMaterialLand->landscapeNormalTextures[i], normalTexture);
+						textures[Material::MAX_LAND_TEXTURES * 2 + i] = GetTexture(lightingPBRMaterialLand->landscapeRMAOSTextures[i], rmaosTexture);
 					}
 
-					textures[Material::MAX_PBRLAND_TEXTURES * 3] = GetTexture(lightingPBRMaterialLand->terrainOverlayTexture, blackTexture);
-					textures[Material::MAX_PBRLAND_TEXTURES * 3 + 1] = GetTexture(lightingPBRMaterialLand->terrainNoiseTexture, blackTexture);
+					textures[Material::MAX_LAND_TEXTURES * 3] = GetTexture(lightingPBRMaterialLand->terrainOverlayTexture, blackTexture);
+					textures[Material::MAX_LAND_TEXTURES * 3 + 1] = GetTexture(lightingPBRMaterialLand->terrainNoiseTexture, blackTexture);
 
 					pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(lightingPBRMaterialLand);
 
@@ -331,6 +283,79 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
 		alphaFlags |= Material::AlphaFlags::Transmission;
 	}
+}
+
+void Material::SetupLandMaterial(const RE::BSLightingShaderMaterialLandscape* lightingBaseMaterialLand)
+{
+	auto renderer = Renderer::GetSingleton();
+	auto& grayTexture = renderer->GetGrayTextureIndex();
+	auto& normalTexture = renderer->GetNormalTextureIndex();
+	auto& blackTexture = renderer->GetBlackTextureIndex();
+
+	logger::info("SetupLandMaterial - {}", lightingBaseMaterialLand->numLandscapeTextures);
+
+	textures[0] = GetTexture(lightingBaseMaterialLand->diffuseTexture, grayTexture);
+	textures[Material::MAX_LAND_TEXTURES] = GetTexture(lightingBaseMaterialLand->normalTexture, normalTexture);
+
+	logger::info("Diffuse[0] - {}", reinterpret_cast<uintptr_t>(lightingBaseMaterialLand->diffuseTexture.get()));
+	logger::info("Normal[0] - {}", reinterpret_cast<uintptr_t>(lightingBaseMaterialLand->normalTexture.get()));
+
+	for (uint i = 0; i < Material::MAX_LAND_TEXTURES - 1u; i++) {
+		const bool valid = i < lightingBaseMaterialLand->numLandscapeTextures;
+
+		auto& landDiffuseTexture = valid ? lightingBaseMaterialLand->landscapeDiffuseTexture[i] : nullptr;
+		auto& landNormalTexture = valid ? lightingBaseMaterialLand->landscapeNormalTexture[i] : nullptr;
+
+		if (valid) {
+			logger::info("Diffuse[{}] - {}", i + 1, reinterpret_cast<uintptr_t>(landDiffuseTexture.get()));
+			logger::info("Normal[{}] - {}", i + 1, reinterpret_cast<uintptr_t>(landNormalTexture.get()));
+		}
+
+		textures[i + 1] = GetTexture(landDiffuseTexture, grayTexture);
+		textures[Material::MAX_LAND_TEXTURES + i + 1] = GetTexture(landNormalTexture, normalTexture);
+	}
+
+	textures[Material::MAX_LAND_TEXTURES * 3] = GetTexture(lightingBaseMaterialLand->terrainOverlayTexture, blackTexture);
+	textures[Material::MAX_LAND_TEXTURES * 3 + 1] = GetTexture(lightingBaseMaterialLand->terrainNoiseTexture, blackTexture);
+
+	colors[2] = {
+		lightingBaseMaterialLand->specularColor.red,
+		lightingBaseMaterialLand->specularColor.green,
+		lightingBaseMaterialLand->specularColor.blue,
+		lightingBaseMaterialLand->specularColorScale
+	};
+
+	scalars[0] = Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->specularPower);
+
+	vectors[0] = Util::Math::Float4(lightingBaseMaterialLand->landBlendParams);
+
+	vectors[1] = {
+		lightingBaseMaterialLand->textureIsSnow[0],
+		lightingBaseMaterialLand->textureIsSnow[1],
+		lightingBaseMaterialLand->textureIsSnow[2],
+		lightingBaseMaterialLand->textureIsSnow[3]
+	};
+
+	vectors[2] = {
+		lightingBaseMaterialLand->textureIsSnow[4],
+		lightingBaseMaterialLand->textureIsSnow[5],
+		Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[0]),
+		Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[1])
+	};
+
+	vectors[3] = {
+		Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[2]),
+		Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[3]),
+		Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[4]),
+		Util::Material::Skyrim::ShininessToRoughness(lightingBaseMaterialLand->textureIsSpecPower[5])
+	};
+
+	/*vectors[4] = {
+		lightingBaseMaterialLand->terrainTexOffsetX,
+		lightingBaseMaterialLand->terrainTexOffsetY,
+		lightingBaseMaterialLand->terrainTexFade,
+		0
+	};*/
 }
 
 void Material::SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID)
