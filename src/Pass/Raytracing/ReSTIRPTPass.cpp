@@ -44,6 +44,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),    // b0: CameraData
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),    // b1: ReSTIRPTData
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),    // b2: FeatureData
+			nvrhi::BindingLayoutItem::VolatileConstantBuffer(3),    // b3: RaytracingData
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),     // t0: SceneBVH
 			nvrhi::BindingLayoutItem::Texture_SRV(1),               // t1: CurrentDepth
 			nvrhi::BindingLayoutItem::Texture_SRV(2),               // t2: CurrentNormals
@@ -54,6 +55,8 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),      // t7: SurfaceDataBuffer
 			nvrhi::BindingLayoutItem::Texture_SRV(8),               // t8: PrimaryDiffuseAlbedo
 			nvrhi::BindingLayoutItem::Texture_SRV(9),               // t9: PrimarySpecularAlbedo
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),     // t10: Lights
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),     // t11: Instances
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),      // u0: PTReservoirs
 			nvrhi::BindingLayoutItem::Texture_UAV(1),               // u1: OutputRadiance
 			nvrhi::BindingLayoutItem::Sampler(0),                   // s0
@@ -64,9 +67,24 @@ namespace Pass::Raytracing
 	void ReSTIRPTPass::CreatePipeline()
 	{
 		auto device = GetRenderer()->GetDevice();
+		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(DxcDefine{ L"USE_RAY_QUERY", L"1" });
+
+		// Initial Sampling
+		{
+			winrt::com_ptr<IDxcBlob> blob;
+			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTInitialSampling.hlsl", defines, L"cs_6_5");
+			if (blob) {
+				m_InitialSamplingShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
+				m_InitialSamplingPipeline = device->createComputePipeline(
+					nvrhi::ComputePipelineDesc()
+					.setComputeShader(m_InitialSamplingShader)
+					.addBindingLayout(m_BindingLayout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
+			}
+		}
 
 		// Temporal Resampling
 		{
@@ -77,7 +95,8 @@ namespace Pass::Raytracing
 				m_TemporalPipeline = device->createComputePipeline(
 					nvrhi::ComputePipelineDesc()
 					.setComputeShader(m_TemporalShader)
-					.addBindingLayout(m_BindingLayout));
+					.addBindingLayout(m_BindingLayout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
 			}
 		}
 
@@ -90,7 +109,8 @@ namespace Pass::Raytracing
 				m_SpatialPipeline = device->createComputePipeline(
 					nvrhi::ComputePipelineDesc()
 					.setComputeShader(m_SpatialShader)
-					.addBindingLayout(m_BindingLayout));
+					.addBindingLayout(m_BindingLayout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
 			}
 		}
 
@@ -103,7 +123,8 @@ namespace Pass::Raytracing
 				m_FinalShadingPipeline = device->createComputePipeline(
 					nvrhi::ComputePipelineDesc()
 					.setComputeShader(m_FinalShadingShader)
-					.addBindingLayout(m_BindingLayout));
+					.addBindingLayout(m_BindingLayout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
 			}
 		}
 	}
@@ -222,6 +243,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_ConstantBuffer),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
+			nvrhi::BindingSetItem::ConstantBuffer(3, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, textureManager.GetTexture(RenderTarget::ClipDepth)),
 			nvrhi::BindingSetItem::Texture_SRV(2, renderTargets->normalRoughness),
@@ -232,6 +254,8 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(7, ptRes->surfaceDataBuffer),
 			nvrhi::BindingSetItem::Texture_SRV(8, diffuseAlbedoTex),
 			nvrhi::BindingSetItem::Texture_SRV(9, specularAlbedoTex),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, scene->GetSceneGraph()->GetLightBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, scene->GetSceneGraph()->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, ptRes->reservoirBuffer),
 			nvrhi::BindingSetItem::Texture_UAV(1, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
@@ -260,8 +284,23 @@ namespace Pass::Raytracing
 		cbData.runtimeParams.activeCheckerboardField = 0; // No checkerboard
 		cbData.runtimeParams.frameIndex = m_Context->GetFrameIndex();
 		cbData.runtimeParams.pad2 = 0;
+		cbData.renderSize = GetRenderer()->GetDynamicResolution();
+		cbData.pad0 = 0;
+		cbData.pad1 = 0;
 
 		commandList->writeBuffer(m_ConstantBuffer, &cbData, sizeof(cbData));
+	}
+
+	void ReSTIRPTPass::DispatchInitialSampling(nvrhi::ICommandList* commandList, const nvrhi::BindingSetVector& bindings, uint2 threadGroupSize)
+	{
+		if (!m_InitialSamplingPipeline)
+			return;
+
+		nvrhi::ComputeState state;
+		state.pipeline = m_InitialSamplingPipeline;
+		state.bindings = bindings;
+		commandList->setComputeState(state);
+		commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 	}
 
 	void ReSTIRPTPass::CopyCurrentGBufferToPrevious(nvrhi::ICommandList* commandList)
@@ -308,7 +347,13 @@ namespace Pass::Raytracing
 		auto resolution = GetRenderer()->GetDynamicResolution();
 		auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 8);
 
-		nvrhi::BindingSetVector bindings = { m_BindingSet };
+		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+		nvrhi::BindingSetVector bindings = {
+			m_BindingSet,
+			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable
+		};
+
+		DispatchInitialSampling(commandList, bindings, threadGroupSize);
 
 		// Temporal resampling
 		if (m_ResamplingMode == rtxdi::ReSTIRPT_ResamplingMode::Temporal ||

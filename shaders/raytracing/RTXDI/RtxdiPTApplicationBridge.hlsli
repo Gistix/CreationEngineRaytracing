@@ -15,10 +15,15 @@
 
 // Full BSDF system
 #include "raytracing/include/Materials/BSDF.hlsli"
+#include "raytracing/include/Rays.hlsli"
+#include "include/Lighting.hlsli"
+#include "include/ColorConversions.hlsli"
 #include "include/Common/Color.hlsli"
 #include "raytracing/include/RayOffset.hlsli"
+#include "Rtxdi/Utils/SampledLightData.hlsli"
 
 // RTXDI types
+#define RAB_DISTANT_LIGHT_DISTANCE kEnvironmentMapSceneDistance
 #include <Rtxdi/PT/Reservoir.hlsli>
 #include <Rtxdi/Utils/RandomSamplerState.hlsli>
 
@@ -32,22 +37,23 @@ struct RAB_Surface
     uint materialFeature;
     bool hasSpecularTransmission;
     float viewDepth;
+    uint materialIndex;
+    uint instanceIndex;
+    uint psrData;
 
     float4 Eval(float3 wo)
     {
-        float3 wi = brdfContext.ViewDirection;
-        float3 wiLocal = surface.ToLocal(wi);
-        float3 woLocal = surface.ToLocal(wo);
-        DefaultBSDF bsdf = DefaultBSDF::make(surface.Normal, wi, surface, true);
-        return bsdf.Eval(wiLocal, woLocal);
+        Material material = Materials[NonUniformResourceIndex(materialIndex)];
+        bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+        StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
+        return bsdf.Eval(brdfContext, material, surface, wo);
     }
 
     float EvalPdf(float3 wo)
     {
-        float3 woLocal = surface.ToLocal(wo);
-        float3 wiLocal = surface.ToLocal(brdfContext.ViewDirection);
-        DefaultBSDF bsdf = DefaultBSDF::make(surface.Normal, brdfContext.ViewDirection, surface, true);
-        return bsdf.Pdf(wiLocal, woLocal);
+        bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+        StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
+        return bsdf.EvalPdf(brdfContext, surface, wo);
     }
 };
 
@@ -119,6 +125,9 @@ RAB_Surface LoadPTSurfaceFromBuffer(uint2 pixelPosition, bool previousFrame)
         rab.materialFeature = Feature::kDefault;
         rab.hasSpecularTransmission = false;
         rab.viewDepth = RAB_BACKGROUND_DEPTH;
+        rab.materialIndex = 0;
+        rab.instanceIndex = 0;
+        rab.psrData = 0;
         return rab;
     }
 
@@ -128,6 +137,9 @@ RAB_Surface LoadPTSurfaceFromBuffer(uint2 pixelPosition, bool previousFrame)
     rab.materialFeature = PSD_GetMaterialFeature(packed);
     rab.hasSpecularTransmission = PSD_SurfaceHasSpecularTransmission(packed);
     rab.viewDepth = packed.viewDepth;
+    rab.materialIndex = packed.materialIndex;
+    rab.instanceIndex = packed.instanceIndex;
+    rab.psrData = packed.psrData;
 
     return rab;
 }
@@ -145,6 +157,33 @@ RAB_Surface RAB_EmptySurface()
     rab.materialFeature = Feature::kDefault;
     rab.hasSpecularTransmission = false;
     rab.viewDepth = RAB_BACKGROUND_DEPTH;
+    rab.materialIndex = 0;
+    rab.instanceIndex = 0;
+    rab.psrData = 0;
+    return rab;
+}
+
+RAB_Surface RAB_MakeSurfaceFromPayload(float3 position, Payload payload, float3 rayDir, RayCone rayCone, bool primary)
+{
+    RAB_Surface rab;
+    Instance instance;
+    Material material;
+    rab.surface = SurfaceMaker::make(position, payload, rayDir, rayCone, instance, material, primary);
+    rab.brdfContext = BRDFContext::make(rab.surface, -rayDir);
+    bool isEnter = dot(rab.surface.FaceNormal, rab.brdfContext.ViewDirection) >= 0.0f;
+    if (!isEnter)
+    {
+        rab.surface.FlipNormal();
+        rab.brdfContext.NdotV = saturate(dot(rab.surface.Normal, rab.brdfContext.ViewDirection));
+    }
+    AdjustShadingNormal(rab.surface, rab.brdfContext, true, false);
+    rab.materialFeature = material.Feature;
+    rab.hasSpecularTransmission = rab.surface.SpecTrans > 0.0f;
+    rab.viewDepth = length(rab.surface.Position - Camera.Position.xyz);
+    Mesh mesh = GetMesh(payload, instance);
+    rab.materialIndex = mesh.GeometryIdx;
+    rab.instanceIndex = payload.InstanceIndex();
+    rab.psrData = 0;
     return rab;
 }
 
@@ -166,6 +205,11 @@ float3 RAB_GetSurfaceNormal(RAB_Surface rab)
 void RAB_SetSurfaceNormal(inout RAB_Surface rab, float3 normal)
 {
     rab.surface.Normal = normal;
+}
+
+void RAB_SetSurfaceWorldPos(inout RAB_Surface rab, float3 worldPos)
+{
+    rab.surface.Position = worldPos;
 }
 
 float3 RAB_GetSurfaceWorldPos(RAB_Surface rab)
@@ -286,11 +330,6 @@ bool RAB_GetConservativeVisibility(RAB_Surface rab, float3 samplePosition)
     return rayQuery.CommittedStatus() == COMMITTED_NOTHING;
 }
 
-bool RAB_GetConservativeVisibility(RAB_Surface rab, RAB_LightSample lightSample)
-{
-    return RAB_GetConservativeVisibility(rab, RAB_LightSamplePosition(lightSample));
-}
-
 bool RAB_GetTemporalConservativeVisibility(RAB_Surface surface, RAB_Surface temporalSurface, float3 samplePosition)
 {
     return RAB_GetConservativeVisibility(surface, samplePosition);
@@ -320,7 +359,21 @@ uint RAB_GetDuplicationMapCount(int2 prevPos)
 struct RAB_PathTracerUserData
 {
     uint pathType;
+    uint2 pixelPosition;
+    float3 psrMotionVector;
+    float psrDepth;
+    float3 psrNormal;
+    float psrRoughness;
+    float3 psrRadiance;
+    uint psrValid;
 };
+
+RAB_PathTracerUserData RAB_EmptyPathTracerUserData(uint2 pixelPosition)
+{
+    RAB_PathTracerUserData ptud = (RAB_PathTracerUserData)0;
+    ptud.pixelPosition = pixelPosition;
+    return ptud;
+}
 
 void RAB_PathTracerUserDataSetPathType(inout RAB_PathTracerUserData ptud, uint pathType)
 {
@@ -332,33 +385,127 @@ void RAB_PathTracerUserDataSetPathType(inout RAB_PathTracerUserData ptud, uint p
 // ---------------------------------------------------------------------------
 void RAB_ReconnectionDenoiserCallback(RTXDI_PTReservoir reservoir, RAB_Surface surface, inout RAB_PathTracerUserData ptud)
 {
-    // No-op: denoiser guide buffers not affected by reconnection in this engine
+    ptud.psrNormal = surface.surface.Normal;
+    ptud.psrRoughness = surface.surface.Roughness;
+    ptud.psrDepth = RAB_GetSurfaceLinearDepth(surface);
+    ptud.psrValid = 1;
 }
 
 void RAB_LastBounceDenoiserCallback(float3 lightPos, RAB_Surface surface, inout RAB_PathTracerUserData ptud)
 {
-    // No-op
+    ptud.psrNormal = surface.surface.Normal;
+    ptud.psrRoughness = surface.surface.Roughness;
+    ptud.psrDepth = RAB_GetSurfaceLinearDepth(surface);
+    ptud.psrValid = 1;
 }
 
 // ---------------------------------------------------------------------------
-// Light system stubs for NEE reconnection
-// ReSTIR PT requires these for ConnectsToNEELight paths.
-// In this project, lights are NOT polymorphic RTXDI lights, so NEE reconnection
-// is initially disabled. These stubs make the library compile; actual
-// light bridge can be implemented in a future pass.
+// Light bridge for ReSTIR PT NEE reconnection
 // ---------------------------------------------------------------------------
-struct RAB_LightInfo { uint dummy; };
-struct RAB_LightSample { float3 position; float3 radiance; float solidAnglePdf; };
+static const uint RAB_LIGHT_TYPE_DIRECTIONAL = 0;
+static const uint RAB_LIGHT_TYPE_POINT = 1;
 
-RAB_LightInfo RAB_EmptyLightInfo() { RAB_LightInfo li; li.dummy = 0; return li; }
-RAB_LightSample RAB_EmptyLightSample() { RAB_LightSample ls; ls.position = 0; ls.radiance = 0; ls.solidAnglePdf = 0; return ls; }
+struct RAB_LightInfo
+{
+    uint lightType;
+    uint lightIndex;
+};
+
+struct RAB_LightSample
+{
+    float3 position;
+    float3 radiance;
+    float solidAnglePdf;
+    float distance;
+    uint lightType;
+};
+
+bool RAB_IsAnalyticLightSample(RAB_LightSample lightSample) { return lightSample.solidAnglePdf > 0.0f; }
+bool RAB_IsInfiniteLightSample(RAB_LightSample lightSample) { return lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL; }
+
+RAB_LightInfo RAB_EmptyLightInfo() { RAB_LightInfo li; li.lightType = 0; li.lightIndex = 0; return li; }
+RAB_LightSample RAB_EmptyLightSample() { RAB_LightSample ls; ls.position = 0; ls.radiance = 0; ls.solidAnglePdf = 0; ls.distance = 0; ls.lightType = 0; return ls; }
 
 float3 RAB_LightSamplePosition(RAB_LightSample ls) { return ls.position; }
 float3 RAB_LightSampleRadiance(RAB_LightSample ls) { return ls.radiance; }
 float RAB_LightSampleSolidAnglePdf(RAB_LightSample ls) { return ls.solidAnglePdf; }
 
-RAB_LightInfo RAB_LoadLightInfo(uint lightIndex, bool isPrevFrame) { return RAB_EmptyLightInfo(); }
-RAB_LightSample RAB_SamplePolymorphicLight(RAB_LightInfo lightInfo, RAB_Surface surface, float2 uv) { return RAB_EmptyLightSample(); }
+void RAB_GetLightDirDistance(RAB_Surface surface, RAB_LightSample lightSample, out float3 lightDir, out float lightDistance)
+{
+    float3 toLight = lightSample.position - surface.surface.Position;
+    lightDistance = length(toLight);
+    lightDir = toLight / max(lightDistance, 1e-4f);
+}
+
+float RAB_GetLightSampleTargetPdfForSurface(RAB_LightSample lightSample, RAB_Surface surface)
+{
+    if (lightSample.solidAnglePdf <= 0.0f)
+        return 0.0f;
+    return Color::RGBToLuminance(RAB_GetReflectedBsdfRadianceForSurface(lightSample.position, lightSample.radiance, surface)) / lightSample.solidAnglePdf;
+}
+
+bool RAB_GetConservativeVisibility(RAB_Surface rab, RAB_LightSample lightSample)
+{
+    return RAB_GetConservativeVisibility(rab, RAB_LightSamplePosition(lightSample));
+}
+
+uint RAB_PackDirectionalLightIndex() { return 0; }
+uint RAB_PackPointLightIndex(uint lightIndex) { return lightIndex + 1; }
+bool RAB_IsDirectionalLightIndex(uint lightIndex) { return lightIndex == 0; }
+uint RAB_UnpackPointLightIndex(uint lightIndex) { return lightIndex - 1; }
+
+RAB_LightInfo RAB_LoadLightInfo(uint lightIndex, bool isPrevFrame)
+{
+    RAB_LightInfo info;
+    if (RAB_IsDirectionalLightIndex(lightIndex))
+    {
+        info.lightType = RAB_LIGHT_TYPE_DIRECTIONAL;
+        info.lightIndex = 0;
+    }
+    else
+    {
+        info.lightType = RAB_LIGHT_TYPE_POINT;
+        info.lightIndex = RAB_UnpackPointLightIndex(lightIndex);
+    }
+    return info;
+}
+
+RAB_LightSample RAB_SamplePolymorphicLight(RAB_LightInfo lightInfo, RAB_Surface surface, float2 uv)
+{
+    RAB_LightSample ls = RAB_EmptyLightSample();
+    ls.lightType = lightInfo.lightType;
+
+    if (lightInfo.lightType == RAB_LIGHT_TYPE_DIRECTIONAL)
+    {
+        float3 irradiance = DirLightToLinear(Raytracing.DirectionalLight.Color) *
+            EvalSkyOcclusion(SkyHemisphere, Raytracing.DirectionalLight.Vector, Features.CloudShadows.Opacity);
+#if defined(PHYSICAL_SKY_TRLUT)
+        irradiance *= SamplePhysicalSkyTransmittance(Raytracing.DirectionalLight.Vector);
+#endif
+        float3 lightDir = normalize(Raytracing.DirectionalLight.Vector);
+        ls.position = surface.surface.Position + lightDir * SHADOW_RAY_TMAX;
+        ls.distance = SHADOW_RAY_TMAX;
+        ls.solidAnglePdf = 1.0f;
+        ls.radiance = irradiance * Raytracing.Directional;
+        return ls;
+    }
+
+    Light light = Lights[NonUniformResourceIndex(lightInfo.lightIndex)];
+    const bool isLinear = (light.Flags & LightFlags::LinearLight) != 0;
+    light.Color = PointLightToLinear(light.Color, isLinear);
+
+    float3 toLight = light.Vector - surface.surface.Position;
+    float dist = length(toLight);
+    float3 lightDir = toLight / max(dist, 1e-4f);
+    float lightSourceAngle = 0.005f;
+    float atten = GetAttenuation(light, dist, lightSourceAngle) * GetSpotAttenuation(light, lightDir);
+
+    ls.position = light.Vector;
+    ls.distance = dist;
+    ls.solidAnglePdf = 1.0f;
+    ls.radiance = light.Color * light.Fade * atten * Raytracing.Point;
+    return ls;
+}
 
 int RAB_TranslateLightIndex(uint lightIndex, bool prevToCurrent) { return (int)lightIndex; }
 
@@ -391,5 +538,13 @@ struct RAB_RayPayload
 
 float RAB_RayPayloadGetCommittedHitT(RAB_RayPayload rp) { return rp.hitT; }
 bool RAB_RayPayloadHit(RAB_RayPayload rp) { return rp.hit; }
+
+RAB_RayPayload RAB_MakeRayPayload(Payload payload)
+{
+    RAB_RayPayload rp;
+    rp.hitT = payload.hitDistance;
+    rp.hit = payload.Hit();
+    return rp;
+}
 
 #endif // RTXDI_PT_APPLICATION_BRIDGE_HLSLI

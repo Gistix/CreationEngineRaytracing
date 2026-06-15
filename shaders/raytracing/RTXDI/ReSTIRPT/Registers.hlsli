@@ -5,15 +5,21 @@
 #include "interop/ReSTIRPTData.hlsli"
 #include "interop/SharedData.hlsli"
 #include "interop/PackedSurfaceData.hlsli"
+#include "interop/RaytracingData.hlsli"
+#include "interop/Light.hlsli"
+#include "interop/Instance.hlsli"
+#include "interop/Material.hlsli"
 
 // Constant buffers
 ConstantBuffer<CameraData>     Camera      : register(b0);
 ConstantBuffer<ReSTIRPTData>   g_ReSTIRPT  : register(b1);
 ConstantBuffer<FeatureData>    Features    : register(b2);
+ConstantBuffer<RaytracingData> Raytracing  : register(b3);
 #define CERT_HAS_FEATURES
 
 // Scene acceleration structure (for visibility rays)
 RaytracingAccelerationStructure SceneBVH   : register(t0);
+#define Scene SceneBVH
 
 // Current frame G-buffer
 Texture2D<float>  CurrentDepth             : register(t1);
@@ -35,6 +41,10 @@ StructuredBuffer<PackedSurfaceData> SurfaceDataBuffer : register(t7);
 // Primary surface material data (for denoiser guide buffers)
 Texture2D<float3> PrimaryDiffuseAlbedo     : register(t8);
 Texture2D<float3> PrimarySpecularAlbedo    : register(t9);
+
+StructuredBuffer<Light>       Lights       : register(t10);
+StructuredBuffer<Instance>    Instances    : register(t11);
+StructuredBuffer<Material>    Materials[]  : register(t0, space3);
 
 // PT reservoir buffer (read/write)
 RWStructuredBuffer<RTXDI_PackedPTReservoir> PTReservoirs : register(u0);

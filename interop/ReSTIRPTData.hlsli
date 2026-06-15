@@ -10,6 +10,9 @@ struct ReSTIRPTData
 {
     RTXDI_PTParameters ptParams;
     RTXDI_RuntimeParameters runtimeParams;
+    uint2 renderSize;
+    uint pad0;
+    uint pad1;
 };
 
 #endif // RESTIR_PT_DATA_HLSLI

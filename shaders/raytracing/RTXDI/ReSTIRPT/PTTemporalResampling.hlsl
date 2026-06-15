@@ -1,6 +1,8 @@
 // ReSTIR PT Temporal Resampling Compute Shader
 
 #include "../RtxdiPTApplicationBridge.hlsli"
+#define RTXDI_RESTIR_PT_HYBRID_SHIFT
+#include "../RtxdiPTPathTrace.hlsli"
 #include <Rtxdi/PT/TemporalResampling.hlsli>
 #include <Rtxdi/PT/BoilingFilter.hlsli>
 
@@ -30,6 +32,8 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID, uint LocalIndex : SV_GroupInd
 
     RAB_PathTracerUserData ptud;
     ptud.pathType = 0;
+    ptud.pixelPosition = GlobalIndex;
+    ptud.psrValid = 0;
 
     bool selectedPrevSample = false;
 

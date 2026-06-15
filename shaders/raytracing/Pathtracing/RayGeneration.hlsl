@@ -357,13 +357,17 @@ void Main()
 
 #       if defined(RESTIR_PT)
     // Write packed surface data for ReSTIR PT (REFERENCE mode)
+    Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
     PTSurfaceDataBuffer[ptSurfBufIdx] = PSD_Pack(
         sourceSurface.Position, sourceSurface.Normal, sourceSurface.Tangent, sourceSurface.Bitangent,
         sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection,
         sourceSurface.DiffuseAlbedo, sourceSurface.F0,
         sourceSurface.Roughness, sourceSurface.Metallic,
         sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
-        primarySceneDistance);
+        primarySceneDistance,
+        sourceMesh.GeometryIdx,
+        sourcePayload.InstanceIndex(),
+        0);
 #       endif
 #   endif   
 #endif   
@@ -1113,6 +1117,7 @@ void Main()
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
             if (Raytracing.EnableReSTIRPT && j == 0 && !arrivedViaDelta)
             {
+                Mesh ptMesh = GetMesh(payload, instance);
                 PTSurfaceDataBuffer[ptSurfBufIdx] = PSD_Pack(
                     surface.Position, surface.Normal,
                     surface.Tangent, surface.Bitangent,
@@ -1120,7 +1125,10 @@ void Main()
                     surface.DiffuseAlbedo, surface.F0,
                     surface.Roughness, surface.Metallic,
                     material.Feature, surface.SpecTrans > 0.0f,
-                    fillSceneLength);
+                    fillSceneLength,
+                    ptMesh.GeometryIdx,
+                    payload.InstanceIndex(),
+                    (fillState.planeIndex & 0xFFu) | ((fillState.stableBranchID & 0xFFFFu) << 8));
             }
 #   endif
 #endif

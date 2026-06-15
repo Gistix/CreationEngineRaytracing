@@ -1,6 +1,8 @@
 // ReSTIR PT Spatial Resampling Compute Shader
 
 #include "../RtxdiPTApplicationBridge.hlsli"
+#define RTXDI_RESTIR_PT_HYBRID_SHIFT
+#include "../RtxdiPTPathTrace.hlsli"
 #include <Rtxdi/PT/SpatialResampling.hlsli>
 
 [numthreads(8, 8, 1)]
@@ -25,6 +27,8 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID)
 
     RAB_PathTracerUserData ptud;
     ptud.pathType = 0;
+    ptud.pixelPosition = GlobalIndex;
+    ptud.psrValid = 0;
 
     bool resampled = false;
 

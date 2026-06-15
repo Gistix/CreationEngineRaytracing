@@ -28,6 +28,9 @@ namespace Pass::Raytracing
 		nvrhi::ShaderHandle m_FinalShadingShader;
 		nvrhi::ComputePipelineHandle m_FinalShadingPipeline;
 
+		nvrhi::ShaderHandle m_InitialSamplingShader;
+		nvrhi::ComputePipelineHandle m_InitialSamplingPipeline;
+
 		// Binding layout and sets
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		nvrhi::BindingSetHandle m_BindingSet;
@@ -57,6 +60,8 @@ namespace Pass::Raytracing
 		void CheckBindings();
 
 		void FillConstantBuffer(nvrhi::ICommandList* commandList);
+
+		void DispatchInitialSampling(nvrhi::ICommandList* commandList, const nvrhi::BindingSetVector& bindings, uint2 threadGroupSize);
 
 		void CopyCurrentGBufferToPrevious(nvrhi::ICommandList* commandList);
 	};

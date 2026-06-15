@@ -4,7 +4,7 @@
 // Packed primary surface data for ReSTIR GI.
 // Written by path tracer into a ping-pong StructuredBuffer,
 // read by ReSTIR GI passes to reconstruct Surface + BRDFContext.
-// 52 bytes per pixel (13 uints).
+// 64 bytes per pixel (16 uints).
 
 #ifdef __cplusplus
 #include <cstdint>
@@ -22,10 +22,13 @@ struct PackedSurfaceData
     uint32_t roughMetallic;     // 4  (fp16 roughness | fp16 metallic)
     uint32_t materialData;      // 4  (low 16: material feature, high 16: surface flags)
     float    viewDepth;         // 4  (negative = empty)
+    uint32_t materialIndex;     // 4  (bindless material descriptor index)
+    uint32_t instanceIndex;     // 4  (TLAS instance index)
+    uint32_t psrData;           // 4  (packed stable plane / PSR metadata)
 };
 
-static_assert(sizeof(PackedSurfaceData) == 52, "PackedSurfaceData must be 52 bytes");
-static constexpr uint32_t PACKED_SURFACE_DATA_STRIDE = 52;
+static_assert(sizeof(PackedSurfaceData) == 64, "PackedSurfaceData must be 64 bytes");
+static constexpr uint32_t PACKED_SURFACE_DATA_STRIDE = 64;
 
 #else // HLSL
 
@@ -42,6 +45,9 @@ struct PackedSurfaceData
     uint   roughMetallic;
     uint   materialData;
     float  viewDepth;           // negative = empty surface
+    uint   materialIndex;
+    uint   instanceIndex;
+    uint   psrData;
 };
 
 // ---------------------------------------------------------------------------
@@ -125,7 +131,10 @@ PackedSurfaceData PSD_Pack(
     float3 diffAlbedo, float3 f0,
     float roughness, float metallic,
     uint materialFeature, bool hasSpecularTransmission,
-    float viewDepth)
+    float viewDepth,
+    uint materialIndex = 0,
+    uint instanceIndex = 0,
+    uint psrData = 0)
 {
     PackedSurfaceData d;
     d.posW             = position;
@@ -139,6 +148,9 @@ PackedSurfaceData PSD_Pack(
     d.roughMetallic    = f32tof16(roughness) | (f32tof16(metallic) << 16);
     d.materialData     = PSD_PackMaterialData(materialFeature, hasSpecularTransmission);
     d.viewDepth        = viewDepth;
+    d.materialIndex    = materialIndex;
+    d.instanceIndex    = instanceIndex;
+    d.psrData          = psrData;
     return d;
 }
 

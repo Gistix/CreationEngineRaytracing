@@ -2,6 +2,8 @@
 // Reads the final PT reservoir and applies indirect illumination to the output.
 
 #include "../RtxdiPTApplicationBridge.hlsli"
+#define RTXDI_RESTIR_PT_HYBRID_SHIFT
+#include "../RtxdiPTPathTrace.hlsli"
 #include <Rtxdi/PT/Reservoir.hlsli>
 #include "include/ColorConversions.hlsli"
 
