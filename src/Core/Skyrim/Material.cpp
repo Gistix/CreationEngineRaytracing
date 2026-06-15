@@ -30,21 +30,9 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 
 	// Set alpha flags
 	if (alphaProperty) {
-		if (alphaProperty->GetAlphaBlending()) {
-			using AlphaFunction = RE::NiAlphaProperty::AlphaFunction;
-
-			if (alphaProperty->GetDestBlendMode() == AlphaFunction::kOne) {
-				alphaFlags |= Material::AlphaFlags::Additive;
-				alphaFlags |= Material::AlphaFlags::Transmission;
-			}
-			else {
-				alphaFlags |= Material::AlphaFlags::Blend;
-			}
-		}
-
-		if (alphaProperty->GetAlphaTesting()) {
+		if (alphaProperty->GetAlphaTesting() || alphaProperty->GetAlphaBlending()) {
 			alphaFlags |= Material::AlphaFlags::Test;
-			alphaThreshold = alphaProperty->alphaThreshold / 255.0f;
+			alphaThreshold = alphaProperty->GetAlphaBlending() ? 0.5f : alphaProperty->alphaThreshold / 255.0f;
 		}
 	}
 
@@ -87,7 +75,6 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 				if (const auto* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 					if (lightingBaseMaterial->materialAlpha != 1.0f && !alphaProperty) {
 						colors[0].w = lightingBaseMaterial->materialAlpha;
-						alphaFlags |= Material::AlphaFlags::Blend;
 					}
 				}
 
@@ -153,31 +140,6 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 
 	if (shaderType == ShaderType::Water) {
 		alphaFlags = Material::AlphaFlags::Transmission;
-	}
-
-	bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
-	blendMaterial |= shaderFlags.any(EShaderPropertyFlag::kDecal, EShaderPropertyFlag::kDynamicDecal);
-
-	if ((alphaFlags & Material::AlphaFlags::Additive) != Material::AlphaFlags::None) {
-		alphaFlags &= ~Material::AlphaFlags::Blend;
-		alphaFlags |= Material::AlphaFlags::Transmission;
-	}
-	else if ((alphaFlags & Material::AlphaFlags::Blend) != Material::AlphaFlags::None && !blendMaterial) {
-		alphaFlags &= ~Material::AlphaFlags::Blend;
-		alphaFlags |= Material::AlphaFlags::Transmission;  // I want them to behave like glass for now
-	}
-
-	// Refraction materials: treat as transmission (glass)
-	if (shaderFlags.any(EShaderPropertyFlag::kRefraction) && alphaFlags == Material::AlphaFlags::None) {
-		alphaFlags |= Material::AlphaFlags::Transmission;
-	}
-
-	// Window transparency: mark window materials (GlowMap/HasEmissive + AssumeShadowmask) as non-opaque
-	// so the any-hit shader can compute transmittance for shadow rays
-	bool isWindow = (feature == Feature::kGlowMap || pbrFlags.any(PBRShaderFlags::HasEmissive)) &&
-		shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask);
-	if (isWindow && alphaFlags == Material::AlphaFlags::None) {
-		alphaFlags |= Material::AlphaFlags::Transmission;
 	}
 }
 
