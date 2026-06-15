@@ -62,7 +62,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
 
 	if (vertexSize != vertexSize2)
-		logger::warn("[RT] Mesh::BuildMesh - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);
+		logger::warn("Mesh::BuildVertices - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);
 
 	bool hasPosition = vertexFlags & RE::BSGraphics::Vertex::VF_VERTEX;
 

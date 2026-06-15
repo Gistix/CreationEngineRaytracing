@@ -99,7 +99,7 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 						c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 					if (nameLower.find("eye") != eastl::string::npos) {
 						feature = Feature::kEye;
-						logger::debug("[RT] BuildMaterial - Overriding EnvironmentMap to Eye for mesh: {}", name.c_str());
+						logger::debug("Material - Overriding EnvironmentMap to Eye for mesh: {}", name.c_str());
 					}
 				}
 
@@ -128,7 +128,7 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 				SetupProjectedUV(lightingShaderProp);
 			}
 			else {
-				logger::warn("[RT] BuildMaterial - BSShaderMaterial is nullptr");
+				logger::warn("Material - BSShaderMaterial is nullptr");
 			}
 		}
 		else if (auto effectShaderProp = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty)) {
