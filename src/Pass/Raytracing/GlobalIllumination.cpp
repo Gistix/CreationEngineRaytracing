@@ -119,6 +119,8 @@ namespace Pass::Raytracing
 		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", defines);
 		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", defines);
 		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", defines);
+		auto shadowMissLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowMiss.hlsl", defines);
+		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", defines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
 
@@ -126,6 +128,7 @@ namespace Pass::Raytracing
 		pipelineDesc.shaders = {
 			{ "RayGen", rayGenLib->getShader("Main", nvrhi::ShaderType::RayGeneration), nullptr },
 			{ "Miss", missLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr },
+			{ "ShadowMiss", shadowMissLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr }
 		};
 
 		pipelineDesc.hitGroups = {
@@ -136,6 +139,12 @@ namespace Pass::Raytracing
 				nullptr,  // intersection
 				nullptr,  // binding layout
 				false     // isProceduralPrimitive
+			},
+			{
+				"ShadowHitGroup",
+				nullptr,
+				shadowAnyHitLib->getShader("Main", nvrhi::ShaderType::AnyHit),
+				nullptr, nullptr, false
 			}
 		};
 
@@ -158,7 +167,7 @@ namespace Pass::Raytracing
 			return;
 
 		auto shaderTableDesc = nvrhi::rt::ShaderTableDesc()
-			.enableCaching(3)
+			.enableCaching(5)
 			.setDebugName("Shader Table");
 
 		m_ShaderTable = m_RayPipeline->createShaderTable(shaderTableDesc);
@@ -167,7 +176,9 @@ namespace Pass::Raytracing
 
 		m_ShaderTable->setRayGenerationShader("RayGen");
 		m_ShaderTable->addMissShader("Miss");
+		m_ShaderTable->addMissShader("ShadowMiss");
 		m_ShaderTable->addHitGroup("HitGroup");
+		m_ShaderTable->addHitGroup("ShadowHitGroup");
 	}
 
 	void GlobalIllumination::CreateComputePipeline()
