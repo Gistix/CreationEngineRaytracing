@@ -286,6 +286,7 @@ float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext b
 float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance,
                               in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
+#if USE_DELTALOBES == 1   
     DeltaLobe deltaLobes[cMaxDeltaLobes];
     int deltaLobeCount;
     float nonDeltaPart;
@@ -366,6 +367,9 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
     }
 
     return totalRadiance;
+#else
+    return float3(0, 0, 0);
+#endif
 }
 
 float3 EvaluateDirectRadiance(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)

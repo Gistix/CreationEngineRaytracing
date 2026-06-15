@@ -20,7 +20,7 @@
 #define HAIR_MODE_CHIANG_BSDF 1
 #define HAIR_MODE_FARFIELD_BCSDF 2
 
-#define USE_DELTALOBES 1
+#define USE_DELTALOBES 0
 
 // Minimum cos(theta) for the incident and outgoing vectors.
 // Some BSDF functions are not robust for cos(theta) == 0.0,
