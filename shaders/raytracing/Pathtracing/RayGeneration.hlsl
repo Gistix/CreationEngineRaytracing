@@ -96,6 +96,14 @@ void Main()
     SurfaceDataBuffer[surfBufIdx] = PSD_Empty();
 #   endif
 #endif
+
+    // ReSTIR PT: Write empty packed surface (overwritten below on valid hit).
+#if defined(RESTIR_PT)
+#   if !(defined(SHARC) && SHARC_UPDATE) && (PATH_TRACER_MODE != PATH_TRACER_MODE_BUILD_STABLE_PLANES)
+    uint ptSurfBufIdx = (Camera.FrameIndex % 2) * (size.x * size.y) + idx.y * size.x + idx.x;
+    PTSurfaceDataBuffer[ptSurfBufIdx] = PSD_Empty();
+#   endif
+#endif
     
     RayDesc sourceRay = SetupPrimaryRay(idx, size, Camera);
     
@@ -346,6 +354,17 @@ void Main()
         sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
         primarySceneDistance);
 #       endif  
+
+#       if defined(RESTIR_PT)
+    // Write packed surface data for ReSTIR PT (REFERENCE mode)
+    PTSurfaceDataBuffer[ptSurfBufIdx] = PSD_Pack(
+        sourceSurface.Position, sourceSurface.Normal, sourceSurface.Tangent, sourceSurface.Bitangent,
+        sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection,
+        sourceSurface.DiffuseAlbedo, sourceSurface.F0,
+        sourceSurface.Roughness, sourceSurface.Metallic,
+        sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
+        primarySceneDistance);
+#       endif
 #   endif   
 #endif   
     
@@ -1084,6 +1103,24 @@ void Main()
                 giSecStarted = true;
                 giSecThroughput = throughput;
                 giSecPdf = bsdfSample.pdf;
+            }
+#   endif
+#endif
+
+            // ReSTIR PT: Write packed surface data for the primary scattering surface (FILL mode)
+            // Unlike GI, PT accepts ALL material types (hair, transmission, etc.) for reconnection
+#if defined(RESTIR_PT)
+#   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+            if (Raytracing.EnableReSTIRPT && j == 0 && !arrivedViaDelta)
+            {
+                PTSurfaceDataBuffer[ptSurfBufIdx] = PSD_Pack(
+                    surface.Position, surface.Normal,
+                    surface.Tangent, surface.Bitangent,
+                    surface.FaceNormal, brdfContext.ViewDirection,
+                    surface.DiffuseAlbedo, surface.F0,
+                    surface.Roughness, surface.Metallic,
+                    material.Feature, surface.SpecTrans > 0.0f,
+                    fillSceneLength);
             }
 #   endif
 #endif

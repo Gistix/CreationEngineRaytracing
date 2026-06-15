@@ -70,6 +70,15 @@ RWTexture2D<float4>                         SecondaryGBufSpecularRough  : regist
 // ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
 RWStructuredBuffer<PackedSurfaceData>       SurfaceDataBuffer           : register(u17);
 #   endif
+
+#   if defined(RESTIR_PT)
+// ReSTIR PT: Reservoir buffer (written during initial sampling in path tracer)
+#include "Rtxdi/PT/ReSTIRPTParameters.h"
+RWStructuredBuffer<RTXDI_PackedPTReservoir> PTReservoirBuffer           : register(u18);
+
+// ReSTIR PT: Packed primary surface data (ping-pong StructuredBuffer)
+RWStructuredBuffer<PackedSurfaceData>       PTSurfaceDataBuffer         : register(u19);
+#   endif
 #endif
 
 RaytracingAccelerationStructure             Scene                       : register(t0);

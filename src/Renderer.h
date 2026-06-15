@@ -144,6 +144,19 @@ public:
 	};
 	eastl::unique_ptr<ReSTIRGIResources> m_ReSTIRGIResources;
 
+	// ReSTIR PT resources
+	struct ReSTIRPTResources
+	{
+		nvrhi::BufferHandle reservoirBuffer = nullptr;       // RWStructuredBuffer<RTXDI_PackedPTReservoir>, 2 arrays (64 bytes each)
+		nvrhi::BufferHandle neighborOffsetBuffer = nullptr;  // Precomputed neighbor offsets for spatial resampling
+		nvrhi::BufferHandle surfaceDataBuffer = nullptr;     // Packed primary surface data (ping-pong)
+		nvrhi::TextureHandle prevGBufferDepth = nullptr;     // R32_FLOAT: previous frame linear depth
+		nvrhi::TextureHandle prevGBufferNormals = nullptr;   // RGBA16_SNORM: previous frame normals
+		bool needsNeighborOffsetUpload = false;
+		eastl::vector<uint8_t> neighborOffsetData;
+	};
+	eastl::unique_ptr<ReSTIRPTResources> m_ReSTIRPTResources;
+
 	eastl::unique_ptr<RenderTargets> m_RenderTargets;
 
 	struct RendererSettings
@@ -277,9 +290,18 @@ public:
 		return m_ReSTIRGIResources.get();
 	}
 
+	auto GetReSTIRPTResources() {
+		if (!m_ReSTIRPTResources)
+			InitReSTIRPT();
+
+		return m_ReSTIRPTResources.get();
+	}
+
 	void InitStablePlanes();
 
 	void InitReSTIRGI();
+
+	void InitReSTIRPT();
 
 	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
 

@@ -22,6 +22,7 @@
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
+#include "Pass/Raytracing/ReSTIRPTPass.h"
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/NRDIntegration.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
@@ -183,6 +184,15 @@ RenderNode* Scene::GetPathTracing()
 			true,
 			"ReSTIRGI",
 			eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(
+				renderer,
+				m_PathTracing->GetPass<Pass::SceneTLAS>()
+			)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"ReSTIRPT",
+			eastl::make_unique<Pass::Raytracing::ReSTIRPTPass>(
 				renderer,
 				m_PathTracing->GetPass<Pass::SceneTLAS>()
 			)
@@ -568,6 +578,13 @@ void Scene::SetWaterFlowMap(ID3D12Resource* waterFlowMap)
 void Scene::UpdateSettings(Settings settings)
 {
 	auto previousMode = m_Settings.GeneralSettings.Mode;
+
+	// Enforce mutual exclusion: ReSTIR PT and ReSTIR GI cannot be enabled simultaneously
+	if (settings.ReSTIRPT.Enabled && settings.ReSTIRGI.Enabled) {
+		// ReSTIR PT takes priority; disable GI
+		settings.ReSTIRGI.Enabled = false;
+		logger::warn("ReSTIR PT and ReSTIR GI are mutually exclusive. Disabling ReSTIR GI.");
+	}
 
 	m_Settings = settings;
 
