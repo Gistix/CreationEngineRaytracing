@@ -160,7 +160,9 @@ namespace Pass::Raytracing
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
-		pipelineDesc.allowOpacityMicromaps = true;
+
+		// When enabled causes: D3D12 ERROR: ID3D12Device::CreateStateObject: Invalid D3D12_RAYTRACING_PIPELINE_CONFIG1.Flags: 0x1024 specified
+		pipelineDesc.allowOpacityMicromaps = false;
 
 		m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
 		if (!m_RayPipeline)
