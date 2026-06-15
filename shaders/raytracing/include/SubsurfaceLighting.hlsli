@@ -270,7 +270,7 @@ float3 EvaluateSubsurfaceDiffuseNEE(
 
             Payload samplePayload = SampleSubsurface(Scene, subsurfaceSample.samplePosition, subsurfaceInteraction.normal, RAY_TMAX, randomSeed);
 
-            if (samplePayload.Hit() && samplePayload.InstanceIndex() == initialPayload.InstanceIndex())
+            if (samplePayload.Hit() && samplePayload.GetInstanceIndex() == initialPayload.GetInstanceIndex())
             {
                 const float3 sampleLocalPosition = subsurfaceSample.samplePosition + samplePayload.hitDistance * (-subsurfaceInteraction.normal);
                 Instance sampleInstance;
