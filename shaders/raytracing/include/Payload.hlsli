@@ -36,12 +36,12 @@ struct Payload
         instanceGeometryIndexPacked = (instanceIndex & 0xFFFF) | ((geometryIndex & 0xFFFF) << 16);
     }
 
-    uint InstanceIndex()
+    uint GetInstanceIndex()
     {
         return instanceGeometryIndexPacked & 0xFFFF;
     }
 
-    uint GeometryIndex()
+    uint GetGeometryIndex()
     {
         return instanceGeometryIndexPacked >> 16;
     }
