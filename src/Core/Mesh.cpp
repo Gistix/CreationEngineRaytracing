@@ -761,6 +761,9 @@ Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 		if (Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot))
 			state |= State::Hidden;
 
+	if (bsGeometryPtr->GetGeometryRuntimeData().shaderProperty->alpha <= std::numeric_limits<float>::epsilon())
+		state |= State::Hidden;
+
 	if (skinned && GetDismemberHidden())
 		state |= State::DismemberHidden;
 
