@@ -28,6 +28,60 @@ void RAB_SetBrdfRaySampleFromBSDF(inout RTXDI_PathTracerContext ctx, BSDFSample 
     ctx.SetBrdfRaySample(brs);
 }
 
+bool RAB_SampleBSDFWithRtxdiRng(
+    StandardBSDF standardBsdf,
+    BRDFContext brdfContext,
+    Material material,
+    Surface surface,
+    out BSDFSample result,
+    inout RTXDI_RandomSamplerState rng)
+{
+    float4 preGeneratedSamples = float4(
+        RTXDI_GetNextRandom(rng),
+        RTXDI_GetNextRandom(rng),
+        RTXDI_GetNextRandom(rng),
+        RTXDI_GetNextRandom(rng));
+
+    float3 wi = brdfContext.ViewDirection;
+    float3 N = surface.Normal;
+    float3 wiLocal = surface.ToLocal(wi);
+
+#if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
+    if (material.Feature == Feature::kHairTint)
+    {
+        HairChiangBSDF bsdf = HairChiangBSDF::make(wi, surface);
+
+        float3 woLocal;
+        bool valid = bsdf.SampleBSDF(wiLocal, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, preGeneratedSamples);
+
+        result.wo = surface.FromLocal(woLocal);
+        return valid;
+    } else
+#elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
+    if (material.Feature == Feature::kHairTint)
+    {
+        HairFarFieldBCSDF bsdf = HairFarFieldBCSDF::make(wi, surface);
+        const float h = 2.0f * RTXDI_GetNextRandom(rng) - 1.0f;
+        float lobeRandom = RTXDI_GetNextRandom(rng);
+
+        float3 woLocal;
+        bool valid = bsdf.SampleBSDF(wiLocal, h, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, lobeRandom, preGeneratedSamples);
+
+        result.wo = surface.FromLocal(woLocal);
+        return valid;
+    } else
+#endif
+    {
+        DefaultBSDF bsdf = DefaultBSDF::make(N, wi, surface, standardBsdf.isEnter);
+
+        float3 woLocal;
+        bool valid = bsdf.SampleBSDF(wiLocal, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, preGeneratedSamples);
+
+        result.wo = surface.FromLocal(woLocal);
+        return valid;
+    }
+}
+
 bool RAB_RecordDirectionalNee(
     inout RTXDI_PathTracerContext ctx,
     RAB_Surface rab,
@@ -54,8 +108,12 @@ bool RAB_RecordDirectionalNee(
     RTXDI_SampledLightData_SetLightData(sampledLightData, RAB_PackDirectionalLightIndex());
     RTXDI_SampledLightData_SetUVData(sampledLightData, float2(0.5, 0.5));
 
+    float solidAnglePdf = max(lightSample.solidAnglePdf, 1e-8f);
+    float neePdf = 1.0f;
     float scatterPdf = RAB_SurfaceEvaluateBrdfPdf(rab, lightDir);
-    return ctx.RecordNeeLightSample(sampledLightData, reflected, lightSample.solidAnglePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
+    float3 contributionOverPdf = reflected / solidAnglePdf;
+    contributionOverPdf *= RAB_GetMISWeightForNEE(RAB_PackDirectionalLightIndex(), lightSample, lightDir, solidAnglePdf, scatterPdf);
+    return ctx.RecordNeeLightSample(sampledLightData, contributionOverPdf, neePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
 }
 
 bool RAB_RecordPointNee(
@@ -79,7 +137,7 @@ bool RAB_RecordPointNee(
         return false;
 
     float3 lightDir = normalize(lightSample.position - rab.surface.Position);
-    float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance * instance.LightData.Count;
+    float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
     if (!any(reflected > MIN_DIFFUSE_SHADOW))
         return false;
 
@@ -90,9 +148,13 @@ bool RAB_RecordPointNee(
     RTXDI_SampledLightData_SetLightData(sampledLightData, RAB_PackPointLightIndex(lightIndex));
     RTXDI_SampledLightData_SetUVData(sampledLightData, float2(0.5, 0.5));
 
-    float neePdf = max(lightSample.solidAnglePdf / max(float(instance.LightData.Count), 1.0f), 1e-8f);
+    float lightCount = max(float(instance.LightData.Count), 1.0f);
+    float solidAnglePdf = max(lightSample.solidAnglePdf, 1e-8f);
+    float neePdf = 1.0f / lightCount;
     float scatterPdf = RAB_SurfaceEvaluateBrdfPdf(rab, lightDir);
-    return ctx.RecordNeeLightSample(sampledLightData, reflected, neePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
+    float3 contributionOverPdf = reflected * lightCount / solidAnglePdf;
+    contributionOverPdf *= RAB_GetMISWeightForNEE(RAB_PackPointLightIndex(lightIndex), lightSample, lightDir, solidAnglePdf, scatterPdf);
+    return ctx.RecordNeeLightSample(sampledLightData, contributionOverPdf, neePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
 }
 
 void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRandomContext ptRandContext, inout RAB_PathTracerUserData ptud)
@@ -101,12 +163,6 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
     if (!RAB_IsSurfaceValid(rab))
         return;
 
-    Surface surface = rab.surface;
-    Material material = Materials[NonUniformResourceIndex(rab.materialIndex)];
-    Instance instance = Instances[NonUniformResourceIndex(rab.instanceIndex)];
-    BRDFContext brdfContext = rab.brdfContext;
-    bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
-    StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
     RayCone rayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * max(rab.viewDepth, 1.0f), Raytracing.PixelConeSpreadAngle);
 
     [loop]
@@ -117,29 +173,27 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
             break;
 
         RAB_Surface currentRab = rab;
+        Surface surface = currentRab.surface;
+        Material material = GetMaterial(currentRab.materialIndex);
+        BRDFContext brdfContext = currentRab.brdfContext;
+        bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+        StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
+
         currentRab.surface = surface;
         currentRab.brdfContext = brdfContext;
         currentRab.materialFeature = material.Feature;
         currentRab.hasSpecularTransmission = surface.SpecTrans > 0.0f;
-        currentRab.materialIndex = rab.materialIndex;
-        currentRab.instanceIndex = rab.instanceIndex;
-
-        if (ctx.ShouldSampleEmissiveSurfaces() && any(surface.Emissive > 0.0f))
-            ctx.RecordEmissiveLightSample(surface.Emissive, currentRab, ptRandContext.initialRandomSamplerState);
-
-        if (ctx.ShouldSampleNee())
-        {
-            RAB_RecordDirectionalNee(ctx, currentRab, material, bsdf, ptRandContext);
-            RAB_RecordPointNee(ctx, currentRab, material, instance, bsdf, ptRandContext);
-        }
 
         BSDFSample bsdfSample;
-        uint bsdfSeed = RAB_RngToUint(ptRandContext.replayRandomSamplerState);
-        bool validSample = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, bsdfSeed);
+        bool validSample = RAB_SampleBSDFWithRtxdiRng(bsdf, brdfContext, material, surface, bsdfSample, ptRandContext.replayRandomSamplerState);
         if (!validSample || bsdfSample.pdf <= 0.0f)
             break;
 
         RAB_SetBrdfRaySampleFromBSDF(ctx, bsdfSample);
+        if (!ctx.ValidContinuationRayBrdfOverPdf())
+            break;
+
+        ctx.MultiplyPathThroughput(ctx.GetContinuationRayBrdfOverPdf());
 
         if (ctx.ShouldRunRussianRoulette() && Raytracing.RussianRoulette == 1 && ctx.GetBounceDepth() > 3)
         {
@@ -166,7 +220,8 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         if (!ctx.AnalyzePathReconnectibilityBeforeTrace())
             break;
 
-        Payload payload = TraceRayStandard(Scene, ray, bsdfSeed);
+        uint traceSeed = RAB_RngToUint(ptRandContext.replayRandomSamplerState);
+        Payload payload = TraceRayStandard(Scene, ray, traceSeed);
         ctx.SetTraceResult(RAB_MakeRayPayload(payload));
 
         if (!payload.Hit())
@@ -184,13 +239,30 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
 
         rab = RAB_MakeSurfaceFromPayload(hitPos, payload, ray.Direction, rayCone, false);
         ctx.RecordPathIntersection(rab);
+        if (ctx.IsPathTerminated())
+            break;
 
-        surface = rab.surface;
-        material = Materials[NonUniformResourceIndex(rab.materialIndex)];
-        instance = Instances[NonUniformResourceIndex(rab.instanceIndex)];
-        brdfContext = rab.brdfContext;
-        isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
-        bsdf = StandardBSDF::make(surface, isEnter);
+        Surface hitSurface = rab.surface;
+        Material hitMaterial = GetMaterial(rab.materialIndex);
+        Instance hitInstance = Instances[NonUniformResourceIndex(rab.instanceIndex)];
+        BRDFContext hitBrdfContext = rab.brdfContext;
+        bool hitIsEnter = dot(hitSurface.FaceNormal, hitBrdfContext.ViewDirection) >= 0.0f;
+        StandardBSDF hitBsdf = StandardBSDF::make(hitSurface, hitIsEnter);
+
+        rab.surface = hitSurface;
+        rab.brdfContext = hitBrdfContext;
+        rab.materialFeature = hitMaterial.Feature;
+        rab.hasSpecularTransmission = hitSurface.SpecTrans > 0.0f;
+
+        if (ctx.ShouldSampleEmissiveSurfaces() && any(hitSurface.Emissive > 0.0f))
+            ctx.RecordEmissiveLightSample(hitSurface.Emissive, currentRab, ptRandContext.initialRandomSamplerState);
+
+        if (ctx.ShouldSampleNee())
+        {
+            RAB_RecordDirectionalNee(ctx, rab, hitMaterial, hitBsdf, ptRandContext);
+            RAB_RecordPointNee(ctx, rab, hitMaterial, hitInstance, hitBsdf, ptRandContext);
+        }
+
         ctx.IncreaseBounceDepth();
     }
 }

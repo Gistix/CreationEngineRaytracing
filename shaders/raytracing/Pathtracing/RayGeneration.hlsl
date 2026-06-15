@@ -694,6 +694,24 @@ void Main()
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
     }
 #   endif
+
+#   if defined(RESTIR_PT)
+    // Stable-planes FILL mode replaces the primary hit with the selected stable
+    // plane surface. ReSTIR PT still needs that current shading surface as its
+    // path-tracing seed; writing only after the first bounce leaves many pixels
+    // empty when the sampled bounce misses.
+    Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
+    PTSurfaceDataBuffer[ptSurfBufIdx] = PSD_Pack(
+        sourceSurface.Position, sourceSurface.Normal, sourceSurface.Tangent, sourceSurface.Bitangent,
+        sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection,
+        sourceSurface.DiffuseAlbedo, sourceSurface.F0,
+        sourceSurface.Roughness, sourceSurface.Metallic,
+        sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
+        fillSceneLength,
+        sourceMesh.GeometryIdx,
+        sourcePayload.InstanceIndex(),
+        (fillState.planeIndex & 0xFFu) | ((fillState.stableBranchID & 0xFFFFu) << 8));
+#   endif
     
     // In FILL mode, emissive along delta paths was captured in BUILD → skip to avoid double-counting
     direct = 0;
@@ -1000,11 +1018,13 @@ void Main()
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += skyIrradiance * relTp;
                 }
+#   if !defined(RESTIR_PT)
                 else if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(skyIrradiance * throughput) : 0;
                     fillPathL += float4(skyIrradiance * throughput, specAvg);
                 }
+#   endif
 #else
                 sampleRadiance += skyIrradiance * throughput;
 #endif                
@@ -1022,11 +1042,13 @@ void Main()
             for (uint effectBouncePass = 0; effectBouncePass < 16 && material.ShaderType == ShaderType::Effect; effectBouncePass++)
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if !defined(RESTIR_PT)
                 if (!giSecStarted && !fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(surface.Emissive * throughput) : 0;
                     fillPathL += float4(surface.Emissive * throughput, specAvg);
                 }
+#   endif
                 // Effect emissive after giSecStarted is captured via the main giSecRadiance accumulation
 #else
                 sampleRadiance += surface.Emissive * throughput;
@@ -1068,11 +1090,13 @@ void Main()
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += skyIrradiance * relTp;
                 }
+#   if !defined(RESTIR_PT)
                 else if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(skyIrradiance * throughput) : 0;
                     fillPathL += float4(skyIrradiance * throughput, specAvg);
                 }
+#   endif
 #else
                 sampleRadiance += skyIrradiance * throughput;
 #endif
@@ -1107,28 +1131,6 @@ void Main()
                 giSecStarted = true;
                 giSecThroughput = throughput;
                 giSecPdf = bsdfSample.pdf;
-            }
-#   endif
-#endif
-
-            // ReSTIR PT: Write packed surface data for the primary scattering surface (FILL mode)
-            // Unlike GI, PT accepts ALL material types (hair, transmission, etc.) for reconnection
-#if defined(RESTIR_PT)
-#   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-            if (Raytracing.EnableReSTIRPT && j == 0 && !arrivedViaDelta)
-            {
-                Mesh ptMesh = GetMesh(payload, instance);
-                PTSurfaceDataBuffer[ptSurfBufIdx] = PSD_Pack(
-                    surface.Position, surface.Normal,
-                    surface.Tangent, surface.Bitangent,
-                    surface.FaceNormal, brdfContext.ViewDirection,
-                    surface.DiffuseAlbedo, surface.F0,
-                    surface.Roughness, surface.Metallic,
-                    material.Feature, surface.SpecTrans > 0.0f,
-                    fillSceneLength,
-                    ptMesh.GeometryIdx,
-                    payload.InstanceIndex(),
-                    (fillState.planeIndex & 0xFFu) | ((fillState.stableBranchID & 0xFFFFu) << 8));
             }
 #   endif
 #endif
@@ -1170,11 +1172,13 @@ void Main()
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += sharcRadiance * relTp;
                 }
+#   if !defined(RESTIR_PT)
                 else if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(sharcRadiance * throughput) : 0;
                     fillPathL += float4(sharcRadiance * throughput, specAvg);
                 }
+#   endif
 #else
                 sampleRadiance += sharcRadiance * throughput;
 #endif
@@ -1231,6 +1235,7 @@ void Main()
                 float3 relTp = throughput / max(giSecThroughput, 1e-10);
                 giSecRadiance += (directRadiance + surface.Emissive) * relTp;
             }
+#   if !defined(RESTIR_PT)
             else
             {
                 // NEE/direct radiance: always accumulated (not captured in BUILD)
@@ -1246,6 +1251,7 @@ void Main()
                     fillPathL += float4(surface.Emissive * throughput, specAvg);
                 }
             }
+#   endif
 #elif defined(SHARC) && SHARC_UPDATE
             sampleRadiance += directRadiance * throughput;
             if (!SharcUpdateHit(sharcParameters, sharcState, sharcHitData, directRadiance, Random(randomSeed)))
@@ -1294,7 +1300,8 @@ void Main()
     radiance /= MAX_SAMPLES;        
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-    // FILL mode output: combine stable radiance (noise-free) with all planes' noisy radiance
+    // FILL mode output: combine stable radiance with the committed fill radiance.
+    // With ReSTIR PT, later-bounce indirect fill radiance is gated above.
     {
         float3 totalRadiance = spCtx.GetAllRadiance(idx, true);
         Output[idx] = float4(LLTrueLinearToGamma(totalRadiance), 1.0f);
@@ -1329,7 +1336,13 @@ void Main()
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;    
 #else    
+#   if defined(RESTIR_PT)
+    // ReSTIR PT owns indirect lighting. Keep the main pass to direct lighting so
+    // the final ReSTIR PT pass replaces the noisy path-traced indirect estimator.
+    Output[idx] = float4(LLTrueLinearToGamma(direct), 1.0f);
+#   else
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
+#   endif
 
 #   if defined(DLSS_RR)
     SpecularHitDistance[idx] = specHitDist;     

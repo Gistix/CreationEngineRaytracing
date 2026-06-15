@@ -23,7 +23,7 @@
 #include "Rtxdi/Utils/SampledLightData.hlsli"
 
 // RTXDI types
-#define RAB_DISTANT_LIGHT_DISTANCE kEnvironmentMapSceneDistance
+#define RAB_DISTANT_LIGHT_DISTANCE 50000.0f
 #include <Rtxdi/PT/Reservoir.hlsli>
 #include <Rtxdi/Utils/RandomSamplerState.hlsli>
 
@@ -43,7 +43,7 @@ struct RAB_Surface
 
     float4 Eval(float3 wo)
     {
-        Material material = Materials[NonUniformResourceIndex(materialIndex)];
+        Material material = GetMaterial(materialIndex);
         bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
         StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
         return bsdf.Eval(brdfContext, material, surface, wo);
@@ -309,25 +309,59 @@ bool RAB_GetConservativeVisibility(RAB_Surface rab, float3 samplePosition)
         return true;
 
     bool behindSurface = dot(toSample, rab.surface.FaceNormal) < 0;
+#if USE_SIA_INTERPOLATION
+    float3 origin = OffsetRaySIA(rab.surface.Position, rab.surface.FaceNormal, rab.surface.SIAOffset, behindSurface);
+#else
     float3 origin = OffsetRayAlt(rab.surface.Position, rab.surface.FaceNormal, behindSurface);
-
+#endif
     float3 offsetToSample = samplePosition - origin;
     float offsetDist = length(offsetToSample);
 
     if (offsetDist < 1e-4)
         return true;
 
+    // Keep ReSTIR PT visibility deterministic across frames. Stochastic alpha
+    // visibility in a reused reservoir shows up as temporal flicker/patterns.
+    uint randomSeed = PCGHash(
+        asuint(rab.surface.Position.x) ^
+        asuint(rab.surface.Position.y) ^
+        asuint(rab.surface.Position.z) ^
+        asuint(samplePosition.x) ^
+        asuint(samplePosition.y) ^
+        asuint(samplePosition.z));
     RayDesc ray;
-    ray.Origin    = origin;
+    ray.Origin = origin;
     ray.Direction = offsetToSample / offsetDist;
-    ray.TMin      = 0.0;
-    ray.TMax      = max(0.0, offsetDist - 0.001);
+    ray.TMin = 0.0f;
+    ray.TMax = max(0.0f, offsetDist - 0.001f);
 
-    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> rayQuery;
-    rayQuery.TraceRayInline(SceneBVH, RAY_FLAG_CULL_NON_OPAQUE, 0xFF, ray);
-    rayQuery.Proceed();
+    float3 transmission = 1.0f;
+    bool visible = true;
 
-    return rayQuery.CommittedStatus() == COMMITTED_NOTHING;
+    RayQuery<RAY_FLAGS> rayQuery;
+    rayQuery.TraceRayInline(SceneBVH, RAY_FLAG_NONE, INSTANCE_MASK, ray);
+
+    while (rayQuery.Proceed())
+    {
+        if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
+        {
+            if (ConsiderTransparentMaterialShadow(
+                rayQuery.CandidateInstanceIndex(),
+                rayQuery.CandidateGeometryIndex(),
+                rayQuery.CandidatePrimitiveIndex(),
+                rayQuery.CandidateTriangleBarycentrics(),
+                randomSeed,
+                ray.Direction,
+                rayQuery.CandidateTriangleRayT(),
+                transmission))
+            {
+                rayQuery.CommitNonOpaqueTriangleHit();
+            }
+        }
+    }
+
+    visible = rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+    return visible && any(transmission > 0.0f);
 }
 
 bool RAB_GetTemporalConservativeVisibility(RAB_Surface surface, RAB_Surface temporalSurface, float3 samplePosition)
@@ -511,6 +545,11 @@ int RAB_TranslateLightIndex(uint lightIndex, bool prevToCurrent) { return (int)l
 
 float3 RAB_GetMISWeightForNEE(uint lightIndex, RAB_LightSample lightSample, float3 lightDir, float lightPdf, float scatterPdf)
 {
+    // Directional and point lights are analytic in this bridge; BSDF sampling
+    // cannot hit them as emissive geometry, so NEE keeps full weight.
+    if (RAB_IsAnalyticLightSample(lightSample))
+        return float3(1.0, 1.0, 1.0);
+
     // Balance heuristic between NEE and BSDF sampling
     float misWeight = (lightPdf > 0) ? lightPdf / (lightPdf + scatterPdf) : 0.0;
     return float3(misWeight, misWeight, misWeight);

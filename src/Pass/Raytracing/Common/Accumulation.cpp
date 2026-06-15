@@ -109,6 +109,7 @@ namespace Pass::Common
 		hashCombine(&settings.WaterSettings, sizeof(settings.WaterSettings));
 		hashCombine(&settings.ExperimentalSettings, sizeof(settings.ExperimentalSettings));
 		hashCombine(&settings.ReSTIRGI, sizeof(settings.ReSTIRGI));
+		hashCombine(&settings.ReSTIRPT, sizeof(settings.ReSTIRPT));
 
 		if (hash != m_PrevSettingsHash) {
 			m_PrevSettingsHash = hash;
