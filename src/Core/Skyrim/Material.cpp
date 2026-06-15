@@ -11,11 +11,7 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 	m_MaterialData = {};
 	m_PrevMaterialData = {};
 
-	auto& grayTexture = renderer->GetGrayTextureIndex();
-	auto& normalTexture = renderer->GetNormalTextureIndex();
 	auto& blackTexture = renderer->GetBlackTextureIndex();
-	auto& whiteTexture = renderer->GetWhiteTextureIndex();
-	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
 
 	colors.fill(float4(1.0f, 1.0f, 1.0f, 1.0f));
 	colors[Constants::Material::EMISSIVE_COLOR] = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -119,99 +115,10 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 					SetupLandMaterial(landMaterial);
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape)) {
-					shaderType = ShaderType::TruePBR;
-
-					const auto* lightingPBRMaterialLand = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
-
-					for (uint i = 0; i < std::min(lightingPBRMaterialLand->numLandscapeTextures, Material::MAX_LAND_TEXTURES); i++) {
-						textures[i] = GetTexture(lightingPBRMaterialLand->landscapeBaseColorTextures[i], grayTexture);
-						textures[Material::MAX_LAND_TEXTURES + i] = GetTexture(lightingPBRMaterialLand->landscapeNormalTextures[i], normalTexture);
-						textures[Material::MAX_LAND_TEXTURES * 2 + i] = GetTexture(lightingPBRMaterialLand->landscapeRMAOSTextures[i], rmaosTexture);
-					}
-
-					textures[Material::MAX_LAND_TEXTURES * 3] = GetTexture(lightingPBRMaterialLand->terrainOverlayTexture, blackTexture);
-					textures[Material::MAX_LAND_TEXTURES * 3 + 1] = GetTexture(lightingPBRMaterialLand->terrainNoiseTexture, blackTexture);
-
-					pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(lightingPBRMaterialLand);
-
-					vectors[0] = Util::Math::Float4(lightingPBRMaterialLand->landBlendParams);
-
-					vectors[1] = {
-						lightingPBRMaterialLand->specularLevels[0],
-						lightingPBRMaterialLand->specularLevels[1],
-						lightingPBRMaterialLand->specularLevels[2],
-						lightingPBRMaterialLand->specularLevels[3]
-					};
-
-					vectors[2] = {
-						lightingPBRMaterialLand->specularLevels[4],
-						lightingPBRMaterialLand->specularLevels[5],
-						lightingPBRMaterialLand->roughnessScales[0],
-						lightingPBRMaterialLand->roughnessScales[1]
-					};
-
-					vectors[3] = {
-						lightingPBRMaterialLand->roughnessScales[2],
-						lightingPBRMaterialLand->roughnessScales[3],
-						lightingPBRMaterialLand->roughnessScales[4],
-						lightingPBRMaterialLand->roughnessScales[5]
-					};
-
-					// LODTexParams - TerrainTexOffset in xy, LodBlendingEnabled in z
-					/*vectors[4] = {
-						lightingPBRMaterialLand->terrainTexOffsetX,
-						lightingPBRMaterialLand->terrainTexOffsetY,
-						0,
-						lightingPBRMaterialLand->terrainTexFade
-					};*/
+					SetupPBRLandscapeMaterial(static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial));
 				}
 				else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR)) {
-					// TrueBR - Tried to check for 'lightingShaderProp->flags.any(EShaderPropertyFlag::kMenuScreen)'
-					// but it did not work at all, skyrim_cast is not safe and will cast even if not PBR material (no RTTI?)
-
-					shaderType = ShaderType::TruePBR;
-
-					const auto* lightingPBRMaterial = static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
-
-					textures[0] = GetTexture(lightingPBRMaterial->diffuseTexture, grayTexture);
-					textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingPBRMaterial->normalTexture, normalTexture);
-					textures[2] = GetTexture(lightingPBRMaterial->emissiveTexture, blackTexture);
-					textures[3] = GetTexture(lightingPBRMaterial->rmaosTexture, rmaosTexture);
-
-					scalars[0] = lightingPBRMaterial->GetRoughnessScale();
-					scalars[1] = lightingPBRMaterial->GetSpecularLevel();
-
-					pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(lightingPBRMaterial);
-
-					if (pbrFlags & PBRShaderFlags::Subsurface) {
-						textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
-
-						auto& sssColor = lightingPBRMaterial->GetSubsurfaceColor();
-						colors[2] = { sssColor.red, sssColor.green, sssColor.blue, 1.0f };
-						scalars[2] = lightingPBRMaterial->GetSubsurfaceOpacity();
-					}
-
-					if (pbrFlags & PBRShaderFlags::TwoLayer) {
-						textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, whiteTexture);
-						textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
-
-						auto& coatColor = lightingPBRMaterial->GetSubsurfaceColor();
-						float coatStrength = lightingPBRMaterial->GetSubsurfaceOpacity();
-						colors[2] = { coatColor.red, coatColor.green, coatColor.blue, coatStrength };
-						scalars[2] = lightingPBRMaterial->coatRoughness;
-					}
-
-					if (pbrFlags & PBRShaderFlags::Fuzz) {
-						textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
-
-						colors[2] = { lightingPBRMaterial->fuzzColor.red, lightingPBRMaterial->fuzzColor.green, lightingPBRMaterial->fuzzColor.blue, lightingPBRMaterial->fuzzWeight };
-					}
-
-					if (pbrFlags & PBRShaderFlags::Glint) {
-						// Same slot as kProjectedUV 'direction' parameter
-						const auto& glint = lightingPBRMaterial->GetGlintParameters();
-						vectors[3] = { glint.screenSpaceScale, glint.logMicrofacetDensity, glint.microfacetRoughness, glint.densityRandomization };
-					}
+					SetupPBRMaterial(static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial));
 				}
 				else if (RE::BSLightingShaderMaterialBase* lightingBaseMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial)) {
 					// Vanilla Materials
@@ -227,19 +134,8 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 		else if (auto effectShaderProp = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty)) {
 			shaderType = ShaderType::Effect;
 
-			if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->material)) {
-				colors[Constants::Material::EMISSIVE_COLOR] = {
-					effectMaterial->baseColor.red,
-					effectMaterial->baseColor.green,
-					effectMaterial->baseColor.blue,
-					effectMaterial->baseColor.alpha
-				};
-
-				scalars[0] = effectMaterial->baseColorScale;
-
-				textures[0] = GetTexture(effectMaterial->sourceTexture, blackTexture);
-				textures[2] = GetTexture(effectMaterial->greyscaleTexture, blackTexture);
-			}
+			if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->material))
+				SetupEffectMaterial(effectMaterial);
 		}
 		else if (auto waterShaderProp = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty)) {
 			SetupWaterProperty(waterShaderProp);
@@ -356,6 +252,120 @@ void Material::SetupLandMaterial(const RE::BSLightingShaderMaterialLandscape* li
 		lightingBaseMaterialLand->terrainTexFade,
 		0
 	};*/
+}
+
+void Material::SetupPBRLandscapeMaterial(const BSLightingShaderMaterialPBRLandscape* lightingPBRMaterialLand)
+{
+	auto renderer = Renderer::GetSingleton();
+	auto& grayTexture = renderer->GetGrayTextureIndex();
+	auto& normalTexture = renderer->GetNormalTextureIndex();
+	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
+
+	shaderType = ShaderType::TruePBR;
+
+	for (uint i = 0; i < std::min(lightingPBRMaterialLand->numLandscapeTextures, Material::MAX_LAND_TEXTURES); i++) {
+		textures[i] = GetTexture(lightingPBRMaterialLand->landscapeBaseColorTextures[i], grayTexture);
+		textures[Material::MAX_LAND_TEXTURES + i] = GetTexture(lightingPBRMaterialLand->landscapeNormalTextures[i], normalTexture);
+		textures[Material::MAX_LAND_TEXTURES * 2 + i] = GetTexture(lightingPBRMaterialLand->landscapeRMAOSTextures[i], rmaosTexture);
+	}
+
+	textures[Material::MAX_LAND_TEXTURES * 3] = GetTexture(lightingPBRMaterialLand->terrainOverlayTexture, blackTexture);
+	textures[Material::MAX_LAND_TEXTURES * 3 + 1] = GetTexture(lightingPBRMaterialLand->terrainNoiseTexture, blackTexture);
+
+	pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(lightingPBRMaterialLand);
+
+	vectors[0] = Util::Math::Float4(lightingPBRMaterialLand->landBlendParams);
+
+	vectors[1] = {
+		lightingPBRMaterialLand->specularLevels[0],
+		lightingPBRMaterialLand->specularLevels[1],
+		lightingPBRMaterialLand->specularLevels[2],
+		lightingPBRMaterialLand->specularLevels[3]
+	};
+
+	vectors[2] = {
+		lightingPBRMaterialLand->specularLevels[4],
+		lightingPBRMaterialLand->specularLevels[5],
+		lightingPBRMaterialLand->roughnessScales[0],
+		lightingPBRMaterialLand->roughnessScales[1]
+	};
+
+	vectors[3] = {
+		lightingPBRMaterialLand->roughnessScales[2],
+		lightingPBRMaterialLand->roughnessScales[3],
+		lightingPBRMaterialLand->roughnessScales[4],
+		lightingPBRMaterialLand->roughnessScales[5]
+	};
+}
+
+void Material::SetupPBRMaterial(const BSLightingShaderMaterialPBR* lightingPBRMaterial)
+{
+	auto renderer = Renderer::GetSingleton();
+	auto& grayTexture = renderer->GetGrayTextureIndex();
+	auto& normalTexture = renderer->GetNormalTextureIndex();
+	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& whiteTexture = renderer->GetWhiteTextureIndex();
+	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
+
+	shaderType = ShaderType::TruePBR;
+
+	textures[0] = GetTexture(lightingPBRMaterial->diffuseTexture, grayTexture);
+	textures[Constants::Material::NORMALMAP_TEXTURE] = GetTexture(lightingPBRMaterial->normalTexture, normalTexture);
+	textures[2] = GetTexture(lightingPBRMaterial->emissiveTexture, blackTexture);
+	textures[3] = GetTexture(lightingPBRMaterial->rmaosTexture, rmaosTexture);
+
+	scalars[0] = lightingPBRMaterial->GetRoughnessScale();
+	scalars[1] = lightingPBRMaterial->GetSpecularLevel();
+
+	pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(lightingPBRMaterial);
+
+	if (pbrFlags & PBRShaderFlags::Subsurface) {
+		textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, blackTexture);
+
+		auto& sssColor = lightingPBRMaterial->GetSubsurfaceColor();
+		colors[2] = { sssColor.red, sssColor.green, sssColor.blue, 1.0f };
+		scalars[2] = lightingPBRMaterial->GetSubsurfaceOpacity();
+	}
+
+	if (pbrFlags & PBRShaderFlags::TwoLayer) {
+		textures[6] = GetTexture(lightingPBRMaterial->featuresTexture0, whiteTexture);
+		textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
+
+		auto& coatColor = lightingPBRMaterial->GetSubsurfaceColor();
+		float coatStrength = lightingPBRMaterial->GetSubsurfaceOpacity();
+		colors[2] = { coatColor.red, coatColor.green, coatColor.blue, coatStrength };
+		scalars[2] = lightingPBRMaterial->coatRoughness;
+	}
+
+	if (pbrFlags & PBRShaderFlags::Fuzz) {
+		textures[7] = GetTexture(lightingPBRMaterial->featuresTexture1, whiteTexture);
+
+		colors[2] = { lightingPBRMaterial->fuzzColor.red, lightingPBRMaterial->fuzzColor.green, lightingPBRMaterial->fuzzColor.blue, lightingPBRMaterial->fuzzWeight };
+	}
+
+	if (pbrFlags & PBRShaderFlags::Glint) {
+		const auto& glint = lightingPBRMaterial->GetGlintParameters();
+		vectors[3] = { glint.screenSpaceScale, glint.logMicrofacetDensity, glint.microfacetRoughness, glint.densityRandomization };
+	}
+}
+
+void Material::SetupEffectMaterial(const RE::BSEffectShaderMaterial* effectMaterial)
+{
+	auto renderer = Renderer::GetSingleton();
+	auto& blackTexture = renderer->GetBlackTextureIndex();
+
+	colors[Constants::Material::EMISSIVE_COLOR] = {
+		effectMaterial->baseColor.red,
+		effectMaterial->baseColor.green,
+		effectMaterial->baseColor.blue,
+		effectMaterial->baseColor.alpha
+	};
+
+	scalars[0] = effectMaterial->baseColorScale;
+
+	textures[0] = GetTexture(effectMaterial->sourceTexture, blackTexture);
+	textures[2] = GetTexture(effectMaterial->greyscaleTexture, blackTexture);
 }
 
 void Material::SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID)
@@ -655,33 +665,49 @@ void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descripto
 
 void Material::Update(RE::BSShaderProperty* shaderProperty)
 {
-	if (shaderType == ShaderType::Water)
+	if (shaderType == ShaderType::Water) {
 		UpdateWaterMaterial(shaderProperty);
-	else {
-		const auto currentShaderFlags = shaderProperty->flags.get();
+		return;
+	}
 
-		if (shaderFlags.get() != currentShaderFlags)
-		{
-			auto addedFlags = currentShaderFlags & ~shaderFlags.get();
-			auto removedFlags = shaderFlags.get() & ~currentShaderFlags;
+	const auto currentShaderFlags = shaderProperty->flags.get();
 
-			logger::debug("Material::Update - {} Shader flags changed - Added: {}, Removed: {}",
-				magic_enum::enum_name(shaderType),
-				Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(addedFlags)),
-				Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(removedFlags)));
+	if (shaderFlags.get() == currentShaderFlags)
+		return;
 
-			shaderFlags = currentShaderFlags;
+	auto addedFlags = currentShaderFlags & ~shaderFlags.get();
+	auto removedFlags = shaderFlags.get() & ~currentShaderFlags;
 
-			if (shaderType == ShaderType::Lighting || shaderType == ShaderType::TruePBR) {
-				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
+	logger::debug("Material::Update - {} Shader flags changed - Added: {}, Removed: {}",
+		magic_enum::enum_name(shaderType),
+		Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(addedFlags)),
+		Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(removedFlags)));
 
-				if (shaderType == ShaderType::Lighting) {
-					if (auto lightingMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(lightingShaderProp->material))
-						SetupLightingMaterial(lightingMaterial, 0);
-				}
+	shaderFlags = currentShaderFlags;
 
-				SetupProjectedUV(lightingShaderProp);
-			} 
+	if (shaderType == ShaderType::Lighting || shaderType == ShaderType::TruePBR) {
+		auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
+
+		if (shaderType == ShaderType::Lighting) {
+			if (feature == Feature::kMultiTexLand || feature == Feature::kMultiTexLandLODBlend) {
+				if (auto landMaterial = skyrim_cast<RE::BSLightingShaderMaterialLandscape*>(lightingShaderProp->material))
+					SetupLandMaterial(landMaterial);
+			} else if (auto lightingMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(lightingShaderProp->material)) {
+				SetupLightingMaterial(lightingMaterial, 0);
+			}
+		} else if (shaderType == ShaderType::TruePBR) {
+			if (typeid(*lightingShaderProp->material) == typeid(BSLightingShaderMaterialPBRLandscape))
+				SetupPBRLandscapeMaterial(static_cast<BSLightingShaderMaterialPBRLandscape*>(lightingShaderProp->material));
+			else if (auto pbrMaterial = skyrim_cast<BSLightingShaderMaterialPBR*>(lightingShaderProp->material))
+				SetupPBRMaterial(pbrMaterial);
+		}
+
+		SetupProjectedUV(lightingShaderProp);
+	} else if (shaderType == ShaderType::Effect) {
+		auto effectShaderProp = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty);
+		if (effectShaderProp) {
+			if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->material))
+				SetupEffectMaterial(effectMaterial);
 		}
 	}
 }

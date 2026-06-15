@@ -54,6 +54,9 @@ struct Material : MaterialBase
 
 	void SetupLandMaterial(const RE::BSLightingShaderMaterialLandscape* landMaterial);
 	void SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID);
+	void SetupPBRLandscapeMaterial(const BSLightingShaderMaterialPBRLandscape* material);
+	void SetupPBRMaterial(const BSLightingShaderMaterialPBR* material);
+	void SetupEffectMaterial(const RE::BSEffectShaderMaterial* material);
 
 	void SetupWaterProperty(RE::BSWaterShaderProperty* waterShaderProp);
 	void SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial);
