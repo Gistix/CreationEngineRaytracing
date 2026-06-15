@@ -5,6 +5,7 @@
 #include "Constants.h"
 #include "DirtyFlags.h"
 #include "Mesh.h"
+#include "Types/EnumFlags.h"
 
 class SceneGraph;
 
@@ -114,14 +115,14 @@ struct Model
 		return m_MeshTypes;
 	}
 
-	uint32_t GetShaderTypes() const
+	auto GetShaderTypes() const
 	{
 		return shaderTypes;
 	}
 
-	auto GetFeatures() const
+	auto GetAlphaFlags() const
 	{
-		return features;
+		return m_AlphaFlags;
 	}
 
 	auto GetShaderFlags() const
@@ -151,9 +152,9 @@ struct Model
 private:
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	CESEAdapter::REX::EnumSet<Mesh::Flags> meshFlags = Mesh::Flags::None;
-	CESEAdapter::REX::EnumSet<Mesh::Type> m_MeshTypes = Mesh::Type::Default;
-	uint32_t shaderTypes = 0;
-	int features = static_cast<int>(RE::BSShaderMaterial::Feature::kNone);
+	EnumFlags<Mesh::Type> m_MeshTypes = 0;
+	CESEAdapter::REX::EnumSet<Material::AlphaFlags> m_AlphaFlags = Material::AlphaFlags::None;
+	EnumFlags<Material::ShaderType> shaderTypes = 0;
 	CESEAdapter::REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	eastl::atomic<int> refCount{ 0 };
 

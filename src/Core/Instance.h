@@ -8,6 +8,8 @@
 
 #include "DirtyFlags.h"
 
+#include "Types/InstanceMask.h"
+
 struct Instance
 {
 	enum State : uint8_t
@@ -61,8 +63,16 @@ struct Instance
 
 	nvrhi::rt::InstanceDesc GetInstanceDesc() const
 	{
+		auto instanceMask = InstanceMask::None;
+
+		if (model->GetShaderTypes().any(Material::ShaderType::Water))
+			instanceMask |= InstanceMask::Water;
+
+		if (instanceMask == InstanceMask::None)
+			instanceMask = InstanceMask::Default;
+
 		auto instanceDesc = nvrhi::rt::InstanceDesc()
-			.setInstanceMask(1)
+			.setInstanceMask(instanceMask)
 			.setInstanceID(m_TLASInstanceID)
 			.setTransform(m_Transform.f)
 			.setBLAS(model->m_BLAS);
