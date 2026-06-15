@@ -46,6 +46,7 @@ namespace Pass
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
 		m_RaytracingData->WaterAbsorptionScale = settings.WaterSettings.AbsorptionScale;
 		m_RaytracingData->EnableReSTIRGI = settings.ReSTIRGI.Enabled ? 1 : 0;
+		m_RaytracingData->EnableReSTIRPT = settings.ReSTIRPT.Enabled ? 1 : 0;
 
 		m_RaytracingData->HitDistSettings = float4(
 			3.0f * Util::Units::M_TO_GAME_UNIT,  // (units > 0) - constant value

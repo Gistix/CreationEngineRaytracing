@@ -322,9 +322,9 @@ void Renderer::InitReSTIRGI()
 		m_ReSTIRGIResources->needsNeighborOffsetUpload = true;
 	}
 
-	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 52 bytes)
+	// Packed primary surface data: ping-pong StructuredBuffer (2 planes x width x height x 64 bytes)
 	{
-		constexpr uint surfaceDataStride = 52; // sizeof(PackedSurfaceData)
+		constexpr uint surfaceDataStride = 64; // sizeof(PackedSurfaceData)
 		nvrhi::BufferDesc desc;
 		desc.byteSize = 2u * width * height * surfaceDataStride;
 		desc.structStride = surfaceDataStride;
@@ -414,6 +414,91 @@ void Renderer::InitReSTIRGI()
 	}
 
 	logger::info("ReSTIR GI resources created ({}x{})", width, height);
+}
+
+void Renderer::InitReSTIRPT()
+{
+	m_ReSTIRPTResources = eastl::make_unique<ReSTIRPTResources>();
+
+	auto device = GetDevice();
+	const uint width = m_RenderSize.x;
+	const uint height = m_RenderSize.y;
+
+	// Calculate reservoir buffer sizing using RTXDI block-linear layout
+	constexpr uint reservoirStride = 64; // sizeof(RTXDI_PackedPTReservoir) = 4 x uint4 = 64 bytes
+	constexpr uint blockSize = 16; // RTXDI_RESERVOIR_BLOCK_SIZE
+	const uint reservoirBlockRowPitch = (width + blockSize - 1) / blockSize;
+	const uint reservoirArrayPitch = reservoirBlockRowPitch * ((height + blockSize - 1) / blockSize) * blockSize * blockSize;
+	constexpr uint numArrays = 2; // Double-buffered for temporal
+
+	{
+		nvrhi::BufferDesc desc;
+		desc.byteSize = reservoirArrayPitch * numArrays * reservoirStride;
+		desc.structStride = reservoirStride;
+		desc.canHaveUAVs = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR PT Reservoir Buffer";
+		m_ReSTIRPTResources->reservoirBuffer = device->createBuffer(desc);
+	}
+
+	// Neighbor offset buffer: 8192 pairs of int8 offsets
+	constexpr uint neighborOffsetCount = 8192;
+	{
+		m_ReSTIRPTResources->neighborOffsetData.resize(neighborOffsetCount * 2);
+		rtxdi::FillNeighborOffsetBuffer(m_ReSTIRPTResources->neighborOffsetData.data(), neighborOffsetCount);
+
+		nvrhi::BufferDesc desc;
+		desc.byteSize = neighborOffsetCount * 2;
+		desc.format = nvrhi::Format::RG8_SNORM;
+		desc.canHaveTypedViews = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::ShaderResource;
+		desc.debugName = "ReSTIR PT Neighbor Offsets";
+		m_ReSTIRPTResources->neighborOffsetBuffer = device->createBuffer(desc);
+		m_ReSTIRPTResources->needsNeighborOffsetUpload = true;
+	}
+
+	// Packed primary surface data: ping-pong StructuredBuffer (2 planes x width x height x 64 bytes)
+	{
+		constexpr uint surfaceDataStride = 64; // sizeof(PackedSurfaceData)
+		nvrhi::BufferDesc desc;
+		desc.byteSize = 2u * width * height * surfaceDataStride;
+		desc.structStride = surfaceDataStride;
+		desc.canHaveUAVs = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR PT Surface Data Buffer";
+		m_ReSTIRPTResources->surfaceDataBuffer = device->createBuffer(desc);
+	}
+
+	// Previous frame G-buffer: depth (R32_FLOAT)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::R32_FLOAT;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR PT Prev GBuffer Depth";
+		m_ReSTIRPTResources->prevGBufferDepth = device->createTexture(desc);
+	}
+
+	// Previous frame G-buffer: normals (RGBA16_SNORM)
+	{
+		nvrhi::TextureDesc desc;
+		desc.width = width;
+		desc.height = height;
+		desc.format = nvrhi::Format::RGBA16_SNORM;
+		desc.isUAV = true;
+		desc.keepInitialState = true;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		desc.debugName = "ReSTIR PT Prev GBuffer Normals";
+		m_ReSTIRPTResources->prevGBufferNormals = device->createTexture(desc);
+	}
+
+	logger::info("ReSTIR PT resources created ({}x{})", width, height);
 }
 
 void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, [[maybe_unused]] ID3D12Resource* gnmao)

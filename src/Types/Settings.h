@@ -227,6 +227,50 @@ struct ReSTIRGISettings
 	bool EnableFinalMIS = false;
 };
 
+enum struct ReSTIRPTResamplingMode : int32_t
+{
+	None = 0,
+	Temporal = 1,
+	Spatial = 2,
+	TemporalAndSpatial = 3,
+};
+
+struct ReSTIRPTSettings
+{
+	bool Enabled = false;
+	ReSTIRPTResamplingMode ResamplingMode = ReSTIRPTResamplingMode::TemporalAndSpatial;
+
+	// Initial sampling
+	int MaxBounceDepth = 3;
+	int MaxRcVertexLength = 5;
+
+	// Reconnection parameters
+	float RoughnessThreshold = 0.1f;
+	float DistanceThreshold = 0.0f;
+	float MinConnectionFootprint = 0.02f;
+	bool UseFootprintMode = true;  // true = footprint, false = fixed threshold
+
+	// Temporal resampling
+	float TemporalDepthThreshold = 0.1f;
+	float TemporalNormalThreshold = 0.6f;
+	int MaxHistoryLength = 8;
+	int MaxReservoirAge = 30;
+	bool EnablePermutationSampling = false;
+	bool EnableFallbackSampling = true;
+	bool EnableTemporalVisibility = true;
+
+	// Spatial resampling
+	int SpatialNumSamples = 1;
+	int SpatialDisocclusionBoostSamples = 8;
+	float SpatialSamplingRadius = 32.0f;
+	float SpatialDepthThreshold = 0.1f;
+	float SpatialNormalThreshold = 0.6f;
+
+	// Boiling filter
+	bool EnableBoilingFilter = true;
+	float BoilingFilterStrength = 0.2f;
+};
+
 enum struct TextureMode : uint32_t
 {
 	Share = 0,
@@ -259,5 +303,6 @@ struct Settings
 	WaterSettings WaterSettings;
 	ExperimentalSettings ExperimentalSettings;
 	ReSTIRGISettings ReSTIRGI;
+	ReSTIRPTSettings ReSTIRPT;
 	DebugSettings DebugSettings;
 };

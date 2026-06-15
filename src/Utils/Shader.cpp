@@ -62,6 +62,9 @@ namespace Util
 
 				if (settings.ReSTIRGI.Enabled)
 					defines.emplace_back(L"RESTIR_GI");
+
+				if (settings.ReSTIRPT.Enabled)
+					defines.emplace_back(L"RESTIR_PT");
 			}
 
 			return defines;
