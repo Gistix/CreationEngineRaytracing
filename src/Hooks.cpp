@@ -3,9 +3,131 @@
 #include "Util.h"
 
 #include "Core/D3D12Texture.h"
+#include "Core/TextureManager.h"
 
 namespace Hooks
 {
+	namespace
+	{
+		bool IsBlockCompressedFormat(DXGI_FORMAT format)
+		{
+			switch (format) {
+			case DXGI_FORMAT_BC1_TYPELESS:
+			case DXGI_FORMAT_BC1_UNORM:
+			case DXGI_FORMAT_BC1_UNORM_SRGB:
+			case DXGI_FORMAT_BC2_TYPELESS:
+			case DXGI_FORMAT_BC2_UNORM:
+			case DXGI_FORMAT_BC2_UNORM_SRGB:
+			case DXGI_FORMAT_BC3_TYPELESS:
+			case DXGI_FORMAT_BC3_UNORM:
+			case DXGI_FORMAT_BC3_UNORM_SRGB:
+			case DXGI_FORMAT_BC4_TYPELESS:
+			case DXGI_FORMAT_BC4_UNORM:
+			case DXGI_FORMAT_BC4_SNORM:
+			case DXGI_FORMAT_BC5_TYPELESS:
+			case DXGI_FORMAT_BC5_UNORM:
+			case DXGI_FORMAT_BC5_SNORM:
+			case DXGI_FORMAT_BC6H_TYPELESS:
+			case DXGI_FORMAT_BC6H_UF16:
+			case DXGI_FORMAT_BC6H_SF16:
+			case DXGI_FORMAT_BC7_TYPELESS:
+			case DXGI_FORMAT_BC7_UNORM:
+			case DXGI_FORMAT_BC7_UNORM_SRGB:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		bool IsAlphaCapableFormat(DXGI_FORMAT format)
+		{
+			switch (format) {
+			case DXGI_FORMAT_BC2_TYPELESS:
+			case DXGI_FORMAT_BC2_UNORM:
+			case DXGI_FORMAT_BC2_UNORM_SRGB:
+			case DXGI_FORMAT_BC3_TYPELESS:
+			case DXGI_FORMAT_BC3_UNORM:
+			case DXGI_FORMAT_BC3_UNORM_SRGB:
+			case DXGI_FORMAT_BC7_TYPELESS:
+			case DXGI_FORMAT_BC7_UNORM:
+			case DXGI_FORMAT_BC7_UNORM_SRGB:
+			case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+			case DXGI_FORMAT_R8G8B8A8_UNORM:
+			case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+			case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+			case DXGI_FORMAT_B8G8R8A8_UNORM:
+			case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		bool IsCriticalStreamingFormat(DXGI_FORMAT format)
+		{
+			switch (format) {
+			case DXGI_FORMAT_BC4_TYPELESS:
+			case DXGI_FORMAT_BC4_UNORM:
+			case DXGI_FORMAT_BC4_SNORM:
+			case DXGI_FORMAT_BC5_TYPELESS:
+			case DXGI_FORMAT_BC5_UNORM:
+			case DXGI_FORMAT_BC5_SNORM:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		uint32_t GetMipExtent(uint32_t extent, uint32_t mip)
+		{
+			return std::max(1u, extent >> mip);
+		}
+
+		uint32_t GetTextureStreamingMipBias(const ExperimentalSettings& settings, uint32_t width, uint32_t height, uint32_t mipLevels, DXGI_FORMAT format)
+		{
+			if (settings.TextureStreamingMode == TextureStreamingMode::Off || mipLevels <= 1)
+				return 0;
+
+			const uint32_t maxDimension = std::max(width, height);
+			if (maxDimension < 1024)
+				return 0;
+
+			if (IsCriticalStreamingFormat(format))
+				return 0;
+
+			uint32_t desiredBias = 0;
+			const bool alphaCapable = IsAlphaCapableFormat(format);
+			switch (settings.TextureStreamingMode) {
+			case TextureStreamingMode::Conservative:
+				if (alphaCapable)
+					return 0;
+
+				desiredBias = maxDimension >= 4096 ? 1 : 0;
+				break;
+			case TextureStreamingMode::Balanced:
+				if (alphaCapable)
+					return 0;
+
+				desiredBias = maxDimension >= 4096 ? 2 : 1;
+				break;
+			case TextureStreamingMode::Aggressive:
+				desiredBias = maxDimension >= 4096 ? 3 : (maxDimension >= 2048 ? 2 : 1);
+				if (alphaCapable)
+					desiredBias = std::min(desiredBias, 1u);
+				break;
+			default:
+				break;
+			}
+
+			desiredBias = std::min(desiredBias, settings.TextureMaxMipBias);
+
+			if (!IsBlockCompressedFormat(format))
+				desiredBias = std::min(desiredBias, 1u);
+
+			return std::min(desiredBias, mipLevels - 1);
+		}
+	}
+
 	struct TES_AttachModel
 	{
 		static void thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
@@ -179,6 +301,7 @@ namespace Hooks
 
 		bool exclusiveMode = expSettings.TextureMode == TextureMode::Exclusive;
 		bool cutOff = expSettings.TextureCutOff != 0;
+		uint32_t streamingMipBias = exclusiveMode ? GetTextureStreamingMipBias(expSettings, a_width, a_height, a_mipLevels, a_format) : 0;
 
 		if (cutOff) {
 			uint32_t cutOffSize = 1 << (expSettings.TextureCutOff + 7);
@@ -219,12 +342,16 @@ namespace Hooks
 			auto device = renderer->GetDevice();
 			auto nativeDevice = renderer->GetNativeD3D12Device();
 
+			const uint32_t residentMipLevels = a_mipLevels - streamingMipBias;
+			const uint32_t residentWidth = GetMipExtent(a_width, streamingMipBias);
+			const uint32_t residentHeight = GetMipExtent(a_height, streamingMipBias);
+
 			D3D12_RESOURCE_DESC nativeDesc = {};
 			nativeDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-			nativeDesc.Width = a_width;
-			nativeDesc.Height = a_height;
+			nativeDesc.Width = residentWidth;
+			nativeDesc.Height = residentHeight;
 			nativeDesc.DepthOrArraySize = 1;
-			nativeDesc.MipLevels = static_cast<UINT16>(a_mipLevels);
+			nativeDesc.MipLevels = static_cast<UINT16>(residentMipLevels);
 			nativeDesc.Format = a_format;
 			nativeDesc.SampleDesc.Count = 1;
 			nativeDesc.SampleDesc.Quality = 0;
@@ -259,14 +386,17 @@ namespace Hooks
 			}
 
 			auto& textureDesc = nvrhi::TextureDesc()
-				.setWidth(a_width)
-				.setHeight(a_height)
-				.setMipLevels(a_mipLevels)
+				.setWidth(residentWidth)
+				.setHeight(residentHeight)
+				.setMipLevels(residentMipLevels)
 				.setFormat(formatIt->second)
 				.setInitialState(nvrhi::ResourceStates::CopyDest)
-				.setDebugName("Shared Texture [?]");
+				.setDebugName(streamingMipBias > 0 ? "Streamed Texture [?]" : "Shared Texture [?]");
 
 			auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(texture->d3d12Texture), textureDesc);
+
+			if (streamingMipBias > 0)
+				TextureManager::RegisterResidentMipOffset(texture->d3d12Texture, streamingMipBias);
 
 			// Upload Texture Data
 			{
@@ -276,9 +406,9 @@ namespace Hooks
 
 				commandList->beginTrackingTextureState(textureHandle, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
 
-				for (uint32_t i = 0; i < a_mipLevels; i++)
+				for (uint32_t i = 0; i < residentMipLevels; i++)
 				{
-					const auto& mipData = a_data[i];
+					const auto& mipData = a_data[i + streamingMipBias];
 					commandList->writeTexture(textureHandle, 0, i, mipData.pSysMem, mipData.SysMemPitch, mipData.SysMemSlicePitch);
 				}
 
