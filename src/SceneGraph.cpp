@@ -418,6 +418,21 @@ void SceneGraph::ClearDirtyStates()
 	});
 }
 
+bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
+{
+	if (frameIndex != m_LastMaintenanceFrame) {
+		m_LastMaintenanceFrame = frameIndex;
+		m_MaintenanceRebuildsThisFrame = 0;
+	}
+
+	if (m_MaintenanceRebuildsThisFrame < Constants::MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME) {
+		m_MaintenanceRebuildsThisFrame++;
+		return true;
+	}
+
+	return false;
+}
+
 void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root)
 {
 	if (!root) {

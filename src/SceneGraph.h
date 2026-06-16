@@ -90,6 +90,9 @@ class SceneGraph
 	uint32_t m_NumMeshes = 0;
 	uint32_t m_NumInstances = 0;
 
+	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
+	uint32_t m_MaintenanceRebuildsThisFrame = 0;
+
 	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::NiAVObject* object, RE::TESForm* form);
 	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
@@ -138,6 +141,8 @@ public:
 	void UpdateLODVisibility();
 
 	void ClearDirtyStates();
+
+	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);
