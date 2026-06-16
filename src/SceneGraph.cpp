@@ -421,7 +421,7 @@ void SceneGraph::ClearDirtyStates()
 void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root)
 {
 	if (!root) {
-		logger::warn("[RT] CreateModel - NULL root object for model: {}", model ? model : "unknown");
+		logger::warn("SceneGraph::CreateModel - NULL root object for model: {}", model ? model : "unknown");
 		return;
 	}
 

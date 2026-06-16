@@ -156,11 +156,14 @@ namespace Pass
 		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", defines);
 		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", defines);
 		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", defines);
+		auto shadowMissLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowMiss.hlsl", defines);
+		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", defines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
 		pipelineDesc.shaders = {
 			{ "RayGen", rayGenLib->getShader("Main", nvrhi::ShaderType::RayGeneration), nullptr },
-			{ "Miss", missLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr }
+			{ "Miss", missLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr },
+			{ "ShadowMiss", shadowMissLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr }
 		};
 
 		pipelineDesc.hitGroups = {
@@ -169,22 +172,29 @@ namespace Pass
 				hitLib->getShader("Main", nvrhi::ShaderType::ClosestHit),
 				anyHitLib->getShader("Main", nvrhi::ShaderType::AnyHit),
 				nullptr, nullptr, false
+			},
+			{
+				"ShadowHitGroup",
+				nullptr,
+				shadowAnyHitLib->getShader("Main", nvrhi::ShaderType::AnyHit),
+				nullptr, nullptr, false
 			}
 		};
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-		pipelineDesc.globalBindingLayouts = {
-			m_BindingLayout,
-			sceneGraph->GetTriangleDescriptors()->m_Layout,
-			sceneGraph->GetVertexDescriptors()->m_Layout,
-			sceneGraph->GetMaterialDescriptors()->m_Layout,
-			sceneGraph->GetTextureDescriptors()->m_Layout,
-			sceneGraph->GetPrevPositionDescriptors()->m_Layout,
-			sceneGraph->GetCubemapDescriptors()->m_Layout
-		};
+
+		pipelineDesc.addBindingLayout(m_BindingLayout)
+		.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
+		.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+		.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+		.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+		.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
+		.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
 
 		pipelineDesc.maxPayloadSize = 20;
-		pipelineDesc.allowOpacityMicromaps = true;
+
+		// When enabled causes: D3D12 ERROR: ID3D12Device::CreateStateObject: Invalid D3D12_RAYTRACING_PIPELINE_CONFIG1.Flags: 0x1024 specified
+		pipelineDesc.allowOpacityMicromaps = false;
 
 #if defined(NVAPI)
 		pipelineDesc.hlslExtensionsUAV = 127;
@@ -195,7 +205,7 @@ namespace Pass
 			return;
 
 		auto shaderTableDesc = nvrhi::rt::ShaderTableDesc()
-			.enableCaching(3)
+			.enableCaching(5)
 			.setDebugName("Shader Table");
 
 		outShaderTable = outPipeline->createShaderTable(shaderTableDesc);
@@ -204,7 +214,9 @@ namespace Pass
 
 		outShaderTable->setRayGenerationShader("RayGen");
 		outShaderTable->addMissShader("Miss");
+		outShaderTable->addMissShader("ShadowMiss");
 		outShaderTable->addHitGroup("HitGroup");
+		outShaderTable->addHitGroup("ShadowHitGroup");
 	}
 
 	void PathTracing::CreateRayTracingPipeline()

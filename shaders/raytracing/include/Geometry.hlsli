@@ -232,8 +232,8 @@ Mesh GetMesh(in uint instanceIndex, in uint geometryIndex, out Instance instance
 
 Mesh GetMesh(in Payload payload, out Instance instance)
 {
-    instance = GetInstance(payload.InstanceIndex());
-    return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + payload.GeometryIndex())];
+    instance = GetInstance(payload.GetInstanceIndex());
+    return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + payload.GetGeometryIndex())];
 }
 
 Triangle GetTriangle(in uint meshIndex, in uint primitiveIdx)

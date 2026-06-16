@@ -6,10 +6,10 @@
 void Main(inout Payload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
     if (!ConsiderTransparentMaterial(
-                payload.InstanceIndex(),
-                payload.GeometryIndex(),
-                payload.primitiveIndex,   
-                payload.Barycentrics(),
+                InstanceIndex(),
+                GeometryIndex(),
+                PrimitiveIndex(),
+                attribs.barycentrics,
                 payload.randomSeed))
         IgnoreHit();
 }

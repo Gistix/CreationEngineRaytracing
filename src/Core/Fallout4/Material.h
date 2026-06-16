@@ -21,8 +21,7 @@ struct Material : MaterialBase
 	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 	using Feature = RE::BSShaderMaterial::Feature;
 
-	static constexpr uint MAX_LAND_TEXTURES = 5u;
-	static constexpr uint MAX_PBRLAND_TEXTURES = 6u;
+	static constexpr uint MAX_LAND_TEXTURES = 6u;
 
 	enum class AlphaFlags : uint8_t
 	{

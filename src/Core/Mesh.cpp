@@ -62,7 +62,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
 
 	if (vertexSize != vertexSize2)
-		logger::warn("[RT] Mesh::BuildMesh - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);
+		logger::warn("Mesh::BuildVertices - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);
 
 	bool hasPosition = vertexFlags & RE::BSGraphics::Vertex::VF_VERTEX;
 
@@ -760,6 +760,9 @@ Mesh::State Mesh::GetState(RE::NiAVObject* instanceRoot, Flags modelFlags) const
 	if (dynamic || skinned || subIndexed || water || dynamicModel || skinnedModel)
 		if (Util::Game::IsHidden(bsGeometryPtr.get(), instanceRoot))
 			state |= State::Hidden;
+
+	if (bsGeometryPtr->GetGeometryRuntimeData().shaderProperty->alpha <= std::numeric_limits<float>::epsilon())
+		state |= State::Hidden;
 
 	if (skinned && GetDismemberHidden())
 		state |= State::DismemberHidden;
