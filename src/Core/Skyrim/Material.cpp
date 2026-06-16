@@ -660,14 +660,6 @@ void Material::Update(RE::BSShaderProperty* shaderProperty)
 	if (shaderFlags.get() == currentShaderFlags)
 		return;
 
-	auto addedFlags = currentShaderFlags & ~shaderFlags.get();
-	auto removedFlags = shaderFlags.get() & ~currentShaderFlags;
-
-	logger::debug("Material::Update - {} Shader flags changed - Added: {}, Removed: {}",
-		magic_enum::enum_name(shaderType),
-		Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(addedFlags)),
-		Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(removedFlags)));
-
 	shaderFlags = currentShaderFlags;
 
 	if (shaderType == ShaderType::Lighting || shaderType == ShaderType::TruePBR) {
