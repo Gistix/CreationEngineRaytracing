@@ -5,18 +5,6 @@
 
 namespace Hooks
 {
-	struct Release3DRelatedData
-	{
-		static void thunk(RE::TESObjectREFR* oThis);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct Actor_Set3D
-	{
-		static void thunk(RE::Actor* oThis, RE::NiAVObject* a_object, bool a_queue3DTasks = true);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 #if defined(SKYRIM)
 	struct TESWaterSystem_AddWater
 	{
@@ -34,24 +22,6 @@ namespace Hooks
 	struct NiSourceTexture_Destructor
 	{
 		static void thunk(RE::NiSourceTexture* oThis);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct ShadowSceneNode_AttachObject
-	{
-		static void thunk(RE::ShadowSceneNode* oThis, RE::NiAVObject* a_object);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct ShadowSceneNode_DetachObject
-	{
-		static void thunk(RE::ShadowSceneNode* oThis, RE::NiAVObject* a_object, bool a3, bool a4);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct TESObjectCELL_AddRefr
-	{
-		static void thunk(RE::TESObjectCELL* a_cell, RE::TESObjectREFR* a_refr, RE::NiNode* a_node);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
@@ -73,24 +43,6 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
-
-	/*struct CreateTextureAndSRV
-	{
-		static HRESULT thunk(
-			ID3D11Device* a_device,
-			int a_textureType, 
-			uint32_t a_width, 
-			uint32_t a_height, 
-			__int64 a_pitchOrLinearSize, 
-			uint32_t a_mipCount, 
-			uint32_t a_sliceCount, 
-			uint8_t a_format,
-			bool a_isCubeMap,
-			__int64 a_pixelData,
-			RE::BSGraphics::Texture** a_outTexture);
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};*/
 
 	struct CreateRenderTarget
 	{
@@ -133,6 +85,4 @@ namespace Hooks
 #endif
 
 	void Install();
-	void InstallEarlyHooks();
-	void InstallD3D11Hooks(ID3D11Device* device);
 }

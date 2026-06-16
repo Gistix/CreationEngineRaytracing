@@ -29,7 +29,15 @@ namespace
 		{ "AEAC_LDD_Eye_Shadow", BlocklistMatch::Exact },
 		{ "FemaleEyesHuman_outer", BlocklistMatch::Contains },
 		{ "FemaleEyesHuman_shadows", BlocklistMatch::Contains },
-		{ "EyeShadow", BlocklistMatch::Contains }
+		{ "EyeShadow", BlocklistMatch::Contains },
+
+		// SMP Collision
+		{ "VirtualGround", BlocklistMatch::Contains },
+		{ "colHeadBDO", BlocklistMatch::Contains },
+		{ "colHFullBDO", BlocklistMatch::Contains },
+		{ "colHMidBDO", BlocklistMatch::Contains },
+		{ "colHMiniBDO", BlocklistMatch::Contains },
+		{ "colWigMiniBDO", BlocklistMatch::Contains }
 	};
 
 	char ToLower(char c)

@@ -18,21 +18,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	void Release3DRelatedData::thunk(RE::TESObjectREFR* refr)
-	{
-		Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(refr, true);
-
-		func(refr);
-	}
-
-	void Actor_Set3D::thunk(RE::Actor* a_actor, RE::NiAVObject* a_object, bool a_queue3DTasks)
-	{
-		if (!a_object)
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_actor, true);
-
-		func(a_actor, a_object, a_queue3DTasks);
-	}
-
 	struct TESObjectLAND_Attach3D
 	{
 		static RE::NiNode* GetCell3D(RE::TESObjectCELL* a_cell)
@@ -108,33 +93,6 @@ namespace Hooks
 #endif
 
 		func(oThis);
-	}
-
-	void ShadowSceneNode_AttachObject::thunk(RE::ShadowSceneNode* a_shadowSceneNode, RE::NiAVObject* a_object)
-	{
-		logger::info("ShadowSceneNode::AttachObject - 0x{:08X} {}", reinterpret_cast<uintptr_t>(a_object), a_object->name);
-
-		func(a_shadowSceneNode, a_object);
-	}
-
-	void ShadowSceneNode_DetachObject::thunk(RE::ShadowSceneNode* a_shadowSceneNode, RE::NiAVObject* a_object, bool a3, bool a4)
-	{
-		logger::info("ShadowSceneNode::DetachObject - 0x{:08X} {}, {}, {}", reinterpret_cast<uintptr_t>(a_object), a_object->name, a3, a4);
-
-		func(a_shadowSceneNode, a_object, a3, a4);
-	}
-
-	void TESObjectCELL_AddRefr::thunk(RE::TESObjectCELL* a_cell, RE::TESObjectREFR* a_refr, RE::NiNode* a_node)
-	{
-		logger::info("TESObjectCELL::AddRefr - 0x{:08X} {} {}", a_refr->formID,
-#if defined(SKYRIM)
-			a_refr->GetName(),
-#elif defined(FALLOUT4)
-			a_refr->GetDisplayFullName(),
-#endif
-			a_node ? a_node->name.c_str() : "N/A");
-
-		func(a_cell, a_refr, a_node);
 	}
 
 	struct TESObject_UnClone3D
