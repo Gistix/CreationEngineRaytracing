@@ -2,6 +2,7 @@
 
 #include "Pass/RenderPass.h"
 #include "Renderer/IRenderNode.h"
+#include "Constants.h"
 
 struct RenderNode : public IRenderNode
 {
@@ -119,5 +120,5 @@ struct RenderNode : public IRenderNode
 	eastl::string m_Name;
 	eastl::unique_ptr<RenderPass> m_RenderPass;
 	eastl::vector<RenderNode> m_Children;
-	nvrhi::TimerQueryHandle m_TimerQuery = nullptr;
+	eastl::array<nvrhi::TimerQueryHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_TimerQueries = {};
 };

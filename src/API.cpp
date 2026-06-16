@@ -38,9 +38,9 @@ void GetResolution(uint32_t& width, uint32_t& height)
 	height = resolution.y;
 }
 
-void WaitExecution()
+uint32_t WaitExecution()
 {
-	Renderer::GetSingleton()->WaitExecution();
+	return Renderer::GetSingleton()->WaitExecution();
 }
 
 void PostExecution()
@@ -106,12 +106,14 @@ void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, 
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
 }
 
-void GetSharedTextures(SharedTexture& main, SharedTexture& diffuseAlbedo)
+void GetSharedTextures(SharedTexture* mainTextures, SharedTexture* diffuseAlbedoTextures)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
 
-	main = textureManager.GetSharedTexture(RenderTarget::Main);
-	diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo);
+	for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
+		mainTextures[i] = textureManager.GetSharedTexture(RenderTarget::Main, i);
+		diffuseAlbedoTextures[i] = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo, i);
+	}
 }
 
 void UpdateJitter(float2 jitter)

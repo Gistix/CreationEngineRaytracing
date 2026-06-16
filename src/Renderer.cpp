@@ -70,8 +70,6 @@ bool Renderer::Initialize(RendererParams rendererParams)
 
 	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
 
-	m_RenderGraphQuery = m_NVRHIDevice->createEventQuery();
-
 	return true;
 }
 
@@ -504,14 +502,30 @@ void Renderer::SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* m
 
 nvrhi::ICommandList* Renderer::StartExecution()
 {
-	logger::trace("Renderer::ExecutePasses - Begin");
+	logger::trace("Renderer::StartExecution - Begin (Slot {})", m_NextSlot);
 
 	m_DynamicResolutionRatio = Util::Adapter::GetDynamicResolutionRatios();
 
-	// Get a new command list every frame, NVRHI command lists are single-use and they can hold stale scratch data
-	m_CommandList = GetGraphicsCommandList();
+	m_CurrentSlot = m_NextSlot;
 
-	m_CommandList->open();
+	auto& slot = m_FrameSlots[m_CurrentSlot];
+
+	if (slot.inFlight) {
+		GetDevice()->waitEventQuery(slot.eventQuery);
+		RunPostExecutionForSlot(m_CurrentSlot);
+		GetDevice()->resetEventQuery(slot.eventQuery);
+		slot.inFlight = false;
+	}
+
+	if (!slot.eventQuery)
+		slot.eventQuery = GetDevice()->createEventQuery();
+
+	m_FrameIndex++;
+
+	slot.commandList = GetGraphicsCommandList();
+	slot.commandList->open();
+
+	m_CommandList = slot.commandList;
 
 	return m_CommandList;
 }
@@ -522,42 +536,64 @@ void Renderer::EndExecution()
 		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
 
 		if (m_PTDepthCopyTargetTexture)
-			m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth), region);
+			m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth, m_CurrentSlot), region);
 	
 		if (m_PTMVCopyTargetTexture)
-			m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D), region);
+			m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D, m_CurrentSlot), region);
 	}
 
-	// Close it
 	m_CommandList->close();
 
 	auto device = GetDevice();
 
-	// Execute it
+	uint64_t fenceValue;
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
-		m_LastSubmittedInstance = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+		fenceValue = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+		m_LastSubmittedInstance = fenceValue;
 	}
 
-	device->setEventQuery(m_RenderGraphQuery, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
+	auto& slot = m_FrameSlots[m_CurrentSlot];
+	slot.fenceValue = fenceValue;
+	device->setEventQuery(slot.eventQuery, nvrhi::CommandQueue::Graphics, fenceValue);
+	slot.inFlight = true;
 
-	logger::trace("Renderer::ExecutePasses - End");
+	m_NextSlot = (m_CurrentSlot + 1) % Constants::MAX_FRAMES_IN_FLIGHT;
+
+	logger::trace("Renderer::EndExecution - Slot {} submitted (fence {}), next slot will be {}", m_CurrentSlot, fenceValue, m_NextSlot);
 }
 
-void Renderer::WaitExecution()
+uint32_t Renderer::WaitExecution()
 {
-	// Fence only the render graph execution and not any of the others async command lists
-	GetDevice()->waitEventQuery(m_RenderGraphQuery);
+	auto& slot = m_FrameSlots[m_CurrentSlot];
 
-	PostExecution();
+	if (!slot.inFlight)
+		return m_LastCompletedSlot;
+
+	GetDevice()->waitEventQuery(slot.eventQuery);
+	RunPostExecutionForSlot(m_CurrentSlot);
+	slot.inFlight = false;
+
+	return m_LastCompletedSlot;
 }
 
 void Renderer::PostExecution()
 {
 	auto device = GetDevice();
 
-	auto* scene = Scene::GetSingleton();
+	for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
+		auto& slot = m_FrameSlots[i];
+		if (slot.inFlight && device->pollEventQuery(slot.eventQuery)) {
+			RunPostExecutionForSlot(i);
+			slot.inFlight = false;
+		}
+	}
+}
 
+void Renderer::RunPostExecutionForSlot(uint32_t slot)
+{
+	auto device = GetDevice();
+	auto* scene = Scene::GetSingleton();
 	const auto timings = scene->m_Settings.DebugSettings.Timings;
 
 	m_PassTimings.clear();
@@ -565,20 +601,19 @@ void Renderer::PostExecution()
 	if (timings) {
 		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
 			rootNode->ForEach([&](RenderNode* node) {
-				if (node->m_TimerQuery && device->pollTimerQuery(node->m_TimerQuery))
-					m_PassTimings.push_back(PassTiming(node->m_Name.c_str(), m_NVRHIDevice->getTimerQueryTime(node->m_TimerQuery) * 1000.0f));
+				if (node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))
+					m_PassTimings.push_back(PassTiming(node->m_Name.c_str(), device->getTimerQueryTime(node->m_TimerQueries[slot]) * 1000.0f));
 			});
 		}
 	}
 
-	m_FrameIndex++;
+	m_LastCompletedSlot = slot;
 
-	// Run garbage collection to release resources that are no longer in use
 	device->runGarbageCollection();
 
 	scene->GetSceneGraph()->RunGarbageCollection();
 
-	logger::trace("Renderer::ExecutePasses - Post");
+	logger::trace("Renderer::RunPostExecutionForSlot - Slot {} completed", slot);
 }
 
 nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)

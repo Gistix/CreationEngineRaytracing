@@ -1,8 +1,8 @@
 #include "RenderTargetManager.h"
 #include "Renderer.h"
 
-nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
-	auto& renderTarget = m_Textures[static_cast<size_t>(texture)];
+nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot) {
+	auto& renderTarget = m_Textures[slot][static_cast<size_t>(texture)];
 
 	if (!renderTarget.handle) {
 		auto* renderer = Renderer::GetSingleton();
@@ -18,7 +18,6 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		desc.initialState = nvrhi::ResourceStates::Common;
 		desc.isUAV = true;
 		desc.keepInitialState = true;
-		desc.debugName = magic_enum::enum_name(texture);
 
 		switch (texture)
 		{
@@ -58,8 +57,10 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 			break;
 		}
 
-		logger::debug("RenderTargetManager::GetTexture - Dimensions: [{}, {}], Format: {}, Shared: {} - {}", 
-			desc.width, desc.height,
+		desc.debugName = std::format("{}_{}", magic_enum::enum_name(texture), slot);
+
+		logger::debug("RenderTargetManager::GetTexture - Slot: {}, Dimensions: [{}, {}], Format: {}, Shared: {} - {}", 
+			slot, desc.width, desc.height,
 			magic_enum::enum_name(desc.format), 
 			(desc.sharedResourceFlags & nvrhi::SharedResourceFlags::Shared) != nvrhi::SharedResourceFlags::None,
 			desc.debugName);
@@ -139,16 +140,20 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 	return renderTarget.handle;
 }
 
-SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
+nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
+	return GetTexture(texture, Renderer::GetSingleton()->GetCurrentSlot());
+}
+
+SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t slot) {
 	SharedTexture sharedTexture;
 
-	auto* dx12Texture = GetTexture(texture);
+	auto* dx12Texture = GetTexture(texture, slot);
 	if (!dx12Texture) {
 		logger::info("RenderTargetManager::GetSharedTexture - Invalid texture for {}", magic_enum::enum_name(texture));
 		return sharedTexture;
 	}
 
-	auto& renderTarget = m_Textures[static_cast<size_t>(texture)];
+	auto& renderTarget = m_Textures[slot][static_cast<size_t>(texture)];
 
 	if (!renderTarget.d3d11Texture) {
 		if (!renderTarget.sharedHandle) {
@@ -172,4 +177,8 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
 	sharedTexture.native = renderTarget.d3d12Resource.get();
 	sharedTexture.shared = renderTarget.d3d11Texture.get();
 	return sharedTexture;
+}
+
+SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
+	return GetSharedTexture(texture, Renderer::GetSingleton()->GetCompletedSlot());
 }
