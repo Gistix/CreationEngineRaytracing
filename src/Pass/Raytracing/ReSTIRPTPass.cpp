@@ -28,6 +28,16 @@ namespace Pass::Raytracing
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
 
+		m_LinearClampSampler = renderer->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(true));
+
+		m_PointWrapSampler = renderer->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
+			.setAllFilters(false));
+
 		m_ConstantBuffer = renderer->GetDevice()->createBuffer(
 			nvrhi::utils::CreateVolatileConstantBufferDesc(
 				sizeof(ReSTIRPTData), "ReSTIR PT Data", Constants::MAX_CB_VERSIONS));
@@ -46,20 +56,26 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),    // b2: FeatureData
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(3),    // b3: RaytracingData
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),     // t0: SceneBVH
-			nvrhi::BindingLayoutItem::Texture_SRV(1),               // t1: CurrentDepth
-			nvrhi::BindingLayoutItem::Texture_SRV(2),               // t2: CurrentNormals
-			nvrhi::BindingLayoutItem::Texture_SRV(3),               // t3: PreviousDepth
-			nvrhi::BindingLayoutItem::Texture_SRV(4),               // t4: PreviousNormals
-			nvrhi::BindingLayoutItem::TypedBuffer_SRV(5),           // t5: NeighborOffsets
-			nvrhi::BindingLayoutItem::Texture_SRV(6),               // t6: MotionVectors
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),      // t7: SurfaceDataBuffer
-			nvrhi::BindingLayoutItem::Texture_SRV(8),               // t8: PrimaryDiffuseAlbedo
-			nvrhi::BindingLayoutItem::Texture_SRV(9),               // t9: PrimarySpecularAlbedo
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10),     // t10: Lights
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),     // t11: Instances
+			nvrhi::BindingLayoutItem::Texture_SRV(1),               // t1: SkyHemisphere
+			nvrhi::BindingLayoutItem::Texture_SRV(2),               // t2: WaterFlowMap
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),      // t3: Lights
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),      // t4: Instances
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),      // t5: Meshes
+			nvrhi::BindingLayoutItem::Texture_SRV(9),               // t9: SkinDetailNormal
+			nvrhi::BindingLayoutItem::Texture_SRV(10),              // t10: CurrentDepth
+			nvrhi::BindingLayoutItem::Texture_SRV(11),              // t11: CurrentNormals
+			nvrhi::BindingLayoutItem::Texture_SRV(12),              // t12: PreviousDepth
+			nvrhi::BindingLayoutItem::Texture_SRV(13),              // t13: PreviousNormals
+			nvrhi::BindingLayoutItem::TypedBuffer_SRV(14),          // t14: NeighborOffsets
+			nvrhi::BindingLayoutItem::Texture_SRV(15),              // t15: MotionVectors
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16),     // t16: SurfaceDataBuffer
+			nvrhi::BindingLayoutItem::Texture_SRV(17),              // t17: PrimaryDiffuseAlbedo
+			nvrhi::BindingLayoutItem::Texture_SRV(18),              // t18: PrimarySpecularAlbedo
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),      // u0: PTReservoirs
 			nvrhi::BindingLayoutItem::Texture_UAV(1),               // u1: OutputRadiance
 			nvrhi::BindingLayoutItem::Sampler(0),                   // s0
+			nvrhi::BindingLayoutItem::Sampler(1),                   // s1
+			nvrhi::BindingLayoutItem::Sampler(2),                   // s2
 		};
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(desc);
 	}
@@ -82,7 +98,12 @@ namespace Pass::Raytracing
 					nvrhi::ComputePipelineDesc()
 					.setComputeShader(m_InitialSamplingShader)
 					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
+					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
 			}
 		}
 
@@ -96,7 +117,12 @@ namespace Pass::Raytracing
 					nvrhi::ComputePipelineDesc()
 					.setComputeShader(m_TemporalShader)
 					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
+					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
 			}
 		}
 
@@ -110,7 +136,12 @@ namespace Pass::Raytracing
 					nvrhi::ComputePipelineDesc()
 					.setComputeShader(m_SpatialShader)
 					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
+					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
 			}
 		}
 
@@ -124,7 +155,12 @@ namespace Pass::Raytracing
 					nvrhi::ComputePipelineDesc()
 					.setComputeShader(m_FinalShadingShader)
 					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout));
+					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
+					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
 			}
 		}
 	}
@@ -227,6 +263,7 @@ namespace Pass::Raytracing
 
 		auto* renderer = GetRenderer();
 		auto* scene = Scene::GetSingleton();
+		auto* sceneGraph = scene->GetSceneGraph();
 		auto* ptRes = renderer->GetReSTIRPTResources();
 		auto* renderTargets = renderer->GetRenderTargets();
 
@@ -245,20 +282,26 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(3, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
-			nvrhi::BindingSetItem::Texture_SRV(1, textureManager.GetTexture(RenderTarget::ClipDepth)),
-			nvrhi::BindingSetItem::Texture_SRV(2, renderTargets->normalRoughness),
-			nvrhi::BindingSetItem::Texture_SRV(3, ptRes->prevGBufferDepth),
-			nvrhi::BindingSetItem::Texture_SRV(4, ptRes->prevGBufferNormals),
-			nvrhi::BindingSetItem::TypedBuffer_SRV(5, ptRes->neighborOffsetBuffer),
-			nvrhi::BindingSetItem::Texture_SRV(6, textureManager.GetTexture(RenderTarget::MotionVectors3D)),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(7, ptRes->surfaceDataBuffer),
-			nvrhi::BindingSetItem::Texture_SRV(8, diffuseAlbedoTex),
-			nvrhi::BindingSetItem::Texture_SRV(9, specularAlbedoTex),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(10, scene->GetSceneGraph()->GetLightBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, scene->GetSceneGraph()->GetInstanceBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(2, scene->GetFlowMapTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(9, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::ClipDepth)),
+			nvrhi::BindingSetItem::Texture_SRV(11, renderTargets->normalRoughness),
+			nvrhi::BindingSetItem::Texture_SRV(12, ptRes->prevGBufferDepth),
+			nvrhi::BindingSetItem::Texture_SRV(13, ptRes->prevGBufferNormals),
+			nvrhi::BindingSetItem::TypedBuffer_SRV(14, ptRes->neighborOffsetBuffer),
+			nvrhi::BindingSetItem::Texture_SRV(15, textureManager.GetTexture(RenderTarget::MotionVectors3D)),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, ptRes->surfaceDataBuffer),
+			nvrhi::BindingSetItem::Texture_SRV(17, diffuseAlbedoTex),
+			nvrhi::BindingSetItem::Texture_SRV(18, specularAlbedoTex),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, ptRes->reservoirBuffer),
 			nvrhi::BindingSetItem::Texture_UAV(1, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
+			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
+			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),
 		};
 
 		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
@@ -350,7 +393,12 @@ namespace Pass::Raytracing
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 		nvrhi::BindingSetVector bindings = {
 			m_BindingSet,
-			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable
+			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		DispatchInitialSampling(commandList, bindings, threadGroupSize);

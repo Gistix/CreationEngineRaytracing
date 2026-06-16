@@ -23,7 +23,7 @@
 #include "Rtxdi/Utils/SampledLightData.hlsli"
 
 // RTXDI types
-#define RAB_DISTANT_LIGHT_DISTANCE kEnvironmentMapSceneDistance
+#define RAB_DISTANT_LIGHT_DISTANCE 50000.0f
 #include <Rtxdi/PT/Reservoir.hlsli>
 #include <Rtxdi/Utils/RandomSamplerState.hlsli>
 
@@ -43,7 +43,7 @@ struct RAB_Surface
 
     float4 Eval(float3 wo)
     {
-        Material material = Materials[NonUniformResourceIndex(materialIndex)];
+        Material material = GetMaterial(materialIndex);
         bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
         StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
         return bsdf.Eval(brdfContext, material, surface, wo);
@@ -182,7 +182,7 @@ RAB_Surface RAB_MakeSurfaceFromPayload(float3 position, Payload payload, float3 
     rab.viewDepth = length(rab.surface.Position - Camera.Position.xyz);
     Mesh mesh = GetMesh(payload, instance);
     rab.materialIndex = mesh.GeometryIdx;
-    rab.instanceIndex = payload.InstanceIndex();
+    rab.instanceIndex = payload.GetInstanceIndex();
     rab.psrData = 0;
     return rab;
 }
@@ -255,10 +255,13 @@ bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
     if (aIsHair != bIsHair)
         return false;
 
+    if (a.materialFeature != b.materialFeature)
+        return false;
+
     if (a.hasSpecularTransmission != b.hasSpecularTransmission)
         return false;
 
-    if (abs(a.surface.Roughness - b.surface.Roughness) > 0.5)
+    if (!RTXDI_CompareRelativeDifference(a.surface.Roughness, b.surface.Roughness, 0.5))
         return false;
 
     float reflA = Color::RGBToLuminance(a.surface.F0);
@@ -266,7 +269,20 @@ bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
     if (abs(reflA - reflB) > 0.25)
         return false;
 
+    float albedoA = Color::RGBToLuminance(a.surface.DiffuseAlbedo);
+    float albedoB = Color::RGBToLuminance(b.surface.DiffuseAlbedo);
+    if (abs(albedoA - albedoB) > 0.25)
+        return false;
+
     return true;
+}
+
+bool RAB_IsDirectionUsableForOpaqueReflection(RAB_Surface rab, float3 direction)
+{
+    if (rab.hasSpecularTransmission || rab.surface.SpecTrans > 0.0f || rab.surface.DiffTrans > 0.0f)
+        return true;
+
+    return dot(rab.surface.FaceNormal, direction) > 1e-4f;
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +291,9 @@ bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
 float3 RAB_GetPTSampleTargetPdfForSurface(float3 samplePosition, float3 sampleRadiance, RAB_Surface rab)
 {
     float3 L = normalize(samplePosition - rab.surface.Position);
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
+        return 0.0f;
+
     float4 bsdfEval = rab.Eval(L);
     return bsdfEval.rgb * sampleRadiance;
 }
@@ -293,6 +312,9 @@ float RAB_SurfaceEvaluateBrdfPdf(RAB_Surface rab, float3 wo)
 float3 RAB_GetReflectedBsdfRadianceForSurface(float3 lightPos, float3 lightRadiance, RAB_Surface rab)
 {
     float3 L = normalize(lightPos - rab.surface.Position);
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
+        return 0.0f;
+
     float4 bsdfEval = rab.Eval(L);
     return bsdfEval.rgb * lightRadiance;
 }
@@ -308,23 +330,18 @@ bool RAB_GetConservativeVisibility(RAB_Surface rab, float3 samplePosition)
     if (dist < 1e-4)
         return true;
 
-    bool behindSurface = dot(toSample, rab.surface.FaceNormal) < 0;
-    float3 origin = OffsetRayAlt(rab.surface.Position, rab.surface.FaceNormal, behindSurface);
-
-    float3 offsetToSample = samplePosition - origin;
-    float offsetDist = length(offsetToSample);
-
-    if (offsetDist < 1e-4)
-        return true;
+    float3 sampleDir = toSample / dist;
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, sampleDir))
+        return false;
 
     RayDesc ray;
-    ray.Origin    = origin;
-    ray.Direction = offsetToSample / offsetDist;
-    ray.TMin      = 0.0;
-    ray.TMax      = max(0.0, offsetDist - 0.001);
+    ray.Origin = rab.surface.Position;
+    ray.Direction = sampleDir;
+    ray.TMin = 0.001f;
+    ray.TMax = max(0.001f, dist - 0.002f);
 
-    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> rayQuery;
-    rayQuery.TraceRayInline(SceneBVH, RAY_FLAG_CULL_NON_OPAQUE, 0xFF, ray);
+    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
+    rayQuery.TraceRayInline(SceneBVH, RAY_FLAG_NONE, INSTANCE_MASK, ray);
     rayQuery.Proceed();
 
     return rayQuery.CommittedStatus() == COMMITTED_NOTHING;
@@ -418,13 +435,14 @@ struct RAB_LightSample
     float solidAnglePdf;
     float distance;
     uint lightType;
+    uint lightIndex;
 };
 
 bool RAB_IsAnalyticLightSample(RAB_LightSample lightSample) { return lightSample.solidAnglePdf > 0.0f; }
 bool RAB_IsInfiniteLightSample(RAB_LightSample lightSample) { return lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL; }
 
 RAB_LightInfo RAB_EmptyLightInfo() { RAB_LightInfo li; li.lightType = 0; li.lightIndex = 0; return li; }
-RAB_LightSample RAB_EmptyLightSample() { RAB_LightSample ls; ls.position = 0; ls.radiance = 0; ls.solidAnglePdf = 0; ls.distance = 0; ls.lightType = 0; return ls; }
+RAB_LightSample RAB_EmptyLightSample() { RAB_LightSample ls; ls.position = 0; ls.radiance = 0; ls.solidAnglePdf = 0; ls.distance = 0; ls.lightType = 0; ls.lightIndex = 0; return ls; }
 
 float3 RAB_LightSamplePosition(RAB_LightSample ls) { return ls.position; }
 float3 RAB_LightSampleRadiance(RAB_LightSample ls) { return ls.radiance; }
@@ -444,9 +462,36 @@ float RAB_GetLightSampleTargetPdfForSurface(RAB_LightSample lightSample, RAB_Sur
     return Color::RGBToLuminance(RAB_GetReflectedBsdfRadianceForSurface(lightSample.position, lightSample.radiance, surface)) / lightSample.solidAnglePdf;
 }
 
+float RAB_LightSampleSelectionPdf(RAB_LightSample lightSample, RAB_Surface surface)
+{
+    if (lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL)
+        return 1.0f;
+
+    Instance instance = Instances[NonUniformResourceIndex(surface.instanceIndex)];
+    return 1.0f / max(float(instance.LightData.Count), 1.0f);
+}
+
 bool RAB_GetConservativeVisibility(RAB_Surface rab, RAB_LightSample lightSample)
 {
     return RAB_GetConservativeVisibility(rab, RAB_LightSamplePosition(lightSample));
+}
+
+float3 RAB_ApplyLightVisibility(RAB_Surface surface, RAB_LightSample lightSample)
+{
+    uint randomSeed = PCGHash(
+        asuint(surface.surface.Position.x) ^
+        asuint(surface.surface.Position.y) ^
+        asuint(surface.surface.Position.z) ^
+        lightSample.lightIndex);
+
+    float3 lightDir;
+    float lightDistance;
+    RAB_GetLightDirDistance(surface, lightSample, lightDir, lightDistance);
+
+    if (lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL)
+        return TraceRayShadow(Scene, surface.surface, lightDir, randomSeed);
+
+    return TraceRayShadowFinite(Scene, surface.surface, lightDir, lightDistance, randomSeed);
 }
 
 uint RAB_PackDirectionalLightIndex() { return 0; }
@@ -474,14 +519,12 @@ RAB_LightSample RAB_SamplePolymorphicLight(RAB_LightInfo lightInfo, RAB_Surface 
 {
     RAB_LightSample ls = RAB_EmptyLightSample();
     ls.lightType = lightInfo.lightType;
+    ls.lightIndex = lightInfo.lightIndex;
 
     if (lightInfo.lightType == RAB_LIGHT_TYPE_DIRECTIONAL)
     {
         float3 irradiance = DirLightToLinear(Raytracing.DirectionalLight.Color) *
             EvalSkyOcclusion(SkyHemisphere, Raytracing.DirectionalLight.Vector, Features.CloudShadows.Opacity);
-#if defined(PHYSICAL_SKY_TRLUT)
-        irradiance *= SamplePhysicalSkyTransmittance(Raytracing.DirectionalLight.Vector);
-#endif
         float3 lightDir = normalize(Raytracing.DirectionalLight.Vector);
         ls.position = surface.surface.Position + lightDir * SHADOW_RAY_TMAX;
         ls.distance = SHADOW_RAY_TMAX;
@@ -511,8 +554,8 @@ int RAB_TranslateLightIndex(uint lightIndex, bool prevToCurrent) { return (int)l
 
 float3 RAB_GetMISWeightForNEE(uint lightIndex, RAB_LightSample lightSample, float3 lightDir, float lightPdf, float scatterPdf)
 {
-    // Balance heuristic between NEE and BSDF sampling
-    float misWeight = (lightPdf > 0) ? lightPdf / (lightPdf + scatterPdf) : 0.0;
+    const float neePdf = max(lightPdf, 0.0f);
+    float misWeight = neePdf > 0.0f ? neePdf / (neePdf + max(scatterPdf, 0.0f)) : 0.0f;
     return float3(misWeight, misWeight, misWeight);
 }
 

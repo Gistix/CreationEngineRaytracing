@@ -25,8 +25,8 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID, uint LocalIndex : SV_GroupInd
     trrParams.reservoirPosition = reservoirPos;
     trrParams.motionVector = float3(mv.xy * float2(Camera.RenderSize), mv.z);
     trrParams.cameraPos = Camera.Position.xyz;
-    trrParams.prevCameraPos = Camera.PrevPosition.xyz;
-    trrParams.prevPrevCameraPos = Camera.PrevPosition.xyz; // No prev-prev tracking yet
+    trrParams.prevCameraPos = Camera.PositionPrev.xyz;
+    trrParams.prevPrevCameraPos = Camera.PositionPrev.xyz; // No prev-prev tracking yet
 
     RTXDI_RandomSamplerState rng = RTXDI_InitRandomSampler(GlobalIndex, runtimeParams.frameIndex, 3);
 

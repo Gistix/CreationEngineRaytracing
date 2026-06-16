@@ -6,6 +6,9 @@
 #include "interop/SharedData.hlsli"
 #include "interop/PackedSurfaceData.hlsli"
 #include "interop/RaytracingData.hlsli"
+#include "interop/Vertex.hlsli"
+#include "interop/Triangle.hlsli"
+#include "interop/Mesh.hlsli"
 #include "interop/Light.hlsli"
 #include "interop/Instance.hlsli"
 #include "interop/Material.hlsli"
@@ -21,30 +24,40 @@ ConstantBuffer<RaytracingData> Raytracing  : register(b3);
 RaytracingAccelerationStructure SceneBVH   : register(t0);
 #define Scene SceneBVH
 
+Texture2D<float4> SkyHemisphere            : register(t1);
+Texture2D<float4> WaterFlowMap             : register(t2);
+StructuredBuffer<Light> Lights             : register(t3);
+StructuredBuffer<Instance> Instances       : register(t4);
+StructuredBuffer<Mesh> Meshes              : register(t5);
+Texture2D<float4> SkinDetailNormal         : register(t9);
+
 // Current frame G-buffer
-Texture2D<float>  CurrentDepth             : register(t1);
-Texture2D<float4> CurrentNormals           : register(t2);  // xyz=normal, w=roughness
+Texture2D<float>  CurrentDepth             : register(t10);
+Texture2D<float4> CurrentNormals           : register(t11);  // xyz=normal, w=roughness
 
 // Previous frame G-buffer
-Texture2D<float>  PreviousDepth            : register(t3);
-Texture2D<float4> PreviousNormals          : register(t4);
+Texture2D<float>  PreviousDepth            : register(t12);
+Texture2D<float4> PreviousNormals          : register(t13);
 
 // Neighbor offset buffer for spatial resampling
-Buffer<float2>    NeighborOffsets           : register(t5);
+Buffer<float2>    NeighborOffsets           : register(t14);
 
 // Motion vectors for temporal reprojection
-Texture2D<float4> MotionVectors            : register(t6);
+Texture2D<float4> MotionVectors            : register(t15);
 
 // Packed primary surface data (ping-pong StructuredBuffer from path tracer)
-StructuredBuffer<PackedSurfaceData> SurfaceDataBuffer : register(t7);
+StructuredBuffer<PackedSurfaceData> SurfaceDataBuffer : register(t16);
 
 // Primary surface material data (for denoiser guide buffers)
-Texture2D<float3> PrimaryDiffuseAlbedo     : register(t8);
-Texture2D<float3> PrimarySpecularAlbedo    : register(t9);
+Texture2D<float3> PrimaryDiffuseAlbedo     : register(t17);
+Texture2D<float3> PrimarySpecularAlbedo    : register(t18);
 
-StructuredBuffer<Light>       Lights       : register(t10);
-StructuredBuffer<Instance>    Instances    : register(t11);
-StructuredBuffer<Material>    Materials[]  : register(t0, space3);
+StructuredBuffer<Triangle> Triangles[]     : register(t0, space1);
+StructuredBuffer<Vertex> Vertices[]        : register(t0, space2);
+StructuredBuffer<Material> Materials[]     : register(t0, space3);
+Texture2D<float4> Textures[]               : register(t0, space4);
+StructuredBuffer<float3> PrevPositions[]   : register(t0, space6);
+TextureCube<float4> CubeTextures[]         : register(t0, space7);
 
 // PT reservoir buffer (read/write)
 RWStructuredBuffer<RTXDI_PackedPTReservoir> PTReservoirs : register(u0);
@@ -53,6 +66,8 @@ RWStructuredBuffer<RTXDI_PackedPTReservoir> PTReservoirs : register(u0);
 RWTexture2D<float4> OutputRadiance         : register(u1);
 
 SamplerState DefaultSampler                : register(s0);
+SamplerState ClampSampler                  : register(s1);
+SamplerState PointWrapSampler              : register(s2);
 
 // Define macros required by RTXDI PT before including its headers
 #define RTXDI_PT_RESERVOIR_BUFFER PTReservoirs

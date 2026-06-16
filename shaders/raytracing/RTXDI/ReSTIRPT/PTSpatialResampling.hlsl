@@ -3,6 +3,7 @@
 #include "../RtxdiPTApplicationBridge.hlsli"
 #define RTXDI_RESTIR_PT_HYBRID_SHIFT
 #include "../RtxdiPTPathTrace.hlsli"
+#include <Rtxdi/Utils/Checkerboard.hlsli>
 #include <Rtxdi/PT/SpatialResampling.hlsli>
 
 [numthreads(8, 8, 1)]
@@ -20,8 +21,8 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID)
     srrParams.PixelPosition = GlobalIndex;
     srrParams.ReservoirPosition = reservoirPos;
     srrParams.cameraPos = Camera.Position.xyz;
-    srrParams.prevCameraPos = Camera.PrevPosition.xyz;
-    srrParams.prevPrevCameraPos = Camera.PrevPosition.xyz;
+    srrParams.prevCameraPos = Camera.PositionPrev.xyz;
+    srrParams.prevPrevCameraPos = Camera.PositionPrev.xyz;
 
     RTXDI_RandomSamplerState rng = RTXDI_InitRandomSampler(GlobalIndex, runtimeParams.frameIndex, 4);
 
