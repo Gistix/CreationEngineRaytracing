@@ -153,3 +153,19 @@ uint64_t GetFakeDoubledVRAMUsage()
 
 	return textureManager->GetFakeDoubledVRAMUsage();
 }
+
+void LogTextureMemoryStats()
+{
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+	if (!sceneGraph)
+		return;
+
+	auto& textureManager = sceneGraph->GetTextureManager();
+
+	if (!textureManager)
+		return;
+
+	textureManager->LogMemoryStats();
+}
+
