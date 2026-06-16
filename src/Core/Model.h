@@ -46,6 +46,8 @@ struct Model
 
 	uint64_t m_LastBLASUpdate = Constants::INVALID_FRAME_INDEX;
 
+	uint32_t m_NumUpdatesSinceRebuild = 0;
+
 	uint64_t m_LastDataUpload = Constants::INVALID_FRAME_INDEX;
 
 	DataParams m_DataParams;

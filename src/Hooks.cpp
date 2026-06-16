@@ -410,9 +410,8 @@ namespace Hooks
 				return hr;
 			}
 
-			auto formatIt = Renderer::GetFormatMapping().find(a_format);
-
-			if (formatIt == Renderer::GetFormatMapping().end()) {
+			auto format = Renderer::GetFormat(a_format);
+			if (format == nvrhi::Format::UNKNOWN) {
 				if (texture->d3d12Texture)
 					texture->d3d12Texture->Release();
 
@@ -423,7 +422,7 @@ namespace Hooks
 				.setWidth(residentWidth)
 				.setHeight(residentHeight)
 				.setMipLevels(residentMipLevels)
-				.setFormat(formatIt->second)
+				.setFormat(format)
 				.setInitialState(nvrhi::ResourceStates::CopyDest)
 				.setDebugName(streamingMipBias > 0 ? "Streamed Texture [?]" : "Shared Texture [?]");
 

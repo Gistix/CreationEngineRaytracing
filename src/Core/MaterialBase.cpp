@@ -13,9 +13,6 @@ Texture MaterialBase::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiSour
 
 	if (auto result = textureManager->GetDescriptor(niPointer->rendererTexture, textureType))
 		return Texture(result, defaultDescHandle.get());
-
-	return Texture(defaultDescHandle, nullptr);
-#else
-	return Texture(defaultDescHandle, nullptr);
 #endif
+	return Texture(defaultDescHandle, nullptr);
 }
