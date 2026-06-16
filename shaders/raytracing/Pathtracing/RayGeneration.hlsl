@@ -366,7 +366,7 @@ void Main()
         sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
         primarySceneDistance,
         sourceMesh.GeometryIdx,
-        sourcePayload.InstanceIndex(),
+        sourcePayload.GetInstanceIndex(),
         0);
 #       endif
 #   endif   
@@ -709,7 +709,7 @@ void Main()
         sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
         fillSceneLength,
         sourceMesh.GeometryIdx,
-        sourcePayload.InstanceIndex(),
+        sourcePayload.GetInstanceIndex(),
         (fillState.planeIndex & 0xFFu) | ((fillState.stableBranchID & 0xFFFFu) << 8));
 #   endif
     

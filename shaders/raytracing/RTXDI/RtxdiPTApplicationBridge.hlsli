@@ -182,7 +182,7 @@ RAB_Surface RAB_MakeSurfaceFromPayload(float3 position, Payload payload, float3 
     rab.viewDepth = length(rab.surface.Position - Camera.Position.xyz);
     Mesh mesh = GetMesh(payload, instance);
     rab.materialIndex = mesh.GeometryIdx;
-    rab.instanceIndex = payload.InstanceIndex();
+    rab.instanceIndex = payload.GetInstanceIndex();
     rab.psrData = 0;
     return rab;
 }

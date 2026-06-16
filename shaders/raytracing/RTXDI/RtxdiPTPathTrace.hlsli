@@ -23,11 +23,7 @@ struct RAB_PTTraceResult
 RAB_PTTraceResult RAB_TraceRayStandardForPT(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
 {
     RAB_PTTraceResult result;
-    result.payload.hitDistance = -1.0f;
-    result.payload.primitiveIndex = 0;
-    result.payload.PackBarycentrics(float2(0.0f, 0.0f));
-    result.payload.PackInstanceGeometryIndex(0, 0);
-    result.payload.randomSeed = randomSeed;
+    result.payload.Init(randomSeed);
     result.frontFace = true;
 
 #if USE_RAY_QUERY
@@ -52,10 +48,12 @@ RAB_PTTraceResult RAB_TraceRayStandardForPT(RaytracingAccelerationStructure scen
 
     if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {
-        result.payload.hitDistance = rayQuery.CommittedRayT();
-        result.payload.primitiveIndex = rayQuery.CommittedPrimitiveIndex();
-        result.payload.PackBarycentrics(rayQuery.CommittedTriangleBarycentrics());
-        result.payload.PackInstanceGeometryIndex(rayQuery.CommittedInstanceIndex(), rayQuery.CommittedGeometryIndex());
+        result.payload.SetCommittedHit(
+            rayQuery.CommittedRayT(),
+            rayQuery.CommittedPrimitiveIndex(),
+            rayQuery.CommittedTriangleBarycentrics(),
+            rayQuery.CommittedInstanceIndex(),
+            rayQuery.CommittedGeometryIndex());
         result.frontFace = rayQuery.CommittedTriangleFrontFace();
     }
 #else
