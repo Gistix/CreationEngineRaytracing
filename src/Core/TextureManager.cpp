@@ -101,7 +101,6 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 
 	// If d3d12Resource is null we need to get the texture handle from dx11
 	bool shareResource = d3d12Resource == nullptr;
-
 	if (shareResource && !d3d11Resource)
 		return nullptr;
 
@@ -168,9 +167,8 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 	// Create NVRHI handle for native texture
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
-	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format); // Line 138
-
-	if (formatIt == Renderer::GetFormatMapping().end()) {
+	auto format = Renderer::GetFormat(nativeTexDesc.Format);
+	if (format == nvrhi::Format::UNKNOWN) {
 		logger::error("TextureManager::GetDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
 		return nullptr;
 	}
@@ -178,7 +176,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 	auto& textureDesc = nvrhi::TextureDesc()
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
-		.setFormat(formatIt->second)
+		.setFormat(format)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Shared Texture [?]");
 
