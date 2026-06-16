@@ -61,7 +61,6 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),      // t3: Lights
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),      // t4: Instances
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),      // t5: Meshes
-			nvrhi::BindingLayoutItem::Texture_SRV(8),               // t8: PhysicalSkyTrLUT
 			nvrhi::BindingLayoutItem::Texture_SRV(9),               // t9: SkinDetailNormal
 			nvrhi::BindingLayoutItem::Texture_SRV(10),              // t10: CurrentDepth
 			nvrhi::BindingLayoutItem::Texture_SRV(11),              // t11: CurrentNormals
@@ -288,7 +287,6 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetPhysicalSkyTrLUTTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(9, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::ClipDepth)),
 			nvrhi::BindingSetItem::Texture_SRV(11, renderTargets->normalRoughness),

@@ -14,6 +14,58 @@ float RAB_RngNext(inout RTXDI_RandomSamplerState rng)
     return RTXDI_GetNextRandom(rng);
 }
 
+struct RAB_PTTraceResult
+{
+    Payload payload;
+    bool frontFace;
+};
+
+RAB_PTTraceResult RAB_TraceRayStandardForPT(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
+{
+    RAB_PTTraceResult result;
+    result.payload.hitDistance = -1.0f;
+    result.payload.primitiveIndex = 0;
+    result.payload.PackBarycentrics(float2(0.0f, 0.0f));
+    result.payload.PackInstanceGeometryIndex(0, 0);
+    result.payload.randomSeed = randomSeed;
+    result.frontFace = true;
+
+#if USE_RAY_QUERY
+    RayQuery<RAY_FLAGS> rayQuery;
+    rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
+
+    while (rayQuery.Proceed())
+    {
+        if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
+        {
+            if (ConsiderTransparentMaterial(
+                rayQuery.CandidateInstanceIndex(),
+                rayQuery.CandidateGeometryIndex(),
+                rayQuery.CandidatePrimitiveIndex(),
+                rayQuery.CandidateTriangleBarycentrics(),
+                randomSeed))
+            {
+                rayQuery.CommitNonOpaqueTriangleHit();
+            }
+        }
+    }
+
+    if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+    {
+        result.payload.hitDistance = rayQuery.CommittedRayT();
+        result.payload.primitiveIndex = rayQuery.CommittedPrimitiveIndex();
+        result.payload.PackBarycentrics(rayQuery.CommittedTriangleBarycentrics());
+        result.payload.PackInstanceGeometryIndex(rayQuery.CommittedInstanceIndex(), rayQuery.CommittedGeometryIndex());
+        result.frontFace = rayQuery.CommittedTriangleFrontFace();
+    }
+#else
+    result.payload = TraceRayStandard(scene, ray, randomSeed);
+#endif
+
+    randomSeed = result.payload.randomSeed;
+    return result;
+}
+
 void RAB_SetBrdfRaySampleFromBSDF(inout RTXDI_PathTracerContext ctx, BSDFSample bsdfSample)
 {
     RTXDI_BrdfRaySample brs = RTXDI_EmptyBrdfRaySample();
@@ -97,22 +149,25 @@ bool RAB_RecordDirectionalNee(
         return false;
 
     float3 lightDir = normalize(lightSample.position - rab.surface.Position);
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, lightDir))
+        return false;
+
     float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
     if (!any(reflected > MIN_DIFFUSE_SHADOW))
         return false;
 
-    if (!RAB_GetConservativeVisibility(rab, lightSample.position))
-        reflected = 0.0f;
+    reflected *= RAB_ApplyLightVisibility(rab, lightSample);
 
     RTXDI_SampledLightData sampledLightData = RTXDI_SampledLightData_CreateInvalidData();
     RTXDI_SampledLightData_SetLightData(sampledLightData, RAB_PackDirectionalLightIndex());
     RTXDI_SampledLightData_SetUVData(sampledLightData, float2(0.5, 0.5));
 
     float solidAnglePdf = max(lightSample.solidAnglePdf, 1e-8f);
-    float neePdf = 1.0f;
+    float selectionPdf = RAB_LightSampleSelectionPdf(lightSample, rab);
+    float neePdf = max(selectionPdf * solidAnglePdf, 1e-8f);
     float scatterPdf = RAB_SurfaceEvaluateBrdfPdf(rab, lightDir);
-    float3 contributionOverPdf = reflected / solidAnglePdf;
-    contributionOverPdf *= RAB_GetMISWeightForNEE(RAB_PackDirectionalLightIndex(), lightSample, lightDir, solidAnglePdf, scatterPdf);
+    float3 contributionOverPdf = reflected / neePdf;
+    contributionOverPdf *= RAB_GetMISWeightForNEE(RAB_PackDirectionalLightIndex(), lightSample, lightDir, neePdf, scatterPdf);
     return ctx.RecordNeeLightSample(sampledLightData, contributionOverPdf, neePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
 }
 
@@ -137,23 +192,25 @@ bool RAB_RecordPointNee(
         return false;
 
     float3 lightDir = normalize(lightSample.position - rab.surface.Position);
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, lightDir))
+        return false;
+
     float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
     if (!any(reflected > MIN_DIFFUSE_SHADOW))
         return false;
 
-    if (!RAB_GetConservativeVisibility(rab, lightSample.position))
-        reflected = 0.0f;
+    reflected *= RAB_ApplyLightVisibility(rab, lightSample);
 
     RTXDI_SampledLightData sampledLightData = RTXDI_SampledLightData_CreateInvalidData();
     RTXDI_SampledLightData_SetLightData(sampledLightData, RAB_PackPointLightIndex(lightIndex));
     RTXDI_SampledLightData_SetUVData(sampledLightData, float2(0.5, 0.5));
 
-    float lightCount = max(float(instance.LightData.Count), 1.0f);
     float solidAnglePdf = max(lightSample.solidAnglePdf, 1e-8f);
-    float neePdf = 1.0f / lightCount;
+    float selectionPdf = RAB_LightSampleSelectionPdf(lightSample, rab);
+    float neePdf = max(selectionPdf * solidAnglePdf, 1e-8f);
     float scatterPdf = RAB_SurfaceEvaluateBrdfPdf(rab, lightDir);
-    float3 contributionOverPdf = reflected * lightCount / solidAnglePdf;
-    contributionOverPdf *= RAB_GetMISWeightForNEE(RAB_PackPointLightIndex(lightIndex), lightSample, lightDir, solidAnglePdf, scatterPdf);
+    float3 contributionOverPdf = reflected / neePdf;
+    contributionOverPdf *= RAB_GetMISWeightForNEE(RAB_PackPointLightIndex(lightIndex), lightSample, lightDir, neePdf, scatterPdf);
     return ctx.RecordNeeLightSample(sampledLightData, contributionOverPdf, neePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
 }
 
@@ -189,9 +246,18 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         if (!validSample || bsdfSample.pdf <= 0.0f)
             break;
 
+        if (!RAB_IsDirectionUsableForOpaqueReflection(currentRab, bsdfSample.wo))
+        {
+            ctx.SetPathTermination(true);
+            break;
+        }
+
         RAB_SetBrdfRaySampleFromBSDF(ctx, bsdfSample);
         if (!ctx.ValidContinuationRayBrdfOverPdf())
+        {
+            ctx.SetPathTermination(true);
             break;
+        }
 
         ctx.MultiplyPathThroughput(ctx.GetContinuationRayBrdfOverPdf());
 
@@ -201,7 +267,10 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
             rrProb *= rrProb;
             ctx.RecordRussianRouletteProbability(1.0f - rrProb);
             if (RAB_RngNext(ptRandContext.initialRandomSamplerState) < rrProb)
+            {
+                ctx.SetPathTermination(true);
                 break;
+            }
             ctx.MultiplyPathThroughput(1.0f / max(1.0f - rrProb, 1e-4f));
         }
 
@@ -218,10 +287,14 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         ctx.SetContinuationRay(ray);
 
         if (!ctx.AnalyzePathReconnectibilityBeforeTrace())
+        {
+            ctx.SetPathTermination(true);
             break;
+        }
 
         uint traceSeed = RAB_RngToUint(ptRandContext.replayRandomSamplerState);
-        Payload payload = TraceRayStandard(Scene, ray, traceSeed);
+        RAB_PTTraceResult traceResult = RAB_TraceRayStandardForPT(Scene, ray, traceSeed);
+        Payload payload = traceResult.payload;
         ctx.SetTraceResult(RAB_MakeRayPayload(payload));
 
         if (!payload.Hit())
@@ -254,7 +327,7 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         rab.materialFeature = hitMaterial.Feature;
         rab.hasSpecularTransmission = hitSurface.SpecTrans > 0.0f;
 
-        if (ctx.ShouldSampleEmissiveSurfaces() && any(hitSurface.Emissive > 0.0f))
+        if (ctx.ShouldSampleEmissiveSurfaces() && traceResult.frontFace && any(hitSurface.Emissive > 0.0f))
             ctx.RecordEmissiveLightSample(hitSurface.Emissive, currentRab, ptRandContext.initialRandomSamplerState);
 
         if (ctx.ShouldSampleNee())
