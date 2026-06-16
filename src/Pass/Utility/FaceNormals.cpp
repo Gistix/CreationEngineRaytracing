@@ -49,12 +49,13 @@ namespace Pass::Utility
 
 	void FaceNormals::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
-		m_DirtyBindings = true;
+		m_BindingSetDirty.fill(true);
 	}
 
 	void FaceNormals::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* renderer = GetRenderer();
@@ -71,18 +72,19 @@ namespace Pass::Utility
 			nvrhi::BindingSetItem::Texture_UAV(0, textureManager.GetTexture(RenderTarget::FaceNormals))
 		};
 
-		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 	
 	void FaceNormals::Execute(nvrhi::ICommandList* commandList)
 	{
 		CheckBindings();
 
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
 		nvrhi::ComputeState state;
 		state.pipeline = m_ComputePipeline;
-		state.bindings = { m_BindingSet };
+		state.bindings = { m_BindingSets[currentSlot] };
 		commandList->setComputeState(state);
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();

@@ -50,7 +50,8 @@ namespace Pass::Common
 
 	void GIComposite::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* scene = Scene::GetSingleton();
@@ -79,19 +80,20 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 
-		m_BindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void GIComposite::Execute(nvrhi::ICommandList* commandList)
 	{
 		CheckBindings();
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
 		auto resolution = Renderer::GetSingleton()->GetResolution();
 
 		nvrhi::ComputeState state;
 		state.pipeline = m_ComputePipeline;
-		state.bindings = { m_BindingSet };
+		state.bindings = { m_BindingSets[currentSlot] };
 		commandList->setComputeState(state);
 
 		auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 8);

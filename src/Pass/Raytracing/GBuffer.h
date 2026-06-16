@@ -25,7 +25,7 @@ namespace Pass::Raytracing
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
-		nvrhi::BindingSetHandle m_BindingSet;
+		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 		nvrhi::SamplerHandle m_LinearClampSampler;
@@ -33,7 +33,7 @@ namespace Pass::Raytracing
 
 		SceneTLAS* m_SceneTLAS;
 
-		bool m_DirtyBindings = true;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty = { true, true };
 
 		nvrhi::TextureHandle m_ViewDepth;
 
@@ -42,7 +42,7 @@ namespace Pass::Raytracing
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{
-			m_DirtyBindings = true;
+			m_BindingSetDirty.fill(true);
 		}
 
 		virtual void CreatePipeline() override;

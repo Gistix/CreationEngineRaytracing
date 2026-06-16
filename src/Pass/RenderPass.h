@@ -3,6 +3,7 @@
 #include <PCH.h>
 
 #include "Types/Settings.h"
+#include "Constants.h"
 
 class Renderer;
 class PassResources;

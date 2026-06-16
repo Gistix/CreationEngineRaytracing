@@ -102,7 +102,8 @@ namespace Pass
 
 	void LandLODOccluder::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		nvrhi::BindingSetDesc bindingSetDesc;
@@ -111,9 +112,9 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_Buffer)
 		};
 
-		m_BindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void LandLODOccluder::Execute(nvrhi::ICommandList* commandList)
@@ -126,11 +127,12 @@ namespace Pass
 		if (!PrepareResources(commandList, numMeshes, vertexCount))
 			return;
 
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
 		auto* scene = Scene::GetSingleton();
 		auto* sceneGraph = scene->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
-			m_BindingSet,
+			m_BindingSets[currentSlot],
 			sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
 			sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable
 		};

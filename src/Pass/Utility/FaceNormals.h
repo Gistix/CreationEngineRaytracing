@@ -18,11 +18,11 @@ namespace Pass::Utility
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
-		nvrhi::BindingSetHandle m_BindingSet;
+		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
-		bool m_DirtyBindings = true;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty = { true, true };
 
 	public:
 		FaceNormals(Renderer* renderer);
