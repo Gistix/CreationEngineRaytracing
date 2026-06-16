@@ -228,8 +228,6 @@ public:
 #endif
 	inline auto& GetDetailTextureIndex() const { return m_DetailTexture->descriptorHandle; }
 
-	static inline auto& GetFormatMapping() { return m_FormatMapping; }
-	
 	inline auto GetPassTimings() const { return m_PassTimings; };
 
 	static inline auto GetFormat(DXGI_FORMAT nativeFormat) 

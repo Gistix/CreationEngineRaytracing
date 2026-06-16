@@ -587,14 +587,11 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 
 	if (format == nvrhi::Format::UNKNOWN)
 	{
-		auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
-
-		if (formatIt == Renderer::GetFormatMapping().end()) {
+		format = Renderer::GetFormat(nativeTexDesc.Format);
+		if (format == nvrhi::Format::UNKNOWN) {
 			logger::error("Renderer::CreateHandleForNativeTexture - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
 			return nullptr;
 		}
-
-		format = formatIt->second;
 	}
 
 	auto textureDesc = nvrhi::TextureDesc()
