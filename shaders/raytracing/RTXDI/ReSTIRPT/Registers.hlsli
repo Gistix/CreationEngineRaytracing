@@ -29,6 +29,7 @@ Texture2D<float4> WaterFlowMap             : register(t2);
 StructuredBuffer<Light> Lights             : register(t3);
 StructuredBuffer<Instance> Instances       : register(t4);
 StructuredBuffer<Mesh> Meshes              : register(t5);
+Texture2D<float4> PhysicalSkyTrLUT          : register(t8);
 Texture2D<float4> SkinDetailNormal         : register(t9);
 
 // Current frame G-buffer

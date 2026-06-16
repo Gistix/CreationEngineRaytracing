@@ -526,6 +526,9 @@ RAB_LightSample RAB_SamplePolymorphicLight(RAB_LightInfo lightInfo, RAB_Surface 
         float3 irradiance = DirLightToLinear(Raytracing.DirectionalLight.Color) *
             EvalSkyOcclusion(SkyHemisphere, Raytracing.DirectionalLight.Vector, Features.CloudShadows.Opacity);
         float3 lightDir = normalize(Raytracing.DirectionalLight.Vector);
+#if defined(PHYSICAL_SKY_TRLUT)
+        irradiance *= SamplePhysicalSkyTransmittance(lightDir);
+#endif
         ls.position = surface.surface.Position + lightDir * SHADOW_RAY_TMAX;
         ls.distance = SHADOW_RAY_TMAX;
         ls.solidAnglePdf = 1.0f;
