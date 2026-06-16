@@ -5,7 +5,7 @@
 namespace
 {
 	std::mutex g_ResidentMipOffsetsMutex;
-	eastl::unordered_map<ID3D12Resource*, uint32_t> g_ResidentMipOffsets;
+	eastl::unordered_map<IUnknown*, uint32_t> g_ResidentMipOffsets;
 }
 
 TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager, uint32_t residentMipOffset) :
@@ -21,7 +21,7 @@ TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTable
 	format = desc.format;
 }
 
-void TextureManager::RegisterResidentMipOffset(ID3D12Resource* resource, uint32_t mipOffset)
+void TextureManager::RegisterResidentMipOffset(IUnknown* resource, uint32_t mipOffset)
 {
 	if (!resource || mipOffset == 0)
 		return;
@@ -159,7 +159,6 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 
 	// If d3d12Resource is null we need to get the texture handle from dx11
 	bool shareResource = d3d12Resource == nullptr;
-
 	if (shareResource && !d3d11Resource)
 		return nullptr;
 
@@ -173,7 +172,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 	uint32_t residentMipOffset = 0;
 	{
 		std::scoped_lock lock(g_ResidentMipOffsetsMutex);
-		if (auto it = g_ResidentMipOffsets.find(d3d12Resource); it != g_ResidentMipOffsets.end()) {
+		if (auto it = g_ResidentMipOffsets.find(key); it != g_ResidentMipOffsets.end()) {
 			residentMipOffset = it->second;
 			g_ResidentMipOffsets.erase(it);
 		}
@@ -235,9 +234,8 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 	// Create NVRHI handle for native texture
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
 
-	auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format); // Line 138
-
-	if (formatIt == Renderer::GetFormatMapping().end()) {
+	auto format = Renderer::GetFormat(nativeTexDesc.Format);
+	if (format == nvrhi::Format::UNKNOWN) {
 		logger::error("TextureManager::GetDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
 		return nullptr;
 	}
@@ -246,7 +244,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
 		.setMipLevels(nativeTexDesc.MipLevels)
-		.setFormat(formatIt->second)
+		.setFormat(format)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Shared Texture [?]");
 

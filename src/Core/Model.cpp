@@ -227,17 +227,25 @@ void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 
 	if (create || m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh)) {
 		rebuild = true;
+		m_NumUpdatesSinceRebuild = 0;
+	}
+	else if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform)) {
+		if (m_NumUpdatesSinceRebuild >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE) {
+			if (Scene::GetSingleton()->GetSceneGraph()->TryMaintenanceRebuild(frameIndex)) {
+				rebuild = true;
+				m_NumUpdatesSinceRebuild = 0;
+			} else {
+				rebuild = false;
+			}
+		} else {
+			m_NumUpdatesSinceRebuild++;
+			rebuild = false;
+		}
 	}
 	else {
-		// Must have a valid update flag
-		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
-			return;
-
-		rebuild = false;
+		return;
 	}
 
-	// If rebuild is true the BLAS will be build/rebuilt (mesh list changed = rebuild, vertex moved = update)
-	// TODO: We should probably rebuild periodically to avoid performance degradation (we had issues in the past with TLAS updates, so nowadays we always rebuild TLAS)
 	auto blasDesc = MakeBLASDesc(!rebuild);
 
 	// Collect geometry descriptions

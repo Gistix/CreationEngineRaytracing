@@ -62,7 +62,7 @@ struct MSNReference : TextureReference
 		eastl::unique_ptr<Pipeline::MSNConverter> m_MSNConverter;
 
 		TextureManager();
-		static void RegisterResidentMipOffset(ID3D12Resource* resource, uint32_t mipOffset);
+		static void RegisterResidentMipOffset(IUnknown* resource, uint32_t mipOffset);
 		uint64_t GetFakeDoubledVRAMUsage();
 		void LogMemoryStats();
 		eastl::shared_ptr<DescriptorHandle> GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType = TextureType::Standard);
