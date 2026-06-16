@@ -5,7 +5,7 @@
 namespace
 {
 	std::mutex g_ResidentMipOffsetsMutex;
-	eastl::unordered_map<ID3D12Resource*, uint32_t> g_ResidentMipOffsets;
+	eastl::unordered_map<IUnknown*, uint32_t> g_ResidentMipOffsets;
 }
 
 TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager, uint32_t residentMipOffset) :
@@ -21,7 +21,7 @@ TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTable
 	format = desc.format;
 }
 
-void TextureManager::RegisterResidentMipOffset(ID3D12Resource* resource, uint32_t mipOffset)
+void TextureManager::RegisterResidentMipOffset(IUnknown* resource, uint32_t mipOffset)
 {
 	if (!resource || mipOffset == 0)
 		return;
@@ -173,7 +173,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 	uint32_t residentMipOffset = 0;
 	{
 		std::scoped_lock lock(g_ResidentMipOffsetsMutex);
-		if (auto it = g_ResidentMipOffsets.find(d3d12Resource); it != g_ResidentMipOffsets.end()) {
+		if (auto it = g_ResidentMipOffsets.find(key); it != g_ResidentMipOffsets.end()) {
 			residentMipOffset = it->second;
 			g_ResidentMipOffsets.erase(it);
 		}

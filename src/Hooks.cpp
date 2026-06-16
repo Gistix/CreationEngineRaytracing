@@ -9,6 +9,33 @@ namespace Hooks
 {
 	namespace
 	{
+		struct PendingTextureUpload
+		{
+			nvrhi::CommandListHandle commandList;
+			nvrhi::EventQueryHandle query;
+		};
+
+		std::mutex g_PendingTextureUploadsMutex;
+		eastl::vector<PendingTextureUpload> g_PendingTextureUploads;
+
+		void RetireCompletedTextureUploads(nvrhi::IDevice* device)
+		{
+			std::scoped_lock lock(g_PendingTextureUploadsMutex);
+
+			for (auto it = g_PendingTextureUploads.begin(); it != g_PendingTextureUploads.end();) {
+				if (device->pollEventQuery(it->query))
+					it = g_PendingTextureUploads.erase(it);
+				else
+					++it;
+			}
+		}
+
+		void TrackTextureUpload(nvrhi::CommandListHandle commandList, nvrhi::EventQueryHandle query)
+		{
+			std::scoped_lock lock(g_PendingTextureUploadsMutex);
+			g_PendingTextureUploads.push_back({ commandList, query });
+		}
+
 		bool IsBlockCompressedFormat(DXGI_FORMAT format)
 		{
 			switch (format) {
@@ -297,16 +324,23 @@ namespace Hooks
 			return result;
 		}
 
-		auto& expSettings = Scene::GetSingleton()->m_Settings.ExperimentalSettings;
+		auto& settings = Scene::GetSingleton()->m_Settings;
+		auto& expSettings = settings.ExperimentalSettings;
 
 		bool exclusiveMode = expSettings.TextureMode == TextureMode::Exclusive;
+		bool pathTracingMode = settings.GeneralSettings.Mode == Mode::PathTracing;
 		bool cutOff = expSettings.TextureCutOff != 0;
-		uint32_t streamingMipBias = exclusiveMode ? GetTextureStreamingMipBias(expSettings, a_width, a_height, a_mipLevels, a_format) : 0;
 
 		if (cutOff) {
 			uint32_t cutOffSize = 1 << (expSettings.TextureCutOff + 7);
 			cutOff = (a_width * a_height) < (cutOffSize * cutOffSize);
 		}
+
+		const bool streamingAllowed = (exclusiveMode && !cutOff) || (!exclusiveMode && pathTracingMode);
+		uint32_t streamingMipBias = streamingAllowed ? GetTextureStreamingMipBias(expSettings, a_width, a_height, a_mipLevels, a_format) : 0;
+
+		if (!a_data || a_arraySize != 1)
+			streamingMipBias = 0;
 
 		auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
 
@@ -400,6 +434,8 @@ namespace Hooks
 
 			// Upload Texture Data
 			{
+				RetireCompletedTextureUploads(device);
+
 				auto commandList = renderer->GetGraphicsCommandList();
 
 				commandList->open();
@@ -418,9 +454,14 @@ namespace Hooks
 
 				commandList->close();
 
-				device->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
+				auto uploadQuery = device->createEventQuery();
+				{
+					std::scoped_lock lock(renderer->GetExecutionMutex());
+					const auto submittedInstance = device->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
+					device->setEventQuery(uploadQuery, nvrhi::CommandQueue::Graphics, submittedInstance);
+				}
 
-				device->waitForIdle();
+				TrackTextureUpload(commandList, uploadQuery);
 			}
 
 			*a_outTexture = texture;
@@ -435,10 +476,14 @@ namespace Hooks
 
 			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
 
+			const uint32_t residentMipLevels = a_mipLevels - streamingMipBias;
+			const uint32_t residentWidth = GetMipExtent(a_width, streamingMipBias);
+			const uint32_t residentHeight = GetMipExtent(a_height, streamingMipBias);
+
 			auto desc = D3D11_TEXTURE2D_DESC{};
-			desc.Width = a_width;
-			desc.Height = a_height;
-			desc.MipLevels = a_mipLevels;
+			desc.Width = residentWidth;
+			desc.Height = residentHeight;
+			desc.MipLevels = residentMipLevels;
 			desc.ArraySize = a_arraySize;
 			desc.Format = a_format;
 			desc.SampleDesc.Count = 1;
@@ -448,17 +493,21 @@ namespace Hooks
 			desc.CPUAccessFlags = 0;
 			desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
-			auto result = a_device->CreateTexture2D(&desc, a_data, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
+			const D3D11_SUBRESOURCE_DATA* residentData = a_data ? a_data + streamingMipBias : nullptr;
+			auto result = a_device->CreateTexture2D(&desc, residentData, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
 
 			if (FAILED(result) || !texture->texture) {
 				return result;
 			}
 
+			if (streamingMipBias > 0)
+				TextureManager::RegisterResidentMipOffset(texture->texture, streamingMipBias);
+
 			auto srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC{};
 			srvDesc.Format = a_format;
 			srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
 			srvDesc.Texture2D.MostDetailedMip = 0;
-			srvDesc.Texture2D.MipLevels = a_mipLevels;
+			srvDesc.Texture2D.MipLevels = residentMipLevels;
 
 			auto srvResult = a_device->CreateShaderResourceView(texture->texture, &srvDesc, &texture->resourceView);
 
