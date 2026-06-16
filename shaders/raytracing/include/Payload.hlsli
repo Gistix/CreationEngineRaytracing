@@ -48,6 +48,23 @@ struct Payload
 
     bool Hit() { return hitDistance > 0.0f; }
     
+    void Init(inout uint seed)
+    {
+        hitDistance = -1.0f;
+        primitiveIndex = 0;
+        PackBarycentrics(float2(0.0f, 0.0f));
+        PackInstanceGeometryIndex(0, 0);
+        randomSeed = seed;
+    }
+    
+    void SetCommittedHit(float hitT, uint primIndex, float2 barycentrics, uint instanceIndex, uint geometryIndex)
+    {
+        hitDistance = hitT;
+        primitiveIndex = primIndex;
+        PackBarycentrics(barycentrics);
+        PackInstanceGeometryIndex(instanceIndex, geometryIndex);
+    }
+    
     void PackAll(in BuiltInTriangleIntersectionAttributes attribs)
     {
         hitDistance = RayTCurrent();
