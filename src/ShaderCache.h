@@ -6,6 +6,8 @@
 
 namespace ShaderCache
 {
+	static constexpr const wchar_t* CacheFolder = L"Data\\CreationEngineRaytracing\\ShaderCache";
+
 	struct ShaderKey {
 		eastl::wstring filePath; 
 		eastl::vector<ShaderDefine> defines; 

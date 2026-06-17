@@ -14,19 +14,22 @@ namespace ShaderCache
 	{
 		ShaderKey shaderKey(filePath, defines, target, entryPoint);
 
-		// Return cached shader
+		// Return loaded shader
 		if (auto it = m_Shaders.find(shaderKey); it != m_Shaders.end()) {
 			logger::debug("ShaderCache::GetShader - Returning cached shader");
 			return it->second.get();
 		}
 
-		winrt::com_ptr<IDxcBlob> blob;
+		// Attempt to load from disk cache first
+		std::filesystem::path cachePath = std::filesystem::path(CacheFolder) / filePath;
+		auto cachePathString =  Util::WStringToString(cachePath);
+		logger::info("Cache Path: {}", cachePathString);
 
+		winrt::com_ptr<IDxcBlob> blob;
 		ShaderUtils::CompileShader(blob, filePath, defines, target, entryPoint);
 
 		// Save shader to cache
-		auto [it, emplaced] = m_Shaders.try_emplace(shaderKey, std::move(blob));
-
+		auto [it, emplaced] = m_Shaders.emplace(shaderKey, std::move(blob));
 		if (!emplaced) {
 			logger::error("ShaderCache::GetShader - Emplace failed.");
 			return nullptr;
