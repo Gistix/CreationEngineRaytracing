@@ -21,11 +21,7 @@ struct TextureReference
 
 	TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager, uint32_t residentMipOffset = 0);
 
-	virtual ~TextureReference()
-	{
-		if (ID3D12Resource* nativeTexture = texture->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource))
-			nativeTexture->Release();
-	}
+	virtual ~TextureReference() = default;
 };
 
 struct MSNReference : TextureReference
@@ -37,11 +33,7 @@ struct MSNReference : TextureReference
 		: TextureReference(texture, manager), sourceTexture(sourceTexture) {
 	}
 
-	virtual ~MSNReference()
-	{
-		if (ID3D12Resource* nativeSourceTexture = sourceTexture->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource))
-			nativeSourceTexture->Release();
-	}
+	virtual ~MSNReference() = default;
 };
 
 	struct TextureManager

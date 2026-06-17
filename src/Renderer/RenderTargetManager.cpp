@@ -30,14 +30,18 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
 		case RenderTarget::ViewDepth:
+			desc.format = nvrhi::Format::R32_FLOAT;
+			break;
 		case RenderTarget::ClipDepth:
 			desc.format = nvrhi::Format::R32_FLOAT;
+			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
 			break;
 		case RenderTarget::FaceNormals:
 			desc.format = nvrhi::Format::R11G11B10_FLOAT;
 			break;
 		case RenderTarget::MotionVectors3D:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
 			break;			
 		case RenderTarget::DiffuseAlbedo:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
