@@ -10,6 +10,7 @@
 #include "interop/CameraData.hlsli"
 #include "interop/SharedData.hlsli"
 
+#include "Types/MenuState.h"
 #include "Types/Settings.h"
 
 struct Scene
@@ -49,6 +50,9 @@ struct Scene
 	// Used to draw full LOD when world map is open
 	bool* g_BypassSubIndexVisibility = nullptr;
 
+	CESEAdapter::REX::EnumSet<MenuState> m_MenuState;
+	uint m_MenuStateUpdateFrame = 0;
+
 	Settings m_Settings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
@@ -78,9 +82,34 @@ struct Scene
 
 	inline auto GetFeatureBuffer() const { return m_FeatureBuffer; }
 
+	auto GetMenuState()
+	{
+		auto frameCount = RE::BSGraphics::State::GetSingleton()->frameCount;
+
+		if (m_MenuStateUpdateFrame != frameCount) {
+			m_MenuState.reset();
+
+			const auto ui = RE::UI::GetSingleton();
+
+			m_MenuState.set(ui->IsMenuOpen(RE::MainMenu::MENU_NAME), MenuState::MainMenu);
+			m_MenuState.set(ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
+			m_MenuState.set(ui->IsMenuOpen(RE::MapMenu::MENU_NAME), MenuState::MapMenu);
+
+			m_MenuStateUpdateFrame = frameCount;
+		}
+
+		return m_MenuState;
+	}
+
 	inline bool IsPathTracingActive() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing; };
 
-	inline bool ApplyPathTracingCull() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing && m_Settings.ExperimentalSettings.PathTracingCull; };
+	inline bool ApplyPathTracingCull() 
+	{ 
+		return m_Settings.Enabled && 
+			m_Settings.GeneralSettings.Mode == Mode::PathTracing && 
+			m_Settings.ExperimentalSettings.PathTracingCull && 
+			GetMenuState().none(MenuState::MainMenu, MenuState::LoadingMenu);
+	}
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
 	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
