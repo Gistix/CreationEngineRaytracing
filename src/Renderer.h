@@ -64,11 +64,6 @@ class Renderer
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;
 
-	ID3D12Resource* m_PTDepthCopyTargetResource = nullptr;
-	nvrhi::TextureHandle m_PTDepthCopyTargetTexture;
-	ID3D12Resource* m_PTMVCopyTargetResource = nullptr;
-	nvrhi::TextureHandle m_PTMVCopyTargetTexture;
-
 	uint64_t m_FrameIndex = 0;
 
 	uint2 m_RenderSize;
@@ -294,8 +289,6 @@ public:
 	uint2 GetResolution();
 
 	uint2 GetDynamicResolution();
-
-	void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 
 	nvrhi::ICommandList* StartExecution();
 
