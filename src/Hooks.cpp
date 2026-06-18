@@ -826,9 +826,9 @@ namespace Hooks
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30739, 31575));
+		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30737, 31575));
 
-		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree, might be broken for SE
+		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree
 		stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD
