@@ -120,6 +120,18 @@ float3 computeMotionVector(float3 posW, float3 prevPosW)
     return motion * float3(0.5f, -0.5f, 1.0f);
 }
 
+float3 computeMotionVectorCameraRelative(float3 posCamera, float3 prevPosCamera)
+{
+    float4 currClip = mul(Camera.ViewProj, float4(posCamera, 1.0));
+    float4 prevClip = mul(Camera.PrevViewProj, float4(prevPosCamera, 1.0));
+
+    float3 currNDC = currClip.xyz / currClip.w;
+    float3 prevNDC = prevClip.xyz / prevClip.w;
+
+    float3 motion = prevNDC - currNDC;
+    return motion * float3(0.5f, -0.5f, 1.0f);
+}
+
 // ============================================================================
 // Clip-space Depth Computation
 // ============================================================================
@@ -127,6 +139,12 @@ float3 computeMotionVector(float3 posW, float3 prevPosW)
 float computeClipDepth(float3 posW)
 {
     float4 clipPos = mul(Camera.ViewProj, float4(posW - Camera.Position, 1.0));
+    return clipPos.z / clipPos.w;
+}
+
+float computeClipDepthCameraRelative(float3 posCamera)
+{
+    float4 clipPos = mul(Camera.ViewProj, float4(posCamera, 1.0));
     return clipPos.z / clipPos.w;
 }
 

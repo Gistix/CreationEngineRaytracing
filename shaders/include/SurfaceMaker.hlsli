@@ -26,6 +26,18 @@
 #   include "include/SurfaceFallout4.hlsli"
 #endif
 
+float3 TransformPointCameraRelative(float3x4 transform, float3 position, float3 cameraPosition)
+{
+    float3 translation = float3(transform._m03, transform._m13, transform._m23);
+    return mul((float3x3)transform, position) + (translation - cameraPosition);
+}
+
+float3 TransformMeshInstancePointCameraRelative(float3 objectSpacePosition, float3x4 meshTransform, float3x4 instanceTransform, float3 cameraPosition)
+{
+    float3 rootSpacePosition = mul(meshTransform, float4(objectSpacePosition, 1.0));
+    return TransformPointCameraRelative(instanceTransform, rootSpacePosition, cameraPosition);
+}
+
 struct SurfaceMaker
 {
 
@@ -38,6 +50,8 @@ struct SurfaceMaker
         
         surface.Position = position;
         surface.PrevPosition = position;
+        surface.CameraRelativePosition = position - Camera.Position;
+        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
@@ -58,6 +72,7 @@ struct SurfaceMaker
         GetVertices(mesh.GeometryIdx, payload.primitiveIndex, v0, v1, v2);
 
         float3 uvw = GetBary(payload.Barycentrics());
+        float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
 
         material = GetMaterial(mesh.GeometryIdx);
 
@@ -115,7 +130,6 @@ struct SurfaceMaker
         // Compute previous world position for motion vectors
 #if defined(HAS_PREV_POSITIONS)
         {
-            float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
             float3 currentRootSpacePos = mul(mesh.Transform, float4(currentObjectSpacePos, 1.0));
             float3 currentWorldPosition = mul(instance.Transform, float4(currentRootSpacePos, 1.0));
             float3 objectSpacePos = currentObjectSpacePos;
@@ -126,10 +140,26 @@ struct SurfaceMaker
  
             float3 prevRootSpacePos = mul(mesh.PrevTransform, float4(objectSpacePos, 1.0));       
             float3 prevWorldPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));
-            // Payload barycentrics are quantized; preserve the exact ray hit residual
-            // so static geometry produces zero motion.
-            surface.PrevPosition = prevWorldPosition + (surface.Position - currentWorldPosition);
+            // Apply object motion after current/previous reconstruction cancel, so
+            // static geometry does not inherit world-coordinate cancellation error.
+            surface.PrevPosition = surface.Position + (prevWorldPosition - currentWorldPosition);
         }
+#endif
+
+        surface.CameraRelativePosition = TransformMeshInstancePointCameraRelative(
+            currentObjectSpacePos, mesh.Transform, instance.Transform, Camera.Position);
+
+#if defined(HAS_PREV_POSITIONS)
+        {
+            float3 prevObjectSpacePos = currentObjectSpacePos;
+            if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
+                prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
+
+            surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
+                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.PositionPrev);
+        }
+#else
+        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
 #endif
 
         float coneTexLODValue = ComputeRayConeTriangleLODValue(v0, v1, v2, objectToWorld3x3);
@@ -240,6 +270,8 @@ struct SurfaceMaker
         
         surface.Position = position;
         surface.PrevPosition = position;
+        surface.CameraRelativePosition = position - Camera.Position;
+        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
@@ -323,6 +355,8 @@ struct SurfaceMaker
 
         surface.Position = position;
         surface.PrevPosition = position;
+        surface.CameraRelativePosition = position - Camera.Position;
+        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
 
         surface.FaceNormal = faceNormal;
 
