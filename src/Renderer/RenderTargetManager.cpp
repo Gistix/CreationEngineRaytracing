@@ -128,6 +128,13 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 					logger::info("RenderTargetManager::GetTexture - Reflect shared properties failed for {} with a hr of {:0X}", magic_enum::enum_name(texture), hr);
 					return nullptr;
 				}
+
+				hr = Renderer::GetSingleton()->GetNativeD3D11Device()->OpenSharedResource(renderTarget.sharedHandle, IID_PPV_ARGS(renderTarget.d3d11Texture.put()));
+
+				if (FAILED(hr)) {
+					logger::info("RenderTargetManager::GetTexture - Open shared resource failed for {} with a hr of {:0X}", magic_enum::enum_name(texture), hr);
+					return nullptr;
+				}
 			}
 			else {
 				D3D11_TEXTURE2D_DESC d3d11Desc{};
