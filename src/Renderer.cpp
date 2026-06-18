@@ -21,7 +21,7 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	deviceDesc.pGraphicsCommandQueue = rendererParams.commandQueue;
 	deviceDesc.pComputeCommandQueue = rendererParams.computeCommandQueue;
 	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
-	deviceDesc.aftermathEnabled = true;
+	deviceDesc.aftermathEnabled = false;
 	deviceDesc.logBufferLifetime = false;
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
