@@ -215,25 +215,32 @@ void SIA_SafeSpawnPointSimple(
 
 Instance GetInstance(uint instanceIdx)
 {
-    return Instances[NonUniformResourceIndex(instanceIdx)];
+    const uint safeInstanceIndex = min(instanceIdx, Raytracing.NumInstances);
+    return Instances[NonUniformResourceIndex(safeInstanceIndex)];
+}
+
+uint GetSafeMeshIndex(in Instance instance, uint geometryIndex)
+{
+    const uint safeGeometryIndex = min(geometryIndex, instance.NumGeometry);
+    return min(instance.FirstGeometryID + safeGeometryIndex, Raytracing.NumMeshes);
 }
 
 Mesh GetMesh(in uint instanceIndex, in uint geometryIndex)
 {
     Instance instance = GetInstance(instanceIndex);
-    return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + geometryIndex)];
+    return Meshes[NonUniformResourceIndex(GetSafeMeshIndex(instance, geometryIndex))];
 }
 
 Mesh GetMesh(in uint instanceIndex, in uint geometryIndex, out Instance instance)
 {
     instance = GetInstance(instanceIndex);
-    return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + geometryIndex)];
+    return Meshes[NonUniformResourceIndex(GetSafeMeshIndex(instance, geometryIndex))];
 }
 
 Mesh GetMesh(in Payload payload, out Instance instance)
 {
     instance = GetInstance(payload.GetInstanceIndex());
-    return Meshes[NonUniformResourceIndex(instance.FirstGeometryID + payload.GetGeometryIndex())];
+    return Meshes[NonUniformResourceIndex(GetSafeMeshIndex(instance, payload.GetGeometryIndex()))];
 }
 
 Triangle GetTriangle(in uint meshIndex, in uint primitiveIdx)
@@ -241,11 +248,14 @@ Triangle GetTriangle(in uint meshIndex, in uint primitiveIdx)
     return Triangles[NonUniformResourceIndex(meshIndex)][primitiveIdx];
 }
 
-void GetVertices(in uint meshIndex, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
+void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
 {
-    Triangle geomTriangle = GetTriangle(meshIndex, primitiveIndex);
+    const uint meshIndex = mesh.GeometryIdx;
+    const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
+    
+    const Triangle geomTriangle = GetTriangle(meshIndex, safePrimitiveIndex);
 
-    StructuredBuffer<Vertex> vertices = Vertices[NonUniformResourceIndex(meshIndex)];
+    const StructuredBuffer<Vertex> vertices = Vertices[NonUniformResourceIndex(meshIndex)];
     v0 = vertices[NonUniformResourceIndex(geomTriangle.x)];
     v1 = vertices[NonUniformResourceIndex(geomTriangle.y)];
     v2 = vertices[NonUniformResourceIndex(geomTriangle.z)];
@@ -256,9 +266,12 @@ Material GetMaterial(in uint meshIndex)
 }
 
 #if defined(HAS_PREV_POSITIONS)
-void GetVertices(in uint meshIndex, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)
+void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)
 {
-    Triangle geomTriangle = GetTriangle(meshIndex, primitiveIndex);
+    const uint meshIndex = mesh.GeometryIdx;
+    const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
+
+    Triangle geomTriangle = GetTriangle(meshIndex, safePrimitiveIndex);
 
     StructuredBuffer<Vertex> vertices = Vertices[NonUniformResourceIndex(meshIndex)];
     v0 = vertices[NonUniformResourceIndex(geomTriangle.x)];
