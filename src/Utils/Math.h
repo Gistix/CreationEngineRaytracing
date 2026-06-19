@@ -20,6 +20,13 @@ namespace Util
 
 		DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);
 
+		inline float3x4 ComputeLocalToRoot(const RE::NiTransform& rootWorldInverse, const RE::NiTransform& geometryWorld)
+		{
+			float3x4 result;
+			XMStoreFloat3x4(&result, GetXMFromNiTransform(rootWorldInverse * geometryWorld));
+			return result;
+		}
+
 		bool MatrixNearEqual(const float3x4& a, const float3x4& b, float epsilon = 1e-5f);
 
 		bool Intersects(const float2& aCenter, const float2& aSize, const float2& bCenter, const float2& bSize);

@@ -518,7 +518,7 @@ namespace Hooks
 
 	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull())
+		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(cullingProcess, geometry, a_arg2);
