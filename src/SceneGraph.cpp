@@ -149,6 +149,12 @@ void SceneGraph::Initialize()
 	m_TextureManager = eastl::make_unique<TextureManager>();
 }
 
+void SceneGraph::UpdateCamera()
+{
+	const auto* tesCamera = RE::PlayerCamera::GetSingleton()->currentState->camera;
+	m_Camera = tesCamera ? Util::Game::FindNiCamera(tesCamera->cameraRoot.get()) : nullptr;
+}
+
 void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 {
 #if defined(SKYRIM)

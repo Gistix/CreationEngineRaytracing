@@ -667,12 +667,16 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 #if defined(SKYRIM)
 	auto* scene = Scene::GetSingleton();
 	const bool isPathTracing = scene->IsPathTracingActive();
-	const bool applyPathTracingCull = scene->ApplyPathTracingCull();
-	const bool isCulled = applyPathTracingCull || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+	const bool isForceCulled = isPathTracing || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+	
+	bool isVisible = false;
+	if (isForceCulled) {	
+		isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(bsGeometryPtr.get());
+	}
 
 	const auto frameID = skinInstance->frameID;
 
-	if (!isCulled && frameID == Constants::INVALID_FRAME_ID)
+	if (!isVisible && frameID == Constants::INVALID_FRAME_ID)
 		return false;
 
 	auto* rootParent = skinInstance->rootParent;
@@ -686,7 +690,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 
 	// Only update if the game has updated the animation
 	// Part 1 of COtR fix
-	if (!isCulled && !unparentedPlayer && m_FrameID == frameID)
+	if (!isVisible && !unparentedPlayer && m_FrameID == frameID)
 		return false;
 
 	m_FrameID = frameID;
@@ -696,7 +700,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 	if (!skinData)
 		return false;
 
-	if (!isCulled && skinInstance->numMatrices != skinData->bones)
+	if (!isForceCulled && skinInstance->numMatrices != skinData->bones)
 		logger::warn("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
 
 	if (skinData->bones == 0)

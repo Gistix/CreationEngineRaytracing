@@ -35,6 +35,8 @@
 
 class SceneGraph
 {
+	RE::NiCamera* m_Camera = nullptr;
+
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 	mutable std::mutex m_ModelMutex;
@@ -131,8 +133,13 @@ public:
 
 	inline auto& GetTextureManager() { return m_TextureManager; }
 
+	inline auto& GetCamera() const  { return m_Camera; }
+	
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
+
+	// Update Camera reference
+	void UpdateCamera();
 
 	// Update Actor equipment
 	void UpdateActors();
