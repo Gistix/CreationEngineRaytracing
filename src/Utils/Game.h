@@ -13,6 +13,8 @@ namespace Util
 		bool IsGlobalLight(RE::BSLight* a_light);
 
 		bool IsHidden(RE::NiAVObject* object, RE::NiAVObject* root = nullptr);
+
+		RE::NiCamera* FindNiCamera(RE::NiAVObject* object);
 	}
 
 	namespace Units

@@ -388,11 +388,66 @@ void Mesh::BuildMaterial(const GeometryRuntimeData& runtimeData, RE::FormID form
 	geometryDesc.flags = (material->alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 }
 
+eastl::unique_ptr<Mesh> Mesh::Clone(RE::NiAVObject* rootNode, RE::FormID formID) const
+{
+	RE::BSGeometry* foundGeom = nullptr;
+
+	Util::Traversal::ScenegraphRTGeometries(rootNode, nullptr, [&](RE::BSGeometry* pGeometry) -> CESEAdapter::RE::BSVisitControl {
+		if (eastl::string(pGeometry->name.c_str()) == m_Name) {
+			foundGeom = pGeometry;
+			return CESEAdapter::RE::BSVisitControl::kStop;
+		}
+		return CESEAdapter::RE::BSVisitControl::kContinue;
+	});
+
+	if (!foundGeom)
+		return nullptr;
+
+	auto rootWorldInverse = rootNode->world.Invert();
+	const bool isRootOrigin = rootNode->world.translate == Util::Adapter::GetNiPoint3Zero();
+	const bool isOrigin = foundGeom->world.translate == Util::Adapter::GetNiPoint3Zero();
+
+	auto cloneFlags = flags;
+	cloneFlags.reset(Mesh::Flags::Origin);
+
+	float3x4 localToRoot;
+	if (!isOrigin || (isOrigin && isRootOrigin)) {
+		localToRoot = Util::Math::ComputeLocalToRoot(rootWorldInverse, foundGeom->world);
+	} else {
+		localToRoot = float3x4(
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f);
+		cloneFlags.set(Mesh::Flags::Origin);
+	}
+
+	auto clone = eastl::make_unique<Mesh>(m_FormType, m_Type, cloneFlags.get(), m_Name.c_str(), foundGeom, localToRoot, m_Identifier);
+
+	clone->vertexData = vertexData;
+	clone->triangleData = triangleData;
+	clone->vertexFlags = vertexFlags;
+	clone->m_BoneMatrices = m_BoneMatrices;
+	clone->m_PrevLocalToRoot = localToRoot;
+
+	const auto& runtimeData = Util::Adapter::GetGeometryRuntimeData(foundGeom);
+	clone->BuildMaterial(runtimeData, formID);
+
+	clone->m_FrameID = 0;
+	clone->m_State = State::None;
+
+	return clone;
+}
+
+bool Mesh::Updatable() const
+{
+	return flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;
+}
+
 void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;
+	bool updatable = Updatable();
 
 	logger::debug("Mesh::CreateBuffers - {}", m_Name);
 
@@ -612,12 +667,16 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 #if defined(SKYRIM)
 	auto* scene = Scene::GetSingleton();
 	const bool isPathTracing = scene->IsPathTracingActive();
-	const bool applyPathTracingCull = scene->ApplyPathTracingCull();
-	const bool isCulled = applyPathTracingCull || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+	const bool isForceCulled = isPathTracing || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+	
+	bool isVisible = false;
+	if (isForceCulled) {	
+		isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(bsGeometryPtr.get());
+	}
 
 	const auto frameID = skinInstance->frameID;
 
-	if (!isCulled && frameID == Constants::INVALID_FRAME_ID)
+	if (!isVisible && frameID == Constants::INVALID_FRAME_ID)
 		return false;
 
 	auto* rootParent = skinInstance->rootParent;
@@ -631,7 +690,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 
 	// Only update if the game has updated the animation
 	// Part 1 of COtR fix
-	if (!isCulled && !unparentedPlayer && m_FrameID == frameID)
+	if (!isVisible && !unparentedPlayer && m_FrameID == frameID)
 		return false;
 
 	m_FrameID = frameID;
@@ -641,7 +700,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 	if (!skinData)
 		return false;
 
-	if (!isCulled && skinInstance->numMatrices != skinData->bones)
+	if (!isForceCulled && skinInstance->numMatrices != skinData->bones)
 		logger::warn("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
 
 	if (skinData->bones == 0)

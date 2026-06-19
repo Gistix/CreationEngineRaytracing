@@ -124,6 +124,8 @@ struct Mesh
 
 	void BuildMaterial(const GeometryRuntimeData& geometryRuntimeData, RE::FormID formID);
 
+	eastl::unique_ptr<Mesh> Clone(RE::NiAVObject* rootNode, RE::FormID formID) const;
+
 	void CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList);
 
 	// Initialize state, must be ran before BLAS is built
@@ -144,6 +146,8 @@ struct Mesh
 	bool IsHidden() const;
 
 	MeshData GetData();
+
+	bool Updatable() const;
 
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:

@@ -76,5 +76,23 @@ namespace Util
 
 			return IsHidden(object->parent, root);
 		}
+
+		RE::NiCamera* FindNiCamera(RE::NiAVObject* object)
+		{
+			if (auto* camera = skyrim_cast<RE::NiCamera*>(object))
+				return camera;
+
+			auto* node = object->AsNode();
+			if (!node)
+				return nullptr;
+
+			for (auto& child : node->GetChildren()) {
+				if (child) {
+					if (auto* res = FindNiCamera(child.get()))
+						return res;
+				}
+			}
+			return nullptr;
+		}
 	}
 }
