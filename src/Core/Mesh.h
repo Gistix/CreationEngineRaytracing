@@ -145,6 +145,8 @@ struct Mesh
 
 	MeshData GetData();
 
+	bool Updatable() const;
+
 	static eastl::vector<Triangle> GetLandscapeTriangles();
 private:
 	CESEAdapter::REX::EnumSet<State> m_State = State::None;

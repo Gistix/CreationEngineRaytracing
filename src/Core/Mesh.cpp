@@ -388,11 +388,16 @@ void Mesh::BuildMaterial(const GeometryRuntimeData& runtimeData, RE::FormID form
 	geometryDesc.flags = (material->alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 }
 
+bool Mesh::Updatable() const
+{
+	return flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;
+}
+
 void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;
+	bool updatable = Updatable();
 
 	logger::debug("Mesh::CreateBuffers - {}", m_Name);
 

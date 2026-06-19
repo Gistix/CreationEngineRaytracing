@@ -26,10 +26,17 @@ struct Model
 			BLASBuilt = 1 << 1
 		};
 	};
-
 	using Flag = Flags::Flag;
 
+	enum class Type : uint8_t
+	{
+		Default,
+		Actor
+	};
+
 	eastl::string m_Name;
+	
+	Type m_Type = Type::Default;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
 
@@ -57,7 +64,7 @@ struct Model
 
 	Flag m_Flags = Flags::None;
 
-	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+	Model(eastl::string name, Type type, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	void UpdateMeshFlags();
 

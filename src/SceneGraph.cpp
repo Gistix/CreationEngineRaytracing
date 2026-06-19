@@ -1277,8 +1277,14 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 	}
 
 	if (model) {
-		AddInstance(formID, pRoot, model);
-		return static_cast<uint32_t>(model->m_Meshes.size());
+		const bool nonInstanceable = model->GetMeshFlags().any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) || model->GetMeshTypes().any(Mesh::Type::LandLOD);
+		if (nonInstanceable) {
+
+		}
+		else {
+			AddInstance(formID, pRoot, model);
+			return static_cast<uint32_t>(model->m_Meshes.size());
+		}
 	}
 
 	logger::debug("SceneGraph::CreateModelInternal - Path: {}, FormID [0x{:08X}], NiNode [0x{:08X}]: {}", path, formID, reinterpret_cast<uintptr_t>(pRoot), pRoot->name);
@@ -1299,7 +1305,9 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 Model* SceneGraph::CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) {
 	if (auto shapeCount = meshes.size(); shapeCount > 0) {
 
-		auto model = eastl::make_unique<Model>(path, object, form, meshes);
+		auto type = form && form->formType.all(RE::FormType::ActorCharacter) ? Model::Type::Actor : Model::Type::Default;
+
+		auto model = eastl::make_unique<Model>(path, type, object, form, meshes);
 		auto* modelPtr = model.get();
 
 		m_ModelMutex.lock();

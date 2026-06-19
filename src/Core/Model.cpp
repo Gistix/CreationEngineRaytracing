@@ -4,8 +4,8 @@
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
-Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
-	m_Name(name), m_Meshes(eastl::move(meshes))
+Model::Model(eastl::string name, Type type, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
+	m_Name(name), m_Type(type), m_Meshes(eastl::move(meshes))
 {
 	UpdateMeshFlags();
 
@@ -14,8 +14,8 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 		mesh->InitState(node, meshFlags.get());
 	}
 
-	// Models with these flags cannot be instanced directly
-	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+	// Actors cannot be instanced or copied, so we give them an unique name
+	if (type == Type::Actor)
 		m_Name.append(Model::KeySuffix(node).c_str());
 
 	// Water and LOD models have no form
