@@ -375,7 +375,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             surface.SubsurfaceData.Anisotropy = -0.5f;
 
             // Typical skin values
-            surface.SubsurfaceData.ScatteringColor = GamutTransform(float3(4.820f, 1.690f, 1.090f));
+            surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
 
