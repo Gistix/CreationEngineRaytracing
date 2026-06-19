@@ -51,12 +51,9 @@ bool Instance::SkipAS() const
 
 bool Instance::SkipUpdate()
 {
-	auto* renderer = Renderer::GetSingleton();
-	auto& settings = renderer->m_Settings;
+	auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	auto frameIndex = renderer->GetFrameIndex();
-
-	if (settings.VariableUpdateRate)
+	if (Scene::GetSingleton()->m_Settings.AdvancedSettings.VariableUpdateRate)
 	{
 		const uint64_t delta = frameIndex - m_LastUpdate;
 

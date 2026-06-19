@@ -145,7 +145,6 @@ public:
 	{
 		bool UseRayQuery = true;
 		bool ValidationLayer = true;
-		bool VariableUpdateRate = false;
 	} m_Settings;
 
 	static Renderer* GetSingleton()
