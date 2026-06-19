@@ -18,18 +18,19 @@ void computePSRMotionVectorsAndDepth(
     const uint2 pixelPos,
     const float totalSceneLength,
     const float3x3 imageXform,
-    const float3 surfacePosition,
-    const float3 surfacePrevPosition,
+    const float3 surfaceCameraPosition,
+    const float3 surfacePrevCameraPosition,
     out float3 outMotionVectors,
     out float outDepth)
 {
     float3 cameraRayDir = normalize(mul((float3x3)Camera.ViewInverse,
         GetView(pixelPos, Camera.RenderSize, Camera.ProjInverse)));
-    float3 virtualWorldPos = Camera.Position.xyz + cameraRayDir * totalSceneLength;
-    float3 worldMotion = surfacePrevPosition - surfacePosition;
+    float3 virtualCameraPos = cameraRayDir * totalSceneLength;
+    float3 cameraDelta = Camera.Position - Camera.PositionPrev;
+    float3 worldMotion = surfacePrevCameraPosition - surfaceCameraPosition - cameraDelta;
     float3 virtualMotion = mul(imageXform, worldMotion);
-    outMotionVectors = computeMotionVector(virtualWorldPos, virtualWorldPos + virtualMotion);
-    outDepth = computeClipDepth(virtualWorldPos);
+    outMotionVectors = computeMotionVectorCameraRelative(virtualCameraPos, virtualCameraPos + virtualMotion + cameraDelta);
+    outDepth = computeClipDepthCameraRelative(virtualCameraPos);
 }
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
@@ -201,7 +202,7 @@ void StablePlanesHandleMiss(
 {
     float3 skyMV; float skyDepth;
     computePSRMotionVectorsAndDepth(pixelPos, kEnvironmentMapSceneDistance, imageXform,
-        float3(0,0,0), float3(0,0,0), skyMV, skyDepth);
+        float3(0,0,0), Camera.Position - Camera.PositionPrev, skyMV, skyDepth);
 
     float3 planeNormal = -rayDir;
 
@@ -301,7 +302,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.Position, surface.PrevPosition, psrMV, psrDepth);
+            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
@@ -355,7 +356,7 @@ StablePlanesHitResult StablePlanesHandleHit(
 
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.Position, surface.PrevPosition, psrMV, psrDepth);
+            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
@@ -444,7 +445,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         bool storeAsDominant = isDominant && canReuseCurrent;
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.Position, surface.PrevPosition, psrMV, psrDepth);
+            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,

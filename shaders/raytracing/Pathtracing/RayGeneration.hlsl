@@ -188,8 +188,10 @@ void Main()
         
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-        float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
-        MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
+        float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
+        MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
+            skyVirtualPos,
+            skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)    
 #   if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
@@ -259,8 +261,10 @@ void Main()
         Output[idx] = float4(LLTrueLinearToGamma(skyRadiance), 1.0f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
         
-        float3 skyVirtualPos = Camera.Position.xyz + sourceDirection * kEnvironmentMapSceneDistance;
-        MotionVectors[idx] = float4(computeMotionVector(skyVirtualPos, skyVirtualPos), 0);
+        float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
+        MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
+            skyVirtualPos,
+            skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
         Depth[idx] = 1;
     
 #       if defined(NRD) | defined(DLSS_RR)   
@@ -324,11 +328,11 @@ void Main()
     
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
-    float3 hitPosW = sourcePosition;
-    float3 hitPrevPosW = sourceSurface.PrevPosition;
-    MotionVectors[idx] = float4(computeMotionVector(hitPosW, hitPrevPosW), 0);
+    MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
+        sourceSurface.CameraRelativePosition,
+        sourceSurface.PrevCameraRelativePosition), 0);
     
-    const float depth = computeClipDepth(hitPosW);
+    const float depth = computeClipDepthCameraRelative(sourceSurface.CameraRelativePosition);
     Depth[idx] = depth;
     
 #   if defined(NRD) 
@@ -372,9 +376,9 @@ void Main()
         float3 buildThp = float3(1,1,1);
         // Base MV for the primary surface. Deeper stable planes compute PSR MV from
         // their virtual path-space surface in StablePlanesHandleHit/Miss.
-        float3 primaryHitPos = Camera.Position.xyz + sourceDirection * primarySceneDistance;
-        float3 primaryPrevPosW = sourceSurface.PrevPosition;
-        float3 buildMVs = computeMotionVector(primaryHitPos, primaryPrevPosW);
+        float3 buildMVs = computeMotionVectorCameraRelative(
+            sourceSurface.CameraRelativePosition,
+            sourceSurface.PrevCameraRelativePosition);
         float buildSceneLength = primarySceneDistance;
         float3x3 buildImageXform = float3x3(1,0,0, 0,1,0, 0,0,1);
         float buildRoughnessAccum = 0;
