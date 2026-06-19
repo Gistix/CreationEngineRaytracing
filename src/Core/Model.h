@@ -14,6 +14,7 @@ struct DataParams
 	bool alreadyUpdated;
 	bool hidden;
 	uint32_t firstMeshID;
+	uint32_t numMeshes;
 };
 
 struct Model

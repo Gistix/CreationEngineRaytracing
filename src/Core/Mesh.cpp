@@ -902,6 +902,7 @@ MeshData Mesh::GetData()
 	return MeshData(
 		static_cast<uint32_t>(m_DescriptorHandle.Get()),
 		flags.underlying(),
+		triangleData.count,
 		m_LocalToRoot,
 		m_PrevLocalToRoot
 	);
