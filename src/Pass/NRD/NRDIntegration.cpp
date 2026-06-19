@@ -6,8 +6,8 @@
 
 namespace Pass::NRD
 {
-	NRDIntegration::NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser)
-		: RenderPass(renderer), kDenoiser(denoiser)
+	NRDIntegration::NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode)
+		: RenderPass(renderer), kDenoiser(denoiser), m_Mode(mode)
 	{
 		auto device = GetRenderer()->GetDevice();
 
@@ -276,9 +276,11 @@ namespace Pass::NRD
 		}
 
 		{
-			nvrhi::ITexture* sourceMotionVectors = GetRenderer()->GetMotionVectorTexture();
-
-			nvrhi::TextureDesc desc = sourceMotionVectors ? sourceMotionVectors->getDesc() : nvrhi::TextureDesc();
+			nvrhi::TextureDesc desc;
+			if (m_Mode == Mode::GlobalIllumination)
+				desc = GetRenderer()->GetMotionVectorTexture()->getDesc();
+			else
+				desc = GetRenderer()->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D)->getDesc();
 
 			desc.width = eastl::max<uint32_t>(1u, desc.width == 0 ? resolution.x : desc.width);
 			desc.height = eastl::max<uint32_t>(1u, desc.height == 0 ? resolution.y : desc.height);
@@ -511,13 +513,18 @@ namespace Pass::NRD
 		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD)
 			return;
 
-		auto* renderer = GetRenderer();
-		nvrhi::ITexture* sourceMotionVectors = renderer->GetMotionVectorTexture();
-
 		if (m_ResourcesDirty) {
 			CreateResources();
 			CreateGlobalBindingSet();
 		}
+
+		auto* renderer = GetRenderer();
+
+		nvrhi::ITexture* sourceMotionVectors = nullptr;
+		if (m_Mode == Mode::GlobalIllumination)
+			sourceMotionVectors = renderer->GetMotionVectorTexture();
+		else
+			sourceMotionVectors = renderer->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D);
 
 		if (sourceMotionVectors && m_MotionVectorsScratch) {
 			const nvrhi::TextureDesc& mvDesc = sourceMotionVectors->getDesc();
