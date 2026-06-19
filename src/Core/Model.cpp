@@ -4,8 +4,8 @@
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
-Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
-	m_Name(name), m_Meshes(eastl::move(meshes))
+Model::Model(eastl::string name, Type type, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes) :
+	m_Name(name), m_Type(type), m_Meshes(eastl::move(meshes))
 {
 	UpdateMeshFlags();
 
@@ -14,8 +14,8 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 		mesh->InitState(node, meshFlags.get());
 	}
 
-	// Models with these flags cannot be instanced directly
-	if (meshFlags.any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned))
+	// Actors cannot be instanced or copied, so we give them an unique name
+	if (type == Type::Actor)
 		m_Name.append(Model::KeySuffix(node).c_str());
 
 	// Water and LOD models have no form
@@ -35,6 +35,30 @@ Model::Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl:
 #endif
 		}
 	}
+}
+
+eastl::unique_ptr<Model> Model::Clone(RE::NiAVObject* node, RE::FormID formID) const
+{
+	eastl::vector<eastl::unique_ptr<Mesh>> clonedMeshes;
+	clonedMeshes.reserve(m_Meshes.size());
+
+	for (const auto& mesh : m_Meshes) {
+		auto clonedMesh = mesh->Clone(node, formID);
+		if (clonedMesh)
+			clonedMeshes.push_back(eastl::move(clonedMesh));
+	}
+
+	if (clonedMeshes.empty())
+		return nullptr;
+
+	eastl::string cloneName = m_Name + KeySuffix(node);
+
+	auto clone = eastl::make_unique<Model>(cloneName, Type::Default, node, nullptr, clonedMeshes);
+
+	clone->m_Type = m_Type;
+	clone->m_EmittanceColor = m_EmittanceColor;
+
+	return clone;
 }
 
 void Model::UpdateMeshFlags()
@@ -157,10 +181,13 @@ DataParams Model::GetData(MeshData* meshData, uint32_t& index)
 		return m_DataParams;
 
 	m_DataParams.firstMeshID = index;
+	m_DataParams.numMeshes = 0;
 
 	for (auto& mesh : m_Meshes) {
 		if (mesh->IsHidden())
 			continue;
+
+		m_DataParams.numMeshes++;
 
 		meshData[index] = mesh->GetData();
 		index++;
@@ -227,17 +254,25 @@ void Model::BuildUpdateBLAS(nvrhi::ICommandList* commandList)
 
 	if (create || m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh)) {
 		rebuild = true;
+		m_NumUpdatesSinceRebuild = 0;
+	}
+	else if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform)) {
+		if (m_NumUpdatesSinceRebuild >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE) {
+			if (Scene::GetSingleton()->GetSceneGraph()->TryMaintenanceRebuild(frameIndex)) {
+				rebuild = true;
+				m_NumUpdatesSinceRebuild = 0;
+			} else {
+				rebuild = false;
+			}
+		} else {
+			m_NumUpdatesSinceRebuild++;
+			rebuild = false;
+		}
 	}
 	else {
-		// Must have a valid update flag
-		if (m_DirtyFlags.none(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform))
-			return;
-
-		rebuild = false;
+		return;
 	}
 
-	// If rebuild is true the BLAS will be build/rebuilt (mesh list changed = rebuild, vertex moved = update)
-	// TODO: We should probably rebuild periodically to avoid performance degradation (we had issues in the past with TLAS updates, so nowadays we always rebuild TLAS)
 	auto blasDesc = MakeBLASDesc(!rebuild);
 
 	// Collect geometry descriptions

@@ -106,10 +106,12 @@ void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, 
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
 }
 
-void GetSharedTextures(SharedTexture& main, SharedTexture& diffuseAlbedo)
+void GetSharedTextures(SharedTexture& depth, SharedTexture& motionVector, SharedTexture& main, SharedTexture& diffuseAlbedo)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
 
+	depth = textureManager.GetSharedTexture(RenderTarget::ClipDepth);
+	motionVector = textureManager.GetSharedTexture(RenderTarget::MotionVectors3D);
 	main = textureManager.GetSharedTexture(RenderTarget::Main);
 	diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo);
 }
@@ -117,11 +119,6 @@ void GetSharedTextures(SharedTexture& main, SharedTexture& diffuseAlbedo)
 void UpdateJitter(float2 jitter)
 {
 	Renderer::GetSingleton()->UpdateJitter(jitter);
-}
-
-void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget)
-{
-	Renderer::GetSingleton()->SetPTOutputTargets(depthTarget, mvTarget);
 }
 
 uint32_t GetAccumulatedFrameCount()

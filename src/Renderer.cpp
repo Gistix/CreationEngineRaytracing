@@ -21,7 +21,7 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	deviceDesc.pGraphicsCommandQueue = rendererParams.commandQueue;
 	deviceDesc.pComputeCommandQueue = rendererParams.computeCommandQueue;
 	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
-	deviceDesc.aftermathEnabled = true;
+	deviceDesc.aftermathEnabled = false;
 	deviceDesc.logBufferLifetime = false;
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
@@ -113,7 +113,7 @@ void Renderer::InitDefaultTextures()
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
 	// Write the textures using a temporary CL
-	nvrhi::CommandListHandle commandList = GetCopyCommandList();
+	nvrhi::CommandListHandle commandList = GetGraphicsCommandList();
 	commandList->open();
 
 	commandList->beginTrackingTextureState(m_WhiteTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
@@ -149,7 +149,7 @@ void Renderer::InitDefaultTextures()
 
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
-		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
+		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
 	}
 }
 
@@ -543,50 +543,6 @@ void Renderer::SettingsChanged(const Settings& settings)
 	m_RenderGraph->SettingsChanged(settings);
 }
 
-void Renderer::SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget)
-{
-	if (depthTarget == m_PTDepthCopyTargetResource && mvTarget == m_PTMVCopyTargetResource)
-		return;
-
-	if (depthTarget) {
-		m_PTDepthCopyTargetResource = depthTarget;
-		auto targetDesc = depthTarget->GetDesc();
-		nvrhi::TextureDesc desc{};
-		desc.width = static_cast<uint32_t>(targetDesc.Width);
-		desc.height = targetDesc.Height;
-		desc.format = nvrhi::Format::R32_FLOAT;
-		desc.mipLevels = targetDesc.MipLevels;
-		desc.arraySize = targetDesc.DepthOrArraySize;
-		desc.dimension = nvrhi::TextureDimension::Texture2D;
-		desc.initialState = nvrhi::ResourceStates::ShaderResource;
-		desc.keepInitialState = true;
-		desc.debugName = "PT Depth Copy Target";
-		m_PTDepthCopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, depthTarget, desc);
-	} else {
-		m_PTDepthCopyTargetResource = nullptr;
-		m_PTDepthCopyTargetTexture = nullptr;
-	}
-
-	if (mvTarget) {
-		m_PTMVCopyTargetResource = mvTarget;
-		auto targetDesc = mvTarget->GetDesc();
-		nvrhi::TextureDesc desc{};
-		desc.width = static_cast<uint32_t>(targetDesc.Width);
-		desc.height = targetDesc.Height;
-		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.mipLevels = targetDesc.MipLevels;
-		desc.arraySize = targetDesc.DepthOrArraySize;
-		desc.dimension = nvrhi::TextureDimension::Texture2D;
-		desc.initialState = nvrhi::ResourceStates::ShaderResource;
-		desc.keepInitialState = true;
-		desc.debugName = "PT MV Copy Target";
-		m_PTMVCopyTargetTexture = m_NVRHIDevice->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, mvTarget, desc);
-	} else {
-		m_PTMVCopyTargetResource = nullptr;
-		m_PTMVCopyTargetTexture = nullptr;
-	}
-}
-
 nvrhi::ICommandList* Renderer::StartExecution()
 {
 	logger::trace("Renderer::ExecutePasses - Begin");
@@ -603,16 +559,6 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 void Renderer::EndExecution()
 {
-	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Mode == Mode::PathTracing) {
-		auto region = nvrhi::TextureSlice{ 0, 0, 0, m_RenderSize.x, m_RenderSize.y, 1 };
-
-		if (m_PTDepthCopyTargetTexture)
-			m_CommandList->copyTexture(m_PTDepthCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::ClipDepth), region);
-	
-		if (m_PTMVCopyTargetTexture)
-			m_CommandList->copyTexture(m_PTMVCopyTargetTexture, region, m_RenderTargetManager.GetTexture(RenderTarget::MotionVectors3D), region);
-	}
-
 	// Close it
 	m_CommandList->close();
 
@@ -672,14 +618,11 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 
 	if (format == nvrhi::Format::UNKNOWN)
 	{
-		auto formatIt = Renderer::GetFormatMapping().find(nativeTexDesc.Format);
-
-		if (formatIt == Renderer::GetFormatMapping().end()) {
+		format = Renderer::GetFormat(nativeTexDesc.Format);
+		if (format == nvrhi::Format::UNKNOWN) {
 			logger::error("Renderer::CreateHandleForNativeTexture - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
 			return nullptr;
 		}
-
-		format = formatIt->second;
 	}
 
 	auto textureDesc = nvrhi::TextureDesc()

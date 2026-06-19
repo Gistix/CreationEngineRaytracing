@@ -249,9 +249,8 @@ namespace Hooks
 				return hr;
 			}
 
-			auto formatIt = Renderer::GetFormatMapping().find(a_format);
-
-			if (formatIt == Renderer::GetFormatMapping().end()) {
+			auto format = Renderer::GetFormat(a_format);
+			if (format == nvrhi::Format::UNKNOWN) {
 				if (texture->d3d12Texture)
 					texture->d3d12Texture->Release();
 
@@ -262,7 +261,7 @@ namespace Hooks
 				.setWidth(a_width)
 				.setHeight(a_height)
 				.setMipLevels(a_mipLevels)
-				.setFormat(formatIt->second)
+				.setFormat(format)
 				.setInitialState(nvrhi::ResourceStates::CopyDest)
 				.setDebugName("Shared Texture [?]");
 
@@ -519,7 +518,7 @@ namespace Hooks
 
 	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull())
+		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(cullingProcess, geometry, a_arg2);
@@ -827,9 +826,9 @@ namespace Hooks
 		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30739, 31575));
+		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30737, 31575));
 
-		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree, might be broken for SE
+		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree
 		stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD

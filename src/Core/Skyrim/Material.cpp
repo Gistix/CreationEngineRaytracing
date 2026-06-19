@@ -648,6 +648,29 @@ void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descripto
 	device->writeDescriptorTable(sceneGraph->GetMaterialDescriptors()->m_DescriptorTable, bindingSet);
 }
 
+eastl::unique_ptr<Material> Material::Clone(const eastl::string& name) const
+{
+	GeometryRuntimeData emptyRuntimeData{};
+	auto clone = eastl::make_unique<Material>(name, emptyRuntimeData, 0);
+
+	clone->shaderFlags = shaderFlags;
+	clone->waterShaderFlags = waterShaderFlags;
+	clone->shaderType = shaderType;
+	clone->feature = feature;
+	clone->pbrFlags = pbrFlags;
+	clone->alphaFlags = alphaFlags;
+	clone->alphaThreshold = alphaThreshold;
+	clone->colors = colors;
+	clone->scalars = scalars;
+	clone->vectors = vectors;
+	clone->texCoordOffsetScale = texCoordOffsetScale;
+	clone->textures = textures;
+	clone->m_MaterialData = m_MaterialData;
+	clone->m_PrevMaterialData = m_PrevMaterialData;
+
+	return clone;
+}
+
 void Material::Update(RE::BSShaderProperty* shaderProperty)
 {
 	if (shaderType == ShaderType::Water) {
@@ -659,14 +682,6 @@ void Material::Update(RE::BSShaderProperty* shaderProperty)
 
 	if (shaderFlags.get() == currentShaderFlags)
 		return;
-
-	auto addedFlags = currentShaderFlags & ~shaderFlags.get();
-	auto removedFlags = shaderFlags.get() & ~currentShaderFlags;
-
-	logger::debug("Material::Update - {} Shader flags changed - Added: {}, Removed: {}",
-		magic_enum::enum_name(shaderType),
-		Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(addedFlags)),
-		Util::GetFlagsString<EShaderPropertyFlag>(static_cast<uint64_t>(removedFlags)));
 
 	shaderFlags = currentShaderFlags;
 

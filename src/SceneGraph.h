@@ -35,6 +35,8 @@
 
 class SceneGraph
 {
+	RE::NiCamera* m_Camera = nullptr;
+
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 	mutable std::mutex m_ModelMutex;
@@ -90,6 +92,9 @@ class SceneGraph
 	uint32_t m_NumMeshes = 0;
 	uint32_t m_NumInstances = 0;
 
+	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
+	uint32_t m_MaintenanceRebuildsThisFrame = 0;
+
 	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::NiAVObject* object, RE::TESForm* form);
 	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
@@ -128,8 +133,13 @@ public:
 
 	inline auto& GetTextureManager() { return m_TextureManager; }
 
+	inline auto& GetCamera() const  { return m_Camera; }
+	
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
+
+	// Update Camera reference
+	void UpdateCamera();
 
 	// Update Actor equipment
 	void UpdateActors();
@@ -138,6 +148,8 @@ public:
 	void UpdateLODVisibility();
 
 	void ClearDirtyStates();
+
+	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
 	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
 	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);

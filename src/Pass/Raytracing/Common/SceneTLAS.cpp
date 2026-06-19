@@ -48,6 +48,9 @@ namespace Pass
 		m_RaytracingData->EnableReSTIRGI = settings.ReSTIRGI.Enabled ? 1 : 0;
 		m_RaytracingData->EnableReSTIRPT = settings.ReSTIRPT.Enabled ? 1 : 0;
 
+		m_RaytracingData->NumMeshes = sceneGraph->GetNumMeshesFrame();
+		m_RaytracingData->NumInstances = sceneGraph->GetNumInstancesFrame();
+
 		m_RaytracingData->HitDistSettings = float4(
 			3.0f * Util::Units::M_TO_GAME_UNIT,  // (units > 0) - constant value
 			0.1f * Util::Units::M_TO_GAME_UNIT,  // (> 0) - viewZ based linear scale (1 m - 10 cm, 10 m - 1 m, 100 m - 10 m)

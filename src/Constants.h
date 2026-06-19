@@ -38,6 +38,10 @@ namespace Constants
 
 	static constexpr uint64_t INVALID_FRAME_INDEX = UINT64_MAX;
 
+	static constexpr uint32_t MAX_BLAS_UPDATES_BEFORE_MAINTENANCE = 256;
+
+	static constexpr uint32_t MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME = 8;
+
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
 
 	static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;

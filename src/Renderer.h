@@ -64,11 +64,6 @@ class Renderer
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;
 
-	ID3D12Resource* m_PTDepthCopyTargetResource = nullptr;
-	nvrhi::TextureHandle m_PTDepthCopyTargetTexture;
-	ID3D12Resource* m_PTMVCopyTargetResource = nullptr;
-	nvrhi::TextureHandle m_PTMVCopyTargetTexture;
-
 	uint64_t m_FrameIndex = 0;
 
 	uint2 m_RenderSize;
@@ -163,7 +158,6 @@ public:
 	{
 		bool UseRayQuery = true;
 		bool ValidationLayer = true;
-		bool VariableUpdateRate = false;
 	} m_Settings;
 
 	static Renderer* GetSingleton()
@@ -241,8 +235,6 @@ public:
 #endif
 	inline auto& GetDetailTextureIndex() const { return m_DetailTexture->descriptorHandle; }
 
-	static inline auto& GetFormatMapping() { return m_FormatMapping; }
-	
 	inline auto GetPassTimings() const { return m_PassTimings; };
 
 	static inline auto GetFormat(DXGI_FORMAT nativeFormat) 
@@ -318,8 +310,6 @@ public:
 	uint2 GetResolution();
 
 	uint2 GetDynamicResolution();
-
-	void SetPTOutputTargets(ID3D12Resource* depthTarget, ID3D12Resource* mvTarget);
 
 	nvrhi::ICommandList* StartExecution();
 
