@@ -105,8 +105,7 @@ struct Scene
 
 	inline bool ApplyPathTracingCull() 
 	{ 
-		return m_Settings.Enabled && 
-			m_Settings.GeneralSettings.Mode == Mode::PathTracing && 
+		return IsPathTracingActive() &&
 			m_Settings.ExperimentalSettings.PathTracingCull && 
 			GetMenuState().none(MenuState::MainMenu, MenuState::LoadingMenu);
 	}

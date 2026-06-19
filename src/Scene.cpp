@@ -269,6 +269,8 @@ void Scene::Execute()
 
 	auto* sceneGraph = GetSceneGraph();
 
+	sceneGraph->UpdateCamera();
+
 	sceneGraph->UpdateActors();
 
 	sceneGraph->UpdateLODVisibility();

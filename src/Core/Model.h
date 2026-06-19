@@ -26,10 +26,17 @@ struct Model
 			BLASBuilt = 1 << 1
 		};
 	};
-
 	using Flag = Flags::Flag;
 
+	enum class Type : uint8_t
+	{
+		Default,
+		Actor
+	};
+
 	eastl::string m_Name;
+	
+	Type m_Type = Type::Default;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
 
@@ -57,7 +64,7 @@ struct Model
 
 	Flag m_Flags = Flags::None;
 
-	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+	Model(eastl::string name, Type type, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	void UpdateMeshFlags();
 
@@ -71,9 +78,10 @@ struct Model
 
 	void UpdateFlags();
 
-	static std::string KeySuffix(RE::NiAVObject* root)
+	static eastl::string KeySuffix(RE::NiAVObject* root)
 	{
-		return std::format("_{:08X}", reinterpret_cast<uintptr_t>(root));
+		auto suffix = std::format("_{:08X}", reinterpret_cast<uintptr_t>(root));
+		return eastl::string(suffix.c_str());
 	}
 
 	bool ShouldQueueMSNConversion() const
@@ -91,6 +99,8 @@ struct Model
 	DataParams GetData(MeshData* meshData, uint32_t& index);
 
 	void BuildUpdateBLAS(nvrhi::ICommandList* commandList);
+
+	eastl::unique_ptr<Model> Clone(RE::NiAVObject* node, RE::FormID formID) const;
 
 	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);
