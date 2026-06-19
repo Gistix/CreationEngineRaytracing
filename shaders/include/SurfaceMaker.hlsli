@@ -66,10 +66,10 @@ struct SurfaceMaker
         float3 prevPos0, prevPos1, prevPos2;
         
         if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
-            GetVertices(mesh.GeometryIdx, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
+            GetVertices(mesh, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
         else
 #endif        
-        GetVertices(mesh.GeometryIdx, payload.primitiveIndex, v0, v1, v2);
+        GetVertices(mesh, payload.primitiveIndex, v0, v1, v2);
 
         float3 uvw = GetBary(payload.Barycentrics());
         float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);

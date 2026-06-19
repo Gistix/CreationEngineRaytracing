@@ -396,6 +396,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			instance->m_PrevTransform,
 			InstanceLightData(lights.data(), numLights),
 			params.firstMeshID,
+			params.numMeshes,
 			instance->GetAlpha()
 		};
 

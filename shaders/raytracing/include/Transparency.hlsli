@@ -18,7 +18,7 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
     
     Vertex v0, v1, v2;
-    GetVertices(mesh.GeometryIdx, primitiveIndex, v0, v1, v2);
+    GetVertices(mesh, primitiveIndex, v0, v1, v2);
     
     float3 uvw = GetBary(barycentrics);
 
@@ -63,7 +63,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
     
     Vertex v0, v1, v2;
-    GetVertices(mesh.GeometryIdx, primitiveIndex, v0, v1, v2);
+    GetVertices(mesh, primitiveIndex, v0, v1, v2);
     
     float3 uvw = GetBary(barycentrics);
 

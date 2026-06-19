@@ -181,10 +181,13 @@ DataParams Model::GetData(MeshData* meshData, uint32_t& index)
 		return m_DataParams;
 
 	m_DataParams.firstMeshID = index;
+	m_DataParams.numMeshes = 0;
 
 	for (auto& mesh : m_Meshes) {
 		if (mesh->IsHidden())
 			continue;
+
+		m_DataParams.numMeshes++;
 
 		meshData[index] = mesh->GetData();
 		index++;
