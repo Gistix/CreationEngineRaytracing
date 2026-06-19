@@ -388,6 +388,56 @@ void Mesh::BuildMaterial(const GeometryRuntimeData& runtimeData, RE::FormID form
 	geometryDesc.flags = (material->alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 }
 
+eastl::unique_ptr<Mesh> Mesh::Clone(RE::NiAVObject* rootNode, RE::FormID formID) const
+{
+	RE::BSGeometry* foundGeom = nullptr;
+
+	Util::Traversal::ScenegraphRTGeometries(rootNode, nullptr, [&](RE::BSGeometry* pGeometry) -> CESEAdapter::RE::BSVisitControl {
+		if (eastl::string(pGeometry->name.c_str()) == m_Name) {
+			foundGeom = pGeometry;
+			return CESEAdapter::RE::BSVisitControl::kStop;
+		}
+		return CESEAdapter::RE::BSVisitControl::kContinue;
+	});
+
+	if (!foundGeom)
+		return nullptr;
+
+	auto rootWorldInverse = rootNode->world.Invert();
+	const bool isRootOrigin = rootNode->world.translate == Util::Adapter::GetNiPoint3Zero();
+	const bool isOrigin = foundGeom->world.translate == Util::Adapter::GetNiPoint3Zero();
+
+	auto cloneFlags = flags;
+	cloneFlags.reset(Mesh::Flags::Origin);
+
+	float3x4 localToRoot;
+	if (!isOrigin || (isOrigin && isRootOrigin)) {
+		localToRoot = Util::Math::ComputeLocalToRoot(rootWorldInverse, foundGeom->world);
+	} else {
+		localToRoot = float3x4(
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f);
+		cloneFlags.set(Mesh::Flags::Origin);
+	}
+
+	auto clone = eastl::make_unique<Mesh>(m_FormType, m_Type, cloneFlags.get(), m_Name.c_str(), foundGeom, localToRoot, m_Identifier);
+
+	clone->vertexData = vertexData;
+	clone->triangleData = triangleData;
+	clone->vertexFlags = vertexFlags;
+	clone->m_BoneMatrices = m_BoneMatrices;
+	clone->m_PrevLocalToRoot = localToRoot;
+
+	const auto& runtimeData = Util::Adapter::GetGeometryRuntimeData(foundGeom);
+	clone->BuildMaterial(runtimeData, formID);
+
+	clone->m_FrameID = 0;
+	clone->m_State = State::None;
+
+	return clone;
+}
+
 bool Mesh::Updatable() const
 {
 	return flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;

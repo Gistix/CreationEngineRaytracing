@@ -37,6 +37,30 @@ Model::Model(eastl::string name, Type type, RE::NiAVObject* node, RE::TESForm* f
 	}
 }
 
+eastl::unique_ptr<Model> Model::Clone(RE::NiAVObject* node, RE::FormID formID) const
+{
+	eastl::vector<eastl::unique_ptr<Mesh>> clonedMeshes;
+	clonedMeshes.reserve(m_Meshes.size());
+
+	for (const auto& mesh : m_Meshes) {
+		auto clonedMesh = mesh->Clone(node, formID);
+		if (clonedMesh)
+			clonedMeshes.push_back(eastl::move(clonedMesh));
+	}
+
+	if (clonedMeshes.empty())
+		return nullptr;
+
+	eastl::string cloneName = m_Name + KeySuffix(node);
+
+	auto clone = eastl::make_unique<Model>(cloneName, Type::Default, node, nullptr, clonedMeshes);
+
+	clone->m_Type = m_Type;
+	clone->m_EmittanceColor = m_EmittanceColor;
+
+	return clone;
+}
+
 void Model::UpdateMeshFlags()
 {
 	meshFlags.reset();

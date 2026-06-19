@@ -52,6 +52,8 @@ struct Material : MaterialBase
 
 	Material(const eastl::string& name, const GeometryRuntimeData& runtimeData, RE::FormID formID);
 
+	eastl::unique_ptr<Material> Clone(const eastl::string& name) const;
+
 	void SetupLandMaterial(const RE::BSLightingShaderMaterialLandscape* landMaterial);
 	void SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingMaterial, RE::FormID formID);
 	void SetupPBRLandscapeMaterial(const BSLightingShaderMaterialPBRLandscape* material);

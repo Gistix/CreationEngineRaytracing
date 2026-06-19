@@ -812,8 +812,7 @@ void SceneGraph::CreateLODModelImpl(T* block, Mesh::Type type)
 
 		eastl::vector<eastl::unique_ptr<Mesh>> meshes;
 
-		float3x4 localToRoot;
-		XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
+		float3x4 localToRoot = Util::Math::ComputeLocalToRoot(rootWorldInverse, pGeometry->world);
 
 		auto triShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
 
@@ -1157,19 +1156,18 @@ eastl::vector<eastl::unique_ptr<Mesh>> SceneGraph::CreateMeshes(RE::NiAVObject* 
 			flags |= Mesh::Flags::Dynamic;
 #endif
 
-		auto localToRoot = float3x4(
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f);
-
+		float3x4 localToRoot;
 		const bool isOrigin = pGeometry->world.translate == Util::Adapter::GetNiPoint3Zero();
 
-		// Some plants have parts with geometry world position of [0, 0, 0]
-		// But so does some architecture (like Winterhold Arcanaeum) and they might depend on transformation for pivoted geometry
 		if (!isOrigin || isOrigin && isRootOrigin)
-			XMStoreFloat3x4(&localToRoot, Util::Math::GetXMFromNiTransform(rootWorldInverse * pGeometry->world));
-		else
+			localToRoot = Util::Math::ComputeLocalToRoot(rootWorldInverse, pGeometry->world);
+		else {
+			localToRoot = float3x4(
+				1.0f, 0.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f);
 			flags |= Mesh::Flags::Origin;
+		}
 
 		if (auto* triShapeRD = geometryRuntimeData.rendererData) {  // Non-Skinned
 			auto* pTriShape = netimmerse_cast<RE::BSTriShape*>(pGeometry);
@@ -1265,7 +1263,7 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 	if (!path || strlen(path) == 0)
 		return 0;
 
-	auto formID = form->GetFormID();
+	auto formID = form ? form->GetFormID() : 0;
 
 	Model* model = nullptr;
 	{
@@ -1279,7 +1277,22 @@ uint32_t SceneGraph::CreateModelInternal(RE::TESForm* form, const char* path, RE
 	if (model) {
 		const bool nonInstanceable = model->GetMeshFlags().any(Mesh::Flags::Dynamic, Mesh::Flags::Skinned) || model->GetMeshTypes().any(Mesh::Type::LandLOD);
 		if (nonInstanceable) {
+			auto modelCopy = model->Clone(pRoot, formID);
 
+			if (modelCopy) {
+				auto* modelCopyPtr = modelCopy.get();
+
+				{
+					std::scoped_lock lock(m_ModelMutex);
+					m_Models.try_emplace(modelCopy->m_Name, eastl::move(modelCopy));
+				}
+
+				modelCopyPtr->CreateBuffers(this);
+				modelCopyPtr->BuildBLAS();
+
+				AddInstance(formID, pRoot, modelCopyPtr);
+				return static_cast<uint32_t>(modelCopyPtr->m_Meshes.size());
+			}
 		}
 		else {
 			AddInstance(formID, pRoot, model);
