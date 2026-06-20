@@ -4,8 +4,6 @@
 
 #include "Core/D3D12Texture.h"
 
-#include <comdef.h>
-
 namespace Hooks
 {
 	struct BSGraphics_CreateTriShape
@@ -893,8 +891,8 @@ namespace Hooks
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
-		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
-		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
+		//stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
+		//stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 	
 		// Terrain LOD
 		//stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
