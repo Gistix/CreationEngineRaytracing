@@ -22,6 +22,7 @@
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
+#include "Pass/Raytracing/Debug.h"
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/NRDIntegration.h"
 #include "Pass/Raytracing/Common/Accumulation.h"

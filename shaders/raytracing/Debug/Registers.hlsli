@@ -1,0 +1,35 @@
+#ifndef REGISTERS_HLSLI
+#define REGISTERS_HLSLI
+
+#include "interop/CameraData.hlsli"
+#include "interop/RaytracingData.hlsli"
+#include "interop/SharedData.hlsli"
+#include "interop/PackedSurfaceData.hlsli"
+
+#include "interop/Vertex.hlsli"
+#include "interop/Triangle.hlsli"
+#include "interop/Mesh.hlsli"
+#include "interop/Instance.hlsli"
+#include "interop/Light.hlsli"
+#include "interop/SHaRCData.hlsli"
+
+#include "interop/SharcTypes.h"
+
+SamplerState DefaultSampler : register(s0);
+SamplerState ClampSampler : register(s1);
+SamplerState PointWrapSampler : register(s2);
+
+ConstantBuffer<CameraData> Camera : register(b0);
+ConstantBuffer<RaytracingData> Raytracing : register(b1);
+ConstantBuffer<FeatureData> Features : register(b2);
+
+RaytracingAccelerationStructure Scene : register(t0);
+Texture2D<float4> SkyHemisphere : register(t1);
+StructuredBuffer<Light> Lights : register(t2);
+
+StructuredBuffer<Triangle> Triangles[] : register(t0, space1);
+StructuredBuffer<Vertex> Vertices[] : register(t0, space2);
+
+RWTexture2D<float4> Output : register(u0);
+
+#endif // REGISTERS_HLSLI
