@@ -917,12 +917,12 @@ namespace Hooks
 		}*/
 		
 		// Landscape
-		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
-		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
+		//stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
+		//stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
 
 		// Water
-		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
-		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
+		//stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
+		//stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
 		// Grass
 		//stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
