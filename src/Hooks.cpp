@@ -162,6 +162,19 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	
+	struct NiNode_AttachChild
+	{
+		static void thunk(RE::NiNode* a_this, RE::NiNode* a_node, bool a3)
+		{
+			logger::info("NiNode::AttachChild - this: {}, node: {}, a3: {}", fmt::ptr(a_this), fmt::ptr(a_node), a3);
+
+			func(a_this, a_node, a3);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct TES_AttachModel
 	{
 		static void thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
@@ -970,6 +983,8 @@ namespace Hooks
 		stl::detour_thunk<BSGraphics_CreateTriShape>(REL::RelocationID(75473, 0));
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(REL::RelocationID(75474, 0));
 	
+		stl::detour_thunk<NiNode_AttachChild>(REL::RelocationID(68938, 0));
+
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
 		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
