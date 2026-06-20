@@ -26,18 +26,6 @@ namespace Pass
 		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
 
-		// Stable Planes BUILD pass pipeline
-		nvrhi::ShaderHandle m_BuildComputeShader;
-		nvrhi::ComputePipelineHandle m_BuildComputePipeline;
-		nvrhi::rt::PipelineHandle m_BuildRayPipeline;
-		nvrhi::rt::ShaderTableHandle m_BuildShaderTable;
-
-		// Stable Planes FILL pass pipeline
-		nvrhi::ShaderHandle m_FillComputeShader;
-		nvrhi::ComputePipelineHandle m_FillComputePipeline;
-		nvrhi::rt::PipelineHandle m_FillRayPipeline;
-		nvrhi::rt::ShaderTableHandle m_FillShaderTable;
-
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		nvrhi::BindingSetHandle m_BindingSet;
 
@@ -47,13 +35,11 @@ namespace Pass
 
 		SceneTLAS* m_SceneTLAS;
 
-		SHaRC* m_SHaRC;
-
 		eastl::vector<ShaderDefine> m_Defines;
 
 		bool m_DirtyBindings = true;
 	public:
-		Debug(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);
+		Debug(Renderer* renderer, SceneTLAS* m_SceneTLAS);
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{

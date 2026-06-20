@@ -897,14 +897,14 @@ namespace Hooks
 		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
 	
 		// Terrain LOD
-		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
-		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
+		//stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
+		//stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30737, 31575));
+		//stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30737, 31575));
 
 		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree
-		stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
+		//stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD
 		/*if (REL::Module::IsSE()) {

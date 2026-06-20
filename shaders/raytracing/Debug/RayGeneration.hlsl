@@ -10,31 +10,67 @@
 
 #include "include/Common.hlsli"
 #include "raytracing/include/Common.hlsli"
+
 #include "raytracing/include/Payload.hlsli"
-#include "raytracing/include/Geometry.hlsli"
-
-#include "raytracing/include/Materials/TexLODHelpers.hlsli"
-
-#include "include/Surface.hlsli"
-#include "include/SurfaceMaker.hlsli"
-
-#include "include/Lighting.hlsli"
-
-#include "raytracing/include/Transparency.hlsli"
-
-#include "Raytracing/Include/SHARC/Sharc.hlsli"
-#include "Raytracing/Include/SHARC/SHaRCHelper.hlsli"
 
 #if defined(GROUP_TILING)
 #   define DXC_STATIC_DISPATCH_GRID_DIM 1
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
-#include "include/NRD.hlsli"
-
 #ifndef THREAD_GROUP_SIZE
 #define THREAD_GROUP_SIZE (32)
 #endif
+
+// --------------------------------------------------------
+// Copied from shaders\raytracing\include\Rays.hlsli
+// --------------------------------------------------------
+
+#ifndef RAY_FLAGS
+#   define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
+#endif
+
+#ifndef INSTANCE_MASK
+#   define INSTANCE_MASK (0xFF)
+#endif
+
+Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
+{
+    Payload payload;
+    payload.Init(randomSeed);
+
+#if USE_RAY_QUERY
+    RayQuery<RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE> rayQuery;
+    rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
+
+    while (rayQuery.Proceed())
+    {
+        if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
+        {
+            rayQuery.CommitNonOpaqueTriangleHit();
+        }
+    }
+    
+    if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+    {
+        payload.SetCommittedHit(
+            rayQuery.CommittedRayT(),
+            rayQuery.CommittedPrimitiveIndex(),
+            rayQuery.CommittedTriangleBarycentrics(),
+            rayQuery.CommittedInstanceIndex(),
+            rayQuery.CommittedGeometryIndex());
+    }
+    
+#else // !USE_RAY_QUERY    
+    TraceRay(Scene, RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+#endif
+    
+    randomSeed = payload.randomSeed;
+    
+    return payload;
+}
+
+// --------------------------------------------------------
 
 #if USE_RAY_QUERY
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
@@ -66,7 +102,7 @@ void Main()
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);
 
-    Payload sourcePayload = TraceRayStandard(Scene, sourceRay, randomSeed);
+    Payload sourcePayload = TraceRayOpaque(Scene, sourceRay, randomSeed);
 
     if (!sourcePayload.Hit())
     {
@@ -76,7 +112,7 @@ void Main()
           
     float3 sourcePosition = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
     
-    bool2 pattern = frac(sourcePosition.xz) > 0.5;
+    bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
     const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
     
     Output[idx] = float4(color, 1.0f);

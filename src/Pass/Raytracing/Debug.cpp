@@ -5,8 +5,8 @@
 
 namespace Pass
 {
-	Debug::Debug(Renderer* renderer, SceneTLAS* sceneTLAS, SHaRC* sharc)
-		: RenderPass(renderer), m_SceneTLAS(sceneTLAS), m_SHaRC(sharc)
+	Debug::Debug(Renderer* renderer, SceneTLAS* sceneTLAS)
+		: RenderPass(renderer), m_SceneTLAS(sceneTLAS)
 	{
 		auto device = renderer->GetDevice();
 
@@ -27,7 +27,7 @@ namespace Pass
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
-		m_Defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);
+		m_Defines = Util::Shader::GetPathTracingDefines(settings, false, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -42,7 +42,7 @@ namespace Pass
 
 	void Debug::SettingsChanged(const Settings& settings)
 	{
-		auto defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);
+		auto defines = Util::Shader::GetPathTracingDefines(settings, false, false);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
@@ -204,7 +204,6 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 
-
 #if defined(NVAPI)
 		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
@@ -215,7 +214,7 @@ namespace Pass
 
 			for (const auto& binding : bindingSetDesc.bindings)
 			{
-				logger::info("PathTracing::CheckBindings - {}, {}, 0x{:08X}", magic_enum::enum_name(binding.type), binding.slot, reinterpret_cast<uintptr_t>(binding.resourceHandle));
+				logger::info("Debug::CheckBindings - {}, {}, 0x{:08X}", magic_enum::enum_name(binding.type), binding.slot, reinterpret_cast<uintptr_t>(binding.resourceHandle));
 			}
 		}
 

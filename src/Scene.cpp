@@ -211,24 +211,54 @@ RenderNode* Scene::GetPathTracing()
 	return m_PathTracing.get();
 }
 
-RenderNode* Scene::GetModeNode(Mode mode)
+RenderNode* Scene::GetDebug()
 {
+	if (!m_Debug) {
+		auto* renderer = Renderer::GetSingleton();
+
+		m_Debug = eastl::make_unique<RenderNode>(true, "Debug");
+
+		m_Debug->AddNode({
+			true,
+			"Scene TLAS",
+			eastl::make_unique<Pass::SceneTLAS>(renderer)
+		});
+
+		m_Debug->AddNode({
+			true,
+			"Debug",
+			eastl::make_unique<Pass::Debug>(
+				renderer,
+				m_Debug->GetPass<Pass::SceneTLAS>()
+			)
+		});
+	}
+
+	return m_Debug.get();
+}
+
+RenderNode* Scene::GetModeNode([[ maybe_unused ]] Mode mode)
+{
+#if 0
 	if (mode == Mode::GlobalIllumination)
 		return GetGlobalIllumination();
 	else if (mode == Mode::PathTracing)
 		return GetPathTracing();
+#endif
 
-	return nullptr;
+	return GetDebug();
 }
 
-bool Scene::IsModeInitialized(Mode mode)
+bool Scene::IsModeInitialized([[ maybe_unused ]] Mode mode)
 {
+#if 0
 	if (mode == Mode::GlobalIllumination)
 		return m_GlobalIllumination != nullptr;
 	else if (mode == Mode::PathTracing)
 		return m_PathTracing != nullptr;
+#endif
 
-	return false;
+	return m_Debug != nullptr;
 }
 
 void Scene::UpdateMode(Mode mode, Mode previousMode)

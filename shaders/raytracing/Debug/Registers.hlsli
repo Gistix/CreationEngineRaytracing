@@ -4,16 +4,10 @@
 #include "interop/CameraData.hlsli"
 #include "interop/RaytracingData.hlsli"
 #include "interop/SharedData.hlsli"
-#include "interop/PackedSurfaceData.hlsli"
 
 #include "interop/Vertex.hlsli"
 #include "interop/Triangle.hlsli"
-#include "interop/Mesh.hlsli"
-#include "interop/Instance.hlsli"
 #include "interop/Light.hlsli"
-#include "interop/SHaRCData.hlsli"
-
-#include "interop/SharcTypes.h"
 
 SamplerState DefaultSampler : register(s0);
 SamplerState ClampSampler : register(s1);
