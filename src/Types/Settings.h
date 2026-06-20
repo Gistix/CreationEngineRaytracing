@@ -233,11 +233,22 @@ enum struct TextureMode : uint32_t
 	Exclusive = 1
 };
 
+enum struct TextureStreamingMode : uint32_t
+{
+	Off = 0,
+	Conservative = 1,
+	Balanced = 2,
+	Aggressive = 3
+};
+
 struct ExperimentalSettings
 {
 	bool PathTracingCull = false;
 	TextureMode TextureMode = TextureMode::Share;
 	uint32_t TextureCutOff = 0;
+	TextureStreamingMode TextureStreamingMode = TextureStreamingMode::Off;
+	uint32_t TextureBudgetMB = 0;
+	uint32_t TextureMaxMipBias = 2;
 };
 
 struct DebugSettings

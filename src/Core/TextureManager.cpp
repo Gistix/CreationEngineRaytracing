@@ -2,11 +2,32 @@
 #include "Core/D3D12Texture.h"
 #include "Renderer.h"
 
-TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager) :
-	texture(texture)
+namespace
+{
+	std::mutex g_ResidentMipOffsetsMutex;
+	eastl::unordered_map<IUnknown*, uint32_t> g_ResidentMipOffsets;
+}
+
+TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager, uint32_t residentMipOffset) :
+	texture(texture), residentMipOffset(residentMipOffset)
 {
 	descriptorHandle = eastl::make_shared<DescriptorHandle>(descriptorTableManager->CreateDescriptorHandle(nvrhi::BindingSetItem::Texture_SRV(0, texture)));
 	size = Renderer::GetSingleton()->GetDevice()->getTextureMemoryRequirements(texture).size;
+
+	const auto& desc = texture->getDesc();
+	width = desc.width;
+	height = desc.height;
+	mipLevels = desc.mipLevels;
+	format = desc.format;
+}
+
+void TextureManager::RegisterResidentMipOffset(IUnknown* resource, uint32_t mipOffset)
+{
+	if (!resource || mipOffset == 0)
+		return;
+
+	std::scoped_lock lock(g_ResidentMipOffsetsMutex);
+	g_ResidentMipOffsets[resource] = mipOffset;
 }
 
 TextureManager::TextureManager()
@@ -61,6 +82,43 @@ uint64_t TextureManager::GetFakeDoubledVRAMUsage()
 	return vramUsage;
 }
 
+void TextureManager::LogMemoryStats()
+{
+	uint64_t standardBytes = 0;
+	uint64_t normalBytes = 0;
+	uint32_t streamedTextures = 0;
+	uint64_t streamedBytes = 0;
+
+	for (const auto& [key, texture] : m_Textures)
+	{
+		if (!texture)
+			continue;
+
+		standardBytes += texture->size;
+
+		if (texture->residentMipOffset > 0) {
+			streamedTextures++;
+			streamedBytes += texture->size;
+		}
+	}
+
+	for (const auto& [key, normalMap] : m_NormalMaps)
+	{
+		if (normalMap)
+			normalBytes += normalMap->size;
+	}
+
+	logger::info(
+		"TextureManager - RT texture memory: total={} MiB, standard={} MiB ({} textures), normal={} MiB ({} textures), streamed={} MiB ({} textures)",
+		(standardBytes + normalBytes) / (1024 * 1024),
+		standardBytes / (1024 * 1024),
+		m_Textures.size(),
+		normalBytes / (1024 * 1024),
+		m_NormalMaps.size(),
+		streamedBytes / (1024 * 1024),
+		streamedTextures);
+}
+
 void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 {
 	if (!texture)
@@ -110,6 +168,15 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 		key = d3d11Resource;
 	else
 		key = d3d12Resource;
+
+	uint32_t residentMipOffset = 0;
+	{
+		std::scoped_lock lock(g_ResidentMipOffsetsMutex);
+		if (auto it = g_ResidentMipOffsets.find(key); it != g_ResidentMipOffsets.end()) {
+			residentMipOffset = it->second;
+			g_ResidentMipOffsets.erase(it);
+		}
+	}
 
 	if (textureType == TextureType::ModelSpaceNormalMap) {
 		if (auto refIt = m_NormalMaps.find(key); refIt != m_NormalMaps.end())
@@ -176,6 +243,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 	auto& textureDesc = nvrhi::TextureDesc()
 		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
 		.setHeight(nativeTexDesc.Height)
+		.setMipLevels(nativeTexDesc.MipLevels)
 		.setFormat(format)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Shared Texture [?]");
@@ -219,7 +287,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 			return nullptr;
 		}
 
-		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
+		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get(), residentMipOffset);
 		return it->second->descriptorHandle;
 	}
 

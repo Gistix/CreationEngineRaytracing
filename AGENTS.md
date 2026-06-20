@@ -980,5 +980,3 @@ bool TryMaintenanceRebuild(uint64_t frameIndex);
 - **Maintenance rebuilds** are gated by the per-frame limit to avoid spikes. If the limit is hit, the model does a normal update instead and will try a maintenance rebuild on the next frame it has dirty update flags.
 - **The counter does not keep climbing** when past the threshold — it stays at the threshold value until a rebuild (of any kind) resets it. This avoids unbounded counter growth and unnecessary comparisons.
 - At 60fps with the default threshold of 256, dynamically-updating models get a fresh rebuild approximately every 4.3 seconds.
-
-
