@@ -26,7 +26,7 @@ public:
 
 	void SetHidden(bool hidden);
 
-	bool GetHidden() const;
+	bool IsHidden() const;
 
 	nvrhi::rt::IAccelStruct* GetBLAS() const;
 };

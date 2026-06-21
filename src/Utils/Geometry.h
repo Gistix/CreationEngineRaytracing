@@ -8,7 +8,7 @@ namespace Util
 {
 	namespace Geometry
 	{
-		std::uint32_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags);
+		std::uint16_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags);
 
 		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc desc);
 

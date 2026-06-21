@@ -40,6 +40,10 @@ class SceneGraph
 	RE::NiCamera* m_Camera = nullptr;
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<DirectMesh>> m_DirectMeshes;
+	mutable std::mutex m_MeshMutex;
+
+	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
+	mutable std::mutex m_MeshDestroyMutex;
 
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
@@ -141,6 +145,8 @@ public:
 
 	inline auto& GetCamera() const  { return m_Camera; }
 	
+	void OnDestroy(RE::BSTriShape* bsTriShape);
+
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
 

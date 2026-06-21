@@ -343,9 +343,33 @@ void SceneGraph::UpdateLODVisibility()
 #endif
 }
 
+void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
+{
+	{
+		std::scoped_lock lock(m_MeshDestroyMutex);
+		m_DestroyedMeshes.push_back(bsTriShape);
+	}
+
+	logger::info("Destroy - {}", fmt::ptr(bsTriShape));
+}
+
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
+
+	eastl::vector<RE::BSTriShape*> destroyedMeshes; 
+	{
+		std::scoped_lock lock(m_MeshDestroyMutex);
+		destroyedMeshes = eastl::move(m_DestroyedMeshes);
+	}
+
+	// Unconditional release for now, needs to be revised for buffering/frames in flight support
+	for (auto destroyedMesh: destroyedMeshes)
+	{
+		// Might be unecessary since direct meshes is only modifier below, and this function runs on the main thread
+		std::scoped_lock lock(m_MeshMutex);
+		m_DirectMeshes.erase(destroyedMesh);
+	}
 
 	auto shadowSceneNode = Util::Adapter::GetShaderManagerState().shadowSceneNode[0];
 
@@ -376,20 +400,30 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (!rendererData)
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
+		const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+		if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+
 		// Check sentinel value
 		if (rendererData->pad1C != 1)
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
-		auto it = m_DirectMeshes.find(bsTriShape);
-		const bool exists = (it != m_DirectMeshes.end());
+		{
+			std::lock_guard lock(m_MeshMutex);
 
-		// If exists - set hidden state, else - create if visible 
-		if (exists) {
-			auto directMesh = it->second.get();
-			directMesh->SetHidden(hidden);
-		}
-		else if (!hidden) {
-			m_DirectMeshes.emplace(bsTriShape, eastl::make_unique<DirectMesh>(bsTriShape, commandList));
+			auto it = m_DirectMeshes.find(bsTriShape);
+
+			const bool exists = (it != m_DirectMeshes.end());
+
+			// If exists - set hidden state, else - create if visible 
+			if (exists) {
+				auto directMesh = it->second.get();
+				directMesh->SetHidden(hidden);
+			}
+			else if (!hidden) {
+				logger::info("Create - {}", fmt::ptr(bsTriShape));
+				m_DirectMeshes.emplace(bsTriShape, eastl::make_unique<DirectMesh>(bsTriShape, commandList));
+			}
 		}
 
 		return CESEAdapter::RE::BSVisitControl::kContinue;

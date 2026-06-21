@@ -50,9 +50,12 @@ public:
 
 		for (const auto& [bsTriShape, directMesh] : directMeshes)
 		{
-			if (directMesh->GetHidden())
+			if (directMesh->IsHidden())
 				continue;
-		
+	
+			if (!directMesh->GetBLAS())
+				continue;
+
 			float3x4 transform;
 			XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(bsTriShape->world));
 
@@ -72,9 +75,9 @@ public:
 
 		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 
-		auto* scene = Scene::GetSingleton();
+		/*auto* scene = Scene::GetSingleton();
 		if (scene->GetSceneGraph()->GetNumInstancesFrame() != topLevelInstances)
-			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances and TLAS instances.");
+			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances and TLAS instances.");*/
 
 		if (!m_Handle || topLevelInstances > m_NumInstances - Constants::TLAS_INSTANCES_THRESHOLD) {
 			float topLevelInstancesRatio = std::ceil(topLevelInstances / static_cast<float>(Constants::TLAS_INSTANCES_STEP));

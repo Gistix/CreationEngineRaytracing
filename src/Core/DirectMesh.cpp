@@ -8,7 +8,7 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandL
 	if (bsTriShape->name.empty())
 		m_Name = std::format("{}", fmt::ptr(bsTriShape)).c_str();
 	else
-		m_Name = bsTriShape->name.c_str();
+		m_Name = { bsTriShape->name.c_str() };
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 
@@ -24,21 +24,40 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandL
 
 		auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(geometryData.rendererData);
 
-		const auto indexCount = trishapeData.triangleCount * 3;
-		const auto indexStride = 2;
-		const auto indexSize = indexStride * indexCount;
+		const uint16_t indexCount = trishapeData.triangleCount * 3;
+		//const uint16_t indexStride = 2;
+		//const uint16_t indexSize = indexStride * indexCount;
 
-		const auto vertexCount = trishapeData.vertexCount;
-		const auto vertexStride = Util::Geometry::GetStoredVertexSize(geometryData.vertexDesc);
-		const auto vertexSize = vertexStride * vertexCount;
+		const uint16_t vertexCount = trishapeData.vertexCount;
+		const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(geometryData.vertexDesc);
+		//const uint16_t vertexSize = vertexStride * vertexCount;
+
+		auto indexDesc = triShapeDX12->indexBufferDX12->GetDesc();
+		auto vertexDesc = triShapeDX12->vertexBufferDX12->GetDesc();
+
+		D3D11_BUFFER_DESC indexDesc11;
+		reinterpret_cast<ID3D11Buffer*>(triShapeDX12->indexBuffer)->GetDesc(&indexDesc11);
+
+		D3D11_BUFFER_DESC vertexDesc11;
+		reinterpret_cast<ID3D11Buffer*>(triShapeDX12->vertexBuffer)->GetDesc(&vertexDesc11);
+
+		if (indexDesc.Width != indexDesc11.ByteWidth) {
+			logger::error("D3D11 ({}) and D3D12 ({}) index buffer size mismatch.", indexDesc11.ByteWidth, indexDesc.Width);
+			return;
+		}
+
+		if (vertexDesc.Width != vertexDesc11.ByteWidth) {
+			logger::error("D3D11 ({}) and D3D12 ({}) vertex buffer size mismatch.", vertexDesc11.ByteWidth, vertexDesc.Width);
+			return;
+		}
 
 		auto& geometryTriangles = m_GeometryDesc.geometryData.triangles;
 
 		// Index
 		{
 			auto indexBufferDesc = nvrhi::BufferDesc()
-				.setByteSize(indexSize)
-				.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+				.setByteSize(indexDesc.Width)
+				.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 				.setIsAccelStructBuildInput(true)
 				.setDebugName(std::format("{} (Triangle Buffer)", m_Name));
 
@@ -53,8 +72,8 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandL
 		// Vertex
 		{
 			auto vertexBufferDesc = nvrhi::BufferDesc()
-				.setByteSize(vertexSize)
-				.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
+				.setByteSize(vertexDesc.Width)
+				.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 				.setIsAccelStructBuildInput(true)
 				.setDebugName(std::format("{} (Vertex Buffer)", m_Name));
 
@@ -87,9 +106,9 @@ void DirectMesh::SetHidden(bool hidden)
 	m_State.set(hidden, State::Hidden);
 }
 
-bool DirectMesh::GetHidden() const
+bool DirectMesh::IsHidden() const
 {
-	return m_State.all(State::Hidden);
+	return m_State.any(State::Hidden);
 }
 
 nvrhi::rt::IAccelStruct* DirectMesh::GetBLAS() const

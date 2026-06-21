@@ -85,11 +85,11 @@ namespace Util
 {
 	namespace Geometry
 	{
-		std::uint32_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags)
+		std::uint16_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags)
 		{
 			using RE::BSGraphics::Vertex;
 
-			std::uint32_t vertexSize = 0;
+			std::uint16_t vertexSize = 0;
 
 			if (flags & Vertex::VF_VERTEX) {
 				vertexSize += sizeof(float) * 4;
@@ -124,8 +124,8 @@ namespace Util
 
 		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc vertexDesc)
 		{
-			const auto desc = *reinterpret_cast<uint64_t*>(&vertexDesc);
-			return (desc & 0xF) * 4;
+			const auto vertexDescUInt = *reinterpret_cast<uint64_t*>(&vertexDesc);
+			return ((4 * LOBYTE(vertexDescUInt)) & 0x3C);
 		}
 
 		bool HasDoubleSidedGeom(Mesh* mesh)

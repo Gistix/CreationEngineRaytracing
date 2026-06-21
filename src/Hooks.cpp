@@ -92,6 +92,10 @@ namespace Hooks
 			auto* triShape = static_cast<RE::BSGraphics::TriShapeDX12*>(mm->Allocate(sizeof(RE::BSGraphics::TriShapeDX12), 0, false));
 			triShape->vertexDesc = vertexDesc;
 			triShape->refCount = 1;
+
+			// Sentinel value
+			triShape->pad1C = 0;
+
 			triShape->rawVertexData = static_cast<uint8_t*>(mm->Allocate(vertexDataSize, 0, false));
 			triShape->rawIndexData = static_cast<uint16_t*>(mm->Allocate(indexDataSize, 0, false));
 
@@ -129,6 +133,97 @@ namespace Hooks
 			Util::CreateSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
 
 			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSGraphics_CreateTriShapeVertex
+	{
+		static RE::BSGraphics::TriShapeDX12* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			uint8_t* a_vertexData, uint32_t a_vertexDataSize,
+			RE::BSGraphics::VertexDesc a_vertexDesc,
+			void* a5)
+		{
+			auto result = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a5);
+
+			// Sentinel value
+			result->pad1C = 0;
+
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSGraphics_CreateTriShapeIndex
+	{
+		static RE::BSGraphics::TriShapeDX12* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			void* a2,
+			RE::BSGraphics::VertexDesc vertexDesc,
+			uint16_t* a_indexData, uint32_t a_numIndices)
+		{
+			auto result = func(a_renderer, a2, vertexDesc, a_indexData, a_numIndices);
+
+			// Sentinel value
+			result->pad1C = 0;
+
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSTriShape_Dtor
+	{
+		static void thunk(RE::BSTriShape* a_bsTriShape, bool a_release)
+		{
+			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsTriShape);
+
+			func(a_bsTriShape, a_release);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct TriShape_Dtor
+	{
+		static void thunk([[ maybe_unused ]] void* a1, RE::BSGraphics::TriShape* a_triShape)
+		{
+			logger::info("TriShape::Dtor - {}", a_triShape->refCount);
+
+			if (a_triShape && _InterlockedExchangeAdd(&a_triShape->refCount, 0xFFFFFFFF) == 1)
+			{
+				auto indexBuffer = reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer);
+				if (indexBuffer)
+					indexBuffer->Release();
+
+				auto vertexBuffer = reinterpret_cast<ID3D11Buffer*>(a_triShape->vertexBuffer);
+				if (vertexBuffer)
+					vertexBuffer->Release();
+
+				auto* mm = RE::MemoryManager::GetSingleton();
+
+				if (a_triShape->rawVertexData)
+					mm->Deallocate(a_triShape->rawVertexData, false);
+
+				if (a_triShape->rawIndexData)
+					mm->Deallocate(a_triShape->rawIndexData, false);
+
+				if (a_triShape->pad1C == 1) {
+					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape);
+
+					if (triShapeDX12->indexBufferDX12)
+						triShapeDX12->indexBufferDX12->Release();
+
+					if (triShapeDX12->vertexBufferDX12)
+						triShapeDX12->vertexBufferDX12->Release();
+				}
+
+				mm->Deallocate(a_triShape, false);
+			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -938,10 +1033,14 @@ namespace Hooks
 		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
 
 #if defined(SKYRIM)
-		// There are other 2 possible functions with similar functionality (one of them with no index data, for landscape)
 		stl::detour_thunk<BSGraphics_CreateTriShape>(REL::RelocationID(75473, 0));
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(REL::RelocationID(75474, 0));
-
+		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(REL::RelocationID(75475, 0));
+		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(REL::RelocationID(75476, 0));
+		
+		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 0));
+		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 0));
+		
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
 		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
