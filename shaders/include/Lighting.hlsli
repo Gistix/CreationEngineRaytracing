@@ -19,6 +19,10 @@ static const float ISL_SCALE = 0.8f;
 static const float ISL_METRES_TO_UNITS = 70.f;
 static const float ISL_METRES_TO_UNITS_SQ = ISL_METRES_TO_UNITS * ISL_METRES_TO_UNITS;
 static const float ISL_SCALED_UNITS_SQ = ISL_SCALE * ISL_METRES_TO_UNITS_SQ;
+static const float NON_ISL_ESTIMATED_LIGHT_SOURCE_RADIUS_PER_FADE = 1.0f / GAME_UNIT_TO_CM;
+static const float NON_ISL_ATTENUATION_FADE_START = 0.8f;
+static const float NON_ISL_ATTENUATION_BRIGHT_FADE_START = 0.55f;
+static const float NON_ISL_ATTENUATION_BRIGHT_FADE_REFERENCE = 4.0f;
 
 #define DIRECTIONAL_LIGHT Raytracing.DirectionalLight
 #define SKY_HEMI SkyHemisphere
@@ -168,6 +172,44 @@ float GetSpotAttenuation(Light light, float3 surfaceToLight)
     return smoothstep(cosOuter, cosInner, cosTheta);
 }
 
+float GetEstimatedNonISLLightSourceRadius(Light light)
+{
+    return max(max(light.Fade, 0.0f) * NON_ISL_ESTIMATED_LIGHT_SOURCE_RADIUS_PER_FADE, light.Radius * 1e-4f);
+}
+
+float GetNonISLAttenuationFadeStart(Light light)
+{
+    float brightFade = saturate((light.Fade - 1.0f) / (NON_ISL_ATTENUATION_BRIGHT_FADE_REFERENCE - 1.0f));
+    return lerp(NON_ISL_ATTENUATION_FADE_START, NON_ISL_ATTENUATION_BRIGHT_FADE_START, brightFade);
+}
+
+float GetNonISLPointLightAttenuation(Light light, float distance)
+{
+    float radius = light.Radius;
+    float normalizedDistance = distance / max(radius, 1e-4f);
+    if (normalizedDistance >= 1.0f)
+        return 0.0f;
+
+    float estimatedLightRadius = GetEstimatedNonISLLightSourceRadius(light);
+    float inverseSquare = radius * radius * rcp(distance * distance + estimatedLightRadius * estimatedLightRadius);
+    float fadeStart = GetNonISLAttenuationFadeStart(light);
+    float edgeFade = saturate((1.0f - normalizedDistance) / (1.0f - fadeStart));
+    edgeFade = edgeFade * edgeFade * (3.0f - 2.0f * edgeFade);
+    return inverseSquare * edgeFade;
+}
+
+float GetLightSourceAngle(Light light, float dist)
+{
+    if ((light.Flags & LightFlags::ISL) != 0)
+    {
+        float size = sqrt((light.SizeBias * 2.0f) / (0.8f * 4900.0f));
+        return atan2(size, dist);
+    }
+
+    float estimatedRadius = GetEstimatedNonISLLightSourceRadius(light);
+    return atan2(estimatedRadius, dist);
+}
+
 float GetAttenuation(Light light, float dist, inout float lightSourceAngle)
 {
     float atten = 0.0f;
@@ -177,21 +219,19 @@ float GetAttenuation(Light light, float dist, inout float lightSourceAngle)
 		float t = saturate((light.Radius - dist) * light.FadeZone);
 		float fastSmoothstep = t * t * (3.0f - 2.0f * t);
 		atten = invSq * fastSmoothstep;
-        float size = sqrt((light.SizeBias * 2.0f) / (0.8 * 4900));
-        lightSourceAngle = atan2(size, dist);
 	}
 	else
 	{
-		float intensityFactor = saturate(dist * light.InvRadius);
-		atten = 1.0f - intensityFactor * intensityFactor;
+		atten = GetNonISLPointLightAttenuation(light, dist);
 	}
+    lightSourceAngle = GetLightSourceAngle(light, dist);
     return atten;
 }
 
 float GetLightSampleWeight(Surface surface, Light light)
 {
     float3 l = (light.Vector - surface.Position);
-    float dist = length(l) * GAME_UNIT_TO_M;
+    float dist = length(l);
     float lightSourceAngle = 0.0f;
     float atten = GetAttenuation(light, dist, lightSourceAngle);
     atten *= GetSpotAttenuation(light, l);
@@ -262,13 +302,15 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     dist = length(lr);
     lr /= dist;
 
-    float lightSourceAngle = 0.005f;
+    float lightSourceAngle = 0.0f;
 
     float atten = GetAttenuation(light, dist, lightSourceAngle);
     atten *= GetSpotAttenuation(light, lr);
 
     irradiance = light.Color * light.Fade * atten * lightWeight;
-    lr = TangentToWorld(lr, SampleCosineHemisphereScaled(randomSeed, lightSourceAngle));
+    float cosLightSourceAngle = cos(lightSourceAngle);
+    lr = TangentToWorld(lr, SampleConeUniform(randomSeed, cosLightSourceAngle));
+    irradiance *= 2.0f / (1.0f + cosLightSourceAngle);
     
 #if defined(RIS)
     return selectedLightID;
@@ -378,9 +420,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
             {
                 // Compute the angular size of this light as seen from the surface
                 Light light = Lights[lightIndex];
-                float lightSourceAngle = 0.005f;
-                float distM = dist * GAME_UNIT_TO_M;
-                GetAttenuation(light, distM, lightSourceAngle);
+                float lightSourceAngle = GetLightSourceAngle(light, dist);
                 
                 // Check if delta direction is within the light's angular extent
                 float3 dirToLight = normalize(light.Vector - surface.Position);
