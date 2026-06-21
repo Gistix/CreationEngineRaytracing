@@ -2,6 +2,7 @@
 
 #include "Util.h"
 #include "Constants.h"
+#include "Renderer.h"
 
 namespace Util
 {
@@ -90,4 +91,18 @@ namespace Util
 	{
 		return std::format("{}, {}, {}, {}", matrix.m[0], matrix.m[1], matrix.m[2], matrix.m[3]);
 	}
+
+	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
+	{
+		// Get underlying resource
+		winrt::com_ptr<IDXGIResource1> dxgiResource;
+		d3d11Buffer->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+
+		// Get shared handle from D3D11 texture to enable D3D12 access
+		HANDLE sharedHandle = nullptr;
+		dxgiResource->GetSharedHandle(&sharedHandle);
+
+		// Open the shared D3D11 texture as D3D12 resource
+		Renderer::GetNativeD3D12Device()->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Buffer));
+	};
 }

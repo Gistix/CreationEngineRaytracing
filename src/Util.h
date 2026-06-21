@@ -65,4 +65,6 @@ namespace Util
 
 	std::string Format(float3x4 matrix);
 	std::string Format(float4x4 matrix);
+
+	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer);
 }

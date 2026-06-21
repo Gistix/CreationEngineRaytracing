@@ -14,22 +14,9 @@ namespace Hooks
 			RE::BSGraphics::VertexDesc a_vertexDesc,
 			uint16_t a_vertexCount, uint32_t a_indexCount)
 		{
-			auto createSharedBuffer = [](ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer) {
-				// Get underlying resource
-				winrt::com_ptr<IDXGIResource1> dxgiResource;
-				d3d11Buffer->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
-
-				// Get shared handle from D3D11 texture to enable D3D12 access
-				HANDLE sharedHandle = nullptr;
-				dxgiResource->GetSharedHandle(&sharedHandle);
-
-				// Open the shared D3D11 texture as D3D12 resource
-				Renderer::GetNativeD3D12Device()->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Buffer));
-			};
+			logger::info("BSGraphics::CreateTriShape");
 
 			auto* device = reinterpret_cast<ID3D11Device*>(a_renderer->GetRuntimeData().forwarder);
-
-			logger::info("BSGraphics::CreateTriShape");
 
 			const auto vertexDescUInt = *reinterpret_cast<uint64_t*>(&a_vertexDesc);
 
@@ -62,7 +49,7 @@ namespace Hooks
 			device->CreateBuffer(&vbDesc, &vbInit, vertexBuffer);
 
 			// Share vertex buffer
-			createSharedBuffer(*vertexBuffer, &triShape->vertexBufferDX12);
+			Util::CreateSharedBuffer(*vertexBuffer, &triShape->vertexBufferDX12);
 
 			// Index - function takes element count
 			a_bsStream->iStr->read(triShape->rawIndexData, a_indexCount);
@@ -80,7 +67,7 @@ namespace Hooks
 			device->CreateBuffer(&ibDesc, &ibInit, indexBuffer);
 
 			// Share index buffer
-			createSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
+			Util::CreateSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
 
 			return triShape;
 		}
@@ -98,6 +85,8 @@ namespace Hooks
 		{
 			logger::info("BSGraphics::CreateTriShapeParticles");
 
+			auto* device = reinterpret_cast<ID3D11Device*>(a_renderer->GetRuntimeData().forwarder);
+
 			const size_t indexDataSize = 2ull * numIndices;
 			auto* mm = RE::MemoryManager::GetSingleton();
 
@@ -110,9 +99,6 @@ namespace Hooks
 			std::memcpy(triShape->rawVertexData, vertexData, vertexDataSize);
 			std::memcpy(triShape->rawIndexData, indexData, indexDataSize);
 
-			auto* device = reinterpret_cast<ID3D11Device*>(a_renderer->GetRuntimeData().forwarder);
-			auto* d3d12Device = Renderer::GetNativeD3D12Device();
-
 			D3D11_BUFFER_DESC vbDesc{};
 			vbDesc.ByteWidth = (UINT)vertexDataSize;
 			vbDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -122,24 +108,11 @@ namespace Hooks
 			D3D11_SUBRESOURCE_DATA vbInit{}; 
 			vbInit.pSysMem = vertexData;
 
-			auto createSharedBuffer = [d3d12Device](ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer) {
-				// Get underlying resource
-				winrt::com_ptr<IDXGIResource1> dxgiResource;
-				d3d11Buffer->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
-
-				// Get shared handle from D3D11 texture to enable D3D12 access
-				HANDLE sharedHandle = nullptr;
-				dxgiResource->GetSharedHandle(&sharedHandle);
-
-				// Open the shared D3D11 texture as D3D12 resource
-				d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Buffer));
-			};
-
 			auto** vertexBuffer = reinterpret_cast<ID3D11Buffer**>(&triShape->vertexBuffer);
 			device->CreateBuffer(&vbDesc, &vbInit, vertexBuffer);
 
 			// Share vertex buffer
-			createSharedBuffer(*vertexBuffer, &triShape->vertexBufferDX12);
+			Util::CreateSharedBuffer(*vertexBuffer, &triShape->vertexBufferDX12);
 
 			D3D11_BUFFER_DESC ibDesc{};
 			ibDesc.ByteWidth = (UINT)indexDataSize;
@@ -154,7 +127,7 @@ namespace Hooks
 			device->CreateBuffer(&ibDesc, &ibInit, indexBuffer);
 
 			// Share index buffer
-			createSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
+			Util::CreateSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
 
 			return triShape;
 		}
