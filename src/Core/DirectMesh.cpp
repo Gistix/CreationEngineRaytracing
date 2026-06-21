@@ -24,7 +24,8 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandL
 
 		auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(geometryData.rendererData);
 
-		const uint16_t indexCount = trishapeData.triangleCount * 3;
+		// Promote to uint32_t to avoid overflow
+		const uint32_t indexCount = trishapeData.triangleCount * 3;
 		//const uint16_t indexStride = 2;
 		//const uint16_t indexSize = indexStride * indexCount;
 
