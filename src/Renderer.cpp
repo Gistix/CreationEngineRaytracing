@@ -14,6 +14,8 @@ Renderer::Renderer()
 
 bool Renderer::Initialize(RendererParams rendererParams)
 {
+	Hooks::InstallD3D11(rendererParams.d3d11Device);
+
 	// NVRHI Device
 	nvrhi::d3d12::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
