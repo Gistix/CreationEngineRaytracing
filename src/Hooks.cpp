@@ -24,19 +24,7 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct MemoryManager_AllocateTriShapeSE
-	{
-		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t a_size, size_t a_aligment)
-		{
-			auto triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_aligment);
-			triShape->pad1C = 0; // Clear sentinel value
-			return triShape;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct MemoryManager_AllocateTriShapeAE
+	struct MemoryManager_AllocateTriShape
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
@@ -1001,18 +989,10 @@ namespace Hooks
 		const auto createTriShapeC = REL::RelocationID(75475, 77261);
 		const auto createTriShapeD = REL::RelocationID(75476, 77262);
 
-		if (REL::Module::IsSE()) {
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeA.address() + 0x9f);
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeB.address() + 0x87);
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeC.address() + 0x82);
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeD.address() + 0x85);
-		}
-		else {
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeA.address() + 0x9f);
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeB.address() + 0x87);
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeC.address() + 0x82);
-			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeD.address() + 0x85);
-		}
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeA.address() + REL::Relocate(0x9f, 0x0));
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeB.address() + REL::Relocate(0x87, 0x0));
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeC.address() + REL::Relocate(0x82, 0x0));
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeD.address() + REL::Relocate(0x85, 0x0));
 
 		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);

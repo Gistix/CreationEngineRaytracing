@@ -345,12 +345,8 @@ void SceneGraph::UpdateLODVisibility()
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
-	{
-		std::scoped_lock lock(m_MeshDestroyMutex);
-		m_DestroyedMeshes.push_back(bsTriShape);
-	}
-
-	logger::info("Destroy - {}", fmt::ptr(bsTriShape));
+	std::scoped_lock lock(m_MeshDestroyMutex);
+	m_DestroyedMeshes.push_back(bsTriShape);
 }
 
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
