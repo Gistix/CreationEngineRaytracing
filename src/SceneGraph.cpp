@@ -421,7 +421,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				directMesh->SetHidden(hidden);
 			}
 			else if (!hidden) {
-				logger::info("Create - {}", fmt::ptr(bsTriShape));
 				m_DirectMeshes.emplace(bsTriShape, eastl::make_unique<DirectMesh>(bsTriShape, commandList));
 			}
 		}

@@ -6,69 +6,67 @@
 
 namespace Hooks
 {
+	struct ID3D11Device_CreateBuffer
+	{
+		static HRESULT thunk(ID3D11Device* a_device, const D3D11_BUFFER_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Buffer** ppBuffer)
+		{
+			if (!pDesc)
+				return func(a_device, pDesc, pInitialData, ppBuffer);
+
+			D3D11_BUFFER_DESC desc = *pDesc;
+
+			if (desc.CPUAccessFlags == 0)
+				desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
+
+			return func(a_device, &desc, pInitialData, ppBuffer);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct MemoryManager_AllocateTriShapeSE
+	{
+		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t a_size, size_t a_aligment)
+		{
+			auto triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_aligment);
+			triShape->pad1C = 0; // Clear sentinel value
+			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct MemoryManager_AllocateTriShapeAE
+	{
+		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
+		{
+			auto triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+			triShape->pad1C = 0; // Clear sentinel value
+			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	struct BSGraphics_CreateTriShape
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
 			RE::BSStream* a_bsStream,
 			RE::BSGraphics::VertexDesc a_vertexDesc,
-			uint16_t a_vertexCount, uint32_t a_indexCount)
+			uint16_t a_vertexCount, 
+			uint32_t a_indexCount)
 		{
-			auto* device = reinterpret_cast<ID3D11Device*>(a_renderer->GetRuntimeData().forwarder);
+			auto triShape = func(a_renderer, a_bsStream, a_vertexDesc, a_vertexCount, a_indexCount);
 
-			const auto vertexDescUInt = *reinterpret_cast<uint64_t*>(&a_vertexDesc);
-
-			const uint32_t vertexDataSize = a_vertexCount * ((4 * LOBYTE(vertexDescUInt)) & 0x3C);
-			const uint32_t indexDataSize = 2 * a_indexCount;
-
-			auto* mm = RE::MemoryManager::GetSingleton();
-
-			auto* triShape = static_cast<RE::BSGraphics::TriShapeDX12*>(mm->Allocate(sizeof(RE::BSGraphics::TriShapeDX12), 0, false));
-
-			triShape->vertexDesc = a_vertexDesc;
-			triShape->refCount = 1;
-
-			// Sentinel value
+			// Set sentinel value
 			triShape->pad1C = 1;
 
-			triShape->rawVertexData = static_cast<uint8_t*>(mm->Allocate(vertexDataSize, 0, false));
-			triShape->rawIndexData = static_cast<uint16_t*>(mm->Allocate(indexDataSize, 0, false));
-
-			// Vertex - function takes element count
-			a_bsStream->iStr->read(triShape->rawVertexData, vertexDataSize);
-
-			D3D11_BUFFER_DESC vbDesc{};
-			vbDesc.ByteWidth = vertexDataSize;
-			vbDesc.Usage = D3D11_USAGE_DEFAULT;
-			vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-			vbDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-			D3D11_SUBRESOURCE_DATA vbInit{};
-			vbInit.pSysMem = triShape->rawVertexData;
-
-			auto** vertexBuffer = reinterpret_cast<ID3D11Buffer**>(&triShape->vertexBuffer);
-			device->CreateBuffer(&vbDesc, &vbInit, vertexBuffer);
-
 			// Share vertex buffer
-			Util::CreateSharedBuffer(*vertexBuffer, &triShape->vertexBufferDX12);
-
-			// Index - function takes element count
-			a_bsStream->iStr->read(triShape->rawIndexData, a_indexCount);
-
-			D3D11_BUFFER_DESC ibDesc{};
-			ibDesc.ByteWidth = indexDataSize;
-			ibDesc.Usage = D3D11_USAGE_DEFAULT;
-			ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-			ibDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-			D3D11_SUBRESOURCE_DATA ibInit{};
-			ibInit.pSysMem = triShape->rawIndexData;
-
-			auto** indexBuffer = reinterpret_cast<ID3D11Buffer**>(&triShape->indexBuffer);
-			device->CreateBuffer(&ibDesc, &ibInit, indexBuffer);
-
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+	
 			// Share index buffer
-			Util::CreateSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
 
 			return triShape;
 		}
@@ -80,57 +78,22 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
-			uint8_t* vertexData, uint32_t vertexDataSize,
+			uint8_t* vertexData, 
+			uint32_t vertexDataSize,
 			RE::BSGraphics::VertexDesc vertexDesc,
-			uint16_t* indexData, uint32_t numIndices)
+			uint16_t* indexData, 
+			uint32_t numIndices)
 		{
-			auto* device = reinterpret_cast<ID3D11Device*>(a_renderer->GetRuntimeData().forwarder);
+			auto triShape = func(a_renderer, vertexData, vertexDataSize, vertexDesc, indexData, numIndices);
 
-			const size_t indexDataSize = 2ull * numIndices;
-			auto* mm = RE::MemoryManager::GetSingleton();
-
-			auto* triShape = static_cast<RE::BSGraphics::TriShapeDX12*>(mm->Allocate(sizeof(RE::BSGraphics::TriShapeDX12), 0, false));
-			triShape->vertexDesc = vertexDesc;
-			triShape->refCount = 1;
-
-			// Sentinel value
-			triShape->pad1C = 0;
-
-			triShape->rawVertexData = static_cast<uint8_t*>(mm->Allocate(vertexDataSize, 0, false));
-			triShape->rawIndexData = static_cast<uint16_t*>(mm->Allocate(indexDataSize, 0, false));
-
-			std::memcpy(triShape->rawVertexData, vertexData, vertexDataSize);
-			std::memcpy(triShape->rawIndexData, indexData, indexDataSize);
-
-			D3D11_BUFFER_DESC vbDesc{};
-			vbDesc.ByteWidth = (UINT)vertexDataSize;
-			vbDesc.Usage = D3D11_USAGE_DEFAULT;
-			vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-			vbDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-			D3D11_SUBRESOURCE_DATA vbInit{}; 
-			vbInit.pSysMem = vertexData;
-
-			auto** vertexBuffer = reinterpret_cast<ID3D11Buffer**>(&triShape->vertexBuffer);
-			device->CreateBuffer(&vbDesc, &vbInit, vertexBuffer);
+			// Set sentinel value
+			triShape->pad1C = 1;
 
 			// Share vertex buffer
-			Util::CreateSharedBuffer(*vertexBuffer, &triShape->vertexBufferDX12);
-
-			D3D11_BUFFER_DESC ibDesc{};
-			ibDesc.ByteWidth = (UINT)indexDataSize;
-			ibDesc.Usage = D3D11_USAGE_DEFAULT;
-			ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-			ibDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-			D3D11_SUBRESOURCE_DATA ibInit{}; 
-			ibInit.pSysMem = indexData;
-
-			auto** indexBuffer = reinterpret_cast<ID3D11Buffer**>(&triShape->indexBuffer);
-			device->CreateBuffer(&ibDesc, &ibInit, indexBuffer);
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
 
 			// Share index buffer
-			Util::CreateSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
 
 			return triShape;
 		}
@@ -142,13 +105,14 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
-			uint8_t* a_vertexData, uint32_t a_vertexDataSize,
+			uint8_t* a_vertexData,
+			uint32_t a_vertexDataSize,
 			RE::BSGraphics::VertexDesc a_vertexDesc,
 			void* a5)
 		{
 			auto result = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a5);
 
-			// Sentinel value
+			// Set sentinel value
 			result->pad1C = 0;
 
 			return result;
@@ -163,11 +127,12 @@ namespace Hooks
 			RE::BSGraphics::Renderer* a_renderer,
 			void* a2,
 			RE::BSGraphics::VertexDesc vertexDesc,
-			uint16_t* a_indexData, uint32_t a_numIndices)
+			uint16_t* a_indexData,
+			uint32_t a_numIndices)
 		{
 			auto result = func(a_renderer, a2, vertexDesc, a_indexData, a_numIndices);
 
-			// Sentinel value
+			// Set sentinel value
 			result->pad1C = 0;
 
 			return result;
@@ -192,8 +157,6 @@ namespace Hooks
 	{
 		static void thunk([[ maybe_unused ]] void* a1, RE::BSGraphics::TriShape* a_triShape)
 		{
-			logger::info("TriShape::Dtor - {}", a_triShape->refCount);
-
 			if (a_triShape && _InterlockedExchangeAdd(&a_triShape->refCount, 0xFFFFFFFF) == 1)
 			{
 				auto indexBuffer = reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer);
@@ -1033,13 +996,31 @@ namespace Hooks
 		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
 
 #if defined(SKYRIM)
-		stl::detour_thunk<BSGraphics_CreateTriShape>(REL::RelocationID(75473, 0));
-		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(REL::RelocationID(75474, 0));
-		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(REL::RelocationID(75475, 0));
-		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(REL::RelocationID(75476, 0));
+		const auto createTriShapeA = REL::RelocationID(75473, 77259);
+		const auto createTriShapeB = REL::RelocationID(75474, 77260);
+		const auto createTriShapeC = REL::RelocationID(75475, 77261);
+		const auto createTriShapeD = REL::RelocationID(75476, 77262);
+
+		if (REL::Module::IsSE()) {
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeA.address() + 0x9f);
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeB.address() + 0x87);
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeC.address() + 0x82);
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeSE>(createTriShapeD.address() + 0x85);
+		}
+		else {
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeA.address() + 0x9f);
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeB.address() + 0x87);
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeC.address() + 0x82);
+			stl::write_thunk_call<MemoryManager_AllocateTriShapeAE>(createTriShapeD.address() + 0x85);
+		}
+
+		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
+		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
+		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC);
+		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD);
 		
-		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 0));
-		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 0));
+		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 70666));
+		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 		
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
 		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
@@ -1113,5 +1094,10 @@ namespace Hooks
 #	endif
 #endif
 		logger::info("[Raytracing] Installed hooks");
+	}
+
+	void InstallD3D11(ID3D11Device* a_device)
+	{
+		stl::detour_vfunc<3, ID3D11Device_CreateBuffer>(a_device);
 	}
 }

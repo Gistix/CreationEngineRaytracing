@@ -85,4 +85,5 @@ namespace Hooks
 #endif
 
 	void Install();
+	void InstallD3D11(ID3D11Device* a_device);
 }

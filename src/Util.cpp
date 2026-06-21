@@ -105,4 +105,9 @@ namespace Util
 		// Open the shared D3D11 texture as D3D12 resource
 		Renderer::GetNativeD3D12Device()->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Buffer));
 	};
+
+	void CreateSharedBuffer(RE::ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
+	{		
+		CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(d3d11Buffer), d3d12Buffer);
+	};
 }
