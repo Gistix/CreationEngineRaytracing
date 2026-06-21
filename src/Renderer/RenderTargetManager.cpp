@@ -71,7 +71,8 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		if ((desc.sharedResourceFlags & nvrhi::SharedResourceFlags::Shared) == nvrhi::SharedResourceFlags::None)
 			renderTarget.handle = device->createTexture(desc);
 		else {
-			D3D12_RESOURCE_DESC nativeDesc = nvrhi::d3d12::convertTextureDesc(desc);
+			auto nativeDesc1 = nvrhi::d3d12::convertTextureDesc(desc);
+			auto nativeDesc = *reinterpret_cast<D3D12_RESOURCE_DESC*>(&nativeDesc1);
 
 			D3D11_RESOURCE_FLAGS flags{};
 			flags.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
