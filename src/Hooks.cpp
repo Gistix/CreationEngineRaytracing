@@ -15,10 +15,17 @@ namespace Hooks
 
 			D3D11_BUFFER_DESC desc = *pDesc;
 
-			if (desc.CPUAccessFlags == 0)
+			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0 && (desc.BindFlags & D3D11_BIND_VERTEX_BUFFER || desc.BindFlags & D3D11_BIND_INDEX_BUFFER))
 				desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
 
-			return func(a_device, &desc, pInitialData, ppBuffer);
+			auto hr = func(a_device, &desc, pInitialData, ppBuffer);
+
+			if (FAILED(hr)) {
+				logger::error("ID3D11Device::CreateBuffer - Failed with HR: 0x{:08X}", static_cast<UINT>(hr));
+				hr = func(a_device, pDesc, pInitialData, ppBuffer);
+			}
+
+			return hr;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -989,10 +996,10 @@ namespace Hooks
 		const auto createTriShapeC = REL::RelocationID(75475, 77261);
 		const auto createTriShapeD = REL::RelocationID(75476, 77262);
 
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeA.address() + REL::Relocate(0x9f, 0x0));
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeB.address() + REL::Relocate(0x87, 0x0));
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeC.address() + REL::Relocate(0x82, 0x0));
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeD.address() + REL::Relocate(0x85, 0x0));
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeA.address() + 0x9f);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeB.address() + 0x87);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeC.address() + 0x82);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeD.address() + REL::Relocate(0x85, 0x87));
 
 		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
