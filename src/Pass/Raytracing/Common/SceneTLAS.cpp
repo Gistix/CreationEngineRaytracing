@@ -88,6 +88,6 @@ namespace Pass
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
-		m_TopLevelAS.Update(commandList, sceneGraph->GetInstances());
+		m_TopLevelAS.Update(commandList, sceneGraph->GetDirectMeshes());
 	}
 }

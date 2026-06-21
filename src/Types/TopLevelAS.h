@@ -36,37 +36,43 @@ public:
 		eastl::erase(m_Listeners, listener);
 	}
 
-	void Update(nvrhi::ICommandList* commandList, const InstanceManager& instances)
+	void Update(nvrhi::ICommandList* commandList, const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<DirectMesh>>& directMeshes)
 	{
 		m_InstanceDescs.clear();
-		m_InstanceDescs.reserve(instances.Size());
+		m_InstanceDescs.reserve(directMeshes.size());
 
 		const auto& markers = Scene::GetSingleton()->m_Settings.DebugSettings.Markers;
 
 		if (markers)
 			commandList->beginMarker("BLAS Update");
 
-		auto* scene = Scene::GetSingleton();
+		uint instanceID = 0;
 
-		instances.Read([&](const eastl::unique_ptr<Instance>& instance) {
-			if (instance->IsHidden())
-				return Iterator::Continue;
+		for (const auto& [bsTriShape, directMesh] : directMeshes)
+		{
+			if (directMesh->GetHidden())
+				continue;
+		
+			float3x4 transform;
+			XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(bsTriShape->world));
 
-			if (instance->SkipAS())
-				return Iterator::Continue;
+			auto instanceDesc = nvrhi::rt::InstanceDesc()
+				.setInstanceMask(InstanceMask::Default)
+				.setInstanceID(instanceID)
+				.setTransform(transform.f)
+				.setBLAS(directMesh->GetBLAS());
 
-			instance->model->BuildUpdateBLAS(commandList);
+			m_InstanceDescs.push_back(instanceDesc);
 
-			m_InstanceDescs.push_back(instance->GetInstanceDesc());
-
-			return Iterator::Continue;
-		});
+			instanceID++;
+		}
 
 		if (markers)
 			commandList->endMarker();
 
 		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 
+		auto* scene = Scene::GetSingleton();
 		if (scene->GetSceneGraph()->GetNumInstancesFrame() != topLevelInstances)
 			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances and TLAS instances.");
 

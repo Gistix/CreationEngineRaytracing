@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/DirectMesh.h"
+
 #include "core/InstanceManager.h"
 #include "core/Model.h"
 #include "core/Light.h"
@@ -36,6 +38,8 @@
 class SceneGraph
 {
 	RE::NiCamera* m_Camera = nullptr;
+
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<DirectMesh>> m_DirectMeshes;
 
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
@@ -121,6 +125,8 @@ public:
 	inline auto& GetLightBuffer() const { return m_LightBuffer; }
 	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
+
+	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
 
 	inline auto& GetModels() { return m_Models; }
 	inline auto& GetInstances() { return m_Instances; }

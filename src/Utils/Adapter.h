@@ -21,6 +21,7 @@ namespace Util
 		RE::TESBoundObject* GetBaseObject(RE::TESObjectREFR* a_refr);
 
 		RE::BSGeometry* AsGeometry(RE::NiAVObject* a_object);
+		RE::BSTriShape* AsTriShape(RE::NiAVObject* a_object);
 		RE::NiNode* AsNode(RE::NiAVObject* a_object);
 		RE::BSFadeNode* AsFadeNode(RE::NiAVObject* a_object);
 		RE::BSSubIndexTriShape* AsSubIndexTriShape(RE::BSGeometry* a_geometry);

@@ -14,8 +14,6 @@ namespace Hooks
 			RE::BSGraphics::VertexDesc a_vertexDesc,
 			uint16_t a_vertexCount, uint32_t a_indexCount)
 		{
-			logger::info("BSGraphics::CreateTriShape");
-
 			auto* device = reinterpret_cast<ID3D11Device*>(a_renderer->GetRuntimeData().forwarder);
 
 			const auto vertexDescUInt = *reinterpret_cast<uint64_t*>(&a_vertexDesc);
@@ -29,6 +27,9 @@ namespace Hooks
 
 			triShape->vertexDesc = a_vertexDesc;
 			triShape->refCount = 1;
+
+			// Sentinel value
+			triShape->pad1C = 1;
 
 			triShape->rawVertexData = static_cast<uint8_t*>(mm->Allocate(vertexDataSize, 0, false));
 			triShape->rawIndexData = static_cast<uint16_t*>(mm->Allocate(indexDataSize, 0, false));
@@ -83,8 +84,6 @@ namespace Hooks
 			RE::BSGraphics::VertexDesc vertexDesc,
 			uint16_t* indexData, uint32_t numIndices)
 		{
-			logger::info("BSGraphics::CreateTriShapeParticles");
-
 			auto* device = reinterpret_cast<ID3D11Device*>(a_renderer->GetRuntimeData().forwarder);
 
 			const size_t indexDataSize = 2ull * numIndices;
@@ -130,19 +129,6 @@ namespace Hooks
 			Util::CreateSharedBuffer(*indexBuffer, &triShape->indexBufferDX12);
 
 			return triShape;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	
-	struct NiNode_AttachChild
-	{
-		static void thunk(RE::NiNode* a_this, RE::NiNode* a_node, bool a3)
-		{
-			logger::info("NiNode::AttachChild - this: {}, node: {}, a3: {}", fmt::ptr(a_this), fmt::ptr(a_node), a3);
-
-			func(a_this, a_node, a3);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -955,8 +941,6 @@ namespace Hooks
 		// There are other 2 possible functions with similar functionality (one of them with no index data, for landscape)
 		stl::detour_thunk<BSGraphics_CreateTriShape>(REL::RelocationID(75473, 0));
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(REL::RelocationID(75474, 0));
-	
-		stl::detour_thunk<NiNode_AttachChild>(REL::RelocationID(68938, 0));
 
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
 		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));

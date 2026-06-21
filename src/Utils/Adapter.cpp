@@ -51,6 +51,15 @@ namespace Util
 #endif
 		}
 
+		RE::BSTriShape* AsTriShape(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->AsTriShape();
+#elif defined(FALLOUT4)
+			return a_object->IsTriShape();
+#endif
+		}
+
 		RE::NiNode* AsNode(RE::NiAVObject* a_object) {
 #if defined(SKYRIM)
 			return a_object->AsNode();

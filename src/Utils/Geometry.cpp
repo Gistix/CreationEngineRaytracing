@@ -122,8 +122,9 @@ namespace Util
 			return vertexSize;
 		}
 
-		uint16_t GetStoredVertexSize(uint64_t desc)
+		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc vertexDesc)
 		{
+			const auto desc = *reinterpret_cast<uint64_t*>(&vertexDesc);
 			return (desc & 0xF) * 4;
 		}
 

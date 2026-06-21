@@ -59,7 +59,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 		vertexData.position.resize(vertexCountIn);
 
 	auto vertexSize = Util::Geometry::GetSkyrimVertexSize(vertexFlags);
-	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
+	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(vertexDesc);
 
 	if (vertexSize != vertexSize2)
 		logger::warn("Mesh::BuildVertices - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);

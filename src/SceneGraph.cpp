@@ -347,10 +347,55 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
 
+	auto shadowSceneNode = Util::Adapter::GetShaderManagerState().shadowSceneNode[0];
+
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
 
-	eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
+	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden) -> CESEAdapter::RE::BSVisitControl {
+		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape))
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+
+		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
+
+		auto* shaderProperty = geometryData.shaderProperty;
+
+		if (!shaderProperty) 
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+
+		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
+		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
+		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
+		bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
+		bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
+
+		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader && !isGrassShader)
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+
+		auto rendererData = geometryData.rendererData;
+		if (!rendererData)
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+
+		// Check sentinel value
+		if (rendererData->pad1C != 1)
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+
+		auto it = m_DirectMeshes.find(bsTriShape);
+		const bool exists = (it != m_DirectMeshes.end());
+
+		// If exists - set hidden state, else - create if visible 
+		if (exists) {
+			auto directMesh = it->second.get();
+			directMesh->SetHidden(hidden);
+		}
+		else if (!hidden) {
+			m_DirectMeshes.emplace(bsTriShape, eastl::make_unique<DirectMesh>(bsTriShape, commandList));
+		}
+
+		return CESEAdapter::RE::BSVisitControl::kContinue;
+	});
+
+	/*eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
 	m_Instances.ApplyChanges();
 
@@ -414,7 +459,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		logger::critical("SceneGraph::Update - Number of instances of {} exceeds the maximum of {}", m_NumInstances, Constants::NUM_INSTANCES_MAX);
 
 	if (m_NumInstances > 0)
-		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));*/
 }
 
 void SceneGraph::ClearDirtyStates()
