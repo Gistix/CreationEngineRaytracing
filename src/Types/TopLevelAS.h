@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "Core/Instance.h"
 #include "Renderer.h"
+#include "Core/BaseMesh.h"
 #include "Scene.h"
 #include "Events/ITLASUpdateListener.h"
 
@@ -36,7 +37,7 @@ public:
 		eastl::erase(m_Listeners, listener);
 	}
 
-	void Update(nvrhi::ICommandList* commandList, const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<DirectMesh>>& directMeshes)
+	void Update(nvrhi::ICommandList* commandList, const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>>& directMeshes)
 	{
 		m_InstanceDescs.clear();
 		m_InstanceDescs.reserve(directMeshes.size());

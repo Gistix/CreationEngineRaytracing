@@ -424,9 +424,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			if (exists) {
 				auto directMesh = it->second.get();
 				directMesh->SetHidden(hidden);
+
+				if (!hidden)
+					directMesh->Update(commandList);
 			}
 			else if (!hidden) {
-				m_DirectMeshes.emplace(bsTriShape, eastl::make_unique<DirectMesh>(bsTriShape, commandList));
+				if (auto mesh = BaseMesh::Create(bsTriShape, commandList))
+					m_DirectMeshes.emplace(bsTriShape, eastl::move(mesh));
 			}
 		}
 

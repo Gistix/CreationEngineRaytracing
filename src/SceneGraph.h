@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/DirectMesh.h"
+#include "Core/BaseMesh.h"
 
 #include "core/InstanceManager.h"
 #include "core/Model.h"
@@ -39,7 +39,7 @@ class SceneGraph
 {
 	RE::NiCamera* m_Camera = nullptr;
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<DirectMesh>> m_DirectMeshes;
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_DirectMeshes;
 	mutable std::mutex m_MeshMutex;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;

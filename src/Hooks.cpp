@@ -1034,8 +1034,8 @@ namespace Hooks
 
 		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
-		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC); // Landscape and NiSkinPartition::Partition::buffData
-		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD);
+		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC); // Landscape
+		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD); // NiSkinPartition::Partition::buffData
 
 		// This function is inlined in some places on AE
 		//stl::detour_thunk<BSGraphics_CopyTriShapeVertices>(REL::RelocationID(74735, 76477));
