@@ -27,6 +27,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	m_DynamicBuffer = device->createBuffer(bufferDesc);
 
+	m_DynamicData.resize(runtimeData.dataSize / sizeof(float4));
+
 	// Upload the initial positions before building the BLAS.
 	Update(commandList);
 
@@ -37,7 +39,17 @@ void DynamicMesh::Update([[maybe_unused]] nvrhi::ICommandList* commandList)
 {
 	auto& runtimeData = m_BSDynamicTriShape->GetDynamicTrishapeRuntimeData();
 
+	if (!runtimeData.dynamicData)
+		return;
+
 	runtimeData.lock.Lock();
+
+	// Has dynamic position changed?
+	if (std::memcmp(m_DynamicData.data(), runtimeData.dynamicData, runtimeData.dataSize) == 0) {
+		runtimeData.lock.Unlock();
+		return;
+	}
+
 	commandList->writeBuffer(m_DynamicBuffer, runtimeData.dynamicData, runtimeData.dataSize);
 	runtimeData.lock.Unlock();
 }
