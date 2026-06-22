@@ -372,7 +372,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
 
-	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden) -> CESEAdapter::RE::BSVisitControl {
+	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
 		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
@@ -429,6 +429,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					directMesh->Update(commandList);
 			}
 			else if (!hidden) {
+				if (ownerRefr)
+					logger::info("{}: {:0X} - BSTriShape \"{}\"", magic_enum::enum_name(ownerRefr->GetFormType()), ownerRefr->GetFormID(), bsTriShape->name);
+				else
+					logger::info("No reference for BSTriShape \"{}\"", bsTriShape->name);
+
 				if (auto mesh = BaseMesh::Create(bsTriShape, commandList))
 					m_DirectMeshes.emplace(bsTriShape, eastl::move(mesh));
 			}

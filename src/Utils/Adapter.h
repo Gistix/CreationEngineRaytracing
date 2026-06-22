@@ -25,7 +25,10 @@ namespace Util
 		RE::NiNode* AsNode(RE::NiAVObject* a_object);
 		RE::BSFadeNode* AsFadeNode(RE::NiAVObject* a_object);
 		RE::BSSubIndexTriShape* AsSubIndexTriShape(RE::BSGeometry* a_geometry);
-		
+
+		// This version mimics direct pointer retrieval rather than CommonLib's implementation, which iterates up the parent hierarchy to find a valid owner
+		RE::TESObjectREFR* GetOwner(RE::BSFadeNode* a_fadeNode);
+
 		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node);
 
 		uint8_t* GetVertexData(RE::BSGraphics::TriShape* rendererData);

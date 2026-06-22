@@ -85,11 +85,11 @@ namespace Util
 			return result;
 		}
 
-		// A custom visit controller built to ignore billboard/particle geometry
+		// A custom visit controller built to pass down visibility and owner reference
 		static CESEAdapter::RE::BSVisitControl ScenegraphTriShapes(
 			RE::NiAVObject* a_object, 
-			std::function<CESEAdapter::RE::BSVisitControl(RE::BSTriShape*, bool)> a_func, 
-			bool parentHidden = false)
+			std::function<CESEAdapter::RE::BSVisitControl(RE::BSTriShape*, bool, RE::TESObjectREFR*)> a_func, 
+			bool parentHidden = false, RE::TESObjectREFR* parentRefr = nullptr)
 		{
 			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
@@ -99,9 +99,18 @@ namespace Util
 
 			bool hidden = parentHidden || Util::Adapter::IsNiAVObjectHidden(a_object);
 
+			// Set as parent refr to propagate it downwards
+			auto refr = parentRefr; 
+
+			// Update refr if it actually exists (else keep the parent refr)
+			auto fadeNode = Util::Adapter::AsFadeNode(a_object);
+			if (fadeNode)
+				if (auto owner = Util::Adapter::GetOwner(fadeNode))
+					refr = owner;
+
 			auto geom = Util::Adapter::AsTriShape(a_object);
 			if (geom) {
-				return a_func(geom, hidden);
+				return a_func(geom, hidden, refr);
 			}
 
 			auto node = Util::Adapter::AsNode(a_object);
@@ -110,7 +119,7 @@ namespace Util
 					if (!child)
 						continue;
 
-					result = ScenegraphTriShapes(child.get(), a_func, hidden);
+					result = ScenegraphTriShapes(child.get(), a_func, hidden, refr);
 					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
 						break;
 					}
