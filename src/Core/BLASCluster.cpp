@@ -74,19 +74,9 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	if (frameIndex == m_LastBuild)
 		return;
 
-	// Prune dead members; their disappearance forces a structural rebuild.
-	const size_t before = m_Members.size();
-	m_Members.erase(
-		eastl::remove_if(m_Members.begin(), m_Members.end(),
-			[](const eastl::weak_ptr<BaseMesh>& member) { return member.expired(); }),
-		m_Members.end());
-
-	if (m_Members.size() != before)
-		m_MembershipDirty = true;
-
 	// Pull dirty state from the members; upload any pending GPU data while we're here.
 	bool anyStructure = false;
-	bool anyRefit = false;
+	bool anyUpdate = false;
 
 	m_Updatable = false;
 
@@ -104,21 +94,24 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 			anyStructure = true;
 
 		if (dirty.any(DirtyFlags::Transform, DirtyFlags::Vertex)) {
-			anyRefit = true;
+			anyUpdate = true;
 
 			if (dirty.any(DirtyFlags::Vertex))
 				mesh->UploadBuffers(commandList);
 		}
 	}
 
-	bool create = !m_BLAS;
+	// Decide what to do from dirtiness only. An empty/failed cluster keeps m_BLAS == null, so basing
+	// this on (!m_BLAS) would force a "rebuild" every frame forever; gate the first build on m_LastBuild instead.
+	const bool firstBuild = (m_LastBuild == Constants::INVALID_FRAME_INDEX);
+
 	bool rebuild;
 
-	if (create || m_MembershipDirty || anyStructure) {
+	if (firstBuild || m_MembershipDirty || anyStructure) {
 		rebuild = true;
 		m_NumUpdatesSinceRebuild = 0;
 	}
-	else if (anyRefit) {
+	else if (anyUpdate) {
 		if (m_NumUpdatesSinceRebuild >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE) {
 			if (sceneGraph->TryMaintenanceRebuild(frameIndex)) {
 				rebuild = true;
@@ -136,6 +129,8 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	else {
 		return;
 	}
+
+	logger::trace("BLASCluster {} - {} - Rebuild: {}, AnyUpdate: {}, AnyStructure: {}, MembershipDirty: {}", fmt::ptr(this), m_Name, rebuild, anyUpdate, anyStructure, m_MembershipDirty);
 
 	// Aggregate geometry from live, visible members. Transforms are already baked into the descs
 	// (SetLocalToOwner during traversal), so no owner/trishape dereference happens here.
@@ -162,17 +157,23 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		return;
 	}
 
+	// Allocate a new accel struct on first build or when the required size grows; a refit needs an
+	// existing BLAS, so if there isn't one yet, promote to a full rebuild.
+	bool allocate = !m_BLAS;
+	if (allocate)
+		rebuild = true;
+
 	auto blasDesc = MakeDesc(!rebuild);
 
 	for (const auto& desc : m_GeometryDescs)
 		blasDesc.addBottomLevelGeometry(desc);
 
-	if (!create && rebuild) {
+	if (!allocate && rebuild) {
 		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);
-		create = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
+		allocate = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
 	}
 
-	if (create)
+	if (allocate)
 		m_BLAS = device->createAccelStruct(blasDesc);
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
