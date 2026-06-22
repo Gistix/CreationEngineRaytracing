@@ -36,7 +36,7 @@ namespace Hooks
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
 			auto triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
-			triShape->pad1C = 0; // Clear sentinel value
+			triShape->pad1C = 1; // Set sentinel value
 			return triShape;
 		}
 
@@ -53,9 +53,6 @@ namespace Hooks
 			uint32_t a_indexCount)
 		{
 			auto triShape = func(a_renderer, a_bsStream, a_vertexDesc, a_vertexCount, a_indexCount);
-
-			// Set sentinel value
-			triShape->pad1C = 1;
 
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
@@ -81,9 +78,6 @@ namespace Hooks
 		{
 			auto triShape = func(a_renderer, vertexData, vertexDataSize, vertexDesc, indexData, numIndices);
 
-			// Set sentinel value
-			triShape->pad1C = 1;
-
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
 
@@ -98,19 +92,55 @@ namespace Hooks
 
 	struct BSGraphics_CreateTriShapeVertex
 	{
+		struct IndexRenderData
+		{
+			ID3D11Buffer* indexBuffer;
+			int32_t refCount;
+		};
+
 		static RE::BSGraphics::TriShapeDX12* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
 			uint8_t* a_vertexData,
 			uint32_t a_vertexDataSize,
 			RE::BSGraphics::VertexDesc a_vertexDesc,
-			void* a5)
+			IndexRenderData* a_indexRenderData)
 		{
-			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a5);
-
-			// Set sentinel value
-			triShape->pad1C = 1;
+			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a_indexRenderData);
 
 			// Share vertex buffer
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+
+			// The original code does 'triShape->indexBuffer = a_indexRenderData->indexBuffer' and calls 'AddRef'
+			// We have no way of copying the original indexBufferDX12 here, so we just share it again
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
+
+			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSGraphics_CreateTriShapeIndex
+	{
+		struct VertexRenderData
+		{
+			ID3D11Buffer* vertexBuffer;				// 00
+			ID3D11Buffer* indexBuffer;				// 08
+			RE::BSGraphics::VertexDesc vertexDesc;  // 10
+		};
+
+		static RE::BSGraphics::TriShapeDX12* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			VertexRenderData* a_vertexRenderData,
+			RE::BSGraphics::VertexDesc vertexDesc,
+			uint16_t* a_indexData,
+			uint32_t a_numIndices)
+		{
+			auto triShape = func(a_renderer, a_vertexRenderData, vertexDesc, a_indexData, a_numIndices);
+
+			// Share vertex buffer
+			// The original function utilizes 'BSGraphics::CopyTriShapeVertices' to copy from 'VertexRenderData' into 'RE::BSGraphics::TriShape'
+			// TODO: Find all sites where 'VertexRenderData' is created and extend it with DX12 buffers as well
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
 
 			// Share index buffer
@@ -122,27 +152,16 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BSGraphics_CreateTriShapeIndex
+	// Releases dst vertexBuffer, copies src vertexBuffer pointer and calls 'AddRef'
+	// Frees dst rawVertexData, then allocates memory for src rawVertexData
+	struct BSGraphics_CopyTriShapeVertices
 	{
-		static RE::BSGraphics::TriShapeDX12* thunk(
+		static int32_t thunk(
 			RE::BSGraphics::Renderer* a_renderer,
-			void* a2,
-			RE::BSGraphics::VertexDesc vertexDesc,
-			uint16_t* a_indexData,
-			uint32_t a_numIndices)
+			BSGraphics_CreateTriShapeIndex::VertexRenderData* a_dstTriShape,
+			BSGraphics_CreateTriShapeIndex::VertexRenderData* a_srcTriShape)
 		{
-			auto triShape = func(a_renderer, a2, vertexDesc, a_indexData, a_numIndices);
-
-			// Set sentinel value
-			triShape->pad1C = 1;
-
-			// Share vertex buffer
-			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
-
-			// Share index buffer
-			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
-
-			return triShape;
+			return func(a_renderer, a_dstTriShape, a_srcTriShape);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1017,6 +1036,9 @@ namespace Hooks
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
 		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC); // Landscape and NiSkinPartition::Partition::buffData
 		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD);
+
+		// This function is inlined in some places on AE
+		//stl::detour_thunk<BSGraphics_CopyTriShapeVertices>(REL::RelocationID(74735, 76477));
 
 		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 70666));
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
