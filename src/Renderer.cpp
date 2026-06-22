@@ -136,7 +136,7 @@ void Renderer::InitDefaultTextures()
 
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
-		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
+		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
 	}
 }
 
