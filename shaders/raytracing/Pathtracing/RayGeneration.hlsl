@@ -398,6 +398,7 @@ void Main()
             Camera.Position.xyz, sourceDirection, sourcePayload.hitDistance,
             buildSceneLength, buildThp, buildMVs, buildImageXform, buildRoughnessAccum,
             sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant,
+            sourceMaterial,
             sourceInstance, randomSeed,
             buildInsideWater, buildWaterAbsorption);
 
@@ -448,6 +449,7 @@ void Main()
                 hitResult.nextRayOrigin, hitResult.nextRayDir, buildPayload.hitDistance,
                 buildSceneLength, hitResult.nextThp, buildMVs, hitResult.nextImageXform,
                 hitResult.nextRoughnessAccum, buildSurface, buildBrdfCtx, buildBsdf, buildIsDominant,
+                buildMaterial,
                 buildInstance, randomSeed,
                 hitResult.nextInsideWater, hitResult.nextWaterAbsorption);
         }
@@ -510,6 +512,7 @@ void Main()
                     ep.rayOrigin, ep.rayDir, expPayload.hitDistance,
                     expSceneLength, ep.throughput, ep.motionVectors, ep.imageXform,
                     ep.roughnessAccum, expSurface, expBrdfCtx, expBsdf, buildIsDominant,
+                    expMaterial,
                     expInstance, randomSeed,
                     ep.insideWaterVolume, ep.waterVolumeAbsorption);
 
@@ -556,6 +559,7 @@ void Main()
                         expHitResult.nextRayOrigin, expHitResult.nextRayDir, contPayload.hitDistance,
                         expSceneLength, expHitResult.nextThp, ep.motionVectors, expHitResult.nextImageXform,
                         expHitResult.nextRoughnessAccum, contSurface, contBrdfCtx, contBsdf, buildIsDominant,
+                        contMaterial,
                         contInstance, randomSeed,
                         expHitResult.nextInsideWater, expHitResult.nextWaterAbsorption);
                 }
