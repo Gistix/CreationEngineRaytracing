@@ -105,12 +105,18 @@ namespace Hooks
 			RE::BSGraphics::VertexDesc a_vertexDesc,
 			void* a5)
 		{
-			auto result = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a5);
+			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a5);
 
 			// Set sentinel value
-			result->pad1C = 0;
+			triShape->pad1C = 1;
 
-			return result;
+			// Share vertex buffer
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+
+			// Share index buffer
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
+
+			return triShape;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -125,12 +131,18 @@ namespace Hooks
 			uint16_t* a_indexData,
 			uint32_t a_numIndices)
 		{
-			auto result = func(a_renderer, a2, vertexDesc, a_indexData, a_numIndices);
+			auto triShape = func(a_renderer, a2, vertexDesc, a_indexData, a_numIndices);
 
 			// Set sentinel value
-			result->pad1C = 0;
+			triShape->pad1C = 1;
 
-			return result;
+			// Share vertex buffer
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+
+			// Share index buffer
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
+
+			return triShape;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1003,9 +1015,9 @@ namespace Hooks
 
 		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
-		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC);
+		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC); // Landscape and NiSkinPartition::Partition::buffData
 		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD);
-		
+
 		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 70666));
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 		

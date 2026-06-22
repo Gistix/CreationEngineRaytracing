@@ -379,30 +379,39 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 		auto* shaderProperty = geometryData.shaderProperty;
-
 		if (!shaderProperty) 
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
-		bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
-		bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
-		bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
-		bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
-		bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
+		const bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
+		const bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
+		const bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
+		const bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
+		const bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
 
 		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader && !isGrassShader)
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
-		auto rendererData = geometryData.rendererData;
-		if (!rendererData)
-			return CESEAdapter::RE::BSVisitControl::kContinue;
+		const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
 
-		const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
-		if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
+		if (!skinned) {
+			const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+			if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0) {
+				logger::warn("BSTriShape \"{}\" has either vertex ({}) or triangle ({}) count of 0, skipping.", bsTriShape->name, trishapeData.vertexCount, trishapeData.triangleCount);
+				return CESEAdapter::RE::BSVisitControl::kContinue;
+			}
+		}
+		
+		const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+		if (!rendererData) {
+			logger::warn("BSTriShape \"{}\" has no renderer data, skipping.", bsTriShape->name);
 			return CESEAdapter::RE::BSVisitControl::kContinue;
+		}
 
 		// Check sentinel value
-		if (rendererData->pad1C != 1)
+		if (rendererData->pad1C != 1) {
+			logger::warn("BSTriShape \"{}\" missing sentinel value, skipping.", bsTriShape->name);
 			return CESEAdapter::RE::BSVisitControl::kContinue;
+		}
 
 		{
 			std::lock_guard lock(m_MeshMutex);

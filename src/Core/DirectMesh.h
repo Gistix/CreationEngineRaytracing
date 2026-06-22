@@ -12,17 +12,26 @@ class DirectMesh
 		Destroyed = 1 << 4
 	};
 
+	struct RendererData {
+		nvrhi::BufferHandle m_IndexBuffer;
+		nvrhi::BufferHandle m_VertexBuffer;
+		nvrhi::rt::GeometryDesc m_GeometryDesc;
+	};
+
 	eastl::string m_Name;
 
-	nvrhi::BufferHandle m_IndexBuffer;
-	nvrhi::BufferHandle m_VertexBuffer;
-
-	nvrhi::rt::GeometryDesc m_GeometryDesc;
+	eastl::vector<RendererData> m_RendererData;
 
 	nvrhi::rt::AccelStructHandle m_BLAS;
 	CESEAdapter::REX::EnumSet<State> m_State = State::None;
 public:
 	DirectMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
+
+	void CreateGeometryDescs(RE::BSTriShape* bsTriShape, RE::BSGraphics::TriShape* triShape);
+
+	void CreateSkinnedGeometryDescs(RE::NiSkinInstance* skinInstance);
+
+	static bool CreateRendererData(uint16_t numTriangles, uint32_t numVertices, RE::BSGraphics::TriShape* triShape, RendererData& rendererData);
 
 	void SetHidden(bool hidden);
 
