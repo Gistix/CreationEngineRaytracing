@@ -218,6 +218,8 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
     if (!RAB_IsSurfaceValid(rab))
         return;
 
+    ctx.MultiplyPathThroughput(rab.pathThroughput);
+
     RayCone rayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * max(rab.viewDepth, 1.0f), Raytracing.PixelConeSpreadAngle);
 
     [loop]
@@ -231,17 +233,18 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         Surface surface = currentRab.surface;
         Material material = GetMaterial(currentRab.materialIndex);
         BRDFContext brdfContext = currentRab.brdfContext;
-        bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
-        StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
+        StandardBSDF bsdf = StandardBSDF::make(surface, currentRab.isEnter);
 
         currentRab.surface = surface;
         currentRab.brdfContext = brdfContext;
         currentRab.materialFeature = material.Feature;
         currentRab.hasSpecularTransmission = surface.SpecTrans > 0.0f;
+        currentRab.isEnter = rab.isEnter;
 
         BSDFSample bsdfSample;
         bool validSample = RAB_SampleBSDFWithRtxdiRng(bsdf, brdfContext, material, surface, bsdfSample, ptRandContext.replayRandomSamplerState);
-        if (!validSample || bsdfSample.pdf <= 0.0f)
+        bool isDeltaSample = bsdfSample.isLobe(LobeType::Delta);
+        if (!validSample || (!isDeltaSample && bsdfSample.pdf <= 0.0f))
             break;
 
         if (!RAB_IsDirectionUsableForOpaqueReflection(currentRab, bsdfSample.wo))
@@ -317,15 +320,15 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         Material hitMaterial = GetMaterial(rab.materialIndex);
         Instance hitInstance = Instances[NonUniformResourceIndex(rab.instanceIndex)];
         BRDFContext hitBrdfContext = rab.brdfContext;
-        bool hitIsEnter = dot(hitSurface.FaceNormal, hitBrdfContext.ViewDirection) >= 0.0f;
-        StandardBSDF hitBsdf = StandardBSDF::make(hitSurface, hitIsEnter);
+        StandardBSDF hitBsdf = StandardBSDF::make(hitSurface, rab.isEnter);
 
         rab.surface = hitSurface;
         rab.brdfContext = hitBrdfContext;
         rab.materialFeature = hitMaterial.Feature;
         rab.hasSpecularTransmission = hitSurface.SpecTrans > 0.0f;
 
-        if (ctx.ShouldSampleEmissiveSurfaces() && traceResult.frontFace && any(hitSurface.Emissive > 0.0f))
+        bool hitIsTwoSided = RAB_IsTwoSidedMaterial(rab);
+        if (ctx.ShouldSampleEmissiveSurfaces() && (traceResult.frontFace || hitIsTwoSided) && any(hitSurface.Emissive > 0.0f))
             ctx.RecordEmissiveLightSample(hitSurface.Emissive, currentRab, ptRandContext.initialRandomSamplerState);
 
         if (ctx.ShouldSampleNee())

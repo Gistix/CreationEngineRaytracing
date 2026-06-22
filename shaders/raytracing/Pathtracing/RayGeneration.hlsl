@@ -371,7 +371,9 @@ void Main()
         primarySceneDistance,
         sourceMesh.GeometryIdx,
         sourcePayload.GetInstanceIndex(),
-        0);
+        PSD_PackColor(float3(1.0f, 1.0f, 1.0f)),
+        sourceSurface.IsThinSurface,
+        sourceIsEnter);
 #       endif
 #   endif   
 #endif   
@@ -601,11 +603,12 @@ void Main()
     float3 fillWaterAbsorption = float3(0.0f, 0.0f, 0.0f);
     float3 fillPlaneThp = float3(1.0f, 1.0f, 1.0f); // plane's stored throughput, used as initial bounce throughput
     float fillSceneLength = 0;
+    uint dominantPlane = spCtx.LoadDominantIndex(idx);
     {
         float3 fillRayOrigin, fillRayDir, fillThp;
         uint fillVertexIndex;
         float2 fillTMinMax = FirstHitFromVBuffer(fillState, fillRayOrigin, fillRayDir, fillThp,
-            fillSceneLength, fillVertexIndex, fillInsideWater, fillWaterAbsorption, spCtx, idx, 0);
+            fillSceneLength, fillVertexIndex, fillInsideWater, fillWaterAbsorption, spCtx, idx, dominantPlane);
 
         if (fillTMinMax.x < 0)
         {
@@ -653,7 +656,6 @@ void Main()
     // Diffuse/normal follow the dominant plane, but specular albedo stays on the first plane.
     // Coat-priority: when coat is present, dominant plane already stores coat-aware data from BUILD;
     // for plane 0, coat properties are applied directly.
-    uint dominantPlane = spCtx.LoadDominantIndex(idx);
     if (dominantPlane != 0)
     {
         StablePlane domSP = spCtx.LoadStablePlane(idx, dominantPlane);
@@ -714,7 +716,9 @@ void Main()
         fillSceneLength,
         sourceMesh.GeometryIdx,
         sourcePayload.GetInstanceIndex(),
-        (fillState.planeIndex & 0xFFu) | ((fillState.stableBranchID & 0xFFFFu) << 8));
+        PSD_PackColor(fillPlaneThp),
+        sourceSurface.IsThinSurface,
+        sourceIsEnter);
 #   endif
     
     // In FILL mode, emissive along delta paths was captured in BUILD → skip to avoid double-counting
@@ -762,6 +766,21 @@ void Main()
         }
     }
     
+#if defined(RESTIR_PT)
+#   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+    if (any(direct > 0))
+        fillPathL += float4(direct * fillPlaneThp, 0);
+    spCtx.CommitDenoiserRadiance(idx, fillState.planeIndex, fillPathL);
+    Output[idx] = float4(LLTrueLinearToGamma(spCtx.GetAllRadiance(idx, true)), 1.0f);
+    return;
+#   elif PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
+    if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
+        direct *= exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
+    Output[idx] = float4(LLTrueLinearToGamma(direct), 1.0f);
+    return;
+#   endif
+#endif
+
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     // Accumulate primary surface direct lighting with plane throughput baked in
     // (GetAllRadiance no longer multiplies by stored thp)

@@ -106,12 +106,18 @@ float3 PSD_UnpackColor(uint packed)
 // Pack: Surface fields -> PackedSurfaceData
 // ---------------------------------------------------------------------------
 static const uint PSD_SURFACE_FLAG_SPECULAR_TRANSMISSION = 1u << 16;
+static const uint PSD_SURFACE_FLAG_THIN_SURFACE = 1u << 17;
+static const uint PSD_SURFACE_FLAG_ENTER_SURFACE = 1u << 18;
 
-uint PSD_PackMaterialData(uint materialFeature, bool hasSpecularTransmission)
+uint PSD_PackMaterialData(uint materialFeature, bool hasSpecularTransmission, bool isThinSurface = false, bool isEnterSurface = true)
 {
     uint data = materialFeature & 0xFFFFu;
     if (hasSpecularTransmission)
         data |= PSD_SURFACE_FLAG_SPECULAR_TRANSMISSION;
+    if (isThinSurface)
+        data |= PSD_SURFACE_FLAG_THIN_SURFACE;
+    if (isEnterSurface)
+        data |= PSD_SURFACE_FLAG_ENTER_SURFACE;
     return data;
 }
 
@@ -125,6 +131,16 @@ bool PSD_SurfaceHasSpecularTransmission(PackedSurfaceData d)
     return (d.materialData & PSD_SURFACE_FLAG_SPECULAR_TRANSMISSION) != 0u;
 }
 
+bool PSD_SurfaceIsThinSurface(PackedSurfaceData d)
+{
+    return (d.materialData & PSD_SURFACE_FLAG_THIN_SURFACE) != 0u;
+}
+
+bool PSD_SurfaceIsEnterSurface(PackedSurfaceData d)
+{
+    return (d.materialData & PSD_SURFACE_FLAG_ENTER_SURFACE) != 0u;
+}
+
 PackedSurfaceData PSD_Pack(
     float3 position, float3 normal, float3 tangent, float3 bitangent,
     float3 faceNormal, float3 viewDir,
@@ -134,7 +150,9 @@ PackedSurfaceData PSD_Pack(
     float viewDepth,
     uint materialIndex = 0,
     uint instanceIndex = 0,
-    uint psrData = 0)
+    uint psrData = 0,
+    bool isThinSurface = false,
+    bool isEnterSurface = true)
 {
     PackedSurfaceData d;
     d.posW             = position;
@@ -146,7 +164,7 @@ PackedSurfaceData PSD_Pack(
     d.diffuseAlbedo    = PSD_PackColor(diffAlbedo);
     d.specularF0       = PSD_PackColor(f0);
     d.roughMetallic    = f32tof16(roughness) | (f32tof16(metallic) << 16);
-    d.materialData     = PSD_PackMaterialData(materialFeature, hasSpecularTransmission);
+    d.materialData     = PSD_PackMaterialData(materialFeature, hasSpecularTransmission, isThinSurface, isEnterSurface);
     d.viewDepth        = viewDepth;
     d.materialIndex    = materialIndex;
     d.instanceIndex    = instanceIndex;
