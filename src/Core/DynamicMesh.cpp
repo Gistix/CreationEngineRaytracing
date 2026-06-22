@@ -4,21 +4,33 @@
 #include "Types/RE/RE.h"
 
 DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::ICommandList* commandList) :
-	m_BSDynamicTriShape(bsDynamicTriShape), SkinnedMesh(bsDynamicTriShape, commandList)
+	SkinnedMesh(), m_BSDynamicTriShape(bsDynamicTriShape)
 {
+	m_Name = MakeDebugName(bsDynamicTriShape);
+
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
 
+	if (runtimeData.dataSize == 0) {
+		logger::warn("DynamicMesh::DynamicMesh - No dynamic data for {}", m_Name);
+		return;
+	}
+
+	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
+	// stride so the trailing w component is skipped.
 	auto bufferDesc = nvrhi::BufferDesc()
 		.setByteSize(runtimeData.dataSize)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.setIsAccelStructBuildInput(true)
 		.setDebugName(std::format("{} - Dynamic", m_Name).c_str());
 
 	m_DynamicBuffer = device->createBuffer(bufferDesc);
 
-	// Initial upload to vertex buffer
+	// Upload the initial positions before building the BLAS.
 	Update(commandList);
+
+	BuildSkinned(bsDynamicTriShape, commandList, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
 }
 
 void DynamicMesh::Update([[maybe_unused]] nvrhi::ICommandList* commandList)

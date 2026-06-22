@@ -39,6 +39,25 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
 
+	BuildSkinned(bsTriShape, commandList, m_VertexBuffer, vertexStride, true);
+}
+
+void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
+{
+	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+
+	auto* skinInstance = geometryData.skinInstance.get();
+	if (!skinInstance)
+		return;
+
+	const auto& skinPartition = skinInstance->skinPartition;
+	if (!skinPartition || skinPartition->numPartitions == 0)
+		return;
+
+	auto* basePartitionBuffer = skinPartition->partitions[0].buffData;
+
+	const uint32_t vertexCount = skinPartition->vertexCount;
+
 	m_IndexBuffers.reserve(skinPartition->numPartitions);
 	m_GeometryDescs.reserve(skinPartition->numPartitions);
 
@@ -48,7 +67,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 		auto* partitionBuffer = partition.buffData;
 		if (!partitionBuffer) {
-			logger::warn("SkinnedMesh::SkinnedMesh - Partition {} has no buffer for {}, skipping partition.", i, m_Name);
+			logger::warn("SkinnedMesh::BuildSkinned - Partition {} has no buffer for {}, skipping partition.", i, m_Name);
 			continue;
 		}
 
@@ -56,8 +75,8 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 			continue;
 
 		// Enforce the single-vertex-buffer invariant: every partition must reference the same vertex buffer.
-		if (partitionBuffer->vertexBuffer != basePartitionBuffer->vertexBuffer) {
-			logger::warn("SkinnedMesh::SkinnedMesh - Partition {} vertex buffer differs from partition 0 for {}, skipping mesh.", i, m_Name);
+		if (requireSharedNativeVertexBuffer && partitionBuffer->vertexBuffer != basePartitionBuffer->vertexBuffer) {
+			logger::warn("SkinnedMesh::BuildSkinned - Partition {} vertex buffer differs from partition 0 for {}, skipping mesh.", i, m_Name);
 			m_IndexBuffers.clear();
 			m_GeometryDescs.clear();
 			m_VertexBuffer = nullptr;
@@ -71,7 +90,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 
 		m_IndexBuffers.push_back(indexBuffer);
-		m_GeometryDescs.push_back(MakeGeometryDesc(indexBuffer, indexCount, m_VertexBuffer, vertexStride, vertexCount));
+		m_GeometryDescs.push_back(MakeGeometryDesc(indexBuffer, indexCount, vertexBuffer, vertexStride, vertexCount));
 	}
 
 	BuildBLAS(commandList, m_GeometryDescs);
