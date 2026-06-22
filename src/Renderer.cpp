@@ -25,6 +25,7 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
 	deviceDesc.aftermathEnabled = false;
 	deviceDesc.logBufferLifetime = false;
+	deviceDesc.enableEnhancedBarriers = true;
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
 
@@ -70,6 +71,9 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::ShaderExecutionReordering))
 		m_SupportedFeatures |= SupportedFeatures::ShaderExecutionReordering;
 
+	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::EnhancedBarriers))
+		m_SupportedFeatures |= SupportedFeatures::EnhancedBarriers;
+
 	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
 
 	m_RenderGraphQuery = m_NVRHIDevice->createEventQuery();
@@ -86,11 +90,12 @@ void Renderer::InitDefaultTextures()
 	uint8_t rmaos[] = { 128u, 0u, 255u, 255u };
 	uint8_t detail[] = { 63u, 64u, 63u, 255u };
 
-	nvrhi::TextureDesc desc;
-	desc.width = 1;
-	desc.height = 1;
-	desc.mipLevels = 1;
-	desc.format = nvrhi::Format::RGBA8_UNORM;
+	auto desc = nvrhi::TextureDesc()
+		.setWidth(1)
+		.setHeight(1)
+		.setMipLevels(1)
+		.setFormat(nvrhi::Format::RGBA8_UNORM)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::Common);
 
 	auto* textureDescriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptors()->m_DescriptorTable.get();
 
@@ -118,15 +123,6 @@ void Renderer::InitDefaultTextures()
 	nvrhi::CommandListHandle commandList = GetCopyCommandList();
 	commandList->open();
 
-	commandList->beginTrackingTextureState(m_WhiteTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-	commandList->beginTrackingTextureState(m_GrayTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-	commandList->beginTrackingTextureState(m_NormalTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-	commandList->beginTrackingTextureState(m_BlackTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-#if defined(SKYRIM)
-	commandList->beginTrackingTextureState(m_RMAOSTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-#endif
-	commandList->beginTrackingTextureState(m_DetailTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-
 	commandList->writeTexture(m_WhiteTexture->texture, 0, 0, white, 4);
 	commandList->writeTexture(m_GrayTexture->texture, 0, 0, gray, 4);
 	commandList->writeTexture(m_NormalTexture->texture, 0, 0, normal, 4);
@@ -135,17 +131,6 @@ void Renderer::InitDefaultTextures()
 	commandList->writeTexture(m_RMAOSTexture->texture, 0, 0, rmaos, 4);
 #endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
-
-	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::Common);
-	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::Common);
-	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::Common);
-	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::Common);
-#if defined(SKYRIM)
-	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::Common);
-#endif
-	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::Common);
-
-	commandList->commitBarriers();
 
 	commandList->close();
 
