@@ -373,7 +373,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_NumInstances = 0;
 
 	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden) -> CESEAdapter::RE::BSVisitControl {
-		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape))
+		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
 		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);

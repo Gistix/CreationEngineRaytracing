@@ -1,6 +1,7 @@
 #include "Core/BaseMesh.h"
 #include "Core/DirectMesh.h"
 #include "Core/SkinnedMesh.h"
+#include "Core/DynamicMesh.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Types/RE/RE.h"
@@ -11,6 +12,9 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 
 	if (geometryData.rendererData)
 		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
+
+	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
+		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
 
 	if (geometryData.skinInstance.get())
 		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
