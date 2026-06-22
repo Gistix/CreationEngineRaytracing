@@ -4,6 +4,7 @@
 #include "Core/Instance.h"
 #include "Renderer.h"
 #include "Core/BaseMesh.h"
+#include "Core/BLASCluster.h"
 #include "Scene.h"
 #include "Events/ITLASUpdateListener.h"
 
@@ -37,39 +38,43 @@ public:
 		eastl::erase(m_Listeners, listener);
 	}
 
-	void Update(nvrhi::ICommandList* commandList, const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>>& directMeshes)
+	void Update(nvrhi::ICommandList* commandList,
+		const eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>>& ownerClusters,
+		const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>>& orphanClusters)
 	{
 		m_InstanceDescs.clear();
-		m_InstanceDescs.reserve(directMeshes.size());
+		m_InstanceDescs.reserve(ownerClusters.size() + orphanClusters.size());
 
 		const auto& markers = Scene::GetSingleton()->m_Settings.DebugSettings.Markers;
 
 		if (markers)
-			commandList->beginMarker("BLAS Update");
+			commandList->beginMarker("TLAS Instances");
 
 		uint instanceID = 0;
 
-		for (const auto& [bsTriShape, directMesh] : directMeshes)
+		auto addCluster = [&](BLASCluster* cluster)
 		{
-			if (directMesh->IsHidden())
-				continue;
-	
-			if (!directMesh->GetBLAS())
-				continue;
+			if (!cluster->GetBLAS())
+				return;
 
-			float3x4 transform;
-			XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(bsTriShape->world));
+			const float3x4 transform = cluster->GetInstanceTransform();
 
 			auto instanceDesc = nvrhi::rt::InstanceDesc()
 				.setInstanceMask(InstanceMask::Default)
 				.setInstanceID(instanceID)
 				.setTransform(transform.f)
-				.setBLAS(directMesh->GetBLAS());
+				.setBLAS(cluster->GetBLAS());
 
 			m_InstanceDescs.push_back(instanceDesc);
 
 			instanceID++;
-		}
+		};
+
+		for (const auto& [owner, cluster] : ownerClusters)
+			addCluster(cluster.get());
+
+		for (const auto& [triShape, cluster] : orphanClusters)
+			addCluster(cluster.get());
 
 		if (markers)
 			commandList->endMarker();

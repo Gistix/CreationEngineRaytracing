@@ -364,10 +364,23 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	{
 		// Might be unecessary since direct meshes is only modifier below, and this function runs on the main thread
 		std::scoped_lock lock(m_MeshMutex);
-		m_DirectMeshes.erase(destroyedMesh);
+
+		auto it = m_DirectMeshes.find(destroyedMesh);
+		if (it == m_DirectMeshes.end())
+			continue;
+
+		auto* mesh = it->second.get();
+
+		// Remove from its cluster (owner used as key only, never dereferenced).
+		RemoveMeshFromCluster(mesh, mesh->GetOwner());
+
+		m_DirectMeshes.erase(it);
 	}
 
 	auto shadowSceneNode = Util::Adapter::GetShaderManagerState().shadowSceneNode[0];
+
+	// Hardcoded for now
+	const bool skipClustering = false;
 
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
@@ -414,33 +427,73 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 
 		{
-			std::lock_guard lock(m_MeshMutex);
+			// When clustering is skipped, force a null owner so every mesh lands in its own orphan cluster.
+			RE::TESObjectREFR* const clusterOwner = skipClustering ? nullptr : ownerRefr;
 
-			auto it = m_DirectMeshes.find(bsTriShape);
+			eastl::shared_ptr<BaseMesh> mesh;
+			{
+				std::scoped_lock lock(m_MeshMutex);
 
-			const bool exists = (it != m_DirectMeshes.end());
+				auto it = m_DirectMeshes.find(bsTriShape);
+				if (it != m_DirectMeshes.end())
+					mesh = it->second;
+			}
 
-			// If exists - set hidden state, else - create if visible 
-			if (exists) {
-				auto directMesh = it->second.get();
-				directMesh->SetHidden(hidden);
+			// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
+			if (mesh) {
+				// SetOwner returns true if the owner changed; re-bucket into the new cluster (key compare only).
+				if (mesh->SetOwner(clusterOwner)) {
+					RemoveMeshFromCluster(mesh.get(), mesh->GetPrevOwner());
+					GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(mesh);
+				}
 
-				if (!hidden)
-					directMesh->Update(commandList);
+				mesh->SetHidden(hidden);
+
+				if (!hidden) {
+					// CPU-side change detection only; the GPU upload happens in the TLAS pass (cluster-driven).
+					mesh->UpdateData();
+
+					// Capture transforms while the owner/trishape are alive; cluster consumes cached values later.
+					UpdateMeshTransforms(mesh.get(), clusterOwner, bsTriShape);
+				}
 			}
 			else if (!hidden) {
-				if (ownerRefr)
-					logger::info("{}: {:0X} - BSTriShape \"{}\"", magic_enum::enum_name(ownerRefr->GetFormType()), ownerRefr->GetFormID(), bsTriShape->name);
-				else
-					logger::info("No reference for BSTriShape \"{}\"", bsTriShape->name);
+				if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
+					created->SetOwner(clusterOwner);
 
-				if (auto mesh = BaseMesh::Create(bsTriShape, commandList))
-					m_DirectMeshes.emplace(bsTriShape, eastl::move(mesh));
+					eastl::shared_ptr<BaseMesh> registered;
+					{
+						std::scoped_lock lock(m_MeshMutex);
+						auto [it, inserted] = m_DirectMeshes.emplace(bsTriShape, created);
+						if (inserted)
+							registered = it->second;
+					}
+
+					if (registered) {
+						GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(registered);
+						UpdateMeshTransforms(registered.get(), clusterOwner, bsTriShape);
+					}
+				}
 			}
 		}
 
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
+
+	// Drop clusters whose meshes were all destroyed this frame.
+	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
+		if (it->second->Empty())
+			it = m_OwnerClusters.erase(it);
+		else
+			++it;
+	}
+
+	for (auto it = m_OrphanClusters.begin(); it != m_OrphanClusters.end(); ) {
+		if (it->second->Empty())
+			it = m_OrphanClusters.erase(it);
+		else
+			++it;
+	}
 
 	/*eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
@@ -530,6 +583,68 @@ bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
 	}
 
 	return false;
+}
+
+BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape)
+{
+	if (owner) {
+		auto& slot = m_OwnerClusters[owner];
+		if (!slot)
+			slot = eastl::make_unique<BLASCluster>(owner);
+		return slot.get();
+	}
+
+	auto& slot = m_OrphanClusters[bsTriShape];
+	if (!slot)
+		slot = eastl::make_unique<BLASCluster>(nullptr);
+	return slot.get();
+}
+
+void SceneGraph::RemoveMeshFromCluster(BaseMesh* mesh, RE::TESObjectREFR* owner)
+{
+	// owner is used as a key only (never dereferenced); orphan meshes are keyed by their trishape.
+	if (owner) {
+		auto it = m_OwnerClusters.find(owner);
+		if (it != m_OwnerClusters.end())
+			it->second->RemoveMember(mesh);
+	}
+	else {
+		auto it = m_OrphanClusters.find(mesh->GetTriShape());
+		if (it != m_OrphanClusters.end())
+			it->second->RemoveMember(mesh);
+	}
+}
+
+void SceneGraph::UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape)
+{
+	// Owner + trishape are alive here (traversal), so it's safe to read their world transforms.
+	// Orphan meshes (no owner) use their own world, giving an identity local-to-owner.
+	RE::NiTransform ownerWorld = bsTriShape->world;
+	if (owner)
+		if (auto* node = owner->Get3D())
+			ownerWorld = node->world;
+
+	// Bake the per-member local-to-owner into the mesh's geometry descs.
+	const auto localToOwner = Util::Math::ComputeLocalToRoot(ownerWorld.Invert(), bsTriShape->world);
+	mesh->SetLocalToOwner(localToOwner);
+
+	// Cache the owner-world transform on the cluster for the TLAS instance (no later deref).
+	float3x4 instanceTransform;
+	XMStoreFloat3x4(&instanceTransform, Util::Math::GetXMFromNiTransform(ownerWorld));
+
+	GetOrCreateCluster(owner, bsTriShape)->SetInstanceTransform(instanceTransform);
+}
+
+void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
+{
+	std::scoped_lock lock(m_MeshMutex);
+
+	// Each cluster pulls dirty state from its members, uploads pending dynamic buffers, and builds/refits.
+	for (auto& [owner, cluster] : m_OwnerClusters)
+		cluster->BuildUpdate(commandList, this);
+
+	for (auto& [bsTriShape, cluster] : m_OrphanClusters)
+		cluster->BuildUpdate(commandList, this);
 }
 
 void SceneGraph::CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root)

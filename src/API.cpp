@@ -83,8 +83,8 @@ void GetSceneGraphCounters(uint32_t& textures, uint32_t& models, uint32_t& insta
 	auto& textureManager = sceneGraph->GetTextureManager();
 
 	textures = static_cast<uint32_t>(textureManager->m_Textures.size() + textureManager->m_NormalMaps.size());
-	models = static_cast<uint32_t>(sceneGraph->GetModels().size());
-	instances = static_cast<uint32_t>(sceneGraph->GetInstances().Size());
+	models = static_cast<uint32_t>(sceneGraph->GetDirectMeshes().size());
+	instances = static_cast<uint32_t>(sceneGraph->GetOwnerClusters().size() + sceneGraph->GetOrphanClusters().size());
 }
 
 void UpdateSettings(Settings settings)

@@ -88,6 +88,9 @@ namespace Pass
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
-		m_TopLevelAS.Update(commandList, sceneGraph->GetDirectMeshes());
+		// Upload pending dynamic buffers and build/refit the per-owner BLAS clusters before the TLAS build.
+		sceneGraph->BuildClusters(commandList);
+
+		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters());
 	}
 }

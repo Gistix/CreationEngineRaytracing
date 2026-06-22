@@ -6,18 +6,18 @@
 #include "Util.h"
 #include "Types/RE/RE.h"
 
-eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
+eastl::shared_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 
 	if (geometryData.rendererData)
-		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
+		return eastl::make_shared<DirectMesh>(bsTriShape, commandList);
 
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
-		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
+		return eastl::make_shared<DynamicMesh>(bsDynamicTriShape, commandList);
 
 	if (geometryData.skinInstance.get())
-		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
+		return eastl::make_shared<SkinnedMesh>(bsTriShape, commandList);
 
 	logger::warn("BaseMesh::Create - No renderer data or skin instance for {}", MakeDebugName(bsTriShape));
 	return nullptr;
@@ -126,29 +126,19 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	return geometryDesc;
 }
 
-void BaseMesh::BuildBLAS(nvrhi::ICommandList* commandList, const eastl::vector<nvrhi::rt::GeometryDesc>& geometryDescs)
+bool BaseMesh::SetHidden(bool hidden)
 {
-	if (geometryDescs.empty()) {
-		logger::warn("BaseMesh::BuildBLAS - No geometry descs for {}", m_Name);
-		return;
+	const bool wasHidden = m_State.any(State::Hidden);
+
+	m_State.set(hidden, State::Hidden);
+
+	if (wasHidden != hidden) {
+		// A visibility change alters which geometry the cluster includes -> rebuild.
+		MarkDirty(DirtyFlags::Visibility);
+		return true;
 	}
 
-	auto blasDesc = nvrhi::rt::AccelStructDesc()
-		.setIsTopLevel(false)
-		.setDebugName(std::format("{} - BLAS", m_Name.c_str()))
-		.setBuildFlags(nvrhi::rt::AccelStructBuildFlags::PreferFastTrace);
-
-	for (const auto& geometryDesc : geometryDescs)
-		blasDesc.addBottomLevelGeometry(geometryDesc);
-
-	m_BLAS = Renderer::GetSingleton()->GetDevice()->createAccelStruct(blasDesc);
-
-	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
-}
-
-void BaseMesh::SetHidden(bool hidden)
-{
-	m_State.set(hidden, State::Hidden);
+	return false;
 }
 
 bool BaseMesh::IsHidden() const
@@ -156,7 +146,31 @@ bool BaseMesh::IsHidden() const
 	return m_State.any(State::Hidden);
 }
 
-nvrhi::rt::IAccelStruct* BaseMesh::GetBLAS() const
+bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 {
-	return m_BLAS;
+	if (m_Owner == owner)
+		return false;
+
+	m_PrevOwner = m_Owner;
+	m_Owner = owner;
+
+	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
+	MarkDirty(DirtyFlags::Visibility);
+
+	return true;
+}
+
+void BaseMesh::SetLocalToOwner(const float3x4& localToOwner)
+{
+	const bool changed = !Util::Math::MatrixNearEqual(m_LocalToOwner, localToOwner);
+
+	m_LocalToOwner = localToOwner;
+
+	// Always (re)bake into the geometry descs so the layout is correct even on the first set;
+	// only flag a refit when it actually changed.
+	for (auto& desc : m_GeometryDescs)
+		desc.setTransform(m_LocalToOwner.f);
+
+	if (changed)
+		MarkDirty(DirtyFlags::Transform);
 }

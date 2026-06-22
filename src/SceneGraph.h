@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/BaseMesh.h"
+#include "Core/BLASCluster.h"
 
 #include "core/InstanceManager.h"
 #include "core/Model.h"
@@ -39,8 +40,12 @@ class SceneGraph
 {
 	RE::NiCamera* m_Camera = nullptr;
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_DirectMeshes;
+	eastl::unordered_map<RE::BSTriShape*, eastl::shared_ptr<BaseMesh>> m_DirectMeshes;
 	mutable std::mutex m_MeshMutex;
+
+	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
+	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	mutable std::mutex m_MeshDestroyMutex;
@@ -107,6 +112,13 @@ class SceneGraph
 	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
 	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
+	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
+	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
+	void RemoveMeshFromCluster(BaseMesh* mesh, RE::TESObjectREFR* owner);
+
+	// Captures the owner/mesh transforms during traversal (while alive) into the mesh + its cluster.
+	void UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
+
 	Instance* AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID);
 	void AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* path);
 	void AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model);
@@ -131,6 +143,12 @@ public:
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
 
 	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
+
+	inline auto& GetOwnerClusters() { return m_OwnerClusters; }
+	inline auto& GetOrphanClusters() { return m_OrphanClusters; }
+
+	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
+	void BuildClusters(nvrhi::ICommandList* commandList);
 
 	inline auto& GetModels() { return m_Models; }
 	inline auto& GetInstances() { return m_Instances; }

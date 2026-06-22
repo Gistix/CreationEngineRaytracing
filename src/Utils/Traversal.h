@@ -102,11 +102,11 @@ namespace Util
 			// Set as parent refr to propagate it downwards
 			auto refr = parentRefr; 
 
-			// Update refr if it actually exists (else keep the parent refr)
+			// A fade node marks a reference boundary; always refresh the owner from it
+			// (a child reference must not inherit a parent/grandparent owner).
 			auto fadeNode = Util::Adapter::AsFadeNode(a_object);
 			if (fadeNode)
-				if (auto owner = Util::Adapter::GetOwner(fadeNode))
-					refr = owner;
+				refr = Util::Adapter::GetOwner(fadeNode);
 
 			auto geom = Util::Adapter::AsTriShape(a_object);
 			if (geom) {

@@ -3,9 +3,10 @@
 #include "Util.h"
 #include "Types/RE/RE.h"
 
-DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
+DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
+	m_BSTriShape = bsTriShape;
 
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 
@@ -31,9 +32,5 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandL
 	const uint32_t indexCount = static_cast<uint32_t>(triShapeData.triangleCount) * 3;
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
-	m_GeometryDesc = MakeGeometryDesc(m_IndexBuffer, indexCount, m_VertexBuffer, vertexStride, triShapeData.vertexCount);
-
-	eastl::vector<nvrhi::rt::GeometryDesc> geometryDescs = { m_GeometryDesc };
-
-	BuildBLAS(commandList, geometryDescs);
+	m_GeometryDescs.push_back(MakeGeometryDesc(m_IndexBuffer, indexCount, m_VertexBuffer, vertexStride, triShapeData.vertexCount));
 }

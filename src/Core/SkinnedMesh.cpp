@@ -3,9 +3,10 @@
 #include "Util.h"
 #include "Types/RE/RE.h"
 
-SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
+SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
+	m_BSTriShape = bsTriShape;
 
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 
@@ -39,10 +40,10 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
 
-	BuildSkinned(bsTriShape, commandList, m_VertexBuffer, vertexStride, true);
+	BuildSkinned(bsTriShape, m_VertexBuffer, vertexStride, true);
 }
 
-void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
+void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
 {
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 
@@ -92,10 +93,4 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* 
 		m_IndexBuffers.push_back(indexBuffer);
 		m_GeometryDescs.push_back(MakeGeometryDesc(indexBuffer, indexCount, vertexBuffer, vertexStride, vertexCount));
 	}
-
-	BuildBLAS(commandList, m_GeometryDescs);
-}
-
-void SkinnedMesh::Update([[maybe_unused]] nvrhi::ICommandList* commandList)
-{
 }
