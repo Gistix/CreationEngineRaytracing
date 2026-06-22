@@ -17,6 +17,8 @@ namespace Pass::NRD
 			eastl::string debugName;
 		};
 
+		Mode m_Mode;
+
 		nrd::Denoiser kDenoiser;
 		nrd::Identifier kDenoiserIdentifier;
 
@@ -59,7 +61,7 @@ namespace Pass::NRD
 		uint32_t GetMaxResourceCount(nrd::DescriptorType type) const;
 
 	public:
-		NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser);
+		NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode);
 		~NRDIntegration() override;
 
 		void SettingsChanged(const Settings& settings) override;

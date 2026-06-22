@@ -123,7 +123,7 @@ RenderNode* Scene::GetGlobalIllumination()
 		m_GlobalIllumination->AddNode({
 			true,
 			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination)
 		});
 
 		m_GlobalIllumination->AddNode({
@@ -201,7 +201,7 @@ RenderNode* Scene::GetPathTracing()
 		m_PathTracing->AddNode({
 			true,
 			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing)
 		});
 
 		m_PathTracing->AddNode({
