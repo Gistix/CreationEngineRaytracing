@@ -36,22 +36,22 @@ struct RAB_Surface
     BRDFContext brdfContext;
     uint materialFeature;
     bool hasSpecularTransmission;
+    bool isEnter;
     float viewDepth;
     uint materialIndex;
     uint instanceIndex;
     uint psrData;
+    float3 pathThroughput;
 
     float4 Eval(float3 wo)
     {
         Material material = GetMaterial(materialIndex);
-        bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
         StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
         return bsdf.Eval(brdfContext, material, surface, wo);
     }
 
     float EvalPdf(float3 wo)
     {
-        bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
         StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
         return bsdf.EvalPdf(brdfContext, surface, wo);
     }
@@ -59,14 +59,22 @@ struct RAB_Surface
 
 static const float RAB_BACKGROUND_DEPTH = 1e4f;
 
+float3 RAB_UnpackPathThroughput(uint packed)
+{
+    return packed != 0u ? PSD_UnpackColor(packed) : float3(1.0f, 1.0f, 1.0f);
+}
+
 // ---------------------------------------------------------------------------
 // Unpack PackedSurfaceData -> full Surface
 // ---------------------------------------------------------------------------
 Surface PSD_UnpackToSurfacePT(PackedSurfaceData d)
 {
-    Surface s;
+    Surface s = (Surface)0;
     s.Primary      = true;
     s.Position     = d.posW;
+    s.PrevPosition = d.posW;
+    s.CameraRelativePosition = d.posW - Camera.Position.xyz;
+    s.PrevCameraRelativePosition = s.CameraRelativePosition + (Camera.Position.xyz - Camera.PositionPrev.xyz);
     s.Normal       = PSD_UnpackOct(d.packedNormal);
     s.Tangent      = PSD_UnpackOct(d.packedTangent);
     s.Bitangent    = PSD_UnpackOct(d.packedBitangent);
@@ -90,7 +98,7 @@ Surface PSD_UnpackToSurfacePT(PackedSurfaceData d)
     s.SubsurfaceData     = (Subsurface)0;
     s.DiffTrans          = 0;
     s.SpecTrans          = 0;
-    s.IsThinSurface      = false;
+    s.IsThinSurface      = PSD_SurfaceIsThinSurface(d);
     s.CoatColor          = 1;
     s.CoatStrength       = 0;
     s.CoatRoughness      = 0;
@@ -98,7 +106,13 @@ Surface PSD_UnpackToSurfacePT(PackedSurfaceData d)
     s.CoatNormal         = s.Normal;
     s.CoatTangent        = s.Tangent;
     s.CoatBitangent      = s.Bitangent;
+    s.FuzzColor          = 0;
+    s.FuzzWeight         = 0;
     s.MipLevel           = 0;
+    s.PositionError      = CalculatePositionError(s.Position);
+#if USE_SIA_INTERPOLATION
+    s.SIAOffset          = 0.0f;
+#endif
 
     return s;
 }
@@ -124,10 +138,12 @@ RAB_Surface LoadPTSurfaceFromBuffer(uint2 pixelPosition, bool previousFrame)
         rab.brdfContext = BRDFContext::make(rab.surface, float3(0, 0, 1));
         rab.materialFeature = Feature::kDefault;
         rab.hasSpecularTransmission = false;
+        rab.isEnter = true;
         rab.viewDepth = RAB_BACKGROUND_DEPTH;
         rab.materialIndex = 0;
         rab.instanceIndex = 0;
         rab.psrData = 0;
+        rab.pathThroughput = 0.0f;
         return rab;
     }
 
@@ -136,10 +152,12 @@ RAB_Surface LoadPTSurfaceFromBuffer(uint2 pixelPosition, bool previousFrame)
     rab.brdfContext = BRDFContext::make(rab.surface, viewDir);
     rab.materialFeature = PSD_GetMaterialFeature(packed);
     rab.hasSpecularTransmission = PSD_SurfaceHasSpecularTransmission(packed);
+    rab.isEnter = PSD_SurfaceIsEnterSurface(packed);
     rab.viewDepth = packed.viewDepth;
     rab.materialIndex = packed.materialIndex;
     rab.instanceIndex = packed.instanceIndex;
     rab.psrData = packed.psrData;
+    rab.pathThroughput = RAB_UnpackPathThroughput(packed.psrData);
 
     return rab;
 }
@@ -156,10 +174,12 @@ RAB_Surface RAB_EmptySurface()
     rab.brdfContext = BRDFContext::make(rab.surface, float3(0, 0, 1));
     rab.materialFeature = Feature::kDefault;
     rab.hasSpecularTransmission = false;
+    rab.isEnter = true;
     rab.viewDepth = RAB_BACKGROUND_DEPTH;
     rab.materialIndex = 0;
     rab.instanceIndex = 0;
     rab.psrData = 0;
+    rab.pathThroughput = 0.0f;
     return rab;
 }
 
@@ -171,6 +191,7 @@ RAB_Surface RAB_MakeSurfaceFromPayload(float3 position, Payload payload, float3 
     rab.surface = SurfaceMaker::make(position, payload, rayDir, rayCone, instance, material, primary);
     rab.brdfContext = BRDFContext::make(rab.surface, -rayDir);
     bool isEnter = dot(rab.surface.FaceNormal, rab.brdfContext.ViewDirection) >= 0.0f;
+    rab.isEnter = isEnter;
     if (!isEnter)
     {
         rab.surface.FlipNormal();
@@ -184,6 +205,7 @@ RAB_Surface RAB_MakeSurfaceFromPayload(float3 position, Payload payload, float3 
     rab.materialIndex = mesh.GeometryIdx;
     rab.instanceIndex = payload.GetInstanceIndex();
     rab.psrData = 0;
+    rab.pathThroughput = 1.0f;
     return rab;
 }
 
@@ -261,6 +283,15 @@ bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
     if (a.hasSpecularTransmission != b.hasSpecularTransmission)
         return false;
 
+    if (a.hasSpecularTransmission || b.hasSpecularTransmission)
+    {
+        if (a.surface.IsThinSurface != b.surface.IsThinSurface)
+            return false;
+
+        if (!a.surface.IsThinSurface && a.isEnter != b.isEnter)
+            return false;
+    }
+
     if (!RTXDI_CompareRelativeDifference(a.surface.Roughness, b.surface.Roughness, 0.5))
         return false;
 
@@ -277,9 +308,18 @@ bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
     return true;
 }
 
+bool RAB_IsTwoSidedMaterial(RAB_Surface rab)
+{
+    Material material = GetMaterial(rab.materialIndex);
+    return (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+}
+
 bool RAB_IsDirectionUsableForOpaqueReflection(RAB_Surface rab, float3 direction)
 {
     if (rab.hasSpecularTransmission || rab.surface.SpecTrans > 0.0f || rab.surface.DiffTrans > 0.0f)
+        return true;
+
+    if (RAB_IsTwoSidedMaterial(rab))
         return true;
 
     return dot(rab.surface.FaceNormal, direction) > 1e-4f;
@@ -291,9 +331,12 @@ bool RAB_IsDirectionUsableForOpaqueReflection(RAB_Surface rab, float3 direction)
 float3 RAB_GetPTSampleTargetPdfForSurface(float3 samplePosition, float3 sampleRadiance, RAB_Surface rab)
 {
     float3 L = normalize(samplePosition - rab.surface.Position);
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
+        return 0.0f;
 
-    float4 bsdfEval = rab.Eval(L);
-    return max(bsdfEval.rgb * sampleRadiance, 0.0f);
+    Material material = GetMaterial(rab.materialIndex);
+    StandardBSDF bsdf = StandardBSDF::make(rab.surface, rab.isEnter);
+    return max(EvalLight(L, material, rab.surface, rab.brdfContext, bsdf) * sampleRadiance * rab.pathThroughput, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -310,9 +353,12 @@ float RAB_SurfaceEvaluateBrdfPdf(RAB_Surface rab, float3 wo)
 float3 RAB_GetReflectedBsdfRadianceForSurface(float3 lightPos, float3 lightRadiance, RAB_Surface rab)
 {
     float3 L = normalize(lightPos - rab.surface.Position);
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
+        return 0.0f;
 
-    float4 bsdfEval = rab.Eval(L);
-    return bsdfEval.rgb * lightRadiance;
+    Material material = GetMaterial(rab.materialIndex);
+    StandardBSDF bsdf = StandardBSDF::make(rab.surface, rab.isEnter);
+    return EvalLight(L, material, rab.surface, rab.brdfContext, bsdf) * lightRadiance * rab.pathThroughput;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,21 +372,27 @@ bool RAB_GetConservativeVisibility(RAB_Surface rab, float3 samplePosition)
     if (dist < 1e-4)
         return true;
 
-    float3 sampleDir = toSample / dist;
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, toSample / dist))
+        return false;
 
-    float3 pos = rab.surface.Position;
-    float positionError = max(abs(pos.x), max(abs(pos.y), abs(pos.z)));
-    float3 offsetOrigin = OffsetRay(pos, rab.surface.FaceNormal, positionError, false);
+    bool behindSurface = dot(toSample, rab.surface.FaceNormal) < 0.0f;
+    float3 origin = OffsetRayAlt(rab.surface.Position, rab.surface.FaceNormal, behindSurface);
+
+    float3 offsetToSample = samplePosition - origin;
+    float offsetDist = length(offsetToSample);
+
+    if (offsetDist < 1e-4)
+        return true;
 
     const float offset = 0.001f;
     RayDesc ray;
-    ray.Origin = offsetOrigin;
-    ray.Direction = sampleDir;
+    ray.Origin = origin;
+    ray.Direction = offsetToSample / offsetDist;
     ray.TMin = 0.0f;
-    ray.TMax = max(offset, dist - offset * 2.0f);
+    ray.TMax = max(0.0f, offsetDist - offset);
 
-    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
-    rayQuery.TraceRayInline(SceneBVH, RAY_FLAG_NONE, INSTANCE_MASK, ray);
+    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER> rayQuery;
+    rayQuery.TraceRayInline(SceneBVH, RAY_FLAG_CULL_NON_OPAQUE, INSTANCE_MASK, ray);
     rayQuery.Proceed();
 
     return rayQuery.CommittedStatus() == COMMITTED_NOTHING;
@@ -556,6 +608,9 @@ int RAB_TranslateLightIndex(uint lightIndex, bool prevToCurrent) { return (int)l
 
 float3 RAB_GetMISWeightForNEE(uint lightIndex, RAB_LightSample lightSample, float3 lightDir, float lightPdf, float scatterPdf)
 {
+    if (RAB_IsAnalyticLightSample(lightSample))
+        return float3(1.0f, 1.0f, 1.0f);
+
     const float neePdf = max(lightPdf, 0.0f);
     float misWeight = neePdf > 0.0f ? neePdf / (neePdf + max(scatterPdf, 0.0f)) : 0.0f;
     return float3(misWeight, misWeight, misWeight);
