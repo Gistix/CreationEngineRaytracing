@@ -291,11 +291,9 @@ bool RAB_IsDirectionUsableForOpaqueReflection(RAB_Surface rab, float3 direction)
 float3 RAB_GetPTSampleTargetPdfForSurface(float3 samplePosition, float3 sampleRadiance, RAB_Surface rab)
 {
     float3 L = normalize(samplePosition - rab.surface.Position);
-    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
-        return 0.0f;
 
     float4 bsdfEval = rab.Eval(L);
-    return bsdfEval.rgb * sampleRadiance;
+    return max(bsdfEval.rgb * sampleRadiance, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -312,8 +310,6 @@ float RAB_SurfaceEvaluateBrdfPdf(RAB_Surface rab, float3 wo)
 float3 RAB_GetReflectedBsdfRadianceForSurface(float3 lightPos, float3 lightRadiance, RAB_Surface rab)
 {
     float3 L = normalize(lightPos - rab.surface.Position);
-    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
-        return 0.0f;
 
     float4 bsdfEval = rab.Eval(L);
     return bsdfEval.rgb * lightRadiance;
@@ -331,14 +327,17 @@ bool RAB_GetConservativeVisibility(RAB_Surface rab, float3 samplePosition)
         return true;
 
     float3 sampleDir = toSample / dist;
-    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, sampleDir))
-        return false;
 
+    float3 pos = rab.surface.Position;
+    float positionError = max(abs(pos.x), max(abs(pos.y), abs(pos.z)));
+    float3 offsetOrigin = OffsetRay(pos, rab.surface.FaceNormal, positionError, false);
+
+    const float offset = 0.001f;
     RayDesc ray;
-    ray.Origin = rab.surface.Position;
+    ray.Origin = offsetOrigin;
     ray.Direction = sampleDir;
-    ray.TMin = 0.001f;
-    ray.TMax = max(0.001f, dist - 0.002f);
+    ray.TMin = 0.0f;
+    ray.TMax = max(offset, dist - offset * 2.0f);
 
     RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
     rayQuery.TraceRayInline(SceneBVH, RAY_FLAG_NONE, INSTANCE_MASK, ray);
