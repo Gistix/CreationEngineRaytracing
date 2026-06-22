@@ -120,7 +120,7 @@ void Renderer::InitDefaultTextures()
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
 	// Write the textures using a temporary CL
-	nvrhi::CommandListHandle commandList = GetCopyCommandList();
+	nvrhi::CommandListHandle commandList = GetGraphicsCommandList();
 	commandList->open();
 
 	commandList->writeTexture(m_WhiteTexture->texture, 0, 0, white, 4);
