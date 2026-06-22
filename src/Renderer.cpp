@@ -113,7 +113,7 @@ void Renderer::InitDefaultTextures()
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
 	// Write the textures using a temporary CL
-	nvrhi::CommandListHandle commandList = GetCopyCommandList();
+	nvrhi::CommandListHandle commandList = GetGraphicsCommandList();
 	commandList->open();
 
 	commandList->beginTrackingTextureState(m_WhiteTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
@@ -149,7 +149,7 @@ void Renderer::InitDefaultTextures()
 
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
-		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
+		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
 	}
 }
 

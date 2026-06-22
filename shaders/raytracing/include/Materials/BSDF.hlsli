@@ -1085,14 +1085,8 @@ struct StandardBSDF
         }
     }
 
-    bool SampleBSDF(const BRDFContext brdfContext, const Material material, const Surface surface, out BSDFSample result, inout uint randomSeed)
+    bool SampleBSDF(const BRDFContext brdfContext, const Material material, const Surface surface, out BSDFSample result, const float4 preGeneratedSamples, const float2 extraSamples)
     {
-        float4 preGeneratedSamples = float4(
-            Random(randomSeed),
-            Random(randomSeed),
-            Random(randomSeed),
-            Random(randomSeed)
-        );
         float3 wi = brdfContext.ViewDirection;
         float3 N = surface.Normal;
 
@@ -1113,8 +1107,8 @@ struct StandardBSDF
         if (material.Feature == Feature::kHairTint)
         {
             HairFarFieldBCSDF bsdf = HairFarFieldBCSDF::make(wi, surface);
-            const float h = 2.0f * Random(randomSeed) - 1.0f;
-            float lobeRandom = Random(randomSeed);
+            const float h = 2.0f * extraSamples.x - 1.0f;
+            float lobeRandom = extraSamples.y;
 
             float3 woLocal;
             bool valid = bsdf.SampleBSDF(wiLocal, h, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, lobeRandom, preGeneratedSamples);
@@ -1132,6 +1126,18 @@ struct StandardBSDF
             result.wo = surface.FromLocal(woLocal);
             return valid;
         }
+    }
+
+    bool SampleBSDF(const BRDFContext brdfContext, const Material material, const Surface surface, out BSDFSample result, inout uint randomSeed)
+    {
+        float4 preGeneratedSamples = float4(
+            Random(randomSeed),
+            Random(randomSeed),
+            Random(randomSeed),
+            Random(randomSeed)
+        );
+        float2 extraSamples = float2(Random(randomSeed), Random(randomSeed));
+        return SampleBSDF(brdfContext, material, surface, result, preGeneratedSamples, extraSamples);
     }
 
     float EvalPdf(const BRDFContext brdfContext, const Surface surface, const float3 wo)

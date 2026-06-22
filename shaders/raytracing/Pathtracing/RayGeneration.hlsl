@@ -398,6 +398,7 @@ void Main()
             Camera.Position.xyz, sourceDirection, sourcePayload.hitDistance,
             buildSceneLength, buildThp, buildMVs, buildImageXform, buildRoughnessAccum,
             sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant,
+            sourceMaterial,
             sourceInstance, randomSeed,
             buildInsideWater, buildWaterAbsorption);
 
@@ -448,6 +449,7 @@ void Main()
                 hitResult.nextRayOrigin, hitResult.nextRayDir, buildPayload.hitDistance,
                 buildSceneLength, hitResult.nextThp, buildMVs, hitResult.nextImageXform,
                 hitResult.nextRoughnessAccum, buildSurface, buildBrdfCtx, buildBsdf, buildIsDominant,
+                buildMaterial,
                 buildInstance, randomSeed,
                 hitResult.nextInsideWater, hitResult.nextWaterAbsorption);
         }
@@ -510,6 +512,7 @@ void Main()
                     ep.rayOrigin, ep.rayDir, expPayload.hitDistance,
                     expSceneLength, ep.throughput, ep.motionVectors, ep.imageXform,
                     ep.roughnessAccum, expSurface, expBrdfCtx, expBsdf, buildIsDominant,
+                    expMaterial,
                     expInstance, randomSeed,
                     ep.insideWaterVolume, ep.waterVolumeAbsorption);
 
@@ -556,6 +559,7 @@ void Main()
                         expHitResult.nextRayOrigin, expHitResult.nextRayDir, contPayload.hitDistance,
                         expSceneLength, expHitResult.nextThp, ep.motionVectors, expHitResult.nextImageXform,
                         expHitResult.nextRoughnessAccum, contSurface, contBrdfCtx, contBsdf, buildIsDominant,
+                        contMaterial,
                         contInstance, randomSeed,
                         expHitResult.nextInsideWater, expHitResult.nextWaterAbsorption);
                 }
@@ -763,6 +767,9 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
+        const uint sampleIndex = Camera.FrameIndex * MAX_SAMPLES + i;
+        randomSeed = InitRandomSeed(idx, size, sampleIndex);
+
 #if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif
@@ -789,6 +796,7 @@ void Main()
         bool arrivedViaDelta = false;
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
+        uint diffuseBounceCount = 0;
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
         // ReSTIR GI: multi-bounce secondary radiance accumulation
@@ -839,7 +847,11 @@ void Main()
 #endif
 
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
-            direction = surface.Mul(SampleCosineHemisphere(randomSeed));
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            direction = surface.Mul(SampleCosineHemisphere(scatterSamples.xy));
+            diffuseBounceCount++;
 
             float NdotD = saturate(dot(surface.Normal, direction));
 
@@ -848,7 +860,10 @@ void Main()
             
             const bool hasTransmission = false;
 #else            
-            bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed);
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, scatterSamples, scatterExtraSamples);
             
             if (isValid)
                 direction = bsdfSample.wo;
@@ -857,6 +872,8 @@ void Main()
             
             bool isDelta = bsdfSample.isLobe(LobeType::Delta);
             isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
+            if (bsdfSample.isLobe(LobeType::Diffuse))
+                diffuseBounceCount++;
             
             if (j == 0)
                 isSpecularSample = isSpecular;         
