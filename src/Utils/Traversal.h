@@ -93,20 +93,27 @@ namespace Util
 		{
 			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
-			if (!a_object) {
+			if (!a_object)
 				return result;
-			}
+
+			auto rtti = a_object->GetRTTI();
+			static REL::Relocation<const RE::NiRTTI*> billboardRTTI{ NiRTTI(NiBillboardNode) };
+			if (rtti == billboardRTTI.get())
+				return result;
+
+			static REL::Relocation<const RE::NiRTTI*> orderedRTTI{ NiRTTI(BSOrderedNode) };
+			if (rtti == orderedRTTI.get())
+				return result;
 
 			bool hidden = parentHidden || Util::Adapter::IsNiAVObjectHidden(a_object);
 
 			// Set as parent refr to propagate it downwards
 			auto refr = parentRefr; 
 
-			// A fade node marks a reference boundary; always refresh the owner from it
-			// (a child reference must not inherit a parent/grandparent owner).
-			auto fadeNode = Util::Adapter::AsFadeNode(a_object);
-			if (fadeNode)
-				refr = Util::Adapter::GetOwner(fadeNode);
+			// Update refr if it actually exists (else keep the parent refr)
+			if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
+				if (auto owner = Util::Adapter::GetOwner(fadeNode))
+					refr = owner;
 
 			auto geom = Util::Adapter::AsTriShape(a_object);
 			if (geom) {
