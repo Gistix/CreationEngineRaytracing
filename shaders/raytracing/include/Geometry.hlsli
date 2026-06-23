@@ -98,7 +98,9 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint16_t ind
 {
     Vertex vertex = (Vertex)0;
 
-    const uint vertexOffset = vertexDesc.GetVertexSize() * index;
+    // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t, so a 16-bit
+    // multiply would overflow (e.g. stride 32 * index 2048 = 0) and corrupt high-index vertices.
+    const uint vertexOffset = (uint)vertexDesc.GetVertexSize() * (uint)index;
 
     float4 pos = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
