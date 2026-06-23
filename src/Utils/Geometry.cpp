@@ -125,7 +125,7 @@ namespace Util
 		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc vertexDesc)
 		{
 			const auto vertexDescUInt = *reinterpret_cast<uint64_t*>(&vertexDesc);
-			return ((4 * LOBYTE(vertexDescUInt)) & 0x3C);
+			return ((vertexDescUInt & 0xF) << 2);
 		}
 
 		bool HasDoubleSidedGeom(Mesh* mesh)
