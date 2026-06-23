@@ -704,26 +704,3 @@ void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
 {
 	m_TextureManager->ReleaseTexture(texture);
 }
-
-void SceneGraph::RunGarbageCollection()
-{
-	// Clear Models
-	{
-		std::scoped_lock modelLock(m_ModelReleaseMutex);
-
-		for (auto it = m_ReleasedModels.begin(); it != m_ReleasedModels.end(); ) {
-			auto* model = it->get();
-
-			model->UpdateFlags();
-
-			const bool release =
-				(model->m_Flags & Model::Flags::BuffersUploaded) &&
-				(model->m_Flags & Model::Flags::BLASBuilt);
-
-			if (release)			
-				it = m_ReleasedModels.erase(it);
-			else
-				++it;
-		}		
-	}
-}

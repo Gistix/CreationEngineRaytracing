@@ -52,9 +52,6 @@ class SceneGraph
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 	mutable std::mutex m_ModelMutex;
 
-	eastl::vector<eastl::unique_ptr<Model>> m_ReleasedModels;
-	mutable std::mutex m_ModelReleaseMutex;
-
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
 	// Water
@@ -166,6 +163,4 @@ public:
 	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
-
-	void RunGarbageCollection();
 };

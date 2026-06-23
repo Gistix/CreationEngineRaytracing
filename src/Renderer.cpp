@@ -509,8 +509,6 @@ void Renderer::PostExecution()
 	// Run garbage collection to release resources that are no longer in use
 	device->runGarbageCollection();
 
-	scene->GetSceneGraph()->RunGarbageCollection();
-
 	logger::trace("Renderer::ExecutePasses - Post");
 }
 
