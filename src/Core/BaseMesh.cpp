@@ -34,6 +34,29 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 	return { bsTriShape->name.c_str() };
 }
 
+uint32_t BaseMesh::WriteMeshData(MeshData* out) const
+{
+	const auto& descs = GetGeometryDescs();
+
+	const uint16_t vertexID = GetVertexID();
+
+	for (size_t i = 0; i < descs.size(); i++) {
+		MeshData& md = out[i];
+		md = {};
+
+		md.IndexID = GetIndexID(i);
+		md.VertexID = vertexID;
+
+		std::memcpy(&md.Flags, &m_VertexDescRaw, sizeof(md.Flags));
+
+		md.NumTriangles = descs[i].geometryData.triangles.indexCount / 3;
+		md.Transform = m_LocalToOwner;
+		md.PrevTransform = m_LocalToOwner;
+	}
+
+	return static_cast<uint32_t>(descs.size());
+}
+
 bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices, RE::BSGraphics::TriShape* triShape)
 {
 	if (numTriangles == 0) {

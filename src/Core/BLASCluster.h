@@ -3,6 +3,8 @@
 #include "Core/BaseMesh.h"
 #include "Constants.h"
 
+#include "Instance.hlsli"
+
 class SceneGraph;
 
 // Aggregates the geometry of all meshes belonging to a single owner (RE::TESObjectREFR) into one
@@ -32,6 +34,8 @@ class BLASCluster
 	uint32_t m_NumUpdatesSinceRebuild = 0;
 	uint64_t m_LastBuild = Constants::INVALID_FRAME_INDEX;
 
+	uint32_t m_InstanceIndex = 0; // TLAS instance slot, assigned during SceneGraph::Update population
+
 	nvrhi::rt::AccelStructDesc MakeDesc(bool update) const;
 
 public:
@@ -52,4 +56,12 @@ public:
 	nvrhi::rt::IAccelStruct* GetBLAS() const { return m_BLAS; }
 
 	float3x4 GetInstanceTransform() const { return m_InstanceTransform; }
+
+	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
+
+	uint32_t GetInstanceIndex() const { return m_InstanceIndex; }
+
+	// Appends one MeshData per visible geometry (in BLAS order) and fills the cluster's InstanceData.
+	// Returns false if the cluster has no visible geometry (skip as a TLAS instance).
+	bool GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance) const;
 };

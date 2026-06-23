@@ -50,8 +50,6 @@ public:
 		if (markers)
 			commandList->beginMarker("TLAS Instances");
 
-		uint instanceID = 0;
-
 		auto addCluster = [&](BLASCluster* cluster)
 		{
 			if (!cluster->GetBLAS())
@@ -59,15 +57,15 @@ public:
 
 			const float3x4 transform = cluster->GetInstanceTransform();
 
+			// Use the instance index assigned during SceneGraph::Update so InstanceID() in the
+			// shader matches the InstanceData slot. Iteration order/skip matches the population pass.
 			auto instanceDesc = nvrhi::rt::InstanceDesc()
 				.setInstanceMask(InstanceMask::Default)
-				.setInstanceID(instanceID)
+				.setInstanceID(cluster->GetInstanceIndex())
 				.setTransform(transform.f)
 				.setBLAS(cluster->GetBLAS());
 
 			m_InstanceDescs.push_back(instanceDesc);
-
-			instanceID++;
 		};
 
 		for (const auto& [owner, cluster] : ownerClusters)

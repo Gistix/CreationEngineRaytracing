@@ -20,6 +20,10 @@ protected:
 
 	eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescsMutable() override { return m_GeometryDescs; }
 
+	uint16_t GetIndexID(size_t geometryIndex) const override { return static_cast<uint16_t>(m_IndexBuffers[geometryIndex].m_Descriptor.Get()); }
+
+	uint16_t GetVertexID() const override { return static_cast<uint16_t>(m_VertexBuffer.m_Descriptor.Get()); }
+
 	// Builds the per-partition index buffers + geometry descs using the supplied vertex buffer.
 	// requireSharedNativeVertexBuffer enforces that every partition references the same native vertex buffer (static skins);
 	// dynamic meshes supply their own buffer and pass false.

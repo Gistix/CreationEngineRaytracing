@@ -4,6 +4,8 @@
 
 #include "Framework/DescriptorTableManager.h"
 
+#include "Mesh.hlsli"
+
 class SkinnedMesh;
 class DynamicMesh;
 
@@ -72,8 +74,17 @@ public:
 
 	void ClearDirtyFlags() { m_DirtyFlags = DirtyFlags::None; }
 
+	// Writes one MeshData per geometry into 'out' (starting at out[0]); returns the number written.
+	uint32_t WriteMeshData(MeshData* out) const;
+
 protected:
 	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
+
+	// Per-geometry index buffer descriptor index (into the Triangles bindless table).
+	virtual uint16_t GetIndexID(size_t geometryIndex) const = 0;
+
+	// Vertex buffer descriptor index (into the Vertices bindless table); shared across the mesh's geometries.
+	virtual uint16_t GetVertexID() const = 0;
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
 
@@ -98,6 +109,9 @@ protected:
 
 	// Cached local-to-owner transform baked into the geometry descs (computed in the traversal).
 	float3x4 m_LocalToOwner;
+
+	// Native 64-bit vertex descriptor (RE::BSGraphics::VertexDesc) for MeshData::Flags.
+	uint64_t m_VertexDescRaw = 0;
 
 	// Mesh-owned dirty state consumed by the owning BLASCluster (Visibility => rebuild, Transform/Vertex => refit).
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;

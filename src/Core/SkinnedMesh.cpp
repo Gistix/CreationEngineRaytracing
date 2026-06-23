@@ -59,6 +59,8 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 
 	const uint32_t vertexCount = skinPartition->vertexCount;
 
+	std::memcpy(&m_VertexDescRaw, &basePartitionBuffer->vertexDesc, sizeof(m_VertexDescRaw));
+
 	m_IndexBuffers.reserve(skinPartition->numPartitions);
 	m_GeometryDescs.reserve(skinPartition->numPartitions);
 

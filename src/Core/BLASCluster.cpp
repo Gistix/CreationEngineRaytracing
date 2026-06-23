@@ -47,6 +47,42 @@ bool BLASCluster::Empty() const
 	return true;
 }
 
+bool BLASCluster::GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance) const
+{
+	// Mirror BuildUpdate's visible-member-geometry iteration so MeshData order matches the BLAS geometry order.
+	const uint32_t firstGeometry = meshCount;
+	uint32_t numGeometry = 0;
+
+	for (const auto& member : m_Members) {
+		auto mesh = member.lock();
+		if (!mesh || mesh->IsHidden())
+			continue;
+
+		const auto& descs = mesh->GetGeometryDescs();
+		if (descs.empty())
+			continue;
+
+		if (meshCount + descs.size() > Constants::NUM_MESHES_MAX)
+			break;
+
+		const uint32_t written = mesh->WriteMeshData(&meshData[meshCount]);
+		meshCount += written;
+		numGeometry += written;
+	}
+
+	if (numGeometry == 0)
+		return false;
+
+	outInstance = {};
+	outInstance.Transform = m_InstanceTransform;
+	outInstance.PrevTransform = m_InstanceTransform;
+	outInstance.FirstGeometryID = firstGeometry;
+	outInstance.NumGeometry = numGeometry;
+	outInstance.Alpha = 1.0f;
+
+	return true;
+}
+
 nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
 {
 	auto blasDesc = nvrhi::rt::AccelStructDesc()

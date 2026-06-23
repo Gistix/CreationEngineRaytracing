@@ -536,6 +536,26 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			++it;
 	}
 
+	// Populate per-instance + per-geometry data for shader-side geometry lookup, in the same
+	// owner-then-orphan / member order the TLAS and BLAS use (so InstanceID()/GeometryIndex() align).
+	auto appendInstance = [&](BLASCluster* cluster) {
+		if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
+			return;
+
+		InstanceData instance;
+		if (cluster->GetData(m_MeshData.data(), m_NumMeshes, instance)) {
+			cluster->SetInstanceIndex(m_NumInstances);
+			m_InstanceData[m_NumInstances] = instance;
+			m_NumInstances++;
+		}
+	};
+
+	for (auto& [owner, cluster] : m_OwnerClusters)
+		appendInstance(cluster.get());
+
+	for (auto& [bsTriShape, cluster] : m_OrphanClusters)
+		appendInstance(cluster.get());
+
 	/*eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
 
 	m_Instances.ApplyChanges();
