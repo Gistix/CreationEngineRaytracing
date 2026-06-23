@@ -4,7 +4,7 @@
 #include "Interop.h"
 #include "ubyte4.hlsli"
 
-struct VertexOld
+struct Vertex
 {
 	float3 Position;
 	half2 Texcoord0;
@@ -21,6 +21,6 @@ struct VertexOld
 	ubyte4f LandBlend1;
 #endif
 };
-VALIDATE_ALIGNMENT(VertexOld, 4);
+VALIDATE_ALIGNMENT(Vertex, 4);
 
 #endif

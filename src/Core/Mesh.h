@@ -66,7 +66,7 @@ struct Mesh
 	{
 		uint count = 0;
 		eastl::vector<float4> dynamicPosition;
-		eastl::vector<VertexOld> vertices;
+		eastl::vector<Vertex> vertices;
 		eastl::vector<Skinning> skinning;
 		eastl::vector<uint16_t> remap;
 		eastl::vector<float4> dynamicPositionRemapped;
