@@ -28,7 +28,7 @@
 // --------------------------------------------------------
 
 #ifndef RAY_FLAGS
-#   define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
+#   define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_CULL_BACK_FACING_TRIANGLES)
 #endif
 
 #ifndef INSTANCE_MASK
