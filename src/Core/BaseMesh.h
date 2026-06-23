@@ -88,7 +88,7 @@ protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
 
-	static bool ValidateCounts(uint16_t numTriangles, uint32_t numVertices, RE::BSGraphics::TriShape* triShape);
+	static bool ValidateCounts(uint16_t numTriangles, uint32_t numVertices);
 
 	static BufferDescriptor CreateIndexBuffer(RE::BSGraphics::TriShape* triShape);
 

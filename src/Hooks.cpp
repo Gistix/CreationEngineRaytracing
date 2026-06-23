@@ -36,9 +36,7 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
-			auto triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
-			triShape->pad1C = 1; // Set sentinel value
-			return triShape;
+			return func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;

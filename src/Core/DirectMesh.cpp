@@ -18,7 +18,7 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 
 	const auto& triShapeData = bsTriShape->GetTrishapeRuntimeData();
 
-	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount, rendererData))
+	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount))
 		return;
 
 	std::memcpy(&m_VertexDescRaw, &rendererData->vertexDesc, sizeof(m_VertexDescRaw));

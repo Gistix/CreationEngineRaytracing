@@ -57,7 +57,7 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 	return static_cast<uint32_t>(descs.size());
 }
 
-bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices, RE::BSGraphics::TriShape* triShape)
+bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices)
 {
 	if (numTriangles == 0) {
 		logger::warn("BaseMesh::ValidateCounts - Num triangles equals 0, skipping.");
@@ -66,11 +66,6 @@ bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices, RE::B
 
 	if (numVertices == 0) {
 		logger::warn("BaseMesh::ValidateCounts - Num vertices equals 0, skipping.");
-		return false;
-	}
-
-	if (triShape->pad1C != 1) {
-		logger::warn("BaseMesh::ValidateCounts - Missing sentinel value, skipping.");
 		return false;
 	}
 

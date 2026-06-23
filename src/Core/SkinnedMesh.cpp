@@ -30,7 +30,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICo
 
 	const uint32_t vertexCount = skinPartition->vertexCount;
 
-	if (!ValidateCounts(skinPartition->partitions[0].triangles, vertexCount, basePartitionBuffer))
+	if (!ValidateCounts(skinPartition->partitions[0].triangles, vertexCount))
 		return;
 
 	// All partitions share a single vertex buffer; create it once from the first partition.

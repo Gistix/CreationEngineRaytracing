@@ -461,12 +461,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
-		// Check sentinel value
-		if (rendererData->pad1C != 1) {
-			logger::warn("BSTriShape \"{}\" missing sentinel value, skipping.", bsTriShape->name);
-			return CESEAdapter::RE::BSVisitControl::kContinue;
-		}
-
 		{
 			// When clustering is skipped, force a null owner so every mesh lands in its own orphan cluster.
 			RE::TESObjectREFR* const clusterOwner = skipClustering ? nullptr : ownerRefr;
