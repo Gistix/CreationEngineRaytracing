@@ -21,16 +21,16 @@ namespace VertexAttribute
 
 namespace VertexFlags
 {
-    static const uint16_t Vertex       = (1u << Attribute::Position);
-    static const uint16_t UV           = (1u << Attribute::Texcoord0);
-    static const uint16_t UV_2         = (1u << Attribute::Texcoord1);
-    static const uint16_t Normal       = (1u << Attribute::Normal);
-    static const uint16_t Tangent      = (1u << Attribute::Binormal);
-    static const uint16_t Colors       = (1u << Attribute::Color);
-    static const uint16_t Skinned      = (1u << Attribute::Skinning);
-    static const uint16_t LandData     = (1u << Attribute::LandData);
-    static const uint16_t EyeData      = (1u << Attribute::EyeData);
-    static const uint16_t InstanceData = (1u << Attribute::InstanceData);
+    static const uint16_t Vertex       = (1u << VertexAttribute::Position);
+    static const uint16_t UV           = (1u << VertexAttribute::Texcoord0);
+    static const uint16_t UV_2         = (1u << VertexAttribute::Texcoord1);
+    static const uint16_t Normal       = (1u << VertexAttribute::Normal);
+    static const uint16_t Tangent      = (1u << VertexAttribute::Binormal);
+    static const uint16_t Colors       = (1u << VertexAttribute::Color);
+    static const uint16_t Skinned      = (1u << VertexAttribute::Skinning);
+    static const uint16_t LandData     = (1u << VertexAttribute::LandData);
+    static const uint16_t EyeData      = (1u << VertexAttribute::EyeData);
+    static const uint16_t InstanceData = (1u << VertexAttribute::InstanceData);
     static const uint16_t FullPrec     = 0x400;
 }
 

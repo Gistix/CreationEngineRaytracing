@@ -66,6 +66,8 @@ namespace Pass
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -201,6 +203,8 @@ namespace Pass
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 

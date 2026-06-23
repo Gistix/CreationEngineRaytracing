@@ -12,6 +12,7 @@
 #include "raytracing/include/Common.hlsli"
 
 #include "raytracing/include/Payload.hlsli"
+#include "raytracing/include/Geometry.hlsli"
 
 #if defined(GROUP_TILING)
 #   define DXC_STATIC_DISPATCH_GRID_DIM 1
@@ -115,5 +116,23 @@ void Main()
     bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
     const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
     
-    Output[idx] = float4(color, 1.0f);
+    float3 uvw = GetBary(sourcePayload.Barycentrics());
+    
+    Instance sourceInstance;
+    Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
+    
+    Vertex v0;
+    Vertex v1;
+    Vertex v2;
+    GetVertices(sourceMesh, sourcePayload.primitiveIndex, v0, v1, v2);
+    
+    //float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
+
+    float3x3 objectToWorld3x3 = mul((float3x3) sourceInstance.Transform, (float3x3) sourceMesh.Transform);
+    
+    float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
+    float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
+    //float3 bitangentWS = cross(tangentWS, normalWS) * handedness;
+    
+    Output[idx] = float4(normalWS * 0.5f + 0.5f, 1.0f);
 }

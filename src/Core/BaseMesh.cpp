@@ -47,7 +47,7 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 		md.IndexID = GetIndexID(i);
 		md.VertexID = vertexID;
 
-		std::memcpy(&md.Flags, &m_VertexDescRaw, sizeof(md.Flags));
+		std::memcpy(&md.VertexDesc, &m_VertexDescRaw, sizeof(md.VertexDesc));
 
 		md.NumTriangles = descs[i].geometryData.triangles.indexCount / 3;
 		md.Transform = m_LocalToOwner;

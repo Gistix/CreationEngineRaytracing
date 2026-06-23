@@ -43,7 +43,7 @@ namespace Util
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
 
-			defines.emplace_back(L"HAS_PREV_POSITIONS", L"1");
+			//defines.emplace_back(L"HAS_PREV_POSITIONS", L"0");
 
 			defines.emplace_back(L"HAIR_MODE", static_cast<int>(settings.AdvancedSettings.HairBSDF));
 
