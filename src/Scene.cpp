@@ -3,7 +3,6 @@
 #include "SceneGraph.h"
 
 #include "Hooks.h"
-#include "Events.h"
 
 #include "framework/DescriptorTableManager.h"
 
@@ -47,7 +46,7 @@ void Scene::PostPostLoad()
 
 void Scene::DataLoaded()
 {
-	Events::Register();
+
 }
 
 void Scene::SetLogLevel(spdlog::level::level_enum a_level)
@@ -308,8 +307,6 @@ void Scene::Execute()
 
 	sceneGraph->UpdateCamera();
 
-	sceneGraph->UpdateActors();
-
 	sceneGraph->UpdateLODVisibility();
 
 	auto* renderer = Renderer::GetSingleton();
@@ -326,67 +323,7 @@ void Scene::Execute()
 	// Executes attached render nodes
 	renderer->GetRenderGraph()->Execute(commandList);
 
-	ClearDirtyStates();
-
 	renderer->EndExecution();
-}
-
-void Scene::ClearDirtyStates()
-{
-	GetSceneGraph()->ClearDirtyStates();
-}
-
-void Scene::AttachModel(RE::TESForm* form) 
-{
-	auto* refr = Util::Adapter::AsReference(form);
-
-	auto* baseObject = Util::Adapter::GetBaseObject(refr);
-
-	RE::FormType type = baseObject->GetFormType();
-
-#if defined(SKYRIM)
-	if (type == RE::FormType::IdleMarker)
-		return;
-#elif defined(FALLOUT4)
-	if (type == RE::FormType::kIDLM)
-		return;
-#endif
-
-	if (baseObject->IsMarker())
-		return;
-
-	auto* node = refr->Get3D();
-
-	if (!node)
-		return;
-
-	if (auto* model = ce_cast<RE::TESModel*>(baseObject)) {
-		GetSceneGraph()->CreateModel(refr, model->GetModel(), node);
-		return;
-	}
-
-	if (Util::IsPlayer(refr)) {
-		if (auto* player = reinterpret_cast<RE::PlayerCharacter*>(refr)) {
-			// First Person
-			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), node);
-
-			// Third Person
-			GetSceneGraph()->CreateActorModel(player);
-			return;
-		}
-	}
-
-	if (auto* actor = ce_cast<RE::Actor*>(refr)) {
-		GetSceneGraph()->CreateActorModel(actor, node);
-	}
-}
-
-void Scene::AttachLand(RE::TESObjectLAND* land)
-{
-	if (!land)
-		return;
-
-	GetSceneGraph()->CreateLandModel(land);
 }
 
 void Scene::UpdateCameraData() const

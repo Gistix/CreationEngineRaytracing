@@ -4,7 +4,7 @@
 
 LODBlockReference::~LODBlockReference()
 {
-	Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(instances, true);
+
 }
 
 void LODBlockReference::SetAttached(bool attached)

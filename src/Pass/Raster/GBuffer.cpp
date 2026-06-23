@@ -141,7 +141,7 @@ namespace Pass::Raster
 
 		commandList->setGraphicsState(state);
 
-		uint32_t i = 0;
+		/*uint32_t i = 0;
 		sceneGraph->GetInstances().Read([&](const auto& instance) {
 			const auto& model = instance->model;
 
@@ -158,6 +158,6 @@ namespace Pass::Raster
 
 			i++;
 			return Iterator::Continue;
-		});
+		});*/
 	}
 }

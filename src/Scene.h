@@ -132,12 +132,6 @@ struct Scene
 
 	void Execute();
 
-	void ClearDirtyStates();
-
-	void AttachModel(RE::TESForm* form);
-
-	void AttachLand(RE::TESObjectLAND* land);
-
 	void UpdateCameraData() const;
 
 	void UpdateFeatureData(void* data, uint32_t size);

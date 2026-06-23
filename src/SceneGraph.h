@@ -3,7 +3,6 @@
 #include "Core/BaseMesh.h"
 #include "Core/BLASCluster.h"
 
-#include "core/InstanceManager.h"
 #include "core/Model.h"
 #include "core/Light.h"
 #include "Core/TextureManager.h"
@@ -13,7 +12,6 @@
 #include "core/GrassInstance.h"
 #endif
 
-#include "Core/Reference/ActorReference.h"
 #include "Core/Reference/ObjectLODBlockReference.h"
 #include "Core/Reference/TerrainLODBlockReference.h"
 #if defined(SKYRIM)
@@ -57,7 +55,6 @@ class SceneGraph
 	eastl::vector<eastl::unique_ptr<Model>> m_ReleasedModels;
 	mutable std::mutex m_ModelReleaseMutex;
 
-	InstanceManager m_Instances;
 	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
 
 	// Water
@@ -72,8 +69,6 @@ class SceneGraph
 	// Grass
 	eastl::unordered_map<RE::GrassTypeKey, GrassReference> m_GrassInstances;
 #endif
-	// Actors
-	eastl::unordered_map<RE::FormID, ActorReference> m_Actors;
 
 	eastl::unordered_set<RE::BSLight*> m_TempActiveLights;
 	eastl::map<RE::BSLight*, Light> m_Lights;
@@ -109,21 +104,12 @@ class SceneGraph
 	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 
-	eastl::vector<eastl::unique_ptr<Mesh>> CreateMeshes(RE::NiAVObject* object, RE::TESForm* form);
-	uint32_t CreateModelInternal(RE::TESForm* form, const char* path, RE::NiAVObject* node);
-	Model* CommitModel(const char* path, RE::NiAVObject* object, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
-
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
 	void RemoveMeshFromCluster(BaseMesh* mesh, RE::TESObjectREFR* owner);
 
 	// Captures the owner/mesh transforms during traversal (while alive) into the mesh + its cluster.
 	void UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
-
-	Instance* AddInstanceImpl(RE::NiAVObject* node, Model* model, RE::FormID formID);
-	void AddInstance(RE::FormID formID, RE::NiAVObject* node, Model* path);
-	void AddInstance(RE::BGSObjectBlock* block, RE::NiAVObject* node, Model* model);
-	void AddInstance(RE::BGSTerrainBlock* block, RE::NiAVObject* node, Model* model);
 public:
 	void Initialize();
 
@@ -153,7 +139,6 @@ public:
 	void BuildClusters(nvrhi::ICommandList* commandList);
 
 	inline auto& GetModels() { return m_Models; }
-	inline auto& GetInstances() { return m_Instances; }
 	inline auto& GetTerrainLodInstances() const { return m_TerrainLODInstances; }
 
 	inline auto& GetLights() { return m_Lights; }
@@ -175,65 +160,12 @@ public:
 	// Update Camera reference
 	void UpdateCamera();
 
-	// Update Actor equipment
-	void UpdateActors();
-
 	// Update LOD visibility
 	void UpdateLODVisibility();
 
-	void ClearDirtyStates();
-
 	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
-	void CreateModel(RE::TESForm* form, const char* model, RE::NiAVObject* root);
-	void CreateActorModel(RE::Actor* actor, RE::NiAVObject* root = nullptr, bool firstPerson = false);
-	void CreateLandModel(RE::TESObjectLAND* land);
-	void CreateWaterModel(RE::TESWaterForm* water, RE::NiAVObject* object);
-
-#if defined(SKYRIM)
-	void CreateGrassModel(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams, uint32_t numInstances);
-#endif
-
-	// LOD
-	bool CreateLODModel(RE::BGSTerrainBlock* block);
-	bool CreateLODModel(RE::BGSObjectBlock* block);
-
-#if defined(SKYRIM)
-	bool CreateLODModel(RE::BGSDistantTreeBlock* block);
-#endif
-
-	template <typename T>
-	void CreateLODModelImpl(T* block, Mesh::Type type);
-
-	void ActorEquip(RE::Actor* a_actor, RE::TESForm* a_form, RE::NiAVObject* a_object, eastl::vector<Mesh*>& a_meshes, bool firstPerson);
-	void ActorUnequip(RE::Actor* a_actor, const eastl::vector<Mesh*>& a_meshes, bool firstPerson);
-
-	ActorReference* GetActorRefr(RE::FormID a_formID);
-
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
-
-	void ReleaseModel(const Model* model);
-
-	void ReleaseInstances(eastl::vector<Instance*>& instances, bool releaseModel);
-
-	// Releases an object instance while keeping the model and mesh data intact.
-	// releaseModel is to be used by water and only water.
-	void ReleaseWaterInstance(RE::NiAVObject* object);
-
-	// Releases all instances of a form, and optionally releases the model and mesh data if there are no remaining instances using it.
-	void ReleaseInstances(RE::TESForm* form, bool releaseModel);
-
-	// Releases all instances of a terrain block (LOD)
-	void ReleaseInstances(RE::BGSTerrainBlock* block);
-
-	// Releases all instances of an object block (LOD)
-	void ReleaseInstances(RE::BGSObjectBlock* block);
-
-#if defined(SKYRIM)
-	// Releases all instances of a distant tree block (LOD)
-	void ReleaseInstances(RE::BGSDistantTreeBlock* block);
-#endif
-	void SetInstanceDetached(RE::TESForm* form, bool detached);
 
 	void RunGarbageCollection();
 };
