@@ -7,6 +7,7 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 {
 	m_Name = MakeDebugName(bsTriShape);
 	m_BSTriShape = bsTriShape;
+	m_Type = Type::Default;
 
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 

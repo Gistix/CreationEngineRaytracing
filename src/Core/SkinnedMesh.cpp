@@ -13,6 +13,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 {
 	m_Name = MakeDebugName(bsTriShape);
 	m_BSTriShape = bsTriShape;
+	m_Type = Type::Skinned;
 
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 

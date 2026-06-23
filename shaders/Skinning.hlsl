@@ -76,8 +76,11 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 
 	const uint vertexOffset = (uint)vertexDesc.GetVertexSize() * vertexIndex;
 	const uint posOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
-	const uint normOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Normal);
-	const uint binormOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Binormal);
+
+	// Only touch normal/tangent/bitangent if the layout actually has them; otherwise their attribute
+	// offset is 0 and we would clobber the position.
+	const bool hasNormal = vertexDesc.HasFlag(VertexFlags::Normal);
+	const bool hasTangent = hasNormal && vertexDesc.HasFlag(VertexFlags::Tangent);
 
 	ByteAddressBuffer original = OriginalVertices[slot];
 
@@ -85,13 +88,30 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 	const float4 pos4 = asfloat(original.Load4(posOffset));
 	float3 position = pos4.xyz;
 
-	// Normal (byte4 snorm; w carries tangent.y) and binormal (byte4 snorm; w carries tangent.z).
-	const float4 normal4 = UnpackByte4SNorm(original.Load(normOffset));
-	const float4 binorm4 = UnpackByte4SNorm(original.Load(binormOffset));
+	uint normOffset = 0;
+	uint binormOffset = 0;
+	float4 normal4 = float4(0.0f, 0.0f, 1.0f, 0.0f);
 
-	float3 N = normalize(normal4.xyz);
-	float3 B = binorm4.xyz;
-	float3 T = float3(pos4.w, normal4.w, binorm4.w);
+	float3 N = float3(0.0f, 0.0f, 1.0f);
+	float3 T = float3(1.0f, 0.0f, 0.0f);
+	float3 B = float3(0.0f, 1.0f, 0.0f);
+
+	if (hasNormal)
+	{
+		// Normal (byte4 snorm; w carries tangent.y).
+		normOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Normal);
+		normal4 = UnpackByte4SNorm(original.Load(normOffset));
+		N = normalize(normal4.xyz);
+
+		if (hasTangent)
+		{
+			// Binormal (byte4 snorm; w carries tangent.z); tangent split across pos.w/normal.w/binormal.w.
+			binormOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Binormal);
+			const float4 binorm4 = UnpackByte4SNorm(original.Load(binormOffset));
+			B = binorm4.xyz;
+			T = float3(pos4.w, normal4.w, binorm4.w);
+		}
+	}
 
 	if (doSkin)
 	{
@@ -125,9 +145,16 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 		const float3x3 boneRot = (float3x3)boneMatrix;
 
 		position = mul(boneMatrix, float4(position, 1.0f));
-		N = normalize(mul(boneRot, N));
-		T = normalize(mul(boneRot, T));
-		B = normalize(mul(boneRot, B));
+
+		if (hasNormal)
+		{
+			N = normalize(mul(boneRot, N));
+			if (hasTangent)
+			{
+				T = normalize(mul(boneRot, T));
+				B = normalize(mul(boneRot, B));
+			}
+		}
 	}
 
 	RWByteAddressBuffer output = OutputVertices[slot];
@@ -135,9 +162,20 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 	// Save the live position as the previous frame's position before overwriting (motion vectors).
 	PrevPositions[slot][vertexIndex] = asfloat(output.Load3(posOffset));
 
-	// Byte-address buffer: position (xyz) + tangent/normal/bitangent always refreshed.
+	// Position (xyz) is always refreshed; normal/tangent/bitangent only when the layout has them.
 	output.Store3(posOffset, asuint(position));
-	output.Store(posOffset + 12, asuint(T.x));                  // tangent.x
-	output.Store(normOffset, PackByte4SNorm(float4(N, T.y)));   // normal.xyz + tangent.y
-	output.Store(binormOffset, PackByte4SNorm(float4(B, T.z))); // bitangent.xyz + tangent.z
+
+	if (hasNormal)
+	{
+		if (hasTangent)
+		{
+			output.Store(posOffset + 12, asuint(T.x));                  // tangent.x
+			output.Store(normOffset, PackByte4SNorm(float4(N, T.y)));   // normal.xyz + tangent.y
+			output.Store(binormOffset, PackByte4SNorm(float4(B, T.z))); // bitangent.xyz + tangent.z
+		}
+		else
+		{
+			output.Store(normOffset, PackByte4SNorm(float4(N, normal4.w))); // normal.xyz, preserve w
+		}
+	}
 }

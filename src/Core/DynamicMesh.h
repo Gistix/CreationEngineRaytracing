@@ -23,6 +23,8 @@ public:
 
 	virtual DynamicMesh* AsDynamicMesh() override { return this; }
 
+	virtual SkinnedMesh* AsSkinnedMesh() override { return nullptr; }
+
 	// Shared bindless slot for the dynamic float4 buffers (original SRV + live UAV).
 	uint32_t GetDynamicIndex() const { return m_DynamicDescriptor.Get(); }
 

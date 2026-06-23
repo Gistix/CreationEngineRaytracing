@@ -10,6 +10,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 {
 	m_Name = MakeDebugName(bsDynamicTriShape);
 	m_BSTriShape = bsDynamicTriShape;
+	m_Type = Type::Dynamic;
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 
@@ -67,7 +68,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
-	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
+	// The BLAS must read the buffer that UploadBuffers refreshes each frame with the morph positions.
+	BuildSkinned(bsDynamicTriShape, m_OriginalDynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
 }
 
 void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)

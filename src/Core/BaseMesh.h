@@ -27,6 +27,14 @@ public:
 		Destroyed = 1 << 4
 	};
 
+	enum class Type : uint8_t
+	{
+		Base,
+		Default,
+		Skinned,
+		Dynamic
+	};
+
 	virtual ~BaseMesh() = default;
 
 	// Constructs the appropriate mesh type (DirectMesh, SkinnedMesh or DynamicMesh) for the given geometry.
@@ -119,6 +127,8 @@ protected:
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
 
 	CESEAdapter::REX::EnumSet<State> m_State = State::None;
+
+	Type m_Type = Type::Base;
 
 	// Prevents BSTriShape being destroyed mid-usage
 	std::mutex m_BSTriShapeMutex;
