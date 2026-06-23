@@ -5,6 +5,8 @@
 #include "Scene.h"
 #include "SceneGraph.h"
 #include "Utils/Adapter.h"
+#include "Renderer/RenderNode.h"
+#include "Pass/Raytracing/Common/Skinning.h"
 #include "Types/RE/RE.h"
 
 SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
@@ -163,46 +165,54 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 	}
 }
 
-bool SkinnedMesh::UpdateData()
+bool SkinnedMesh::Update()
 {
+	bool poseAdvanced = false;
+
 #if defined(SKYRIM)
-	if (!m_BSTriShape)
-		return false;
+	if (m_BSTriShape) {
+		const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
 
-	const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
+		auto* skinInstance = geometryData.skinInstance.get();
 
-	auto* skinInstance = geometryData.skinInstance.get();
-	if (!skinInstance)
-		return false;
+		// UBE crash fix: rootParent must be valid.
+		if (skinInstance && skinInstance->rootParent) {
+			// Only recompute when the game advanced the animation this frame.
+			const auto frameID = skinInstance->frameID;
+			if (m_SkinFrameID != frameID) {
+				m_SkinFrameID = frameID;
 
-	// UBE crash fix
-	if (!skinInstance->rootParent)
-		return false;
+				auto* skinData = skinInstance->skinData.get();
+				if (skinData && skinData->bones != 0) {
+					const auto geometryWorldInverse = m_BSTriShape->world.Invert();
 
-	// Only update if the game advanced the animation this frame.
-	const auto frameID = skinInstance->frameID;
-	if (m_SkinFrameID == frameID)
-		return false;
+					if (m_BoneMatrices.size() != skinData->bones)
+						m_BoneMatrices.resize(skinData->bones);
 
-	m_SkinFrameID = frameID;
+					for (uint32_t i = 0; i < skinData->bones; i++) {
+						const auto boneWorld = *skinInstance->boneWorldTransforms[i];
+						const auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
+						XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(geometryWorldInverse * boneMatrix));
+					}
 
-	auto* skinData = skinInstance->skinData.get();
-	if (!skinData || skinData->bones == 0)
-		return false;
+					poseAdvanced = true;
+				}
+			}
+		}
+	}
+#endif
 
-	const auto geometryWorldInverse = m_BSTriShape->world.Invert();
+	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.
+	DirtyFlags skinningFlags = DirtyFlags::None;
+	if (poseAdvanced)
+		skinningFlags |= DirtyFlags::Skin;
+	if (GetDirtyFlags().any(DirtyFlags::Vertex))
+		skinningFlags |= DirtyFlags::Vertex;
 
-	if (m_BoneMatrices.size() != skinData->bones)
-		m_BoneMatrices.resize(skinData->bones);
-
-	for (uint32_t i = 0; i < skinData->bones; i++) {
-		const auto boneWorld = *skinInstance->boneWorldTransforms[i];
-		const auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
-		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(geometryWorldInverse * boneMatrix));
+	if (skinningFlags != DirtyFlags::None) {
+		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
+			skinningPass->QueueUpdate(skinningFlags, this);
 	}
 
-	return true;
-#else
-	return false;
-#endif
+	return poseAdvanced;
 }

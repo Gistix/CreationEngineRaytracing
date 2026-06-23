@@ -16,7 +16,7 @@ public:
 
 	// Recomputes the per-bone skinning matrices (geometry-local) from the game skin instance.
 	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
-	bool UpdateData() override;
+	bool Update() override;
 
 	const eastl::vector<float3x4>& GetBoneMatrices() const { return m_BoneMatrices; }
 

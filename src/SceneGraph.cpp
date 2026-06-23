@@ -498,23 +498,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				mesh->SetHidden(hidden);
 
 				if (!hidden) {
-					// CPU-side change detection only; the GPU upload happens in the TLAS pass (cluster-driven).
-					// SkinnedMesh::UpdateData recomputes bone matrices while the trishape + skin instance are alive.
-					const bool poseAdvanced = mesh->UpdateData();
-
-					// Queue skinned/dynamic meshes for the GPU skinning pass.
-					if (auto* skinnedMesh = mesh->AsSkinnedMesh()) {
-						DirtyFlags skinningFlags = DirtyFlags::None;
-						if (poseAdvanced)
-							skinningFlags |= DirtyFlags::Skin;
-						if (mesh->GetDirtyFlags().any(DirtyFlags::Vertex))
-							skinningFlags |= DirtyFlags::Vertex;
-
-						if (skinningFlags != DirtyFlags::None) {
-							if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
-								skinningPass->QueueUpdate(skinningFlags, skinnedMesh);
-						}
-					}
+					// CPU-side change detection while the trishape + skin instance are alive.
+					// SkinnedMesh::Update recomputes bone matrices and queues the GPU skinning pass.
+					mesh->Update();
 
 					// Capture transforms while the owner/trishape are alive; cluster consumes cached values later.
 					UpdateMeshTransforms(mesh.get(), clusterOwner, bsTriShape);

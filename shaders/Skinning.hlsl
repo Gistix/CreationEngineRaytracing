@@ -8,7 +8,7 @@ StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
 StructuredBuffer<BoneMatrix> BoneMatrices               : register(t1);
 
 // Dynamic float4 positions (input). Lives in DynamicMesh, addressed by updateData.dynamicIndex.
-StructuredBuffer<float4> DynamicVertices[]              : register(t0, space1);
+StructuredBuffer<float4> DynamicVertices[]             : register(t0, space1);
 // Original (rest-pose) vertices in native packed format; also carries inline skinning. Shared slot.
 ByteAddressBuffer OriginalVertices[]                   : register(t0, space2);
 
@@ -68,9 +68,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 	// the original dynamic float4 buffer and the skinned result is written to the live float4 buffer.
 	if (isDynamic)
 	{
-		const float3 position = DynamicVertices[dynSlot][vertexIndex].xyz;
-		const float4 current = DynamicVerticesOut[dynSlot][vertexIndex];
-		DynamicVerticesOut[dynSlot][vertexIndex] = float4(position, current.w);
+		DynamicVerticesOut[dynSlot][vertexIndex] = DynamicVertices[dynSlot][vertexIndex];
 		return;
 	}
 
