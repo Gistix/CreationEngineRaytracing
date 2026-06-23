@@ -1,9 +1,13 @@
 #include "Core/SkinnedMesh.h"
 #include "Renderer.h"
 #include "Util.h"
+#include "Constants.h"
+#include "Scene.h"
+#include "SceneGraph.h"
+#include "Utils/Adapter.h"
 #include "Types/RE/RE.h"
 
-SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList)
+SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
 	m_BSTriShape = bsTriShape;
@@ -34,13 +38,75 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICo
 		return;
 
 	// All partitions share a single vertex buffer; create it once from the first partition.
+	// This native buffer is the original (rest-pose) source consumed by the skinning pass.
 	m_VertexBuffer = CreateVertexBuffer(basePartitionBuffer);
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
+	m_VertexCount = vertexCount;
+
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
 
-	BuildSkinned(bsTriShape, m_VertexBuffer.m_Buffer, vertexStride, true);
+	// Create the live (output) buffer + prev positions and register everything at the shared slot.
+	// The BLAS reads the live buffer (skinning output), not the native original.
+	nvrhi::IBuffer* liveBuffer = CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
+
+	BuildSkinned(bsTriShape, liveBuffer, vertexStride, true);
+}
+
+nvrhi::IBuffer* SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
+{
+	auto device = Renderer::GetSingleton()->GetDevice();
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+	const uint32_t slot = m_VertexBuffer.m_Descriptor.Get();
+	const size_t vertexBufferSize = m_VertexBuffer.m_Buffer->getDesc().byteSize;
+
+	// Live (output) buffer: device-owned, raw-viewable + UAV + BLAS input.
+	auto liveBufferDesc = nvrhi::BufferDesc()
+		.setByteSize(vertexBufferSize)
+		.setCanHaveRawViews(true)
+		.setCanHaveUAVs(true)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.setIsAccelStructBuildInput(true)
+		.setDebugName(std::format("{} (Live Vertex Buffer)", m_Name.c_str()).c_str());
+
+	m_LiveVertexBuffer = device->createBuffer(liveBufferDesc);
+
+	// Seed the live buffer from the CPU rest-pose data (carries UV/color/etc. that skinning never writes).
+	// Avoids barriering the shared native source buffer, which several meshes wrap independently.
+	const size_t seedSize = static_cast<size_t>(vertexCount) * vertexStride;
+	commandList->writeBuffer(m_LiveVertexBuffer, Util::Adapter::GetVertexData(sourceTriShape), seedSize);
+
+	// Prev-position buffer (float3 per vertex) for per-vertex motion vectors.
+	auto prevPositionBufferDesc = nvrhi::BufferDesc()
+		.setByteSize(sizeof(float3) * vertexCount)
+		.setStructStride(sizeof(float3))
+		.setCanHaveUAVs(true)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()).c_str());
+
+	m_PrevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
+
+	// RT reads the live buffer (repoint the slot previously set to the native buffer).
+	device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+		nvrhi::BindingSetItem::RawBuffer_SRV(slot, m_LiveVertexBuffer));
+
+	// Skinning reads the original (native) buffer.
+	device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::RawBuffer_SRV(slot, m_VertexBuffer.m_Buffer));
+
+	// Skinning writes the live buffer.
+	device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::RawBuffer_UAV(slot, m_LiveVertexBuffer));
+
+	// Prev positions: SRV (RT read) + UAV (skinning write).
+	device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_PrevPositionBuffer));
+	device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_UAV(slot, m_PrevPositionBuffer));
+
+	return m_LiveVertexBuffer;
 }
 
 void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
@@ -95,4 +161,48 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
 		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, indexCount, vertexBuffer, vertexStride, vertexCount));
 	}
+}
+
+bool SkinnedMesh::UpdateData()
+{
+#if defined(SKYRIM)
+	if (!m_BSTriShape)
+		return false;
+
+	const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
+
+	auto* skinInstance = geometryData.skinInstance.get();
+	if (!skinInstance)
+		return false;
+
+	// UBE crash fix
+	if (!skinInstance->rootParent)
+		return false;
+
+	// Only update if the game advanced the animation this frame.
+	const auto frameID = skinInstance->frameID;
+	if (m_SkinFrameID == frameID)
+		return false;
+
+	m_SkinFrameID = frameID;
+
+	auto* skinData = skinInstance->skinData.get();
+	if (!skinData || skinData->bones == 0)
+		return false;
+
+	const auto geometryWorldInverse = m_BSTriShape->world.Invert();
+
+	if (m_BoneMatrices.size() != skinData->bones)
+		m_BoneMatrices.resize(skinData->bones);
+
+	for (uint32_t i = 0; i < skinData->bones; i++) {
+		const auto boneWorld = *skinInstance->boneWorldTransforms[i];
+		const auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
+		XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(geometryWorldInverse * boneMatrix));
+	}
+
+	return true;
+#else
+	return false;
+#endif
 }

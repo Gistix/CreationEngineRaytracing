@@ -81,7 +81,7 @@ void SceneGraph::Initialize()
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
 		};
 
-		m_DynamicVertexDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+		m_DynamicVertexDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
 	}
 
 	// Skinning descriptor table
@@ -97,30 +97,43 @@ void SceneGraph::Initialize()
 		m_SkinningDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
 
-	// Vertex copy descriptor table
+	// Vertex copy descriptor table (original/rest-pose vertices in native packed format; raw views)
 	{
 		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
 		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(2).setSize(UINT_MAX)
 		};
 
 		m_VertexCopyDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
 
-	// Vertex write descriptor table
+	// Vertex write descriptor table (live vertices in native packed format; raw UAV)
 	{
 		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
 		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::RawBuffer_UAV(0).setSize(UINT_MAX)
 		};
 
 		m_VertexWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
+	// Dynamic vertex write descriptor table (skinned dynamic float4 positions; UAV)
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2).setSize(UINT_MAX)
+		};
+
+		m_DynamicVertexWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
 
 	// Previous position SRV descriptor table (for reading prev positions in RT shaders)
@@ -486,7 +499,22 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				if (!hidden) {
 					// CPU-side change detection only; the GPU upload happens in the TLAS pass (cluster-driven).
-					mesh->UpdateData();
+					// SkinnedMesh::UpdateData recomputes bone matrices while the trishape + skin instance are alive.
+					const bool poseAdvanced = mesh->UpdateData();
+
+					// Queue skinned/dynamic meshes for the GPU skinning pass.
+					if (auto* skinnedMesh = mesh->AsSkinnedMesh()) {
+						DirtyFlags skinningFlags = DirtyFlags::None;
+						if (poseAdvanced)
+							skinningFlags |= DirtyFlags::Skin;
+						if (mesh->GetDirtyFlags().any(DirtyFlags::Vertex))
+							skinningFlags |= DirtyFlags::Vertex;
+
+						if (skinningFlags != DirtyFlags::None) {
+							if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
+								skinningPass->QueueUpdate(skinningFlags, skinnedMesh);
+						}
+					}
 
 					// Capture transforms while the owner/trishape are alive; cluster consumes cached values later.
 					UpdateMeshTransforms(mesh.get(), clusterOwner, bsTriShape);

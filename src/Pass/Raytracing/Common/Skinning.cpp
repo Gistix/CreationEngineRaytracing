@@ -1,6 +1,8 @@
 #include "Skinning.h"
 #include "Renderer.h"
 #include "Scene.h"
+#include "Core/SkinnedMesh.h"
+#include "Core/DynamicMesh.h"
 
 namespace Pass
 {
@@ -45,18 +47,18 @@ namespace Pass
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexCopyDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetSkinningDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexWriteDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetPrevPositionWriteDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetPrevPositionWriteDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetDynamicVertexWriteDescriptors()->m_Layout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
 
-	void Skinning::QueueUpdate(DirtyFlags updateFlags, Mesh* mesh)
+	void Skinning::QueueUpdate(DirtyFlags updateFlags, SkinnedMesh* mesh)
 	{
 		queuedMeshes.emplace(
 			mesh,
-			QueuedMesh(updateFlags, mesh->m_Name));
+			QueuedMesh(updateFlags, mesh->GetName()));
 	}
 
 	bool Skinning::PrepareResources(nvrhi::ICommandList* commandList, uint32_t& numMeshes, uint32_t& numVertices)
@@ -76,34 +78,45 @@ namespace Pass
 			const bool vertexUpdate = (queuedMesh.updateFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 			const bool skinUpdate = (queuedMesh.updateFlags & DirtyFlags::Skin) != DirtyFlags::None;
 
-			numVertices = std::max(numVertices, mesh->vertexData.count);
-			uint32_t numBoneMatrices = skinUpdate ? static_cast<uint32_t>(mesh->m_BoneMatrices.size()) : 0;
+			const uint32_t vertexCount = mesh->GetVertexCount();
+			numVertices = std::max(numVertices, vertexCount);
 
-			m_VertexUpdateData[meshIndex++] = VertexUpdateData(
-				mesh->m_DescriptorHandle.Get(),
-				static_cast<uint32_t>(queuedMesh.updateFlags),
-				mesh->vertexData.count,
-				boneMatrixIndex,
-				mesh->flags.underlying(),
-				numBoneMatrices);
+			const auto& boneMatrices = mesh->GetBoneMatrices();
+			const uint32_t numBoneMatrices = skinUpdate ? static_cast<uint32_t>(boneMatrices.size()) : 0;
 
-			// Dynamic TriShapes
-			if (vertexUpdate)
-				mesh->UpdateUploadDynamicBuffers(commandList);
+			if (skinUpdate && numBoneMatrices > MAX_BONE_MATRICES - boneMatrixIndex) {
+				logger::critical(
+					"SkinningPipeline::PrepareResources - Bone matrix upload for '{}' would exceed the maximum of {} (offset {}, count {})",
+					queuedMesh.path,
+					MAX_BONE_MATRICES,
+					boneMatrixIndex,
+					numBoneMatrices);
+				break;
+			}
 
-			// Skinning - This is a bit more involved
+			auto* dynamicMesh = mesh->AsDynamicMesh();
+			const uint32_t dynamicIndex = dynamicMesh ? dynamicMesh->GetDynamicIndex() : 0u;
+			const uint32_t shapeFlags = dynamicMesh ? (1u << 1) : 0u;  // MeshFlags::Dynamic
+
+			const uint64_t vertexDescRaw = mesh->GetVertexDescRaw();
+
+			VertexUpdateData& data = m_VertexUpdateData[meshIndex++];
+			data = {};
+			data.index = mesh->GetSkinningSlot();
+			data.dynamicIndex = dynamicIndex;
+			data.updateFlags = static_cast<uint32_t>(queuedMesh.updateFlags);
+			data.vertexCount = vertexCount;
+			data.boneOffset = boneMatrixIndex;
+			data.shapeFlags = shapeFlags;
+			data.numMatrices = numBoneMatrices;
+			std::memcpy(&data.VertexDesc, &vertexDescRaw, sizeof(uint64_t));
+
+			// Dynamic morph upload (skinning input) must land before the dispatch reads it.
+			if (vertexUpdate && dynamicMesh)
+				dynamicMesh->UploadBuffers(commandList);
+
 			if (skinUpdate) {
-				if (numBoneMatrices > MAX_BONE_MATRICES - boneMatrixIndex) {
-					logger::critical(
-						"SkinningPipeline::PrepareResources - Bone matrix upload for '{}' would exceed the maximum of {} (offset {}, count {})",
-						queuedMesh.path,
-						MAX_BONE_MATRICES,
-						boneMatrixIndex,
-						numBoneMatrices);
-					break;
-				}
-
-				std::memcpy(m_BoneMatrixData.data() + boneMatrixIndex, mesh->m_BoneMatrices.data(), sizeof(float3x4) * numBoneMatrices);
+				std::memcpy(m_BoneMatrixData.data() + boneMatrixIndex, boneMatrices.data(), sizeof(float3x4) * numBoneMatrices);
 				boneMatrixIndex += numBoneMatrices;
 			}
 		}
@@ -152,11 +165,11 @@ namespace Pass
 
 		nvrhi::BindingSetVector bindings = {
 			m_BindingSet,
-			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable,
+			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
-			sceneGraph->GetSkinningDescriptors()->m_DescriptorTable,
 			sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
-			sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable
+			sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,
+			sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable
 		};
 
 		nvrhi::ComputeState state;

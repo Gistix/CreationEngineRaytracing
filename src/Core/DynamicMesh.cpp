@@ -1,9 +1,11 @@
 #include "Core/DynamicMesh.h"
 #include "Renderer.h"
 #include "Util.h"
+#include "Scene.h"
+#include "SceneGraph.h"
 #include "Types/RE/RE.h"
 
-DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList) :
+DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::ICommandList* commandList) :
 	SkinnedMesh()
 {
 	m_Name = MakeDebugName(bsDynamicTriShape);
@@ -27,13 +29,42 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, [[maybe_unuse
 
 	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
 	// stride so the trailing w component is skipped.
-	auto bufferDesc = nvrhi::BufferDesc()
+
+	// Live (skinning output) positions; BLAS/RT source.
+	auto liveBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(runtimeData.dataSize)
+		.setStructStride(sizeof(float4))
+		.setCanHaveUAVs(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true)
-		.setDebugName(std::format("{} - Dynamic", m_Name).c_str());
+		.setDebugName(std::format("{} - Dynamic (Live)", m_Name).c_str());
 
-	m_DynamicBuffer = device->createBuffer(bufferDesc);
+	m_DynamicBuffer = device->createBuffer(liveBufferDesc);
+
+	// Original (rest/morph) positions copied from the game each frame; skinning input.
+	auto originalBufferDesc = nvrhi::BufferDesc()
+		.setByteSize(runtimeData.dataSize)
+		.setStructStride(sizeof(float4))
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.setDebugName(std::format("{} - Dynamic (Original)", m_Name).c_str());
+
+	m_OriginalDynamicBuffer = device->createBuffer(originalBufferDesc);
+
+	// Seed the original buffer with the initial morph positions and copy them into the live buffer
+	// so the first BLAS build has valid data before the skinning pass runs.
+	commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
+	commandList->copyBuffer(m_DynamicBuffer, 0, m_OriginalDynamicBuffer, 0, runtimeData.dataSize);
+	m_NeedsUpload = false;
+
+	// Register at a shared slot: original -> SRV (input), live -> UAV (output).
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+	m_DynamicDescriptor = sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(
+		nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_OriginalDynamicBuffer));
+
+	device->writeDescriptorTable(
+		sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_UAV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
 	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
 }
@@ -53,10 +84,11 @@ void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)
 
 void DynamicMesh::UploadBuffers(nvrhi::ICommandList* commandList)
 {
-	if (!m_NeedsUpload || !m_DynamicBuffer)
+	if (!m_NeedsUpload || !m_OriginalDynamicBuffer)
 		return;
 
-	commandList->writeBuffer(m_DynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
+	// Upload the latest morph positions to the skinning input; the skinning pass produces the live buffer.
+	commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
 
 	m_NeedsUpload = false;
 }

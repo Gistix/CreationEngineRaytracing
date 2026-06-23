@@ -15,6 +15,8 @@
 
 #include "Types/ShaderDefine.h"
 
+class SkinnedMesh;
+
 namespace Pass
 {
 	class Skinning : public RenderPass
@@ -43,7 +45,7 @@ namespace Pass
 			eastl::string path;
 		};
 
-		eastl::unordered_map<Mesh*, QueuedMesh> queuedMeshes;
+		eastl::unordered_map<SkinnedMesh*, QueuedMesh> queuedMeshes;
 
 	public:
 		Skinning(Renderer* renderer);
@@ -52,7 +54,7 @@ namespace Pass
 
 		virtual void CreatePipeline() override;
 
-		void QueueUpdate(DirtyFlags updateFlags, Mesh* mesh);
+		void QueueUpdate(DirtyFlags updateFlags, SkinnedMesh* mesh);
 		bool PrepareResources(nvrhi::ICommandList* commandList, uint32_t& count, uint32_t& vertexCount);
 		void ClearQueue();
 

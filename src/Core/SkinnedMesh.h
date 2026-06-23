@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/BaseMesh.h"
+#include "Constants.h"
 
 class SkinnedMesh : public BaseMesh
 {
@@ -12,6 +13,20 @@ public:
 	virtual SkinnedMesh* AsSkinnedMesh() override { return this; }
 
 	bool IsUpdatable() const override { return true; }
+
+	// Recomputes the per-bone skinning matrices (geometry-local) from the game skin instance.
+	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
+	bool UpdateData() override;
+
+	const eastl::vector<float3x4>& GetBoneMatrices() const { return m_BoneMatrices; }
+
+	// Shared bindless slot addressing the original (VertexCopy), live (Vertex/VertexWrite) and
+	// prev-position (PrevPosition/PrevPositionWrite) buffers; consumed by the skinning pass.
+	uint32_t GetSkinningSlot() const { return m_VertexBuffer.m_Descriptor.Get(); }
+
+	uint32_t GetVertexCount() const { return m_VertexCount; }
+
+	uint64_t GetVertexDescRaw() const { return m_VertexDescRaw; }
 
 	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const override { return m_GeometryDescs; }
 protected:
@@ -29,6 +44,25 @@ protected:
 	// dynamic meshes supply their own buffer and pass false.
 	void BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer);
 
+	// Creates the live (skinning output) byte-address UAV buffer seeded from the CPU rest-pose data, plus
+	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT
+	// read (VertexDescriptors) to the live buffer. Returns the live buffer for the BLAS geometry desc.
+	nvrhi::IBuffer* CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride);
+
 	// One geometry desc per skin partition (identity transform with the local-to-owner transform baked in).
 	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
+
+	// Live (skinning output) byte-address vertices read by the RT path; copy of the native original buffer.
+	nvrhi::BufferHandle m_LiveVertexBuffer;
+
+	// Previous skinned positions for per-vertex motion vectors.
+	nvrhi::BufferHandle m_PrevPositionBuffer;
+
+	uint32_t m_VertexCount = 0;
+
+	// Geometry-local bone matrices, recomputed each frame the pose advances; consumed by the skinning pass.
+	eastl::vector<float3x4> m_BoneMatrices;
+
+	// Skin instance frame id of the last pose we processed (skip work when the animation hasn't advanced).
+	uint32_t m_SkinFrameID = Constants::INVALID_FRAME_ID;
 };

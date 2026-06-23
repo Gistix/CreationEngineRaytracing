@@ -220,6 +220,12 @@ RenderNode* Scene::GetDebug()
 
 		m_Debug->AddNode({
 			true,
+			"Skinning",
+			eastl::make_unique<Pass::Skinning>(renderer)
+		});
+
+		m_Debug->AddNode({
+			true,
 			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});

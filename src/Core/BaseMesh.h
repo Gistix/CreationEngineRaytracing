@@ -59,6 +59,8 @@ public:
 
 	RE::BSTriShape* GetTriShape() const { return m_BSTriShape; }
 
+	const eastl::string& GetName() const { return m_Name; }
+
 	RE::TESObjectREFR* GetOwner() const { return m_Owner; }
 
 	RE::TESObjectREFR* GetPrevOwner() const { return m_PrevOwner; }
