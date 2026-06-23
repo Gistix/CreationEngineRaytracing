@@ -4,7 +4,6 @@
 
 class DynamicMesh : public SkinnedMesh
 {
-	RE::BSDynamicTriShape* m_BSDynamicTriShape;
 	nvrhi::BufferHandle m_DynamicBuffer;
 
 	// CPU staging copy used to detect changes (lazy) and feed the GPU upload.

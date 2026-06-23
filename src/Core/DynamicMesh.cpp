@@ -4,7 +4,7 @@
 #include "Types/RE/RE.h"
 
 DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList) :
-	SkinnedMesh(), m_BSDynamicTriShape(bsDynamicTriShape)
+	SkinnedMesh()
 {
 	m_Name = MakeDebugName(bsDynamicTriShape);
 	m_BSTriShape = bsDynamicTriShape;
@@ -18,17 +18,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, [[maybe_unuse
 		return;
 	}
 
-	// Cache the initial positions on the CPU; the GPU upload happens later in the TLAS pass.
-	m_DynamicData.resize(runtimeData.dataSize);
-
-	runtimeData.lock.Lock();
-	std::memcpy(m_DynamicData.data(), runtimeData.dynamicData, runtimeData.dataSize);
-	runtimeData.lock.Unlock();
-
-	m_NeedsUpload = true;
-
-	// Flag a vertex refit so the cluster uploads the initial data before its first BLAS build.
-	MarkDirty(DirtyFlags::Vertex);
+	// Allocate space for dynamic data
+	m_DynamicData.resize(runtimeData.dataSize, 0u);
 
 	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
 	// stride so the trailing w component is skipped.
@@ -45,26 +36,32 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, [[maybe_unuse
 
 bool DynamicMesh::UpdateData()
 {
-	auto& runtimeData = m_BSDynamicTriShape->GetDynamicTrishapeRuntimeData();
+	auto& runtimeData = m_BSTriShape->AsDynamicTriShape()->GetDynamicTrishapeRuntimeData();
 
-	if (!runtimeData.dynamicData || runtimeData.dataSize != m_DynamicData.size())
+	if (!runtimeData.dynamicData)
 		return false;
 
-	bool changed = false;
+	if (runtimeData.dataSize == 0)
+		return false;
+
+	if (runtimeData.dataSize != m_DynamicData.size())
+		return false;
 
 	runtimeData.lock.Lock();
-	if (std::memcmp(m_DynamicData.data(), runtimeData.dynamicData, runtimeData.dataSize) != 0) {
-		std::memcpy(m_DynamicData.data(), runtimeData.dynamicData, runtimeData.dataSize);
-		changed = true;
+	if (std::memcmp(m_DynamicData.data(), runtimeData.dynamicData, runtimeData.dataSize) == 0) {
+		runtimeData.lock.Unlock();
+		return false;
 	}
+
+	std::memcpy(m_DynamicData.data(), runtimeData.dynamicData, runtimeData.dataSize);
 	runtimeData.lock.Unlock();
 
-	if (changed) {
-		m_NeedsUpload = true;
-		MarkDirty(DirtyFlags::Vertex);
-	}
+	m_NeedsUpload = true;
 
-	return changed;
+	// Flag a vertex update so the cluster uploads the initial data before its first BLAS build.
+	MarkDirty(DirtyFlags::Vertex);
+
+	return true;
 }
 
 void DynamicMesh::UploadBuffers(nvrhi::ICommandList* commandList)
