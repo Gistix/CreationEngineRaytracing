@@ -472,6 +472,7 @@ void RAB_LastBounceDenoiserCallback(float3 lightPos, RAB_Surface surface, inout 
 // ---------------------------------------------------------------------------
 static const uint RAB_LIGHT_TYPE_DIRECTIONAL = 0;
 static const uint RAB_LIGHT_TYPE_POINT = 1;
+static const uint RAB_LIGHT_TYPE_SKY = 2;
 
 struct RAB_LightInfo
 {
@@ -489,8 +490,8 @@ struct RAB_LightSample
     uint lightIndex;
 };
 
-bool RAB_IsAnalyticLightSample(RAB_LightSample lightSample) { return lightSample.solidAnglePdf > 0.0f; }
-bool RAB_IsInfiniteLightSample(RAB_LightSample lightSample) { return lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL; }
+bool RAB_IsAnalyticLightSample(RAB_LightSample lightSample) { return lightSample.solidAnglePdf > 0.0f && lightSample.lightType != RAB_LIGHT_TYPE_SKY; }
+bool RAB_IsInfiniteLightSample(RAB_LightSample lightSample) { return lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL || lightSample.lightType == RAB_LIGHT_TYPE_SKY; }
 
 RAB_LightInfo RAB_EmptyLightInfo() { RAB_LightInfo li; li.lightType = 0; li.lightIndex = 0; return li; }
 RAB_LightSample RAB_EmptyLightSample() { RAB_LightSample ls; ls.position = 0; ls.radiance = 0; ls.solidAnglePdf = 0; ls.distance = 0; ls.lightType = 0; ls.lightIndex = 0; return ls; }
@@ -501,6 +502,13 @@ float RAB_LightSampleSolidAnglePdf(RAB_LightSample ls) { return ls.solidAnglePdf
 
 void RAB_GetLightDirDistance(RAB_Surface surface, RAB_LightSample lightSample, out float3 lightDir, out float lightDistance)
 {
+    if (lightSample.lightType == RAB_LIGHT_TYPE_SKY)
+    {
+        lightDir = normalize(lightSample.position - surface.surface.Position);
+        lightDistance = RAB_DISTANT_LIGHT_DISTANCE;
+        return;
+    }
+
     float3 toLight = lightSample.position - surface.surface.Position;
     lightDistance = length(toLight);
     lightDir = toLight / max(lightDistance, 1e-4f);
@@ -515,7 +523,7 @@ float RAB_GetLightSampleTargetPdfForSurface(RAB_LightSample lightSample, RAB_Sur
 
 float RAB_LightSampleSelectionPdf(RAB_LightSample lightSample, RAB_Surface surface)
 {
-    if (lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL)
+    if (lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL || lightSample.lightType == RAB_LIGHT_TYPE_SKY)
         return 1.0f;
 
     Instance instance = Instances[NonUniformResourceIndex(surface.instanceIndex)];
@@ -539,16 +547,31 @@ float3 RAB_ApplyLightVisibility(RAB_Surface surface, RAB_LightSample lightSample
     float lightDistance;
     RAB_GetLightDirDistance(surface, lightSample, lightDir, lightDistance);
 
-    if (lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL)
+    if (lightSample.lightType == RAB_LIGHT_TYPE_DIRECTIONAL || lightSample.lightType == RAB_LIGHT_TYPE_SKY)
         return TraceRayShadow(Scene, surface.surface, lightDir, randomSeed);
 
     return TraceRayShadowFinite(Scene, surface.surface, lightDir, lightDistance, randomSeed);
 }
 
 uint RAB_PackDirectionalLightIndex() { return 0; }
-uint RAB_PackPointLightIndex(uint lightIndex) { return lightIndex + 1; }
+uint RAB_PackSkyLightIndex() { return 1; }
+uint RAB_PackPointLightIndex(uint lightIndex) { return lightIndex + 2; }
 bool RAB_IsDirectionalLightIndex(uint lightIndex) { return lightIndex == 0; }
-uint RAB_UnpackPointLightIndex(uint lightIndex) { return lightIndex - 1; }
+bool RAB_IsSkyLightIndex(uint lightIndex) { return lightIndex == 1; }
+uint RAB_UnpackPointLightIndex(uint lightIndex) { return lightIndex - 2; }
+
+float3 RAB_SampleSkyDirection(float2 uv)
+{
+    float z = uv.x;
+    float r = sqrt(max(0.0f, 1.0f - z * z));
+    float phi = 2.0f * K_PI * uv.y;
+    return float3(r * cos(phi), r * sin(phi), z);
+}
+
+float RAB_EvaluateSkySamplingPdf(float3 direction)
+{
+    return direction.z > 0.0f ? rcp(2.0f * K_PI) : 0.0f;
+}
 
 RAB_LightInfo RAB_LoadLightInfo(uint lightIndex, bool isPrevFrame)
 {
@@ -556,6 +579,11 @@ RAB_LightInfo RAB_LoadLightInfo(uint lightIndex, bool isPrevFrame)
     if (RAB_IsDirectionalLightIndex(lightIndex))
     {
         info.lightType = RAB_LIGHT_TYPE_DIRECTIONAL;
+        info.lightIndex = 0;
+    }
+    else if (RAB_IsSkyLightIndex(lightIndex))
+    {
+        info.lightType = RAB_LIGHT_TYPE_SKY;
         info.lightIndex = 0;
     }
     else
@@ -581,6 +609,16 @@ RAB_LightSample RAB_SamplePolymorphicLight(RAB_LightInfo lightInfo, RAB_Surface 
         ls.distance = SHADOW_RAY_TMAX;
         ls.solidAnglePdf = 1.0f;
         ls.radiance = irradiance * Raytracing.Directional;
+        return ls;
+    }
+
+    if (lightInfo.lightType == RAB_LIGHT_TYPE_SKY)
+    {
+        float3 lightDir = RAB_SampleSkyDirection(uv);
+        ls.position = surface.surface.Position + lightDir * RAB_DISTANT_LIGHT_DISTANCE;
+        ls.distance = RAB_DISTANT_LIGHT_DISTANCE;
+        ls.solidAnglePdf = RAB_EvaluateSkySamplingPdf(lightDir);
+        ls.radiance = SampleSky(SkyHemisphere, lightDir) * Raytracing.Sky;
         return ls;
     }
 
@@ -621,7 +659,8 @@ float3 RAB_GetMISWeightForEmissiveSurface(float3 radiance, float brdfPdf, float 
 
 float3 RAB_GetMISWeightForEnvironmentMap(float3 radiance, float brdfPdf, float envPdf)
 {
-    return float3(1.0, 1.0, 1.0); // No environment map sampling in this engine
+    float misWeight = (brdfPdf > 0.0f) ? brdfPdf / (brdfPdf + max(envPdf, 0.0f)) : 0.0f;
+    return float3(misWeight, misWeight, misWeight);
 }
 
 // ---------------------------------------------------------------------------
