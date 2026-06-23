@@ -5,7 +5,6 @@
 
 class SkinnedMesh : public BaseMesh
 {
-	BufferDescriptor m_VertexBuffer;
 	eastl::vector<BufferDescriptor> m_IndexBuffers;
 public:
 	SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
@@ -48,6 +47,9 @@ protected:
 	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT
 	// read (VertexDescriptors) to the live buffer. Returns the live buffer for the BLAS geometry desc.
 	nvrhi::IBuffer* CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride);
+
+	// Native (rest-pose) byte-address vertex buffer; the original source consumed by the skinning pass.
+	BufferDescriptor m_VertexBuffer;
 
 	// One geometry desc per skin partition (identity transform with the local-to-owner transform baked in).
 	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;

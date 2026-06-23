@@ -21,17 +21,54 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		return;
 	}
 
-	// Allocate space for dynamic data
+	// Byte-address buffers (normals/tangents/skinning) are inherited from the SkinnedMesh setup. The
+	// skin partition's native buffer has the same vertex count as the dynamic morph data; it carries
+	// everything except position (dynamic trishapes have no vertex position - it lives in the morph data).
+	const auto& geometryData = bsDynamicTriShape->GetGeometryRuntimeData();
+
+	auto* skinInstance = geometryData.skinInstance.get();
+	if (!skinInstance) {
+		logger::warn("DynamicMesh::DynamicMesh - No skin instance for {}", m_Name);
+		return;
+	}
+
+	const auto& skinPartition = skinInstance->skinPartition;
+	if (!skinPartition || skinPartition->numPartitions == 0) {
+		logger::warn("DynamicMesh::DynamicMesh - No skin partitions for {}", m_Name);
+		return;
+	}
+
+	auto* basePartitionBuffer = skinPartition->partitions[0].buffData;
+	if (!basePartitionBuffer) {
+		logger::warn("DynamicMesh::DynamicMesh - No base partition buffer for {}", m_Name);
+		return;
+	}
+
+	const uint32_t vertexCount = skinPartition->vertexCount;
+
+	if (!ValidateCounts(skinPartition->partitions[0].triangles, vertexCount))
+		return;
+
+	m_VertexBuffer = CreateVertexBuffer(basePartitionBuffer);
+	if (!m_VertexBuffer.m_Buffer)
+		return;
+
+	m_VertexCount = vertexCount;
+
+	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
+
+	// Byte-address live + prev-position buffers at the shared slot (skinning normals/tangents target).
+	CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
+
+	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
+	// stride so the trailing w component is skipped.
 	m_DynamicData.resize(runtimeData.dataSize, 0u);
 
 	runtimeData.lock.Lock();
 	UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
 	runtimeData.lock.Unlock();
 
-	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
-	// stride so the trailing w component is skipped.
-
-	// Live (skinning output) positions; BLAS/RT source.
+	// Live (skinning output) positions; BLAS source.
 	auto liveBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(runtimeData.dataSize)
 		.setStructStride(sizeof(float4))
@@ -47,7 +84,6 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		.setByteSize(runtimeData.dataSize)
 		.setStructStride(sizeof(float4))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
-		.setIsAccelStructBuildInput(true)
 		.setDebugName(std::format("{} - Dynamic (Original)", m_Name).c_str());
 
 	m_OriginalDynamicBuffer = device->createBuffer(originalBufferDesc);
@@ -58,7 +94,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	commandList->copyBuffer(m_DynamicBuffer, 0, m_OriginalDynamicBuffer, 0, runtimeData.dataSize);
 	m_NeedsUpload = false;
 
-	// Register at a shared slot: original -> SRV (input), live -> UAV (output).
+	// Register at a shared dynamic slot: original -> SRV (input), live -> UAV (output).
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	m_DynamicDescriptor = sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(
@@ -68,8 +104,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
-	// The BLAS must read the buffer that UploadBuffers refreshes each frame with the morph positions.
-	BuildSkinned(bsDynamicTriShape, m_OriginalDynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
+	// The BLAS reads the live dynamic positions (skinning output).
+	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
 }
 
 void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)

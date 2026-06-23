@@ -64,33 +64,28 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 	const bool isDynamic = (updateData.shapeFlags & MeshFlags::Dynamic) != 0;
 	const bool doSkin = (updateData.updateFlags & DirtyFlags::Skin) != 0;
 
-	// Dynamic meshes have no byte-address vertex buffer (positions-only): morphed positions live in
-	// the original dynamic float4 buffer and the skinned result is written to the live float4 buffer.
-	if (isDynamic)
-	{
-		DynamicVerticesOut[dynSlot][vertexIndex] = DynamicVertices[dynSlot][vertexIndex];
-		return;
-	}
-
 	VertexDesc vertexDesc = updateData.VertexDesc;
 
 	const uint vertexOffset = (uint)vertexDesc.GetVertexSize() * vertexIndex;
+	
 	const uint posOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
-
-	// Only touch normal/tangent/bitangent if the layout actually has them; otherwise their attribute
-	// offset is 0 and we would clobber the position.
+    uint normOffset = 0;
+    uint binormOffset = 0;
+	
+    const bool hasPosition = vertexDesc.HasFlag(VertexFlags::Vertex);
 	const bool hasNormal = vertexDesc.HasFlag(VertexFlags::Normal);
 	const bool hasTangent = hasNormal && vertexDesc.HasFlag(VertexFlags::Tangent);
 
 	ByteAddressBuffer original = OriginalVertices[slot];
 
 	// Position (float4; w carries tangent.x).
-	const float4 pos4 = asfloat(original.Load4(posOffset));
-	float3 position = pos4.xyz;
-
-	uint normOffset = 0;
-	uint binormOffset = 0;
-	float4 normal4 = float4(0.0f, 0.0f, 1.0f, 0.0f);
+    float4 position4 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 normal4 = float4(0.0f, 0.0f, 1.0f, 0.0f);
+    
+    if (hasPosition)
+        position4 = asfloat(original.Load4(posOffset));
+    else if (isDynamic)
+        position4 = DynamicVertices[dynSlot][vertexIndex];
 
 	float3 N = float3(0.0f, 0.0f, 1.0f);
 	float3 T = float3(1.0f, 0.0f, 0.0f);
@@ -109,8 +104,8 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 			binormOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Binormal);
 			const float4 binorm4 = UnpackByte4SNorm(original.Load(binormOffset));
 			B = binorm4.xyz;
-			T = float3(pos4.w, normal4.w, binorm4.w);
-		}
+            T = float3(position4.w, normal4.w, binorm4.w);
+        }
 	}
 
 	if (doSkin)
@@ -128,15 +123,6 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 			bonesPacked & 0xFF, (bonesPacked >> 8) & 0xFF,
 			(bonesPacked >> 16) & 0xFF, (bonesPacked >> 24) & 0xFF);
 
-		// Renormalize weights to sum to 1 (mirrors the CPU reference path).
-		const float sum = weights.x + weights.y + weights.z + weights.w;
-		if (sum < 1.0f)
-			weights.x += 1.0f - sum;
-		else if (sum > 1e-6f)
-			weights /= sum;
-		else
-			weights = float4(1.0f, 0.0f, 0.0f, 0.0f);
-
 		const uint maxBone = max(max(bones.x, bones.y), max(bones.z, bones.w));
 		if (maxBone >= updateData.numMatrices)
 			return;
@@ -144,7 +130,8 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 		const float3x4 boneMatrix = GetBoneTransformMatrix(bones, weights, updateData.boneOffset);
 		const float3x3 boneRot = (float3x3)boneMatrix;
 
-		position = mul(boneMatrix, float4(position, 1.0f));
+        if (hasPosition || isDynamic)
+			position4.xyz = mul(boneMatrix, float4(position4.xyz, 1.0f));
 
 		if (hasNormal)
 		{
@@ -153,7 +140,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 			{
 				T = normalize(mul(boneRot, T));
 				B = normalize(mul(boneRot, B));
-			}
+            }
 		}
 	}
 
@@ -163,8 +150,11 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 	PrevPositions[slot][vertexIndex] = asfloat(output.Load3(posOffset));
 
 	// Position (xyz) is always refreshed; normal/tangent/bitangent only when the layout has them.
-	output.Store3(posOffset, asuint(position));
-
+    if (hasPosition)
+        output.Store3(posOffset, asuint(position4.xyz));
+	else if(isDynamic)
+        DynamicVerticesOut[dynSlot][vertexIndex] = position4;
+		
 	if (hasNormal)
 	{
 		if (hasTangent)
