@@ -32,11 +32,6 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID)
     // The product of WeightSum and TargetFunction gives us the final radiance
     float3 finalRadiance = finalReservoir.TargetFunction * finalReservoir.WeightSum;
 
-    // Clamp to avoid fireflies
-    float luminance = Color::RGBToLuminance(finalRadiance);
-    if (luminance > 100.0f)
-        finalRadiance *= 100.0f / luminance;
-
     if (any(isinf(finalRadiance)) || any(isnan(finalRadiance)))
         finalRadiance = 0;
 

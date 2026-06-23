@@ -212,6 +212,45 @@ bool RAB_RecordPointNee(
     return ctx.RecordNeeLightSample(sampledLightData, contributionOverPdf, neePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
 }
 
+bool RAB_RecordSkyNee(
+    inout RTXDI_PathTracerContext ctx,
+    RAB_Surface rab,
+    Material material,
+    StandardBSDF bsdf,
+    inout RTXDI_PathTracerRandomContext ptRandContext)
+{
+    float2 uv = float2(
+        RTXDI_GetNextRandom(ptRandContext.initialRandomSamplerState),
+        RTXDI_GetNextRandom(ptRandContext.initialRandomSamplerState));
+
+    RAB_LightInfo lightInfo;
+    lightInfo.lightType = RAB_LIGHT_TYPE_SKY;
+    lightInfo.lightIndex = 0;
+    RAB_LightSample lightSample = RAB_SamplePolymorphicLight(lightInfo, rab, uv);
+    if (!any(lightSample.radiance > 0.0f) || lightSample.solidAnglePdf <= 0.0f)
+        return false;
+
+    float3 lightDir = normalize(lightSample.position - rab.surface.Position);
+    if (!RAB_IsDirectionUsableForOpaqueReflection(rab, lightDir))
+        return false;
+
+    float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
+    if (!any(reflected > MIN_DIFFUSE_SHADOW))
+        return false;
+
+    reflected *= RAB_ApplyLightVisibility(rab, lightSample);
+
+    RTXDI_SampledLightData sampledLightData = RTXDI_SampledLightData_CreateInvalidData();
+    RTXDI_SampledLightData_SetLightData(sampledLightData, RAB_PackSkyLightIndex());
+    RTXDI_SampledLightData_SetUVData(sampledLightData, uv);
+
+    float neePdf = max(lightSample.solidAnglePdf, 1e-8f);
+    float scatterPdf = RAB_SurfaceEvaluateBrdfPdf(rab, lightDir);
+    float3 contributionOverPdf = reflected / neePdf;
+    contributionOverPdf *= RAB_GetMISWeightForNEE(RAB_PackSkyLightIndex(), lightSample, lightDir, neePdf, scatterPdf);
+    return ctx.RecordNeeLightSample(sampledLightData, contributionOverPdf, neePdf, scatterPdf, lightSample, ptRandContext.initialRandomSamplerState);
+}
+
 void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRandomContext ptRandContext, inout RAB_PathTracerUserData ptud)
 {
     RAB_Surface rab = ctx.GetIntersectionSurface();
@@ -240,6 +279,9 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         currentRab.materialFeature = material.Feature;
         currentRab.hasSpecularTransmission = surface.SpecTrans > 0.0f;
         currentRab.isEnter = rab.isEnter;
+
+        if (ctx.GetBounceDepth() == 2 && ctx.ShouldSampleNee())
+            RAB_RecordSkyNee(ctx, currentRab, material, bsdf, ptRandContext);
 
         BSDFSample bsdfSample;
         bool validSample = RAB_SampleBSDFWithRtxdiRng(bsdf, brdfContext, material, surface, bsdfSample, ptRandContext.replayRandomSamplerState);
@@ -302,6 +344,12 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         {
             ctx.RecordPathRadianceMiss(ptRandContext.initialRandomSamplerState);
             float3 skyRadiance = SampleSky(SkyHemisphere, ray.Direction) * Raytracing.Sky;
+            RTXDI_BrdfRaySample brs = ctx.GetBrdfRaySample();
+            if (!brs.properties.IsDelta())
+            {
+                float envPdf = RAB_EvaluateSkySamplingPdf(ray.Direction);
+                skyRadiance *= RAB_GetMISWeightForEnvironmentMap(skyRadiance, brs.OutPdf, envPdf);
+            }
             ctx.RecordEnvironmentMapLightSample(skyRadiance, currentRab, ptRandContext.initialRandomSamplerState);
             break;
         }
@@ -334,6 +382,7 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
         if (ctx.ShouldSampleNee())
         {
             RAB_RecordDirectionalNee(ctx, rab, hitMaterial, hitBsdf, ptRandContext);
+            RAB_RecordSkyNee(ctx, rab, hitMaterial, hitBsdf, ptRandContext);
             RAB_RecordPointNee(ctx, rab, hitMaterial, hitInstance, hitBsdf, ptRandContext);
         }
 

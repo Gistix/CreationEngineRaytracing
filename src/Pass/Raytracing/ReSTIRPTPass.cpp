@@ -199,7 +199,9 @@ namespace Pass::Raytracing
 		// Initial sampling parameters
 		{
 			RTXDI_PTInitialSamplingParameters iparams = rtxdi::GetDefaultReSTIRPTInitialSamplingParams();
-			iparams.maxBounceDepth = settings.ReSTIRPT.MaxBounceDepth;
+			// RTXDI counts bounce depth as path vertices: 0=camera, 1=primary hit,
+			// 2=secondary hit. Match the user-facing PT bounce count used by Reference.
+			iparams.maxBounceDepth = settings.ReSTIRPT.MaxBounceDepth + 1;
 			iparams.maxRcVertexLength = settings.ReSTIRPT.MaxRcVertexLength;
 			m_Context->SetInitialSamplingParameters(iparams);
 		}
@@ -219,7 +221,7 @@ namespace Pass::Raytracing
 		// Hybrid shift parameters
 		{
 			RTXDI_PTHybridShiftPerFrameParameters hparams = rtxdi::GetDefaultReSTIRPTHybridShiftParams();
-			hparams.maxBounceDepth = settings.ReSTIRPT.MaxBounceDepth;
+			hparams.maxBounceDepth = settings.ReSTIRPT.MaxBounceDepth + 1;
 			hparams.maxRcVertexLength = settings.ReSTIRPT.MaxRcVertexLength;
 			m_Context->SetHybridShiftParameters(hparams);
 		}
