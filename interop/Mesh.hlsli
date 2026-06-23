@@ -2,12 +2,13 @@
 #define SHAPE_HLSL
 
 #include "Interop.h"
-#include "interop/Material.hlsli"
+#include "interop/VertexDesc.hlsli"
 
 INTEROP_DATA_STRUCT(Mesh, 4)
 { 
-    uint GeometryIdx;
-    uint Flags;
+    uint16_t IndexID;
+    uint16_t VertexID;
+    VertexDesc Flags;
     uint NumTriangles;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
     INTEROP_ROW_MAJOR(float3x4) PrevTransform;
