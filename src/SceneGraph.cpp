@@ -588,7 +588,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		m_NumInstances++;
 		return Iterator::Continue;
-	});
+	});*/
 
 	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
 		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
@@ -600,7 +600,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		logger::critical("SceneGraph::Update - Number of instances of {} exceeds the maximum of {}", m_NumInstances, Constants::NUM_INSTANCES_MAX);
 
 	if (m_NumInstances > 0)
-		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));*/
+		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 }
 
 void SceneGraph::ClearDirtyStates()

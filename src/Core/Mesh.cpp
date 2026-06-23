@@ -87,7 +87,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 	for (uint32_t i = 0; i < vertexCountIn; i++) {
 		uint8_t* vtx = Util::Adapter::GetVertexData(rendererData) + i * vertexSize;
 
-		Vertex vertex{};
+		VertexOld vertex{};
 
 		float4 pos;
 
@@ -502,13 +502,13 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 	// Vertex Buffer
 	{
-		const size_t size = sizeof(Vertex) * vertexData.count;
+		const size_t size = sizeof(VertexOld) * vertexData.count;
 
 		logger::debug("Mesh::CreateBuffers - Vertex Count: {}, Buffer Size: {}", vertexData.count, size);
 
 		auto& vertexBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
-			.setStructStride(sizeof(Vertex))
+			.setStructStride(sizeof(VertexOld))
 			.setCanHaveUAVs(updatable)
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 			.setIsAccelStructBuildInput(true)
@@ -529,11 +529,11 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 	// Vertex Copy
 	if (updatable) {
-		const size_t size = sizeof(Vertex) * vertexData.count;
+		const size_t size = sizeof(VertexOld) * vertexData.count;
 
 		auto& vertexCopyBufferDesc = nvrhi::BufferDesc()
 			.setByteSize(size)
-			.setStructStride(sizeof(Vertex))
+			.setStructStride(sizeof(VertexOld))
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
 			.setDebugName(std::format("{} (Vertex Copy Buffer)", m_Name.c_str()));
 
@@ -598,7 +598,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 	geometryTriangles.vertexBuffer = buffers.vertexBuffer;
 	geometryTriangles.vertexOffset = 0;
 	geometryTriangles.vertexFormat = nvrhi::Format::RGB32_FLOAT;
-	geometryTriangles.vertexStride = sizeof(Vertex);
+	geometryTriangles.vertexStride = sizeof(VertexOld);
 	geometryTriangles.vertexCount = vertexData.count;
 
 	geometryDesc.setTransform(m_LocalToRoot.f);
@@ -899,13 +899,7 @@ void Mesh::UpdateData(nvrhi::ICommandList* commandList, float3 externalEmittance
 
 MeshData Mesh::GetData()
 {
-	return MeshData(
-		static_cast<uint32_t>(m_DescriptorHandle.Get()),
-		flags.underlying(),
-		triangleData.count,
-		m_LocalToRoot,
-		m_PrevLocalToRoot
-	);
+	return MeshData();
 }
 
 bool Mesh::IsHidden() const
@@ -920,9 +914,9 @@ void Mesh::CalculateNormals()
 
 	// Loop over triangles
 	for (auto& t : triangleData.triangles) {
-		Vertex& v0 = vertexData.vertices[t.x];
-		Vertex& v1 = vertexData.vertices[t.y];
-		Vertex& v2 = vertexData.vertices[t.z];
+		VertexOld& v0 = vertexData.vertices[t.x];
+		VertexOld& v1 = vertexData.vertices[t.y];
+		VertexOld& v2 = vertexData.vertices[t.z];
 
 		float3 pos0 = v0.Position;
 		float3 pos1 = v1.Position;
