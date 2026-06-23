@@ -159,7 +159,11 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 	{
 		if (hasTangent)
 		{
-			output.Store(posOffset + 12, asuint(T.x));                  // tangent.x
+			// tangent.x is packed into pos.w, which only exists when the layout has a position attribute.
+			// No-position meshes (e.g. dynamic mesh) reconstruct tangent.x on read, so don't write it here.
+			if (hasPosition)
+				output.Store(posOffset + 12, asuint(T.x));             // tangent.x
+
 			output.Store(normOffset, PackByte4SNorm(float4(N, T.y)));   // normal.xyz + tangent.y
 			output.Store(binormOffset, PackByte4SNorm(float4(B, T.z))); // bitangent.xyz + tangent.z
 		}

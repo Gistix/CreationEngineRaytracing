@@ -33,8 +33,4 @@ public:
 	void UploadBuffers(nvrhi::ICommandList* commandList) override;
 
 	bool IsUpdatable() const override { return true; }
-
-protected:
-	// Dynamic positions live in the dynamic buffer (deferred: positions-only for now).
-	uint16_t GetVertexID() const override { return static_cast<uint16_t>(m_DynamicDescriptor.Get()); }
 };
