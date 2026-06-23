@@ -146,6 +146,11 @@ bool BaseMesh::IsHidden() const
 	return m_State.any(State::Hidden);
 }
 
+void BaseMesh::OnDestroy() {
+	std::scoped_lock lock(m_BSTriShapeMutex);
+	m_BSTriShape = nullptr;
+}
+
 bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 {
 	if (m_Owner == owner)

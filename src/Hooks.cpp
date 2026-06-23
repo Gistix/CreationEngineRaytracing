@@ -3,6 +3,7 @@
 #include "Util.h"
 
 #include "Core/D3D12Texture.h"
+#include "Core/DynamicMesh.h"
 
 namespace Hooks
 {
@@ -174,6 +175,34 @@ namespace Hooks
 			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsTriShape);
 
 			func(a_bsTriShape, a_release);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSDynamicTriShape_Dtor
+	{
+		static void thunk(RE::BSDynamicTriShape* a_bsDynamicTriShape, bool a_release)
+		{
+			logger::info("BSDynamicTriShape::Dtor - {}", fmt::ptr(a_bsDynamicTriShape));
+
+			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsDynamicTriShape);
+
+			func(a_bsDynamicTriShape, a_release);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// Copies new float3* dynamic data to the dynamic trishape's float4* dynamic data
+	struct BSDynamicTriShape_UpdateDynamicData
+	{
+		static void thunk(RE::BSDynamicTriShape* a_bsDynamicTriShape, float3* a_dynamicData, bool a_recalculateBounds)
+		{
+			func(a_bsDynamicTriShape, a_dynamicData, a_recalculateBounds);
+
+			// Dynamic data is ready as float4* after the original function ran
+			Scene::GetSingleton()->GetSceneGraph()->UpdateDynamicData(a_bsDynamicTriShape);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1035,12 +1064,19 @@ namespace Hooks
 		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
 		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC); // Landscape
-		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD); // NiSkinPartition::Partition::buffData
+		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD);  // NiSkinPartition::Partition::buffData
 
 		// This function is inlined in some places on AE
 		//stl::detour_thunk<BSGraphics_CopyTriShapeVertices>(REL::RelocationID(74735, 76477));
 
-		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 70666));
+		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 70666));  // BSTriShape
+		//stl::detour_thunk<BSDynamicTriShape_Dtor>(REL::RelocationID(69573, 0));  // BSDynamicTriShape
+		//stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(75033, 0));  // BSSubIndexTriShape
+		//stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(74611, 0));  // BSMultiStreamInstanceTriShape
+
+		// Use a hook to update dynamic data, else we risk trying accessing dynamic data while the engine has already released it
+		stl::detour_thunk<BSDynamicTriShape_UpdateDynamicData>(REL::RelocationID(69570, 70954));
+		
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 		
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));

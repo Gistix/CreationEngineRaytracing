@@ -165,6 +165,8 @@ public:
 	
 	void OnDestroy(RE::BSTriShape* bsTriShape);
 
+	void UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape);
+
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
 

@@ -2,6 +2,9 @@
 
 #include "Core/DirtyFlags.h"
 
+class SkinnedMesh;
+class DynamicMesh;
+
 class BaseMesh
 {
 public:
@@ -24,6 +27,12 @@ public:
 	bool SetHidden(bool hidden);
 
 	bool IsHidden() const;
+
+	void OnDestroy();
+
+	virtual SkinnedMesh* AsSkinnedMesh() { return nullptr; }
+
+	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
 
 	// CPU-side per-frame update: detect whether the mesh's geometry data changed (lazy).
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
@@ -85,4 +94,7 @@ protected:
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
 
 	CESEAdapter::REX::EnumSet<State> m_State = State::None;
+
+	// Prevents BSTriShape being destroyed mid-usage
+	std::mutex m_BSTriShapeMutex;
 };

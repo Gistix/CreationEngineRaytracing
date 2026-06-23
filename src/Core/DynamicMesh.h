@@ -12,7 +12,9 @@ class DynamicMesh : public SkinnedMesh
 public:
 	DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::ICommandList* commandList);
 
-	bool UpdateData() override;
+	virtual DynamicMesh* AsDynamicMesh() override { return this; }
+
+	void UpdateDynamicData(void* dynamicData, uint32_t dataSize);
 
 	void UploadBuffers(nvrhi::ICommandList* commandList) override;
 

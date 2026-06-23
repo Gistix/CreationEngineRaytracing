@@ -9,8 +9,9 @@ class SkinnedMesh : public BaseMesh
 public:
 	SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
-	bool IsUpdatable() const override { return true; }
+	virtual SkinnedMesh* AsSkinnedMesh() override { return this; }
 
+	bool IsUpdatable() const override { return true; }
 protected:
 	// Non-building constructor for derived meshes that supply their own vertex buffer (e.g. DynamicMesh).
 	SkinnedMesh() = default;

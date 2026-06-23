@@ -16,6 +16,9 @@
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
+#include "Core/SkinnedMesh.h"
+#include "Core/DynamicMesh.h"
+
 void SceneGraph::Initialize()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
@@ -345,8 +348,46 @@ void SceneGraph::UpdateLODVisibility()
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
-	std::scoped_lock lock(m_MeshDestroyMutex);
-	m_DestroyedMeshes.push_back(bsTriShape);
+	BaseMesh* mesh = nullptr;
+	{
+		std::scoped_lock lock(m_MeshMutex);
+
+		auto it = m_DirectMeshes.find(bsTriShape);
+		if (it == m_DirectMeshes.end())
+			return;
+
+		mesh = it->second.get();
+	}
+
+	// Signal destroy outside mesh mutex since it has its own scoped lock inside
+	mesh->OnDestroy();
+
+	{
+		std::scoped_lock lock(m_MeshDestroyMutex);
+		m_DestroyedMeshes.push_back(bsTriShape);
+	}
+}
+
+void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
+{
+	BaseMesh* mesh = nullptr;
+	{
+		std::scoped_lock lock(m_MeshMutex);
+
+		auto it = m_DirectMeshes.find(bsDynamicTriShape);
+		if (it == m_DirectMeshes.end())
+			return;
+
+		mesh = it->second.get();
+	}
+
+	if (auto dynamicMesh = mesh->AsDynamicMesh()) {
+		auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
+
+		// Function is called through a hook thats already between lock
+		// Acessing without locking here is safe and correct
+		dynamicMesh->UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
+	}
 }
 
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
