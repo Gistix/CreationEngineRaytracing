@@ -1,13 +1,17 @@
 #pragma once
 
 #include "Core/SkinnedMesh.h"
+#include "Framework/DescriptorTableManager.h"
 
 class DynamicMesh : public SkinnedMesh
 {
 	nvrhi::BufferHandle m_DynamicBuffer;
 
+	DescriptorHandle m_DynamicDescriptor;
+
 	// CPU staging copy used to detect changes (lazy) and feed the GPU upload.
 	eastl::vector<uint8_t> m_DynamicData;
+
 	bool m_NeedsUpload = false;
 public:
 	DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::ICommandList* commandList);

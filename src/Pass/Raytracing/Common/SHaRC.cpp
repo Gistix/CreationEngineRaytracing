@@ -255,7 +255,7 @@ namespace Pass
 			state.bindings = {
 				m_UpdatePass.m_BindingSet,
 				sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-				sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+				sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,

@@ -4,7 +4,10 @@
 #include "Core/DynamicMesh.h"
 #include "Renderer.h"
 #include "Util.h"
+#include "Scene.h"
+#include "SceneGraph.h"
 #include "Types/RE/RE.h"
+#include "interop/Triangle.hlsli"
 
 eastl::shared_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
@@ -51,9 +54,9 @@ bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices, RE::B
 	return true;
 }
 
-nvrhi::BufferHandle BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape* triShape)
+BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape* triShape)
 {
-	auto device = Renderer::GetSingleton()->GetDevice();
+	BufferDescriptor indexBuffer{};
 
 	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
 
@@ -64,20 +67,32 @@ nvrhi::BufferHandle BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape* triSha
 
 	if (indexDesc.Width != indexDesc11.ByteWidth) {
 		logger::error("D3D11 ({}) and D3D12 ({}) index buffer size mismatch.", indexDesc11.ByteWidth, indexDesc.Width);
-		return nullptr;
+		return indexBuffer;
 	}
 
 	auto indexBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(indexDesc.Width)
+		.setStructStride(sizeof(Triangle))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true);
 
-	return device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->indexBufferDX12), indexBufferDesc);
+	auto device = Renderer::GetSingleton()->GetDevice();
+	indexBuffer.m_Buffer = device->createHandleForNativeBuffer(
+		nvrhi::ObjectTypes::D3D12_Resource, 
+		nvrhi::Object(triShapeDX12->indexBufferDX12), 
+		indexBufferDesc);
+
+	if (indexBuffer.m_Buffer) {
+		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable;
+		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, indexBuffer.m_Buffer));
+	}
+
+	return indexBuffer;
 }
 
-nvrhi::BufferHandle BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape* triShape)
+BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape* triShape)
 {
-	auto device = Renderer::GetSingleton()->GetDevice();
+	BufferDescriptor vertexBuffer{};
 
 	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
 
@@ -88,15 +103,27 @@ nvrhi::BufferHandle BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape* triSh
 
 	if (vertexDesc.Width != vertexDesc11.ByteWidth) {
 		logger::error("D3D11 ({}) and D3D12 ({}) vertex buffer size mismatch.", vertexDesc11.ByteWidth, vertexDesc.Width);
-		return nullptr;
+		return vertexBuffer;
 	}
 
 	auto vertexBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(vertexDesc.Width)
+		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true);
 
-	return device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->vertexBufferDX12), vertexBufferDesc);
+	auto device = Renderer::GetSingleton()->GetDevice();
+	vertexBuffer.m_Buffer = device->createHandleForNativeBuffer(
+		nvrhi::ObjectTypes::D3D12_Resource, 
+		nvrhi::Object(triShapeDX12->vertexBufferDX12), 
+		vertexBufferDesc);
+
+	if (vertexBuffer.m_Buffer) {
+		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetVertexDescriptors()->m_DescriptorTable;
+		vertexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, vertexBuffer.m_Buffer));
+	}
+
+	return vertexBuffer;
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
@@ -173,7 +200,7 @@ void BaseMesh::SetLocalToOwner(const float3x4& localToOwner)
 
 	// Always (re)bake into the geometry descs so the layout is correct even on the first set;
 	// only flag a refit when it actually changed.
-	for (auto& desc : m_GeometryDescs)
+	for (auto& desc : GetGeometryDescsMutable())
 		desc.setTransform(m_LocalToOwner.f);
 
 	if (changed)

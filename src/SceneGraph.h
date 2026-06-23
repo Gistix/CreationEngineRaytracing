@@ -92,7 +92,7 @@ class SceneGraph
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
-	eastl::unique_ptr<BindlessTable> m_VertexDescriptors;
+	eastl::unique_ptr<BindlessTableManager> m_VertexDescriptors;
 	eastl::unique_ptr<BindlessTable> m_MaterialDescriptors;
 	
 	eastl::unique_ptr<BindlessTable> m_DynamicVertexDescriptors;

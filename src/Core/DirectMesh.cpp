@@ -22,15 +22,15 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 		return;
 
 	m_IndexBuffer = CreateIndexBuffer(rendererData);
-	if (!m_IndexBuffer)
+	if (!m_IndexBuffer.m_Buffer)
 		return;
 
 	m_VertexBuffer = CreateVertexBuffer(rendererData);
-	if (!m_VertexBuffer)
+	if (!m_VertexBuffer.m_Buffer)
 		return;
 
 	const uint32_t indexCount = static_cast<uint32_t>(triShapeData.triangleCount) * 3;
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
-	m_GeometryDescs.push_back(MakeGeometryDesc(m_IndexBuffer, indexCount, m_VertexBuffer, vertexStride, triShapeData.vertexCount));
+	m_GeometryDescs.push_back(MakeGeometryDesc(m_IndexBuffer.m_Buffer, indexCount, m_VertexBuffer.m_Buffer, vertexStride, triShapeData.vertexCount));
 }

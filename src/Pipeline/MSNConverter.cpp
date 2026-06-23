@@ -125,7 +125,7 @@ namespace Pipeline
 				state.bindings = {
 					bindingSet,
 					triangleDescriptors->m_DescriptorTable->GetDescriptorTable(),
-					vertexDescriptors->m_DescriptorTable
+					vertexDescriptors->m_DescriptorTable->GetDescriptorTable()
 				};
 				state.viewport.addViewportAndScissorRect(fbinfo.getViewport());
 

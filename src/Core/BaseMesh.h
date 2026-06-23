@@ -2,12 +2,19 @@
 
 #include "Core/DirtyFlags.h"
 
+#include "Framework/DescriptorTableManager.h"
+
 class SkinnedMesh;
 class DynamicMesh;
 
 class BaseMesh
 {
 public:
+	struct BufferDescriptor {
+		nvrhi::BufferHandle m_Buffer;
+		DescriptorHandle m_Descriptor;
+	};
+
 	enum class State : uint8_t
 	{
 		None = 0,
@@ -44,7 +51,9 @@ public:
 	// True for meshes whose vertex data changes per frame, so their cluster BLAS must be refit.
 	virtual bool IsUpdatable() const { return false; }
 
-	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const { return m_GeometryDescs; }
+	// Returns the mesh's geometry descs (identity transform with the local-to-owner transform baked in).
+	// DirectMesh holds a single desc; SkinnedMesh/DynamicMesh hold one per partition.
+	virtual const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const = 0;
 
 	RE::BSTriShape* GetTriShape() const { return m_BSTriShape; }
 
@@ -70,16 +79,16 @@ protected:
 
 	static bool ValidateCounts(uint16_t numTriangles, uint32_t numVertices, RE::BSGraphics::TriShape* triShape);
 
-	static nvrhi::BufferHandle CreateIndexBuffer(RE::BSGraphics::TriShape* triShape);
+	static BufferDescriptor CreateIndexBuffer(RE::BSGraphics::TriShape* triShape);
 
-	static nvrhi::BufferHandle CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
+	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
 
-	eastl::string m_Name;
+	// Mutable access to the derived mesh's geometry descs, used to bake the local-to-owner transform.
+	virtual eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescsMutable() = 0;
 
-	// Geometry descs (identity transform) provided to the owning BLASCluster, which bakes the local-to-owner transform.
-	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
+	eastl::string m_Name;
 
 	RE::BSTriShape* m_BSTriShape = nullptr;
 
@@ -87,7 +96,7 @@ protected:
 
 	RE::TESObjectREFR* m_PrevOwner = nullptr;
 
-	// Cached local-to-owner transform baked into m_GeometryDescs (computed in the traversal).
+	// Cached local-to-owner transform baked into the geometry descs (computed in the traversal).
 	float3x4 m_LocalToOwner;
 
 	// Mesh-owned dirty state consumed by the owning BLASCluster (Visibility => rebuild, Transform/Vertex => refit).
