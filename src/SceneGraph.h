@@ -3,8 +3,10 @@
 #include "Core/BaseMesh.h"
 #include "Core/BLASCluster.h"
 
-#include "core/Model.h"
+
 #include "core/Light.h"
+#include "core/MaterialManager.h"
+#include "core/Model.h"
 #include "Core/TextureManager.h"
 
 #if defined(SKYRIM)
@@ -48,6 +50,9 @@ class SceneGraph
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	mutable std::mutex m_MeshDestroyMutex;
 
+	// Material
+	MaterialManager m_MaterialManager;
+
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
 	mutable std::mutex m_ModelMutex;
@@ -80,6 +85,9 @@ class SceneGraph
 	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	nvrhi::BufferHandle m_InstanceBuffer;
+
+	// Material
+	nvrhi::BufferHandle m_MaterialBuffer;
 
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 
@@ -134,6 +142,8 @@ public:
 
 	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 	void BuildClusters(nvrhi::ICommandList* commandList);
+
+	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager.Get(shaderMaterial); }
 
 	inline auto& GetModels() { return m_Models; }
 	inline auto& GetTerrainLodInstances() const { return m_TerrainLODInstances; }

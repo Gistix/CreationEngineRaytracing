@@ -106,6 +106,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	// The BLAS reads the live dynamic positions (skinning output).
 	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
+
+	CreateMaterial();
 }
 
 void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)

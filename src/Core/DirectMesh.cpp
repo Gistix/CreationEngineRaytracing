@@ -36,4 +36,6 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
 	m_GeometryDescs.push_back(MakeGeometryDesc(m_IndexBuffer.m_Buffer, indexCount, m_VertexBuffer.m_Buffer, vertexStride, triShapeData.vertexCount));
+
+	CreateMaterial();
 }

@@ -55,6 +55,8 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	nvrhi::IBuffer* liveBuffer = CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
 
 	BuildSkinned(bsTriShape, liveBuffer, vertexStride, true);
+
+	CreateMaterial();
 }
 
 nvrhi::IBuffer* SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)

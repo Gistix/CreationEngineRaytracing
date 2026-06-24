@@ -224,3 +224,8 @@ void BaseMesh::SetLocalToOwner(const float3x4& localToOwner)
 	if (changed)
 		MarkDirty(DirtyFlags::Transform);
 }
+
+void BaseMesh::CreateMaterial()
+{
+	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+}

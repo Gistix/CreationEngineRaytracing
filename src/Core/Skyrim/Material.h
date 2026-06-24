@@ -9,15 +9,15 @@
 #include "Material.hlsli"
 #include "Framework/DescriptorTableManager.h"
 
-#include "Core/MaterialBase.h"
 #include "Core/Texture.h"
+#include "Core/TextureManager.h"
 
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBR.h"
 #include "Types\CommunityShaders\BSLightingShaderMaterialPBRLandscape.h"
 
 #include "Types/GeometryRuntimeData.h"
 
-struct Material : MaterialBase
+struct Material
 {
 	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 	using Feature = RE::BSShaderMaterial::Feature;
@@ -266,6 +266,7 @@ struct Material : MaterialBase
 			return static_cast<uint16_t>(texture.defaultTexture->Get());
 	}
 
+	static Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture>& niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType = TextureType::Standard);
 private:
 	MaterialData* GetData();
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/DirtyFlags.h"
+#include "Core/Material/MaterialBase.h"
 
 #include "Framework/DescriptorTableManager.h"
 
@@ -109,6 +110,8 @@ protected:
 	// Mutable access to the derived mesh's geometry descs, used to bake the local-to-owner transform.
 	virtual eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescsMutable() = 0;
 
+	void CreateMaterial();
+
 	eastl::string m_Name;
 
 	RE::BSTriShape* m_BSTriShape = nullptr;
@@ -132,4 +135,6 @@ protected:
 
 	// Prevents BSTriShape being destroyed mid-usage
 	std::mutex m_BSTriShapeMutex;
+
+	eastl::shared_ptr<MaterialBase> m_Material;
 };
