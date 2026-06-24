@@ -10,7 +10,7 @@ struct LightingMaterial : public MaterialBase
 
 	LightingMaterial() = default;
 
-	LightingMaterial(RE::BSShaderMaterial* shaderMaterial);
+	LightingMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
 	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
 

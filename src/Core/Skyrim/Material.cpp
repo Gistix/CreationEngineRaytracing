@@ -630,7 +630,7 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 	}
 }
 
-void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descriptorIndex)
+void Material::CreateBuffer(const eastl::string& name, [[ maybe_unused]] DescriptorIndex descriptorIndex)
 {
 	const size_t size = sizeof(MaterialData);
 
@@ -642,10 +642,6 @@ void Material::CreateBuffer(const eastl::string& name, DescriptorIndex descripto
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 	buffer = device->createBuffer(bufferDesc);
-
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffer);
-	device->writeDescriptorTable(sceneGraph->GetMaterialDescriptors()->m_DescriptorTable, bindingSet);
 }
 
 eastl::unique_ptr<Material> Material::Clone(const eastl::string& name) const

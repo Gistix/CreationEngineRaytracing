@@ -51,7 +51,7 @@ class SceneGraph
 	mutable std::mutex m_MeshDestroyMutex;
 
 	// Material manager
-	MaterialManager m_MaterialManager;
+	eastl::unique_ptr<MaterialManager> m_MaterialManager;
 
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
@@ -90,8 +90,7 @@ class SceneGraph
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
 	eastl::unique_ptr<BindlessTableManager> m_VertexDescriptors;
-	eastl::unique_ptr<BindlessTable> m_MaterialDescriptors;
-	
+
 	eastl::unique_ptr<BindlessTableManager> m_DynamicVertexDescriptors;
 	eastl::unique_ptr<BindlessTable> m_SkinningDescriptors;
 	eastl::unique_ptr<BindlessTable> m_VertexCopyDescriptors;
@@ -117,7 +116,6 @@ public:
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
 	inline auto& GetVertexDescriptors() const { return m_VertexDescriptors; }
-	inline auto& GetMaterialDescriptors() const { return m_MaterialDescriptors; }
 	inline auto& GetTextureDescriptors() const { return m_TextureManager->m_TextureDescriptors; }
 	inline auto& GetCubemapDescriptors() const { return m_TextureManager->m_CubemapDescriptors; }
 	inline auto& GetDynamicVertexDescriptors() const { return m_DynamicVertexDescriptors; }
@@ -131,6 +129,7 @@ public:
 	inline auto& GetLightBuffer() const { return m_LightBuffer; }
 	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
+	inline auto GetMaterialBuffer() { return m_MaterialManager->GetBuffer(); }
 
 	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
 
@@ -140,7 +139,7 @@ public:
 	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 	void BuildClusters(nvrhi::ICommandList* commandList);
 
-	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager.Get(shaderMaterial); }
+	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
 
 	inline auto& GetModels() { return m_Models; }
 	inline auto& GetTerrainLodInstances() const { return m_TerrainLODInstances; }

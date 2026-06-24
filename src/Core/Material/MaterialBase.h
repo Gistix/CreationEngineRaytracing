@@ -8,7 +8,7 @@ struct MaterialBase
 
 	MaterialBase() = default;
 
-	MaterialBase(RE::BSShaderMaterial* shaderMaterial);
+	MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
 	void Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial);
 

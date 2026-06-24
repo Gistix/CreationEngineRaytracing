@@ -1,7 +1,20 @@
 #include "Core/MaterialManager.h"
 
 #include "Core/Material/Skyrim/LightingMaterial.h"
+#include "Renderer.h"
 #include "Scene.h"
+
+MaterialManager::MaterialManager()
+{
+	m_Size = kSizeReference * Constants::NUM_MATERIALS_MIN;
+
+	auto bufferDesc = nvrhi::BufferDesc()
+		.setByteSize(m_Size)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setDebugName("Material Buffer");
+
+	Renderer::GetSingleton()->GetDevice()->createBuffer(bufferDesc);
+}
 
 eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shaderMaterial)
 {
@@ -19,6 +32,8 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 
 	if (material)
 		return material;
+
+	auto offset = 0;
 
 	auto type = shaderMaterial->GetType();
 	if (type == Type::kLighting) 
@@ -46,13 +61,15 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 		case RE::BSShaderMaterial::Feature::kLODLandNoise:
 		case RE::BSShaderMaterial::Feature::kMultiTexLandLODBlend:
 		default:
-			material = eastl::make_shared<LightingMaterial>(shaderMaterial);
+			material = eastl::make_shared<LightingMaterial>(shaderMaterial, offset);
 			break;
 		}
 	}
 	else {
-		material = eastl::make_shared<MaterialBase>(shaderMaterial);
+		material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
 	}
+
+
 
 	return material;
 }

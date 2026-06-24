@@ -4,8 +4,10 @@
 #include "Renderer.h"
 #include "Util.h"
 
-LightingMaterial::LightingMaterial(RE::BSShaderMaterial* shaderMaterial)
+LightingMaterial::LightingMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
+	m_Offset = offset;
+
 	m_Data = eastl::make_unique<LightingMaterialData>();
 
 	Initialize(m_Data.get(), shaderMaterial);

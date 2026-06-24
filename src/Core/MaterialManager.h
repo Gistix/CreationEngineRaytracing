@@ -3,14 +3,23 @@
 #include "Core/Texture.h"
 #include "Core/TextureManager.h"
 #include "Core/Material/MaterialBase.h"
+#include "Interop/Material/Skyrim/LightingMaterialData.hlsli"
 
 class MaterialManager
 {
+	static constexpr auto kSizeReference = sizeof(LightingMaterialData);
+
 	eastl::unordered_map<RE::BSShaderMaterial*, eastl::shared_ptr<MaterialBase>> m_Material;
 	mutable std::mutex m_MaterialMutex;
 
 	nvrhi::BufferHandle m_MaterialBuffer;
+
+	uint64_t m_Size;
 public:
+	MaterialManager();
+
+	inline nvrhi::IBuffer* GetBuffer() const { return m_MaterialBuffer; }
+
 	eastl::shared_ptr<MaterialBase> Get(RE::BSShaderMaterial* shaderMaterial);
 	void Release(RE::BSShaderMaterial* shaderMaterial);
 
