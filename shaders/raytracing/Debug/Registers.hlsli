@@ -26,6 +26,7 @@ StructuredBuffer<Mesh> Meshes : register(t5);
 
 StructuredBuffer<Triangle> Triangles[] : register(t0, space1);
 ByteAddressBuffer Vertices[] : register(t0, space2);
+ByteAddressBuffer Materials[] : register(t0, space3);
 
 RWTexture2D<float4> Output : register(u0);
 
