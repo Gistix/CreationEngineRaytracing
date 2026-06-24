@@ -41,17 +41,15 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 	const uint16_t vertexID = GetVertexID();
 
 	for (size_t i = 0; i < descs.size(); i++) {
-		MeshData& md = out[i];
-		md = {};
-
-		md.IndexID = GetIndexID(i);
-		md.VertexID = vertexID;
-
-		std::memcpy(&md.VertexDesc, &m_VertexDescRaw, sizeof(md.VertexDesc));
-
-		md.NumTriangles = descs[i].geometryData.triangles.indexCount / 3;
-		md.Transform = m_LocalToOwner;
-		md.PrevTransform = m_LocalToOwner;
+		out[i] = {
+			GetIndexID(i),
+			vertexID,
+			VertexDesc(m_VertexDescRaw),
+			static_cast<uint32_t>(m_Material->GetOffset()),
+			descs[i].geometryData.triangles.indexCount / 3,
+			m_LocalToOwner,
+			m_LocalToOwner
+		};
 	}
 
 	return static_cast<uint32_t>(descs.size());

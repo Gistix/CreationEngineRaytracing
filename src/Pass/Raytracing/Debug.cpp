@@ -128,7 +128,8 @@ namespace Pass
 		pipelineDesc.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
 
 		pipelineDesc.maxPayloadSize = 20;
 
@@ -178,7 +179,8 @@ namespace Pass
 		pipelineDesc.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
@@ -237,7 +239,8 @@ namespace Pass
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable
+			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
+			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable()
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();

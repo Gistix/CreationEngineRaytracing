@@ -1,8 +1,8 @@
 #ifndef LIGHTING_MATERIAL_HLSL
 #define LIGHTING_MATERIAL_HLSL
 
-#include "Interop.h"
-#include "Material/MaterialBaseData.hlsli"
+#include "interop/Interop.h"
+#include "interop/Material/MaterialBaseData.hlsli"
 
 INTEROP_STRUCT(LightingMaterialData : MaterialBaseData, 4)
 {

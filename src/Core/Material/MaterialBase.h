@@ -6,6 +6,18 @@ struct MaterialBase
 {
 	using Data = MaterialBaseData;
 
+	enum Type : uint16_t
+	{
+		Lighting = 0,
+		Effect = 1,
+		Grass = 2,
+		Water = 3,
+		BloodSplatter = 4,
+		DistantTree = 5,
+		Particle = 6,
+		TruePBR = 7
+	};
+
 	MaterialBase() = default;
 
 	MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);

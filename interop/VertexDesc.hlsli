@@ -39,6 +39,16 @@ struct VertexDesc
     uint32_t Lower;
     uint32_t Upper;
 
+#ifdef __cplusplus
+    VertexDesc() = default;
+    
+    constexpr VertexDesc(uint64_t value)
+        : Lower(static_cast<uint32_t>(value)),
+          Upper(static_cast<uint32_t>(value >> 32))
+    {
+    }
+#endif
+
     // Low 32 bits of the 64-bit desc logically right-shifted by 'shift'.
     uint GetDescBits(uint shift)
     {

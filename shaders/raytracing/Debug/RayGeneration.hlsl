@@ -73,6 +73,9 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
 
 // --------------------------------------------------------
 
+#include "interop/Material/MaterialBaseData.hlsli"
+#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+
 #if USE_RAY_QUERY
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 #   if defined(GROUP_TILING)
@@ -113,8 +116,8 @@ void Main()
           
     float3 sourcePosition = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
     
-    bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
-    const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
+    //bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
+    //const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
     
     float3 uvw = GetBary(sourcePayload.Barycentrics());
     
@@ -125,8 +128,6 @@ void Main()
     Vertex v1;
     Vertex v2;
     GetVertices(sourceMesh, sourcePayload.primitiveIndex, v0, v1, v2);
-    
-    //float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
     float3x3 objectToWorld3x3 = mul((float3x3) sourceInstance.Transform, (float3x3) sourceMesh.Transform);
     
@@ -134,5 +135,25 @@ void Main()
     float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
     //float3 bitangentWS = cross(tangentWS, normalWS) * handedness;
     
-    Output[idx] = float4(normalWS * 0.5f + 0.5f, 1.0f);
+    ByteAddressBuffer materials = Materials[0];
+    uint typeFeature = materials.Load(sourceMesh.MaterialOffset);
+
+    uint16_t type = (uint16_t) (typeFeature & 0xFFFF);
+    uint16_t feature = (uint16_t) (typeFeature >> 16);
+    
+    float3 color = float3(0, 0, 0);
+    
+    if (type == Type::Lighting)
+    {
+        if (feature == Feature::kDefault)
+        {
+            LightingMaterialData lightingMaterial = materials.Load<LightingMaterialData>(sourceMesh.MaterialOffset);    
+            float2 texCoord = lightingMaterial.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
+            
+            const Texture2D diffuseTexture = Textures[lightingMaterial.DiffuseTexture];          
+            color = diffuseTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
+        }
+    }
+    
+    Output[idx] = float4(color, 1.0f);
 }
