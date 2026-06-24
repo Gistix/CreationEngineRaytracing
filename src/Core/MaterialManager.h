@@ -4,11 +4,36 @@
 #include "Core/TextureManager.h"
 #include "Core/Material/MaterialBase.h"
 #include "Interop/Material/Skyrim/LightingMaterialData.hlsli"
+#include "Interop/Material/Skyrim/EnvmapMaterialData.hlsli"
+#include "Interop/Material/Skyrim/GlowmapMaterialData.hlsli"
+#include "Interop/Material/Skyrim/ParallaxMaterialData.hlsli"
+#include "Interop/Material/Skyrim/FacegenMaterialData.hlsli"
+#include "Interop/Material/Skyrim/FacegenTintMaterialData.hlsli"
+#include "Interop/Material/Skyrim/HairTintMaterialData.hlsli"
+#include "Interop/Material/Skyrim/ParallaxOccMaterialData.hlsli"
+#include "Interop/Material/Skyrim/EyeMaterialData.hlsli"
+#include "Interop/Material/Skyrim/MultiLayerParallaxMaterialData.hlsli"
+#include "Interop/Material/Skyrim/LandscapeMaterialData.hlsli"
+#include "Interop/Material/Skyrim/LODLandscapeMaterialData.hlsli"
 #include "Types/BindlessTable.h"
 
 class MaterialManager
 {
-	static constexpr auto kSizeReference = sizeof(LightingMaterialData);
+	// Uniform slot size: the largest material-data struct, so every material fits its slot.
+	static constexpr size_t kSizeReference = std::max({
+		sizeof(LightingMaterialData),
+		sizeof(EnvmapMaterialData),
+		sizeof(GlowmapMaterialData),
+		sizeof(ParallaxMaterialData),
+		sizeof(FacegenMaterialData),
+		sizeof(FacegenTintMaterialData),
+		sizeof(HairTintMaterialData),
+		sizeof(ParallaxOccMaterialData),
+		sizeof(EyeMaterialData),
+		sizeof(MultiLayerParallaxMaterialData),
+		sizeof(LandscapeMaterialData),
+		sizeof(LODLandscapeMaterialData)
+	});
 
 	eastl::unordered_map<RE::BSShaderMaterial*, eastl::shared_ptr<MaterialBase>> m_Material;
 	mutable std::mutex m_MaterialMutex;

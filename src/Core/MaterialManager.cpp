@@ -1,6 +1,17 @@
 #include "Core/MaterialManager.h"
 
 #include "Core/Material/Skyrim/LightingMaterial.h"
+#include "Core/Material/Skyrim/EnvmapMaterial.h"
+#include "Core/Material/Skyrim/GlowmapMaterial.h"
+#include "Core/Material/Skyrim/ParallaxMaterial.h"
+#include "Core/Material/Skyrim/FacegenMaterial.h"
+#include "Core/Material/Skyrim/FacegenTintMaterial.h"
+#include "Core/Material/Skyrim/HairTintMaterial.h"
+#include "Core/Material/Skyrim/ParallaxOccMaterial.h"
+#include "Core/Material/Skyrim/EyeMaterial.h"
+#include "Core/Material/Skyrim/MultiLayerParallaxMaterial.h"
+#include "Core/Material/Skyrim/LandscapeMaterial.h"
+#include "Core/Material/Skyrim/LODLandscapeMaterial.h"
 #include "Renderer.h"
 #include "Scene.h"
 
@@ -120,26 +131,45 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	{
 		switch (shaderMaterial->GetFeature())
 		{
-		case RE::BSShaderMaterial::Feature::kNone:
-		case RE::BSShaderMaterial::Feature::kDefault:
 		case RE::BSShaderMaterial::Feature::kEnvironmentMap:
+			material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
+			break;
 		case RE::BSShaderMaterial::Feature::kGlowMap:
+			material = eastl::make_shared<GlowmapMaterial>(shaderMaterial, offset);
+			break;
 		case RE::BSShaderMaterial::Feature::kParallax:
+			material = eastl::make_shared<ParallaxMaterial>(shaderMaterial, offset);
+			break;
 		case RE::BSShaderMaterial::Feature::kFaceGen:
+			material = eastl::make_shared<FacegenMaterial>(shaderMaterial, offset);
+			break;
 		case RE::BSShaderMaterial::Feature::kFaceGenRGBTint:
+			material = eastl::make_shared<FacegenTintMaterial>(shaderMaterial, offset);
+			break;
 		case RE::BSShaderMaterial::Feature::kHairTint:
+			material = eastl::make_shared<HairTintMaterial>(shaderMaterial, offset);
+			break;
 		case RE::BSShaderMaterial::Feature::kParallaxOcc:
-		case RE::BSShaderMaterial::Feature::kMultiTexLand:
-		case RE::BSShaderMaterial::Feature::kLODLand:
-		case RE::BSShaderMaterial::Feature::kUnknown:
+			material = eastl::make_shared<ParallaxOccMaterial>(shaderMaterial, offset);
+			break;
 		case RE::BSShaderMaterial::Feature::kMultilayerParallax:
+			material = eastl::make_shared<MultiLayerParallaxMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kEye:
+			material = eastl::make_shared<EyeMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kMultiTexLand:
+		case RE::BSShaderMaterial::Feature::kMultiTexLandLODBlend:
+			material = eastl::make_shared<LandscapeMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kLODLand:
+		case RE::BSShaderMaterial::Feature::kLODLandNoise:
+			material = eastl::make_shared<LODLandscapeMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kDefault:
 		case RE::BSShaderMaterial::Feature::kTreeAnim:
 		case RE::BSShaderMaterial::Feature::kMultiIndexTriShapeSnow:
 		case RE::BSShaderMaterial::Feature::kLODObjectsHD:
-		case RE::BSShaderMaterial::Feature::kEye:
-		case RE::BSShaderMaterial::Feature::kCloud:
-		case RE::BSShaderMaterial::Feature::kLODLandNoise:
-		case RE::BSShaderMaterial::Feature::kMultiTexLandLODBlend:
 		default:
 			material = eastl::make_shared<LightingMaterial>(shaderMaterial, offset);
 			break;
