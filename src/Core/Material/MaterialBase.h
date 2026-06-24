@@ -18,5 +18,9 @@ struct MaterialBase
 
 	virtual size_t GetDataSize() { return sizeof(Data); }
 protected:
+	// Material buffer offset
+	uint64_t m_Offset;
+
+	// Material data sent to the GPU
 	eastl::unique_ptr<Data> m_Data;
 };
