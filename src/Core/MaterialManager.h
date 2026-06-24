@@ -15,6 +15,8 @@
 #include "Interop/Material/Skyrim/MultiLayerParallaxMaterialData.hlsli"
 #include "Interop/Material/Skyrim/LandscapeMaterialData.hlsli"
 #include "Interop/Material/Skyrim/LODLandscapeMaterialData.hlsli"
+#include "Interop/Material/Skyrim/PBRMaterialData.hlsli"
+#include "Interop/Material/Skyrim/PBRLandscapeMaterialData.hlsli"
 #include "Types/BindlessTable.h"
 
 class MaterialManager
@@ -32,7 +34,9 @@ class MaterialManager
 		sizeof(EyeMaterialData),
 		sizeof(MultiLayerParallaxMaterialData),
 		sizeof(LandscapeMaterialData),
-		sizeof(LODLandscapeMaterialData)
+		sizeof(LODLandscapeMaterialData),
+		sizeof(PBRMaterialData),
+		sizeof(PBRLandscapeMaterialData)
 	});
 
 	eastl::unordered_map<RE::BSShaderMaterial*, eastl::shared_ptr<MaterialBase>> m_Material;

@@ -12,8 +12,15 @@
 #include "Core/Material/Skyrim/MultiLayerParallaxMaterial.h"
 #include "Core/Material/Skyrim/LandscapeMaterial.h"
 #include "Core/Material/Skyrim/LODLandscapeMaterial.h"
+#include "Core/Material/Skyrim/PBRMaterial.h"
+#include "Core/Material/Skyrim/PBRLandscapeMaterial.h"
 #include "Renderer.h"
 #include "Scene.h"
+
+#include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
+#include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
+
+#include <typeinfo>
 
 MaterialManager::MaterialManager()
 {
@@ -129,7 +136,11 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	auto type = shaderMaterial->GetType();
 	if (type == Type::kLighting) 
 	{
-		switch (shaderMaterial->GetFeature())
+		if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape))
+			material = eastl::make_shared<PBRLandscapeMaterial>(shaderMaterial, offset);
+		else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR))
+			material = eastl::make_shared<PBRMaterial>(shaderMaterial, offset);
+		else switch (shaderMaterial->GetFeature())
 		{
 		case RE::BSShaderMaterial::Feature::kEnvironmentMap:
 			material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
