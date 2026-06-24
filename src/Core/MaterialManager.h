@@ -34,8 +34,14 @@ class MaterialManager
 	void Free(uint64_t offset);
 	void Write(MaterialBase* material);
 
+	// (Re)creates m_Buffer at the current m_Size and points the descriptor table at it.
+	void CreateBuffer();
+
 	// Writes m_Buffer into descriptor slot 0; call after creating or resizing the buffer.
 	void BindBuffer();
+
+	// Grows the buffer by NUM_MATERIALS_STEP materials and restages all data for re-upload.
+	void Grow();
 public:
 	MaterialManager();
 

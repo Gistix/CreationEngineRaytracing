@@ -12,6 +12,23 @@ MaterialManager::MaterialManager()
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 
+	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+	bindlessLayoutDesc.firstSlot = 0;
+	bindlessLayoutDesc.maxCapacity = 1;
+	bindlessLayoutDesc.registerSpaces = {
+		nvrhi::BindingLayoutItem::RawBuffer_SRV(3)
+	};
+
+	m_Descriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+
+	CreateBuffer();
+}
+
+void MaterialManager::CreateBuffer()
+{
+	auto device = Renderer::GetSingleton()->GetDevice();
+
 	auto bufferDesc = nvrhi::BufferDesc()
 		.setByteSize(m_Size)
 		.setCanHaveRawViews(true)
@@ -20,16 +37,6 @@ MaterialManager::MaterialManager()
 
 	m_Buffer = device->createBuffer(bufferDesc);
 
-	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
-	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
-	bindlessLayoutDesc.firstSlot = 0;
-	bindlessLayoutDesc.maxCapacity = 1;
-	bindlessLayoutDesc.registerSpaces = {
-		nvrhi::BindingLayoutItem::RawBuffer_SRV(3).setSize(UINT_MAX)
-	};
-
-	m_Descriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
-
 	BindBuffer();
 }
 
@@ -37,6 +44,17 @@ void MaterialManager::BindBuffer()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 	device->writeDescriptorTable(m_Descriptors->m_DescriptorTable, nvrhi::BindingSetItem::RawBuffer_SRV(0, m_Buffer));
+}
+
+void MaterialManager::Grow()
+{
+	// Recreates the GPU buffer at the current (already grown) m_Size and rebinds it to the
+	// descriptor table; the table handle is stable so passes never need to rebind.
+	CreateBuffer();
+
+	// The freshly created buffer is empty; restage all live data for re-upload.
+	m_DirtyRanges.clear();
+	m_DirtyRanges.push_back({ 0, m_NextOffset });
 }
 
 uint64_t MaterialManager::Allocate()
@@ -48,8 +66,10 @@ uint64_t MaterialManager::Allocate()
 	}
 
 	if (m_NextOffset + kSizeReference > m_Size) {
-		logger::error("MaterialManager::Allocate - material buffer is full ({} materials)", Constants::NUM_MATERIALS_MIN);
-		return 0;
+		// Grow the logical capacity (and CPU mirror) now so Write() stays in-bounds; the GPU
+		// buffer itself is recreated lazily in Flush() where a command list is available.
+		m_Size += kSizeReference * Constants::NUM_MATERIALS_STEP;
+		m_Data.resize(m_Size);
 	}
 
 	uint64_t offset = m_NextOffset;
@@ -167,8 +187,17 @@ void MaterialManager::Flush(nvrhi::ICommandList* commandList)
 {
 	std::scoped_lock lock(m_MaterialMutex);
 
-	for (const auto& [offset, size] : m_DirtyRanges)
+	// Recreate the GPU buffer here (not during Allocate) if the logical capacity outgrew it.
+	if (m_Buffer->getDesc().byteSize < m_Size)
+		Grow();
+
+	for (const auto& [offset, size] : m_DirtyRanges) {
+		if (offset + size > m_Buffer->getDesc().byteSize) {
+			logger::error("MaterialManager::Flush - Current range {} is greater than buffer size {}.", offset + size, m_Buffer->getDesc().byteSize);
+		}
+
 		commandList->writeBuffer(m_Buffer, m_Data.data() + offset, size, offset);
+	}
 
 	m_DirtyRanges.clear();
 }
