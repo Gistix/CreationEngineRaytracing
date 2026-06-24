@@ -11,7 +11,7 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 	m_MaterialData = {};
 	m_PrevMaterialData = {};
 
-	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& blackTexture = renderer->GetBlackTextureDescriptor();
 
 	colors.fill(float4(1.0f, 1.0f, 1.0f, 1.0f));
 	colors[Constants::Material::EMISSIVE_COLOR] = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -184,9 +184,9 @@ Material::Material(const eastl::string& name, const GeometryRuntimeData& runtime
 void Material::SetupLandMaterial(const RE::BSLightingShaderMaterialLandscape* lightingBaseMaterialLand)
 {
 	auto renderer = Renderer::GetSingleton();
-	auto& grayTexture = renderer->GetGrayTextureIndex();
-	auto& normalTexture = renderer->GetNormalTextureIndex();
-	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& grayTexture = renderer->GetGrayTextureDescriptor();
+	auto& normalTexture = renderer->GetNormalTextureDescriptor();
+	auto& blackTexture = renderer->GetBlackTextureDescriptor();
 
 	textures[0] = GetTexture(lightingBaseMaterialLand->diffuseTexture, grayTexture);
 	textures[Material::MAX_LAND_TEXTURES] = GetTexture(lightingBaseMaterialLand->normalTexture, normalTexture);
@@ -242,10 +242,10 @@ void Material::SetupLandMaterial(const RE::BSLightingShaderMaterialLandscape* li
 void Material::SetupPBRLandscapeMaterial(const BSLightingShaderMaterialPBRLandscape* lightingPBRMaterialLand)
 {
 	auto renderer = Renderer::GetSingleton();
-	auto& grayTexture = renderer->GetGrayTextureIndex();
-	auto& normalTexture = renderer->GetNormalTextureIndex();
-	auto& blackTexture = renderer->GetBlackTextureIndex();
-	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
+	auto& grayTexture = renderer->GetGrayTextureDescriptor();
+	auto& normalTexture = renderer->GetNormalTextureDescriptor();
+	auto& blackTexture = renderer->GetBlackTextureDescriptor();
+	auto& rmaosTexture = renderer->GetRMAOSTextureDescriptor();
 
 	shaderType = ShaderType::TruePBR;
 
@@ -287,11 +287,11 @@ void Material::SetupPBRLandscapeMaterial(const BSLightingShaderMaterialPBRLandsc
 void Material::SetupPBRMaterial(const BSLightingShaderMaterialPBR* lightingPBRMaterial)
 {
 	auto renderer = Renderer::GetSingleton();
-	auto& grayTexture = renderer->GetGrayTextureIndex();
-	auto& normalTexture = renderer->GetNormalTextureIndex();
-	auto& blackTexture = renderer->GetBlackTextureIndex();
-	auto& whiteTexture = renderer->GetWhiteTextureIndex();
-	auto& rmaosTexture = renderer->GetRMAOSTextureIndex();
+	auto& grayTexture = renderer->GetGrayTextureDescriptor();
+	auto& normalTexture = renderer->GetNormalTextureDescriptor();
+	auto& blackTexture = renderer->GetBlackTextureDescriptor();
+	auto& whiteTexture = renderer->GetWhiteTextureDescriptor();
+	auto& rmaosTexture = renderer->GetRMAOSTextureDescriptor();
 
 	shaderType = ShaderType::TruePBR;
 
@@ -338,7 +338,7 @@ void Material::SetupPBRMaterial(const BSLightingShaderMaterialPBR* lightingPBRMa
 void Material::SetupEffectMaterial(const RE::BSEffectShaderMaterial* effectMaterial)
 {
 	auto renderer = Renderer::GetSingleton();
-	auto& blackTexture = renderer->GetBlackTextureIndex();
+	auto& blackTexture = renderer->GetBlackTextureDescriptor();
 
 	colors[Constants::Material::EMISSIVE_COLOR] = {
 		effectMaterial->baseColor.red,
@@ -357,11 +357,11 @@ void Material::SetupLightingMaterial(RE::BSLightingShaderMaterialBase* lightingM
 {
 	auto* renderer = Renderer::GetSingleton();
 
-	auto& grayTexture = renderer->GetGrayTextureIndex();
-	auto& normalTexture = renderer->GetNormalTextureIndex();
-	auto& blackTexture = renderer->GetBlackTextureIndex();
-	auto& whiteTexture = renderer->GetWhiteTextureIndex();
-	auto& detailTexture = renderer->GetDetailTextureIndex();
+	auto& grayTexture = renderer->GetGrayTextureDescriptor();
+	auto& normalTexture = renderer->GetNormalTextureDescriptor();
+	auto& blackTexture = renderer->GetBlackTextureDescriptor();
+	auto& whiteTexture = renderer->GetWhiteTextureDescriptor();
+	auto& detailTexture = renderer->GetDetailTextureDescriptor();
 
 	textures[0] = GetTexture(lightingMaterial->diffuseTexture, grayTexture);
 
@@ -508,7 +508,7 @@ void Material::SetupProjectedUV(RE::BSLightingShaderProperty* lightingShaderProp
 		vectors[3] = { 0.0f, 0.0f, 1.0f, 0.0f };
 
 		auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
-		textures[7] = GetTexture(projNoiseMap, Renderer::GetSingleton()->GetBlackTextureIndex());
+		textures[7] = GetTexture(projNoiseMap, Renderer::GetSingleton()->GetBlackTextureDescriptor());
 	}
 }
 
@@ -565,7 +565,7 @@ void Material::SetupWaterMaterial(RE::BSWaterShaderMaterial* waterMaterial)
 	vectors[2].z = 0.0f;
 	vectors[2].w = 0.0f;
 
-	auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureIndex();
+	auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureDescriptor();
 	textures[0] = GetTexture(waterMaterial->normalTexture1, normalTexture);
 	textures[1] = GetTexture(waterMaterial->normalTexture2, normalTexture);
 	textures[2] = GetTexture(waterMaterial->normalTexture3, normalTexture);
@@ -612,7 +612,7 @@ void Material::UpdateWaterMaterial(RE::BSShaderProperty* shaderProperty)
 		auto* defaultNormal = RE::BSGraphics::State::GetSingleton()->GetRuntimeData().defaultTextureNormalMap.get();
 
 		if (bsWaterMaterial->normalTexture4.get() && bsWaterMaterial->normalTexture4.get() != defaultNormal) {
-			auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureIndex();
+			auto& normalTexture = Renderer::GetSingleton()->GetNormalTextureDescriptor();
 			textures[3] = GetTexture(bsWaterMaterial->normalTexture4, normalTexture);
 		}
 	}

@@ -10,7 +10,9 @@ struct MaterialBase
 
 	MaterialBase(RE::BSShaderMaterial* shaderMaterial);
 
-	static void Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial);
+
+	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial);
 
 	virtual Data* GetData() { return m_Data.get(); }
 

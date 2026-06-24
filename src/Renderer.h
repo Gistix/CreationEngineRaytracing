@@ -210,17 +210,17 @@ public:
 
 	inline auto& RenderTargetManager() { return m_RenderTargetManager; }
 
-	inline auto& GetBlackTexture() const { return m_BlackTexture->texture; }
+	inline auto& GetBlackDescriptor() const { return m_BlackTexture->texture; }
 
-	inline auto& GetWhiteTextureIndex() const { return m_WhiteTexture->descriptorHandle; }
-	inline auto& GetGrayTextureIndex() const { return m_GrayTexture->descriptorHandle; }
-	inline auto& GetNormalTextureIndex() const { return m_NormalTexture->descriptorHandle; }
+	inline auto& GetWhiteTextureDescriptor() const { return m_WhiteTexture->descriptorHandle; }
+	inline auto& GetGrayTextureDescriptor() const { return m_GrayTexture->descriptorHandle; }
+	inline auto& GetNormalTextureDescriptor() const { return m_NormalTexture->descriptorHandle; }
 	inline nvrhi::ITexture* GetNormalTexture() const { return m_NormalTexture->texture; }
-	inline auto& GetBlackTextureIndex() const { return m_BlackTexture->descriptorHandle; }
+	inline auto& GetBlackTextureDescriptor() const { return m_BlackTexture->descriptorHandle; }
 #if defined(SKYRIM)
-	inline auto& GetRMAOSTextureIndex() const { return m_RMAOSTexture->descriptorHandle; }
+	inline auto& GetRMAOSTextureDescriptor() const { return m_RMAOSTexture->descriptorHandle; }
 #endif
-	inline auto& GetDetailTextureIndex() const { return m_DetailTexture->descriptorHandle; }
+	inline auto& GetDetailTextureDescriptor() const { return m_DetailTexture->descriptorHandle; }
 
 	inline auto GetPassTimings() const { return m_PassTimings; };
 

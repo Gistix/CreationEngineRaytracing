@@ -50,7 +50,7 @@ class SceneGraph
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	mutable std::mutex m_MeshDestroyMutex;
 
-	// Material
+	// Material manager
 	MaterialManager m_MaterialManager;
 
 	// Model Path, Model data ptr
@@ -85,9 +85,6 @@ class SceneGraph
 	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	nvrhi::BufferHandle m_InstanceBuffer;
-
-	// Material
-	nvrhi::BufferHandle m_MaterialBuffer;
 
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 

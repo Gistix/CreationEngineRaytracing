@@ -2,6 +2,7 @@
 
 #include "Core/Material/MaterialBase.h"
 #include "Interop/Material/Skyrim/LightingMaterialData.hlsli"
+#include "Core/Texture.h"
 
 struct LightingMaterial : public MaterialBase
 {
@@ -11,9 +12,16 @@ struct LightingMaterial : public MaterialBase
 
 	LightingMaterial(RE::BSShaderMaterial* shaderMaterial);
 
-	static void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+
+	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual MaterialBase::Data* GetData() override { return m_Data.get(); }
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
+
+	Texture m_DiffuseTexture;
+	Texture m_NormalTexture;
+	Texture m_RimSoftLightingTexture;
+	Texture m_SpecularBackLightingTexture;
 };
