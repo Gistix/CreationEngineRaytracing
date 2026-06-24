@@ -510,6 +510,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
 
+	// Upload pending material data to material buffer
+	m_MaterialManager->Flush(commandList);
+
 	// Drop clusters whose meshes were all destroyed this frame.
 	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
 		if (it->second->Empty())

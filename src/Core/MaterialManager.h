@@ -4,6 +4,7 @@
 #include "Core/TextureManager.h"
 #include "Core/Material/MaterialBase.h"
 #include "Interop/Material/Skyrim/LightingMaterialData.hlsli"
+#include "Types/BindlessTable.h"
 
 class MaterialManager
 {
@@ -14,6 +15,10 @@ class MaterialManager
 
 	// Stable GPU material data buffer (materials keep a fixed offset for their lifetime)
 	nvrhi::BufferHandle m_Buffer;
+
+	// Single-slot bindless table holding m_Buffer; passes bind the table so a future resize
+	// only needs to rewrite the descriptor instead of rebuilding every pass binding set.
+	eastl::unique_ptr<BindlessTable> m_Descriptors;
 
 	// CPU-side mirror of the GPU buffer; source of truth and previous-state comparison
 	eastl::vector<uint8_t> m_Data;
@@ -28,10 +33,14 @@ class MaterialManager
 	uint64_t Allocate();
 	void Free(uint64_t offset);
 	void Write(MaterialBase* material);
+
+	// Writes m_Buffer into descriptor slot 0; call after creating or resizing the buffer.
+	void BindBuffer();
 public:
 	MaterialManager();
 
 	inline nvrhi::IBuffer* GetBuffer() const { return m_Buffer; }
+	inline auto& GetDescriptors() const { return m_Descriptors; }
 
 	eastl::shared_ptr<MaterialBase> Get(RE::BSShaderMaterial* shaderMaterial);
 	void Release(RE::BSShaderMaterial* shaderMaterial);

@@ -129,7 +129,7 @@ public:
 	inline auto& GetLightBuffer() const { return m_LightBuffer; }
 	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
 	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
-	inline auto GetMaterialBuffer() { return m_MaterialManager->GetBuffer(); }
+	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
 	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
 

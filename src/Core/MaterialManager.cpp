@@ -10,13 +10,33 @@ MaterialManager::MaterialManager()
 
 	m_Data.resize(m_Size);
 
+	auto device = Renderer::GetSingleton()->GetDevice();
+
 	auto bufferDesc = nvrhi::BufferDesc()
 		.setByteSize(m_Size)
 		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Material Buffer");
 
-	m_Buffer = Renderer::GetSingleton()->GetDevice()->createBuffer(bufferDesc);
+	m_Buffer = device->createBuffer(bufferDesc);
+
+	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+	bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+	bindlessLayoutDesc.firstSlot = 0;
+	bindlessLayoutDesc.maxCapacity = 1;
+	bindlessLayoutDesc.registerSpaces = {
+		nvrhi::BindingLayoutItem::RawBuffer_SRV(3).setSize(UINT_MAX)
+	};
+
+	m_Descriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+
+	BindBuffer();
+}
+
+void MaterialManager::BindBuffer()
+{
+	auto device = Renderer::GetSingleton()->GetDevice();
+	device->writeDescriptorTable(m_Descriptors->m_DescriptorTable, nvrhi::BindingSetItem::RawBuffer_SRV(0, m_Buffer));
 }
 
 uint64_t MaterialManager::Allocate()
