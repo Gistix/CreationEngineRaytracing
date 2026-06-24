@@ -8,23 +8,63 @@ MaterialManager::MaterialManager()
 {
 	m_Size = kSizeReference * Constants::NUM_MATERIALS_MIN;
 
+	m_Data.resize(m_Size);
+
 	auto bufferDesc = nvrhi::BufferDesc()
 		.setByteSize(m_Size)
+		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Material Buffer");
 
-	Renderer::GetSingleton()->GetDevice()->createBuffer(bufferDesc);
+	m_Buffer = Renderer::GetSingleton()->GetDevice()->createBuffer(bufferDesc);
+}
+
+uint64_t MaterialManager::Allocate()
+{
+	if (!m_FreeOffsets.empty()) {
+		uint64_t offset = m_FreeOffsets.back();
+		m_FreeOffsets.pop_back();
+		return offset;
+	}
+
+	if (m_NextOffset + kSizeReference > m_Size) {
+		logger::error("MaterialManager::Allocate - material buffer is full ({} materials)", Constants::NUM_MATERIALS_MIN);
+		return 0;
+	}
+
+	uint64_t offset = m_NextOffset;
+	m_NextOffset += kSizeReference;
+	return offset;
+}
+
+void MaterialManager::Free(uint64_t offset)
+{
+	m_FreeOffsets.push_back(offset);
+}
+
+void MaterialManager::Write(MaterialBase* material)
+{
+	const uint64_t offset = material->GetOffset();
+	const size_t size = material->GetDataSize();
+
+	if (size > kSizeReference) {
+		logger::critical("MaterialManager::Write - material data exceeds the reference slot size");
+		return;
+	}
+
+	if (offset + size > m_Size) {
+		logger::critical("MaterialManager::Write - material data write out of bounds");
+		return;
+	}
+
+	std::memcpy(m_Data.data() + offset, material->GetData(), size);
+	m_DirtyRanges.push_back({ offset, size });
 }
 
 eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shaderMaterial)
 {
 	using Feature = RE::BSShaderMaterial::Feature;
 	using Type = RE::BSShaderMaterial::Type;
-
-	logger::info("BSShaderMaterial: {}, Feature: {}, Type: {}",
-		fmt::ptr(shaderMaterial),
-		magic_enum::enum_name(shaderMaterial->GetFeature()),
-		magic_enum::enum_name(shaderMaterial->GetType()));
 
 	std::scoped_lock lock(m_MaterialMutex);
 
@@ -33,7 +73,7 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	if (material)
 		return material;
 
-	auto offset = 0;
+	auto offset = Allocate();
 
 	auto type = shaderMaterial->GetType();
 	if (type == Type::kLighting) 
@@ -69,7 +109,7 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 		material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
 	}
 
-
+	Write(material.get());
 
 	return material;
 }
@@ -83,8 +123,34 @@ void MaterialManager::Release(RE::BSShaderMaterial* shaderMaterial)
 		return;
 
 	// The last reference is the one held by the manager, so erase it
-	if (it->second.unique())
+	if (it->second.unique()) {
+		Free(it->second->GetOffset());
 		m_Material.erase(it);
+	}
+}
+
+void MaterialManager::Update(MaterialBase* material)
+{
+	std::scoped_lock lock(m_MaterialMutex);
+
+	const uint64_t offset = material->GetOffset();
+	const size_t size = material->GetDataSize();
+
+	// Skip the upload entirely when the data is identical to what is already staged
+	if (std::memcmp(m_Data.data() + offset, material->GetData(), size) == 0)
+		return;
+
+	Write(material);
+}
+
+void MaterialManager::Flush(nvrhi::ICommandList* commandList)
+{
+	std::scoped_lock lock(m_MaterialMutex);
+
+	for (const auto& [offset, size] : m_DirtyRanges)
+		commandList->writeBuffer(m_Buffer, m_Data.data() + offset, size, offset);
+
+	m_DirtyRanges.clear();
 }
 
 Texture MaterialManager::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiSourceTexture>& niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, [[maybe_unused]] TextureType textureType)

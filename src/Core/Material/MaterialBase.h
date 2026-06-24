@@ -17,9 +17,11 @@ struct MaterialBase
 	virtual Data* GetData() { return m_Data.get(); }
 
 	virtual size_t GetDataSize() { return sizeof(Data); }
+
+	uint64_t GetOffset() const { return m_Offset; }
 protected:
 	// Material buffer offset
-	uint64_t m_Offset;
+	uint64_t m_Offset = 0;
 
 	// Material data sent to the GPU
 	eastl::unique_ptr<Data> m_Data;
