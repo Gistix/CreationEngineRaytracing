@@ -8,6 +8,11 @@ Properties::Properties(RE::BSTriShape* triShape)
 	m_Data.AlphaFlags = 0;
 	m_Data.AlphaThreshold = 0.5f;
 	m_Data.EmissiveColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.Alpha = 1.0f;
+	m_Data.ProjectedUVParams0 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.ProjectedUVParams1 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.ProjectedUVParams2 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	if (!triShape)
 		return;
@@ -19,6 +24,12 @@ Properties::Properties(RE::BSTriShape* triShape)
 
 Properties::Properties(RE::BSShaderProperty* shaderProperty, RE::NiAlphaProperty* alphaProperty)
 {
+	m_Data.Alpha = 1.0f;
+	m_Data.ProjectedUVParams0 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.ProjectedUVParams1 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.ProjectedUVParams2 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+
 	if (alphaProperty) {
 		AlphaFlags alpha = AlphaFlags::None;
 
@@ -41,6 +52,7 @@ Properties::Properties(RE::BSShaderProperty* shaderProperty, RE::NiAlphaProperty
 
 	if (shaderProperty) {
 		m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
+		m_Data.Alpha = shaderProperty->alpha;
 
 		if (auto lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
 			float4 emissive = float4(1.0f, 1.0f, 1.0f, lightingShaderProp->emissiveMult);
@@ -52,6 +64,26 @@ Properties::Properties(RE::BSShaderProperty* shaderProperty, RE::NiAlphaProperty
 			}
 
 			m_Data.EmissiveColor = emissive;
+		}
+
+		if (shaderProperty->flags.all(EShaderPropertyFlag::kProjectedUV)) {
+			auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
+			float oneMinusAlpha = 1.0f - params.w;
+
+			m_Data.ProjectedUVParams0 = half4(oneMinusAlpha * params.x, 0.0f, params.z, (oneMinusAlpha * params.y) + params.w);
+			m_Data.ProjectedUVParams1 = Util::Math::Float4(lightingShaderProp->projectedUVColor);
+
+			auto renderFlags = 0;
+			bool enableProjectedNormals = RE::GetINISetting("bEnableProjecteUVDiffuseNormals:Display")->GetBool() && (!(renderFlags & 0x8) || !RE::GetINISetting("bEnableProjecteUVDiffuseNormalsOnCubemap:Display")->GetBool());
+
+			m_Data.ProjectedUVParams2 = half4(
+				RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display")->GetFloat(),
+				RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display")->GetFloat(),
+				0.0f,
+				enableProjectedNormals ? 1.0f : 0.0f
+			);
+
+			m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 1.0f, 0.0f);
 		}
 	}
 }

@@ -20,4 +20,6 @@ struct PBRMaterial : public LightingMaterial
 	// Base color / normal reuse the inherited LightingMaterial diffuse/normal.
 	Texture m_RMAOSTexture;
 	Texture m_EmissiveTexture;
+	Texture m_FeaturesTexture0;
+	Texture m_FeaturesTexture1;
 };

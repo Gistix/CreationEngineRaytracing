@@ -27,8 +27,10 @@ void LightingMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial
 
 	UpdateTextures(shaderMaterial);
 
-	lightingData->SpecularColor = Util::Math::Float3(lightingShaderMaterial->specularColor) * lightingShaderMaterial->specularColorScale;
+	lightingData->SpecularColor = Util::Math::Float3(lightingShaderMaterial->specularColor);
+	lightingData->SpecularColorScale = lightingShaderMaterial->specularColorScale;
 	lightingData->SpecularPower = lightingShaderMaterial->specularPower;
+	lightingData->MaterialAlpha = lightingShaderMaterial->materialAlpha;
 
 	lightingData->DiffuseTexture = m_DiffuseTexture.GetDescriptorIndex();
 	lightingData->NormalTexture = m_NormalTexture.GetDescriptorIndex();
