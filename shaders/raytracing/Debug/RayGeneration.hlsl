@@ -145,14 +145,11 @@ void Main()
     
     if (type == Type::Lighting)
     {
-        if (feature == Feature::kDefault)
-        {
-            LightingMaterialData lightingMaterial = materials.Load<LightingMaterialData>(sourceMesh.MaterialOffset);    
-            float2 texCoord = lightingMaterial.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
+        LightingMaterialData lightingMaterial = materials.Load<LightingMaterialData>(sourceMesh.MaterialOffset);    
+        float2 texCoord = lightingMaterial.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
             
-            const Texture2D diffuseTexture = Textures[lightingMaterial.DiffuseTexture];          
-            color = diffuseTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
-        }
+        const Texture2D diffuseTexture = Textures[lightingMaterial.DiffuseTexture];          
+        color = diffuseTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
     }
     
     Output[idx] = float4(color, 1.0f);
