@@ -209,12 +209,7 @@ void Main()
     LightingMaterialData sourceMaterial;
 
     Surface sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial, true);
-    
- #if !(defined(SHARC) && SHARC_UPDATE)
-    Output[idx] = float4(sourceSurface.Albedo, 1.0f);
-    return;
- #endif
-    
+
     // Pass through Effect materials on primary ray: accumulate emissive, don't interact
     float3 primaryEffectEmissive = float3(0, 0, 0);
 #if defined(EFFECT_PASSTHROUGH)    
