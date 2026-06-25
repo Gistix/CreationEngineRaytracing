@@ -12,6 +12,13 @@
 #include "include/Surface.hlsli"
 #include "include/SurfaceMaker.hlsli"
 
+#include "interop/Properties.hlsli"
+#include "interop/Material/MaterialBaseData.hlsli"
+#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#include "interop/Material/Skyrim/WaterMaterialData.hlsli"
+#include "interop/Material/Skyrim/GlowmapMaterialData.hlsli"
+#include "interop/Material/Skyrim/PBRMaterialData.hlsli"
+
 bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed)
 {
     Instance instance;
@@ -22,32 +29,32 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     
     float3 uvw = GetBary(barycentrics);
 
-    Material material = GetMaterial(mesh.GeometryIdx);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
     
-    if (material.ShaderType == ShaderType::Water) {
+    if (material.Type == Type::Water) {
         return true;
     }
     
     float2 texCoord = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
     
-    float alpha = Textures[NonUniformResourceIndex(material.BaseTexture())].SampleLevel(DefaultSampler, texCoord, 0).a;
+    float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
     
-    alpha *= material.BaseColor().a * instance.Alpha;
+    alpha *= mesh.Properties.Alpha * instance.Alpha;
     
-    if ((material.ShaderFlags & ShaderFlags::kVertexAlpha) && !(material.ShaderFlags & ShaderFlags::kTreeAnim))
+    if ((mesh.Properties.ShaderFlags & ShaderFlags::kVertexAlpha) && !(mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim))
         alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
 
     [branch]
-    if (material.AlphaFlags & AlphaFlags::Test)
+    if (mesh.Properties.AlphaFlags & AlphaFlags::Test)
     {
-        if (alpha < material.AlphaThreshold)
+        if (alpha < mesh.Properties.AlphaThreshold)
             return false;
     }
 
-	if (material.AlphaFlags & AlphaFlags::Additive)
+	if (mesh.Properties.AlphaFlags & AlphaFlags::Additive)
 		alpha = 0.0f;
     
-    if (material.AlphaFlags & AlphaFlags::Blend)
+    if (mesh.Properties.AlphaFlags & AlphaFlags::Blend)
     {
         float rnd = Random(randomSeed);
         if (alpha < rnd)
@@ -67,27 +74,27 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     
     float3 uvw = GetBary(barycentrics);
 
-    Material material = GetMaterial(mesh.GeometryIdx);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
 
 #if defined(EFFECT_PASSTHROUGH)      
-    if (material.ShaderType == ShaderType::Effect)
+    if (material.Type == Type::Effect)
         return false;
 #endif
     
     float2 texCoord = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
-    if (material.ShaderType == ShaderType::Water)
+    if (material.Type == Type::Water)
     {
         float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
 
-        float handedness = Interpolate(v0.Handedness, v1.Handedness, v2.Handedness, uvw);
-        
         float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));        
         float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-        float3 bitangentWS = cross(tangentWS, normalWS) * handedness;        
+        float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));    
+        
+        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
         
         Surface surface = (Surface)0;
-        WaterMaterial(surface, texCoord, tangentWS, bitangentWS, handedness, material);
+        WaterMaterial(surface, texCoord, tangentWS, bitangentWS, handedness, mesh);
         
         float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
 
@@ -100,42 +107,42 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         return false;        
     }else
     {   
-        float alpha = Textures[NonUniformResourceIndex(material.BaseTexture())].SampleLevel(DefaultSampler, texCoord, 0).a;
+        float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
     
-        alpha *= material.BaseColor().a * instance.Alpha;
+        alpha *= mesh.Properties.Alpha * instance.Alpha;
     
-        if ((material.ShaderFlags & ShaderFlags::kVertexAlpha) && !(material.ShaderFlags & ShaderFlags::kTreeAnim))
+        if ((mesh.Properties.ShaderFlags & ShaderFlags::kVertexAlpha) && !(mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim))
             alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
         
         [branch]
-        if (material.AlphaFlags & AlphaFlags::Test)
+        if (mesh.Properties.AlphaFlags & AlphaFlags::Test)
         {
-            if (alpha < material.AlphaThreshold)
+            if (alpha < mesh.Properties.AlphaThreshold)
                 return false;
         }
 
-        if (material.AlphaFlags & AlphaFlags::Additive)
+        if (mesh.Properties.AlphaFlags & AlphaFlags::Additive)
             alpha = 0.0f;
     
-        if (material.AlphaFlags & AlphaFlags::Blend)
+        if (mesh.Properties.AlphaFlags & AlphaFlags::Blend)
         {
             float rnd = Random(randomSeed);
             if (rnd > alpha)
                 return false;
         }
         
-        if (((material.AlphaFlags & AlphaFlags::Transmission)) || (material.ShaderFlags & ShaderFlags::kRefraction))
+        if (((mesh.Properties.AlphaFlags & AlphaFlags::Transmission)) || (mesh.Properties.ShaderFlags & ShaderFlags::kRefraction))
         {
             float3 transmittance = 1.0f;
             [branch]
-            if (material.ShaderFlags & ShaderFlags::kRefraction)
+            if (mesh.Properties.ShaderFlags & ShaderFlags::kRefraction)
             {
                 transmittance = 1.0f; // fully transparent glass
             }
             else
             {
-                float3 baseColor = Textures[NonUniformResourceIndex(material.BaseTexture())].SampleLevel(DefaultSampler, texCoord, 0).rgb;
-                baseColor *= material.BaseColor().rgb;
+                float3 baseColor = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
+                baseColor *= float3(1.0f, 1.0f, 1.0f);
                 transmittance = lerp(float3(1.0f, 1.0f, 1.0f), baseColor, alpha);
             }
 
@@ -145,9 +152,9 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
             float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
             float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-            float3 bitangentWS = cross(tangentWS, normalWS) * Interpolate(v0.Handedness, v1.Handedness, v2.Handedness, uvw);
-
-            Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
+            float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));    
+        
+            Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
             float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
 
             float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
@@ -171,46 +178,48 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             return false;
         }
     
-        if ((material.Feature == Feature::kGlowMap || material.PBRFlags & PBR::Flags::HasEmissive) && material.ShaderFlags & ShaderFlags::kAssumeShadowmask) // only window for now
+        if ((material.Feature == Feature::kGlowMap || material.Type == Type::TruePBR) && mesh.Properties.ShaderFlags & ShaderFlags::kAssumeShadowmask)
         {
             float3 transmittance = 0.0f;
             float3 F0 = 0.04f;
             [branch]
             if (material.Feature == Feature::kGlowMap)
             {
-                transmittance = Textures[NonUniformResourceIndex(material.GlowTexture())].SampleLevel(DefaultSampler, texCoord, 0).rgb;
+                GlowmapMaterialDataExtra glow = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+                transmittance = Textures[NonUniformResourceIndex(glow.GlowTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
                 [branch]
-                if (material.ShaderFlags & ShaderFlags::kSpecular) {
+                if (mesh.Properties.ShaderFlags & ShaderFlags::kSpecular) {
                     float3 specularColor = 0.0f;
 
                     [branch]
-                    if (material.ShaderFlags & ShaderFlags::kModelSpaceNormals) {
-                        Texture2D specularTexture = Textures[NonUniformResourceIndex(material.SpecularTexture())];
-                        specularColor = specularTexture.SampleLevel(DefaultSampler, texCoord, 0).r * material.SpecularColor().rgb * material.SpecularColor().a;
+                    if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals) {
+                        Texture2D specularTexture = Textures[NonUniformResourceIndex(material.SpecularBackLightingTexture)];
+                        specularColor = specularTexture.SampleLevel(DefaultSampler, texCoord, 0).r * material.SpecularColor * material.SpecularColorScale;
                     } else {
-                        Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
-                        specularColor = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).a * material.SpecularColor().rgb * material.SpecularColor().a;
+                        Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
+                        specularColor = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).a * material.SpecularColor * material.SpecularColorScale;
                     }
                     F0 = clamp(0.08f * specularColor, 0.02f, 0.08f);
                 }
             }
             else
             {
-                Texture2D rmaosTexture = Textures[NonUniformResourceIndex(material.RMAOSTexture())];
-                Texture2D emissiveTexture = Textures[NonUniformResourceIndex(material.EmissiveTexture())];
+                PBRMaterialDataExtra pbr = Materials[0].Load<PBRMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+                Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
+                Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
                 float specular = rmaosTexture.SampleLevel(DefaultSampler, texCoord, 0).a;
                 float3 emissive = emissiveTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
                 transmittance = emissive;
-                F0 = material.SpecularLevel() * specular;
+                F0 = pbr.SpecularLevel * specular;
             }
 
             float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
 
             float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
             float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-            float3 bitangentWS = cross(tangentWS, normalWS) * Interpolate(v0.Handedness, v1.Handedness, v2.Handedness, uvw);
+            float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
         
-            Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture())];
+            Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
             float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
 
             float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;

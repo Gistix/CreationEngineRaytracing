@@ -20,7 +20,7 @@ StructuredBuffer<Instance>                  Instances                   : regist
 StructuredBuffer<Mesh>                      Meshes                      : register(t2);
 
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
-StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
+ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
 ByteAddressBuffer                           Materials[]                 : register(t0, space3);
 
 Texture2D<float4>                           Textures[]                  : register(t0, space4);

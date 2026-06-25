@@ -10,7 +10,7 @@ struct Vertex
 	half2 Texcoord0;
 	half3 Normal;
 	half3 Tangent;
-	float Handedness;
+    half3 Bitangent;
 	ubyte4f Color;
 	ubyte4f LandBlend0;
 	ubyte4f LandBlend1;

@@ -144,7 +144,7 @@ void Main()
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
-    Material sourceMaterial = (Material)0;
+    LightingMaterialData sourceMaterial = (LightingMaterialData)0;
     sourceMaterial.Feature = Feature::kDefault;
     
     Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, roughness, metalness, 0, ao);
@@ -175,7 +175,7 @@ void Main()
     Payload payload;
 
     Instance instance;
-    Material material;
+    LightingMaterialData material;
 
     Surface surface;
     BRDFContext brdfContext;
@@ -446,12 +446,12 @@ void Main()
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
                     StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, false);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, false);
                 }
             }
             

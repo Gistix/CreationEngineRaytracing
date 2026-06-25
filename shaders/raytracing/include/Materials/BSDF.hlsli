@@ -1059,7 +1059,7 @@ struct StandardBSDF
         return bsdf;
     }
 
-    float4 Eval(const BRDFContext brdfContext, const Material material, const Surface surface, const float3 wo)
+    float4 Eval(const BRDFContext brdfContext, const uint16_t feature, const Surface surface, const float3 wo)
     {
         float3 wi = brdfContext.ViewDirection;
         float3 N = surface.Normal;
@@ -1067,13 +1067,13 @@ struct StandardBSDF
         float3 wiLocal = surface.ToLocal(wi);
         float3 woLocal = surface.ToLocal(wo);
 #if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
-        if (material.Feature == Feature::kHairTint)
+        if (feature == Feature::kHairTint)
         {
             HairChiangBSDF bsdf = HairChiangBSDF::make(wi, surface);
             return bsdf.Eval(wiLocal, woLocal);
         } else
 #elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
-        if (material.Feature == Feature::kHairTint)
+        if (feature == Feature::kHairTint)
         {
             HairFarFieldBCSDF bsdf = HairFarFieldBCSDF::make(wi, surface);
             return bsdf.Eval(wiLocal, woLocal);
@@ -1085,7 +1085,7 @@ struct StandardBSDF
         }
     }
 
-    bool SampleBSDF(const BRDFContext brdfContext, const Material material, const Surface surface, out BSDFSample result, inout uint randomSeed)
+    bool SampleBSDF(const BRDFContext brdfContext, const uint16_t feature, const Surface surface, out BSDFSample result, inout uint randomSeed)
     {
         float4 preGeneratedSamples = float4(
             Random(randomSeed),
@@ -1099,7 +1099,7 @@ struct StandardBSDF
         float3 wiLocal = surface.ToLocal(wi);
         
 #if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
-        if (material.Feature == Feature::kHairTint)
+        if (feature == Feature::kHairTint)
         {
             HairChiangBSDF bsdf = HairChiangBSDF::make(wi, surface);
 
@@ -1110,7 +1110,7 @@ struct StandardBSDF
             return valid;
         } else
 #elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
-        if (material.Feature == Feature::kHairTint)
+        if (feature == Feature::kHairTint)
         {
             HairFarFieldBCSDF bsdf = HairFarFieldBCSDF::make(wi, surface);
             const float h = 2.0f * Random(randomSeed) - 1.0f;

@@ -244,26 +244,26 @@ RenderNode* Scene::GetDebug()
 
 RenderNode* Scene::GetModeNode([[ maybe_unused ]] Mode mode)
 {
-#if 0
 	if (mode == Mode::GlobalIllumination)
 		return GetGlobalIllumination();
 	else if (mode == Mode::PathTracing)
 		return GetPathTracing();
-#endif
+	else if (mode == Mode::Debug)
+		return GetDebug();
 
-	return GetDebug();
+	return nullptr;
 }
 
 bool Scene::IsModeInitialized([[ maybe_unused ]] Mode mode)
 {
-#if 0
 	if (mode == Mode::GlobalIllumination)
 		return m_GlobalIllumination != nullptr;
 	else if (mode == Mode::PathTracing)
 		return m_PathTracing != nullptr;
-#endif
+	else if (mode == Mode::Debug)
+		return m_Debug != nullptr;
 
-	return m_Debug != nullptr;
+	return false;
 }
 
 void Scene::UpdateMode(Mode mode, Mode previousMode)

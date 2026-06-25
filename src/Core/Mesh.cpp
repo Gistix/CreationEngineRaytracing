@@ -140,7 +140,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 
 				vertex.Tangent = Util::Math::Normalize(T);
 
-				vertex.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
+				//vertex.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
 			}
 		}
 

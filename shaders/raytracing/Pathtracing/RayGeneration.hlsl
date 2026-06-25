@@ -206,15 +206,20 @@ void Main()
     float3 sourcePosition = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
     
     Instance sourceInstance;
-    Material sourceMaterial;
+    LightingMaterialData sourceMaterial;
 
     Surface sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial, true);
-
+    
+ #if !(defined(SHARC) && SHARC_UPDATE)
+    Output[idx] = float4(sourceSurface.Albedo, 1.0f);
+    return;
+ #endif
+    
     // Pass through Effect materials on primary ray: accumulate emissive, don't interact
     float3 primaryEffectEmissive = float3(0, 0, 0);
 #if defined(EFFECT_PASSTHROUGH)    
     [loop]
-    for (uint effectPrimPass = 0; effectPrimPass < 16 && sourceMaterial.ShaderType == ShaderType::Effect; effectPrimPass++)
+    for (uint effectPrimPass = 0; effectPrimPass < 16 && sourceMaterial.Type == Type::Effect; effectPrimPass++)
     {
         primaryEffectEmissive += sourceSurface.Emissive;
 
@@ -431,7 +436,7 @@ void Main()
 
             float3 buildHitPos = buildRay.Origin + buildRay.Direction * buildPayload.hitDistance;
             Instance buildInstance;
-            Material buildMaterial;
+            LightingMaterialData buildMaterial;
             RayCone buildRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * buildSceneLength, Raytracing.PixelConeSpreadAngle);
             Surface buildSurface = SurfaceMaker::make(buildHitPos, buildPayload, hitResult.nextRayDir, buildRayCone, buildInstance, buildMaterial, true);
             BRDFContext buildBrdfCtx = BRDFContext::make(buildSurface, -hitResult.nextRayDir);
@@ -493,7 +498,7 @@ void Main()
             {
                 float3 expHitPos = expRay.Origin + expRay.Direction * expPayload.hitDistance;
                 Instance expInstance;
-                Material expMaterial;
+                LightingMaterialData expMaterial;
                 RayCone expRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * expSceneLength, Raytracing.PixelConeSpreadAngle);
                 Surface expSurface = SurfaceMaker::make(expHitPos, expPayload, ep.rayDir, expRayCone, expInstance, expMaterial, false);
                 BRDFContext expBrdfCtx = BRDFContext::make(expSurface, -ep.rayDir);
@@ -539,7 +544,7 @@ void Main()
 
                     float3 contHitPos = contRay.Origin + contRay.Direction * contPayload.hitDistance;
                     Instance contInstance;
-                    Material contMaterial;
+                    LightingMaterialData contMaterial;
                     RayCone contRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * expSceneLength, Raytracing.PixelConeSpreadAngle);
                     Surface contSurface = SurfaceMaker::make(contHitPos, contPayload, expHitResult.nextRayDir, contRayCone, contInstance, contMaterial, false);
                     BRDFContext contBrdfCtx = BRDFContext::make(contSurface, -expHitResult.nextRayDir);
@@ -706,11 +711,11 @@ void Main()
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
                 StandardBSDF specBsdf = StandardBSDF::make(specSurface, true);
-                direct += EvaluateDirectRadiance(sourceMaterial, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
             }
             else
 #endif
-                direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
         }
         
         // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights.
@@ -746,7 +751,7 @@ void Main()
     Payload payload;
 
     Instance instance;
-    Material material;
+    LightingMaterialData material;
 
     Surface surface;
     BRDFContext brdfContext;
@@ -848,7 +853,7 @@ void Main()
             
             const bool hasTransmission = false;
 #else            
-            bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed);
+            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed);
             
             if (isValid)
                 direction = bsdfSample.wo;
@@ -1000,7 +1005,7 @@ void Main()
             // Pass through Effect materials in bounce: accumulate emissive, continue ray unchanged
             bool effectMiss = false;
             [loop]
-            for (uint effectBouncePass = 0; effectBouncePass < 16 && material.ShaderType == ShaderType::Effect; effectBouncePass++)
+            for (uint effectBouncePass = 0; effectBouncePass < 16 && material.Type == Type::Effect; effectBouncePass++)
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
                 if (!giSecStarted && !fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
@@ -1168,12 +1173,12 @@ void Main()
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
                     StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
                 }
             }
             

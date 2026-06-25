@@ -95,7 +95,7 @@ void Main()
     float3 worldPosition = ray.Origin + ray.Direction * payload.hitDistance;
     
     Instance instance;
-    Material material;
+    LightingMaterialData material;
 
     Surface surface = SurfaceMaker::make(worldPosition, payload, ray.Direction, rayCone, instance, material);
 

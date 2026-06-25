@@ -139,12 +139,11 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint16_t ind
 
             float3 B = bitangent.xyz;
             B = normalize(B - N * dot(N, B));
-
+            vertex.Bitangent = (half3)B;
+            
             float3 T = float3(pos.w, normal.w, bitangent.w);
             T = normalize(T - N * dot(N, T));
-
-            vertex.Tangent = (half3)normalize(T);
-            vertex.Handedness = -(dot(cross(N, T), B) < 0.0f ? -1.0f : 1.0f);
+            vertex.Tangent = (half3)T;
         }
     }
 
@@ -200,17 +199,16 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
 #if defined(HAS_PREV_POSITIONS)
 void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)
 {
-    const uint meshIndex = mesh.GeometryID;
     const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
 
-    Triangle geomTriangle = GetTriangle(meshIndex, safePrimitiveIndex);
+    Triangle geomTriangle = GetTriangle(mesh.IndexID, safePrimitiveIndex);
 
-    StructuredBuffer<Vertex> vertices = Vertices[NonUniformResourceIndex(meshIndex)];
-    v0 = vertices[NonUniformResourceIndex(geomTriangle.x)];
-    v1 = vertices[NonUniformResourceIndex(geomTriangle.y)];
-    v2 = vertices[NonUniformResourceIndex(geomTriangle.z)];
+    ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
+    v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x);
+    v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y);
+    v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z);
     
-    StructuredBuffer<float3> prevVertices = PrevPositions[NonUniformResourceIndex(meshIndex)];
+    StructuredBuffer<float3> prevVertices = PrevPositions[NonUniformResourceIndex(mesh.VertexID)];
     prevPos0 = prevVertices[NonUniformResourceIndex(geomTriangle.x)];
     prevPos1 = prevVertices[NonUniformResourceIndex(geomTriangle.y)];
     prevPos2 = prevVertices[NonUniformResourceIndex(geomTriangle.z)];    

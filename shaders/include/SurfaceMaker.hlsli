@@ -42,7 +42,7 @@ struct SurfaceMaker
 {
 
 #if !defined(RASTER)
-    static Surface make(float3 position, Payload payload, float3 rayDir, RayCone rayCone, out Instance instance, out Material material, bool primary)
+    static Surface make(float3 position, Payload payload, float3 rayDir, RayCone rayCone, out Instance instance, out LightingMaterialData material, bool primary)
     { 
         Surface surface;         
 
@@ -74,7 +74,7 @@ struct SurfaceMaker
         float3 uvw = GetBary(payload.Barycentrics());
         float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
 
-        material = GetMaterial(mesh.GeometryIdx);
+        material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
@@ -172,21 +172,24 @@ struct SurfaceMaker
         float3 normal1 = FlipIfOpposite(v1.Normal, objectSpaceFlatNormal);
         float3 normal2 = FlipIfOpposite(v2.Normal, objectSpaceFlatNormal);
 
-        float handedness = Interpolate(v0.Handedness, v1.Handedness, v2.Handedness, uvw);
-        
         float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(normal0, normal1, normal2, uvw)));
         float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-        float3 bitangentWS = cross(tangentWS, normalWS) * handedness;        
+        float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));     
         
-        float4 vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
-
+        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
+           
+        float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+        
+        if (mesh.Properties.ShaderFlags & ShaderFlags::kVertexColors)
+            vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
+        
 #if !USE_SIA_INTERPOLATION
         // Standard path: compute face normal from object-space cross product
         surface.FaceNormal = mul(objectToWorld3x3, objectSpaceFlatNormal);
 #endif
 
         surface.MipLevel = rayCone.computeLOD(coneTexLODValue, rayDir, normalWS, true) + Raytracing.TexLODBias;
-        Texture2D baseTextureForLod = Textures[NonUniformResourceIndex(material.BaseTexture())];
+        Texture2D baseTextureForLod = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
         uint baseTexWidth, baseTexHeight;
         baseTextureForLod.GetDimensions(baseTexWidth, baseTexHeight);
         surface.MipLevel += 0.5f * SafeLog2(max(1.0f, (float)baseTexWidth * (float)baseTexHeight));
@@ -225,27 +228,27 @@ struct SurfaceMaker
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
             
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, mesh);
         }
-        else if (material.ShaderType == ShaderType::Effect)
+        else if (material.Type == Type::Effect)
         {
-            EffectMaterial(surface, texCoord0, vertexColor, material);
+            EffectMaterial(surface, texCoord0, vertexColor, mesh);
         }
-        else if (material.ShaderType == ShaderType::Water)
+        else if (material.Type == Type::Water)
         {
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, mesh);
         }
-        else if (material.ShaderType == ShaderType::DistantTree)
+        else if (material.Type == Type::DistantTree)
         {
-            DistantTreeMaterial(surface, texCoord0, material);
+            DistantTreeMaterial(surface, texCoord0, mesh);
         }
-        else if (material.ShaderType == ShaderType::Grass)
+        else if (material.Type == Type::Grass)
         {
-            GrassMaterial(surface, texCoord0, material);
+            GrassMaterial(surface, texCoord0, mesh);
         }
         else
         {
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh);
         }
 #   else   
 #   endif
@@ -277,7 +280,7 @@ struct SurfaceMaker
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
-        Material material = GetMaterial(mesh.GeometryIdx);
+        LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
 
         float2 texCoord0 = material.TexCoord(texCoord);
 
@@ -316,17 +319,17 @@ struct SurfaceMaker
         
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, material);
-        else if (material.ShaderType == ShaderType::Effect)
-            EffectMaterial(surface, texCoord0, vertexColor, material);
-        else if (material.ShaderType == ShaderType::Water)
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, material);
-        else if (material.ShaderType == ShaderType::DistantTree)
-            DistantTreeMaterial(surface, texCoord0, material);
-        else if (material.ShaderType == ShaderType::Grass)
-            GrassMaterial(surface, texCoord0, material);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, mesh);
+        else if (material.Type == Type::Effect)
+            EffectMaterial(surface, texCoord0, vertexColor, mesh);
+        else if (material.Type == Type::Water)
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, mesh);
+        else if (material.Type == Type::DistantTree)
+            DistantTreeMaterial(surface, texCoord0, mesh);
+        else if (material.Type == Type::Grass)
+            GrassMaterial(surface, texCoord0, mesh);
         else
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, material);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh);
 #   else   
 #   endif
    

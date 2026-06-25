@@ -31,6 +31,22 @@ namespace ShaderFlags
     static const uint kHDLODObjects = (1 << 23);
     static const uint kSnow = (1 << 24);
 }
+
+namespace AlphaFlags
+{
+    static const uint16_t None = 0;
+    static const uint16_t Blend = (1 << 0);
+    static const uint16_t Test = (1 << 1);
+    static const uint16_t Transmission = (1 << 2);
+    static const uint16_t Additive = (1 << 3);
+}
+
+namespace WaterShaderFlags
+{
+    static const uint kEnableFlowmap = (1 << 15);
+    static const uint kBlendNormals = (1 << 16);
+    static const uint kVertexUV = (1 << 8);
+}
 #endif
 
 INTEROP_DATA_STRUCT(Properties, 4)
