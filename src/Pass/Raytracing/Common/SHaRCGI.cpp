@@ -287,8 +287,7 @@ namespace Pass::Raytracing::Common
 				Util::Math::DivideRoundUp(resolution.y, 5u)
 			};
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, 16);
-
+			auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, Constants::GI_DISPATCH_THREADS);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 

@@ -19,10 +19,6 @@
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
-#ifndef THREAD_GROUP_SIZE
-#define THREAD_GROUP_SIZE (32)
-#endif
-
 // --------------------------------------------------------
 // Copied from shaders\raytracing\include\Rays.hlsli
 // --------------------------------------------------------

@@ -412,7 +412,7 @@ namespace Pass
 			state.bindings = bindings;
 			commandList->setComputeState(state);
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 32);
+			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, Constants::PT_DISPATCH_THREADS);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 	}

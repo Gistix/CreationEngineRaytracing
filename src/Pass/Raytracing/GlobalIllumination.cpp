@@ -314,7 +314,7 @@ namespace Pass::Raytracing
 			state.bindings = bindings;
 			commandList->setComputeState(state);
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 16);
+			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, Constants::GI_DISPATCH_THREADS);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 	}

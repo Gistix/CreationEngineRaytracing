@@ -270,8 +270,7 @@ namespace Pass
 				Util::Math::DivideRoundUp(resolution.y, 5u)
 			};
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, 16);
-
+			auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, Constants::PT_DISPATCH_THREADS);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 

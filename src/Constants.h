@@ -49,4 +49,8 @@ namespace Constants
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
 
 	static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;
+
+	static constexpr uint32_t PT_DISPATCH_THREADS = 8;
+
+	static constexpr uint32_t GI_DISPATCH_THREADS = 16;
 }

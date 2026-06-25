@@ -1,6 +1,7 @@
 #include "Shader.h"
 
 #include "Types/InstanceMask.h"
+#include "Constants.h"
 
 namespace Util
 {
@@ -43,8 +44,10 @@ namespace Util
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
 
-			//defines.emplace_back(L"HAS_PREV_POSITIONS", L"0");
+			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::GI_DISPATCH_THREADS);
 
+			//defines.emplace_back(L"HAS_PREV_POSITIONS", L"0");
+			
 			defines.emplace_back(L"HAIR_MODE", static_cast<int>(settings.AdvancedSettings.HairBSDF));
 
 			if (settings.AdvancedSettings.SSSSettings.Enabled)
@@ -69,6 +72,8 @@ namespace Util
 		eastl::vector<ShaderDefine> GetGlobalIlluminationDefines(const Settings& settings, bool sharc, bool sharcUpdate)
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
+
+			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::GI_DISPATCH_THREADS);
 
 			// No water in GI
 			auto instanceMask = InstanceMask::All & ~InstanceMask::Water;
