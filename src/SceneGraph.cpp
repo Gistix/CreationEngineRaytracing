@@ -491,17 +491,19 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 					created->SetOwner(clusterOwner);
 
-					eastl::shared_ptr<BaseMesh> registered;
+					mesh = nullptr;
 					{
 						std::scoped_lock lock(m_MeshMutex);
 						auto [it, inserted] = m_DirectMeshes.emplace(bsTriShape, created);
 						if (inserted)
-							registered = it->second;
+							mesh = it->second;
 					}
 
-					if (registered) {
-						GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(registered);
-						UpdateMeshTransforms(registered.get(), clusterOwner, bsTriShape);
+					if (mesh) {
+						mesh->Update();
+
+						GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(mesh);
+						UpdateMeshTransforms(mesh.get(), clusterOwner, bsTriShape);
 					}
 				}
 			}

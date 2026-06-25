@@ -170,36 +170,39 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 
 bool SkinnedMesh::Update()
 {
+	BaseMesh::Update();
+
+	if (!m_BSTriShape)
+		return false;
+
 	bool poseAdvanced = false;
 
 #if defined(SKYRIM)
-	if (m_BSTriShape) {
-		const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
 
-		auto* skinInstance = geometryData.skinInstance.get();
+	auto* skinInstance = geometryData.skinInstance.get();
 
-		// UBE crash fix: rootParent must be valid.
-		if (skinInstance && skinInstance->rootParent) {
-			// Only recompute when the game advanced the animation this frame.
-			const auto frameID = skinInstance->frameID;
-			if (m_SkinFrameID != frameID) {
-				m_SkinFrameID = frameID;
+	// UBE crash fix: rootParent must be valid.
+	if (skinInstance && skinInstance->rootParent) {
+		// Only recompute when the game advanced the animation this frame.
+		const auto frameID = skinInstance->frameID;
+		if (m_SkinFrameID != frameID) {
+			m_SkinFrameID = frameID;
 
-				auto* skinData = skinInstance->skinData.get();
-				if (skinData && skinData->bones != 0) {
-					const auto geometryWorldInverse = m_BSTriShape->world.Invert();
+			auto* skinData = skinInstance->skinData.get();
+			if (skinData && skinData->bones != 0) {
+				const auto geometryWorldInverse = m_BSTriShape->world.Invert();
 
-					if (m_BoneMatrices.size() != skinData->bones)
-						m_BoneMatrices.resize(skinData->bones);
+				if (m_BoneMatrices.size() != skinData->bones)
+					m_BoneMatrices.resize(skinData->bones);
 
-					for (uint32_t i = 0; i < skinData->bones; i++) {
-						const auto boneWorld = *skinInstance->boneWorldTransforms[i];
-						const auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
-						XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(geometryWorldInverse * boneMatrix));
-					}
-
-					poseAdvanced = true;
+				for (uint32_t i = 0; i < skinData->bones; i++) {
+					const auto boneWorld = *skinInstance->boneWorldTransforms[i];
+					const auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
+					XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(geometryWorldInverse * boneMatrix));
 				}
+
+				poseAdvanced = true;
 			}
 		}
 	}

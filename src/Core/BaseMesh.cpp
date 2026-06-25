@@ -47,6 +47,7 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			VertexDesc(m_VertexDescRaw),
 			static_cast<uint32_t>(m_Material->GetOffset()),
 			descs[i].geometryData.triangles.indexCount / 3,
+			m_Properties.GetData(),
 			m_LocalToOwner,
 			m_LocalToOwner
 		};
@@ -140,6 +141,16 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	}
 
 	return vertexBuffer;
+}
+
+bool BaseMesh::Update()
+{ 
+	if (!m_BSTriShape)
+		return false;
+
+	m_Properties = { m_BSTriShape };
+
+	return false;
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)

@@ -3,6 +3,7 @@
 
 #include "Interop.h"
 #include "interop/VertexDesc.hlsli"
+#include "interop/Properties.hlsli"
 
 INTEROP_DATA_STRUCT(Mesh, 4)
 { 
@@ -11,6 +12,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     VertexDesc VertexDesc;
     uint MaterialOffset;
     uint NumTriangles;
+    INTEROP_DATA_TYPE(Properties) Properties;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
     INTEROP_ROW_MAJOR(float3x4) PrevTransform;
 };

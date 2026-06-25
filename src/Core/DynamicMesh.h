@@ -28,6 +28,7 @@ public:
 	// Shared bindless slot for the dynamic float4 buffers (original SRV + live UAV).
 	uint32_t GetDynamicIndex() const { return m_DynamicDescriptor.Get(); }
 
+	// Called by hook
 	void UpdateDynamicData(void* dynamicData, uint32_t dataSize);
 
 	void UploadBuffers(nvrhi::ICommandList* commandList) override;

@@ -2,7 +2,7 @@
 
 #include "Core/DirtyFlags.h"
 #include "Core/Material/MaterialBase.h"
-
+#include "Core/Skyrim/Properties.h"
 #include "Framework/DescriptorTableManager.h"
 
 #include "Mesh.hlsli"
@@ -54,7 +54,7 @@ public:
 
 	// CPU-side per-frame update: detect whether the mesh's geometry data changed (lazy).
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
-	virtual bool Update() { return false; }
+	virtual bool Update();
 
 	// GPU-side per-frame upload of any pending data (flag-gated); runs in the TLAS pass. No-op otherwise.
 	virtual void UploadBuffers([[maybe_unused]] nvrhi::ICommandList* commandList) {}
@@ -135,6 +135,9 @@ protected:
 
 	// Prevents BSTriShape being destroyed mid-usage
 	std::mutex m_BSTriShapeMutex;
+
+	// Shader and Alpha properties
+	Properties m_Properties;
 
 	eastl::shared_ptr<MaterialBase> m_Material;
 };
