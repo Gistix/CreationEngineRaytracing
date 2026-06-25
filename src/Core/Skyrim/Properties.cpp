@@ -5,7 +5,7 @@
 Properties::Properties(RE::BSTriShape* triShape)
 {
 	m_Data.ShaderFlags = 0;
-	m_Data.AlphaFlags = 0;
+	m_Data.AlphaFlags = AlphaFlags::None;
 	m_Data.AlphaThreshold = 0.5f;
 	m_Data.EmissiveColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.Alpha = 1.0f;
@@ -19,37 +19,28 @@ Properties::Properties(RE::BSTriShape* triShape)
 
 	auto runtimeData = Util::Adapter::GetGeometryRuntimeData(triShape);
 
-	*this = Properties(runtimeData.shaderProperty, runtimeData.alphaProperty);
-}
-
-Properties::Properties(RE::BSShaderProperty* shaderProperty, RE::NiAlphaProperty* alphaProperty)
-{
-	m_Data.Alpha = 1.0f;
-	m_Data.ProjectedUVParams0 = half4(0.0f, 0.0f, 0.0f, 0.0f);
-	m_Data.ProjectedUVParams1 = half4(0.0f, 0.0f, 0.0f, 0.0f);
-	m_Data.ProjectedUVParams2 = half4(0.0f, 0.0f, 0.0f, 0.0f);
-	m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 0.0f, 0.0f);
-
+	auto alphaProperty = runtimeData.alphaProperty;
 	if (alphaProperty) {
-		AlphaFlags alpha = AlphaFlags::None;
+		AlphaFlags alphaFlags = AlphaFlags::None;
 
 		if (alphaProperty->GetAlphaBlending()) {
 			using AlphaFunction = RE::NiAlphaProperty::AlphaFunction;
 
 			if (alphaProperty->GetDestBlendMode() == AlphaFunction::kOne)
-				alpha |= AlphaFlags::Additive | AlphaFlags::Transmission;
+				alphaFlags |= AlphaFlags::Additive | AlphaFlags::Transmission;
 			else
-				alpha |= AlphaFlags::Blend;
+				alphaFlags |= AlphaFlags::Blend;
 		}
 
 		if (alphaProperty->GetAlphaTesting()) {
-			alpha |= AlphaFlags::Test;
+			alphaFlags |= AlphaFlags::Test;
 			m_Data.AlphaThreshold = alphaProperty->alphaThreshold / 255.0f;
 		}
 
-		m_Data.AlphaFlags = static_cast<uint16_t>(alpha);
+		m_Data.AlphaFlags = alphaFlags;
 	}
 
+	auto shaderProperty = runtimeData.shaderProperty;
 	if (shaderProperty) {
 		m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
 		m_Data.Alpha = shaderProperty->alpha;

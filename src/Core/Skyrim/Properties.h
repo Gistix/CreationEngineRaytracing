@@ -58,8 +58,6 @@ struct Properties
 
 	Properties(RE::BSTriShape* triShape);
 
-	Properties(RE::BSShaderProperty* shaderProperty, RE::NiAlphaProperty* alphaProperty);
-
 	auto& GetData() const { return m_Data; }
 private:
 	static uint32_t MapShaderFlags(RE::BSShaderProperty* shaderProperty);
