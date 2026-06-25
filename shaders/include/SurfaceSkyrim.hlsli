@@ -98,7 +98,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
         Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
 
-        float4 albedo = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel) * float4(1.0f, 1.0f, 1.0f, mesh.Properties.Alpha);
+        float4 albedo = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
         albedo.rgb = PBRColorScale(albedo.rgb);
         alpha = albedo.a;
         
@@ -214,7 +214,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             baseTexture.SampleLevel(ClampSampler, texCoord0, mipLevel) : 
             baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
         
-        alpha = diffuse.a * mesh.Properties.Alpha;
+        alpha = diffuse.a;
         
         float3 albedo = diffuse.rgb * vertexColor.rgb;
         
@@ -235,8 +235,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         if (material.Feature == Feature::kHairTint)
         {
             HairTintMaterialDataExtra hair = Materials[0].Load<HairTintMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
-            float3 hairTint = hair.TintColor;
-            surface.Albedo *= VanillaDiffuseColor(hairTint);
+            surface.Albedo *= VanillaDiffuseColor(hair.TintColor);
         }
     
         [branch]
@@ -513,12 +512,14 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             }
             
             surface.Albedo = lerp(surface.Albedo, projBaseColor, projWeight > 0 ? 1.0f : 0.0f);
-        }      
+        }
     }
     
     [branch]
     if (mesh.Properties.AlphaFlags != AlphaFlags::None)
     {
+        alpha *= material.MaterialAlpha * mesh.Properties.Alpha;
+        
         [branch]
         if ((mesh.Properties.ShaderFlags & ShaderFlags::kVertexAlpha) && !(mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim))
             alpha *= vertexColor.a;
