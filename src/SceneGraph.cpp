@@ -436,7 +436,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		const bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
 		const bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
 
-		if (!isLightingShader && !isEffectShader && !isWaterShader && !isTreeLODShader && !isGrassShader)
+		auto* alphaProperty = geometryData.alphaProperty;
+		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+
+		const bool validEffect = isEffectShader && !isAlphaBlend;
+
+		if (!isLightingShader && !validEffect && !isWaterShader && !isTreeLODShader && !isGrassShader)
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
 		const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
