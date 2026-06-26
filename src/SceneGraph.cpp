@@ -568,60 +568,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto& [bsTriShape, cluster] : m_OrphanClusters)
 		appendInstance(cluster.get());
 
-	/*eastl::array<uint8_t, Constants::INSTANCE_LIGHTS_MAX> lights;
-
-	m_Instances.ApplyChanges();
-
-	m_Instances.Write([&](eastl::unique_ptr<Instance>& instance) {
-		instance->Update(m_NumInstances);
-
-		if (instance->IsHidden())
-			return Iterator::Continue;
-
-		bool isPlayer = Util::IsPlayerFormID(instance->m_FormID);
-
-		// Update if applicable, and queue skinning/dynamic update
-		instance->model->Update(instance->m_Node, isPlayer, commandList);
-
-		// Get mesh data
-		auto params = instance->model->GetData(m_MeshData.data(), m_NumMeshes);
-
-		// No visible meshes in instance
-		instance->SetHiddenModel(params.hidden);
-
-		// Post update since these states are set by update itself
-		if (instance->SkipAS())
-			return Iterator::Continue;
-
-		uint8_t numLights = 0u;
-
-		for (auto& [bsLight, light] : m_Lights)
-		{
-			if (light.m_Instances.find(instance.get()) == light.m_Instances.end())
-				continue;
-
-			lights[numLights] = light.m_Index;
-			numLights++;
-
-			if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
-				logger::error("SceneGraph::Update - Number of lights per instance of {} exceeds the maximum of {}", numLights, Constants::INSTANCE_LIGHTS_MAX);
-				break;
-			}
-		}
-
-		m_InstanceData[m_NumInstances] = {
-			instance->m_Transform,
-			instance->m_PrevTransform,
-			InstanceLightData(lights.data(), numLights),
-			params.firstMeshID,
-			params.numMeshes,
-			instance->GetAlpha()
-		};
-
-		m_NumInstances++;
-		return Iterator::Continue;
-	});*/
-
 	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
 		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
 
