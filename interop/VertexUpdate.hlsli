@@ -4,6 +4,16 @@
 #include "Interop.h"
 #include "interop/VertexDesc.hlsli"
 
+namespace Skinning
+{
+    namespace MeshFlags
+    {
+        static const uint32_t None = 0;
+        static const uint32_t Dynamic = (1 << 0);
+        static const uint32_t ModelSpaceNormal = (1 << 1);
+    }
+}
+
 INTEROP_STRUCT(VertexUpdateData, 4)
 {
 	// Shared bindless slot for the original (rest-pose), live (output) and prev-position buffers.
@@ -13,7 +23,7 @@ INTEROP_STRUCT(VertexUpdateData, 4)
 	uint updateFlags;
 	uint vertexCount;
 	uint boneOffset;
-	uint shapeFlags;
+	uint meshFlags;
 	uint numMatrices;
 	// Native packed vertex layout used to read the original buffer and write the live buffer.
 	VertexDesc VertexDesc;

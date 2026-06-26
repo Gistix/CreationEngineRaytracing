@@ -88,6 +88,8 @@ public:
 	// Writes one MeshData per geometry into 'out' (starting at out[0]); returns the number written.
 	uint32_t WriteMeshData(MeshData* out) const;
 
+	uint64_t GetVertexDescRaw() const { return *reinterpret_cast<const uint64_t*>(&m_VertexDesc); }
+
 protected:
 	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
 
@@ -124,7 +126,7 @@ protected:
 	float3x4 m_LocalToOwner;
 
 	// Native 64-bit vertex descriptor (RE::BSGraphics::VertexDesc) for MeshData::Flags.
-	uint64_t m_VertexDescRaw = 0;
+	RE::BSGraphics::VertexDesc m_VertexDesc;
 
 	// Mesh-owned dirty state consumed by the owning BLASCluster (Visibility => rebuild, Transform/Vertex => refit).
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;

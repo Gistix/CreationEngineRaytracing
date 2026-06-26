@@ -35,7 +35,7 @@
 static const uint kBaseSize = sizeof(MaterialBaseData);
 static const uint kLightingSize = sizeof(LightingMaterialData);
 
-void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Mesh mesh)
+void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Mesh mesh, float4 boneRotation)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
     float mipLevel = surface.MipLevel;
@@ -65,14 +65,11 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     }
 #endif
 
-    if ((mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals) && (mesh.Properties.ShaderFlags & ShaderFlags::kLODLandscape))
+    if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals)
     {
-        ModelSpaceNormalMap(
-            normal,
-            handedness,
-            normalWS, tangentWS, bitangentWS,
-            surface.Normal, surface.Tangent, surface.Bitangent
-        );
+        // Swizzle matches vanilla shaders
+        surface.Normal = RotateByQuaternion(normalize(normal.xzy * 2.0f - 1.0f), boneRotation);
+        CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
     }
     else
     {

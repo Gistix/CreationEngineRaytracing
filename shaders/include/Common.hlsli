@@ -11,6 +11,14 @@
 #define DIV_EPSILON (1e-4f)
 #define LAND_MIN_WEIGHT (0.01f)
 
+void CreateOrthonormalBasis(in float3 normal, out float3 tangent, out float3 bitangent)
+{
+    float3 up = abs(normal.z) < 0.999 ? float3(0, 0, 1) : float3(0, 1, 0);
+
+    tangent = normalize(cross(up, normal));
+    bitangent = cross(normal, tangent);
+}
+
 float3 SafeNormalize(float3 input)
 {
     float lenSq = dot(input,input);
@@ -37,12 +45,11 @@ void NormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 g
     bitangentWS = cross(normalWS, tangentWS) * handedness;
 }
 
-void ModelSpaceNormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
+void ModelSpaceNormalMap(float3 normalMap, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
 {
     // Swizzle matches vanilla shaders
     normalWS = normalize(normalMap.xzy * 2.0f - 1.0f);
-    tangentWS = normalize(geomTangentWS - normalWS * dot(geomTangentWS, normalWS));
-    bitangentWS = cross(normalWS, tangentWS) * handedness;
+    CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
 }
 
 float Remap(float x, float min, float max)
@@ -191,5 +198,11 @@ float3 ComputeNormalImproved(const Texture2D<float> depth, in float2 id, in int2
 
     // Invert normals so they match GBuffer
     return normalize(cross(dpdy, dpdx));
+}
+
+float3 RotateByQuaternion(float3 v, float4 q)
+{
+    float3 t = 2.0 * cross(q.xyz, v);
+    return v + q.w * t + cross(q.xyz, t);
 }
 #endif // COMMON_HLSLI

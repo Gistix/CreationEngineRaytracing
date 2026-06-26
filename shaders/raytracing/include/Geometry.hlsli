@@ -48,6 +48,24 @@ inline float4 Interpolate(half4 u, half4 v, half4 w, float3 uvw)
     return u * uvw.x + v * uvw.y + w * uvw.z;
 }
 
+inline float4 InterpolateQuaternion(half4 u, half4 v, half4 w, float3 bary)
+{
+    float4 q0 = (float4)u;
+    float4 q1 = (float4)v;
+    float4 q2 = (float4)w;
+
+    // hemisphere alignment
+    if (dot(q0, q1) < 0.0) q1 = -q1;
+    if (dot(q0, q2) < 0.0) q2 = -q2;
+
+    float4 q =
+        q0 * bary.x +
+        q1 * bary.y +
+        q2 * bary.z;
+
+    return normalize(q);
+}
+
 Instance GetInstance(uint instanceIdx)
 {
     const uint safeInstanceIndex = min(instanceIdx, Raytracing.NumInstances);
@@ -94,13 +112,15 @@ inline float4 UnpackByte4SNorm(uint packed)
     return v * (1.0f / 255.0f) * 2.0f - 1.0f;
 }
 
-Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint16_t index)
+Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
 {
     Vertex vertex = (Vertex)0;
 
+    const uint vertexSize = (uint)vertexDesc.GetVertexSize();
+    
     // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t, so a 16-bit
     // multiply would overflow (e.g. stride 32 * index 2048 = 0) and corrupt high-index vertices.
-    const uint vertexOffset = (uint)vertexDesc.GetVertexSize() * (uint)index;
+    const uint vertexOffset = vertexSize * index;
 
     float4 pos = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -176,6 +196,21 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint16_t ind
         vertex.LandBlend1.w = (packed1 >> 24) & 0xFF;
     }
 
+    if (isMSN)
+    {
+        const uint quatOffset = (vertexSize * numVertices) + index * 8u;
+        const uint2 packed = vertices.Load2(quatOffset);
+        
+        half4 q;
+        q.x = (half)f16tof32(packed.x & 0xffff);
+        q.y = (half)f16tof32(packed.x >> 16);
+        q.z = (half)f16tof32(packed.y & 0xffff);
+        q.w = (half)f16tof32(packed.y >> 16);
+        
+        vertex.Normal = q.xyz;
+        vertex.Tangent.x = q.w;
+    }
+    
     return vertex;
 }
 
@@ -185,16 +220,13 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
     
     const Triangle geomTriangle = GetTriangle(mesh.IndexID, safePrimitiveIndex);
 
+    const bool isMSN = mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    
     const ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
-    v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x);
-    v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y);
-    v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z);
+    v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x, isMSN, mesh.NumVertices);
+    v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y, isMSN, mesh.NumVertices);
+    v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z, isMSN, mesh.NumVertices);
 }
-
-/*Material GetMaterial(in uint meshIndex)
-{
-    return Materials[NonUniformResourceIndex(meshIndex)][0];
-}*/
 
 #if defined(HAS_PREV_POSITIONS)
 void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)

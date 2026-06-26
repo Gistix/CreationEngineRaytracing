@@ -11,7 +11,8 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint16_t VertexID;
     VertexDesc VertexDesc;
     uint MaterialOffset;
-    uint NumTriangles;
+    uint16_t NumVertices;
+    uint16_t NumTriangles;
     INTEROP_DATA_TYPE(Properties) Properties;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
     INTEROP_ROW_MAJOR(float3x4) PrevTransform;

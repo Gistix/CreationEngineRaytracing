@@ -52,9 +52,6 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 
 	vertexData.vertices.resize(vertexCountIn);
 
-	if (skinned)
-		vertexData.skinning.resize(vertexCountIn);
-
 	if (skinned || dynamic)
 		vertexData.position.resize(vertexCountIn);
 
@@ -183,8 +180,6 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 
 			fillSkinningData(weights);
 			fillSkinningData(boneIds);
-
-			vertexData.skinning[i] = Skinning(weights, boneIds);
 		}
 
 		if (vertexFlags & RE::BSGraphics::Vertex::VF_LANDDATA) {
@@ -261,7 +256,6 @@ void Mesh::ClearUnusedVertices()
 	}
 
 	cleanVertexData.vertices.resize(vertexCount);
-	cleanVertexData.skinning.resize(vertexCount);
 	cleanVertexData.remap.resize(vertexCount);
 
 	uint16_t i = 0;
@@ -271,7 +265,6 @@ void Mesh::ClearUnusedVertices()
 			cleanVertexData.dynamicPositionRemapped[i] = vertexData.dynamicPosition[v];
 	
 		cleanVertexData.vertices[i] = vertexData.vertices[v];
-		cleanVertexData.skinning[i] = vertexData.skinning[v];
 
 		// New -> Old
 		cleanVertexData.remap[i] = v;
@@ -543,23 +536,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexCopyBuffer);
 		device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable, bindingSet);
-	}
-
-	if (flags.all(Flags::Skinned)) {
-		const size_t size = sizeof(Skinning) * vertexData.count;
-
-		auto& skinningBufferDesc = nvrhi::BufferDesc()
-			.setByteSize(size)
-			.setStructStride(sizeof(Skinning))
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-			.setDebugName(std::format("{} (Skinning Buffer)", m_Name.c_str()));
-
-		buffers.skinningBuffer = device->createBuffer(skinningBufferDesc);
-
-		commandList->writeBuffer(buffers.skinningBuffer, vertexData.skinning.data(), size);
-
-		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
-		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
 	}
 
 	// Previous position buffer for per-vertex motion vectors

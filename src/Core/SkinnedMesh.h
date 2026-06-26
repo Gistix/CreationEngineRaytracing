@@ -25,9 +25,9 @@ public:
 
 	uint32_t GetVertexCount() const { return m_VertexCount; }
 
-	uint64_t GetVertexDescRaw() const { return m_VertexDescRaw; }
-
 	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const override { return m_GeometryDescs; }
+
+	bool GetModelSpaceNormal() const { return m_ModelSpaceNormal; }
 protected:
 	// Non-building constructor for derived meshes that supply their own vertex buffer (e.g. DynamicMesh).
 	SkinnedMesh() = default;
@@ -46,7 +46,7 @@ protected:
 	// Creates the live (skinning output) byte-address UAV buffer seeded from the CPU rest-pose data, plus
 	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT
 	// read (VertexDescriptors) to the live buffer. Returns the live buffer for the BLAS geometry desc.
-	nvrhi::IBuffer* CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride);
+	void CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride);
 
 	// Native (rest-pose) byte-address vertex buffer; the original source consumed by the skinning pass.
 	BufferDescriptor m_VertexBuffer;
@@ -67,4 +67,6 @@ protected:
 
 	// Skin instance frame id of the last pose we processed (skip work when the animation hasn't advanced).
 	uint32_t m_SkinFrameID = Constants::INVALID_FRAME_ID;
+
+	bool m_ModelSpaceNormal = false;
 };

@@ -52,20 +52,28 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	// Create the live (output) buffer + prev positions and register everything at the shared slot.
 	// The BLAS reads the live buffer (skinning output), not the native original.
-	nvrhi::IBuffer* liveBuffer = CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
+	CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
 
-	BuildSkinned(bsTriShape, liveBuffer, vertexStride, true);
+	BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true);
 
 	CreateMaterial();
 }
 
-nvrhi::IBuffer* SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
+void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	const uint32_t slot = m_VertexBuffer.m_Descriptor.Get();
-	const size_t vertexBufferSize = m_VertexBuffer.m_Buffer->getDesc().byteSize;
+	size_t vertexBufferSize = m_VertexBuffer.m_Buffer->getDesc().byteSize;
+
+	// Model space normal maps require that we store the skinning TBN so they are transformed properly into world space
+	if (m_BSTriShape->GetGeometryRuntimeData().shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals)) {
+		m_ModelSpaceNormal = true;
+
+		// Rotation stored as a quaternion
+		vertexBufferSize += 8ull * vertexCount;	
+	}
 
 	// Live (output) buffer: device-owned, raw-viewable + UAV + BLAS input.
 	auto liveBufferDesc = nvrhi::BufferDesc()
@@ -110,8 +118,6 @@ nvrhi::IBuffer* SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandL
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_PrevPositionBuffer));
 	device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(slot, m_PrevPositionBuffer));
-
-	return m_LiveVertexBuffer;
 }
 
 void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
@@ -130,7 +136,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 
 	const uint32_t vertexCount = skinPartition->vertexCount;
 
-	std::memcpy(&m_VertexDescRaw, &basePartitionBuffer->vertexDesc, sizeof(m_VertexDescRaw));
+	std::memcpy(&m_VertexDesc, &basePartitionBuffer->vertexDesc, sizeof(m_VertexDesc));
 
 	m_IndexBuffers.reserve(skinPartition->numPartitions);
 	m_GeometryDescs.reserve(skinPartition->numPartitions);

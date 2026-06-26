@@ -47,6 +47,62 @@ float3x4 GetBoneTransformMatrix(uint4 bones, float4 weights, uint boneOffset)
 	return m;
 }
 
+float3x3 ExtractNormalizedRotation(float3x4 transform)
+{
+    float3 x = normalize(transform[0].xyz);
+    float3 y = normalize(transform[1].xyz);
+
+    // Remove any component of Y along X
+    y = normalize(y - x * dot(x, y));
+
+    // Rebuild Z
+    float3 z = cross(x, y);
+
+    return float3x3(x, y, z);
+}
+
+float4 MatrixToQuaternion(float3x3 m)
+{
+    float4 q;
+
+    float trace = m[0][0] + m[1][1] + m[2][2];
+
+    if (trace > 0.0)
+    {
+        float s = sqrt(trace + 1.0) * 2.0;
+        q.w = 0.25 * s;
+        q.x = (m[2][1] - m[1][2]) / s;
+        q.y = (m[0][2] - m[2][0]) / s;
+        q.z = (m[1][0] - m[0][1]) / s;
+    }
+    else if (m[0][0] > m[1][1] && m[0][0] > m[2][2])
+    {
+        float s = sqrt(1.0 + m[0][0] - m[1][1] - m[2][2]) * 2.0;
+        q.w = (m[2][1] - m[1][2]) / s;
+        q.x = 0.25 * s;
+        q.y = (m[0][1] + m[1][0]) / s;
+        q.z = (m[0][2] + m[2][0]) / s;
+    }
+    else if (m[1][1] > m[2][2])
+    {
+        float s = sqrt(1.0 + m[1][1] - m[0][0] - m[2][2]) * 2.0;
+        q.w = (m[0][2] - m[2][0]) / s;
+        q.x = (m[0][1] + m[1][0]) / s;
+        q.y = 0.25 * s;
+        q.z = (m[1][2] + m[2][1]) / s;
+    }
+    else
+    {
+        float s = sqrt(1.0 + m[2][2] - m[0][0] - m[1][1]) * 2.0;
+        q.w = (m[1][0] - m[0][1]) / s;
+        q.x = (m[0][2] + m[2][0]) / s;
+        q.y = (m[1][2] + m[2][1]) / s;
+        q.z = 0.25 * s;
+    }
+
+    return normalize(q);
+}
+
 [numthreads(1, 32, 1)]
 void Main(uint2 DTid : SV_DispatchThreadID)
 {
@@ -61,12 +117,14 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 	const uint slot = NonUniformResourceIndex(updateData.index);
 	const uint dynSlot = NonUniformResourceIndex(updateData.dynamicIndex);
 
-	const bool isDynamic = (updateData.shapeFlags & MeshFlags::Dynamic) != 0;
+    const bool isDynamic = (updateData.meshFlags & Skinning::MeshFlags::Dynamic) != 0;
+    const bool isMSN = (updateData.meshFlags & Skinning::MeshFlags::ModelSpaceNormal) != 0;
 	const bool doSkin = (updateData.updateFlags & DirtyFlags::Skin) != 0;
 
 	VertexDesc vertexDesc = updateData.VertexDesc;
 
-	const uint vertexOffset = (uint)vertexDesc.GetVertexSize() * vertexIndex;
+    const uint vertexSize = (uint) vertexDesc.GetVertexSize();
+    const uint vertexOffset = vertexSize * vertexIndex;
 	
 	const uint posOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
     uint normOffset = 0;
@@ -108,6 +166,8 @@ void Main(uint2 DTid : SV_DispatchThreadID)
         }
 	}
 
+    RWByteAddressBuffer output = OutputVertices[slot];
+	
 	if (doSkin)
 	{
 		// Inline skinning (assumes 4 bones/vertex): 4 half weights, then 4 uint8 bone ids.
@@ -128,7 +188,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 			return;
 
 		const float3x4 boneMatrix = GetBoneTransformMatrix(bones, weights, updateData.boneOffset);
-		const float3x3 boneRot = (float3x3)boneMatrix;
+        const float3x3 boneRot = ExtractNormalizedRotation(boneMatrix);
 
         if (hasPosition || isDynamic)
 			position4.xyz = mul(boneMatrix, float4(position4.xyz, 1.0f));
@@ -142,9 +202,22 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 				B = normalize(mul(boneRot, B));
             }
 		}
-	}
-
-	RWByteAddressBuffer output = OutputVertices[slot];
+		
+		// Write quaternion
+        if (isMSN)
+        {
+			// Positioned after the original vertices
+            const uint quatOffset = (vertexSize * updateData.vertexCount) + vertexIndex * 8u;
+			
+            float4 q = MatrixToQuaternion(boneRot);
+			
+            uint2 packed;
+            packed.x = f32tof16(q.x) | (f32tof16(q.y) << 16);
+            packed.y = f32tof16(q.z) | (f32tof16(q.w) << 16);
+			
+            output.Store2(quatOffset, packed);
+        }
+    }
 
 	// Save the live position as the previous frame's position before overwriting (motion vectors).
 	PrevPositions[slot][vertexIndex] = asfloat(output.Load3(posOffset));

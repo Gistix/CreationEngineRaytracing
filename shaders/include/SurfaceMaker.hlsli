@@ -38,6 +38,54 @@ float3 TransformMeshInstancePointCameraRelative(float3 objectSpacePosition, floa
     return TransformPointCameraRelative(instanceTransform, rootSpacePosition, cameraPosition);
 }
 
+float4 MatrixToQuaternionLocal(float3x3 m)
+{
+    float4 q;
+    float trace = m[0][0] + m[1][1] + m[2][2];
+
+    if (trace > 0.0)
+    {
+        float s = sqrt(trace + 1.0) * 2.0;
+        q.w = 0.25 * s;
+        q.x = (m[2][1] - m[1][2]) / s;
+        q.y = (m[0][2] - m[2][0]) / s;
+        q.z = (m[1][0] - m[0][1]) / s;
+    }
+    else if (m[0][0] > m[1][1] && m[0][0] > m[2][2])
+    {
+        float s = sqrt(1.0 + m[0][0] - m[1][1] - m[2][2]) * 2.0;
+        q.w = (m[2][1] - m[1][2]) / s;
+        q.x = 0.25 * s;
+        q.y = (m[0][1] + m[1][0]) / s;
+        q.z = (m[0][2] + m[2][0]) / s;
+    }
+    else if (m[1][1] > m[2][2])
+    {
+        float s = sqrt(1.0 + m[1][1] - m[0][0] - m[2][2]) * 2.0;
+        q.w = (m[0][2] - m[2][0]) / s;
+        q.x = (m[0][1] + m[1][0]) / s;
+        q.y = 0.25 * s;
+        q.z = (m[1][2] + m[2][1]) / s;
+    }
+    else
+    {
+        float s = sqrt(1.0 + m[2][2] - m[0][0] - m[1][1]) * 2.0;
+        q.w = (m[1][0] - m[0][1]) / s;
+        q.x = (m[0][2] + m[2][0]) / s;
+        q.y = (m[1][2] + m[2][1]) / s;
+        q.z = 0.25 * s;
+    }
+
+    return normalize(q);
+}
+
+float4 QuaternionMultiplyLocal(float4 a, float4 b)
+{
+    return float4(
+        a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz),
+        a.w * b.w - dot(a.xyz, b.xyz));
+}
+
 struct SurfaceMaker
 {
 
@@ -168,24 +216,40 @@ struct SurfaceMaker
             v1.Position - v0.Position,
             v2.Position - v0.Position));
 
-        float3 normal0 = FlipIfOpposite(v0.Normal, objectSpaceFlatNormal);
-        float3 normal1 = FlipIfOpposite(v1.Normal, objectSpaceFlatNormal);
-        float3 normal2 = FlipIfOpposite(v2.Normal, objectSpaceFlatNormal);
+        float3 normalWS = float3(0.0f, 0.0f, 1.0f);
+        float3 tangentWS = float3(0.0f, 1.0f, 0.0f);
+        float3 bitangentWS = float3(1.0f, 0.0f, 0.0f);
 
-        float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(normal0, normal1, normal2, uvw)));
-        float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-        float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));     
+        float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
         
+        const bool hasNormal = mesh.VertexDesc.HasFlag(VertexFlags::Normal);
+        
+        if (hasNormal)
+        {
+            normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
+            tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
+            bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
+        }
+        else
+        {
+            normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
+            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
+            
+            // transform by objectToWorld3x3
+            boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
+            boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
+        }
+ 
         float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
-           
-        float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
         
+        float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);  
         if (mesh.Properties.ShaderFlags & ShaderFlags::kVertexColors)
             vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
-        
+       
+            
 #if !USE_SIA_INTERPOLATION
         // Standard path: compute face normal from object-space cross product
-        surface.FaceNormal = mul(objectToWorld3x3, objectSpaceFlatNormal);
+        surface.FaceNormal = hasNormal ? mul(objectToWorld3x3, objectSpaceFlatNormal) : normalWS;
 #endif
 
         surface.MipLevel = rayCone.computeLOD(coneTexLODValue, rayDir, normalWS, true) + Raytracing.TexLODBias;
@@ -248,11 +312,11 @@ struct SurfaceMaker
         }
         else
         {
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh, boneRotation);
         }
 #   else   
 #   endif
-   
+        
         surface.Roughness = PBR::Roughness(surface.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
         surface.Metallic = Remap(surface.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
 
@@ -316,6 +380,7 @@ struct SurfaceMaker
         surface.FuzzWeight = 0.0f;
     
         float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
+        float4 boneRotation = float4(1.0f, 1.0f, 1.0f, 1.0f);
         
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
@@ -329,7 +394,7 @@ struct SurfaceMaker
         else if (material.Type == Type::Grass)
             GrassMaterial(surface, texCoord0, mesh);
         else
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh, boneRotation);
 #   else   
 #   endif
    

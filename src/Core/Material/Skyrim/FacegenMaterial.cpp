@@ -36,6 +36,6 @@ void FacegenMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	auto renderer = Renderer::GetSingleton();
 
 	m_TintTexture = MaterialManager::GetTexture(facegenMaterial->tintTexture, renderer->GetWhiteTextureDescriptor());
-	m_DetailTexture = MaterialManager::GetTexture(facegenMaterial->detailTexture, renderer->GetGrayTextureDescriptor());
+	m_DetailTexture = MaterialManager::GetTexture(facegenMaterial->detailTexture, renderer->GetDetailTextureDescriptor());
 	m_SubsurfaceTexture = MaterialManager::GetTexture(facegenMaterial->subsurfaceTexture, renderer->GetBlackTextureDescriptor());
 }

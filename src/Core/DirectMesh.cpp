@@ -22,7 +22,7 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount))
 		return;
 
-	std::memcpy(&m_VertexDescRaw, &rendererData->vertexDesc, sizeof(m_VertexDescRaw));
+	m_VertexDesc = rendererData->vertexDesc;
 
 	m_IndexBuffer = CreateIndexBuffer(rendererData);
 	if (!m_IndexBuffer.m_Buffer)

@@ -41,12 +41,15 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 	const uint16_t vertexID = GetVertexID();
 
 	for (size_t i = 0; i < descs.size(); i++) {
+		auto& geomTris = descs[i].geometryData.triangles;
+
 		out[i] = {
 			GetIndexID(i),
 			vertexID,
-			VertexDesc(m_VertexDescRaw),
+			VertexDesc(GetVertexDescRaw()),
 			static_cast<uint32_t>(m_Material->GetOffset()),
-			descs[i].geometryData.triangles.indexCount / 3,
+			static_cast<uint16_t>(geomTris.vertexCount),
+			static_cast<uint16_t>(geomTris.indexCount / 3),
 			m_Properties.GetData(),
 			m_LocalToOwner,
 			m_LocalToOwner

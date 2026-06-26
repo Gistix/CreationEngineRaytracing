@@ -5,7 +5,6 @@
 #include "Types.h"
 #include "Vertex.hlsli"
 #include "Triangle.hlsli"
-#include "Skinning.hlsli"
 
 #include "Material.h"
 
@@ -67,7 +66,6 @@ struct Mesh
 		uint count = 0;
 		eastl::vector<float4> dynamicPosition;
 		eastl::vector<Vertex> vertices;
-		eastl::vector<Skinning> skinning;
 		eastl::vector<uint16_t> remap;
 		eastl::vector<float4> dynamicPositionRemapped;
 		eastl::vector<float3> position;

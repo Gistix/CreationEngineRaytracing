@@ -96,18 +96,20 @@ namespace Pass
 
 			auto* dynamicMesh = mesh->AsDynamicMesh();
 			const uint32_t dynamicIndex = dynamicMesh ? dynamicMesh->GetDynamicIndex() : 0u;
-			const uint32_t shapeFlags = dynamicMesh ? (1u << 1) : 0u;  // MeshFlags::Dynamic
+			uint32_t meshFlags = dynamicMesh ? ::Skinning::MeshFlags::Dynamic : 0u;
+
+			if (mesh->GetModelSpaceNormal())
+				meshFlags |= ::Skinning::MeshFlags::ModelSpaceNormal;
 
 			const uint64_t vertexDescRaw = mesh->GetVertexDescRaw();
 
 			VertexUpdateData& data = m_VertexUpdateData[meshIndex++];
-			data = {};
 			data.index = mesh->GetSkinningSlot();
 			data.dynamicIndex = dynamicIndex;
 			data.updateFlags = static_cast<uint32_t>(queuedMesh.updateFlags);
 			data.vertexCount = vertexCount;
 			data.boneOffset = boneMatrixIndex;
-			data.shapeFlags = shapeFlags;
+			data.meshFlags = meshFlags;
 			data.numMatrices = numBoneMatrices;
 			std::memcpy(&data.VertexDesc, &vertexDescRaw, sizeof(uint64_t));
 

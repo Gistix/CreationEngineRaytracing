@@ -5,7 +5,6 @@
 #include "Types.h"
 #include "Vertex.hlsli"
 #include "Triangle.hlsli"
-#include "Skinning.hlsli"
 #include "Material.hlsli"
 #include "Framework/DescriptorTableManager.h"
 
