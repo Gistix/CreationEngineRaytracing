@@ -17,6 +17,7 @@
 #include "Interop/Material/Skyrim/LODLandscapeMaterialData.hlsli"
 #include "Interop/Material/Skyrim/PBRMaterialData.hlsli"
 #include "Interop/Material/Skyrim/PBRLandscapeMaterialData.hlsli"
+#include "Interop/Material/Skyrim/EffectMaterialData.hlsli"
 #include "Types/BindlessTable.h"
 
 class MaterialManager
@@ -36,7 +37,8 @@ class MaterialManager
 		sizeof(LandscapeMaterialData),
 		sizeof(LODLandscapeMaterialData),
 		sizeof(PBRMaterialData),
-		sizeof(PBRLandscapeMaterialData)
+		sizeof(PBRLandscapeMaterialData),
+		sizeof(EffectMaterialData)
 	});
 
 	eastl::unordered_map<RE::BSShaderMaterial*, eastl::shared_ptr<MaterialBase>> m_Material;

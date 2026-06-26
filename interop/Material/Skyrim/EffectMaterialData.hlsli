@@ -2,25 +2,18 @@
 #define EFFECT_MATERIAL_DATA_HLSL
 
 #include "interop/Interop.h"
-#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#include "interop/Material/MaterialBaseData.hlsli"
 
-INTEROP_STRUCT(EffectMaterialDataExtra, 4)
-{
-    half4 BaseColor;
-    half BaseColorScale;
-    uint16_t EffectTexture;
-    uint16_t Pad;
-};
-VALIDATE_ALIGNMENT(EffectMaterialDataExtra, 4);
+// EffectMaterialData inherits directly from MaterialBaseData (not LightingMaterialData).
+// Effect materials (fire, smoke, glow) are emissive-only; they have no diffuse/normal/specular.
 
-INTEROP_STRUCT(EffectMaterialData : LightingMaterialData, 4)
+INTEROP_STRUCT(EffectMaterialData : MaterialBaseData, 4)
 {
-    half4 BaseColor;
-    half BaseColorScale;
-    uint16_t EffectTexture;
-    uint16_t Pad;
+    half4 BaseColor;           // BSEffectShaderMaterial::baseColor (RGBA)
+    half BaseColorScale;       // BSEffectShaderMaterial::baseColorScale
+    uint16_t SourceTexture;    // BSEffectShaderMaterial::sourceTexture (main sprite)
+    uint16_t EffectTexture;    // BSEffectShaderMaterial::greyscaleTexture (palette lookup)
 };
 VALIDATE_ALIGNMENT(EffectMaterialData, 4);
-VALIDATE_SIZE(EffectMaterialData, sizeof(LightingMaterialData) + sizeof(EffectMaterialDataExtra));
 
 #endif // EFFECT_MATERIAL_DATA_HLSL

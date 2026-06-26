@@ -632,11 +632,10 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
 void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in Mesh mesh)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-    EffectMaterialDataExtra effect = Materials[0].Load<EffectMaterialDataExtra>(mesh.GetMaterialOffset() + kBaseSize);
+    EffectMaterialData effect = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
     const float mipLevel = surface.MipLevel;
     
-    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
+    Texture2D baseTexture = Textures[NonUniformResourceIndex(effect.SourceTexture)];
 
     float4 baseTexColor = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
     baseTexColor.xyz = baseTexColor.xyz;
@@ -651,12 +650,12 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
     }
 
     float4 baseColor = float4(1, 1, 1, 1);
-    float baseColorScale = effect.BaseColorScale; // TODO: Scalar0 — EffectMaterial needs its own typed struct
+    float baseColorScale = effect.BaseColorScale;
 
     [branch]
     if (mesh.Properties.ShaderFlags & ShaderFlags::kGrayscaleToPaletteColor)
     {
-        Texture2D effectTexture = Textures[NonUniformResourceIndex(effect.EffectTexture)]; // TODO: EffectTexture — needs typed Effect struct
+        Texture2D effectTexture = Textures[NonUniformResourceIndex(effect.EffectTexture)];
 
         float2 grayscaleToColorUv = float2(baseTexColor.y, baseColorMul.x);
 

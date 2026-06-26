@@ -76,6 +76,16 @@ Properties::Properties(RE::BSTriShape* triShape)
 				m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 1.0f, 0.0f);
 			}
 		}
+		else if (auto effectShaderProp = skyrim_cast<RE::BSEffectShaderProperty*>(shaderProperty)) {
+			if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->GetBaseMaterial())) {
+				m_Data.EmissiveColor = float4(
+					effectMaterial->baseColor.red,
+					effectMaterial->baseColor.green,
+					effectMaterial->baseColor.blue,
+					effectMaterial->baseColorScale
+				);
+			}
+		}
 	}
 }
 
