@@ -245,10 +245,12 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
 
     Triangle geomTriangle = GetTriangle(mesh.IndexID, safePrimitiveIndex);
 
+    const bool isMSN = mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+
     ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
-    v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x);
-    v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y);
-    v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z);
+    v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x, isMSN, mesh.NumVertices);
+    v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y, isMSN, mesh.NumVertices);
+    v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z, isMSN, mesh.NumVertices);
 
     if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
     {

@@ -119,7 +119,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 
     const bool isDynamic = (updateData.meshFlags & Skinning::MeshFlags::Dynamic) != 0;
     const bool isMSN = (updateData.meshFlags & Skinning::MeshFlags::ModelSpaceNormal) != 0;
-	const bool doSkin = (updateData.updateFlags & DirtyFlags::Skin) != 0;
+    const bool doSkin = (updateData.updateFlags & Skinning::DirtyFlags::Skin) != 0;
 
 	VertexDesc vertexDesc = updateData.VertexDesc;
 

@@ -12,6 +12,17 @@ namespace Skinning
         static const uint32_t Dynamic = (1 << 0);
         static const uint32_t ModelSpaceNormal = (1 << 1);
     }
+	
+    namespace DirtyFlags
+    {
+        static const uint32_t None = 0;
+        static const uint32_t Transform = (1 << 0);
+        static const uint32_t Skin = (1 << 1);
+        static const uint32_t Vertex = (1 << 2);
+        static const uint32_t Visibility = (1 << 3);
+        static const uint32_t Material = (1 << 4);
+        static const uint32_t Mesh = (1 << 5);
+    }
 }
 
 INTEROP_STRUCT(VertexUpdateData, 4)

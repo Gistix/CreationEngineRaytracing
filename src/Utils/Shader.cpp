@@ -46,7 +46,7 @@ namespace Util
 
 			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::GI_DISPATCH_THREADS);
 
-			//defines.emplace_back(L"HAS_PREV_POSITIONS", L"0");
+			defines.emplace_back(L"HAS_PREV_POSITIONS", L"1");
 			
 			defines.emplace_back(L"HAIR_MODE", static_cast<int>(settings.AdvancedSettings.HairBSDF));
 

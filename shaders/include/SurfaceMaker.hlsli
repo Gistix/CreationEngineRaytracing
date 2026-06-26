@@ -53,7 +53,7 @@ struct SurfaceMaker
 #if defined(HAS_PREV_POSITIONS)
         float3 prevPos0, prevPos1, prevPos2;
         
-        if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
+        if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
             GetVertices(mesh, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
         else
 #endif        
@@ -115,33 +115,28 @@ struct SurfaceMaker
         }
 #endif // USE_SIA_INTERPOLATION
 
-        // Compute previous world position for motion vectors
-#if defined(HAS_PREV_POSITIONS)
-        {
-            float3 currentRootSpacePos = mul(mesh.Transform, float4(currentObjectSpacePos, 1.0));
-            float3 currentWorldPosition = mul(instance.Transform, float4(currentRootSpacePos, 1.0));
-            float3 objectSpacePos = currentObjectSpacePos;
-        
-            if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
-                // Per-vertex: read previous skinned positions from PrevPositions buffer
-                objectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);     
- 
-            float3 prevRootSpacePos = mul(mesh.PrevTransform, float4(objectSpacePos, 1.0));       
-            float3 prevWorldPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));
-            // Apply object motion after current/previous reconstruction cancel, so
-            // static geometry does not inherit world-coordinate cancellation error.
-            surface.PrevPosition = surface.Position + (prevWorldPosition - currentWorldPosition);
-        }
-#endif
-
         surface.CameraRelativePosition = TransformMeshInstancePointCameraRelative(
             currentObjectSpacePos, mesh.Transform, instance.Transform, Camera.Position);
 
+        // Previous-frame positions for motion vectors.
 #if defined(HAS_PREV_POSITIONS)
         {
+            // Previous object-space position: per-vertex skinned/dynamic positions, else current.
             float3 prevObjectSpacePos = currentObjectSpacePos;
-            if ((mesh.Flags & MeshFlags::Skinned) || (mesh.Flags & MeshFlags::Dynamic))
+            if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
                 prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
+
+            // Reconstruct the world-space current/previous delta and apply it to surface.Position so
+            // static geometry does not inherit world-coordinate cancellation error.
+            float3 currentRootSpacePos = mul(mesh.Transform, float4(currentObjectSpacePos, 1.0));
+            float3 currentWorldPosition = mul(instance.Transform, float4(currentRootSpacePos, 1.0));
+        
+            float3 prevRootSpacePos = mul(mesh.PrevTransform, float4(prevObjectSpacePos, 1.0));
+            float3 prevWorldPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));
+        
+            // Apply object motion after current/previous reconstruction cancel, so
+            // static geometry does not inherit world-coordinate cancellation error.        
+            surface.PrevPosition = surface.Position + (prevWorldPosition - currentWorldPosition);
 
             surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
                 prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.PositionPrev);
