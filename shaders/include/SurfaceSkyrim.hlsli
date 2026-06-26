@@ -70,6 +70,10 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         // Swizzle matches vanilla shaders
         surface.Normal = RotateByQuaternion(normalize(normal.xzy * 2.0f - 1.0f), boneRotation);
         CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
+        
+        // Use shading values since the geometry ones aren't available
+        surface.GeomNormal = surface.Normal;
+        surface.GeomTangent = surface.Tangent;
     }
     else
     {
