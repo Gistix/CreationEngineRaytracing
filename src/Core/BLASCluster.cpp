@@ -38,6 +38,14 @@ void BLASCluster::RemoveMember(BaseMesh* mesh)
 		m_MembershipDirty = true;
 }
 
+void BLASCluster::GrowBounds(const RE::NiBound& bound)
+{
+	float3 clusterCenter = float3(m_InstanceTransform._14, m_InstanceTransform._24, m_InstanceTransform._34);
+	float3 boundCenter = Util::Math::Float3(bound.center);
+	float distToBound = (boundCenter - clusterCenter).Length();
+	m_InstanceRadius = std::max(m_InstanceRadius, distToBound + bound.radius);
+}
+
 bool BLASCluster::Empty() const
 {
 	for (const auto& member : m_Members)
@@ -47,7 +55,45 @@ bool BLASCluster::Empty() const
 	return true;
 }
 
-bool BLASCluster::GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance) const
+static InstanceLightData ComputeInstanceLightData(const float3x4& instanceTransform,
+                                                    float instanceRadius,
+                                                    const eastl::map<RE::BSLight*, Light>& lights,
+                                                    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
+{
+	uint8_t lightIds[Constants::INSTANCE_LIGHTS_MAX];
+	uint8_t numLights = 0;
+
+	float3 clusterPosition = float3(instanceTransform._14, instanceTransform._24, instanceTransform._34);
+
+	for (const auto& [bsLight, light] : lights) {
+		if (!light.m_Active)
+			continue;
+
+		if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
+			logger::error("ComputeInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}", numLights, Constants::INSTANCE_LIGHTS_MAX);
+			break;
+		}
+
+		const auto& ld = lightData[light.m_Index];
+
+		if (ld.Type == LightType::Directional) {
+			lightIds[numLights] = light.m_Index;
+			numLights++;
+		} else {
+			float dist = float3::Distance(clusterPosition, ld.Vector);
+			if (dist - instanceRadius <= ld.Radius) {
+				lightIds[numLights] = light.m_Index;
+				numLights++;
+			}
+		}
+	}
+
+	return InstanceLightData(lightIds, numLights);
+}
+
+bool BLASCluster::GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance,
+                          const eastl::map<RE::BSLight*, Light>& lights,
+                          const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData) const
 {
 	// Mirror BuildUpdate's visible-member-geometry iteration so MeshData order matches the BLAS geometry order.
 	const uint32_t firstGeometry = meshCount;
@@ -83,6 +129,9 @@ bool BLASCluster::GetData(MeshData* meshData, uint32_t& meshCount, InstanceData&
 	outInstance.FirstGeometryID = firstGeometry;
 	outInstance.NumGeometry = numGeometry;
 	outInstance.Alpha = 1.0f;
+
+	outInstance.LightData = ComputeInstanceLightData(m_InstanceTransform, m_InstanceRadius, lights, lightData);
+	m_InstanceRadius = 0.0f;
 
 	return true;
 }

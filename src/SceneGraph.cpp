@@ -555,7 +555,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			return;
 
 		InstanceData instance;
-		if (cluster->GetData(m_MeshData.data(), m_NumMeshes, instance)) {
+		if (cluster->GetData(m_MeshData.data(), m_NumMeshes, instance, m_Lights, m_LightData)) {
 			cluster->SetInstanceIndex(m_NumInstances);
 			m_InstanceData[m_NumInstances] = instance;
 			m_NumInstances++;
@@ -698,6 +698,7 @@ void SceneGraph::UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, 
 	XMStoreFloat3x4(&instanceTransform, Util::Math::GetXMFromNiTransform(ownerWorld));
 
 	GetOrCreateCluster(owner, bsTriShape)->SetInstanceTransform(instanceTransform);
+	GetOrCreateCluster(owner, bsTriShape)->GrowBounds(bsTriShape->worldBound);
 }
 
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)

@@ -4,8 +4,11 @@
 #include "Constants.h"
 
 #include "Instance.hlsli"
+#include "Light.hlsli"
 
 class SceneGraph;
+
+struct Light;
 
 // Aggregates the geometry of all meshes belonging to a single owner (RE::TESObjectREFR) into one
 // BLAS / one TLAS instance, to avoid many small overlapping AABBs. Meshes are referenced (weak_ptr)
@@ -29,6 +32,7 @@ class BLASCluster
 	float3x4 m_InstanceTransform; // owner-world, cached during traversal; used for the TLAS instance
 	mutable float3x4 m_PrevInstanceTransform; // previous-frame instance transform for motion vectors
 	mutable bool m_HasPrevInstanceTransform = false;
+	mutable float m_InstanceRadius = 0.0f; // world-space bounding sphere radius, accumulated from member bounds
 
 	bool m_MembershipDirty = true; // member added/removed/pruned -> full rebuild
 	bool m_Updatable = false;      // any member is updatable (dynamic)
@@ -49,6 +53,9 @@ public:
 
 	void SetInstanceTransform(const float3x4& transform) { m_InstanceTransform = transform; }
 
+	// Grow the world-space bounding sphere to include the given bound (center + radius in world space).
+	void GrowBounds(const RE::NiBound& bound);
+
 	// No live members remain.
 	bool Empty() const;
 
@@ -63,7 +70,10 @@ public:
 
 	uint32_t GetInstanceIndex() const { return m_InstanceIndex; }
 
-	// Appends one MeshData per visible geometry (in BLAS order) and fills the cluster's InstanceData.
+	// Appends one MeshData per visible geometry (in BLAS order) and fills the cluster's InstanceData,
+	// including per-instance light-affected data calculated from the scene lights.
 	// Returns false if the cluster has no visible geometry (skip as a TLAS instance).
-	bool GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance) const;
+	bool GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance,
+	             const eastl::map<RE::BSLight*, Light>& lights,
+	             const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData) const;
 };
