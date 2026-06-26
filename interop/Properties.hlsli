@@ -54,8 +54,8 @@ INTEROP_DATA_STRUCT(Properties, 4)
     uint ShaderFlags;
     uint16_t AlphaFlags;
     half AlphaThreshold;
-    half4 EmissiveColor;
     half Alpha;
+    half4 EmissiveColor;
     half4 ProjectedUVParams0;
     half4 ProjectedUVParams1;
     half4 ProjectedUVParams2;

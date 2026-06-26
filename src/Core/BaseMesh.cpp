@@ -47,10 +47,12 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			GetIndexID(i),
 			vertexID,
 			VertexDesc(GetVertexDescRaw()),
-			static_cast<uint32_t>(m_Material->GetOffset()),
 			static_cast<uint16_t>(geomTris.vertexCount),
 			static_cast<uint16_t>(geomTris.indexCount / 3),
 			m_Properties.GetData(),
+			static_cast<uint16_t>(m_Type),
+			0,
+			m_Material->GetOffsetComp(),
 			m_LocalToOwner,
 			m_LocalToOwner
 		};

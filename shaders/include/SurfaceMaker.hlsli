@@ -26,66 +26,6 @@
 #   include "include/SurfaceFallout4.hlsli"
 #endif
 
-float3 TransformPointCameraRelative(float3x4 transform, float3 position, float3 cameraPosition)
-{
-    float3 translation = float3(transform._m03, transform._m13, transform._m23);
-    return mul((float3x3)transform, position) + (translation - cameraPosition);
-}
-
-float3 TransformMeshInstancePointCameraRelative(float3 objectSpacePosition, float3x4 meshTransform, float3x4 instanceTransform, float3 cameraPosition)
-{
-    float3 rootSpacePosition = mul(meshTransform, float4(objectSpacePosition, 1.0));
-    return TransformPointCameraRelative(instanceTransform, rootSpacePosition, cameraPosition);
-}
-
-float4 MatrixToQuaternionLocal(float3x3 m)
-{
-    float4 q;
-    float trace = m[0][0] + m[1][1] + m[2][2];
-
-    if (trace > 0.0)
-    {
-        float s = sqrt(trace + 1.0) * 2.0;
-        q.w = 0.25 * s;
-        q.x = (m[2][1] - m[1][2]) / s;
-        q.y = (m[0][2] - m[2][0]) / s;
-        q.z = (m[1][0] - m[0][1]) / s;
-    }
-    else if (m[0][0] > m[1][1] && m[0][0] > m[2][2])
-    {
-        float s = sqrt(1.0 + m[0][0] - m[1][1] - m[2][2]) * 2.0;
-        q.w = (m[2][1] - m[1][2]) / s;
-        q.x = 0.25 * s;
-        q.y = (m[0][1] + m[1][0]) / s;
-        q.z = (m[0][2] + m[2][0]) / s;
-    }
-    else if (m[1][1] > m[2][2])
-    {
-        float s = sqrt(1.0 + m[1][1] - m[0][0] - m[2][2]) * 2.0;
-        q.w = (m[0][2] - m[2][0]) / s;
-        q.x = (m[0][1] + m[1][0]) / s;
-        q.y = 0.25 * s;
-        q.z = (m[1][2] + m[2][1]) / s;
-    }
-    else
-    {
-        float s = sqrt(1.0 + m[2][2] - m[0][0] - m[1][1]) * 2.0;
-        q.w = (m[1][0] - m[0][1]) / s;
-        q.x = (m[0][2] + m[2][0]) / s;
-        q.y = (m[1][2] + m[2][1]) / s;
-        q.z = 0.25 * s;
-    }
-
-    return normalize(q);
-}
-
-float4 QuaternionMultiplyLocal(float4 a, float4 b)
-{
-    return float4(
-        a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz),
-        a.w * b.w - dot(a.xyz, b.xyz));
-}
-
 struct SurfaceMaker
 {
 
@@ -122,7 +62,7 @@ struct SurfaceMaker
         float3 uvw = GetBary(payload.Barycentrics());
         float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
 
-        material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+        material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
@@ -343,7 +283,7 @@ struct SurfaceMaker
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
-        LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+        LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
 
         float2 texCoord0 = material.TexCoord(texCoord);
 

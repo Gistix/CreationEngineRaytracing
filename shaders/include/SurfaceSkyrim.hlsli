@@ -37,7 +37,7 @@ static const uint kLightingSize = sizeof(LightingMaterialData);
 
 void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, float4 boneRotation)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     float mipLevel = surface.MipLevel;
 
     const Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
@@ -67,9 +67,18 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
     if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals)
     {
-        // Swizzle matches vanilla shaders
-        surface.Normal = RotateByQuaternion(normalize(normal.xzy * 2.0f - 1.0f), boneRotation);
-        CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
+        // Swizzle matches vanilla shaders        
+        normal = normalize(normal.xzy * 2.0f - 1.0f);
+        
+        if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
+        {
+            surface.Normal = RotateByQuaternion(normal, boneRotation);
+            CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
+        }
+        else
+        {
+            surface.Normal = normal;
+        }
         
         // Use shading values since the geometry ones aren't available
         surface.GeomNormal = surface.Normal;
@@ -94,7 +103,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     [branch]
     if (material.Type == Type::TruePBR)
     {
-        PBRMaterialDataExtra pbr = Materials[0].Load<PBRMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+        PBRMaterialDataExtra pbr = Materials[0].Load<PBRMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
         Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
         Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
 
@@ -233,7 +242,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         [branch]
         if (material.Feature == Feature::kHairTint)
         {
-            HairTintMaterialDataExtra hair = Materials[0].Load<HairTintMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+            HairTintMaterialDataExtra hair = Materials[0].Load<HairTintMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
             surface.Albedo *= VanillaDiffuseColor(hair.TintColor);
         }
     
@@ -270,12 +279,12 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
             uint16_t envTexIndex;
 
             if (material.Feature == Feature::kEye) {
-                EyeMaterialDataExtra eye = Materials[0].Load<EyeMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+                EyeMaterialDataExtra eye = Materials[0].Load<EyeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
                 envMaskTexIndex = eye.EnvironmentMaskTexture;
                 envTexIndex = eye.EnvironmentTexture;
             }
             else {
-                EnvmapMaterialDataExtra envMap = Materials[0].Load<EnvmapMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+                EnvmapMaterialDataExtra envMap = Materials[0].Load<EnvmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
                 envMaskTexIndex = envMap.EnvironmentMaskTexture;
                 envTexIndex = envMap.EnvironmentTexture;
             }
@@ -339,7 +348,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         [branch]
         if (material.Feature == Feature::kGlowMap)
         {
-            GlowmapMaterialDataExtra glowData = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+            GlowmapMaterialDataExtra glowData = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
             Texture2D glowTexture = Textures[NonUniformResourceIndex(glowData.GlowTexture)];
             float3 glow = glowTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
                 
@@ -357,7 +366,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         [branch]
         if (material.Feature == Feature::kFaceGen)
         {
-            FacegenMaterialDataExtra facegen = Materials[0].Load<FacegenMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+            FacegenMaterialDataExtra facegen = Materials[0].Load<FacegenMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
             float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
             
             Texture2D detailTexture = Textures[NonUniformResourceIndex(facegen.DetailTexture)];
@@ -373,7 +382,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
         }
         else if (material.Feature == Feature::kSkinTint)
         {
-            FacegenTintMaterialDataExtra tintData = Materials[0].Load<FacegenTintMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+            FacegenTintMaterialDataExtra tintData = Materials[0].Load<FacegenTintMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
             float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
             
             float3 tintColor = tintData.TintColor * gammaAlbedo * 2.0f;
@@ -623,8 +632,8 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
 
 void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in Mesh mesh)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
-    EffectMaterialDataExtra effect = Materials[0].Load<EffectMaterialDataExtra>(mesh.MaterialOffset + kBaseSize);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
+    EffectMaterialDataExtra effect = Materials[0].Load<EffectMaterialDataExtra>(mesh.GetMaterialOffset() + kBaseSize);
     const float mipLevel = surface.MipLevel;
     
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
@@ -664,8 +673,8 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
 
 void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
-    WaterMaterialDataExtra water = Materials[0].Load<WaterMaterialDataExtra>(mesh.MaterialOffset + kBaseSize);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
+    WaterMaterialDataExtra water = Materials[0].Load<WaterMaterialDataExtra>(mesh.GetMaterialOffset() + kBaseSize);
     const float mipLevel = surface.MipLevel;
 
     surface.Albedo = float3(1.0f, 1.0f, 1.0f);
@@ -831,7 +840,7 @@ float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, fl
 
 void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     float mipLevel = surface.MipLevel;
 
     uint16_t diffTex0, diffTex1, diffTex2, diffTex3, diffTex4, diffTex5;
@@ -845,7 +854,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     [branch]
     if (material.Type == Type::TruePBR)
     {
-        PBRLandscapeMaterialDataExtra pbrLand = Materials[0].Load<PBRLandscapeMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+        PBRLandscapeMaterialDataExtra pbrLand = Materials[0].Load<PBRLandscapeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
         diffTex0  = pbrLand.BaseColorTexture0;  diffTex1  = pbrLand.BaseColorTexture1;
         diffTex2  = pbrLand.BaseColorTexture2;  diffTex3  = pbrLand.BaseColorTexture3;
         diffTex4  = pbrLand.BaseColorTexture4;  diffTex5  = pbrLand.BaseColorTexture5;
@@ -867,7 +876,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     }
     else
     {
-        LandscapeMaterialDataExtra land = Materials[0].Load<LandscapeMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+        LandscapeMaterialDataExtra land = Materials[0].Load<LandscapeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
         diffTex0  = material.DiffuseTexture;  diffTex1  = land.DiffuseTexture1;
         diffTex2  = land.DiffuseTexture2;     diffTex3  = land.DiffuseTexture3;
         diffTex4  = land.DiffuseTexture4;     diffTex5  = land.DiffuseTexture5;
@@ -975,7 +984,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
 
 void DistantTreeMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
     float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
     float alpha = diffuse.a * mesh.Properties.Alpha;
@@ -985,7 +994,7 @@ void DistantTreeMaterial(inout Surface surface, in float2 texCoord0, in Mesh mes
 
 void GrassMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
     float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
     float alpha = diffuse.a * mesh.Properties.Alpha;

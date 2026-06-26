@@ -31,6 +31,9 @@ struct MaterialBase
 	virtual size_t GetDataSize() { return sizeof(Data); }
 
 	uint64_t GetOffset() const { return m_Offset; }
+
+	// Material has to be aligned to 4 bytes by design, so we compress the offset to send as a uint32_t
+	uint32_t GetOffsetComp() const { return static_cast<uint32_t>(m_Offset / 4); }
 protected:
 	// Material buffer offset
 	uint64_t m_Offset = 0;

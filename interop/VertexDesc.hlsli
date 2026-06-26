@@ -34,7 +34,7 @@ namespace VertexFlags
     static const uint16_t FullPrec     = 0x400;
 }
 
-struct VertexDesc
+INTEROP_STRUCT(VertexDesc, 4)
 {
     uint32_t Lower;
     uint32_t Upper;
@@ -82,6 +82,7 @@ struct VertexDesc
         return (uint16_t)((Lower & 0xF) << 2);
     }
 };
+VALIDATE_ALIGNMENT(VertexDesc, 4);
 VALIDATE_SIZE(VertexDesc, 8);
 
 #endif  // VERTEX_DESC_HLSL

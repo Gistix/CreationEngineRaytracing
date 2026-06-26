@@ -29,7 +29,7 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     
     float3 uvw = GetBary(barycentrics);
 
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     
     if (material.Type == Type::Water) {
         return true;
@@ -74,7 +74,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     
     float3 uvw = GetBary(barycentrics);
 
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
 
 #if defined(EFFECT_PASSTHROUGH)      
     if (material.Type == Type::Effect)
@@ -180,7 +180,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             [branch]
             if (material.Feature == Feature::kGlowMap)
             {
-                GlowmapMaterialDataExtra glow = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+                GlowmapMaterialDataExtra glow = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
                 transmittance = Textures[NonUniformResourceIndex(glow.GlowTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
                 [branch]
                 if (mesh.Properties.ShaderFlags & ShaderFlags::kSpecular) {
@@ -199,7 +199,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             }
             else
             {
-                PBRMaterialDataExtra pbr = Materials[0].Load<PBRMaterialDataExtra>(mesh.MaterialOffset + kLightingSize);
+                PBRMaterialDataExtra pbr = Materials[0].Load<PBRMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
                 Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
                 Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
                 float specular = rmaosTexture.SampleLevel(DefaultSampler, texCoord, 0).a;
