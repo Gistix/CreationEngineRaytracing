@@ -241,7 +241,7 @@ void Main()
             
             const bool hasTransmission = false;
 #else
-            if (bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed))
+            if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed))
                 direction = bsdfSample.wo;
             else
                 break;            
