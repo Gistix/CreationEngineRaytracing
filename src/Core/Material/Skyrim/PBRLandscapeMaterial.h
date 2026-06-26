@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Core/Material/Skyrim/LightingMaterial.h"
+#include "Core/Material/MaterialBase.h"
+#include "Core/Texture.h"
 #include "Interop/Material/Skyrim/PBRLandscapeMaterialData.hlsli"
 
-struct PBRLandscapeMaterial : public LightingMaterial
+struct PBRLandscapeMaterial : public MaterialBase
 {
 	using Data = PBRLandscapeMaterialData;
 
@@ -15,8 +16,14 @@ struct PBRLandscapeMaterial : public LightingMaterial
 
 	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
+	virtual MaterialBase::Data* GetData() override { return m_Data.get(); }
+
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
+	Texture m_DiffuseTexture;
+	Texture m_NormalTexture;
+	Texture m_RimSoftLightingTexture;
+	Texture m_SpecularBackLightingTexture;
 	Texture m_BaseColorTextures[6];
 	Texture m_NormalTextures[6];
 	Texture m_RMAOSTextures[6];

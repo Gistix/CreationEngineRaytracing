@@ -21,7 +21,7 @@ void LightingMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial
 
 	auto lightingShaderMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial);
 	if (!lightingShaderMaterial) {
-		logger::error("LightingMaterial::Initialize - Shader material is not BSLightingShaderMaterialBase");
+		logger::error("LightingMaterial::Initialize - Shader material is not BSLightingShaderMaterialBase: {}", shaderMaterial ? typeid(*shaderMaterial).name() : "nullptr");
 		return;
 	}
 
@@ -42,7 +42,7 @@ void LightingMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	auto lightingShaderMaterial = skyrim_cast<RE::BSLightingShaderMaterialBase*>(shaderMaterial);
 	if (!lightingShaderMaterial) {
-		logger::error("LightingMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialBase");
+		logger::error("LightingMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialBase: {}", shaderMaterial ? typeid(*shaderMaterial).name() : "nullptr");
 		return;
 	}
 

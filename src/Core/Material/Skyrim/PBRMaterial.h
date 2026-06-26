@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Core/Material/Skyrim/LightingMaterial.h"
+#include "Core/Material/MaterialBase.h"
+#include "Core/Texture.h"
 #include "Interop/Material/Skyrim/PBRMaterialData.hlsli"
 
-struct PBRMaterial : public LightingMaterial
+struct PBRMaterial : public MaterialBase
 {
 	using Data = PBRMaterialData;
 
@@ -15,9 +16,14 @@ struct PBRMaterial : public LightingMaterial
 
 	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
+	virtual MaterialBase::Data* GetData() override { return m_Data.get(); }
+
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	// Base color / normal reuse the inherited LightingMaterial diffuse/normal.
+	Texture m_DiffuseTexture;
+	Texture m_NormalTexture;
+	Texture m_RimSoftLightingTexture;
+	Texture m_SpecularBackLightingTexture;
 	Texture m_RMAOSTexture;
 	Texture m_EmissiveTexture;
 	Texture m_FeaturesTexture0;

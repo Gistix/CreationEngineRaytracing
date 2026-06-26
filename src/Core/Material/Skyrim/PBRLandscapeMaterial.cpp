@@ -2,29 +2,45 @@
 
 #include "Core/MaterialManager.h"
 #include "Renderer.h"
+#include "Util.h"
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
 
 PBRLandscapeMaterial::PBRLandscapeMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
 	m_Offset = offset;
 
-	m_Data = eastl::make_unique<PBRLandscapeMaterialData>();
+	m_Data = eastl::make_unique<Data>();
 
 	Initialize(m_Data.get(), shaderMaterial);
 }
 
 void PBRLandscapeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
-
 	auto landData = reinterpret_cast<Data*>(data);
 
-	// GetType() reports kLighting and GetFeature() reports kDefault for PBR landscape; tag it explicitly.
 	landData->Type = MaterialBase::Type::TruePBR;
 	landData->Feature = static_cast<uint16_t>(RE::BSShaderMaterial::Feature::kMultiTexLandLODBlend);
-	landData->PBRFlags = 0;
+
+	landData->TexCoordOffset = Util::Math::Float2(shaderMaterial->texCoordOffset[0]);
+	landData->TexCoordScale = Util::Math::Float2(shaderMaterial->texCoordScale[0]);
+
+	auto landMaterial = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
+
+	// LightingMaterialData-equivalent fields
+	landData->SpecularColor = Util::Math::Float3(landMaterial->specularColor);
+	landData->SpecularLevel = landMaterial->specularPower;
+	landData->RoughnessScale = landMaterial->specularColorScale;
+	landData->MaterialAlpha = landMaterial->materialAlpha;
 
 	UpdateTextures(shaderMaterial);
+
+	landData->DiffuseTexture = m_DiffuseTexture.GetDescriptorIndex();
+	landData->NormalTexture = m_NormalTexture.GetDescriptorIndex();
+	landData->RimSoftLightingTexture = m_RimSoftLightingTexture.GetDescriptorIndex();
+	landData->SpecularBackLightingTexture = m_SpecularBackLightingTexture.GetDescriptorIndex();
+
+	// PBR landscape-specific fields
+	landData->PBRFlags = 0;
 
 	landData->BaseColorTexture0 = m_BaseColorTextures[0].GetDescriptorIndex();
 	landData->BaseColorTexture1 = m_BaseColorTextures[1].GetDescriptorIndex();
@@ -50,8 +66,6 @@ void PBRLandscapeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMate
 	landData->OverlayTexture = m_OverlayTexture.GetDescriptorIndex();
 	landData->NoiseTexture = m_NoiseTexture.GetDescriptorIndex();
 
-	auto landMaterial = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
-
 	landData->RoughnessScale0 = landMaterial->roughnessScales[0];
 	landData->RoughnessScale1 = landMaterial->roughnessScales[1];
 	landData->RoughnessScale2 = landMaterial->roughnessScales[2];
@@ -76,11 +90,14 @@ void PBRLandscapeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMate
 
 void PBRLandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::UpdateTextures(shaderMaterial);
-
 	auto landMaterial = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
 
 	auto renderer = Renderer::GetSingleton();
+
+	m_DiffuseTexture = MaterialManager::GetTexture(landMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor());
+	m_NormalTexture = MaterialManager::GetTexture(landMaterial->normalTexture, renderer->GetNormalTextureDescriptor());
+	m_RimSoftLightingTexture = MaterialManager::GetTexture(landMaterial->rimSoftLightingTexture, renderer->GetBlackTextureDescriptor());
+	m_SpecularBackLightingTexture = MaterialManager::GetTexture(landMaterial->specularBackLightingTexture, renderer->GetBlackTextureDescriptor());
 
 	for (uint32_t i = 0; i < 6; i++) {
 		m_BaseColorTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeBaseColorTextures[i], renderer->GetGrayTextureDescriptor());

@@ -103,7 +103,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     [branch]
     if (material.Type == Type::TruePBR)
     {
-        PBRMaterialDataExtra pbr = Materials[0].Load<PBRMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+        PBRMaterialData pbr = Materials[0].Load<PBRMaterialData>(mesh.GetMaterialOffset());
         Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
         Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
 
@@ -854,7 +854,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     [branch]
     if (material.Type == Type::TruePBR)
     {
-        PBRLandscapeMaterialDataExtra pbrLand = Materials[0].Load<PBRLandscapeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+        PBRLandscapeMaterialData pbrLand = Materials[0].Load<PBRLandscapeMaterialData>(mesh.GetMaterialOffset());
         diffTex0  = pbrLand.BaseColorTexture0;  diffTex1  = pbrLand.BaseColorTexture1;
         diffTex2  = pbrLand.BaseColorTexture2;  diffTex3  = pbrLand.BaseColorTexture3;
         diffTex4  = pbrLand.BaseColorTexture4;  diffTex5  = pbrLand.BaseColorTexture5;

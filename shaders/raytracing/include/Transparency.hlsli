@@ -199,7 +199,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             }
             else
             {
-                PBRMaterialDataExtra pbr = Materials[0].Load<PBRMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+                PBRMaterialData pbr = Materials[0].Load<PBRMaterialData>(mesh.GetMaterialOffset());
                 Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
                 Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
                 float specular = rmaosTexture.SampleLevel(DefaultSampler, texCoord, 0).a;
