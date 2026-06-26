@@ -16,7 +16,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     INTEROP_DATA_TYPE(Properties) Properties;
     uint16_t Type;
     uint16_t Pad;
-    uint32 MaterialOffsetComp;
+    uint MaterialOffsetComp;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
     INTEROP_ROW_MAJOR(float3x4) PrevTransform;
     
