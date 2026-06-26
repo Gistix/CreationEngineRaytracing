@@ -70,7 +70,7 @@ void SceneGraph::Initialize()
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
 		};
 
-		m_DynamicVertexDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
+		m_DynamicVertexReadDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
 	}
 
 	// Skinning descriptor table
@@ -122,7 +122,20 @@ void SceneGraph::Initialize()
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2).setSize(UINT_MAX)
 		};
 
-		m_DynamicVertexWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+		m_DynamicVertexDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
+	// Dynamic vertex live SRV descriptor table (skinned dynamic float4 positions; SRV read by RT shading)
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(8).setSize(UINT_MAX)
+		};
+
+		m_DynamicVertexLiveDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
 
 	// Previous position SRV descriptor table (for reading prev positions in RT shaders)

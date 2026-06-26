@@ -126,7 +126,8 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		m_UpdatePass.m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 	}
@@ -259,7 +260,8 @@ namespace Pass
 				sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
-				sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
+				sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+				sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 			};
 			commandList->setComputeState(state);
 

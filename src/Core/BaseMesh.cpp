@@ -51,7 +51,7 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			static_cast<uint16_t>(geomTris.indexCount / 3),
 			m_Properties.GetData(),
 			static_cast<uint16_t>(m_Type),
-			0,
+			static_cast<uint16_t>(GetDynamicIndex()),
 			m_Material->GetOffsetComp(),
 			m_LocalToOwner,
 			m_LocalToOwner

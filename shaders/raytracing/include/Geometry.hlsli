@@ -226,6 +226,16 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
     v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x, isMSN, mesh.NumVertices);
     v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y, isMSN, mesh.NumVertices);
     v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z, isMSN, mesh.NumVertices);
+
+    // Position-less dynamic meshes (BSDynamicTriShape) keep positions in the live float4 buffer,
+    // not in the byte-address vertex buffer. Reconstruct them so flat normals / object-space pos are valid.
+    if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
+    {
+        StructuredBuffer<float4> dynPos = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];
+        v0.Position = dynPos[NonUniformResourceIndex(geomTriangle.x)].xyz;
+        v1.Position = dynPos[NonUniformResourceIndex(geomTriangle.y)].xyz;
+        v2.Position = dynPos[NonUniformResourceIndex(geomTriangle.z)].xyz;
+    }
 }
 
 #if defined(HAS_PREV_POSITIONS)
@@ -239,7 +249,15 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
     v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x);
     v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y);
     v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z);
-    
+
+    if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
+    {
+        StructuredBuffer<float4> dynPos = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];
+        v0.Position = dynPos[NonUniformResourceIndex(geomTriangle.x)].xyz;
+        v1.Position = dynPos[NonUniformResourceIndex(geomTriangle.y)].xyz;
+        v2.Position = dynPos[NonUniformResourceIndex(geomTriangle.z)].xyz;
+    }
+
     StructuredBuffer<float3> prevVertices = PrevPositions[NonUniformResourceIndex(mesh.VertexID)];
     prevPos0 = prevVertices[NonUniformResourceIndex(geomTriangle.x)];
     prevPos1 = prevVertices[NonUniformResourceIndex(geomTriangle.y)];

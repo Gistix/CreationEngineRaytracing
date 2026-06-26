@@ -95,6 +95,7 @@ Texture2D<float4>                           Textures[]                  : regist
 RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space5);
 StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space6);
 TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
+StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
 Texture2D<float4>                           SkinDetailNormal            : register(t8);
 
 SamplerState                                DefaultSampler              : register(s0);

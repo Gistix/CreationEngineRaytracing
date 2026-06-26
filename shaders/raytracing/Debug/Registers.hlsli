@@ -30,6 +30,8 @@ ByteAddressBuffer Materials[] : register(t0, space3);
 
 Texture2D<float4> Textures[] : register(t0, space4);
 
+StructuredBuffer<float4> DynamicPositions[] : register(t0, space8);
+
 RWTexture2D<float4> Output : register(u0);
 
 #endif // REGISTERS_HLSLI

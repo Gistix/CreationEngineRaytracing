@@ -136,7 +136,8 @@ namespace Pass::Raytracing
 			sceneGraph->GetVertexDescriptors()->m_Layout,
 			sceneGraph->GetMaterialDescriptors()->m_Layout,
 			sceneGraph->GetTextureDescriptors()->m_Layout,
-			sceneGraph->GetCubemapDescriptors()->m_Layout
+			sceneGraph->GetCubemapDescriptors()->m_Layout,
+			sceneGraph->GetDynamicVertexDescriptors()->m_Layout
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -189,7 +190,8 @@ namespace Pass::Raytracing
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 
@@ -270,7 +272,8 @@ namespace Pass::Raytracing
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();

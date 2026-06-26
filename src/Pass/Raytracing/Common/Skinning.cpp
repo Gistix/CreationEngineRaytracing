@@ -45,7 +45,7 @@ namespace Pass
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
 			.setComputeShader(m_ComputeShader)
 			.addBindingLayout(m_BindingLayout)
-			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetDynamicVertexReadDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexCopyDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexWriteDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetPrevPositionWriteDescriptors()->m_Layout)
@@ -167,7 +167,7 @@ namespace Pass
 
 		nvrhi::BindingSetVector bindings = {
 			m_BindingSet,
-			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
 			sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
 			sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,

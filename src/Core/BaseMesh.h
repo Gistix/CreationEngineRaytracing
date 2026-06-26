@@ -52,6 +52,9 @@ public:
 
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
 
+	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
+	virtual uint32_t GetDynamicIndex() const { return 0; }
+
 	// CPU-side per-frame update: detect whether the mesh's geometry data changed (lazy).
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
 	virtual bool Update();

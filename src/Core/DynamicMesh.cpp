@@ -97,12 +97,17 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	// Register at a shared dynamic slot: original -> SRV (input), live -> UAV (output).
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-	m_DynamicDescriptor = sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(
+	m_DynamicDescriptor = sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->CreateDescriptorHandle(
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_OriginalDynamicBuffer));
 
 	device->writeDescriptorTable(
 		sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
+
+	// Live (skinned) dynamic positions exposed as SRV so the RT shading path can reconstruct Vertex::Position.
+	device->writeDescriptorTable(
+		sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_SRV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
 	// The BLAS reads the live dynamic positions (skinning output).
 	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);

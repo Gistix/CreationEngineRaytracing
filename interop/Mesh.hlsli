@@ -15,7 +15,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint16_t NumTriangles;
     INTEROP_DATA_TYPE(Properties) Properties;
     uint16_t Type;
-    uint16_t Pad;
+    uint16_t DynamicID;
     uint MaterialOffsetComp;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
     INTEROP_ROW_MAJOR(float3x4) PrevTransform;
