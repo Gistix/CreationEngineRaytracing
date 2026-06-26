@@ -235,7 +235,7 @@ struct SurfaceMaker
             normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
             CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
             
-            // transform by objectToWorld3x3
+            // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
             boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
             boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
         }
