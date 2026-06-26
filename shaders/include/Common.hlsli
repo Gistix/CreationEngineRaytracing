@@ -36,13 +36,14 @@ float F0toIOR(float3 F0)
 	return (1.0 + sqrt(f0)) / (1.0 - sqrt(f0));
 }
 
-void NormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
+void NormalMap(float3 normalMap, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
 {
 	normalMap = normalize(normalMap * 2.0f - 1.0f);
 	
     normalWS = normalize(normalMap.x * geomTangentWS + normalMap.y * geomBitangentWS + normalMap.z * geomNormalWS);
     tangentWS = normalize(geomTangentWS - normalWS * dot(geomTangentWS, normalWS));
-    bitangentWS = cross(normalWS, tangentWS) * handedness;
+    bitangentWS = cross(normalWS, tangentWS);
+    bitangentWS *= (dot(bitangentWS, geomBitangentWS) < 0.0f) ? -1.0f : 1.0f;
 }
 
 void ModelSpaceNormalMap(float3 normalMap, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)

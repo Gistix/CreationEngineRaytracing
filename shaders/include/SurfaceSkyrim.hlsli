@@ -35,7 +35,7 @@
 static const uint kBaseSize = sizeof(MaterialBaseData);
 static const uint kLightingSize = sizeof(LightingMaterialData);
 
-void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Mesh mesh, float4 boneRotation)
+void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, float4 boneRotation)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
     float mipLevel = surface.MipLevel;
@@ -75,7 +75,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     {
         NormalMap(
             normal,
-            handedness,
             normalWS, tangentWS, bitangentWS,
             surface.Normal, surface.Tangent, surface.Bitangent
         );
@@ -162,7 +161,6 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
                 {
                     NormalMap(
                         sampledCoatNormal.xyz,
-                        handedness,
                         normalWS, tangentWS, bitangentWS,
                         surface.CoatNormal, surface.CoatTangent, surface.CoatBitangent
                     );
@@ -660,7 +658,7 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
     surface.Emissive = EffectToLinear(baseColor.xyz) * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
 }
 
-void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in float handedness, in Mesh mesh)
+void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
     WaterMaterialDataExtra water = Materials[0].Load<WaterMaterialDataExtra>(mesh.MaterialOffset + kBaseSize);
@@ -802,7 +800,8 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     }
 
     surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
-    surface.Bitangent = cross(surface.Normal, surface.Tangent) * handedness;
+    surface.Bitangent = cross(surface.Normal, surface.Tangent);
+    surface.Bitangent *= (dot(surface.Bitangent, bitangentWS) < 0.0f) ? -1.0f : 1.0f;
     
     // Distance-based absorption via Beer-Lambert law instead of flat surface tint.
     // The absorption coefficient is derived from the game's water color at a reference depth.
@@ -826,7 +825,7 @@ float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, fl
     }
 }
 
-void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, in float handedness, float4 landBlend0, float4 landBlend1, in Mesh mesh)
+void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.MaterialOffset);
     float mipLevel = surface.MipLevel;
@@ -952,7 +951,6 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
            
     NormalMap(
         blendedNormal.xyz,
-        handedness,
         normalWS, tangentWS, bitangentWS,
         surface.Normal, surface.Tangent, surface.Bitangent
     );

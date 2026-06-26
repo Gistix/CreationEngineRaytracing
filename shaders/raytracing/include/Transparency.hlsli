@@ -91,10 +91,8 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
         float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));    
         
-        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
-        
         Surface surface = (Surface)0;
-        WaterMaterial(surface, texCoord, tangentWS, bitangentWS, handedness, mesh);
+        WaterMaterial(surface, texCoord, tangentWS, bitangentWS, mesh);
         
         float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
 
@@ -157,13 +155,10 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
             float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
 
-            float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
-
             float3 Normal, Tangent, Bitangent;
 
             NormalMap(
                     normal,
-                    handedness,
                     normalWS, tangentWS, bitangentWS,
                     Normal, Tangent, Bitangent
                 );
@@ -222,13 +217,10 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
             float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
 
-            float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
-
             float3 Normal, Tangent, Bitangent;
 
             NormalMap(
                     normal,
-                    handedness,
                     normalWS, tangentWS, bitangentWS,
                     Normal, Tangent, Bitangent
                 );

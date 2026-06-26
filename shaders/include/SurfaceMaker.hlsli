@@ -240,7 +240,6 @@ struct SurfaceMaker
             boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
         }
  
-        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
         
         float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);  
         if (mesh.Properties.ShaderFlags & ShaderFlags::kVertexColors)
@@ -292,7 +291,7 @@ struct SurfaceMaker
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
             
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, mesh);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh);
         }
         else if (material.Type == Type::Effect)
         {
@@ -300,7 +299,7 @@ struct SurfaceMaker
         }
         else if (material.Type == Type::Water)
         {
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, mesh);
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh);
         }
         else if (material.Type == Type::DistantTree)
         {
@@ -312,7 +311,7 @@ struct SurfaceMaker
         }
         else
         {
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh, boneRotation);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
         }
 #   else   
 #   endif
@@ -379,22 +378,21 @@ struct SurfaceMaker
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
     
-        float handedness = (dot(cross(normalWS, tangentWS), bitangentWS) < 0.0f) ? -1.0f : 1.0f;
         float4 boneRotation = float4(1.0f, 1.0f, 1.0f, 1.0f);
         
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, landBlend0, landBlend1, mesh);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh);
         else if (material.Type == Type::Effect)
             EffectMaterial(surface, texCoord0, vertexColor, mesh);
         else if (material.Type == Type::Water)
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, handedness, mesh);
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh);
         else if (material.Type == Type::DistantTree)
             DistantTreeMaterial(surface, texCoord0, mesh);
         else if (material.Type == Type::Grass)
             GrassMaterial(surface, texCoord0, mesh);
         else
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, handedness, mesh, boneRotation);
+            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
 #   else   
 #   endif
    

@@ -291,7 +291,7 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);    
     
-    AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
+    AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
     
  #if !(defined(SHARC) && SHARC_UPDATE)
     // Coat-priority GBuffer: when coat is present, use coat normal/roughness for denoiser;
