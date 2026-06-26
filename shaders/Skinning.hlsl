@@ -226,7 +226,12 @@ void Main(uint2 DTid : SV_DispatchThreadID)
     if (hasPosition)
         output.Store3(posOffset, asuint(position4.xyz));
 	else if(isDynamic)
+    {
+        // Save last frame's skinned position into the previous-position region (stored after the
+        // current set) before refreshing the current position for this frame.
+        DynamicVerticesOut[dynSlot][vertexIndex + updateData.vertexCount] = DynamicVerticesOut[dynSlot][vertexIndex];
         DynamicVerticesOut[dynSlot][vertexIndex] = position4;
+    }
 		
 	if (hasNormal)
 	{

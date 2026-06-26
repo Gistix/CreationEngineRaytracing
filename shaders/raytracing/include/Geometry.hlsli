@@ -258,12 +258,20 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
         v0.Position = dynPos[NonUniformResourceIndex(geomTriangle.x)].xyz;
         v1.Position = dynPos[NonUniformResourceIndex(geomTriangle.y)].xyz;
         v2.Position = dynPos[NonUniformResourceIndex(geomTriangle.z)].xyz;
-    }
 
-    StructuredBuffer<float3> prevVertices = PrevPositions[NonUniformResourceIndex(mesh.VertexID)];
-    prevPos0 = prevVertices[NonUniformResourceIndex(geomTriangle.x)];
-    prevPos1 = prevVertices[NonUniformResourceIndex(geomTriangle.y)];
-    prevPos2 = prevVertices[NonUniformResourceIndex(geomTriangle.z)];    
+        // Previous-frame positions are stored immediately after the current ones.
+        const uint prevBase = mesh.NumVertices;
+        prevPos0 = dynPos[NonUniformResourceIndex(prevBase + geomTriangle.x)].xyz;
+        prevPos1 = dynPos[NonUniformResourceIndex(prevBase + geomTriangle.y)].xyz;
+        prevPos2 = dynPos[NonUniformResourceIndex(prevBase + geomTriangle.z)].xyz;
+    }
+    else
+    {
+        StructuredBuffer<float3> prevVertices = PrevPositions[NonUniformResourceIndex(mesh.VertexID)];
+        prevPos0 = prevVertices[NonUniformResourceIndex(geomTriangle.x)];
+        prevPos1 = prevVertices[NonUniformResourceIndex(geomTriangle.y)];
+        prevPos2 = prevVertices[NonUniformResourceIndex(geomTriangle.z)];
+    }
 }
 #endif
 

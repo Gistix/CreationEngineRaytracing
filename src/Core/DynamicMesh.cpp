@@ -68,9 +68,10 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
 	runtimeData.lock.Unlock();
 
-	// Live (skinning output) positions; BLAS source.
+	// Live (skinning output) positions; BLAS source. Sized for two vertex sets:
+	// current positions in [0, vertexCount), previous-frame positions in [vertexCount, 2 * vertexCount).
 	auto liveBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(runtimeData.dataSize)
+		.setByteSize(2ull * runtimeData.dataSize)
 		.setStructStride(sizeof(float4))
 		.setCanHaveUAVs(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
@@ -92,6 +93,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	// so the first BLAS build has valid data before the skinning pass runs.
 	commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
 	commandList->copyBuffer(m_DynamicBuffer, 0, m_OriginalDynamicBuffer, 0, runtimeData.dataSize);
+	// Seed the previous-position region (second half) so the first frame has zero motion.
+	commandList->copyBuffer(m_DynamicBuffer, runtimeData.dataSize, m_OriginalDynamicBuffer, 0, runtimeData.dataSize);
 	m_NeedsUpload = false;
 
 	// Register at a shared dynamic slot: original -> SRV (input), live -> UAV (output).
