@@ -160,10 +160,7 @@ struct SurfaceMaker
         float3 tangentWS = float3(0.0f, 1.0f, 0.0f);
         float3 bitangentWS = float3(1.0f, 0.0f, 0.0f);
 
-        float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        
         const bool hasNormal = mesh.VertexDesc.HasFlag(VertexFlags::Normal);
-        
         if (hasNormal)
         {
             normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
@@ -173,15 +170,18 @@ struct SurfaceMaker
         else
         {
             normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
-            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
-            
+            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);         
+        }
+ 
+        float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+        {
             // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
             boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
             boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
         }
- 
         
-        float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);  
+            float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
         if (mesh.Properties.ShaderFlags & ShaderFlags::kVertexColors)
             vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
        
