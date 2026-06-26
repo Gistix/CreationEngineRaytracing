@@ -128,6 +128,10 @@ protected:
 	// Cached local-to-owner transform baked into the geometry descs (computed in the traversal).
 	float3x4 m_LocalToOwner;
 
+	// Previous-frame local-to-owner transform for motion vectors; advanced in WriteMeshData (once per frame).
+	mutable float3x4 m_PrevLocalToOwner;
+	mutable bool m_HasPrevTransform = false;
+
 	// Native 64-bit vertex descriptor (RE::BSGraphics::VertexDesc) for MeshData::Flags.
 	RE::BSGraphics::VertexDesc m_VertexDesc;
 

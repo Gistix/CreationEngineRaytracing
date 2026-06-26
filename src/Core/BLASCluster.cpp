@@ -75,7 +75,11 @@ bool BLASCluster::GetData(MeshData* meshData, uint32_t& meshCount, InstanceData&
 
 	outInstance = {};
 	outInstance.Transform = m_InstanceTransform;
-	outInstance.PrevTransform = m_InstanceTransform;
+	outInstance.PrevTransform = m_HasPrevInstanceTransform ? m_PrevInstanceTransform : m_InstanceTransform;
+
+	// Advance previous-frame state (GetData runs once per cluster per frame).
+	m_PrevInstanceTransform = m_InstanceTransform;
+	m_HasPrevInstanceTransform = true;
 	outInstance.FirstGeometryID = firstGeometry;
 	outInstance.NumGeometry = numGeometry;
 	outInstance.Alpha = 1.0f;

@@ -40,6 +40,9 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 
 	const uint16_t vertexID = GetVertexID();
 
+	// Previous-frame transform for motion vectors; identical for every geometry of this mesh.
+	const float3x4 prevTransform = m_HasPrevTransform ? m_PrevLocalToOwner : m_LocalToOwner;
+
 	for (size_t i = 0; i < descs.size(); i++) {
 		auto& geomTris = descs[i].geometryData.triangles;
 
@@ -54,9 +57,13 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			static_cast<uint16_t>(GetDynamicIndex()),
 			m_Material->GetOffsetComp(),
 			m_LocalToOwner,
-			m_LocalToOwner
+			prevTransform
 		};
 	}
+
+	// Advance previous-frame state (WriteMeshData runs once per mesh per frame).
+	m_PrevLocalToOwner = m_LocalToOwner;
+	m_HasPrevTransform = true;
 
 	return static_cast<uint32_t>(descs.size());
 }

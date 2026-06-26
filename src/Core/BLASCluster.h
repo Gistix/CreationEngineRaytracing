@@ -27,6 +27,8 @@ class BLASCluster
 	eastl::string m_Name;
 
 	float3x4 m_InstanceTransform; // owner-world, cached during traversal; used for the TLAS instance
+	mutable float3x4 m_PrevInstanceTransform; // previous-frame instance transform for motion vectors
+	mutable bool m_HasPrevInstanceTransform = false;
 
 	bool m_MembershipDirty = true; // member added/removed/pruned -> full rebuild
 	bool m_Updatable = false;      // any member is updatable (dynamic)
