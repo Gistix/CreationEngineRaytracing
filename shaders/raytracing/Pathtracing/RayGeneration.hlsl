@@ -289,9 +289,9 @@ void Main()
         sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
     }
 
-    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);    
-    
-    AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
+    AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
+
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
     
  #if !(defined(SHARC) && SHARC_UPDATE)
     // Coat-priority GBuffer: when coat is present, use coat normal/roughness for denoiser;
@@ -437,7 +437,7 @@ void Main()
                 buildBrdfCtx.NdotV = saturate(dot(buildSurface.Normal, buildBrdfCtx.ViewDirection));
             }
             AdjustShadingNormal(buildSurface, buildBrdfCtx, true, false);
-            StandardBSDF buildBsdf = StandardBSDF::make(buildSurface, buildIsEnter);
+            StandardBSDF buildBsdf = StandardBSDF::make(buildSurface, buildSurface.Normal, buildBrdfCtx.ViewDirection, buildIsEnter);
 
             hitResult = StablePlanesHandleHit(
                 spCtx, idx, buildPlaneIndex, hitResult.nextVertexIndex, hitResult.nextBranchID,
@@ -499,7 +499,7 @@ void Main()
                     expBrdfCtx.NdotV = saturate(dot(expSurface.Normal, expBrdfCtx.ViewDirection));
                 }
                 AdjustShadingNormal(expSurface, expBrdfCtx, true, false);
-                StandardBSDF expBsdf = StandardBSDF::make(expSurface, expIsEnter);
+                StandardBSDF expBsdf = StandardBSDF::make(expSurface, expSurface.Normal, expBrdfCtx.ViewDirection, expIsEnter);
 
                 StablePlanesHitResult expHitResult = StablePlanesHandleHit(
                     spCtx, idx, buildPlaneIndex, ep.vertexIndex, ep.stableBranchID,
@@ -545,7 +545,7 @@ void Main()
                         contBrdfCtx.NdotV = saturate(dot(contSurface.Normal, contBrdfCtx.ViewDirection));
                     }
                     AdjustShadingNormal(contSurface, contBrdfCtx, true, false);
-                    StandardBSDF contBsdf = StandardBSDF::make(contSurface, contIsEnter);
+                    StandardBSDF contBsdf = StandardBSDF::make(contSurface, contSurface.Normal, contBrdfCtx.ViewDirection, contIsEnter);
 
                     expHitResult = StablePlanesHandleHit(
                         spCtx, idx, buildPlaneIndex, expHitResult.nextVertexIndex, expHitResult.nextBranchID,
@@ -614,7 +614,7 @@ void Main()
             sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
         }
         AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);
-        sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);
+        sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
         fillPlaneThp = fillThp;
 
         // SurfaceDataBuffer for ReSTIR GI is now written in the bounce loop
@@ -701,7 +701,7 @@ void Main()
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
-                StandardBSDF specBsdf = StandardBSDF::make(specSurface, true);
+                StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
                 direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
             }
             else
@@ -1146,7 +1146,7 @@ void Main()
             }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, isEnter);
+            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
@@ -1163,7 +1163,7 @@ void Main()
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
                     directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
                 }
                 else

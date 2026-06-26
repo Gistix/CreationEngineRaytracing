@@ -1050,12 +1050,14 @@ struct StandardBSDF
 {
     float3 emission;
     bool isEnter;
+    DefaultBSDF defaultBSDF;
 
-    static StandardBSDF make(Surface surface, bool isEnter = true)
+    static StandardBSDF make(Surface surface, float3 N, float3 V, bool isEnter = true)
     {
         StandardBSDF bsdf;
         bsdf.emission = surface.Emissive;
         bsdf.isEnter = surface.IsThinSurface ? true : isEnter;
+        bsdf.defaultBSDF.__init(N, V, surface, isEnter);
         return bsdf;
     }
 
@@ -1080,8 +1082,7 @@ struct StandardBSDF
         } else
 #endif
         {
-            DefaultBSDF bsdf = DefaultBSDF::make(N, wi, surface, isEnter);
-            return bsdf.Eval(wiLocal, woLocal);
+            return defaultBSDF.Eval(wiLocal, woLocal);
         }
     }
 
@@ -1124,10 +1125,8 @@ struct StandardBSDF
         } else
 #endif
         {
-            DefaultBSDF bsdf = DefaultBSDF::make(N, wi, surface, isEnter);
-
             float3 woLocal;
-            bool valid = bsdf.SampleBSDF(wiLocal, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, preGeneratedSamples);
+            bool valid = defaultBSDF.SampleBSDF(wiLocal, woLocal, result.pdf, result.weight, result.lobe, result.lobeP, preGeneratedSamples);
 
             result.wo = surface.FromLocal(woLocal);
             return valid;
@@ -1142,8 +1141,7 @@ struct StandardBSDF
         float3 wiLocal = surface.ToLocal(wi);
         float3 woLocal = surface.ToLocal(wo);
 
-        DefaultBSDF bsdf = DefaultBSDF::make(N, wi, surface, isEnter);
-        return bsdf.EvalPdf(wiLocal, woLocal);
+        return defaultBSDF.EvalPdf(wiLocal, woLocal);
     }
 
     uint GetLobes(const Surface surface)
@@ -1158,8 +1156,7 @@ struct StandardBSDF
 
         float3 wiLocal = surface.ToLocal(wi);
 
-        DefaultBSDF bsdf = DefaultBSDF::make(N, wi, surface, isEnter);
-        bsdf.EvalDeltaLobes(wiLocal, deltaLobes, deltaLobeCount, nonDeltaPart);
+        defaultBSDF.EvalDeltaLobes(wiLocal, deltaLobes, deltaLobeCount, nonDeltaPart);
 
         for (int i = 0; i < deltaLobeCount; i++)
         {
