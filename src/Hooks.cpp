@@ -245,6 +245,17 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BSTextureSet_SetTexture
+	{
+		static void thunk(RE::BSTextureSet* a_bsTextureSet, RE::BSTextureSet::Texture a_texture, RE::NiSourceTexturePtr& a_srcTexture)
+		{
+			func(a_bsTextureSet, a_texture, a_srcTexture);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 #if defined(SKYRIM)
@@ -484,6 +495,105 @@ namespace Hooks
 			return result;
 		}
 	}
+
+	struct CreateTexture2DAndSRV
+	{
+		static uint32_t GetBitsPerPixel(DXGI_FORMAT a_format)
+		{
+			auto fmt = static_cast<uint32_t>(a_format);
+			if (fmt >= 1 && fmt <= 4)       return 128;
+			if (fmt >= 5 && fmt <= 8)       return 96;
+			if (fmt >= 9 && fmt <= 22)      return 64;
+			if (fmt >= 23 && fmt <= 45)     return 32;
+			if (fmt == 87)                  return 32;
+			if (fmt >= 48 && fmt <= 59)     return 16;
+			if (fmt >= 60 && fmt <= 65)     return 8;
+			return 0;
+		}
+
+		static RE::BSGraphics::Texture* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			uint32_t a_width,
+			uint32_t a_height,
+			void* a_pixelData,
+			D3D11_USAGE a_usage,
+			DXGI_FORMAT a_format,
+			bool a_unorderedAccess)
+		{
+			auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+
+			auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(
+				scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
+
+			if (!texture)
+				return nullptr;
+
+			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
+
+			D3D11_TEXTURE2D_DESC desc = {};
+			desc.Width = a_width;
+			desc.Height = a_height;
+			desc.MipLevels = 1;
+			desc.ArraySize = 1;
+			desc.Format = a_format;
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Usage = a_usage;
+			desc.BindFlags = (a_usage == D3D11_USAGE_STAGING) ? 0 : D3D11_BIND_SHADER_RESOURCE;
+			if (a_unorderedAccess)
+				desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+
+			if (a_usage == D3D11_USAGE_DYNAMIC)
+				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			else if (a_usage == D3D11_USAGE_STAGING)
+				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ;
+			else
+				desc.CPUAccessFlags = 0;
+
+			desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+
+			D3D11_SUBRESOURCE_DATA subresData = {};
+			D3D11_SUBRESOURCE_DATA* pSubres = nullptr;
+			if (a_pixelData) {
+				auto bpp = GetBitsPerPixel(a_format);
+				subresData.pSysMem = a_pixelData;
+				subresData.SysMemPitch = (bpp >> 3) * a_width;
+				subresData.SysMemSlicePitch = 0;
+				pSubres = &subresData;
+			}
+
+			auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
+
+			ID3D11Texture2D* d3dTex = nullptr;
+			HRESULT hr = device->CreateTexture2D(&desc, pSubres, &d3dTex);
+
+			if (FAILED(hr) || !d3dTex)
+				return nullptr;
+
+			texture->texture = d3dTex;
+			texture->width = static_cast<uint16_t>(a_width);
+			texture->height = static_cast<uint16_t>(a_height);
+			texture->format = static_cast<uint8_t>(a_format);
+			texture->mips = 1;
+			texture->unk1E = 0;
+			texture->refCount = 1;
+			texture->pad24 = NO_DX12RESOURCE;
+
+			if (a_usage != D3D11_USAGE_STAGING) {
+				D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+				srvDesc.Format = a_format;
+				srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+				srvDesc.Texture2D.MostDetailedMip = 0;
+				srvDesc.Texture2D.MipLevels = 1;
+
+				device->CreateShaderResourceView(d3dTex, &srvDesc, &texture->resourceView);
+			}
+
+			return texture;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	void CreateRenderTarget::thunk(
 		RE::BSGraphics::Renderer* a_renderer,
@@ -893,7 +1003,14 @@ namespace Hooks
 		
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 		
+		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
+		
+		// All textures loaded from DDS
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
+
+		// Flowmap and Player FaceGen Tint
+		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
+
 		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
