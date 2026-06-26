@@ -58,19 +58,13 @@ namespace Hooks
 
 	struct BSCullingProcess_AppendVirtual
 	{
-		static void thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BSFadeNodeCuller_AppendVirtual
-	{
-		static void thunk(RE::BSFadeNodeCuller* culler, RE::BSGeometry& geometry, uint32_t a_arg2);
+		static void thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
 	struct NiCullingProcess_AppendVirtual
 	{
-		static void thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2);
+		static void thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2);
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 

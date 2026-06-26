@@ -657,25 +657,17 @@ namespace Hooks
 		}
 	}
 
-	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
+	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
+		if (geometry && Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(cullingProcess, geometry, a_arg2);
 	}
 
-	void BSFadeNodeCuller_AppendVirtual::thunk(RE::BSFadeNodeCuller* culler, RE::BSGeometry& geometry, uint32_t a_arg2)
+	void NiCullingProcess_AppendVirtual::thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
-			return;
-
-		func(culler, geometry, a_arg2);
-	}
-
-	void NiCullingProcess_AppendVirtual::thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
-	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
+		if (geometry && Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(cullingProcess, geometry, a_arg2);
@@ -938,11 +930,14 @@ namespace Hooks
 		// Grass
 		//stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
 
-		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
-		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
-		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
+		/*stl::detour_thunk<NiCullingProcess_AppendVirtual>(REL::RelocationID(26533, 27130));
+		stl::detour_thunk<BSCullingProcess_AppendVirtual>(REL::RelocationID(74807, 76556));*/
 
-		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(0, 107644));
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
+		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
+
+		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100854, 107644));
 
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
