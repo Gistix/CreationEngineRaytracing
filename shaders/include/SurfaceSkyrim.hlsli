@@ -672,8 +672,7 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
 
 void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-    WaterMaterialDataExtra water = Materials[0].Load<WaterMaterialDataExtra>(mesh.GetMaterialOffset() + kBaseSize);
+    WaterMaterialData water = Materials[0].Load<WaterMaterialData>(mesh.GetMaterialOffset());
     const float mipLevel = surface.MipLevel;
 
     surface.Albedo = float3(1.0f, 1.0f, 1.0f);
@@ -692,15 +691,15 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     
     const float scale = 0.001f;
     
-    float2 normalScroll1 = water.Vector0.xy;
-    float2 normalScroll2 = water.Vector0.zw;
-    float2 normalScroll3 = water.Vector1.xy;
+    float2 normalScroll1 = water.NormalScrolls.xy;
+    float2 normalScroll2 = water.NormalScrolls.zw;
+    float2 normalScroll3 = water.NormalScroll3AndScale.xy;
     
-    float3 normalsScale = float3(water.Vector1.z, water.Vector1.w, water.Vector2.x);
+    float3 normalsScale = float3(water.NormalScroll3AndScale.z, water.NormalScroll3AndScale.w, water.UVScaleAndObjectUV.x);
     
-    float3 objectUV = water.Vector2.yzw;
+    float3 objectUV = water.UVScaleAndObjectUV.yzw;
 
-    float4 cellTexCoordOffset = water.Vector3;
+    float4 cellTexCoordOffset = water.CellTexCoordOffset;
     
     float2 scrollAdjust1;
     float2 scrollAdjust2;
@@ -747,7 +746,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         
         float2 normalMul = 0.5 + -(-0.5 + abs(frac(flowCoord.xy * (64 * flowmapDimensions)) * 2 - 1));
         
-        Texture2D normals04Texture = Textures[NonUniformResourceIndex(water.Texture3)];
+        Texture2D normals04Texture = Textures[NonUniformResourceIndex(water.FlowmapTexture)];
         
         float3 normals1 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, uvShift, 9.92, 0, flowScroll, mipLevel);
         float3 normals2 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, flowScroll, mipLevel);
@@ -768,7 +767,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     } else
     {
         float2 normalCoord1 = normalScroll1 + scrollAdjust1;
-        Texture2D normals01Texture = Textures[NonUniformResourceIndex(water.Texture0)];
+        Texture2D normals01Texture = Textures[NonUniformResourceIndex(water.NormalsTexture0)];
         float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
         
         if (hasBlendNormals)
@@ -776,17 +775,17 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             float2 normalCoord2 = normalScroll2 + scrollAdjust2;
             float2 normalCoord3 = normalScroll3 + scrollAdjust3;
         
-            Texture2D normals02Texture = Textures[NonUniformResourceIndex(water.Texture1)];
-            Texture2D normals03Texture = Textures[NonUniformResourceIndex(water.Texture2)];
+            Texture2D normals02Texture = Textures[NonUniformResourceIndex(water.NormalsTexture1)];
+            Texture2D normals03Texture = Textures[NonUniformResourceIndex(water.NormalsTexture2)];
     
             float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
             float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
         
             surface.Normal = normalize(
                 float3(0, 0, 1) +
-                water.Scalar0 * normals1 +
-                water.Scalar1 * normals2 +
-                water.Scalar2 * normals3
+                water.Amplitude0 * normals1 +
+                water.Amplitude1 * normals2 +
+                water.Amplitude2 * normals3
             );
         }
         else
@@ -818,7 +817,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     // Distance-based absorption via Beer-Lambert law instead of flat surface tint.
     // The absorption coefficient is derived from the game's water color at a reference depth.
     static const float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0;
-    float3 waterColor = saturate(water.Color0.rgb);
+    float3 waterColor = saturate(water.ShallowColor.rgb);
     surface.VolumeAbsorption = -log(max(waterColor, 1e-4)) / WATER_ABSORPTION_REFERENCE_DEPTH * Raytracing.WaterAbsorptionScale;
     surface.TransmissionColor = float3(1.0f, 1.0f, 1.0f);
     surface.SpecTrans = 1.0f;

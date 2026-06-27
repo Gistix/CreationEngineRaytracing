@@ -15,6 +15,7 @@
 #include "Core/Material/Skyrim/PBRMaterial.h"
 #include "Core/Material/Skyrim/PBRLandscapeMaterial.h"
 #include "Core/Material/Skyrim/EffectMaterial.h"
+#include "Core/Material/Skyrim/WaterMaterial.h"
 #include "Renderer.h"
 #include "Scene.h"
 
@@ -189,6 +190,9 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	}
 	else if (type == Type::kEffect) {
 		material = eastl::make_shared<EffectMaterial>(shaderMaterial, offset);
+	}
+	else if (type == Type::kWater) {
+		material = eastl::make_shared<WaterMaterial>(shaderMaterial, offset);
 	}
 	else {
 		material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
