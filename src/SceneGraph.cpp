@@ -416,10 +416,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
 
-	eastl::hash_set<RE::BSTriShape*> visitedTriShapes;
+	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
 	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
-		visitedTriShapes.insert(bsTriShape);
 		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
@@ -471,6 +470,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 			// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
 			if (mesh) {
+				mesh->SetLastVisitedFrame(frameIndex);
+
 				// SetOwner returns true if the owner changed; re-bucket into the new cluster (key compare only).
 				if (mesh->SetOwner(clusterOwner)) {
 					RemoveMeshFromCluster(mesh.get(), mesh->GetPrevOwner());
@@ -496,6 +497,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					if (inserted) {
 						mesh = it2->second;
 
+						mesh->SetLastVisitedFrame(frameIndex);
 						mesh->Update();
 
 						GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(mesh);
@@ -508,13 +510,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
 
-	// Hide meshes whose trishapes were not visited by the traversal this frame for any reason
+	// Hide meshes whose trishapes were not visited by the traversal this frame
 	{
 		for (auto& [bsTriShape, mesh] : m_DirectMeshes) {
 			if (mesh->IsHidden())
 				continue;
 
-			if (!visitedTriShapes.contains(bsTriShape)) {
+			if (mesh->GetLastVisitedFrame() != frameIndex) {
 				logger::warn("SceneGraph::Update - BSTriShape {} - \"{}\" not visited this frame, hiding mesh.", fmt::ptr(bsTriShape), mesh->GetName());
 				mesh->SetHidden(true);
 				RemoveMeshFromCluster(mesh.get(), mesh->GetOwner());

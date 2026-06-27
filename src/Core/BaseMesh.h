@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Constants.h"
 #include "Core/DirtyFlags.h"
 #include "Core/Material/MaterialBase.h"
 #include "Core/Skyrim/Properties.h"
 #include "Framework/DescriptorTableManager.h"
-
 #include "Mesh.hlsli"
 
 class SkinnedMesh;
@@ -93,6 +93,9 @@ public:
 
 	uint64_t GetVertexDescRaw() const { return *reinterpret_cast<const uint64_t*>(&m_VertexDesc); }
 
+	void SetLastVisitedFrame(uint64_t f) { m_LastVisitedFrame = f; }
+	uint64_t GetLastVisitedFrame() const { return m_LastVisitedFrame; }
+
 protected:
 	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
 
@@ -131,6 +134,8 @@ protected:
 	// Previous-frame local-to-owner transform for motion vectors; advanced in WriteMeshData (once per frame).
 	mutable float3x4 m_PrevLocalToOwner;
 	mutable bool m_HasPrevTransform = false;
+
+	mutable uint64_t m_LastVisitedFrame = Constants::INVALID_FRAME_INDEX;
 
 	// Native 64-bit vertex descriptor (RE::BSGraphics::VertexDesc) for MeshData::Flags.
 	RE::BSGraphics::VertexDesc m_VertexDesc;
