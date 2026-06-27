@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Constants.h"
+
 namespace Util
 {
 	namespace Traversal
@@ -97,12 +99,11 @@ namespace Util
 				return result;
 
 			auto rtti = a_object->GetRTTI();
-			static REL::Relocation<const RE::NiRTTI*> billboardRTTI{ NiRTTI(NiBillboardNode) };
-			if (rtti == billboardRTTI.get())
+
+			if (rtti == Constants::rtti::NiBillboardNode.get())
 				return result;
 
-			static REL::Relocation<const RE::NiRTTI*> orderedRTTI{ NiRTTI(BSOrderedNode) };
-			if (rtti == orderedRTTI.get())
+			if (rtti == Constants::rtti::BSOrderedNode.get())
 				return result;
 
 			bool hidden = parentHidden || Util::Adapter::IsNiAVObjectHidden(a_object);

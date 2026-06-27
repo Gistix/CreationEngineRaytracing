@@ -44,10 +44,14 @@ Properties::Properties(RE::BSTriShape* triShape)
 	if (shaderProperty) {
 		m_Data.Alpha = shaderProperty->alpha;
 
-		if (auto waterShaderProp = skyrim_cast<RE::BSWaterShaderProperty*>(shaderProperty)) {
-			m_Data.ShaderFlags = MapWaterShaderFlags(waterShaderProp);
+		const auto materialType = shaderProperty->GetMaterialType();
+		if (materialType == RE::BSShaderMaterial::Type::kWater) {
+			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
+			m_Data.ShaderFlags = MapWaterShaderFlags(waterShaderProperty);
 		}
-		else if (auto lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
+		else if (materialType == RE::BSShaderMaterial::Type::kLighting) {
+			auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
+
 			m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
 			float4 emissive = float4(1.0f, 1.0f, 1.0f, lightingShaderProp->emissiveMult);
 
@@ -79,8 +83,8 @@ Properties::Properties(RE::BSTriShape* triShape)
 				m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 1.0f, 0.0f);
 			}
 		}
-		else if (auto effectShaderProp = skyrim_cast<RE::BSEffectShaderProperty*>(shaderProperty)) {
-			if (auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(effectShaderProp->GetBaseMaterial())) {
+		else if (materialType == RE::BSShaderMaterial::Type::kEffect) {
+			if (auto effectMaterial = reinterpret_cast<RE::BSEffectShaderMaterial*>(shaderProperty->material)) {
 				m_Data.EmissiveColor = float4(
 					effectMaterial->baseColor.red,
 					effectMaterial->baseColor.green,

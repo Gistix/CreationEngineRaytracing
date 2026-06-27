@@ -53,4 +53,12 @@ namespace Constants
 	static constexpr uint32_t PT_DISPATCH_THREADS = 8;
 
 	static constexpr uint32_t GI_DISPATCH_THREADS = 16;
+
+	namespace rtti
+	{
+		static REL::Relocation<const RE::NiRTTI*> NiBillboardNode{ NiRTTI(NiBillboardNode) };
+		static REL::Relocation<const RE::NiRTTI*> BSOrderedNode{ NiRTTI(BSOrderedNode) };
+		static REL::Relocation<const RE::NiRTTI*> BSDistantTreeShaderProperty{ NiRTTI(BSDistantTreeShaderProperty) };
+		static REL::Relocation<const RE::NiRTTI*> BSGrassShaderProperty{ NiRTTI(BSGrassShaderProperty) };
+	}
 }

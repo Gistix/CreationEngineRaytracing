@@ -428,11 +428,15 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (!shaderProperty) 
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
-		const bool isLightingShader = netimmerse_cast<RE::BSLightingShaderProperty*>(shaderProperty) != nullptr;
-		const bool isEffectShader = netimmerse_cast<RE::BSEffectShaderProperty*>(shaderProperty) != nullptr;
-		const bool isWaterShader = netimmerse_cast<RE::BSWaterShaderProperty*>(shaderProperty) != nullptr;
-		const bool isTreeLODShader = netimmerse_cast<RE::BSDistantTreeShaderProperty*>(shaderProperty) != nullptr;
-		const bool isGrassShader = netimmerse_cast<RE::BSGrassShaderProperty*>(shaderProperty) != nullptr;
+		const auto materialType = shaderProperty->GetMaterialType();
+
+		const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
+		const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
+		const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+
+		const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+		const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
+		const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
 
 		auto* alphaProperty = geometryData.alphaProperty;
 		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
