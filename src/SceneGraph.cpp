@@ -355,19 +355,12 @@ void SceneGraph::UpdateLODVisibility()
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
-	BaseMesh* mesh = nullptr;
-	{
-		std::scoped_lock lock(m_MeshMutex);
+	auto it = m_DirectMeshes.find(bsTriShape);
+	if (it == m_DirectMeshes.end())
+		return;
 
-		auto it = m_DirectMeshes.find(bsTriShape);
-		if (it == m_DirectMeshes.end())
-			return;
 
-		mesh = it->second.get();
-	}
-
-	// Signal destroy outside mesh mutex since it has its own scoped lock inside
-	mesh->OnDestroy();
+	it->second->OnDestroy();
 
 	{
 		std::scoped_lock lock(m_MeshDestroyMutex);
@@ -377,18 +370,11 @@ void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 {
-	BaseMesh* mesh = nullptr;
-	{
-		std::scoped_lock lock(m_MeshMutex);
+	auto it = m_DirectMeshes.find(bsDynamicTriShape);
+	if (it == m_DirectMeshes.end())
+		return;
 
-		auto it = m_DirectMeshes.find(bsDynamicTriShape);
-		if (it == m_DirectMeshes.end())
-			return;
-
-		mesh = it->second.get();
-	}
-
-	if (auto dynamicMesh = mesh->AsDynamicMesh()) {
+	if (auto dynamicMesh = it->second->AsDynamicMesh()) {
 		auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
 
 		// Function is called through a hook thats already between lock
@@ -410,9 +396,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// Unconditional release for now, needs to be revised for buffering/frames in flight support
 	for (auto destroyedMesh: destroyedMeshes)
 	{
-		// Might be unecessary since direct meshes is only modifier below, and this function runs on the main thread
-		std::scoped_lock lock(m_MeshMutex);
-
 		auto it = m_DirectMeshes.find(destroyedMesh);
 		if (it == m_DirectMeshes.end())
 			continue;
@@ -481,13 +464,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			RE::TESObjectREFR* const clusterOwner = skipClustering ? nullptr : ownerRefr;
 
 			eastl::shared_ptr<BaseMesh> mesh;
-			{
-				std::scoped_lock lock(m_MeshMutex);
 
-				auto it = m_DirectMeshes.find(bsTriShape);
-				if (it != m_DirectMeshes.end())
-					mesh = it->second;
-			}
+			auto it = m_DirectMeshes.find(bsTriShape);
+			if (it != m_DirectMeshes.end())
+				mesh = it->second;
 
 			// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
 			if (mesh) {
@@ -512,15 +492,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 					created->SetOwner(clusterOwner);
 
-					mesh = nullptr;
-					{
-						std::scoped_lock lock(m_MeshMutex);
-						auto [it, inserted] = m_DirectMeshes.emplace(bsTriShape, created);
-						if (inserted)
-							mesh = it->second;
-					}
+					auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, created);
+					if (inserted) {
+						mesh = it2->second;
 
-					if (mesh) {
 						mesh->Update();
 
 						GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(mesh);
@@ -535,8 +510,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	// Hide meshes whose trishapes were not visited by the traversal this frame for any reason
 	{
-		std::scoped_lock lock(m_MeshMutex);
-
 		for (auto& [bsTriShape, mesh] : m_DirectMeshes) {
 			if (mesh->IsHidden())
 				continue;
@@ -668,8 +641,6 @@ void SceneGraph::UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, 
 
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 {
-	std::scoped_lock lock(m_MeshMutex);
-
 	// Each cluster pulls dirty state from its members, uploads pending dynamic buffers, and builds/refits.
 	for (auto& [owner, cluster] : m_OwnerClusters)
 		cluster->BuildUpdate(commandList, this);
