@@ -13,6 +13,8 @@
 #include "Types/MenuState.h"
 #include "Types/Settings.h"
 
+#include "INISettings.h"
+
 struct Scene
 {
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
@@ -55,6 +57,8 @@ struct Scene
 	uint m_MenuStateUpdateFrame = 0;
 
 	Settings m_Settings;
+
+	INISettings m_INISettings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
 

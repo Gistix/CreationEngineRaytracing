@@ -2,6 +2,8 @@
 
 #include "Util.h"
 
+#include "Scene.h"
+
 Properties::Properties(RE::BSTriShape* triShape)
 {
 	m_Data.ShaderFlags = 0;
@@ -70,12 +72,14 @@ Properties::Properties(RE::BSTriShape* triShape)
 				m_Data.ProjectedUVParams0 = half4(oneMinusAlpha * params.x, 0.0f, params.z, (oneMinusAlpha * params.y) + params.w);
 				m_Data.ProjectedUVParams1 = Util::Math::Float4(lightingShaderProp->projectedUVColor);
 
+				const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
+
 				auto renderFlags = 0;
-				bool enableProjectedNormals = RE::GetINISetting("bEnableProjecteUVDiffuseNormals:Display")->GetBool() && (!(renderFlags & 0x8) || !RE::GetINISetting("bEnableProjecteUVDiffuseNormalsOnCubemap:Display")->GetBool());
+				bool enableProjectedNormals = iniSettings.enableProjecteUVDiffuseNormals && (!(renderFlags & 0x8) || !iniSettings.enableProjecteUVDiffuseNormalsOnCubemap);
 
 				m_Data.ProjectedUVParams2 = half4(
-					RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display")->GetFloat(),
-					RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display")->GetFloat(),
+					iniSettings.projectedUVDiffuseNormalTilingScale,
+					iniSettings.projectedUVNormalDetailTilingScale,
 					0.0f,
 					enableProjectedNormals ? 1.0f : 0.0f
 				);

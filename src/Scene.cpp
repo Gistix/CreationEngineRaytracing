@@ -42,6 +42,7 @@ void Scene::Load()
 void Scene::PostPostLoad()
 {
 	Hooks::Install();
+	m_INISettings.Initialize();
 }
 
 void Scene::DataLoaded()
