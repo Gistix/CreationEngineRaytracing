@@ -25,7 +25,9 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
 	deviceDesc.aftermathEnabled = false;
 	deviceDesc.logBufferLifetime = false;
+#if defined(NVRHI_ENHANCED_BARRIERS)
 	deviceDesc.enableEnhancedBarriers = true;
+#endif
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
 
@@ -71,8 +73,10 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::ShaderExecutionReordering))
 		m_SupportedFeatures |= SupportedFeatures::ShaderExecutionReordering;
 
+#if defined(NVRHI_ENHANCED_BARRIERS)
 	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::EnhancedBarriers))
 		m_SupportedFeatures |= SupportedFeatures::EnhancedBarriers;
+#endif
 
 	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
 
