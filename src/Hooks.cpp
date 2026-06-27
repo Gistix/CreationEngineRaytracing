@@ -540,6 +540,7 @@ namespace Hooks
 			desc.SampleDesc.Quality = 0;
 			desc.Usage = a_usage;
 			desc.BindFlags = (a_usage == D3D11_USAGE_STAGING) ? 0 : D3D11_BIND_SHADER_RESOURCE;
+
 			if (a_unorderedAccess)
 				desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 
@@ -550,7 +551,7 @@ namespace Hooks
 			else
 				desc.CPUAccessFlags = 0;
 
-			desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+			desc.MiscFlags = (a_usage == 0 || a_usage == D3D11_USAGE_IMMUTABLE) ? D3D11_RESOURCE_MISC_SHARED : 0;
 
 			D3D11_SUBRESOURCE_DATA subresData = {};
 			D3D11_SUBRESOURCE_DATA* pSubres = nullptr;
