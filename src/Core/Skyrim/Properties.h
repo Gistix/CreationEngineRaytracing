@@ -14,7 +14,9 @@ struct Properties
 	using EShaderPropertyFlag = RE::BSShaderProperty::EShaderPropertyFlag;
 	using Feature = RE::BSShaderMaterial::Feature;
 
-	// Mirrors the interop ShaderFlags namespace (interop/MaterialSkyrim.hlsli).
+	// Mirrors the interop ShaderFlags namespace (interop/Properties.hlsli).
+	// Water flags reuse the same bits as lighting flags (kHairTint/kTwoSided/kModelSpaceNormals)
+	// because the shader interprets them differently based on material Type.
 	enum ShaderFlags : uint32_t
 	{
 		kSpecular = 1 << 0,
@@ -43,6 +45,15 @@ struct Properties
 		kSnow = 1 << 24
 	};
 
+	// Water shader flags (mirrors interop/Properties.hlsli WaterShaderFlags namespace).
+	// Written into the same ShaderFlags field; the shader disambiguates by material Type::Water.
+	enum WaterShaderFlags : uint32_t
+	{
+		kWaterVertexUV      = 1 << 8,
+		kWaterEnableFlowmap  = 1 << 15,
+		kWaterBlendNormals   = 1 << 16
+	};
+
 	enum AlphaFlags : uint16_t
 	{
 		None = 0,
@@ -61,4 +72,5 @@ struct Properties
 	auto& GetData() const { return m_Data; }
 private:
 	static uint32_t MapShaderFlags(RE::BSShaderProperty* shaderProperty);
+	static uint32_t MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp);
 };

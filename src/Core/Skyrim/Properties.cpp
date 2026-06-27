@@ -42,10 +42,13 @@ Properties::Properties(RE::BSTriShape* triShape)
 
 	auto shaderProperty = runtimeData.shaderProperty;
 	if (shaderProperty) {
-		m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
 		m_Data.Alpha = shaderProperty->alpha;
 
-		if (auto lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
+		if (auto waterShaderProp = skyrim_cast<RE::BSWaterShaderProperty*>(shaderProperty)) {
+			m_Data.ShaderFlags = MapWaterShaderFlags(waterShaderProp);
+		}
+		else if (auto lightingShaderProp = skyrim_cast<RE::BSLightingShaderProperty*>(shaderProperty)) {
+			m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
 			float4 emissive = float4(1.0f, 1.0f, 1.0f, lightingShaderProp->emissiveMult);
 
 			if (lightingShaderProp->flags.all(EShaderPropertyFlag::kOwnEmit) && lightingShaderProp->emissiveColor) {
@@ -119,6 +122,20 @@ uint32_t Properties::MapShaderFlags(RE::BSShaderProperty* shaderProperty)
 	if (flags.any(EShaderPropertyFlag::kLODObjects)) result |= kLODObjects;
 	if (flags.any(EShaderPropertyFlag::kHDLODObjects)) result |= kHDLODObjects;
 	if (flags.any(EShaderPropertyFlag::kSnow)) result |= kSnow;
+
+	return result;
+}
+
+uint32_t Properties::MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp)
+{
+	using WaterFlag = RE::BSWaterShaderProperty::WaterFlag;
+	const auto& waterFlags = waterShaderProp->waterFlags;
+
+	uint32_t result = 0;
+
+	if (waterFlags.any(WaterFlag::kEnableFlowmap)) result |= kWaterEnableFlowmap;
+	if (waterFlags.any(WaterFlag::kBlendNormals)) result |= kWaterBlendNormals;
+	if (waterFlags.underlying() & (1 << 8)) result |= kWaterVertexUV;
 
 	return result;
 }
