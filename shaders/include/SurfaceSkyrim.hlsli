@@ -640,7 +640,7 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
     float4 baseTexColor = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
     baseTexColor.xyz = baseTexColor.xyz;
     
-    float4 baseColorMul = mesh.Properties.EmissiveColor;       
+    float4 baseColorMul = effect.BaseColor;       
     baseColorMul.xyz = baseColorMul.xyz;
     
     [branch]

@@ -51,50 +51,43 @@ Properties::Properties(RE::BSTriShape* triShape)
 			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 			m_Data.ShaderFlags = MapWaterShaderFlags(waterShaderProperty);
 		}
-		else if (materialType == RE::BSShaderMaterial::Type::kLighting) {
-			auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
-
+		else {
 			m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
-			float4 emissive = float4(1.0f, 1.0f, 1.0f, lightingShaderProp->emissiveMult);
 
-			if (lightingShaderProp->flags.all(EShaderPropertyFlag::kOwnEmit) && lightingShaderProp->emissiveColor) {
-				emissive.x = lightingShaderProp->emissiveColor->red;
-				emissive.y = lightingShaderProp->emissiveColor->green;
-				emissive.z = lightingShaderProp->emissiveColor->blue;
-			}
+			if (materialType == RE::BSShaderMaterial::Type::kLighting) {
+				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 
-			m_Data.EmissiveColor = emissive;
+				float4 emissive = float4(1.0f, 1.0f, 1.0f, lightingShaderProp->emissiveMult);
 
-			if (lightingShaderProp->flags.all(EShaderPropertyFlag::kProjectedUV)) {
-				auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
-				float oneMinusAlpha = 1.0f - params.w;
+				if (lightingShaderProp->flags.all(EShaderPropertyFlag::kOwnEmit) && lightingShaderProp->emissiveColor) {
+					emissive.x = lightingShaderProp->emissiveColor->red;
+					emissive.y = lightingShaderProp->emissiveColor->green;
+					emissive.z = lightingShaderProp->emissiveColor->blue;
+				}
 
-				m_Data.ProjectedUVParams0 = half4(oneMinusAlpha * params.x, 0.0f, params.z, (oneMinusAlpha * params.y) + params.w);
-				m_Data.ProjectedUVParams1 = Util::Math::Float4(lightingShaderProp->projectedUVColor);
+				m_Data.EmissiveColor = emissive;
 
-				const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
+				if (lightingShaderProp->flags.all(EShaderPropertyFlag::kProjectedUV)) {
+					auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
+					float oneMinusAlpha = 1.0f - params.w;
 
-				auto renderFlags = 0;
-				bool enableProjectedNormals = iniSettings.enableProjecteUVDiffuseNormals && (!(renderFlags & 0x8) || !iniSettings.enableProjecteUVDiffuseNormalsOnCubemap);
+					m_Data.ProjectedUVParams0 = half4(oneMinusAlpha * params.x, 0.0f, params.z, (oneMinusAlpha * params.y) + params.w);
+					m_Data.ProjectedUVParams1 = Util::Math::Float4(lightingShaderProp->projectedUVColor);
 
-				m_Data.ProjectedUVParams2 = half4(
-					iniSettings.projectedUVDiffuseNormalTilingScale,
-					iniSettings.projectedUVNormalDetailTilingScale,
-					0.0f,
-					enableProjectedNormals ? 1.0f : 0.0f
-				);
+					const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
 
-				m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 1.0f, 0.0f);
-			}
-		}
-		else if (materialType == RE::BSShaderMaterial::Type::kEffect) {
-			if (auto effectMaterial = reinterpret_cast<RE::BSEffectShaderMaterial*>(shaderProperty->material)) {
-				m_Data.EmissiveColor = float4(
-					effectMaterial->baseColor.red,
-					effectMaterial->baseColor.green,
-					effectMaterial->baseColor.blue,
-					effectMaterial->baseColorScale
-				);
+					auto renderFlags = 0;
+					bool enableProjectedNormals = iniSettings.enableProjecteUVDiffuseNormals && (!(renderFlags & 0x8) || !iniSettings.enableProjecteUVDiffuseNormalsOnCubemap);
+
+					m_Data.ProjectedUVParams2 = half4(
+						iniSettings.projectedUVDiffuseNormalTilingScale,
+						iniSettings.projectedUVNormalDetailTilingScale,
+						0.0f,
+						enableProjectedNormals ? 1.0f : 0.0f
+					);
+
+					m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 1.0f, 0.0f);
+				}
 			}
 		}
 	}
