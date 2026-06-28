@@ -455,6 +455,9 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 	m_DynamicResolutionRatio = Util::Adapter::GetDynamicResolutionRatios();
 
+	// If the last frame hasn't finished we wait
+	GetDevice()->waitEventQuery(m_RenderGraphQuery);
+
 	// Get a new command list every frame, NVRHI command lists are single-use and they can hold stale scratch data
 	m_CommandList = GetGraphicsCommandList();
 
@@ -483,9 +486,6 @@ void Renderer::EndExecution()
 
 void Renderer::WaitExecution()
 {
-	// Fence only the render graph execution and not any of the others async command lists
-	GetDevice()->waitEventQuery(m_RenderGraphQuery);
-
 	PostExecution();
 }
 
