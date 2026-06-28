@@ -40,9 +40,16 @@ void BLASCluster::RemoveMember(BaseMesh* mesh)
 
 void BLASCluster::GrowBounds(const RE::NiBound& bound)
 {
-	float3 clusterCenter = float3(m_InstanceTransform._14, m_InstanceTransform._24, m_InstanceTransform._34);
 	float3 boundCenter = Util::Math::Float3(bound.center);
-	float distToBound = (boundCenter - clusterCenter).Length();
+
+	float margin = m_InstanceRadius - bound.radius;
+	if (margin > 0.0f) {
+		float distSq = (boundCenter - m_ClusterCenter).LengthSquared();
+		if (distSq <= margin * margin)
+			return;
+	}
+
+	float distToBound = (boundCenter - m_ClusterCenter).Length();
 	m_InstanceRadius = std::max(m_InstanceRadius, distToBound + bound.radius);
 }
 

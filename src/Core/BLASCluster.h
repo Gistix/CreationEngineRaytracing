@@ -33,6 +33,7 @@ class BLASCluster
 	mutable float3x4 m_PrevInstanceTransform; // previous-frame instance transform for motion vectors
 	mutable bool m_HasPrevInstanceTransform = false;
 	mutable float m_InstanceRadius = 0.0f; // world-space bounding sphere radius, accumulated from member bounds
+	float3 m_ClusterCenter; // cached translation of m_InstanceTransform, invalid when transform changes
 
 	bool m_MembershipDirty = true; // member added/removed/pruned -> full rebuild
 	bool m_Updatable = false;      // any member is updatable (dynamic)
@@ -51,7 +52,10 @@ public:
 
 	void RemoveMember(BaseMesh* mesh);
 
-	void SetInstanceTransform(const float3x4& transform) { m_InstanceTransform = transform; }
+	void SetInstanceTransform(const float3x4& transform) {
+		m_InstanceTransform = transform;
+		m_ClusterCenter = float3(transform._14, transform._24, transform._34);
+	}
 
 	// Grow the world-space bounding sphere to include the given bound (center + radius in world space).
 	void GrowBounds(const RE::NiBound& bound);

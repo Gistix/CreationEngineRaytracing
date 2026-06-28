@@ -641,8 +641,9 @@ void SceneGraph::UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, 
 	float3x4 instanceTransform;
 	XMStoreFloat3x4(&instanceTransform, Util::Math::GetXMFromNiTransform(ownerWorld));
 
-	GetOrCreateCluster(owner, bsTriShape)->SetInstanceTransform(instanceTransform);
-	GetOrCreateCluster(owner, bsTriShape)->GrowBounds(bsTriShape->worldBound);
+	auto* cluster = GetOrCreateCluster(owner, bsTriShape);
+	cluster->SetInstanceTransform(instanceTransform);
+	cluster->GrowBounds(bsTriShape->worldBound);
 }
 
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
