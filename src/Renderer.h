@@ -13,6 +13,8 @@
 #include "Renderer/RenderGraph.h"
 #include "Renderer/RenderTargetManager.h"
 
+#include "Constants.h"
+
 #include <d3d12compatibility.h>
 
 struct MessageCallback : public nvrhi::IMessageCallback
@@ -57,8 +59,19 @@ class Renderer
 	// Fence used to synchronize 'executeCommandList' since it is not thread safe and we need the returned fence value to synchronize GPU resources
 	mutable std::mutex m_ExecutionMutex;
 
+	struct FrameSlot
+	{
+		nvrhi::CommandListHandle commandList = nullptr;
+		nvrhi::EventQueryHandle eventQuery = nullptr;
+		uint64_t fenceValue = 0;
+		bool inFlight = false;
+	};
+	eastl::array<FrameSlot, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameSlots;
+	uint32_t m_CurrentSlot = 0;
+	uint32_t m_NextSlot = 0;
+	uint32_t m_LastCompletedSlot = 0;
+
 	uint64_t m_LastSubmittedInstance = 0;
-	nvrhi::EventQueryHandle m_RenderGraphQuery;
 
 	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
@@ -195,9 +208,12 @@ public:
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();
 
-	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main); }
+	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main, m_CurrentSlot); }
 
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
+
+	inline auto GetCurrentSlot() const { return m_CurrentSlot; }
+	inline auto GetCompletedSlot() const { return m_LastCompletedSlot; }
 
 	inline auto GetJitter() const { return m_Jitter; }
 
@@ -293,7 +309,7 @@ public:
 
 	void EndExecution();
 
-	void WaitExecution();
+	uint32_t PostExecution();
 
-	void PostExecution();
+	void RunPostExecutionForSlot(uint32_t slot);
 };

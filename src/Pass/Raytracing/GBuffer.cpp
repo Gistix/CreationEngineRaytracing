@@ -57,7 +57,7 @@ namespace Pass::Raytracing
 
 	void GBuffer::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
-		m_DirtyBindings = true;
+		m_BindingSetDirty.fill(true);
 	}
 
 	void GBuffer::CreateRootSignature()
@@ -203,7 +203,8 @@ namespace Pass::Raytracing
 
 	void GBuffer::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* renderer = GetRenderer();
@@ -255,19 +256,21 @@ namespace Pass::Raytracing
 		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 
-		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void GBuffer::Execute(nvrhi::ICommandList* commandList)
 	{
 		CheckBindings();
 
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
-			m_BindingSet,
+			m_BindingSets[currentSlot],
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,

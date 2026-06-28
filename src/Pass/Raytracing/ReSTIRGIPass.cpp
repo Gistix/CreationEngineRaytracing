@@ -133,7 +133,7 @@ namespace Pass::Raytracing
 		staticParams.CheckerboardSamplingMode = rtxdi::CheckerboardMode::Off;
 
 		m_Context = eastl::make_unique<rtxdi::ReSTIRGIContext>(staticParams);
-		m_DirtyBindings = true;
+		m_BindingSetDirty.fill(true);
 	}
 
 	void ReSTIRGIPass::SettingsChanged(const Settings& settings)
@@ -143,7 +143,7 @@ namespace Pass::Raytracing
 		if (defines != m_Defines) {
 			m_Defines = defines;
 			CreatePipeline();
-			m_DirtyBindings = true;
+			m_BindingSetDirty.fill(true);
 		}
 
 		m_Enabled = settings.ReSTIRGI.Enabled;
@@ -212,7 +212,8 @@ namespace Pass::Raytracing
 
 	void ReSTIRGIPass::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* renderer = GetRenderer();
@@ -246,8 +247,8 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 		};
 
-		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
-		m_DirtyBindings = false;
+		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void ReSTIRGIPass::FillConstantBuffer(nvrhi::ICommandList* commandList)
@@ -313,7 +314,9 @@ namespace Pass::Raytracing
 
 		CheckBindings();
 
-		if (!m_BindingSet)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
+		if (!m_BindingSets[currentSlot])
 			return;
 
 		FillConstantBuffer(commandList);
@@ -321,7 +324,7 @@ namespace Pass::Raytracing
 		auto resolution = GetRenderer()->GetDynamicResolution();
 		auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 8);
 
-		nvrhi::BindingSetVector bindings = { m_BindingSet };
+		nvrhi::BindingSetVector bindings = { m_BindingSets[currentSlot] };
 
 		switch (m_ResamplingMode)
 		{

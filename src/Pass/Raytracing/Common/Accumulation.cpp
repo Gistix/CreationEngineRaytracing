@@ -46,7 +46,8 @@ namespace Pass::Common
 
 	void Accumulation::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* scene = Scene::GetSingleton();
@@ -62,11 +63,11 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::Texture_UAV(0, textureManager.GetTexture(RenderTarget::Accumulation))
 		};
 
-		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
 		m_AccumulatedFrames = 0;
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	bool Accumulation::DetectCameraChange() const
@@ -125,7 +126,7 @@ namespace Pass::Common
 
 	void Accumulation::ResolutionChanged(uint2)
 	{
-		m_DirtyBindings = true;
+		m_BindingSetDirty.fill(true);
 		m_AccumulatedFrames = 0;
 	}
 
@@ -133,7 +134,9 @@ namespace Pass::Common
 	{
 		CheckBindings();
 
-		if (!m_ComputePipeline || !m_BindingSet)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
+		if (!m_ComputePipeline || !m_BindingSets[currentSlot])
 			return;
 
 		// Detect camera changes and reset if needed
@@ -145,7 +148,7 @@ namespace Pass::Common
 
 		nvrhi::ComputeState state;
 		state.pipeline = m_ComputePipeline;
-		state.bindings = { m_BindingSet };
+		state.bindings = { m_BindingSets[currentSlot] };
 		commandList->setComputeState(state);
 
 		// Update push constants

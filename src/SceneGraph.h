@@ -75,15 +75,15 @@ class SceneGraph
 	eastl::map<RE::BSLight*, Light> m_Lights;
 
 	eastl::array<LightData, Constants::LIGHTS_MAX> m_LightData;
-	nvrhi::BufferHandle m_LightBuffer;
+	eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_LightBuffer;
 
 	// Mesh
 	eastl::array<MeshData, Constants::NUM_MESHES_MAX> m_MeshData;
-	nvrhi::BufferHandle m_MeshBuffer;
+	eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_MeshBuffer;
 
 	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
-	nvrhi::BufferHandle m_InstanceBuffer;
+	eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_InstanceBuffer;
 
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 
@@ -127,9 +127,9 @@ public:
 	inline auto& GetPrevPositionDescriptors() const { return m_PrevPositionDescriptors; }
 	inline auto& GetPrevPositionWriteDescriptors() const { return m_PrevPositionWriteDescriptors; }
 
-	inline auto& GetLightBuffer() const { return m_LightBuffer; }
-	inline auto& GetMeshBuffer() const { return m_MeshBuffer; }
-	inline auto& GetInstanceBuffer() const { return m_InstanceBuffer; }
+	nvrhi::IBuffer* GetLightBuffer() const;
+	nvrhi::IBuffer* GetMeshBuffer() const;
+	nvrhi::IBuffer* GetInstanceBuffer() const;
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
 	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
@@ -170,4 +170,8 @@ public:
 	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
+
+	void ProcessPendingMeshDestroys();
+private:
+	eastl::vector<eastl::shared_ptr<BaseMesh>> m_PendingMeshDestroy;
 };

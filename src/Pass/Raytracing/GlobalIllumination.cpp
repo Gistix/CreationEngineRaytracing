@@ -34,7 +34,7 @@ namespace Pass::Raytracing
 
 	void GlobalIllumination::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
-		m_DirtyBindings = true;
+		m_BindingSetDirty.fill(true);
 	}
 
 	void GlobalIllumination::SettingsChanged(const Settings& settings)
@@ -44,7 +44,7 @@ namespace Pass::Raytracing
 		if (defines != m_Defines) {
 			m_Defines = defines;
 			CreatePipeline();
-			m_DirtyBindings = true;
+			m_BindingSetDirty.fill(true);
 		}
 	}
 
@@ -215,7 +215,8 @@ namespace Pass::Raytracing
 
 	void GlobalIllumination::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* renderer = GetRenderer();
@@ -275,19 +276,21 @@ namespace Pass::Raytracing
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
 		}
 
-		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void GlobalIllumination::Execute(nvrhi::ICommandList* commandList)
 	{	
 		CheckBindings();
 
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
-			m_BindingSet,
+			m_BindingSets[currentSlot],
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,

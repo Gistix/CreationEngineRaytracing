@@ -46,16 +46,18 @@ void RenderNode::Execute(nvrhi::ICommandList* commandList)
 		if (debugSettings.Markers)
 			commandList->beginMarker(std::format("{} - Pass", m_Name.c_str()).c_str());
 
-		if (!m_TimerQuery)
-			m_TimerQuery = Renderer::GetSingleton()->GetDevice()->createTimerQuery();
+		auto currentSlot = Renderer::GetSingleton()->GetCurrentSlot();
+
+		if (!m_TimerQueries[currentSlot])
+			m_TimerQueries[currentSlot] = Renderer::GetSingleton()->GetDevice()->createTimerQuery();
 
 		if (debugSettings.Timings)
-			commandList->beginTimerQuery(m_TimerQuery);
+			commandList->beginTimerQuery(m_TimerQueries[currentSlot]);
 
 		m_RenderPass->Execute(commandList);
 
 		if (debugSettings.Timings)
-			commandList->endTimerQuery(m_TimerQuery);
+			commandList->endTimerQuery(m_TimerQueries[currentSlot]);
 
 		if (debugSettings.Markers)
 			commandList->endMarker();

@@ -38,14 +38,9 @@ void GetResolution(uint32_t& width, uint32_t& height)
 	height = resolution.y;
 }
 
-void WaitExecution()
+uint32_t PostExecution()
 {
-	Renderer::GetSingleton()->WaitExecution();
-}
-
-void PostExecution()
-{
-	Renderer::GetSingleton()->PostExecution();
+	return Renderer::GetSingleton()->PostExecution();
 }
 
 void UpdateFeatureData(void* data, uint32_t size)
@@ -106,14 +101,16 @@ void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, 
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
 }
 
-void GetSharedTextures(SharedTexture& depth, SharedTexture& motionVector, SharedTexture& main, SharedTexture& diffuseAlbedo)
+void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main, SharedTexture* diffuseAlbedo)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
 
-	depth = textureManager.GetSharedTexture(RenderTarget::ClipDepth);
-	motionVector = textureManager.GetSharedTexture(RenderTarget::MotionVectors3D);
-	main = textureManager.GetSharedTexture(RenderTarget::Main);
-	diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo);
+	for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
+		depth[i] = textureManager.GetSharedTexture(RenderTarget::ClipDepth, i);
+		motionVector[i] = textureManager.GetSharedTexture(RenderTarget::MotionVectors3D, i);
+		main[i] = textureManager.GetSharedTexture(RenderTarget::Main, i);
+		diffuseAlbedo[i] = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo, i);
+	}
 }
 
 void UpdateJitter(float2 jitter)

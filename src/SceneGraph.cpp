@@ -19,18 +19,24 @@
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
 
-void SceneGraph::Initialize()
+	nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer[Renderer::GetSingleton()->GetCurrentSlot()]; }
+	nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer[Renderer::GetSingleton()->GetCurrentSlot()]; }
+	nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer[Renderer::GetSingleton()->GetCurrentSlot()]; }
+
+	void SceneGraph::Initialize()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	// Mesh Data Buffer
-	m_MeshBuffer = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
+	for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
+		auto name = std::format("Mesh Buffer[{}]", i);
+		m_MeshBuffer[i] = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, name.c_str());
 
-	// Instance Data Buffer
-	m_InstanceBuffer = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+		name = std::format("Instance Buffer[{}]", i);
+		m_InstanceBuffer[i] = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, name.c_str());
 
-	// Mesh Data Buffer
-	m_LightBuffer = Util::CreateStructuredBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
+		name = std::format("Light Buffer[{}]", i);
+		m_LightBuffer[i] = Util::CreateStructuredBuffer<LightData>(device, Constants::LIGHTS_MAX, name.c_str());
+	}
 
 	m_MaterialManager = eastl::make_unique<MaterialManager>();
 
@@ -329,7 +335,7 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 		}
 	}
 
-	commandList->writeBuffer(m_LightBuffer, m_LightData.data(), numLights * sizeof(LightData));
+	commandList->writeBuffer(GetLightBuffer(), m_LightData.data(), numLights * sizeof(LightData));
 #endif
 }
 
@@ -570,13 +576,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
 
 	if (m_NumMeshes > 0)
-		commandList->writeBuffer(m_MeshBuffer, m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
+		commandList->writeBuffer(GetMeshBuffer(), m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
 
 	if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
 		logger::critical("SceneGraph::Update - Number of instances of {} exceeds the maximum of {}", m_NumInstances, Constants::NUM_INSTANCES_MAX);
 
 	if (m_NumInstances > 0)
-		commandList->writeBuffer(m_InstanceBuffer, m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
