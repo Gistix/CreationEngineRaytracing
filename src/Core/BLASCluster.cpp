@@ -62,10 +62,11 @@ bool BLASCluster::Empty() const
 	return true;
 }
 
-static InstanceLightData ComputeInstanceLightData(const float3x4& instanceTransform,
-                                                    float instanceRadius,
-                                                    const eastl::map<RE::BSLight*, Light>& lights,
-                                                    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
+static InstanceLightData ComputeInstanceLightData(
+	const float3x4& instanceTransform,
+    float instanceRadius,
+    const eastl::map<RE::BSLight*, Light>& lights,
+    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
 {
 	uint8_t lightIds[Constants::INSTANCE_LIGHTS_MAX];
 	uint8_t numLights = 0;
@@ -77,7 +78,11 @@ static InstanceLightData ComputeInstanceLightData(const float3x4& instanceTransf
 			continue;
 
 		if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
-			logger::error("ComputeInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}", numLights, Constants::INSTANCE_LIGHTS_MAX);
+			logger::error("ComputeInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}, for light {} of {}", 
+				numLights, 
+				Constants::INSTANCE_LIGHTS_MAX, 
+				light.m_Index,
+				Constants::LIGHTS_MAX);
 			break;
 		}
 
