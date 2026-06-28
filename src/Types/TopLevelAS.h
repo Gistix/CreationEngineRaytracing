@@ -10,7 +10,7 @@
 
 class TopLevelAS
 {
-	nvrhi::rt::AccelStructHandle m_Handle;
+	eastl::array<nvrhi::rt::AccelStructHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_Handle;
 	eastl::vector<nvrhi::rt::InstanceDesc> m_InstanceDescs;
 	uint32_t m_NumInstances = 0;
 
@@ -25,7 +25,7 @@ class TopLevelAS
 public:
 	nvrhi::rt::IAccelStruct* GetHandle()
 	{
-		return m_Handle;
+		return m_Handle[Renderer::GetSingleton()->GetCurrentSlot()];
 	}
 
 	void AddListener(ITLASUpdateListener* listener)
@@ -45,7 +45,8 @@ public:
 		m_InstanceDescs.clear();
 		m_InstanceDescs.reserve(ownerClusters.size() + orphanClusters.size());
 
-		const auto& markers = Scene::GetSingleton()->m_Settings.DebugSettings.Markers;
+		auto* scene = Scene::GetSingleton();
+		const auto& markers = scene->m_Settings.DebugSettings.Markers;
 
 		if (markers)
 			commandList->beginMarker("TLAS Instances");
@@ -79,11 +80,12 @@ public:
 
 		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 
-		/*auto* scene = Scene::GetSingleton();
 		if (scene->GetSceneGraph()->GetNumInstancesFrame() != topLevelInstances)
-			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances and TLAS instances.");*/
+			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances and TLAS instances.");
 
-		if (!m_Handle || topLevelInstances > m_NumInstances - Constants::TLAS_INSTANCES_THRESHOLD) {
+		const auto ringSlot = Renderer::GetSingleton()->GetCurrentSlot();
+
+		if (!m_Handle[ringSlot] || topLevelInstances > m_NumInstances - Constants::TLAS_INSTANCES_THRESHOLD) {
 			float topLevelInstancesRatio = std::ceil(topLevelInstances / static_cast<float>(Constants::TLAS_INSTANCES_STEP));
 
 			uint32_t topLevelMaxInstances = static_cast<uint32_t>(topLevelInstancesRatio) * Constants::TLAS_INSTANCES_STEP;
@@ -96,7 +98,7 @@ public:
 			tlasDesc.isTopLevel = true;
 			tlasDesc.topLevelMaxInstances = m_NumInstances;
 			tlasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
-			m_Handle = Renderer::GetSingleton()->GetDevice()->createAccelStruct(tlasDesc);
+			m_Handle[ringSlot] = Renderer::GetSingleton()->GetDevice()->createAccelStruct(tlasDesc);
 
 			NotifyResized();
 		}
@@ -104,7 +106,7 @@ public:
 		if (markers)
 			commandList->beginMarker("TLAS Update");
 
-		commandList->buildTopLevelAccelStruct(m_Handle, m_InstanceDescs.data(), m_InstanceDescs.size(), nvrhi::rt::AccelStructBuildFlags::PreferFastTrace);
+		commandList->buildTopLevelAccelStruct(m_Handle[ringSlot], m_InstanceDescs.data(), m_InstanceDescs.size(), nvrhi::rt::AccelStructBuildFlags::PreferFastTrace);
 
 		if (markers)
 			commandList->endMarker();

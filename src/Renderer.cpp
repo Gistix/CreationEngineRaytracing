@@ -455,17 +455,19 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 	m_CurrentSlot = m_NextSlot;
 
+	auto device = GetDevice();
+
 	auto& slot = m_FrameSlots[m_CurrentSlot];
 
 	if (slot.inFlight) {
-		GetDevice()->waitEventQuery(slot.eventQuery);
+		device->waitEventQuery(slot.eventQuery);
 		RunPostExecutionForSlot(m_CurrentSlot);
-		GetDevice()->resetEventQuery(slot.eventQuery);
+		device->resetEventQuery(slot.eventQuery);
 		slot.inFlight = false;
 	}
 
 	if (!slot.eventQuery)
-		slot.eventQuery = GetDevice()->createEventQuery();
+		slot.eventQuery = device->createEventQuery();
 
 	m_FrameIndex++;
 
