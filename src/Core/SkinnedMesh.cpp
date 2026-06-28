@@ -190,9 +190,18 @@ bool SkinnedMesh::Update()
 
 	// UBE crash fix: rootParent must be valid.
 	if (skinInstance && skinInstance->rootParent) {
+		auto* scene = Scene::GetSingleton();
+		const bool isPathTracing = scene->IsPathTracingActive();
+		const bool isForceCulled = isPathTracing; // Should also check for kEye and kEnvMap materials
+
+		bool isVisible = false;
+		if (isForceCulled)
+			isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
+
 		// Only recompute when the game advanced the animation this frame.
 		const auto frameID = skinInstance->frameID;
-		if (m_SkinFrameID != frameID) {
+
+		if (isVisible || m_SkinFrameID != frameID) {
 			m_SkinFrameID = frameID;
 
 			auto* skinData = skinInstance->skinData.get();
