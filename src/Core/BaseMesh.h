@@ -36,6 +36,12 @@ public:
 		Dynamic
 	};
 
+	enum class Flags : uint8_t
+	{
+		None = 0,
+		LandLOD4 = 1 << 0
+	};
+
 	virtual ~BaseMesh() = default;
 
 	// Constructs the appropriate mesh type (DirectMesh, SkinnedMesh or DynamicMesh) for the given geometry.
@@ -96,6 +102,9 @@ public:
 	void SetLastVisitedFrame(uint64_t f) { m_LastVisitedFrame = f; }
 	uint64_t GetLastVisitedFrame() const { return m_LastVisitedFrame; }
 
+	CESEAdapter::REX::EnumSet<Flags> GetFlags() const { return m_Flags; }
+	bool HasFlag(Flags f) const { return m_Flags.all(f); }
+
 protected:
 	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
 
@@ -146,6 +155,7 @@ protected:
 	CESEAdapter::REX::EnumSet<State> m_State = State::None;
 
 	Type m_Type = Type::Base;
+	CESEAdapter::REX::EnumSet<Flags> m_Flags = Flags::None;
 
 	// Prevents BSTriShape being destroyed mid-usage
 	std::mutex m_BSTriShapeMutex;

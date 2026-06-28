@@ -845,6 +845,13 @@ namespace Hooks
 		{
 			auto result = func(a_block, a_terrainManager, a_stream, a4, a5);
 
+			if (result && result->node && result->land) {
+				auto lodLevel = static_cast<std::int32_t>(result->node->GetLODLevel());
+				auto key = RE::BSFixedString(Constants::ExtraData::LandLOD);
+				auto extra = RE::NiIntegersExtraData::Create(key, { lodLevel });
+				result->land->AddExtraData(extra);
+			}
+
 			return result;
 		}
 
@@ -1018,7 +1025,7 @@ namespace Hooks
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
 		// Terrain LOD
-		//stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
+		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
 		//stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
