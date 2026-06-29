@@ -12,9 +12,9 @@ namespace Pass
 		auto device = renderer->GetDevice();
 
 		for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
-			m_BoneWorldBuffer[i] = Util::CreateStructuredBuffer<BoneTransform>(device, MAX_BONE_MATRICES,
+			m_BoneWorldBuffer[i] = Util::CreateStructuredBuffer<NiTransformPacked>(device, MAX_BONE_MATRICES,
 				std::format("Bone World Buffer[{}]", i).c_str());
-			m_SkinToBoneBuffer[i] = Util::CreateStructuredBuffer<BoneTransform>(device, MAX_BONE_MATRICES,
+			m_SkinToBoneBuffer[i] = Util::CreateStructuredBuffer<NiTransformPacked>(device, MAX_BONE_MATRICES,
 				std::format("SkinToBone Buffer[{}]", i).c_str());
 			m_MeshBoneHeaderBuffer[i] = Util::CreateStructuredBuffer<MeshBoneHeader>(device, MAX_GEOMETRY,
 				std::format("Mesh Bone Header Buffer[{}]", i).c_str());
@@ -167,12 +167,12 @@ namespace Pass
 				// Copy raw boneWorld transforms to BoneCompute input buffer
 				std::memcpy(m_BoneWorldData.data() + boneIndex,
 					mesh->GetBoneWorlds().data(),
-					sizeof(float3x4) * boneCount);
+					sizeof(NiTransformPacked) * boneCount);
 
 				// Copy static skinToBone transforms to BoneCompute input buffer
 				std::memcpy(m_SkinToBoneData.data() + boneIndex,
 					mesh->GetSkinToBones().data(),
-					sizeof(float3x4) * boneCount);
+					sizeof(NiTransformPacked) * boneCount);
 
 				// Fill per-mesh bone compute header
 				MeshBoneHeader& header = m_MeshBoneHeaderData[meshIndex];
@@ -180,7 +180,11 @@ namespace Pass
 				header.BoneWorldOffset = boneIndex;
 				header.SkinToBoneOffset = boneIndex;
 				header.Pad = 0;
-				header.GeometryWorldInverse = mesh->GetGeometryWorldInverse();
+				NiTransformPacked geomInv = mesh->GetGeometryWorldInverse();
+				header.GeomInv_Rot0_Scale = geomInv.Rot0_Scale;
+				header.GeomInv_Rot1       = geomInv.Rot1;
+				header.GeomInv_Rot2       = geomInv.Rot2;
+				header.GeomInv_Translate  = geomInv.Translate;
 			}
 
 			boneIndex += boneCount;
@@ -192,7 +196,7 @@ namespace Pass
 
 		// Upload raw bone transform data (BoneCompute input)
 		if (boneIndex > 0) {
-			auto bytes = sizeof(float3x4) * boneIndex;
+			auto bytes = sizeof(NiTransformPacked) * boneIndex;
 
 			if (bytes > 0) {
 				commandList->writeBuffer(m_BoneWorldBuffer[currentSlot], m_BoneWorldData.data(), bytes);

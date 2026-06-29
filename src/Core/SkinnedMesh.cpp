@@ -9,6 +9,22 @@
 #include "Pass/Raytracing/Common/Skinning.h"
 #include "Types/RE/RE.h"
 
+static void PackNiTransform(const RE::NiTransform& src, NiTransformPacked& dst)
+{
+	dst.Rot0_Scale = float4(src.rotate.entry[0][0], src.rotate.entry[0][1], src.rotate.entry[0][2], src.scale);
+	dst.Rot1       = float4(src.rotate.entry[1][0], src.rotate.entry[1][1], src.rotate.entry[1][2], 0.0f);
+	dst.Rot2       = float4(src.rotate.entry[2][0], src.rotate.entry[2][1], src.rotate.entry[2][2], 0.0f);
+	dst.Translate  = float4(src.translate.x, src.translate.y, src.translate.z, 0.0f);
+}
+
+static void PackNiTransform(const RE::NiTransform& src, float4& r0s, float4& r1, float4& r2, float4& t)
+{
+	r0s = float4(src.rotate.entry[0][0], src.rotate.entry[0][1], src.rotate.entry[0][2], src.scale);
+	r1  = float4(src.rotate.entry[1][0], src.rotate.entry[1][1], src.rotate.entry[1][2], 0.0f);
+	r2  = float4(src.rotate.entry[2][0], src.rotate.entry[2][1], src.rotate.entry[2][2], 0.0f);
+	t   = float4(src.translate.x, src.translate.y, src.translate.z, 0.0f);
+}
+
 SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
@@ -72,7 +88,7 @@ void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
 
 	m_SkinToBones.resize(skinData->bones);
 	for (uint32_t i = 0; i < skinData->bones; i++)
-		XMStoreFloat3x4(&m_SkinToBones[i], Util::Math::GetXMFromNiTransform(skinData->boneData[i].skinToBone));
+		PackNiTransform(skinData->boneData[i].skinToBone, m_SkinToBones[i]);
 }
 
 void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
@@ -226,9 +242,9 @@ bool SkinnedMesh::Update(BLASCluster* cluster)
 					m_BoneWorlds.resize(skinData->bones);
 
 				for (uint32_t i = 0; i < skinData->bones; i++)
-					XMStoreFloat3x4(&m_BoneWorlds[i], Util::Math::GetXMFromNiTransform(*skinInstance->boneWorldTransforms[i]));
+					PackNiTransform(*skinInstance->boneWorldTransforms[i], m_BoneWorlds[i]);
 
-				XMStoreFloat3x4(&m_GeometryWorldInverse, Util::Math::GetXMFromNiTransform(m_BSTriShape->world.Invert()));
+				PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
 
 				poseAdvanced = true;
 			}

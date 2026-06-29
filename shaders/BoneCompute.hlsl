@@ -1,13 +1,21 @@
 #include "Interop/BoneMatrix.hlsli"
 #include "Interop/BoneTransform.hlsli"
 
-StructuredBuffer<BoneTransform> BoneWorlds          : register(t0);
-StructuredBuffer<BoneTransform> SkinToBones         : register(t1);
-StructuredBuffer<MeshBoneHeader> MeshHeaders        : register(t2);
-RWStructuredBuffer<BoneMatrix> BoneMatricesOut      : register(u0);
+StructuredBuffer<NiTransformPacked> BoneWorlds       : register(t0);
+StructuredBuffer<NiTransformPacked> SkinToBones      : register(t1);
+StructuredBuffer<MeshBoneHeader> MeshHeaders         : register(t2);
+RWStructuredBuffer<BoneMatrix> BoneMatricesOut       : register(u0);
 
-// 3x4 affine transform multiply: a * b, assuming both represent affine
-// transforms where the implicit 4th row is [0,0,0,1].
+float3x4 NiToAffine(NiTransformPacked t)
+{
+	float3x4 m;
+	float s = t.Rot0_Scale.w;
+	m[0] = float4(t.Rot0_Scale.xyz * s, t.Translate.x);
+	m[1] = float4(t.Rot1.xyz * s, t.Translate.y);
+	m[2] = float4(t.Rot2.xyz * s, t.Translate.z);
+	return m;
+}
+
 float3x4 MulAffine(float3x4 a, float3x4 b)
 {
 	float3x4 r;
@@ -33,9 +41,15 @@ void Main(uint3 DTid : SV_DispatchThreadID)
 	if (globalBoneIndex >= header.BoneCount)
 		return;
 
-	const float3x4 boneWorld = BoneWorlds[header.BoneWorldOffset + globalBoneIndex].Affine;
-	const float3x4 skinToBone = SkinToBones[header.SkinToBoneOffset + globalBoneIndex].Affine;
-	const float3x4 geomInv = header.GeometryWorldInverse;
+	const float3x4 boneWorld = NiToAffine(BoneWorlds[header.BoneWorldOffset + globalBoneIndex]);
+	const float3x4 skinToBone = NiToAffine(SkinToBones[header.SkinToBoneOffset + globalBoneIndex]);
+
+	NiTransformPacked geomInvPacked;
+	geomInvPacked.Rot0_Scale = header.GeomInv_Rot0_Scale;
+	geomInvPacked.Rot1      = header.GeomInv_Rot1;
+	geomInvPacked.Rot2      = header.GeomInv_Rot2;
+	geomInvPacked.Translate = header.GeomInv_Translate;
+	const float3x4 geomInv = NiToAffine(geomInvPacked);
 
 	float3x4 m = MulAffine(MulAffine(geomInv, boneWorld), skinToBone);
 

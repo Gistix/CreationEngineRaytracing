@@ -2,6 +2,7 @@
 
 #include "Core/BaseMesh.h"
 #include "Constants.h"
+#include "Interop/BoneTransform.hlsli"
 
 class SkinnedMesh : public BaseMesh
 {
@@ -19,9 +20,16 @@ public:
 
 	uint32_t GetBoneCount() const { return static_cast<uint32_t>(m_BoneWorlds.size()); }
 
-	const eastl::vector<float3x4>& GetBoneWorlds() const { return m_BoneWorlds; }
-	const eastl::vector<float3x4>& GetSkinToBones() const { return m_SkinToBones; }
-	const float3x4& GetGeometryWorldInverse() const { return m_GeometryWorldInverse; }
+	const eastl::vector<NiTransformPacked>& GetBoneWorlds() const { return m_BoneWorlds; }
+	const eastl::vector<NiTransformPacked>& GetSkinToBones() const { return m_SkinToBones; }
+	NiTransformPacked GetGeometryWorldInverse() const {
+		NiTransformPacked r;
+		r.Rot0_Scale = m_GeomInv_Rot0_Scale;
+		r.Rot1       = m_GeomInv_Rot1;
+		r.Rot2       = m_GeomInv_Rot2;
+		r.Translate  = m_GeomInv_Translate;
+		return r;
+	}
 
 	// Shared bindless slot addressing the original (VertexCopy), live (Vertex/VertexWrite) and
 	// prev-position (PrevPosition/PrevPositionWrite) buffers; consumed by the skinning pass.
@@ -70,13 +78,16 @@ protected:
 	uint32_t m_VertexCount = 0;
 
 	// Raw boneWorld transforms (one per bone), copied from the engine each frame the pose advances.
-	eastl::vector<float3x4> m_BoneWorlds;
+	eastl::vector<NiTransformPacked> m_BoneWorlds;
 
 	// Static skinToBone transforms (one per bone), populated once at creation from skinData.
-	eastl::vector<float3x4> m_SkinToBones;
+	eastl::vector<NiTransformPacked> m_SkinToBones;
 
-	// Per-frame geometry-world-inverse packed as float3x4.
-	float3x4 m_GeometryWorldInverse;
+	// Per-frame geometry-world-inverse (flattened to avoid alignas(16) on the class).
+	float4 m_GeomInv_Rot0_Scale;
+	float4 m_GeomInv_Rot1;
+	float4 m_GeomInv_Rot2;
+	float4 m_GeomInv_Translate;
 
 	// Skin instance frame id of the last pose we processed (skip work when the animation hasn't advanced).
 	uint32_t m_SkinFrameID = Constants::INVALID_FRAME_ID;

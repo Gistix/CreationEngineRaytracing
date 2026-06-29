@@ -37,8 +37,8 @@ namespace Pass
 		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_SkinToBoneBuffer;
 		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_MeshBoneHeaderBuffer;
 
-		eastl::array<BoneTransform, MAX_BONE_MATRICES> m_BoneWorldData;
-		eastl::array<BoneTransform, MAX_BONE_MATRICES> m_SkinToBoneData;
+		eastl::array<NiTransformPacked, MAX_BONE_MATRICES> m_BoneWorldData;
+		eastl::array<NiTransformPacked, MAX_BONE_MATRICES> m_SkinToBoneData;
 		eastl::array<MeshBoneHeader, MAX_GEOMETRY> m_MeshBoneHeaderData;
 
 		// ---- Vertex Skinning Pass ----
