@@ -174,9 +174,9 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 	}
 }
 
-bool SkinnedMesh::Update()
+bool SkinnedMesh::Update(BLASCluster* cluster)
 {
-	BaseMesh::Update();
+	BaseMesh::Update(cluster);
 
 	if (!m_BSTriShape)
 		return false;

@@ -70,7 +70,7 @@ public:
 
 	nvrhi::rt::IAccelStruct* GetBLAS() const { return m_BLAS; }
 
-	float3x4 GetInstanceTransform() const { return m_InstanceTransform; }
+	const float3x4& GetInstanceTransform() const { return m_InstanceTransform; }
 
 	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
 

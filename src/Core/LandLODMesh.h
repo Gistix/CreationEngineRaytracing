@@ -10,9 +10,12 @@ class LandLODMesh : public DirectMesh
 	bool m_PrevIntersecting = false;
 	float2 m_AABBCenter;
 	float2 m_AABBSize;
+	bool m_NeedsOcclusionPass = false;
 public:
 	LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
-	bool Update() override;
-	bool PrepareOcclusion(const float3x4& worldTransform, LandLODUpdate& outUpdate, uint32_t& outMaxVertices);
+	bool IsUpdatable() const override { return true; }
+
+	bool Update(BLASCluster* cluster) override;
+	void UpdateOcclusion(const float3x4& clusterTransform);
 };

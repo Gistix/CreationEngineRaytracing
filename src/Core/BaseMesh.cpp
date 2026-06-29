@@ -161,14 +161,33 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	return vertexBuffer;
 }
 
-bool BaseMesh::Update()
+bool BaseMesh::Update(BLASCluster* cluster)
 { 
 	if (!m_BSTriShape)
 		return false;
 
 	m_Properties = { m_BSTriShape };
 
+	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
+
+	SyncClusterTransform(cluster);
+
 	return false;
+}
+
+void BaseMesh::SyncClusterTransform(BLASCluster* cluster)
+{
+	float3x4 ownerWorld;
+	if (m_Owner) {
+		auto* node = m_Owner->Get3D();
+		XMStoreFloat3x4(&ownerWorld, Util::Math::GetXMFromNiTransform(node ? node->world : m_BSTriShape->world));
+	} else {
+		XMStoreFloat3x4(&ownerWorld, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
+	}
+
+	SetLocalToOwner(ownerWorld);
+	cluster->SetInstanceTransform(ownerWorld);
+	cluster->GrowBounds(m_BSTriShape->worldBound);
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
@@ -237,14 +256,21 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 	return true;
 }
 
-void BaseMesh::SetLocalToOwner(const float3x4& localToOwner)
+void BaseMesh::SetLocalToOwner(const float3x4& ownerWorld)
 {
+	using namespace DirectX;
+
+	auto ownerInv = XMMatrixInverse(nullptr, XMLoadFloat3x4(&ownerWorld));
+	auto meshWorld = XMLoadFloat3x4(&m_Transform);
+	auto localToOwnerMat = XMMatrixMultiply(ownerInv, meshWorld);
+
+	float3x4 localToOwner;
+	XMStoreFloat3x4(&localToOwner, localToOwnerMat);
+
 	const bool changed = !Util::Math::MatrixNearEqual(m_LocalToOwner, localToOwner);
 
 	m_LocalToOwner = localToOwner;
 
-	// Always (re)bake into the geometry descs so the layout is correct even on the first set;
-	// only flag a refit when it actually changed.
 	for (auto& desc : GetGeometryDescsMutable())
 		desc.setTransform(m_LocalToOwner.f);
 

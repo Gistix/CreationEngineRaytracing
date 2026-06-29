@@ -416,10 +416,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
-	m_LandLODClusters.clear();
+	m_LandLODMeshUpdates.clear();
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
-	eastl::hash_set<BLASCluster*> landLODClusterSet;
 
 	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
 		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
@@ -487,16 +486,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				mesh->SetHidden(hidden);
 
-				if (!hidden && mesh->HasFlag(BaseMesh::Flags::LandLOD4))
-					landLODClusterSet.insert(GetOrCreateCluster(clusterOwner, bsTriShape));
-
 				if (!hidden) {
-					// CPU-side change detection while the trishape + skin instance are alive.
-					// SkinnedMesh::Update recomputes bone matrices and queues the GPU skinning pass.
-					mesh->Update();
-
-					// Capture transforms while the owner/trishape are alive; cluster consumes cached values later.
-					UpdateMeshTransforms(mesh.get(), clusterOwner, bsTriShape);
+					auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
+					mesh->Update(cluster);
 				}
 			}
 			else if (!hidden) {
@@ -507,15 +499,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					if (inserted) {
 						mesh = it2->second;
 
-						mesh->SetLastVisitedFrame(frameIndex);
-						mesh->Update();
-
 						auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
 						cluster->AddMember(mesh);
-						UpdateMeshTransforms(mesh.get(), clusterOwner, bsTriShape);
 
-						if (mesh->HasFlag(BaseMesh::Flags::LandLOD4))
-							landLODClusterSet.insert(cluster);
+						mesh->SetLastVisitedFrame(frameIndex);
+
+						mesh->Update(cluster);
 					}
 				}
 			}
@@ -523,8 +512,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
-
-	m_LandLODClusters.assign(landLODClusterSet.begin(), landLODClusterSet.end());
 
 	// Hide meshes whose trishapes were not visited by the traversal this frame
 	{
@@ -634,28 +621,6 @@ void SceneGraph::RemoveMeshFromCluster(BaseMesh* mesh, RE::TESObjectREFR* owner)
 		if (it != m_OrphanClusters.end())
 			it->second->RemoveMember(mesh);
 	}
-}
-
-void SceneGraph::UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape)
-{
-	// Owner + trishape are alive here (traversal), so it's safe to read their world transforms.
-	// Orphan meshes (no owner) use their own world, giving an identity local-to-owner.
-	RE::NiTransform ownerWorld = bsTriShape->world;
-	if (owner)
-		if (auto* node = owner->Get3D())
-			ownerWorld = node->world;
-
-	// Bake the per-member local-to-owner into the mesh's geometry descs.
-	const auto localToOwner = Util::Math::ComputeLocalToRoot(ownerWorld.Invert(), bsTriShape->world);
-	mesh->SetLocalToOwner(localToOwner);
-
-	// Cache the owner-world transform on the cluster for the TLAS instance (no later deref).
-	float3x4 instanceTransform;
-	XMStoreFloat3x4(&instanceTransform, Util::Math::GetXMFromNiTransform(ownerWorld));
-
-	auto* cluster = GetOrCreateCluster(owner, bsTriShape);
-	cluster->SetInstanceTransform(instanceTransform);
-	cluster->GrowBounds(bsTriShape->worldBound);
 }
 
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)

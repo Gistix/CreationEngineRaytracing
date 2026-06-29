@@ -43,9 +43,9 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 		nvrhi::BindingSetItem::RawBuffer_UAV(slot, liveBuffer));
 }
 
-bool LandLODMesh::Update()
+bool LandLODMesh::Update(BLASCluster* cluster)
 {
-	bool changed = DirectMesh::Update();
+	bool changed = DirectMesh::Update(cluster);
 
 	if (!m_BSTriShape)
 		return changed;
@@ -67,41 +67,36 @@ bool LandLODMesh::Update()
 		}
 	}
 
+	float4 loadedRange = *reinterpret_cast<const float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
+
+	const float2 loadedPosition = { loadedRange.x , loadedRange.y };
+	const float2 loadedSize = { loadedRange.z * 2.0f , loadedRange.w * 2.0f };
+
+	m_PrevIntersecting = m_Intersecting;
+	m_Intersecting = Util::Math::Intersects(loadedPosition, loadedSize, m_AABBCenter, m_AABBSize);
+
+	if (m_Intersecting || m_PrevIntersecting)	
+		UpdateOcclusion(cluster->GetInstanceTransform());
+
 	return changed;
 }
 
-bool LandLODMesh::PrepareOcclusion(const float3x4& worldTransform, LandLODUpdate& outUpdate, uint32_t& outMaxVertices)
+void LandLODMesh::UpdateOcclusion(const float3x4& clusterTransform)
 {
-#if defined(SKYRIM)
-	float4 loadedRange = *reinterpret_cast<const float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
-#else
-	float4 loadedRange = { 0, 0, 0, 0 };
-#endif
-
-	m_PrevIntersecting = m_Intersecting;
-	m_Intersecting = Util::Math::Intersects(
-		{ loadedRange.x, loadedRange.y },
-		{ loadedRange.z * 2.0f, loadedRange.w * 2.0f },
-		m_AABBCenter, m_AABBSize);
-
-	if (!m_Intersecting && !m_PrevIntersecting)
-		return false;
-
 	const auto& descs = GetGeometryDescs();
-	if (descs.empty())
-		return false;
+	if (!descs.empty()) {
+		const auto& firstDesc = descs[0];
 
-	const auto& firstDesc = descs[0];
+		LandLODUpdate update(
+			GetVertexID(),
+			firstDesc.geometryData.triangles.vertexCount,
+			firstDesc.geometryData.triangles.vertexStride,
+			GetLocalToOwner(),
+			clusterTransform);
 
-	outUpdate = LandLODUpdate(
-		GetVertexID(),
-		firstDesc.geometryData.triangles.vertexCount,
-		firstDesc.geometryData.triangles.vertexStride,
-		GetLocalToOwner(),
-		worldTransform);
+		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+		sceneGraph->GetLandLODMeshUpdates()[this] = update;
 
-	outMaxVertices = std::max(outMaxVertices, firstDesc.geometryData.triangles.vertexCount);
-
-	MarkDirty(DirtyFlags::Vertex);
-	return true;
+		MarkDirty(DirtyFlags::Vertex);
+	}
 }

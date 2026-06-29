@@ -52,21 +52,13 @@ namespace Pass
 	{
 		uint32_t meshIndex = 0;
 
-		const auto& landLODClusters = Scene::GetSingleton()->GetSceneGraph()->GetLandLODClusters();
-		for (auto* cluster : landLODClusters) {
-			const auto worldTransform = cluster->GetInstanceTransform();
-
-			for (auto& weakMesh : cluster->GetMembers()) {
-				if (auto mesh = weakMesh.lock()) {
-					LandLODUpdate update;
-					if (mesh->PrepareOcclusion(worldTransform, update, numVertices)) {
-						m_VertexUpdateData[meshIndex++] = update;
-						if (meshIndex >= MAX_MESHES) {
-							logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
-							break;
-						}
-					}
-				}
+		const auto& updates = Scene::GetSingleton()->GetSceneGraph()->GetLandLODMeshUpdates();
+		for (auto& [mesh, update] : updates) {
+			m_VertexUpdateData[meshIndex++] = update;
+			numVertices = std::max(numVertices, update.VertexCount);
+			if (meshIndex >= MAX_MESHES) {
+				logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
+				break;
 			}
 		}
 

@@ -10,6 +10,7 @@
 
 class SkinnedMesh;
 class DynamicMesh;
+class BLASCluster;
 
 class BaseMesh
 {
@@ -62,9 +63,10 @@ public:
 	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
 	virtual uint32_t GetDynamicIndex() const { return 0; }
 
-	// CPU-side per-frame update: detect whether the mesh's geometry data changed (lazy).
+	// CPU-side per-frame update: detect whether the mesh's geometry data changed (lazy),
+	// sync cluster transforms, and populate any traversal-time data.
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
-	virtual bool Update();
+	virtual bool Update(BLASCluster* cluster);
 
 	// GPU-side per-frame upload of any pending data (flag-gated); runs in the TLAS pass. No-op otherwise.
 	virtual void UploadBuffers([[maybe_unused]] nvrhi::ICommandList* commandList) {}
@@ -87,11 +89,13 @@ public:
 	// Stores the owner pointer for grouping/comparison only (never dereferenced); returns true if it changed.
 	bool SetOwner(RE::TESObjectREFR* owner);
 
-	// Bakes the local-to-owner transform into the geometry descs (computed in the traversal while alive);
+	// Bakes the local-to-owner transform into the geometry descs (computed in the traversal);
 	// flags the mesh for a refit if it changed.
-	void SetLocalToOwner(const float3x4& localToOwner);
+	void SetLocalToOwner(const float3x4& ownerWorld);
 
 	const float3x4& GetLocalToOwner() const { return m_LocalToOwner; }
+
+	const float3x4& GetTransform() const { return m_Transform; }
 
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
 
@@ -122,6 +126,8 @@ protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
 
+	void SyncClusterTransform(BLASCluster* cluster);
+
 	static bool ValidateCounts(uint16_t numTriangles, uint32_t numVertices);
 
 	static BufferDescriptor CreateIndexBuffer(RE::BSGraphics::TriShape* triShape);
@@ -142,6 +148,9 @@ protected:
 	RE::TESObjectREFR* m_Owner = nullptr;
 
 	RE::TESObjectREFR* m_PrevOwner = nullptr;
+
+	// Cached world transform from BSTriShape, refreshed in Update().
+	float3x4 m_Transform;
 
 	// Cached local-to-owner transform baked into the geometry descs (computed in the traversal).
 	float3x4 m_LocalToOwner;

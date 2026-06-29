@@ -22,6 +22,7 @@
 #include "Light.hlsli"
 #include "Mesh.hlsli"
 #include "Instance.hlsli"
+#include "Interop/LandLODUpdate.hlsli"
 
 #include "Constants.h"
 #include "Types/BindlessTableManager.h"
@@ -34,6 +35,8 @@
 #include <eastl/unordered_set.h>
 
 #include "Pipeline/MSNConverter.h"
+
+class LandLODMesh;
 
 class SceneGraph
 {
@@ -62,7 +65,7 @@ class SceneGraph
 
 	// LOD
 	eastl::unordered_map<RE::BGSObjectBlock*, eastl::unique_ptr<ObjectLODBlockReference>> m_ObjectLODInstances;
-	eastl::vector<BLASCluster*> m_LandLODClusters;
+	eastl::unordered_map<LandLODMesh*, LandLODUpdate> m_LandLODMeshUpdates;
 #if defined(SKYRIM)
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, eastl::unique_ptr<TreeLODBlockReference>> m_TreeLODInstances;
 
@@ -107,9 +110,6 @@ class SceneGraph
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
 	void RemoveMeshFromCluster(BaseMesh* mesh, RE::TESObjectREFR* owner);
-
-	// Captures the owner/mesh transforms during traversal (while alive) into the mesh + its cluster.
-	void UpdateMeshTransforms(BaseMesh* mesh, RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
 public:
 	void Initialize();
 
@@ -142,7 +142,7 @@ public:
 	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
 
 	inline auto& GetModels() { return m_Models; }
-	inline auto& GetLandLODClusters() { return m_LandLODClusters; }
+	inline auto& GetLandLODMeshUpdates() { return m_LandLODMeshUpdates; }
 
 	inline auto& GetLights() { return m_Lights; }
 
