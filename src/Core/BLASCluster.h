@@ -52,6 +52,8 @@ public:
 
 	void RemoveMember(BaseMesh* mesh);
 
+	const auto& GetMembers() const { return m_Members; }
+
 	void SetInstanceTransform(const float3x4& transform) {
 		m_InstanceTransform = transform;
 		m_ClusterCenter = float3(transform._14, transform._24, transform._34);

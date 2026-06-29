@@ -341,11 +341,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 
 void SceneGraph::UpdateLODVisibility()
 {
-	for (auto& [block, ref] : m_TerrainLODInstances)
-	{
-		ref->UpdateVisibility();
-	}
-
 	for (auto& [block, ref] : m_ObjectLODInstances)
 	{
 		ref->UpdateVisibility();
@@ -421,8 +416,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
+	m_LandLODClusters.clear();
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+	eastl::hash_set<BLASCluster*> landLODClusterSet;
 
 	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
 		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
@@ -490,6 +487,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				mesh->SetHidden(hidden);
 
+				if (!hidden && mesh->HasFlag(BaseMesh::Flags::LandLOD4))
+					landLODClusterSet.insert(GetOrCreateCluster(clusterOwner, bsTriShape));
+
 				if (!hidden) {
 					// CPU-side change detection while the trishape + skin instance are alive.
 					// SkinnedMesh::Update recomputes bone matrices and queues the GPU skinning pass.
@@ -510,8 +510,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						mesh->SetLastVisitedFrame(frameIndex);
 						mesh->Update();
 
-						GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(mesh);
+						auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
+						cluster->AddMember(mesh);
 						UpdateMeshTransforms(mesh.get(), clusterOwner, bsTriShape);
+
+						if (mesh->HasFlag(BaseMesh::Flags::LandLOD4))
+							landLODClusterSet.insert(cluster);
 					}
 				}
 			}
@@ -519,6 +523,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
+
+	m_LandLODClusters.assign(landLODClusterSet.begin(), landLODClusterSet.end());
 
 	// Hide meshes whose trishapes were not visited by the traversal this frame
 	{

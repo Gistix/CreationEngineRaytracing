@@ -37,10 +37,5 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 
 	m_GeometryDescs.push_back(MakeGeometryDesc(m_IndexBuffer.m_Buffer, indexCount, m_VertexBuffer.m_Buffer, vertexStride, triShapeData.vertexCount));
 
-	if (auto* extra = bsTriShape->GetExtraData<RE::NiIntegersExtraData>(Constants::ExtraData::LandLOD)) {
-		if (extra->size > 0 && extra->value[0] == 4)
-			m_Flags.set(Flags::LandLOD4);
-	}
-
 	CreateMaterial();
 }

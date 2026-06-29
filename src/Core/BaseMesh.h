@@ -5,6 +5,7 @@
 #include "Core/Material/MaterialBase.h"
 #include "Core/Skyrim/Properties.h"
 #include "Framework/DescriptorTableManager.h"
+#include "Interop/LandLODUpdate.hlsli"
 #include "Mesh.hlsli"
 
 class SkinnedMesh;
@@ -90,12 +91,16 @@ public:
 	// flags the mesh for a refit if it changed.
 	void SetLocalToOwner(const float3x4& localToOwner);
 
+	const float3x4& GetLocalToOwner() const { return m_LocalToOwner; }
+
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
 
 	void ClearDirtyFlags() { m_DirtyFlags = DirtyFlags::None; }
 
 	// Writes one MeshData per geometry into 'out' (starting at out[0]); returns the number written.
 	uint32_t WriteMeshData(MeshData* out) const;
+
+	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
 
 	uint64_t GetVertexDescRaw() const { return *reinterpret_cast<const uint64_t*>(&m_VertexDesc); }
 
@@ -105,14 +110,15 @@ public:
 	CESEAdapter::REX::EnumSet<Flags> GetFlags() const { return m_Flags; }
 	bool HasFlag(Flags f) const { return m_Flags.all(f); }
 
-protected:
-	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
+	virtual bool PrepareOcclusion([[maybe_unused]] const float3x4& worldTransform, [[maybe_unused]] LandLODUpdate& outUpdate, [[maybe_unused]] uint32_t& outMaxVertices) { return false; }
 
 	// Per-geometry index buffer descriptor index (into the Triangles bindless table).
 	virtual uint16_t GetIndexID(size_t geometryIndex) const = 0;
 
 	// Vertex buffer descriptor index (into the Vertices bindless table); shared across the mesh's geometries.
 	virtual uint16_t GetVertexID() const = 0;
+
+protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
 

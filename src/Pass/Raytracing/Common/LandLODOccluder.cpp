@@ -52,41 +52,21 @@ namespace Pass
 	{
 		uint32_t meshIndex = 0;
 
-		const auto& terrainLODInstances = Scene::GetSingleton()->GetSceneGraph()->GetTerrainLodInstances();
-		for (auto& [block, blockRefr] : terrainLODInstances) {
-#if defined(SKYRIM)
-			if (block->node->GetLODLevel() != 4)
-				continue;
-#elif defined(FALLOUT4)
-			// BGSTerrainNode is only forward-declared in FO4, skip LOD level check
-#endif
+		const auto& landLODClusters = Scene::GetSingleton()->GetSceneGraph()->GetLandLODClusters();
+		for (auto* cluster : landLODClusters) {
+			const auto worldTransform = cluster->GetInstanceTransform();
 
-			// Only process terrain that is intersecting (or that intersected the last frame) against loaded range
-			if (!blockRefr->intersecting && !blockRefr->prevIntersecting)
-				continue;
-
-			for (auto& instance : blockRefr->GetInstances())
-			{
-				auto firstMeshIndex = meshIndex;
-
-				for (auto& mesh : instance->model->m_Meshes) {
-					if (meshIndex > MAX_MESHES - 1) {
-						logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
-						break;
+			for (auto& weakMesh : cluster->GetMembers()) {
+				if (auto mesh = weakMesh.lock()) {
+					LandLODUpdate update;
+					if (mesh->PrepareOcclusion(worldTransform, update, numVertices)) {
+						m_VertexUpdateData[meshIndex++] = update;
+						if (meshIndex >= MAX_MESHES) {
+							logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
+							break;
+						}
 					}
-
-					numVertices = std::max(numVertices, mesh->vertexData.count);
-
-					m_VertexUpdateData[meshIndex++] = LandLODUpdate(
-						mesh->m_DescriptorHandle.Get(),
-						mesh->vertexData.count,
-						mesh->m_LocalToRoot,
-						instance->m_Transform);
 				}
-
-				// Marks Vertex as dirty, triggering a BLAS update on SceneTLAS pass
-				if (meshIndex > firstMeshIndex)
-					instance->model->TerrainLODUpdated();
 			}
 		}
 

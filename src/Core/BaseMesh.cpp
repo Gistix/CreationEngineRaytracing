@@ -1,5 +1,6 @@
 #include "Core/BaseMesh.h"
 #include "Core/DirectMesh.h"
+#include "Core/LandLODMesh.h"
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
 #include "Renderer.h"
@@ -13,8 +14,13 @@ eastl::shared_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 {
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 
-	if (geometryData.rendererData)
+	if (geometryData.rendererData) {
+		if (auto* extra = bsTriShape->GetExtraData<RE::NiIntegersExtraData>(Constants::ExtraData::LandLOD)) {
+			if (extra->size > 0 && extra->value[0] == 4)
+				return eastl::make_shared<LandLODMesh>(bsTriShape, commandList);
+		}
 		return eastl::make_shared<DirectMesh>(bsTriShape, commandList);
+	}
 
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
 		return eastl::make_shared<DynamicMesh>(bsDynamicTriShape, commandList);

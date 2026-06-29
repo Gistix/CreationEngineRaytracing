@@ -15,7 +15,6 @@
 #endif
 
 #include "Core/Reference/ObjectLODBlockReference.h"
-#include "Core/Reference/TerrainLODBlockReference.h"
 #if defined(SKYRIM)
 #include "Core/Reference/TreeLODBlockReference.h"
 #include "Core/Reference/GrassReference.h"
@@ -63,7 +62,7 @@ class SceneGraph
 
 	// LOD
 	eastl::unordered_map<RE::BGSObjectBlock*, eastl::unique_ptr<ObjectLODBlockReference>> m_ObjectLODInstances;
-	eastl::unordered_map<RE::BGSTerrainBlock*, eastl::unique_ptr<TerrainLODBlockReference>> m_TerrainLODInstances;
+	eastl::vector<BLASCluster*> m_LandLODClusters;
 #if defined(SKYRIM)
 	eastl::unordered_map<RE::BGSDistantTreeBlock*, eastl::unique_ptr<TreeLODBlockReference>> m_TreeLODInstances;
 
@@ -143,7 +142,7 @@ public:
 	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
 
 	inline auto& GetModels() { return m_Models; }
-	inline auto& GetTerrainLodInstances() const { return m_TerrainLODInstances; }
+	inline auto& GetLandLODClusters() { return m_LandLODClusters; }
 
 	inline auto& GetLights() { return m_Lights; }
 
