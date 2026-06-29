@@ -55,7 +55,9 @@ namespace Pass
 		const auto& updates = Scene::GetSingleton()->GetSceneGraph()->GetLandLODMeshUpdates();
 		for (auto& [mesh, update] : updates) {
 			m_VertexUpdateData[meshIndex++] = update;
+
 			numVertices = std::max(numVertices, update.VertexCount);
+
 			if (meshIndex >= MAX_MESHES) {
 				logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
 				break;
