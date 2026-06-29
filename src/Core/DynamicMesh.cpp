@@ -116,6 +116,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
 
 	CreateMaterial();
+
+	InitSkinToBones(skinInstance);
 }
 
 void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)

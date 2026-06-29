@@ -10,6 +10,7 @@
 
 #include "Interop/VertexUpdate.hlsli"
 #include "Interop/BoneMatrix.hlsli"
+#include "Interop/BoneTransform.hlsli"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
 
@@ -24,6 +25,23 @@ namespace Pass
 		static constexpr uint MAX_GEOMETRY = 2048;
 		static constexpr uint MAX_BONE_MATRICES = MAX_GEOMETRY * 10;
 
+		// ---- Bone Compute Pass ----
+		nvrhi::ShaderLibraryHandle m_BoneShaderLibrary;
+		nvrhi::ShaderHandle m_BoneComputeShader;
+		nvrhi::ComputePipelineHandle m_BoneComputePipeline;
+		nvrhi::BindingLayoutHandle m_BoneBindingLayout;
+		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BoneBindingSets;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BoneBindingSetDirty {};
+
+		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BoneWorldBuffer;
+		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_SkinToBoneBuffer;
+		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_MeshBoneHeaderBuffer;
+
+		eastl::array<BoneTransform, MAX_BONE_MATRICES> m_BoneWorldData;
+		eastl::array<BoneTransform, MAX_BONE_MATRICES> m_SkinToBoneData;
+		eastl::array<MeshBoneHeader, MAX_GEOMETRY> m_MeshBoneHeaderData;
+
+		// ---- Vertex Skinning Pass ----
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
@@ -50,6 +68,7 @@ namespace Pass
 	public:
 		Skinning(Renderer* renderer);
 
+		void CreateBoneBindingLayout();
 		void CreateBindingLayout();
 
 		virtual void CreatePipeline() override;
@@ -58,6 +77,7 @@ namespace Pass
 		bool PrepareResources(nvrhi::ICommandList* commandList, uint32_t& count, uint32_t& vertexCount);
 		void ClearQueue();
 
+		void CheckBoneBindings();
 		void CheckBindings();
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;

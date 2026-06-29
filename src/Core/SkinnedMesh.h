@@ -13,11 +13,15 @@ public:
 
 	bool IsUpdatable() const override { return true; }
 
-	// Recomputes the per-bone skinning matrices (geometry-local) from the game skin instance.
+	// Copies raw boneWorld transforms from the game skin instance (no matrix math — that moves to GPU).
 	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
 	bool Update(BLASCluster* cluster) override;
 
-	const eastl::vector<float3x4>& GetBoneMatrices() const { return m_BoneMatrices; }
+	uint32_t GetBoneCount() const { return static_cast<uint32_t>(m_BoneWorlds.size()); }
+
+	const eastl::vector<float3x4>& GetBoneWorlds() const { return m_BoneWorlds; }
+	const eastl::vector<float3x4>& GetSkinToBones() const { return m_SkinToBones; }
+	const float3x4& GetGeometryWorldInverse() const { return m_GeometryWorldInverse; }
 
 	// Shared bindless slot addressing the original (VertexCopy), live (Vertex/VertexWrite) and
 	// prev-position (PrevPosition/PrevPositionWrite) buffers; consumed by the skinning pass.
@@ -43,6 +47,9 @@ protected:
 	// dynamic meshes supply their own buffer and pass false.
 	void BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer);
 
+	// Populates m_SkinToBones from the static skin data, called once during construction.
+	void InitSkinToBones(RE::NiSkinInstance* skinInstance);
+
 	// Creates the live (skinning output) byte-address UAV buffer seeded from the CPU rest-pose data, plus
 	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT
 	// read (VertexDescriptors) to the live buffer. Returns the live buffer for the BLAS geometry desc.
@@ -62,8 +69,14 @@ protected:
 
 	uint32_t m_VertexCount = 0;
 
-	// Geometry-local bone matrices, recomputed each frame the pose advances; consumed by the skinning pass.
-	eastl::vector<float3x4> m_BoneMatrices;
+	// Raw boneWorld transforms (one per bone), copied from the engine each frame the pose advances.
+	eastl::vector<float3x4> m_BoneWorlds;
+
+	// Static skinToBone transforms (one per bone), populated once at creation from skinData.
+	eastl::vector<float3x4> m_SkinToBones;
+
+	// Per-frame geometry-world-inverse packed as float3x4.
+	float3x4 m_GeometryWorldInverse;
 
 	// Skin instance frame id of the last pose we processed (skip work when the animation hasn't advanced).
 	uint32_t m_SkinFrameID = Constants::INVALID_FRAME_ID;

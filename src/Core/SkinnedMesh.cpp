@@ -57,6 +57,22 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true);
 
 	CreateMaterial();
+
+	InitSkinToBones(skinInstance);
+}
+
+void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
+{
+	if (!skinInstance)
+		return;
+
+	auto* skinData = skinInstance->skinData.get();
+	if (!skinData || skinData->bones == 0)
+		return;
+
+	m_SkinToBones.resize(skinData->bones);
+	for (uint32_t i = 0; i < skinData->bones; i++)
+		XMStoreFloat3x4(&m_SkinToBones[i], Util::Math::GetXMFromNiTransform(skinData->boneData[i].skinToBone));
 }
 
 void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
@@ -206,16 +222,13 @@ bool SkinnedMesh::Update(BLASCluster* cluster)
 
 			auto* skinData = skinInstance->skinData.get();
 			if (skinData && skinData->bones != 0) {
-				const auto geometryWorldInverse = m_BSTriShape->world.Invert();
+				if (m_BoneWorlds.size() != skinData->bones)
+					m_BoneWorlds.resize(skinData->bones);
 
-				if (m_BoneMatrices.size() != skinData->bones)
-					m_BoneMatrices.resize(skinData->bones);
+				for (uint32_t i = 0; i < skinData->bones; i++)
+					XMStoreFloat3x4(&m_BoneWorlds[i], Util::Math::GetXMFromNiTransform(*skinInstance->boneWorldTransforms[i]));
 
-				for (uint32_t i = 0; i < skinData->bones; i++) {
-					const auto boneWorld = *skinInstance->boneWorldTransforms[i];
-					const auto boneMatrix = boneWorld * skinData->boneData[i].skinToBone;
-					XMStoreFloat3x4(&m_BoneMatrices[i], Util::Math::GetXMFromNiTransform(geometryWorldInverse * boneMatrix));
-				}
+				XMStoreFloat3x4(&m_GeometryWorldInverse, Util::Math::GetXMFromNiTransform(m_BSTriShape->world.Invert()));
 
 				poseAdvanced = true;
 			}

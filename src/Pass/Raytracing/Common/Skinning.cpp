@@ -10,11 +10,36 @@ namespace Pass
 		: RenderPass(renderer)
 	{
 		auto device = renderer->GetDevice();
-		m_VertexUpdateBuffer = Util::CreateStructuredBuffer<VertexUpdateData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
-		m_BoneMatrixBuffer = Util::CreateStructuredBuffer<BoneMatrix>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer");
 
+		for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
+			m_BoneWorldBuffer[i] = Util::CreateStructuredBuffer<BoneTransform>(device, MAX_BONE_MATRICES,
+				std::format("Bone World Buffer[{}]", i).c_str());
+			m_SkinToBoneBuffer[i] = Util::CreateStructuredBuffer<BoneTransform>(device, MAX_BONE_MATRICES,
+				std::format("SkinToBone Buffer[{}]", i).c_str());
+			m_MeshBoneHeaderBuffer[i] = Util::CreateStructuredBuffer<MeshBoneHeader>(device, MAX_GEOMETRY,
+				std::format("Mesh Bone Header Buffer[{}]", i).c_str());
+		}
+
+		m_VertexUpdateBuffer = Util::CreateStructuredBuffer<VertexUpdateData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
+		m_BoneMatrixBuffer = Util::CreateStructuredBuffer<BoneMatrix>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer", true);
+
+		CreateBoneBindingLayout();
 		CreateBindingLayout();
 		CreatePipeline();
+	}
+
+	void Skinning::CreateBoneBindingLayout()
+	{
+		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
+		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::Compute;
+		globalBindingLayoutDesc.bindings = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0)
+		};
+
+		m_BoneBindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
 
 	void Skinning::CreateBindingLayout()
@@ -33,25 +58,45 @@ namespace Pass
 	{
 		auto device = GetRenderer()->GetDevice();
 
-		winrt::com_ptr<IDxcBlob> shaderBlob;
-		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/Skinning.hlsl", {}, L"cs_6_5");
-		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
+		// Bone compute pipeline
+		{
+			winrt::com_ptr<IDxcBlob> shaderBlob;
+			ShaderUtils::CompileShader(shaderBlob, L"data/shaders/BoneCompute.hlsl", {}, L"cs_6_5");
+			if (shaderBlob) {
+				m_BoneComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
 
-		if (!m_ComputeShader)
-			return;
+				if (m_BoneComputeShader) {
+					auto pipelineDesc = nvrhi::ComputePipelineDesc()
+						.setComputeShader(m_BoneComputeShader)
+						.addBindingLayout(m_BoneBindingLayout);
 
-		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+					m_BoneComputePipeline = device->createComputePipeline(pipelineDesc);
+				}
+			}
+		}
 
-		auto pipelineDesc = nvrhi::ComputePipelineDesc()
-			.setComputeShader(m_ComputeShader)
-			.addBindingLayout(m_BindingLayout)
-			.addBindingLayout(sceneGraph->GetDynamicVertexReadDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetVertexCopyDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetVertexWriteDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetPrevPositionWriteDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetDynamicVertexWriteDescriptors()->m_Layout);
+		// Vertex skinning pipeline
+		{
+			winrt::com_ptr<IDxcBlob> shaderBlob;
+			ShaderUtils::CompileShader(shaderBlob, L"data/shaders/Skinning.hlsl", {}, L"cs_6_5");
+			m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
 
-		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+			if (!m_ComputeShader)
+				return;
+
+			auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+			auto pipelineDesc = nvrhi::ComputePipelineDesc()
+				.setComputeShader(m_ComputeShader)
+				.addBindingLayout(m_BindingLayout)
+				.addBindingLayout(sceneGraph->GetDynamicVertexReadDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetVertexCopyDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetVertexWriteDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetPrevPositionWriteDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetDynamicVertexWriteDescriptors()->m_Layout);
+
+			m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+		}
 	}
 
 	void Skinning::QueueUpdate(DirtyFlags updateFlags, SkinnedMesh* mesh)
@@ -66,12 +111,13 @@ namespace Pass
 		if (queuedMeshes.empty())
 			return false;
 
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
 		uint32_t meshIndex = 0;
-		uint32_t boneMatrixIndex = 0;
+		uint32_t boneIndex = 0;
 
 		for (auto& [mesh, queuedMesh] : queuedMeshes) {
 			if (meshIndex > MAX_GEOMETRY - 1) {
-				logger::critical("SkinningPipeline::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_GEOMETRY);
+				logger::critical("Skinning::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_GEOMETRY);
 				break;
 			}
 
@@ -81,16 +127,15 @@ namespace Pass
 			const uint32_t vertexCount = mesh->GetVertexCount();
 			numVertices = std::max(numVertices, vertexCount);
 
-			const auto& boneMatrices = mesh->GetBoneMatrices();
-			const uint32_t numBoneMatrices = skinUpdate ? static_cast<uint32_t>(boneMatrices.size()) : 0;
+			const uint32_t boneCount = skinUpdate ? mesh->GetBoneCount() : 0;
 
-			if (skinUpdate && numBoneMatrices > MAX_BONE_MATRICES - boneMatrixIndex) {
+			if (skinUpdate && boneCount > MAX_BONE_MATRICES - boneIndex) {
 				logger::critical(
-					"SkinningPipeline::PrepareResources - Bone matrix upload for '{}' would exceed the maximum of {} (offset {}, count {})",
+					"Skinning::PrepareResources - Bone data upload for '{}' would exceed the maximum of {} (offset {}, count {})",
 					queuedMesh.path,
 					MAX_BONE_MATRICES,
-					boneMatrixIndex,
-					numBoneMatrices);
+					boneIndex,
+					boneCount);
 				break;
 			}
 
@@ -103,29 +148,62 @@ namespace Pass
 
 			const uint64_t vertexDescRaw = mesh->GetVertexDescRaw();
 
-			VertexUpdateData& data = m_VertexUpdateData[meshIndex++];
+			// Populate vertex update data (consumed by the skinning pass)
+			VertexUpdateData& data = m_VertexUpdateData[meshIndex];
 			data.index = mesh->GetSkinningSlot();
 			data.dynamicIndex = dynamicIndex;
 			data.updateFlags = static_cast<uint32_t>(queuedMesh.updateFlags);
 			data.vertexCount = vertexCount;
-			data.boneOffset = boneMatrixIndex;
+			data.boneOffset = boneIndex;
 			data.meshFlags = meshFlags;
-			data.numMatrices = numBoneMatrices;
+			data.numMatrices = boneCount;
 			std::memcpy(&data.VertexDesc, &vertexDescRaw, sizeof(uint64_t));
 
 			// Dynamic morph upload (skinning input) must land before the dispatch reads it.
 			if (vertexUpdate && dynamicMesh)
 				dynamicMesh->UploadBuffers(commandList);
 
-			if (skinUpdate) {
-				std::memcpy(m_BoneMatrixData.data() + boneMatrixIndex, boneMatrices.data(), sizeof(float3x4) * numBoneMatrices);
-				boneMatrixIndex += numBoneMatrices;
+			if (skinUpdate && boneCount > 0) {
+				// Copy raw boneWorld transforms to BoneCompute input buffer
+				std::memcpy(m_BoneWorldData.data() + boneIndex,
+					mesh->GetBoneWorlds().data(),
+					sizeof(float3x4) * boneCount);
+
+				// Copy static skinToBone transforms to BoneCompute input buffer
+				std::memcpy(m_SkinToBoneData.data() + boneIndex,
+					mesh->GetSkinToBones().data(),
+					sizeof(float3x4) * boneCount);
+
+				// Fill per-mesh bone compute header
+				MeshBoneHeader& header = m_MeshBoneHeaderData[meshIndex];
+				header.BoneCount = boneCount;
+				header.BoneWorldOffset = boneIndex;
+				header.SkinToBoneOffset = boneIndex;
+				header.Pad = 0;
+				header.GeometryWorldInverse = mesh->GetGeometryWorldInverse();
+			}
+
+			boneIndex += boneCount;
+			meshIndex++;
+		}
+
+		if (meshIndex == 0)
+			return false;
+
+		// Upload raw bone transform data (BoneCompute input)
+		if (boneIndex > 0) {
+			auto bytes = sizeof(float3x4) * boneIndex;
+
+			if (bytes > 0) {
+				commandList->writeBuffer(m_BoneWorldBuffer[currentSlot], m_BoneWorldData.data(), bytes);
+				commandList->writeBuffer(m_SkinToBoneBuffer[currentSlot], m_SkinToBoneData.data(), bytes);
 			}
 		}
 
+		commandList->writeBuffer(m_MeshBoneHeaderBuffer[currentSlot], m_MeshBoneHeaderData.data(), sizeof(MeshBoneHeader) * meshIndex);
+
+		// Upload vertex skinning data (Skinning pass input)
 		commandList->writeBuffer(m_VertexUpdateBuffer, m_VertexUpdateData.data(), sizeof(VertexUpdateData) * meshIndex);
-		if (boneMatrixIndex > 0)
-			commandList->writeBuffer(m_BoneMatrixBuffer, m_BoneMatrixData.data(), sizeof(BoneMatrix) * boneMatrixIndex);
 
 		numMeshes = meshIndex;
 
@@ -135,6 +213,25 @@ namespace Pass
 	void Skinning::ClearQueue()
 	{
 		queuedMeshes.clear();
+	}
+
+	void Skinning::CheckBoneBindings()
+	{
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BoneBindingSetDirty[currentSlot] && m_BoneBindingSets[currentSlot])
+			return;
+
+		nvrhi::BindingSetDesc bindingSetDesc;
+		bindingSetDesc.bindings = {
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_BoneWorldBuffer[currentSlot]),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, m_SkinToBoneBuffer[currentSlot]),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, m_MeshBoneHeaderBuffer[currentSlot]),
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_BoneMatrixBuffer)
+		};
+
+		m_BoneBindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BoneBindingLayout);
+
+		m_BoneBindingSetDirty[currentSlot] = false;
 	}
 
 	void Skinning::CheckBindings()
@@ -156,6 +253,7 @@ namespace Pass
 
 	void Skinning::Execute(nvrhi::ICommandList* commandList)
 	{
+		CheckBoneBindings();
 		CheckBindings();
 
 		uint32_t numMeshes = 0;
@@ -165,25 +263,47 @@ namespace Pass
 			return;
 
 		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
-
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-		nvrhi::BindingSetVector bindings = {
-			m_BindingSets[currentSlot],
-			sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
-			sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
-			sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,
-			sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable
-		};
+		// --- Pass 0: Bone Matrix Compute ---
+		// Compute M = geometryWorldInverse * boneWorld * skinToBone per bone, store in BoneMatrixBuffer.
+		if (m_BoneComputePipeline) {
+			nvrhi::ComputeState boneState;
+			boneState.pipeline = m_BoneComputePipeline;
+			boneState.bindings = { m_BoneBindingSets[currentSlot] };
+			commandList->setComputeState(boneState);
 
-		nvrhi::ComputeState state;
-		state.pipeline = m_ComputePipeline;
-		state.bindings = bindings;
-		commandList->setComputeState(state);
+			uint32_t totalBones = 0;
+			for (auto& [mesh, qm] : queuedMeshes)
+				if ((qm.updateFlags & DirtyFlags::Skin) != DirtyFlags::None)
+					totalBones += mesh->GetBoneCount();
 
-		auto vertexGroups = Util::Math::DivideRoundUp(vertexCount, 32u);
-		commandList->dispatch(numMeshes, vertexGroups);
+			if (totalBones > 0) {
+				auto boneGroups = Util::Math::DivideRoundUp(totalBones, 64u);
+				commandList->dispatch(boneGroups, numMeshes);
+				commandList->commitBarriers();
+			}
+		}
+
+		// --- Pass 1: Vertex Skinning ---
+		{
+			nvrhi::BindingSetVector bindings = {
+				m_BindingSets[currentSlot],
+				sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+				sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
+				sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
+				sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,
+				sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable
+			};
+
+			nvrhi::ComputeState state;
+			state.pipeline = m_ComputePipeline;
+			state.bindings = bindings;
+			commandList->setComputeState(state);
+
+			auto vertexGroups = Util::Math::DivideRoundUp(vertexCount, 32u);
+			commandList->dispatch(numMeshes, vertexGroups);
+		}
 
 		ClearQueue();
 	}
