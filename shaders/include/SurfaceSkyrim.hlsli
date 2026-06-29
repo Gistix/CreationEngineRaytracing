@@ -853,36 +853,68 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     if (material.Type == Type::TruePBR)
     {
         PBRLandscapeMaterialData pbrLand = Materials[0].Load<PBRLandscapeMaterialData>(mesh.GetMaterialOffset());
-        diffTex0  = pbrLand.BaseColorTexture0;  diffTex1  = pbrLand.BaseColorTexture1;
-        diffTex2  = pbrLand.BaseColorTexture2;  diffTex3  = pbrLand.BaseColorTexture3;
-        diffTex4  = pbrLand.BaseColorTexture4;  diffTex5  = pbrLand.BaseColorTexture5;
-        normTex0  = pbrLand.NormalTexture0;     normTex1  = pbrLand.NormalTexture1;
-        normTex2  = pbrLand.NormalTexture2;     normTex3  = pbrLand.NormalTexture3;
-        normTex4  = pbrLand.NormalTexture4;     normTex5  = pbrLand.NormalTexture5;
-        rmaosTex0 = pbrLand.RMAOSTexture0;      rmaosTex1 = pbrLand.RMAOSTexture1;
-        rmaosTex2 = pbrLand.RMAOSTexture2;      rmaosTex3 = pbrLand.RMAOSTexture3;
-        rmaosTex4 = pbrLand.RMAOSTexture4;      rmaosTex5 = pbrLand.RMAOSTexture5;
+        
+        diffTex0  = pbrLand.BaseColorTexture0;  
+        diffTex1  = pbrLand.BaseColorTexture1;
+        diffTex2  = pbrLand.BaseColorTexture2;  
+        diffTex3  = pbrLand.BaseColorTexture3;
+        diffTex4  = pbrLand.BaseColorTexture4;  
+        diffTex5  = pbrLand.BaseColorTexture5;
+        
+        normTex0  = pbrLand.NormalTexture0;     
+        normTex1  = pbrLand.NormalTexture1;
+        normTex2  = pbrLand.NormalTexture2;     
+        normTex3  = pbrLand.NormalTexture3;
+        normTex4  = pbrLand.NormalTexture4;    
+        normTex5  = pbrLand.NormalTexture5;
+        
+        rmaosTex0 = pbrLand.RMAOSTexture0;      
+        rmaosTex1 = pbrLand.RMAOSTexture1;
+        rmaosTex2 = pbrLand.RMAOSTexture2;      
+        rmaosTex3 = pbrLand.RMAOSTexture3;
+        rmaosTex4 = pbrLand.RMAOSTexture4;      
+        rmaosTex5 = pbrLand.RMAOSTexture5;
+        
         overlayTex = pbrLand.OverlayTexture;
         noiseTex   = pbrLand.NoiseTexture;
-        roughness0 = pbrLand.RoughnessScale0; roughness1 = pbrLand.RoughnessScale1;
-        roughness2 = pbrLand.RoughnessScale2; roughness3 = pbrLand.RoughnessScale3;
-        roughness4 = pbrLand.RoughnessScale4; roughness5 = pbrLand.RoughnessScale5;
-        specular0  = pbrLand.SpecularLevel0;  specular1  = pbrLand.SpecularLevel1;
-        specular2  = pbrLand.SpecularLevel2;  specular3  = pbrLand.SpecularLevel3;
-        specular4  = pbrLand.SpecularLevel4;  specular5  = pbrLand.SpecularLevel5;
+        
+        roughness0 = pbrLand.RoughnessScale0; 
+        roughness1 = pbrLand.RoughnessScale1;
+        roughness2 = pbrLand.RoughnessScale2; 
+        roughness3 = pbrLand.RoughnessScale3;
+        roughness4 = pbrLand.RoughnessScale4; 
+        roughness5 = pbrLand.RoughnessScale5;
+        
+        specular0  = pbrLand.SpecularLevel0;  
+        specular1  = pbrLand.SpecularLevel1;
+        specular2  = pbrLand.SpecularLevel2;  
+        specular3  = pbrLand.SpecularLevel3;
+        specular4  = pbrLand.SpecularLevel4;  
+        specular5  = pbrLand.SpecularLevel5;
+        
         pbrFlags = pbrLand.PBRFlags;
     }
     else
     {
         LandscapeMaterialDataExtra land = Materials[0].Load<LandscapeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-        diffTex0  = material.DiffuseTexture;  diffTex1  = land.DiffuseTexture1;
-        diffTex2  = land.DiffuseTexture2;     diffTex3  = land.DiffuseTexture3;
-        diffTex4  = land.DiffuseTexture4;     diffTex5  = land.DiffuseTexture5;
-        normTex0  = material.NormalTexture;   normTex1  = land.NormalTexture1;
-        normTex2  = land.NormalTexture2;      normTex3  = land.NormalTexture3;
-        normTex4  = land.NormalTexture4;      normTex5  = land.NormalTexture5;
+        
+        diffTex0  = material.DiffuseTexture;  
+        diffTex1  = land.DiffuseTexture1;
+        diffTex2  = land.DiffuseTexture2;     
+        diffTex3  = land.DiffuseTexture3;
+        diffTex4  = land.DiffuseTexture4;     
+        diffTex5  = land.DiffuseTexture5;
+        
+        normTex0  = material.NormalTexture;   
+        normTex1  = land.NormalTexture1;
+        normTex2  = land.NormalTexture2;      
+        normTex3  = land.NormalTexture3;
+        normTex4  = land.NormalTexture4;      
+        normTex5  = land.NormalTexture5;
+        
         overlayTex = land.OverlayTexture;
         noiseTex   = land.NoiseTexture;
+        
         float rough = ShininessToRoughness(material.SpecularPower);
         roughness0 = roughness1 = roughness2 = roughness3 = roughness4 = roughness5 = rough;
     }
@@ -928,12 +960,12 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
         blendedLand.rgb *= saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
         
         float4 rmaos = float4(0, 0, 0, 0);
-        rmaos += BlendLandTexture(rmaosTex0, texCoord0, landBlend0.x, mipLevel) * float4(roughness0, 1.0f, 1.0, specular0);
-        rmaos += BlendLandTexture(rmaosTex1, texCoord0, landBlend0.y, mipLevel) * float4(roughness1, 1.0f, 1.0, specular1);
-        rmaos += BlendLandTexture(rmaosTex2, texCoord0, landBlend0.z, mipLevel) * float4(roughness2, 1.0f, 1.0, specular2);
-        rmaos += BlendLandTexture(rmaosTex3, texCoord0, landBlend0.w, mipLevel) * float4(roughness3, 1.0f, 1.0, specular3);
-        rmaos += BlendLandTexture(rmaosTex4, texCoord0, landBlend1.x, mipLevel) * float4(roughness4, 1.0f, 1.0, specular4);
-        rmaos += BlendLandTexture(rmaosTex5, texCoord0, landBlend1.y, mipLevel) * float4(roughness5, 1.0f, 1.0, specular5);
+        rmaos += BlendLandTexture(rmaosTex0, texCoord0, landBlend0.x, mipLevel) * float4(roughness0, 1.0f, 1.0f, specular0);
+        rmaos += BlendLandTexture(rmaosTex1, texCoord0, landBlend0.y, mipLevel) * float4(roughness1, 1.0f, 1.0f, specular1);
+        rmaos += BlendLandTexture(rmaosTex2, texCoord0, landBlend0.z, mipLevel) * float4(roughness2, 1.0f, 1.0f, specular2);
+        rmaos += BlendLandTexture(rmaosTex3, texCoord0, landBlend0.w, mipLevel) * float4(roughness3, 1.0f, 1.0f, specular3);
+        rmaos += BlendLandTexture(rmaosTex4, texCoord0, landBlend1.x, mipLevel) * float4(roughness4, 1.0f, 1.0f, specular4);
+        rmaos += BlendLandTexture(rmaosTex5, texCoord0, landBlend1.y, mipLevel) * float4(roughness5, 1.0f, 1.0f, specular5);
         
         surface.Roughness = saturate(rmaos.x);
         surface.Metallic = saturate(rmaos.y);

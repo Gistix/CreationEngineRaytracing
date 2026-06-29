@@ -3,6 +3,7 @@
 #include "Core/MaterialManager.h"
 #include "Renderer.h"
 #include "Util.h"
+#include "Utils/Material.h"
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
 
 PBRLandscapeMaterial::PBRLandscapeMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
@@ -40,7 +41,7 @@ void PBRLandscapeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMate
 	landData->SpecularBackLightingTexture = m_SpecularBackLightingTexture.GetDescriptorIndex();
 
 	// PBR landscape-specific fields
-	landData->PBRFlags = 0;
+	landData->PBRFlags = static_cast<uint16_t>(Util::Material::Skyrim::GetPBRShaderFlags(landMaterial).underlying());
 
 	landData->BaseColorTexture0 = m_BaseColorTextures[0].GetDescriptorIndex();
 	landData->BaseColorTexture1 = m_BaseColorTextures[1].GetDescriptorIndex();
