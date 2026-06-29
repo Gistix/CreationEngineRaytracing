@@ -262,7 +262,7 @@ void BaseMesh::SetLocalToOwner(const float3x4& ownerWorld)
 
 	auto ownerInv = XMMatrixInverse(nullptr, XMLoadFloat3x4(&ownerWorld));
 	auto meshWorld = XMLoadFloat3x4(&m_Transform);
-	auto localToOwnerMat = XMMatrixMultiply(ownerInv, meshWorld);
+	auto localToOwnerMat = XMMatrixMultiply(meshWorld, ownerInv);
 
 	float3x4 localToOwner;
 	XMStoreFloat3x4(&localToOwner, localToOwnerMat);
