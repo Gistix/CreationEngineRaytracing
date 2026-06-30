@@ -266,7 +266,6 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 			mesh->ClearDirtyFlags();
 
 	if (m_GeometryDescs.empty()) {
-		logger::warn("BLASCluster::BuildUpdate - {} geometry empty after aggregation, setting BLAS to null", m_Name);
 		m_BLAS = nullptr;
 		m_MembershipDirty = false;
 		m_LastBuild = frameIndex;
