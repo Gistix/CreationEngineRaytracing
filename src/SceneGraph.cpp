@@ -491,6 +491,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				if (!hidden) {
 					auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
+					if (!mesh->GetCluster()) {
+						cluster->AddMember(mesh);
+						MarkClusterDirty(cluster);
+					}
 					mesh->Update(cluster);
 					currentVisible.push_back(mesh);
 				}
