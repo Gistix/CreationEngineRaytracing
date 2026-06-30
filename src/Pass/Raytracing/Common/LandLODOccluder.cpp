@@ -8,7 +8,7 @@ namespace Pass
 	LandLODOccluder::LandLODOccluder(Renderer* renderer)
 		: RenderPass(renderer)
 	{
-		m_Buffer = Util::CreateStructuredBuffer<LandLODUpdate>(renderer->GetDevice(), MAX_MESHES, "Land LOD Update Buffer");
+		m_Buffer = Util::CreateStructuredRingBuffer<LandLODUpdate>(renderer->GetDevice(), MAX_MESHES, "Land LOD Update Buffer");
 
 		CreateBindingLayout();
 		CreatePipeline();
@@ -50,26 +50,23 @@ namespace Pass
 
 	bool LandLODOccluder::PrepareResources(nvrhi::ICommandList* commandList, uint32_t& numMeshes, uint32_t& numVertices)
 	{
-		uint32_t meshIndex = 0;
-
-		const auto& updates = Scene::GetSingleton()->GetSceneGraph()->GetLandLODMeshUpdates();
+		auto& updates = Scene::GetSingleton()->GetSceneGraph()->GetLandLODMeshUpdates();
 		for (auto& [mesh, update] : updates) {
-			m_VertexUpdateData[meshIndex++] = update;
+			m_VertexUpdateData[numMeshes++] = update;
 
 			numVertices = std::max(numVertices, update.VertexCount);
 
-			if (meshIndex >= MAX_MESHES) {
+			if (numMeshes >= MAX_MESHES) {
 				logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
 				break;
 			}
 		}
+		updates.clear();
 
-		if (meshIndex == 0)
+		if (numMeshes == 0)
 			return false;
 
-		commandList->writeBuffer(m_Buffer, m_VertexUpdateData.data(), sizeof(LandLODUpdate) * meshIndex);
-
-		numMeshes = meshIndex;
+		commandList->writeBuffer(m_Buffer.current(), m_VertexUpdateData.data(), sizeof(LandLODUpdate) * numMeshes);
 
 		return true;
 	}
@@ -83,7 +80,7 @@ namespace Pass
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::PushConstants(0, sizeof(float4)),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_Buffer)
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_Buffer[currentSlot])
 		};
 
 		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);

@@ -30,6 +30,7 @@
 #include "Types/VectorStorage.h"
 #include "Types/ReleasedData.h"
 #include "Types/RE/RE.h"
+#include "Types/RingBuffer.h"
 
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
@@ -77,15 +78,15 @@ class SceneGraph
 	eastl::map<RE::BSLight*, Light> m_Lights;
 
 	eastl::array<LightData, Constants::LIGHTS_MAX> m_LightData;
-	eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_LightBuffer;
+	RingBuffer m_LightBuffer;
 
 	// Mesh
 	eastl::array<MeshData, Constants::NUM_MESHES_MAX> m_MeshData;
-	eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_MeshBuffer;
+	RingBuffer m_MeshBuffer;
 
 	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
-	eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_InstanceBuffer;
+	RingBuffer m_InstanceBuffer;
 
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 
@@ -109,7 +110,6 @@ class SceneGraph
 
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
-	void RemoveMeshFromCluster(BaseMesh* mesh, RE::TESObjectREFR* owner);
 public:
 	void Initialize();
 
@@ -170,7 +170,12 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 
-	void ProcessPendingMeshDestroys();
+	void ProcessPendingMeshDestroys(uint64_t completedFence);
 private:
-	eastl::vector<eastl::shared_ptr<BaseMesh>> m_PendingMeshDestroy;
+	struct PendingDestroy
+	{
+		eastl::shared_ptr<BaseMesh> mesh;
+		uint64_t fenceValue;
+	};
+	eastl::vector<PendingDestroy> m_PendingMeshDestroy;
 };

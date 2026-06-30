@@ -80,6 +80,9 @@ public:
 
 	RE::BSTriShape* GetTriShape() const { return m_BSTriShape; }
 
+	BLASCluster* GetCluster() const { return m_Cluster; }
+	void SetCluster(BLASCluster* cluster) { m_Cluster = cluster; }
+
 	const eastl::string& GetName() const { return m_Name; }
 
 	RE::TESObjectREFR* GetOwner() const { return m_Owner; }
@@ -148,6 +151,9 @@ protected:
 	RE::TESObjectREFR* m_Owner = nullptr;
 
 	RE::TESObjectREFR* m_PrevOwner = nullptr;
+
+	// Back-pointer to the BLAS cluster this mesh belongs to; set by AddMember, used for fast removal.
+	BLASCluster* m_Cluster = nullptr;
 
 	// Cached world transform from BSTriShape, refreshed in Update().
 	float3x4 m_Transform;

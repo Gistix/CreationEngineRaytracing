@@ -11,7 +11,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	m_Flags.set(Flags::LandLOD4);
 
-	const auto slot = m_VertexBuffer.m_Descriptor.Get();
+	const auto slotIndex = m_VertexBuffer.m_Descriptor.Get();
 	auto device = Renderer::GetSingleton()->GetDevice();
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
@@ -24,23 +24,31 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 		.setCanHaveRawViews(true)
 		.setCanHaveUAVs(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
-		.setIsAccelStructBuildInput(true);
-	auto liveBuffer = device->createBuffer(liveBufDesc);
-	m_LiveVertexBuffer = liveBuffer;
+		.setIsAccelStructBuildInput(true)
+		.setDebugName(std::format("{} - LandLOD", m_Name.c_str()));
+		
+	//const auto* rendererData = bsTriShape->GetGeometryRuntimeData().rendererData;
 
-	const auto* rendererData = bsTriShape->GetGeometryRuntimeData().rendererData;
-	commandList->writeBuffer(liveBuffer, Util::Adapter::GetVertexData(const_cast<RE::BSGraphics::TriShape*>(rendererData)), byteSize);
+	m_LiveVertexBuffer = device->createBuffer(liveBufDesc);
+	//commandList->writeBuffer(m_LiveVertexBuffer, Util::Adapter::GetVertexData(const_cast<RE::BSGraphics::TriShape*>(rendererData)), byteSize);
+
+	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, 0, byteSize);
 
 	// Repoint the geometry desc to the live buffer for BLAS reads
 	for (auto& desc : GetGeometryDescsMutable())
-		desc.geometryData.triangles.vertexBuffer = liveBuffer;
+		desc.geometryData.triangles.vertexBuffer = m_LiveVertexBuffer;
 
+	// RT shaders read from here
 	device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-		nvrhi::BindingSetItem::RawBuffer_SRV(slot, liveBuffer));
+		nvrhi::BindingSetItem::RawBuffer_SRV(slotIndex, m_LiveVertexBuffer));
+
+	// LandLODOccluder input
 	device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
-		nvrhi::BindingSetItem::RawBuffer_SRV(slot, liveBuffer));
+		nvrhi::BindingSetItem::RawBuffer_SRV(slotIndex, m_VertexBuffer.m_Buffer));
+
+	// LandLODOccluder output
 	device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
-		nvrhi::BindingSetItem::RawBuffer_UAV(slot, liveBuffer));
+		nvrhi::BindingSetItem::RawBuffer_UAV(slotIndex, m_LiveVertexBuffer));
 }
 
 bool LandLODMesh::Update(BLASCluster* cluster)

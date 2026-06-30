@@ -466,6 +466,9 @@ nvrhi::ICommandList* Renderer::StartExecution()
 		slot.inFlight = false;
 	}
 
+	// Release meshes whose recorded fence has been passed by the GPU.
+	Scene::GetSingleton()->GetSceneGraph()->ProcessPendingMeshDestroys(slot.fenceValue);
+
 	if (!slot.eventQuery)
 		slot.eventQuery = device->createEventQuery();
 

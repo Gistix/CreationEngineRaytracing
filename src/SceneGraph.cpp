@@ -19,24 +19,17 @@
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
 
-	nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer[Renderer::GetSingleton()->GetCurrentSlot()]; }
-	nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer[Renderer::GetSingleton()->GetCurrentSlot()]; }
-	nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer[Renderer::GetSingleton()->GetCurrentSlot()]; }
+	nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
+	nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
+	nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
 
 	void SceneGraph::Initialize()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
-		auto name = std::format("Mesh Buffer[{}]", i);
-		m_MeshBuffer[i] = Util::CreateStructuredBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, name.c_str());
-
-		name = std::format("Instance Buffer[{}]", i);
-		m_InstanceBuffer[i] = Util::CreateStructuredBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, name.c_str());
-
-		name = std::format("Light Buffer[{}]", i);
-		m_LightBuffer[i] = Util::CreateStructuredBuffer<LightData>(device, Constants::LIGHTS_MAX, name.c_str());
-	}
+	m_MeshBuffer = Util::CreateStructuredRingBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
+	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
 
 	m_MaterialManager = eastl::make_unique<MaterialManager>();
 
@@ -360,7 +353,6 @@ void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 	if (it == m_DirectMeshes.end())
 		return;
 
-
 	it->second->OnDestroy();
 
 	{
@@ -394,7 +386,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		destroyedMeshes = eastl::move(m_DestroyedMeshes);
 	}
 
-	// Unconditional release for now, needs to be revised for buffering/frames in flight support
+	// Defer release until the owning slot's GPU work completes; ProcessPendingMeshDestroys
+	// is called from StartExecution() after the per-slot fence resolves.
 	for (auto destroyedMesh: destroyedMeshes)
 	{
 		auto it = m_DirectMeshes.find(destroyedMesh);
@@ -403,9 +396,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		auto* mesh = it->second.get();
 
-		// Remove from its cluster (owner used as key only, never dereferenced).
-		RemoveMeshFromCluster(mesh, mesh->GetOwner());
+		if (auto* cluster = mesh->GetCluster()) {
+			cluster->RemoveMember(mesh);
+			mesh->SetCluster(nullptr);
+		}
 
+		uint64_t fence = Renderer::GetSingleton()->GetLastSubmittedFence();
+		m_PendingMeshDestroy.push_back({ it->second, fence });
 		m_DirectMeshes.erase(it);
 	}
 
@@ -416,7 +413,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
-	m_LandLODMeshUpdates.clear();
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
@@ -480,7 +476,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				// SetOwner returns true if the owner changed; re-bucket into the new cluster (key compare only).
 				if (mesh->SetOwner(clusterOwner)) {
-					RemoveMeshFromCluster(mesh.get(), mesh->GetPrevOwner());
+					if (auto* oldCluster = mesh->GetCluster())
+						oldCluster->RemoveMember(mesh.get());
 					GetOrCreateCluster(clusterOwner, bsTriShape)->AddMember(mesh);
 				}
 
@@ -520,9 +517,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				continue;
 
 			if (mesh->GetLastVisitedFrame() != frameIndex) {
-				logger::warn("SceneGraph::Update - BSTriShape {} - \"{}\" not visited this frame, hiding mesh.", fmt::ptr(bsTriShape), mesh->GetName());
 				mesh->SetHidden(true);
-				RemoveMeshFromCluster(mesh.get(), mesh->GetOwner());
+
+				if (auto* cluster = mesh->GetCluster()) {
+					cluster->RemoveMember(mesh.get());
+					mesh->SetCluster(nullptr);
+				}
 			}
 		}
 	}
@@ -532,15 +532,17 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	// Drop clusters whose meshes were all destroyed this frame.
 	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
-		if (it->second->Empty())
+		if (it->second->Empty()) {
 			it = m_OwnerClusters.erase(it);
+		}
 		else
 			++it;
 	}
 
 	for (auto it = m_OrphanClusters.begin(); it != m_OrphanClusters.end(); ) {
-		if (it->second->Empty())
+		if (it->second->Empty()) {
 			it = m_OrphanClusters.erase(it);
+		}
 		else
 			++it;
 	}
@@ -608,21 +610,6 @@ BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriS
 	return slot.get();
 }
 
-void SceneGraph::RemoveMeshFromCluster(BaseMesh* mesh, RE::TESObjectREFR* owner)
-{
-	// owner is used as a key only (never dereferenced); orphan meshes are keyed by their trishape.
-	if (owner) {
-		auto it = m_OwnerClusters.find(owner);
-		if (it != m_OwnerClusters.end())
-			it->second->RemoveMember(mesh);
-	}
-	else {
-		auto it = m_OrphanClusters.find(mesh->GetTriShape());
-		if (it != m_OrphanClusters.end())
-			it->second->RemoveMember(mesh);
-	}
-}
-
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 {
 	// Each cluster pulls dirty state from its members, uploads pending dynamic buffers, and builds/refits.
@@ -636,4 +623,12 @@ void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
 {
 	m_TextureManager->ReleaseTexture(texture);
+}
+
+void SceneGraph::ProcessPendingMeshDestroys(uint64_t completedFence)
+{
+	m_PendingMeshDestroy.erase(
+		eastl::remove_if(m_PendingMeshDestroy.begin(), m_PendingMeshDestroy.end(),
+			[completedFence](const PendingDestroy& p) { return p.fenceValue <= completedFence; }),
+		m_PendingMeshDestroy.end());
 }

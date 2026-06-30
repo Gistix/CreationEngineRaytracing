@@ -18,6 +18,7 @@ BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
 void BLASCluster::AddMember(const eastl::shared_ptr<BaseMesh>& mesh)
 {
 	m_Members.push_back(mesh);
+	mesh->SetCluster(this);
 
 	if (mesh->IsUpdatable())
 		m_Updatable = true;

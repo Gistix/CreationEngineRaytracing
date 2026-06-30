@@ -11,17 +11,12 @@ namespace Pass
 	{
 		auto device = renderer->GetDevice();
 
-		for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
-			m_BoneWorldBuffer[i] = Util::CreateStructuredBuffer<NiTransformPacked>(device, MAX_BONE_MATRICES,
-				std::format("Bone World Buffer[{}]", i).c_str());
-			m_SkinToBoneBuffer[i] = Util::CreateStructuredBuffer<NiTransformPacked>(device, MAX_BONE_MATRICES,
-				std::format("SkinToBone Buffer[{}]", i).c_str());
-			m_MeshBoneHeaderBuffer[i] = Util::CreateStructuredBuffer<MeshBoneHeader>(device, MAX_GEOMETRY,
-				std::format("Mesh Bone Header Buffer[{}]", i).c_str());
-		}
+		m_BoneWorldBuffer = Util::CreateStructuredRingBuffer<NiTransformPacked>(device, MAX_BONE_MATRICES, "Bone World Buffer");
+		m_SkinToBoneBuffer = Util::CreateStructuredRingBuffer<NiTransformPacked>(device, MAX_BONE_MATRICES, "SkinToBone Buffer");
+		m_MeshBoneHeaderBuffer = Util::CreateStructuredRingBuffer<MeshBoneHeader>(device, MAX_GEOMETRY, "Mesh Bone Header Buffer");
 
-		m_VertexUpdateBuffer = Util::CreateStructuredBuffer<VertexUpdateData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
-		m_BoneMatrixBuffer = Util::CreateStructuredBuffer<BoneMatrix>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer", true);
+		m_VertexUpdateBuffer = Util::CreateStructuredRingBuffer<VertexUpdateData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
+		m_BoneMatrixBuffer = Util::CreateStructuredRingBuffer<BoneMatrix>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer", true);
 
 		CreateBoneBindingLayout();
 		CreateBindingLayout();
@@ -207,7 +202,7 @@ namespace Pass
 		commandList->writeBuffer(m_MeshBoneHeaderBuffer[currentSlot], m_MeshBoneHeaderData.data(), sizeof(MeshBoneHeader) * meshIndex);
 
 		// Upload vertex skinning data (Skinning pass input)
-		commandList->writeBuffer(m_VertexUpdateBuffer, m_VertexUpdateData.data(), sizeof(VertexUpdateData) * meshIndex);
+		commandList->writeBuffer(m_VertexUpdateBuffer[currentSlot], m_VertexUpdateData.data(), sizeof(VertexUpdateData) * meshIndex);
 
 		numMeshes = meshIndex;
 
@@ -230,7 +225,7 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_BoneWorldBuffer[currentSlot]),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, m_SkinToBoneBuffer[currentSlot]),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, m_MeshBoneHeaderBuffer[currentSlot]),
-			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_BoneMatrixBuffer)
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_BoneMatrixBuffer[currentSlot])
 		};
 
 		m_BoneBindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BoneBindingLayout);
@@ -246,8 +241,8 @@ namespace Pass
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_VertexUpdateBuffer),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, m_BoneMatrixBuffer)
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_VertexUpdateBuffer[currentSlot]),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, m_BoneMatrixBuffer[currentSlot])
 		};
 
 		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
@@ -271,22 +266,20 @@ namespace Pass
 
 		// --- Pass 0: Bone Matrix Compute ---
 		// Compute M = geometryWorldInverse * boneWorld * skinToBone per bone, store in BoneMatrixBuffer.
-		if (m_BoneComputePipeline) {
-			nvrhi::ComputeState boneState;
-			boneState.pipeline = m_BoneComputePipeline;
-			boneState.bindings = { m_BoneBindingSets[currentSlot] };
-			commandList->setComputeState(boneState);
+		nvrhi::ComputeState boneState;
+		boneState.pipeline = m_BoneComputePipeline;
+		boneState.bindings = { m_BoneBindingSets[currentSlot] };
+		commandList->setComputeState(boneState);
 
-			uint32_t totalBones = 0;
-			for (auto& [mesh, qm] : queuedMeshes)
-				if ((qm.updateFlags & DirtyFlags::Skin) != DirtyFlags::None)
-					totalBones += mesh->GetBoneCount();
+		uint32_t totalBones = 0;
+		for (auto& [mesh, qm] : queuedMeshes)
+			if ((qm.updateFlags & DirtyFlags::Skin) != DirtyFlags::None)
+				totalBones += mesh->GetBoneCount();
 
-			if (totalBones > 0) {
-				auto boneGroups = Util::Math::DivideRoundUp(totalBones, 64u);
-				commandList->dispatch(boneGroups, numMeshes);
-				commandList->commitBarriers();
-			}
+		if (totalBones > 0) {
+			auto boneGroups = Util::Math::DivideRoundUp(totalBones, 64u);
+			commandList->dispatch(boneGroups, numMeshes);
+			commandList->commitBarriers();
 		}
 
 		// --- Pass 1: Vertex Skinning ---

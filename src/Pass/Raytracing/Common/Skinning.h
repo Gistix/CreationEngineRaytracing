@@ -13,8 +13,10 @@
 #include "Interop/BoneTransform.hlsli"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
+#include "Types/RingBuffer.h"
 
 #include "Types/ShaderDefine.h"
+#include "Types/RingBuffer.h"
 
 class SkinnedMesh;
 
@@ -33,9 +35,9 @@ namespace Pass
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BoneBindingSets;
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BoneBindingSetDirty {};
 
-		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BoneWorldBuffer;
-		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_SkinToBoneBuffer;
-		eastl::array<nvrhi::BufferHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_MeshBoneHeaderBuffer;
+		RingBuffer m_BoneWorldBuffer;
+		RingBuffer m_SkinToBoneBuffer;
+		RingBuffer m_MeshBoneHeaderBuffer;
 
 		eastl::array<NiTransformPacked, MAX_BONE_MATRICES> m_BoneWorldData;
 		eastl::array<NiTransformPacked, MAX_BONE_MATRICES> m_SkinToBoneData;
@@ -51,8 +53,8 @@ namespace Pass
 
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
-		nvrhi::BufferHandle m_VertexUpdateBuffer;
-		nvrhi::BufferHandle m_BoneMatrixBuffer;
+		RingBuffer m_VertexUpdateBuffer;
+		RingBuffer m_BoneMatrixBuffer;
 
 		eastl::array<VertexUpdateData, MAX_GEOMETRY> m_VertexUpdateData;
 		eastl::array<BoneMatrix, MAX_BONE_MATRICES> m_BoneMatrixData;

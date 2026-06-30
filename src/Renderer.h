@@ -208,6 +208,8 @@ public:
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();
 
+	inline auto GetLastSubmittedFence() const { return m_LastSubmittedInstance; }
+
 	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main, m_CurrentSlot); }
 
 	inline auto GetFrameIndex() const { return m_FrameIndex; }

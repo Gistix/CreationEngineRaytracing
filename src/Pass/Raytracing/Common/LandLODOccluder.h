@@ -13,6 +13,7 @@
 #include "Pass/Raytracing/Common/SHaRC.h"
 
 #include "Types/ShaderDefine.h"
+#include "Types/RingBuffer.h"
 
 namespace Pass
 {
@@ -29,7 +30,7 @@ namespace Pass
 
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
-		nvrhi::BufferHandle m_Buffer;
+		RingBuffer m_Buffer;
 
 		eastl::array<LandLODUpdate, MAX_MESHES> m_VertexUpdateData;
 	public:
