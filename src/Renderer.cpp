@@ -532,9 +532,12 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
 			rootNode->ForEach([&](RenderNode* node) {
 				if (node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))
-					m_PassTimings.push_back(PassTiming(node->m_Name.c_str(), device->getTimerQueryTime(node->m_TimerQueries[slot]) * 1000.0f));
+					m_PassTimings.push_back(PassTiming{ node->m_Name.c_str(), device->getTimerQueryTime(node->m_TimerQueries[slot]) * 1000.0f, node->m_CpuTimes[slot] });
 			});
 		}
+
+		if (m_FrameTimerQueries[slot] && device->pollTimerQuery(m_FrameTimerQueries[slot]))
+			m_PassTimings.push_back(PassTiming{ "Execute", device->getTimerQueryTime(m_FrameTimerQueries[slot]) * 1000.0f, m_FrameCpuTimes[slot] });
 	}
 
 	m_LastCompletedSlot = slot;

@@ -8,6 +8,8 @@
 
 #include "Renderer.h"
 
+#include <chrono>
+
 #include "Renderer/RenderNode.h"
 
 #include "Pass/Raytracing/Common/Skinning.h"
@@ -314,15 +316,40 @@ void Scene::Execute()
 
 	auto* commandList = renderer->StartExecution();
 
-	// Update all scene related data and their buffers
-	sceneGraph->Update(commandList);
+	const auto currentSlot = renderer->GetCurrentSlot();
+	const auto& timings = m_Settings.DebugSettings.Timings;
 
-	commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
+	if (timings) {
+		auto cpuStart = std::chrono::high_resolution_clock::now();
 
-	commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
+		if (!renderer->GetFrameTimerQuery(currentSlot))
+			renderer->GetFrameTimerQuery(currentSlot) = renderer->GetDevice()->createTimerQuery();
 
-	// Executes attached render nodes
-	renderer->GetRenderGraph()->Execute(commandList);
+		commandList->beginTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
+
+		// Update all scene related data and their buffers
+		sceneGraph->Update(commandList);
+
+		commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
+		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
+
+		// Executes attached render nodes
+		renderer->GetRenderGraph()->Execute(commandList);
+
+		commandList->endTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
+
+		auto cpuEnd = std::chrono::high_resolution_clock::now();
+		renderer->SetFrameCpuTime(currentSlot, std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
+	} else {
+		// Update all scene related data and their buffers
+		sceneGraph->Update(commandList);
+
+		commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
+		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
+
+		// Executes attached render nodes
+		renderer->GetRenderGraph()->Execute(commandList);
+	}
 
 	renderer->EndExecution();
 }

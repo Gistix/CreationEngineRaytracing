@@ -122,4 +122,5 @@ struct RenderNode : public IRenderNode
 	eastl::unique_ptr<RenderPass> m_RenderPass;
 	eastl::vector<RenderNode> m_Children;
 	eastl::array<nvrhi::TimerQueryHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_TimerQueries = {};
+	eastl::array<float, Constants::MAX_FRAMES_IN_FLIGHT> m_CpuTimes = {};
 };

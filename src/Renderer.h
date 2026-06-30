@@ -91,6 +91,9 @@ class Renderer
 
 	eastl::vector<PassTiming> m_PassTimings;
 
+	eastl::array<nvrhi::TimerQueryHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameTimerQueries = {};
+	eastl::array<float, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameCpuTimes = {};
+
 	RenderTargetManager m_RenderTargetManager;
 
 	eastl::unique_ptr<TextureReference> m_WhiteTexture;
@@ -216,6 +219,10 @@ public:
 
 	inline auto GetCurrentSlot() const { return m_CurrentSlot; }
 	inline auto GetCompletedSlot() const { return m_LastCompletedSlot; }
+
+	inline auto& GetFrameTimerQuery(uint32_t slot) { return m_FrameTimerQueries[slot]; }
+	inline void SetFrameCpuTime(uint32_t slot, float ms) { m_FrameCpuTimes[slot] = ms; }
+	inline float GetFrameCpuTime(uint32_t slot) const { return m_FrameCpuTimes[slot]; }
 
 	inline auto GetJitter() const { return m_Jitter; }
 

@@ -3,5 +3,6 @@
 struct PassTiming
 {
 	eastl::string name;
-	float timing;
+	float gpuTiming;  // milliseconds on GPU (timer query)
+	float cpuTiming;  // milliseconds on CPU (wall clock)
 };
