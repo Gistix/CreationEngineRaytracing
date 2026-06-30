@@ -44,6 +44,7 @@ class SceneGraph
 	RE::NiCamera* m_Camera = nullptr;
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::shared_ptr<BaseMesh>> m_DirectMeshes;
+	eastl::vector<eastl::shared_ptr<BaseMesh>> m_PreviousVisible;
 
 	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
@@ -107,8 +108,10 @@ class SceneGraph
 
 	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
-
+	eastl::vector<BLASCluster*> m_DirtyClusters;
+	
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
+
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
 public:
 	void Initialize();
@@ -135,8 +138,10 @@ public:
 
 	inline auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline auto& GetOrphanClusters() { return m_OrphanClusters; }
-
+	inline auto& GetDirtyClusters() { return m_DirtyClusters; }
+	
 	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
+
 	void BuildClusters(nvrhi::ICommandList* commandList);
 
 	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
@@ -169,8 +174,10 @@ public:
 	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
-
+	void MarkClusterDirty(BLASCluster* cluster);
+	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
+
 private:
 	struct PendingDestroy
 	{

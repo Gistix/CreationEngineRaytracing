@@ -108,6 +108,7 @@ public:
 	uint32_t WriteMeshData(MeshData* out) const;
 
 	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
+	void MarkClusterDirty();
 
 	uint64_t GetVertexDescRaw() const { return *reinterpret_cast<const uint64_t*>(&m_VertexDesc); }
 

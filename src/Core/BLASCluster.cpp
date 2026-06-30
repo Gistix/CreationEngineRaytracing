@@ -15,29 +15,37 @@ BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
 		m_Name = { "Cluster (orphan)" };
 }
 
+void BLASCluster::MarkDirty()
+{
+	m_IsDirty = true;
+}
+	
 void BLASCluster::AddMember(const eastl::shared_ptr<BaseMesh>& mesh)
 {
 	m_Members.push_back(mesh);
 	mesh->SetCluster(this);
-
+	
 	if (mesh->IsUpdatable())
 		m_Updatable = true;
-
+	
 	m_MembershipDirty = true;
 }
+
 
 void BLASCluster::RemoveMember(BaseMesh* mesh)
 {
 	const size_t before = m_Members.size();
-
+	
 	m_Members.erase(
 		eastl::remove_if(m_Members.begin(), m_Members.end(),
 			[mesh](const eastl::weak_ptr<BaseMesh>& member) { return member.lock().get() == mesh; }),
 		m_Members.end());
-
-	if (m_Members.size() != before)
+	
+	if (m_Members.size() != before) {
 		m_MembershipDirty = true;
+	}
 }
+
 
 void BLASCluster::GrowBounds(const RE::NiBound& bound)
 {
@@ -169,12 +177,15 @@ nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
 
 void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph)
 {
+	m_IsDirty = false;
 	auto* renderer = Renderer::GetSingleton();
 	auto* device = renderer->GetDevice();
 	const auto frameIndex = renderer->GetFrameIndex();
 
-	if (frameIndex == m_LastBuild)
+	if (frameIndex == m_LastBuild) {
+		logger::info("BLASCluster::BuildUpdate - {} already built this frame, skipping", m_Name);
 		return;
+	}
 
 	// Pull dirty state from the members; upload any pending GPU data while we're here.
 	bool anyStructure = false;
@@ -182,10 +193,12 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 
 	m_Updatable = false;
 
+	size_t liveMemberCount = 0;
 	for (const auto& member : m_Members) {
 		auto mesh = member.lock();
 		if (!mesh)
 			continue;
+		liveMemberCount++;
 
 		if (mesh->IsUpdatable())
 			m_Updatable = true;
@@ -229,10 +242,10 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		}
 	}
 	else {
+		logger::warn("BLASCluster::BuildUpdate - {} no work needed (live members: {}, firstBuild: {}, membershipDirty: {}, anyStructure: {}, anyUpdate: {})",
+			m_Name, liveMemberCount, firstBuild, m_MembershipDirty, anyStructure, anyUpdate);
 		return;
 	}
-
-	logger::trace("BLASCluster {} - {} - Rebuild: {}, AnyUpdate: {}, AnyStructure: {}, MembershipDirty: {}", fmt::ptr(this), m_Name, rebuild, anyUpdate, anyStructure, m_MembershipDirty);
 
 	// Aggregate geometry from live, visible members. Transforms are already baked into the descs
 	// (SetLocalToOwner during traversal), so no owner/trishape dereference happens here.
@@ -253,6 +266,7 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 			mesh->ClearDirtyFlags();
 
 	if (m_GeometryDescs.empty()) {
+		logger::warn("BLASCluster::BuildUpdate - {} geometry empty after aggregation, setting BLAS to null", m_Name);
 		m_BLAS = nullptr;
 		m_MembershipDirty = false;
 		m_LastBuild = frameIndex;

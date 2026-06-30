@@ -106,5 +106,6 @@ void LandLODMesh::UpdateOcclusion(const float3x4& clusterTransform)
 		sceneGraph->GetLandLODMeshUpdates()[this] = update;
 
 		MarkDirty(DirtyFlags::Vertex);
+		MarkClusterDirty();
 	}
 }

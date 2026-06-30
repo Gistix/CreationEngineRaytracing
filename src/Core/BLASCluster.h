@@ -37,6 +37,9 @@ class BLASCluster
 
 	bool m_MembershipDirty = true; // member added/removed/pruned -> full rebuild
 	bool m_Updatable = false;      // any member is updatable (dynamic)
+	bool m_IsDirty = false;         // pending rebuild/refit (set exclusively by SceneGraph::MarkClusterDirty)
+	
+	friend class SceneGraph;
 
 	uint32_t m_NumUpdatesSinceRebuild = 0;
 	uint64_t m_LastBuild = Constants::INVALID_FRAME_INDEX;
@@ -51,8 +54,9 @@ public:
 	void AddMember(const eastl::shared_ptr<BaseMesh>& mesh);
 
 	void RemoveMember(BaseMesh* mesh);
-
+	void MarkDirty();
 	const auto& GetMembers() const { return m_Members; }
+
 
 	void SetInstanceTransform(const float3x4& transform) {
 		m_InstanceTransform = transform;

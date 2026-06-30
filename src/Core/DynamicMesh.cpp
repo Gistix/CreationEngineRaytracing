@@ -131,6 +131,7 @@ void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)
 
 	// Flag a vertex update so the cluster uploads the initial data before its first BLAS build.
 	MarkDirty(DirtyFlags::Vertex);
+	MarkClusterDirty();
 }
 
 void DynamicMesh::UploadBuffers(nvrhi::ICommandList* commandList)

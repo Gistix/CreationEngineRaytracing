@@ -226,8 +226,8 @@ bool BaseMesh::SetHidden(bool hidden)
 	m_State.set(hidden, State::Hidden);
 
 	if (wasHidden != hidden) {
-		// A visibility change alters which geometry the cluster includes -> rebuild.
 		MarkDirty(DirtyFlags::Visibility);
+		MarkClusterDirty();
 		return true;
 	}
 
@@ -251,12 +251,14 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 
 	m_PrevOwner = m_Owner;
 	m_Owner = owner;
-
+	
 	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
 	MarkDirty(DirtyFlags::Visibility);
+	MarkClusterDirty();
 
 	return true;
 }
+
 
 void BaseMesh::SetLocalToOwner(const float3x4& ownerWorld)
 {
@@ -276,11 +278,19 @@ void BaseMesh::SetLocalToOwner(const float3x4& ownerWorld)
 	for (auto& desc : GetGeometryDescsMutable())
 		desc.setTransform(m_LocalToOwner.f);
 
-	if (changed)
+	if (changed) {
 		MarkDirty(DirtyFlags::Transform);
+		MarkClusterDirty();
+	}
 }
 
 void BaseMesh::CreateMaterial()
 {
 	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+}
+
+void BaseMesh::MarkClusterDirty()
+{
+	if (m_Cluster)
+		Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }

@@ -81,7 +81,8 @@ public:
 		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 
 		if (scene->GetSceneGraph()->GetNumInstancesFrame() != topLevelInstances)
-			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances and TLAS instances.");
+			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances ({}) and TLAS instances ({}).",
+				scene->GetSceneGraph()->GetNumInstancesFrame(), topLevelInstances);
 
 		const auto ringSlot = Renderer::GetSingleton()->GetCurrentSlot();
 
