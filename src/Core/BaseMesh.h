@@ -7,6 +7,7 @@
 #include "Framework/DescriptorTableManager.h"
 #include "Interop/LandLODUpdate.hlsli"
 #include "Mesh.hlsli"
+#include "Util.h"
 
 class SkinnedMesh;
 class DynamicMesh;
@@ -14,6 +15,12 @@ class BLASCluster;
 
 class BaseMesh
 {
+	static constexpr float3x4 kIdentityTransform = {
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f
+		};
+
 public:
 	struct BufferDescriptor {
 		nvrhi::BufferHandle m_Buffer;
