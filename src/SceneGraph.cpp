@@ -38,7 +38,9 @@
 
 	logger::info("Num Threads: {}", numThreads);
 
-	m_WorkerPool = std::make_unique<WorkerPool>(std::min(numThreads, 8u));
+	m_WorkerPool = std::make_unique<WorkerPool>(std::min(numThreads, 8u), [] {
+		return Renderer::GetSingleton()->GetCopyCommandList();
+	});
 
 	// Triangle bindless descriptor table
 	{
@@ -422,10 +424,15 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_WorkerVisible.clear();
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
+	// Open worker command lists for this frame
+	for (auto& cl : m_WorkerPool->m_WorkerCommandLists) {
+		if (cl) cl->open();
+	}
+
 	// --- ownedHandler: one per FadeNode subtree, holds shared_lock for duration ---
-	auto ownedHandler = [this, frameIndex, commandList](RE::NiAVObject* fadeNode, bool ownerHidden, RE::TESObjectREFR* ownerRefr) {
+	auto ownedHandler = [this, frameIndex, commandList](RE::NiAVObject* fadeNode, bool ownerHidden, RE::TESObjectREFR* ownerRefr, nvrhi::ICommandList* workerCl) {
 		Util::Traversal::ScenegraphTriShapes(fadeNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
-			ProcessMesh(bsTriShape, hidden, refr, frameIndex, commandList, m_WorkerVisible, &m_VisibleMutex);
+			ProcessMesh(bsTriShape, hidden, refr, frameIndex, workerCl, m_WorkerVisible, &m_VisibleMutex);
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}, ownerHidden, ownerRefr);
 	};
@@ -439,6 +446,17 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	logger::info("SceneGraph::Update - Parallel traversal done, waiting for {} pending workers...", m_WorkerPool->Pending());
 
 	m_WorkerPool->Wait();
+
+	// Close and submit worker command lists
+	{
+		std::scoped_lock lock(Renderer::GetSingleton()->GetExecutionMutex());
+		for (auto& cl : m_WorkerPool->m_WorkerCommandLists) {
+			if (cl) {
+				cl->close();
+				Renderer::GetSingleton()->GetDevice()->executeCommandList(cl, nvrhi::CommandQueue::Copy);
+			}
+		}
+	}
 
 	logger::info("SceneGraph::Update - Workers completed.");
 
@@ -654,11 +672,8 @@ void SceneGraph::ProcessMesh(RE::BSTriShape* bsTriShape, bool hidden, RE::TESObj
 			}
 		}
 	} else if (!hidden) {
-		{
-			std::scoped_lock cl(m_CommandListMutex);
-			mesh = BaseMesh::Create(bsTriShape, commandList);
-		}
-
+		mesh = BaseMesh::Create(bsTriShape, commandList);
+	
 		if (mesh) {
 			mesh->SetOwner(clusterOwner);
 

@@ -173,8 +173,8 @@ namespace Util
 					refr = owner;
 
 			if (refr) {
-				workerPool.Enqueue([a_object, hidden, refr, &ownedHandler] {
-					ownedHandler(a_object, hidden, refr);
+				workerPool.Enqueue([a_object, hidden, refr, &ownedHandler](nvrhi::ICommandList* cl) {
+					ownedHandler(a_object, hidden, refr, cl);
 				});
 				return;
 			}
