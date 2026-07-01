@@ -430,7 +430,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	}
 
 	// --- ownedHandler: one per FadeNode subtree, holds shared_lock for duration ---
-	auto ownedHandler = [this, frameIndex, commandList](RE::NiAVObject* fadeNode, bool ownerHidden, RE::TESObjectREFR* ownerRefr, nvrhi::ICommandList* workerCl) {
+	auto ownedHandler = [this, frameIndex](RE::NiAVObject* fadeNode, bool ownerHidden, RE::TESObjectREFR* ownerRefr, nvrhi::ICommandList* workerCl) {
 		Util::Traversal::ScenegraphTriShapes(fadeNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
 			ProcessMesh(bsTriShape, hidden, refr, frameIndex, workerCl, m_WorkerVisible, &m_VisibleMutex);
 			return CESEAdapter::RE::BSVisitControl::kContinue;
@@ -613,15 +613,12 @@ void SceneGraph::ProcessMesh(RE::BSTriShape* bsTriShape, bool hidden, RE::TESObj
 	const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
 	const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
 
-	if (!isLightingShader && !isWaterShader)
-		return;
-
 	// Exclude alpha blended effects
 	auto* alphaProperty = geometryData.alphaProperty;
 	const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
 	const bool validEffect = isEffectShader && !isAlphaBlend;
 
-	if (!validEffect)
+	if (!isLightingShader && !validEffect && !isWaterShader)
 		return;
 
 	// Exclude tree lod and grass for now

@@ -115,10 +115,11 @@ namespace Util
 			// Set as parent refr to propagate it downwards
 			auto refr = parentRefr; 
 
-			// Update refr if it actually exists (else keep the parent refr)
-			if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
-				if (auto owner = Util::Adapter::GetOwner(fadeNode))
-					refr = owner;
+			// Always keep the parentRefr if it exists
+			if (!refr) {
+				if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
+					refr = Util::Adapter::GetOwner(fadeNode);
+			}
 
 			auto geom = Util::Adapter::AsTriShape(a_object);
 			if (geom) {
@@ -168,9 +169,11 @@ namespace Util
 
 			auto refr = parentRefr;
 
-			if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
-				if (auto owner = Util::Adapter::GetOwner(fadeNode))
-					refr = owner;
+			// Always keep the parentRefr if it exists
+			if (!refr) {
+				if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
+					refr = Util::Adapter::GetOwner(fadeNode);
+			}
 
 			if (refr) {
 				workerPool.Enqueue([a_object, hidden, refr, &ownedHandler](nvrhi::ICommandList* cl) {
