@@ -370,15 +370,9 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 	return triangles;
 }
 
-void Mesh::BuildMaterial(const GeometryRuntimeData& runtimeData, RE::FormID formID)
+void Mesh::BuildMaterial([[ maybe_unused ]] const GeometryRuntimeData& runtimeData, [[ maybe_unused ]] RE::FormID formID)
 {
-	material = eastl::make_unique<Material>(m_Name, runtimeData, formID);
 
-	// Attempt to clear up fake positives
-	if (material->shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kTwoSided))
-		flags.reset(Mesh::Flags::DoubleSidedGeom);
-
-	geometryDesc.flags = (material->alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
 }
 
 eastl::unique_ptr<Mesh> Mesh::Clone(RE::NiAVObject* rootNode, RE::FormID formID) const
@@ -560,9 +554,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
 	}
 
-	// Material Buffer
-	material->CreateBuffer(m_Name, descriptorIndex);
-
 	// Geometry description
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
@@ -643,7 +634,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 #if defined(SKYRIM)
 	auto* scene = Scene::GetSingleton();
 	const bool isPathTracing = scene->IsPathTracingActive();
-	const bool isForceCulled = isPathTracing || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+	const bool isForceCulled = isPathTracing;
 	
 	bool isVisible = false;
 	if (isForceCulled) {	
@@ -823,8 +814,6 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	}
 #endif
 
-	material->Update(Util::Adapter::GetGeometryRuntimeData(bsGeometryPtr.get()).shaderProperty);
-
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
@@ -867,10 +856,9 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	return updateFlags;
 }
 
-void Mesh::UpdateData(nvrhi::ICommandList* commandList, float3 externalEmittance)
+void Mesh::UpdateData([[ maybe_unused ]] nvrhi::ICommandList* commandList, [[ maybe_unused ]] float3 externalEmittance)
 {
 
-	material->UpdateData(commandList, externalEmittance);
 }
 
 MeshData Mesh::GetData()

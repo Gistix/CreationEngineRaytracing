@@ -65,16 +65,11 @@ void Model::UpdateMeshFlags()
 {
 	meshFlags.reset();
 	m_MeshTypes.reset();
-	m_AlphaFlags.reset();
-	shaderTypes = 0;
 	shaderFlags.reset();
 
 	for (auto& mesh : m_Meshes) {
 		meshFlags.set(mesh->flags.get());
 		m_MeshTypes.set(mesh->m_Type);
-		m_AlphaFlags.set(mesh->material->alphaFlags);
-		shaderTypes.set(mesh->material->shaderType);
-		shaderFlags.set(mesh->material->shaderFlags.get());
 	}
 }
 

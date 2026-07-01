@@ -6,8 +6,6 @@
 #include "Vertex.hlsli"
 #include "Triangle.hlsli"
 
-#include "Material.h"
-
 #include "Framework/DescriptorTableManager.h"
 
 #include "Mesh.hlsli"
@@ -90,8 +88,6 @@ struct Mesh
 	eastl::vector<float3x4> m_BoneMatrices;
 
 	nvrhi::rt::GeometryDesc geometryDesc;
-
-	eastl::unique_ptr<Material> material;
 
 	CESEAdapter::REX::EnumSet<Flags> flags = Flags::None;
 
