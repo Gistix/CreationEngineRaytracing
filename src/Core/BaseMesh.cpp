@@ -4,7 +4,6 @@
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
 #include "Renderer.h"
-#include "Util.h"
 #include "Scene.h"
 #include "SceneGraph.h"
 #include "Types/RE/RE.h"
@@ -209,12 +208,7 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;
 
-	auto localToRoot = float3x4(
-		1.0f, 0.0f, 0.0f, 0.0f,
-		0.0f, 1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f);
-
-	geometryDesc.setTransform(localToRoot.f);
+	geometryDesc.setTransform(kIdentityTransform.f);
 
 	return geometryDesc;
 }
