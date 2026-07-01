@@ -165,7 +165,7 @@ namespace Util
 			if (rtti == Constants::rtti::BSOrderedNode.get())
 				return;
 
-			bool hidden = parentHidden || Util::Adapter::IsNiAVObjectHidden(a_object);
+			const bool hidden = parentHidden || Util::Adapter::IsNiAVObjectHidden(a_object);
 
 			auto refr = parentRefr;
 
@@ -176,7 +176,7 @@ namespace Util
 			}
 
 			if (refr) {
-				workerPool.Enqueue([a_object, hidden, refr, &ownedHandler](nvrhi::ICommandList* cl) {
+				workerPool.Enqueue([a_object, hidden, refr, &ownedHandler](nvrhi::CommandListHandle cl) {
 					ownedHandler(a_object, hidden, refr, cl);
 				});
 				return;

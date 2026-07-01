@@ -36,10 +36,8 @@
 
 	auto numThreads = std::thread::hardware_concurrency();
 
-	logger::info("Num Threads: {}", numThreads);
-
 	m_WorkerPool = std::make_unique<WorkerPool>(std::min(numThreads, 8u), [] {
-		return Renderer::GetSingleton()->GetCopyCommandList();
+		return Renderer::GetSingleton()->GetComputeCommandList();
 	});
 
 	// Triangle bindless descriptor table
@@ -424,13 +422,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_WorkerVisible.clear();
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	// Open worker command lists for this frame
-	for (auto& cl : m_WorkerPool->m_WorkerCommandLists) {
-		if (cl) cl->open();
-	}
-
-	// --- ownedHandler: one per FadeNode subtree, holds shared_lock for duration ---
-	auto ownedHandler = [this, frameIndex](RE::NiAVObject* fadeNode, bool ownerHidden, RE::TESObjectREFR* ownerRefr, nvrhi::ICommandList* workerCl) {
+	auto ownedHandler = [this, frameIndex, commandList](RE::NiAVObject* fadeNode, bool ownerHidden, RE::TESObjectREFR* ownerRefr, nvrhi::CommandListHandle workerCl) {
 		Util::Traversal::ScenegraphTriShapes(fadeNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
 			ProcessMesh(bsTriShape, hidden, refr, frameIndex, workerCl, m_WorkerVisible, &m_VisibleMutex);
 			return CESEAdapter::RE::BSVisitControl::kContinue;
@@ -441,9 +433,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		ProcessMesh(bsTriShape, hidden, nullptr, frameIndex, commandList, currentVisible, nullptr);
 	};
 
-	Util::Traversal::ScenegraphTriShapesParallel(shadowSceneNode, orphanCallback, ownedHandler, *m_WorkerPool);
+	// Open worker command lists for this frame
+	m_WorkerPool->Open();
 
-	logger::info("SceneGraph::Update - Parallel traversal done, waiting for {} pending workers...", m_WorkerPool->Pending());
+	Util::Traversal::ScenegraphTriShapesParallel(shadowSceneNode, orphanCallback, ownedHandler, *m_WorkerPool);
 
 	m_WorkerPool->Wait();
 
@@ -451,14 +444,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	{
 		std::scoped_lock lock(Renderer::GetSingleton()->GetExecutionMutex());
 		for (auto& cl : m_WorkerPool->m_WorkerCommandLists) {
-			if (cl) {
-				cl->close();
-				Renderer::GetSingleton()->GetDevice()->executeCommandList(cl, nvrhi::CommandQueue::Copy);
-			}
+			cl->close();
+			Renderer::GetSingleton()->GetDevice()->executeCommandList(cl, nvrhi::CommandQueue::Compute);
 		}
 	}
-
-	logger::info("SceneGraph::Update - Workers completed.");
 
 	for (auto& mesh : m_WorkerVisible) 
 		currentVisible.push_back(mesh);

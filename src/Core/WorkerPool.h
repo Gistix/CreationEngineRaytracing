@@ -8,24 +8,23 @@
 #include <functional>
 #include <atomic>
 
-// Forward declare nvrhi types to avoid heavy includes in the header
-namespace nvrhi { class ICommandList; }
-using CommandListHandle = nvrhi::ICommandList*;
+#include "nvrhi/nvrhi.h"
 
 class WorkerPool
 {
 	std::vector<std::thread> m_Threads;
-	std::queue<std::function<void(CommandListHandle)>> m_Tasks;
+	std::queue<std::function<void(nvrhi::CommandListHandle)>> m_Tasks;
 	std::mutex m_Mutex;
 	std::condition_variable m_Cv;
 	std::atomic<size_t> m_Pending{ 0 };
 	bool m_Stop = false;
-	std::function<CommandListHandle()> m_ClProvider;
+	std::function<nvrhi::CommandListHandle()> m_ClProvider;
+	size_t m_NumThreads;
 
 	void WorkerLoop(size_t threadIdx)
 	{
 		while (true) {
-			std::function<void(CommandListHandle)> task;
+			std::function<void(nvrhi::CommandListHandle)> task;
 			{
 				std::unique_lock lock(m_Mutex);
 				m_Cv.wait(lock, [this] { return m_Stop || !m_Tasks.empty(); });
@@ -35,10 +34,7 @@ class WorkerPool
 				m_Tasks.pop();
 			}
 
-			CommandListHandle cl = m_WorkerCommandLists[threadIdx];
-			if (cl) {
-				task(cl);
-			}
+			task(m_WorkerCommandLists[threadIdx]);
 
 			{
 				std::scoped_lock lock(m_Mutex);
@@ -49,14 +45,16 @@ class WorkerPool
 	}
 
 public:
-	std::vector<CommandListHandle> m_WorkerCommandLists;
+	std::vector<nvrhi::CommandListHandle> m_WorkerCommandLists;
 
-	explicit WorkerPool(size_t numThreads, std::function<CommandListHandle()> clProvider)
-		: m_ClProvider(std::move(clProvider))
+	explicit WorkerPool(size_t numThreads, std::function<nvrhi::CommandListHandle()> clProvider)
+		: m_NumThreads(numThreads), m_ClProvider(std::move(clProvider))
 	{
-		m_WorkerCommandLists.resize(numThreads);
-		for (size_t i = 0; i < numThreads; i++)
+		m_WorkerCommandLists.resize(m_NumThreads);
+
+		for (size_t i = 0; i < m_NumThreads; i++) {
 			m_Threads.emplace_back([this, i] { WorkerLoop(i); });
+		}
 	}
 
 	~WorkerPool()
@@ -71,7 +69,16 @@ public:
 				t.join();
 	}
 
-	void Enqueue(std::function<void(CommandListHandle)> task)
+	void Open()
+	{
+		for (size_t i = 0; i < m_NumThreads; i++) {
+			auto& commandList = m_WorkerCommandLists[i];
+			commandList = m_ClProvider();
+			commandList->open();
+		}
+	}
+
+	void Enqueue(std::function<void(nvrhi::CommandListHandle)> task)
 	{
 		m_Pending++;
 		{
@@ -88,5 +95,6 @@ public:
 		std::unique_lock lock(m_Mutex);
 		m_Cv.wait(lock, [this] { return m_Pending == 0; });
 	}
+
 	size_t Pending() const { return m_Pending; }
 };
