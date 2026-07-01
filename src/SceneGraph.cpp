@@ -602,32 +602,48 @@ void SceneGraph::ProcessMesh(RE::BSTriShape* bsTriShape, bool hidden, RE::TESObj
 		return;
 
 	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
+
 	auto* shaderProperty = geometryData.shaderProperty;
-	if (!shaderProperty) return;
+	if (!shaderProperty) 
+		return;
 
 	const auto materialType = shaderProperty->GetMaterialType();
+
 	const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
 	const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
 	const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
-	const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-	const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
-	const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
+
+	if (!isLightingShader && !isWaterShader)
+		return;
+
+	// Exclude alpha blended effects
 	auto* alphaProperty = geometryData.alphaProperty;
 	const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
 	const bool validEffect = isEffectShader && !isAlphaBlend;
-	if (!isLightingShader && !validEffect && !isWaterShader && !isTreeLODShader && !isGrassShader)
+
+	if (!validEffect)
+		return;
+
+	// Exclude tree lod and grass for now
+	const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+	const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
+	const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
+
+	if (isTreeLODShader || isGrassShader)
 		return;
 
 	const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
 	if (!skinned) {
 		const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
 		if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0) {
+			logger::warn("BSTriShape \"{}\" has either vertex ({}) or triangle ({}) count of 0, skipping.", bsTriShape->name, trishapeData.vertexCount, trishapeData.triangleCount);
 			return;
 		}
 	}
 
 	const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
 	if (!rendererData) {
+		logger::warn("BSTriShape \"{}\" has no renderer data, skipping.", bsTriShape->name);
 		return;
 	}
 
