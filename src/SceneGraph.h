@@ -43,7 +43,7 @@ class SceneGraph
 	RE::NiCamera* m_Camera = nullptr;
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::shared_ptr<BaseMesh>> m_DirectMeshes;
-	mutable std::mutex m_DirectMeshesMutex;
+	mutable std::shared_mutex m_DirectMeshesMutex;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	mutable std::mutex m_MeshDestroyMutex;

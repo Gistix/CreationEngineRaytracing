@@ -635,7 +635,7 @@ void SceneGraph::ProcessMesh(RE::BSTriShape* bsTriShape, bool hidden, RE::TESObj
 
 	eastl::shared_ptr<BaseMesh> mesh;
 	{
-		std::scoped_lock lock(m_DirectMeshesMutex);
+		std::shared_lock lock(m_DirectMeshesMutex);
 		auto it = m_DirectMeshes.find(bsTriShape);
 		if (it != m_DirectMeshes.end())
 			mesh = it->second;
@@ -680,7 +680,7 @@ void SceneGraph::ProcessMesh(RE::BSTriShape* bsTriShape, bool hidden, RE::TESObj
 			mesh->SetOwner(clusterOwner);
 
 			{
-				std::scoped_lock lock(m_DirectMeshesMutex);
+				std::unique_lock lock(m_DirectMeshesMutex);
 				m_DirectMeshes.emplace(bsTriShape, mesh);
 			}
 
