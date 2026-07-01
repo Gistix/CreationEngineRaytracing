@@ -252,9 +252,7 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 	m_PrevOwner = m_Owner;
 	m_Owner = owner;
 	
-	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
 	MarkDirty(DirtyFlags::Visibility);
-	MarkClusterDirty();
 
 	return true;
 }

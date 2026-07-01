@@ -30,7 +30,6 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	//const auto* rendererData = bsTriShape->GetGeometryRuntimeData().rendererData;
 
 	m_LiveVertexBuffer = device->createBuffer(liveBufDesc);
-	//commandList->writeBuffer(m_LiveVertexBuffer, Util::Adapter::GetVertexData(const_cast<RE::BSGraphics::TriShape*>(rendererData)), byteSize);
 
 	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, 0, byteSize);
 

@@ -29,6 +29,8 @@ class BLASCluster
 
 	eastl::string m_Name;
 
+	std::mutex m_Mutex;
+
 	float3x4 m_InstanceTransform; // owner-world, cached during traversal; used for the TLAS instance
 	mutable float3x4 m_PrevInstanceTransform; // previous-frame instance transform for motion vectors
 	mutable bool m_HasPrevInstanceTransform = false;

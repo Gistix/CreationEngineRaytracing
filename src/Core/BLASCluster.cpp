@@ -22,6 +22,7 @@ void BLASCluster::MarkDirty()
 	
 void BLASCluster::AddMember(const eastl::shared_ptr<BaseMesh>& mesh)
 {
+	std::scoped_lock lock(m_Mutex);
 	m_Members.push_back(mesh);
 	mesh->SetCluster(this);
 	
@@ -34,6 +35,7 @@ void BLASCluster::AddMember(const eastl::shared_ptr<BaseMesh>& mesh)
 
 void BLASCluster::RemoveMember(BaseMesh* mesh)
 {
+	std::scoped_lock lock(m_Mutex);
 	const size_t before = m_Members.size();
 	
 	m_Members.erase(

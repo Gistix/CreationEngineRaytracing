@@ -37,6 +37,7 @@
 
 #include "Pipeline/MSNConverter.h"
 
+class WorkerPool;
 class LandLODMesh;
 
 class SceneGraph
@@ -44,14 +45,25 @@ class SceneGraph
 	RE::NiCamera* m_Camera = nullptr;
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::shared_ptr<BaseMesh>> m_DirectMeshes;
+	mutable std::mutex m_DirectMeshesMutex;
+
+	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
+	mutable std::mutex m_MeshDestroyMutex;
+
 	eastl::vector<eastl::shared_ptr<BaseMesh>> m_PreviousVisible;
 
 	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
 
-	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
-	mutable std::mutex m_MeshDestroyMutex;
+	eastl::vector<uint64_t> m_SubmittedInstances;
+
+	std::mutex m_DirtyClustersMutex;
+	std::mutex m_ClusterMapsMutex;
+
+	std::mutex m_CommandListMutex;
+
+	std::unique_ptr<WorkerPool> m_WorkerPool;
 
 	// Material manager
 	eastl::unique_ptr<MaterialManager> m_MaterialManager;
@@ -164,6 +176,14 @@ public:
 
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
+
+	void ProcessMesh(RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* clusterOwner,
+		uint64_t frameIndex, nvrhi::ICommandList* commandList,
+		eastl::vector<eastl::shared_ptr<BaseMesh>>& visibleList, std::mutex* visibleMutex);
+
+	// Worker-local visible list, merged into currentVisible after parallel traversal completes.
+	eastl::vector<eastl::shared_ptr<BaseMesh>> m_WorkerVisible;
+	std::mutex m_VisibleMutex;
 
 	// Update Camera reference
 	void UpdateCamera();

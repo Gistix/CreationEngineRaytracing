@@ -2,6 +2,10 @@
 
 #include "Constants.h"
 
+#include "Core/WorkerPool.h"
+
+#include <functional>
+
 namespace Util
 {
 	namespace Traversal
@@ -135,6 +139,61 @@ namespace Util
 			}
 
 			return result;
+		}
+
+		// Parallel variant. When a BSFadeNode introduces a non-null owner, the FadeNode
+		// subtree is dispatched as a unit to one worker via ownedHandler. Orphans are
+		// processed inline via orphanFunc on the calling thread.
+		template <typename OrphanFunc, typename OwnedHandler>
+		static void ScenegraphTriShapesParallel(
+			RE::NiAVObject* a_object,
+			OrphanFunc&& orphanFunc,
+			OwnedHandler& ownedHandler,
+			WorkerPool& workerPool,
+			bool parentHidden = false,
+			RE::TESObjectREFR* parentRefr = nullptr)
+		{
+			if (!a_object)
+				return;
+
+			auto rtti = a_object->GetRTTI();
+
+			if (rtti == Constants::rtti::NiBillboardNode.get())
+				return;
+
+			if (rtti == Constants::rtti::BSOrderedNode.get())
+				return;
+
+			bool hidden = parentHidden || Util::Adapter::IsNiAVObjectHidden(a_object);
+
+			auto refr = parentRefr;
+
+			if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
+				if (auto owner = Util::Adapter::GetOwner(fadeNode))
+					refr = owner;
+
+			if (refr) {
+				workerPool.Enqueue([a_object, hidden, refr, &ownedHandler] {
+					ownedHandler(a_object, hidden, refr);
+				});
+				return;
+			}
+
+			auto geom = Util::Adapter::AsTriShape(a_object);
+			if (geom) {
+				orphanFunc(geom, hidden, refr);
+				return;
+			}
+
+			auto node = Util::Adapter::AsNode(a_object);
+			if (node) {
+				for (auto& child : Util::Adapter::GetChildren(node)) {
+					if (!child)
+						continue;
+
+					ScenegraphTriShapesParallel(child.get(), orphanFunc, ownedHandler, workerPool, hidden, refr);
+				}
+			}
 		}
 	}
 }
