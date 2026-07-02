@@ -128,6 +128,34 @@ namespace Util
 			return ((vertexDescUInt & 0xF) << 2);
 		}
 
+		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance)
+		{
+#if defined(SKYRIM)
+			if (!skinInstance)
+				return false;
+
+			return skinInstance->GetRTTI() == Constants::rtti::BSDismemberSkinInstance.get();
+#else
+			(void)skinInstance;
+			return false;
+#endif
+		}
+
+		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<uint8_t>& outVisibility)
+		{
+			outVisibility.clear();
+
+#if defined(SKYRIM)
+			auto& runtime = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance)->GetRuntimeData();
+			outVisibility.resize(runtime.numPartitions);
+
+			for (int32_t i = 0; i < runtime.numPartitions; ++i)
+				outVisibility[i] = runtime.partitions[i].editorVisible ? 1u : 0u;
+#else
+			(void)skinInstance;
+#endif
+		}
+
 		bool HasDoubleSidedGeom(Mesh* mesh)
 		{
 			static constexpr float kQuantize = 1e2f;

@@ -1,4 +1,5 @@
 #include "Core/BaseMesh.h"
+#include "Core/DismemberMesh.h"
 #include "Core/DirectMesh.h"
 #include "Core/LandLODMesh.h"
 #include "Core/SkinnedMesh.h"
@@ -24,8 +25,13 @@ eastl::shared_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
 		return eastl::make_shared<DynamicMesh>(bsDynamicTriShape, commandList);
 
-	if (geometryData.skinInstance.get())
-		return eastl::make_shared<SkinnedMesh>(bsTriShape, commandList);
+	auto* skinInstance = geometryData.skinInstance.get();
+	if (skinInstance) {
+		if (Util::Geometry::IsDismemberSkinInstance(skinInstance))
+			return eastl::make_shared<DismemberMesh>(bsTriShape, commandList);
+		else
+			return eastl::make_shared<SkinnedMesh>(bsTriShape, commandList);
+	}
 
 	logger::warn("BaseMesh::Create - No renderer data or skin instance for {}", MakeDebugName(bsTriShape));
 	return nullptr;

@@ -10,6 +10,7 @@
 #include "Util.h"
 
 class SkinnedMesh;
+class DismemberMesh;
 class DynamicMesh;
 class BLASCluster;
 
@@ -53,7 +54,7 @@ public:
 
 	virtual ~BaseMesh() = default;
 
-	// Constructs the appropriate mesh type (DirectMesh, SkinnedMesh or DynamicMesh) for the given geometry.
+	// Constructs the appropriate mesh type (DirectMesh, SkinnedMesh, DismemberMesh or DynamicMesh) for the given geometry.
 	static eastl::shared_ptr<BaseMesh> Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
 	// Returns true if the hidden state changed (which flags the mesh structurally dirty).
@@ -64,6 +65,8 @@ public:
 	void OnDestroy();
 
 	virtual SkinnedMesh* AsSkinnedMesh() { return nullptr; }
+
+	virtual DismemberMesh* AsDismemberMesh() { return nullptr; }
 
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
 
