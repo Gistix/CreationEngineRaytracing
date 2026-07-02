@@ -422,7 +422,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
+	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
 
 		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
 			return CESEAdapter::RE::BSVisitControl::kContinue;
@@ -495,14 +495,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				MarkClusterDirty(cluster);
 			}
 
-			mesh->SetHidden(hidden);
+			mesh->SetHidden(false);
 
-			if (!hidden) {
-				mesh->Update();
-				m_CurrentVisible.push_back(mesh.get());
-			}
+			mesh->Update();
+			m_CurrentVisible.push_back(mesh.get());
 		}
-		else if (!hidden) {
+		else {
 			if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 				created->SetOwner(clusterOwner);
 	
@@ -521,6 +519,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				}
 			}
 		}
+
+
 
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
