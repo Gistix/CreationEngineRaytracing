@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Constants.h"
+#include "Types/RingBuffer.h"
 
 #include "Utils/Adapter.h"
 #include "Utils/Culling.h"
@@ -63,6 +64,26 @@ namespace Util
 		return device->createBuffer(bufferDesc);
 	};
 
+	template <typename T>
+	auto CreateStructuredRingBuffer(nvrhi::IDevice* device, uint32_t maxCapacity, const char* name, bool uav = false) {
+		auto size = static_cast<uint32_t>(sizeof(T));
+
+		auto bufferDesc = nvrhi::BufferDesc()
+			.setByteSize(size * maxCapacity)
+			.setStructStride(size)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
+
+		if (uav)
+			bufferDesc.setCanHaveUAVs(true);
+
+		return RingBuffer(device, bufferDesc, name);
+	};
+
 	std::string Format(float3x4 matrix);
 	std::string Format(float4x4 matrix);
+
+	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer);
+
+	void CreateSharedBuffer(RE::ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer);
+
 }

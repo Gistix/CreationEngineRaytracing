@@ -8,7 +8,7 @@ namespace Pass
 	LandLODOccluder::LandLODOccluder(Renderer* renderer)
 		: RenderPass(renderer)
 	{
-		m_Buffer = Util::CreateStructuredBuffer<LandLODUpdate>(renderer->GetDevice(), MAX_MESHES, "Land LOD Update Buffer");
+		m_Buffer = Util::CreateStructuredRingBuffer<LandLODUpdate>(renderer->GetDevice(), MAX_MESHES, "Land LOD Update Buffer");
 
 		CreateBindingLayout();
 		CreatePipeline();
@@ -50,70 +50,42 @@ namespace Pass
 
 	bool LandLODOccluder::PrepareResources(nvrhi::ICommandList* commandList, uint32_t& numMeshes, uint32_t& numVertices)
 	{
-		uint32_t meshIndex = 0;
+		auto& updates = Scene::GetSingleton()->GetSceneGraph()->GetLandLODMeshUpdates();
+		for (auto& [mesh, update] : updates) {
+			m_VertexUpdateData[numMeshes++] = update;
 
-		const auto& terrainLODInstances = Scene::GetSingleton()->GetSceneGraph()->GetTerrainLodInstances();
-		for (auto& [block, blockRefr] : terrainLODInstances) {
-#if defined(SKYRIM)
-			if (block->node->GetLODLevel() != 4)
-				continue;
-#elif defined(FALLOUT4)
-			// BGSTerrainNode is only forward-declared in FO4, skip LOD level check
-#endif
+			numVertices = std::max(numVertices, update.VertexCount);
 
-			// Only process terrain that is intersecting (or that intersected the last frame) against loaded range
-			if (!blockRefr->intersecting && !blockRefr->prevIntersecting)
-				continue;
-
-			for (auto& instance : blockRefr->GetInstances())
-			{
-				auto firstMeshIndex = meshIndex;
-
-				for (auto& mesh : instance->model->m_Meshes) {
-					if (meshIndex > MAX_MESHES - 1) {
-						logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
-						break;
-					}
-
-					numVertices = std::max(numVertices, mesh->vertexData.count);
-
-					m_VertexUpdateData[meshIndex++] = LandLODUpdate(
-						mesh->m_DescriptorHandle.Get(),
-						mesh->vertexData.count,
-						mesh->m_LocalToRoot,
-						instance->m_Transform);
-				}
-
-				// Marks Vertex as dirty, triggering a BLAS update on SceneTLAS pass
-				if (meshIndex > firstMeshIndex)
-					instance->model->TerrainLODUpdated();
+			if (numMeshes >= MAX_MESHES) {
+				logger::critical("LandLODOccluder::PrepareResources - Exceeded maximum geometry update limit of {}", MAX_MESHES);
+				break;
 			}
 		}
+		updates.clear();
 
-		if (meshIndex == 0)
+		if (numMeshes == 0)
 			return false;
 
-		commandList->writeBuffer(m_Buffer, m_VertexUpdateData.data(), sizeof(LandLODUpdate) * meshIndex);
-
-		numMeshes = meshIndex;
+		commandList->writeBuffer(m_Buffer.current(), m_VertexUpdateData.data(), sizeof(LandLODUpdate) * numMeshes);
 
 		return true;
 	}
 
 	void LandLODOccluder::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::PushConstants(0, sizeof(float4)),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_Buffer)
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_Buffer[currentSlot])
 		};
 
-		m_BindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void LandLODOccluder::Execute(nvrhi::ICommandList* commandList)
@@ -126,11 +98,13 @@ namespace Pass
 		if (!PrepareResources(commandList, numMeshes, vertexCount))
 			return;
 
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
 		auto* scene = Scene::GetSingleton();
 		auto* sceneGraph = scene->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
-			m_BindingSet,
+			m_BindingSets[currentSlot],
 			sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
 			sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable
 		};
