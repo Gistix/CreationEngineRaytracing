@@ -537,7 +537,7 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 		}
 
 		if (m_FrameTimerQueries[slot] && device->pollTimerQuery(m_FrameTimerQueries[slot]))
-			m_PassTimings.push_back(PassTiming{ "Execute", device->getTimerQueryTime(m_FrameTimerQueries[slot]) * 1000.0f, m_FrameCpuTimes[slot] });
+			m_PassTimings.push_back(PassTiming{ "Total", device->getTimerQueryTime(m_FrameTimerQueries[slot]) * 1000.0f, m_FrameCpuTimes[slot] });
 	}
 
 	m_LastCompletedSlot = slot;
