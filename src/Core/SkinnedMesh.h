@@ -16,7 +16,7 @@ public:
 
 	// Copies raw boneWorld transforms from the game skin instance (no matrix math — that moves to GPU).
 	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
-	bool Update(BLASCluster* cluster) override;
+	bool Update() override;
 
 	uint32_t GetBoneCount() const { return static_cast<uint32_t>(m_BoneWorlds.size()); }
 

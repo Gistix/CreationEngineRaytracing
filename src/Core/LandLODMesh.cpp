@@ -51,9 +51,9 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 		nvrhi::BindingSetItem::RawBuffer_UAV(slotIndex, m_LiveVertexBuffer));
 }
 
-bool LandLODMesh::Update(BLASCluster* cluster)
+bool LandLODMesh::Update()
 {
-	bool changed = DirectMesh::Update(cluster);
+	bool changed = DirectMesh::Update();
 
 	if (!m_BSTriShape)
 		return changed;
@@ -84,7 +84,7 @@ bool LandLODMesh::Update(BLASCluster* cluster)
 	m_Intersecting = Util::Math::Intersects(loadedPosition, loadedSize, m_AABBCenter, m_AABBSize);
 
 	if (m_Intersecting || m_PrevIntersecting)	
-		UpdateOcclusion(cluster->GetInstanceTransform());
+		UpdateOcclusion(GetCluster()->GetInstanceTransform());
 
 	return changed;
 }

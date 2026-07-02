@@ -42,7 +42,8 @@ class SceneGraph
 	RE::NiCamera* m_Camera = nullptr;
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::shared_ptr<BaseMesh>> m_DirectMeshes;
-	eastl::vector<eastl::shared_ptr<BaseMesh>> m_PreviousVisible;
+	eastl::vector<BaseMesh*> m_CurrentVisible;
+	eastl::vector<BaseMesh*> m_PreviousVisible;
 
 	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;

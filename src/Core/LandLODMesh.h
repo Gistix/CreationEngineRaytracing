@@ -15,6 +15,6 @@ public:
 
 	bool IsUpdatable() const override { return true; }
 
-	bool Update(BLASCluster* cluster) override;
+	bool Update() override;
 	void UpdateOcclusion(const float3x4& clusterTransform);
 };

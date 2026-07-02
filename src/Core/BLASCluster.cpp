@@ -34,8 +34,10 @@ void BLASCluster::AddMember(const eastl::shared_ptr<BaseMesh>& mesh)
 
 void BLASCluster::RemoveMember(BaseMesh* mesh)
 {
+	mesh->SetCluster(nullptr);
+
 	const size_t before = m_Members.size();
-	
+
 	m_Members.erase(
 		eastl::remove_if(m_Members.begin(), m_Members.end(),
 			[mesh](const eastl::weak_ptr<BaseMesh>& member) { return member.lock().get() == mesh; }),

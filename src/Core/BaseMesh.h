@@ -73,7 +73,7 @@ public:
 	// CPU-side per-frame update: detect whether the mesh's geometry data changed (lazy),
 	// sync cluster transforms, and populate any traversal-time data.
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
-	virtual bool Update(BLASCluster* cluster);
+	virtual bool Update();
 
 	// GPU-side per-frame upload of any pending data (flag-gated); runs in the TLAS pass. No-op otherwise.
 	virtual void UploadBuffers([[maybe_unused]] nvrhi::ICommandList* commandList) {}
@@ -137,7 +137,7 @@ protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
 
-	void SyncClusterTransform(BLASCluster* cluster);
+	void SyncClusterTransform();
 
 	static bool ValidateCounts(uint16_t numTriangles, uint32_t numVertices);
 

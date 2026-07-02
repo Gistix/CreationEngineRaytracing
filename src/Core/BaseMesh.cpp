@@ -162,7 +162,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	return vertexBuffer;
 }
 
-bool BaseMesh::Update(BLASCluster* cluster)
+bool BaseMesh::Update()
 { 
 	if (!m_BSTriShape)
 		return false;
@@ -171,12 +171,12 @@ bool BaseMesh::Update(BLASCluster* cluster)
 
 	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
 
-	SyncClusterTransform(cluster);
+	SyncClusterTransform();
 
 	return false;
 }
 
-void BaseMesh::SyncClusterTransform(BLASCluster* cluster)
+void BaseMesh::SyncClusterTransform()
 {
 	float3x4 ownerWorld;
 	if (m_Owner) {
@@ -187,8 +187,8 @@ void BaseMesh::SyncClusterTransform(BLASCluster* cluster)
 	}
 
 	SetLocalToOwner(ownerWorld);
-	cluster->SetInstanceTransform(ownerWorld);
-	cluster->GrowBounds(m_BSTriShape->worldBound);
+	m_Cluster->SetInstanceTransform(ownerWorld);
+	m_Cluster->GrowBounds(m_BSTriShape->worldBound);
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)

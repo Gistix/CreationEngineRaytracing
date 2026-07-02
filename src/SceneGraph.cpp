@@ -19,11 +19,13 @@
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
 
-	nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
-	nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
-	nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
+#include <chrono>
 
-	void SceneGraph::Initialize()
+nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
+nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
+nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
+
+void SceneGraph::Initialize()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
@@ -414,9 +416,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
-	eastl::vector<eastl::shared_ptr<BaseMesh>> currentVisible;
-	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 	
+	m_CurrentVisible.clear();
+	m_CurrentVisible.reserve(m_DirectMeshes.size());
+
+	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+
 	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, bool hidden, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
 
 		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
@@ -462,64 +467,60 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 		}
 
-		{
-			// When clustering is skipped, force a null owner so every mesh lands in its own orphan cluster.
-			RE::TESObjectREFR* const clusterOwner = skipClustering ? nullptr : ownerRefr;
+		// When clustering is skipped, force a null owner so every mesh lands in its own orphan cluster.
+		RE::TESObjectREFR* const clusterOwner = skipClustering ? nullptr : ownerRefr;
 
-			eastl::shared_ptr<BaseMesh> mesh;
-
-			auto it = m_DirectMeshes.find(bsTriShape);
-			if (it != m_DirectMeshes.end())
-				mesh = it->second;
+		auto it = m_DirectMeshes.find(bsTriShape);
+		if (it != m_DirectMeshes.end()) {
+			auto& mesh = it->second;
 
 			// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
-			if (mesh) {
-				mesh->SetLastVisitedFrame(frameIndex);
+			mesh->SetLastVisitedFrame(frameIndex);
 
-				// SetOwner returns true if the owner changed; re-bucket into the new cluster (key compare only).
-				if (mesh->SetOwner(clusterOwner)) {
-					if (auto* oldCluster = mesh->GetCluster()) {
-						oldCluster->RemoveMember(mesh.get());
-						MarkClusterDirty(oldCluster);
-					}
-					auto* newCluster = GetOrCreateCluster(clusterOwner, bsTriShape);
-					newCluster->AddMember(mesh);
-					MarkClusterDirty(newCluster);
+			// SetOwner returns true if the owner changed
+			const bool ownerChanged = mesh->SetOwner(clusterOwner);
+
+			// Get current cluster
+			auto cluster = mesh->GetCluster();
+
+			if (ownerChanged || !cluster) {
+				// Remove from old cluster if it existed
+				if (cluster) {
+					cluster->RemoveMember(mesh.get());
+					MarkClusterDirty(cluster);
 				}
 
-				mesh->SetHidden(hidden);
-
-				if (!hidden) {
-					auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
-					if (!mesh->GetCluster()) {
-						cluster->AddMember(mesh);
-						MarkClusterDirty(cluster);
-					}
-					mesh->Update(cluster);
-					currentVisible.push_back(mesh);
-				}
+				cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
+				cluster->AddMember(mesh);
+				MarkClusterDirty(cluster);
 			}
-			else if (!hidden) {
-				if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
-					created->SetOwner(clusterOwner);
-	
-					auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, created);
-					if (inserted) {
-						mesh = it2->second;
-	
-						auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
-						cluster->AddMember(mesh);
-						MarkClusterDirty(cluster);
 
-						mesh->SetLastVisitedFrame(frameIndex);
+			mesh->SetHidden(hidden);
+
+			if (!hidden) {
+				mesh->Update();
+				m_CurrentVisible.push_back(mesh.get());
+			}
+		}
+		else if (!hidden) {
+			if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
+				created->SetOwner(clusterOwner);
 	
-						mesh->Update(cluster);
-						currentVisible.push_back(mesh);
-					}
+				auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, created);
+				if (inserted) {
+					auto& mesh = it2->second;
+	
+					auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
+					cluster->AddMember(mesh);
+					MarkClusterDirty(cluster);
+
+					mesh->SetLastVisitedFrame(frameIndex);
+	
+					mesh->Update();
+					m_CurrentVisible.push_back(mesh.get());
 				}
 			}
 		}
-
 
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
@@ -530,17 +531,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			if (mesh->GetLastVisitedFrame() != frameIndex) {
 				mesh->SetHidden(true);
 				if (auto* cluster = mesh->GetCluster()) {
-					cluster->RemoveMember(mesh.get());
+					cluster->RemoveMember(mesh);
 					MarkClusterDirty(cluster);
 					mesh->SetCluster(nullptr);
 				}
 			}
 		}
-		m_PreviousVisible = eastl::move(currentVisible);
+		m_PreviousVisible = eastl::move(m_CurrentVisible);
 	}
-	
-	// Upload pending material data to material buffer
 
+	// Upload pending material data to material buffer
 	m_MaterialManager->Flush(commandList);
 
 	// Drop clusters whose meshes were all destroyed this frame.
