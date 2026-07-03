@@ -8,8 +8,7 @@ INTEROP_STRUCT(LandLODUpdate, 4)
 	uint Index;
     uint VertexCount;
     uint VertexStride;
-    INTEROP_ROW_MAJOR(float3x4) MeshTransform;
-    INTEROP_ROW_MAJOR(float3x4) InstanceTransform;
+    INTEROP_ROW_MAJOR(float3x4) Transform;
 };
 VALIDATE_ALIGNMENT(LandLODUpdate, 4);
 

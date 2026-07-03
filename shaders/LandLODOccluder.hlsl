@@ -43,9 +43,8 @@ void Main(uint2 DTid : SV_DispatchThreadID)
         asfloat(Vertices[shapeIndex].Load(addr + 4)),
         asfloat(Vertices[shapeIndex].Load(addr + 8)));
     
-    float3 positionRS = mul(updateData.MeshTransform, float4(positionMS, 1.0));
-    float3 positionWS = mul(updateData.InstanceTransform, float4(positionRS, 1.0));
-    
+    float3 positionWS = mul(updateData.Transform, float4(positionMS, 1.0));
+
     positionMS = AdjustLodLandscapeVertexPositionMS(positionMS, positionWS, PC.HighDetailRange);
     
     OutputVertices[shapeIndex].Store(addr, asuint(positionMS.x));

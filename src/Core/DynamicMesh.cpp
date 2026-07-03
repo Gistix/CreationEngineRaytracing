@@ -89,14 +89,6 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	m_OriginalDynamicBuffer = device->createBuffer(originalBufferDesc);
 
-	// Seed the original buffer with the initial morph positions and copy them into the live buffer
-	// so the first BLAS build has valid data before the skinning pass runs.
-	commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
-	commandList->copyBuffer(m_DynamicBuffer, 0, m_OriginalDynamicBuffer, 0, runtimeData.dataSize);
-	// Seed the previous-position region (second half) so the first frame has zero motion.
-	commandList->copyBuffer(m_DynamicBuffer, runtimeData.dataSize, m_OriginalDynamicBuffer, 0, runtimeData.dataSize);
-	m_NeedsUpload = false;
-
 	// Register at a shared dynamic slot: original -> SRV (input), live -> UAV (output).
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
@@ -128,19 +120,19 @@ void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)
 	std::memcpy(m_DynamicData.data(), dynamicData, dataSize);
 
 	m_NeedsUpload = true;
-
-	// Flag a vertex update so the cluster uploads the initial data before its first BLAS build.
-	MarkDirty(DirtyFlags::Vertex);
-	MarkClusterDirty();
 }
 
-void DynamicMesh::UploadBuffers(nvrhi::ICommandList* commandList)
+void DynamicMesh::Update(nvrhi::ICommandList* commandList)
 {
-	if (!m_NeedsUpload || !m_OriginalDynamicBuffer)
+	SkinnedMesh::Update(commandList);
+
+	if (!m_NeedsUpload)
 		return;
 
 	// Upload the latest morph positions to the skinning input; the skinning pass produces the live buffer.
 	commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
+
+	MarkDirty(DirtyFlags::Vertex);
 
 	m_NeedsUpload = false;
 }

@@ -10,27 +10,27 @@
 #include "Types/RE/RE.h"
 #include "interop/Triangle.hlsli"
 
-eastl::shared_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
+eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 
 	if (geometryData.rendererData) {
 		if (auto* extra = bsTriShape->GetExtraData<RE::NiIntegersExtraData>(Constants::ExtraData::LandLOD)) {
 			if (extra->size > 0 && extra->value[0] == 4)
-				return eastl::make_shared<LandLODMesh>(bsTriShape, commandList);
+				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
 		}
-		return eastl::make_shared<DirectMesh>(bsTriShape, commandList);
+		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
 	}
 
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
-		return eastl::make_shared<DynamicMesh>(bsDynamicTriShape, commandList);
+		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
 
 	auto* skinInstance = geometryData.skinInstance.get();
-	if (skinInstance) {
-		if (Util::Geometry::IsDismemberSkinInstance(skinInstance))
-			return eastl::make_shared<DismemberMesh>(bsTriShape, commandList);
-		else
-			return eastl::make_shared<SkinnedMesh>(bsTriShape, commandList);
+	if (skinInstance) {	
+		if (auto dismemberSkin = netimmerse_cast<RE::BSDismemberSkinInstance*>(skinInstance))
+			return eastl::make_unique<DismemberMesh>(bsTriShape, commandList);
+		else 
+			return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
 	}
 
 	logger::warn("BaseMesh::Create - No renderer data or skin instance for {}", MakeDebugName(bsTriShape));
@@ -45,14 +45,27 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 	return { bsTriShape->name.c_str() };
 }
 
+void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
+{
+	XMStoreFloat3x4(&m_LocalTransform,
+		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
+
+	XMStoreFloat3x4(&m_PrevLocalTransform,
+		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
+
+	for (auto& desc: m_GeometryDescs)
+	{
+		desc.setTransform(m_LocalTransform.f);
+	}
+}
+
 uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 {
+	using namespace DirectX;
+
 	const auto& descs = GetGeometryDescs();
 
 	const uint16_t vertexID = GetVertexID();
-
-	// Previous-frame transform for motion vectors; identical for every geometry of this mesh.
-	const float3x4 prevTransform = m_HasPrevTransform ? m_PrevLocalToOwner : m_LocalToOwner;
 
 	for (size_t i = 0; i < descs.size(); i++) {
 		auto& geomTris = descs[i].geometryData.triangles;
@@ -67,16 +80,17 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			static_cast<uint16_t>(m_Type),
 			static_cast<uint16_t>(GetDynamicIndex()),
 			m_Material->GetOffsetComp(),
-			m_LocalToOwner,
-			prevTransform
+			m_LocalTransform,
+			m_PrevLocalTransform
 		};
 	}
 
-	// Advance previous-frame state (WriteMeshData runs once per mesh per frame).
-	m_PrevLocalToOwner = m_LocalToOwner;
-	m_HasPrevTransform = true;
-
 	return static_cast<uint32_t>(descs.size());
+}
+
+void BaseMesh::MarkDirty(DirtyFlags flag) {
+	m_DirtyFlags.set(flag);
+	Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }
 
 bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices)
@@ -168,33 +182,22 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	return vertexBuffer;
 }
 
-bool BaseMesh::Update()
+void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 { 
-	if (!m_BSTriShape)
-		return false;
+	ClearDirtyFlags();
 
 	m_Properties = { m_BSTriShape };
 
-	XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
+	m_WorldBound = m_BSTriShape->worldBound;
 
-	SyncClusterTransform();
+	float3x4 transform;
+	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
 
-	return false;
-}
+	if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+		MarkDirty(DirtyFlags::Transform);
 
-void BaseMesh::SyncClusterTransform()
-{
-	float3x4 ownerWorld;
-	if (m_Owner) {
-		auto* node = m_Owner->Get3D();
-		XMStoreFloat3x4(&ownerWorld, Util::Math::GetXMFromNiTransform(node ? node->world : m_BSTriShape->world));
-	} else {
-		XMStoreFloat3x4(&ownerWorld, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
-	}
-
-	SetLocalToOwner(ownerWorld);
-	m_Cluster->SetInstanceTransform(ownerWorld);
-	m_Cluster->GrowBounds(m_BSTriShape->worldBound);
+	m_Transform = transform;
+	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_BSTriShape->previousWorld));
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
@@ -214,7 +217,7 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;
 
-	geometryDesc.setTransform(kIdentityTransform.f);
+	geometryDesc.setTransform(Constants::kIdentityTransform.f);
 
 	return geometryDesc;
 }
@@ -227,7 +230,6 @@ bool BaseMesh::SetHidden(bool hidden)
 
 	if (wasHidden != hidden) {
 		MarkDirty(DirtyFlags::Visibility);
-		MarkClusterDirty();
 		return true;
 	}
 
@@ -254,43 +256,10 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 	
 	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
 	MarkDirty(DirtyFlags::Visibility);
-	MarkClusterDirty();
-
 	return true;
-}
-
-
-void BaseMesh::SetLocalToOwner(const float3x4& ownerWorld)
-{
-	using namespace DirectX;
-
-	auto ownerInv = XMMatrixInverse(nullptr, XMLoadFloat3x4(&ownerWorld));
-	auto meshWorld = XMLoadFloat3x4(&m_Transform);
-	auto localToOwnerMat = XMMatrixMultiply(meshWorld, ownerInv);
-
-	float3x4 localToOwner;
-	XMStoreFloat3x4(&localToOwner, localToOwnerMat);
-
-	const bool changed = !Util::Math::MatrixNearEqual(m_LocalToOwner, localToOwner);
-
-	m_LocalToOwner = localToOwner;
-
-	for (auto& desc : GetGeometryDescsMutable())
-		desc.setTransform(m_LocalToOwner.f);
-
-	if (changed) {
-		MarkDirty(DirtyFlags::Transform);
-		MarkClusterDirty();
-	}
 }
 
 void BaseMesh::CreateMaterial()
 {
 	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
-}
-
-void BaseMesh::MarkClusterDirty()
-{
-	if (m_Cluster)
-		Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }

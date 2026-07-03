@@ -21,7 +21,7 @@ class BLASCluster
 {
 	RE::TESObjectREFR* m_Owner = nullptr; // null for orphan (no-owner) clusters; comparison key only
 
-	eastl::vector<eastl::weak_ptr<BaseMesh>> m_Members;
+	eastl::vector<BaseMesh*> m_Members;
 
 	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
@@ -29,39 +29,49 @@ class BLASCluster
 
 	eastl::string m_Name;
 
-	float3x4 m_InstanceTransform; // owner-world, cached during traversal; used for the TLAS instance
-	mutable float3x4 m_PrevInstanceTransform; // previous-frame instance transform for motion vectors
-	mutable bool m_HasPrevInstanceTransform = false;
-	mutable float m_InstanceRadius = 0.0f; // world-space bounding sphere radius, accumulated from member bounds
-	float3 m_ClusterCenter; // cached translation of m_InstanceTransform, invalid when transform changes
+	float3x4 m_Transform;
+	float3x4 m_PrevTransform;
 
-	bool m_MembershipDirty = true; // member added/removed/pruned -> full rebuild
-	bool m_Updatable = false;      // any member is updatable (dynamic)
-	bool m_IsDirty = false;         // pending rebuild/refit (set exclusively by SceneGraph::MarkClusterDirty)
+	// cached translation of m_InstanceTransform, invalid when transform changes
+	float3 m_ClusterPosition;
+
+	// world-space bounding sphere radius, accumulated from member bounds
+	float m_ClusterRadius = 0.0f; 
+
+	// member added/removed/pruned -> full rebuild
+	bool m_MembershipDirty = true;
+
+	// any member is updatable (dynamic)
+	bool m_Updatable = false;
+
+	// Pending rebuild/refit (set exclusively by SceneGraph::MarkClusterDirty)
+	bool m_IsDirty = false;
 	
 	friend class SceneGraph;
 
 	uint32_t m_NumUpdatesSinceRebuild = 0;
 	uint64_t m_LastBuild = Constants::INVALID_FRAME_INDEX;
 
-	uint32_t m_InstanceIndex = 0; // TLAS instance slot, assigned during SceneGraph::Update population
+	// TLAS instance slot, assigned during SceneGraph::Update population
+	uint32_t m_InstanceIndex = 0; 
+
+	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
+
+	void UpdateTransform();
 
 	nvrhi::rt::AccelStructDesc MakeDesc(bool update) const;
 
+	InstanceLightData GetInstanceLightData(
+		const eastl::map<RE::BSLight*, Light>& lights,
+		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 public:
 	explicit BLASCluster(RE::TESObjectREFR* owner);
 
-	void AddMember(const eastl::shared_ptr<BaseMesh>& mesh);
+	void AddMember(BaseMesh* mesh);
 
 	void RemoveMember(BaseMesh* mesh);
 	void MarkDirty();
 	const auto& GetMembers() const { return m_Members; }
-
-
-	void SetInstanceTransform(const float3x4& transform) {
-		m_InstanceTransform = transform;
-		m_ClusterCenter = float3(transform._14, transform._24, transform._34);
-	}
 
 	// Grow the world-space bounding sphere to include the given bound (center + radius in world space).
 	void GrowBounds(const RE::NiBound& bound);
@@ -69,12 +79,13 @@ public:
 	// No live members remain.
 	bool Empty() const;
 
+	// Has visible meshes
+	bool Valid() const;
+	
 	// Rebuilds or refits the BLAS as needed (once per frame), pulling dirty state from its members.
 	void BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph);
 
-	nvrhi::rt::IAccelStruct* GetBLAS() const { return m_BLAS; }
-
-	const float3x4& GetInstanceTransform() const { return m_InstanceTransform; }
+	nvrhi::rt::InstanceDesc MakeInstanceDesc() const;
 
 	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
 
@@ -83,7 +94,8 @@ public:
 	// Appends one MeshData per visible geometry (in BLAS order) and fills the cluster's InstanceData,
 	// including per-instance light-affected data calculated from the scene lights.
 	// Returns false if the cluster has no visible geometry (skip as a TLAS instance).
-	bool GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance,
-	             const eastl::map<RE::BSLight*, Light>& lights,
-	             const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData) const;
+	void Update(MeshData* meshData, uint32_t& meshCount, 
+		InstanceData* instanceData, uint32_t& instanceCount,
+	    const eastl::map<RE::BSLight*, Light>& lights,
+	    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 };

@@ -116,7 +116,6 @@ namespace Pass
 				break;
 			}
 
-			const bool vertexUpdate = (queuedMesh.updateFlags & DirtyFlags::Vertex) != DirtyFlags::None;
 			const bool skinUpdate = (queuedMesh.updateFlags & DirtyFlags::Skin) != DirtyFlags::None;
 
 			const uint32_t vertexCount = mesh->GetVertexCount();
@@ -154,10 +153,6 @@ namespace Pass
 			data.numMatrices = boneCount;
 			std::memcpy(&data.VertexDesc, &vertexDescRaw, sizeof(uint64_t));
 
-			// Dynamic morph upload (skinning input) must land before the dispatch reads it.
-			if (vertexUpdate && dynamicMesh)
-				dynamicMesh->UploadBuffers(commandList);
-
 			if (skinUpdate && boneCount > 0) {
 				// Copy raw boneWorld transforms to BoneCompute input buffer
 				std::memcpy(m_BoneWorldData.data() + boneIndex,
@@ -175,6 +170,7 @@ namespace Pass
 				header.BoneWorldOffset = boneIndex;
 				header.SkinToBoneOffset = boneIndex;
 				header.Pad = 0;
+
 				NiTransformPacked geomInv = mesh->GetGeometryWorldInverse();
 				header.GeomInv_Rot0_Scale = geomInv.Rot0_Scale;
 				header.GeomInv_Rot1       = geomInv.Rot1;

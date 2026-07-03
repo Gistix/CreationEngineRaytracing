@@ -35,7 +35,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, 0, byteSize);
 
 	// Repoint the geometry desc to the live buffer for BLAS reads
-	for (auto& desc : GetGeometryDescsMutable())
+	for (auto& desc : m_GeometryDescs)
 		desc.geometryData.triangles.vertexBuffer = m_LiveVertexBuffer;
 
 	// RT shaders read from here
@@ -51,12 +51,9 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 		nvrhi::BindingSetItem::RawBuffer_UAV(slotIndex, m_LiveVertexBuffer));
 }
 
-bool LandLODMesh::Update()
+void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 {
-	bool changed = DirectMesh::Update();
-
-	if (!m_BSTriShape)
-		return changed;
+	DirectMesh::Update(commandList);
 
 	for (auto* node = static_cast<RE::NiAVObject*>(m_BSTriShape->parent); node; node = node->parent) {
 		if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(node)) {
@@ -83,29 +80,27 @@ bool LandLODMesh::Update()
 	m_PrevIntersecting = m_Intersecting;
 	m_Intersecting = Util::Math::Intersects(loadedPosition, loadedSize, m_AABBCenter, m_AABBSize);
 
-	if (m_Intersecting || m_PrevIntersecting)	
-		UpdateOcclusion(GetCluster()->GetInstanceTransform());
-
-	return changed;
+	if (m_Intersecting || m_PrevIntersecting)
+		UpdateOcclusion();
 }
 
-void LandLODMesh::UpdateOcclusion(const float3x4& clusterTransform)
+void LandLODMesh::UpdateOcclusion()
 {
-	const auto& descs = GetGeometryDescs();
-	if (!descs.empty()) {
-		const auto& firstDesc = descs[0];
-
-		LandLODUpdate update(
-			GetVertexID(),
-			firstDesc.geometryData.triangles.vertexCount,
-			firstDesc.geometryData.triangles.vertexStride,
-			GetLocalToOwner(),
-			clusterTransform);
-
-		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-		sceneGraph->GetLandLODMeshUpdates()[this] = update;
-
-		MarkDirty(DirtyFlags::Vertex);
-		MarkClusterDirty();
+	if (m_GeometryDescs.empty()) {
+		logger::info("LandLODMesh::UpdateOcclusion - No geometry");
+		return;
 	}
+
+	const auto& firstDesc = m_GeometryDescs[0];
+
+	LandLODUpdate update(
+		GetVertexID(),
+		firstDesc.geometryData.triangles.vertexCount,
+		firstDesc.geometryData.triangles.vertexStride,
+		m_Transform);
+
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	sceneGraph->GetLandLODMeshUpdates()[this] = update;
+
+	MarkDirty(DirtyFlags::Vertex);
 }

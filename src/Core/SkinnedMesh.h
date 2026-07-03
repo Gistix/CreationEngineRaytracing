@@ -16,12 +16,13 @@ public:
 
 	// Copies raw boneWorld transforms from the game skin instance (no matrix math — that moves to GPU).
 	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
-	bool Update() override;
+	void Update(nvrhi::ICommandList* commandList) override;
 
 	uint32_t GetBoneCount() const { return static_cast<uint32_t>(m_BoneWorlds.size()); }
 
 	const eastl::vector<NiTransformPacked>& GetBoneWorlds() const { return m_BoneWorlds; }
 	const eastl::vector<NiTransformPacked>& GetSkinToBones() const { return m_SkinToBones; }
+
 	NiTransformPacked GetGeometryWorldInverse() const {
 		NiTransformPacked r;
 		r.Rot0_Scale = m_GeomInv_Rot0_Scale;
@@ -37,8 +38,6 @@ public:
 
 	uint32_t GetVertexCount() const { return m_VertexCount; }
 
-	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const override { return m_GeometryDescs; }
-
 	bool GetModelSpaceNormal() const { return m_ModelSpaceNormal; }
 
 	uint16_t GetIndexID(size_t geometryIndex) const override { return static_cast<uint16_t>(m_IndexBuffers[geometryIndex].m_Descriptor.Get()); }
@@ -47,8 +46,6 @@ public:
 protected:
 	// Non-building constructor for derived meshes that supply their own vertex buffer (e.g. DynamicMesh).
 	SkinnedMesh() = default;
-
-	eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescsMutable() override { return m_GeometryDescs; }
 
 	// Builds the per-partition index buffers + geometry descs using the supplied vertex buffer.
 	// requireSharedNativeVertexBuffer enforces that every partition references the same native vertex buffer (static skins);
@@ -66,8 +63,8 @@ protected:
 	// Native (rest-pose) byte-address vertex buffer; the original source consumed by the skinning pass.
 	BufferDescriptor m_VertexBuffer;
 
-	// One geometry desc per skin partition (identity transform with the local-to-owner transform baked in).
-	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
+	// Maps each emitted geometry desc back to its source skin partition index.
+	eastl::vector<size_t> m_GeometryPartitionIndices;
 
 	// Live (skinning output) byte-address vertices read by the RT path; copy of the native original buffer.
 	nvrhi::BufferHandle m_LiveVertexBuffer;

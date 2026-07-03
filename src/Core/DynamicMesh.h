@@ -31,7 +31,7 @@ public:
 	// Called by hook
 	void UpdateDynamicData(void* dynamicData, uint32_t dataSize);
 
-	void UploadBuffers(nvrhi::ICommandList* commandList) override;
+	void Update(nvrhi::ICommandList* commandList) override;
 
 	bool IsUpdatable() const override { return true; }
 };

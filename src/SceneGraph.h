@@ -41,7 +41,7 @@ class SceneGraph
 {
 	RE::NiCamera* m_Camera = nullptr;
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::shared_ptr<BaseMesh>> m_DirectMeshes;
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_DirectMeshes;
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
@@ -180,7 +180,7 @@ public:
 private:
 	struct PendingDestroy
 	{
-		eastl::shared_ptr<BaseMesh> mesh;
+		eastl::unique_ptr<BaseMesh> mesh;
 		uint64_t fenceValue;
 	};
 	eastl::vector<PendingDestroy> m_PendingMeshDestroy;

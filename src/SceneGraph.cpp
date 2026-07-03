@@ -405,7 +405,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 
 		uint64_t fence = Renderer::GetSingleton()->GetLastSubmittedFence();
-		m_PendingMeshDestroy.push_back({ it->second, fence });
+		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
 		m_DirectMeshes.erase(it);
 	}
 
@@ -472,7 +472,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		auto it = m_DirectMeshes.find(bsTriShape);
 		if (it != m_DirectMeshes.end()) {
-			auto& mesh = it->second;
+			auto mesh = it->second.get();
 
 			// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
 			mesh->SetLastVisitedFrame(frameIndex);
@@ -486,7 +486,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			if (ownerChanged || !cluster) {
 				// Remove from old cluster if it existed
 				if (cluster) {
-					cluster->RemoveMember(mesh.get());
+					cluster->RemoveMember(mesh);
 					MarkClusterDirty(cluster);
 				}
 
@@ -497,16 +497,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 			mesh->SetHidden(false);
 
-			mesh->Update();
-			m_CurrentVisible.push_back(mesh.get());
+			mesh->Update(commandList);
+			m_CurrentVisible.push_back(mesh);
 		}
 		else {
 			if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 				created->SetOwner(clusterOwner);
 	
-				auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, created);
+				auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
 				if (inserted) {
-					auto& mesh = it2->second;
+					auto mesh = it2->second.get();
 	
 					auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
 					cluster->AddMember(mesh);
@@ -514,8 +514,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 					mesh->SetLastVisitedFrame(frameIndex);
 	
-					mesh->Update();
-					m_CurrentVisible.push_back(mesh.get());
+					mesh->Update(commandList);
+					m_CurrentVisible.push_back(mesh);
 				}
 			}
 		}
@@ -564,23 +564,18 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	// Populate per-instance + per-geometry data for shader-side geometry lookup, in the same
 	// owner-then-orphan / member order the TLAS and BLAS use (so InstanceID()/GeometryIndex() align).
-	auto appendInstance = [&](BLASCluster* cluster) {
+	auto processCluster = [&](BLASCluster* cluster) {
 		if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
 			return;
 
-		InstanceData instance;
-		if (cluster->GetData(m_MeshData.data(), m_NumMeshes, instance, m_Lights, m_LightData)) {
-			cluster->SetInstanceIndex(m_NumInstances);
-			m_InstanceData[m_NumInstances] = instance;
-			m_NumInstances++;
-		}
+		cluster->Update(m_MeshData.data(), m_NumMeshes, m_InstanceData.data(), m_NumInstances, m_Lights, m_LightData);
 	};
 
 	for (auto& [owner, cluster] : m_OwnerClusters)
-		appendInstance(cluster.get());
+		processCluster(cluster.get());
 
 	for (auto& [bsTriShape, cluster] : m_OrphanClusters)
-		appendInstance(cluster.get());
+		processCluster(cluster.get());
 
 	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
 		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);

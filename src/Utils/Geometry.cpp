@@ -141,16 +141,19 @@ namespace Util
 #endif
 		}
 
-		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<uint8_t>& outVisibility)
+		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility)
 		{
 			outVisibility.clear();
 
 #if defined(SKYRIM)
+			if (!skinInstance)
+				return;
+
 			auto& runtime = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance)->GetRuntimeData();
 			outVisibility.resize(runtime.numPartitions);
 
 			for (int32_t i = 0; i < runtime.numPartitions; ++i)
-				outVisibility[i] = runtime.partitions[i].editorVisible ? 1u : 0u;
+				outVisibility[i] = runtime.partitions[i].editorVisible;
 #else
 			(void)skinInstance;
 #endif

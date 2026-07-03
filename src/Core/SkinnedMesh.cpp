@@ -172,6 +172,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 
 	m_IndexBuffers.reserve(skinPartition->numPartitions);
 	m_GeometryDescs.reserve(skinPartition->numPartitions);
+	m_GeometryPartitionIndices.reserve(skinPartition->numPartitions);
 
 	for (size_t i = 0; i < skinPartition->numPartitions; i++)
 	{
@@ -203,19 +204,14 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
 		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, indexCount, vertexBuffer, vertexStride, vertexCount));
+		m_GeometryPartitionIndices.push_back(i);
 	}
 }
 
-bool SkinnedMesh::Update()
+void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 {
-	BaseMesh::Update();
+	BaseMesh::Update(commandList);
 
-	if (!m_BSTriShape)
-		return false;
-
-	bool poseAdvanced = false;
-
-#if defined(SKYRIM)
 	const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
 
 	auto* skinInstance = geometryData.skinInstance.get();
@@ -246,23 +242,14 @@ bool SkinnedMesh::Update()
 
 				PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
 
-				poseAdvanced = true;
+				m_DirtyFlags.set(DirtyFlags::Skin);
 			}
 		}
 	}
-#endif
 
 	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.
-	DirtyFlags skinningFlags = DirtyFlags::None;
-	if (poseAdvanced)
-		skinningFlags |= DirtyFlags::Skin;
-	if (GetDirtyFlags().any(DirtyFlags::Vertex))
-		skinningFlags |= DirtyFlags::Vertex;
-
-	if (skinningFlags != DirtyFlags::None) {
+	if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
 		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
-			skinningPass->QueueUpdate(skinningFlags, this);
+			skinningPass->QueueUpdate(m_DirtyFlags.get(), this);
 	}
-
-	return poseAdvanced;
 }

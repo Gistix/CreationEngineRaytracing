@@ -16,11 +16,7 @@ class BLASCluster;
 
 class BaseMesh
 {
-	static constexpr float3x4 kIdentityTransform = {
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f
-		};
+	void ClearDirtyFlags() { m_DirtyFlags.reset(); }
 
 public:
 	struct BufferDescriptor {
@@ -55,7 +51,7 @@ public:
 	virtual ~BaseMesh() = default;
 
 	// Constructs the appropriate mesh type (DirectMesh, SkinnedMesh, DismemberMesh or DynamicMesh) for the given geometry.
-	static eastl::shared_ptr<BaseMesh> Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
+	static eastl::unique_ptr<BaseMesh> Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
 	// Returns true if the hidden state changed (which flags the mesh structurally dirty).
 	bool SetHidden(bool hidden);
@@ -76,17 +72,14 @@ public:
 	// CPU-side per-frame update: detect whether the mesh's geometry data changed (lazy),
 	// sync cluster transforms, and populate any traversal-time data.
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
-	virtual bool Update();
-
-	// GPU-side per-frame upload of any pending data (flag-gated); runs in the TLAS pass. No-op otherwise.
-	virtual void UploadBuffers([[maybe_unused]] nvrhi::ICommandList* commandList) {}
+	virtual void Update(nvrhi::ICommandList* commandList);
 
 	// True for meshes whose vertex data changes per frame, so their cluster BLAS must be refit.
 	virtual bool IsUpdatable() const { return false; }
 
 	// Returns the mesh's geometry descs (identity transform with the local-to-owner transform baked in).
 	// DirectMesh holds a single desc; SkinnedMesh/DynamicMesh hold one per partition.
-	virtual const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const = 0;
+	virtual const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const { return m_GeometryDescs; }
 
 	RE::BSTriShape* GetTriShape() const { return m_BSTriShape; }
 
@@ -102,23 +95,20 @@ public:
 	// Stores the owner pointer for grouping/comparison only (never dereferenced); returns true if it changed.
 	bool SetOwner(RE::TESObjectREFR* owner);
 
-	// Bakes the local-to-owner transform into the geometry descs (computed in the traversal);
-	// flags the mesh for a refit if it changed.
-	void SetLocalToOwner(const float3x4& ownerWorld);
-
-	const float3x4& GetLocalToOwner() const { return m_LocalToOwner; }
-
 	const float3x4& GetTransform() const { return m_Transform; }
 
+	const float3x4& GetPrevTransform() const { return m_PrevTransform; }
+
+	const auto& GetWorldBound() const { return m_WorldBound; }
+	
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
 
-	void ClearDirtyFlags() { m_DirtyFlags = DirtyFlags::None; }
+	void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform);
 
 	// Writes one MeshData per geometry into 'out' (starting at out[0]); returns the number written.
 	uint32_t WriteMeshData(MeshData* out) const;
 
-	void MarkDirty(DirtyFlags flag) { m_DirtyFlags.set(flag); }
-	void MarkClusterDirty();
+	void MarkDirty(DirtyFlags flag);
 
 	uint64_t GetVertexDescRaw() const { return *reinterpret_cast<const uint64_t*>(&m_VertexDesc); }
 
@@ -127,8 +117,6 @@ public:
 
 	CESEAdapter::REX::EnumSet<Flags> GetFlags() const { return m_Flags; }
 	bool HasFlag(Flags f) const { return m_Flags.all(f); }
-
-	virtual bool PrepareOcclusion([[maybe_unused]] const float3x4& worldTransform, [[maybe_unused]] LandLODUpdate& outUpdate, [[maybe_unused]] uint32_t& outMaxVertices) { return false; }
 
 	// Per-geometry index buffer descriptor index (into the Triangles bindless table).
 	virtual uint16_t GetIndexID(size_t geometryIndex) const = 0;
@@ -140,8 +128,6 @@ protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
 
-	void SyncClusterTransform();
-
 	static bool ValidateCounts(uint16_t numTriangles, uint32_t numVertices);
 
 	static BufferDescriptor CreateIndexBuffer(RE::BSGraphics::TriShape* triShape);
@@ -149,9 +135,6 @@ protected:
 	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
-
-	// Mutable access to the derived mesh's geometry descs, used to bake the local-to-owner transform.
-	virtual eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescsMutable() = 0;
 
 	void CreateMaterial();
 
@@ -163,18 +146,20 @@ protected:
 
 	RE::TESObjectREFR* m_PrevOwner = nullptr;
 
+	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
+
 	// Back-pointer to the BLAS cluster this mesh belongs to; set by AddMember, used for fast removal.
 	BLASCluster* m_Cluster = nullptr;
 
 	// Cached world transform from BSTriShape, refreshed in Update().
 	float3x4 m_Transform;
+	float3x4 m_PrevTransform;
 
-	// Cached local-to-owner transform baked into the geometry descs (computed in the traversal).
-	float3x4 m_LocalToOwner;
+	// Local to the BLASCluster
+	float3x4 m_LocalTransform;
+	float3x4 m_PrevLocalTransform;
 
-	// Previous-frame local-to-owner transform for motion vectors; advanced in WriteMeshData (once per frame).
-	mutable float3x4 m_PrevLocalToOwner;
-	mutable bool m_HasPrevTransform = false;
+	RE::NiBound m_WorldBound;
 
 	mutable uint64_t m_LastVisitedFrame = Constants::INVALID_FRAME_INDEX;
 

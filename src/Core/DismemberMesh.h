@@ -7,15 +7,26 @@ class DismemberMesh : public SkinnedMesh
 public:
 	DismemberMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
-	DismemberMesh* AsDismemberMesh() override { return this; }
+	virtual SkinnedMesh* AsSkinnedMesh() override { return this; }
 
-	bool Update() override;
+	virtual DismemberMesh* AsDismemberMesh() override { return this; }
 
-	const eastl::vector<uint8_t>& GetPartitionVisibility() const { return m_PartitionVisibility; }
+	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const override;
+
+	uint16_t GetIndexID(size_t geometryIndex) const override;
+
+	void Update(nvrhi::ICommandList* commandList) override;
+
+	const eastl::vector<bool>& GetPartitionVisibility() const { return m_PartitionVisibility; }
 
 	bool IsPartitionVisible(size_t index) const;
 
 private:
-	// One entry per skin partition; 1 means editor-visible, 0 means hidden.
-	eastl::vector<uint8_t> m_PartitionVisibility;
+	void RefreshVisibleGeometryCache() const;
+
+	// One entry per skin partition.
+	eastl::vector<bool> m_PartitionVisibility;
+
+	mutable eastl::vector<nvrhi::rt::GeometryDesc> m_VisibleGeometryDescs;
+	mutable eastl::vector<size_t> m_VisibleGeometrySourceIndices;
 };

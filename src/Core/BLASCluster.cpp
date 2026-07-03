@@ -20,7 +20,7 @@ void BLASCluster::MarkDirty()
 	m_IsDirty = true;
 }
 	
-void BLASCluster::AddMember(const eastl::shared_ptr<BaseMesh>& mesh)
+void BLASCluster::AddMember(BaseMesh* mesh)
 {
 	m_Members.push_back(mesh);
 	mesh->SetCluster(this);
@@ -40,7 +40,7 @@ void BLASCluster::RemoveMember(BaseMesh* mesh)
 
 	m_Members.erase(
 		eastl::remove_if(m_Members.begin(), m_Members.end(),
-			[mesh](const eastl::weak_ptr<BaseMesh>& member) { return member.lock().get() == mesh; }),
+			[mesh](BaseMesh* member) { return member == mesh; }),
 		m_Members.end());
 	
 	if (m_Members.size() != before) {
@@ -53,36 +53,66 @@ void BLASCluster::GrowBounds(const RE::NiBound& bound)
 {
 	float3 boundCenter = Util::Math::Float3(bound.center);
 
-	float margin = m_InstanceRadius - bound.radius;
+	float margin = m_ClusterRadius - bound.radius;
 	if (margin > 0.0f) {
-		float distSq = (boundCenter - m_ClusterCenter).LengthSquared();
+		float distSq = (boundCenter - m_ClusterPosition).LengthSquared();
 		if (distSq <= margin * margin)
 			return;
 	}
 
-	float distToBound = (boundCenter - m_ClusterCenter).Length();
-	m_InstanceRadius = std::max(m_InstanceRadius, distToBound + bound.radius);
+	float distToBound = (boundCenter - m_ClusterPosition).Length();
+	m_ClusterRadius = std::max(m_ClusterRadius, distToBound + bound.radius);
+}
+
+void BLASCluster::UpdateTransform() {
+
+	if (m_Owner) {
+		const RE::NiAVObject* object = m_Owner->Get3D();
+		XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(object->world));
+		XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(object->previousWorld));
+	}
+	else {
+		if (m_Members.empty()) {
+			m_Transform = Constants::kIdentityTransform;
+			m_PrevTransform = Constants::kIdentityTransform;
+		}
+		else {
+			const auto& mesh = m_Members.front();
+			m_Transform = mesh->GetTransform();
+			m_PrevTransform = mesh->GetPrevTransform();
+		}
+	}
+
+	m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
 }
 
 bool BLASCluster::Empty() const
 {
-	for (const auto& member : m_Members)
-		if (!member.expired())
-			return false;
-
-	return true;
+	return m_Members.empty();
 }
 
-static InstanceLightData ComputeInstanceLightData(
-	const float3x4& instanceTransform,
-    float instanceRadius,
+bool BLASCluster::Valid() const
+{
+	for (const auto& mesh : m_Members) {
+		if (mesh->IsHidden())
+			continue;
+
+		const auto& descs = mesh->GetGeometryDescs();
+		if (descs.empty())
+			continue;
+
+		return true;
+	}
+
+	return false;
+}
+
+InstanceLightData BLASCluster::GetInstanceLightData(
     const eastl::map<RE::BSLight*, Light>& lights,
     const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
 {
 	uint8_t lightIds[Constants::INSTANCE_LIGHTS_MAX];
 	uint8_t numLights = 0;
-
-	float3 clusterPosition = float3(instanceTransform._14, instanceTransform._24, instanceTransform._34);
 
 	for (const auto& [bsLight, light] : lights) {
 		if (!light.m_Active)
@@ -103,8 +133,8 @@ static InstanceLightData ComputeInstanceLightData(
 			lightIds[numLights] = light.m_Index;
 			numLights++;
 		} else {
-			float dist = float3::Distance(clusterPosition, ld.Vector);
-			if (dist - instanceRadius <= ld.Radius) {
+			float dist = float3::Distance(m_ClusterPosition, ld.Vector);
+			if (dist - m_ClusterRadius <= ld.Radius) {
 				lightIds[numLights] = light.m_Index;
 				numLights++;
 			}
@@ -114,49 +144,67 @@ static InstanceLightData ComputeInstanceLightData(
 	return InstanceLightData(lightIds, numLights);
 }
 
-bool BLASCluster::GetData(MeshData* meshData, uint32_t& meshCount, InstanceData& outInstance,
-                          const eastl::map<RE::BSLight*, Light>& lights,
-                          const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData) const
+void BLASCluster::Update(MeshData* meshData, uint32_t& meshCount,
+	InstanceData* instanceData, uint32_t& instanceCount,
+    const eastl::map<RE::BSLight*, Light>& lights,
+     const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
 {
-	// Mirror BuildUpdate's visible-member-geometry iteration so MeshData order matches the BLAS geometry order.
-	const uint32_t firstGeometry = meshCount;
-	uint32_t numGeometry = 0;
+	m_ClusterRadius = 0.0f;
 
-	for (const auto& member : m_Members) {
-		auto mesh = member.lock();
-		if (!mesh || mesh->IsHidden())
+	UpdateTransform();
+
+	const auto invTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_Transform));
+	const auto invPrevTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_PrevTransform));
+
+	const uint32_t firstGeometry = meshCount;
+
+	m_Updatable = false;
+	m_DirtyFlags.reset();
+
+	m_GeometryDescs.clear();
+	m_GeometryDescs.reserve(m_Members.size());
+
+	for (const auto& mesh : m_Members) {
+		if (mesh->IsHidden())
 			continue;
+
+		GrowBounds(mesh->GetWorldBound());
+
+		mesh->UpdateLocalTransform(invTransform, invPrevTransform);
 
 		const auto& descs = mesh->GetGeometryDescs();
 		if (descs.empty())
 			continue;
 
-		if (meshCount + descs.size() > Constants::NUM_MESHES_MAX)
-			break;
+		for (const auto& desc : descs)
+			m_GeometryDescs.push_back(desc);
 
-		const uint32_t written = mesh->WriteMeshData(&meshData[meshCount]);
-		meshCount += written;
-		numGeometry += written;
+		if (mesh->IsUpdatable())
+			m_Updatable = true;
+
+		m_DirtyFlags |= mesh->GetDirtyFlags();
+
+		meshCount += mesh->WriteMeshData(&meshData[meshCount]);
 	}
 
-	if (numGeometry == 0)
-		return false;
+	const uint32_t numGeometry = meshCount - firstGeometry;
 
-	outInstance = {};
-	outInstance.Transform = m_InstanceTransform;
-	outInstance.PrevTransform = m_HasPrevInstanceTransform ? m_PrevInstanceTransform : m_InstanceTransform;
+	if (numGeometry == 0) {
+		logger::warn("BLASCluster::GetData - BLASCluster {} has no geometry", fmt::ptr(this));
+		return;
+	}
 
-	// Advance previous-frame state (GetData runs once per cluster per frame).
-	m_PrevInstanceTransform = m_InstanceTransform;
-	m_HasPrevInstanceTransform = true;
+	InstanceData& outInstance = instanceData[instanceCount++];
+	outInstance.Transform = m_Transform;
+	outInstance.PrevTransform = m_PrevTransform;
+
+	outInstance.LightData = GetInstanceLightData(lights, lightData);
+
 	outInstance.FirstGeometryID = firstGeometry;
 	outInstance.NumGeometry = numGeometry;
 	outInstance.Alpha = 1.0f;
 
-	outInstance.LightData = ComputeInstanceLightData(m_InstanceTransform, m_InstanceRadius, lights, lightData);
-	m_InstanceRadius = 0.0f;
-
-	return true;
+	return;
 }
 
 nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
@@ -177,6 +225,17 @@ nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
 	return blasDesc;
 }
 
+nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
+{
+	auto instanceDesc = nvrhi::rt::InstanceDesc()
+		.setInstanceMask(InstanceMask::Default)
+		.setInstanceID(m_InstanceIndex)
+		.setTransform(m_Transform.f)
+		.setBLAS(m_BLAS);
+
+	return instanceDesc;
+}
+
 void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph)
 {
 	m_IsDirty = false;
@@ -190,33 +249,8 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	}
 
 	// Pull dirty state from the members; upload any pending GPU data while we're here.
-	bool anyStructure = false;
-	bool anyUpdate = false;
-
-	m_Updatable = false;
-
-	size_t liveMemberCount = 0;
-	for (const auto& member : m_Members) {
-		auto mesh = member.lock();
-		if (!mesh)
-			continue;
-		liveMemberCount++;
-
-		if (mesh->IsUpdatable())
-			m_Updatable = true;
-
-		const auto dirty = mesh->GetDirtyFlags();
-
-		if (dirty.any(DirtyFlags::Visibility))
-			anyStructure = true;
-
-		if (dirty.any(DirtyFlags::Transform, DirtyFlags::Vertex)) {
-			anyUpdate = true;
-
-			if (dirty.any(DirtyFlags::Vertex))
-				mesh->UploadBuffers(commandList);
-		}
-	}
+	const bool anyStructure = m_DirtyFlags.any(DirtyFlags::Visibility);
+	const bool anyUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
 
 	// Decide what to do from dirtiness only. An empty/failed cluster keeps m_BLAS == null, so basing
 	// this on (!m_BLAS) would force a "rebuild" every frame forever; gate the first build on m_LastBuild instead.
@@ -244,28 +278,10 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		}
 	}
 	else {
-		logger::warn("BLASCluster::BuildUpdate - {} no work needed (live members: {}, firstBuild: {}, membershipDirty: {}, anyStructure: {}, anyUpdate: {})",
-			m_Name, liveMemberCount, firstBuild, m_MembershipDirty, anyStructure, anyUpdate);
+		logger::warn("BLASCluster::BuildUpdate - {} no work needed (firstBuild: {}, membershipDirty: {}, anyStructure: {}, anyUpdate: {})",
+			m_Name, firstBuild, m_MembershipDirty, anyStructure, anyUpdate);
 		return;
 	}
-
-	// Aggregate geometry from live, visible members. Transforms are already baked into the descs
-	// (SetLocalToOwner during traversal), so no owner/trishape dereference happens here.
-	m_GeometryDescs.clear();
-
-	for (const auto& member : m_Members) {
-		auto mesh = member.lock();
-		if (!mesh || mesh->IsHidden())
-			continue;
-
-		for (const auto& desc : mesh->GetGeometryDescs())
-			m_GeometryDescs.push_back(desc);
-	}
-
-	// Consume member dirty state now that it has been folded into this build.
-	for (const auto& member : m_Members)
-		if (auto mesh = member.lock())
-			mesh->ClearDirtyFlags();
 
 	if (m_GeometryDescs.empty()) {
 		m_BLAS = nullptr;
@@ -281,9 +297,7 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		rebuild = true;
 
 	auto blasDesc = MakeDesc(!rebuild);
-
-	for (const auto& desc : m_GeometryDescs)
-		blasDesc.addBottomLevelGeometry(desc);
+	blasDesc.bottomLevelGeometries = decltype(blasDesc.bottomLevelGeometries)(m_GeometryDescs.begin(), m_GeometryDescs.end());
 
 	if (!allocate && rebuild) {
 		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);

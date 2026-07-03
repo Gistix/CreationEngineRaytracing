@@ -48,25 +48,12 @@ public:
 		auto* scene = Scene::GetSingleton();
 		const auto& markers = scene->m_Settings.DebugSettings.Markers;
 
-		if (markers)
-			commandList->beginMarker("TLAS Instances");
-
 		auto addCluster = [&](BLASCluster* cluster)
 		{
-			if (!cluster->GetBLAS())
+			if (!cluster->Valid())
 				return;
 
-			const float3x4 transform = cluster->GetInstanceTransform();
-
-			// Use the instance index assigned during SceneGraph::Update so InstanceID() in the
-			// shader matches the InstanceData slot. Iteration order/skip matches the population pass.
-			auto instanceDesc = nvrhi::rt::InstanceDesc()
-				.setInstanceMask(InstanceMask::Default)
-				.setInstanceID(cluster->GetInstanceIndex())
-				.setTransform(transform.f)
-				.setBLAS(cluster->GetBLAS());
-
-			m_InstanceDescs.push_back(instanceDesc);
+			m_InstanceDescs.push_back(cluster->MakeInstanceDesc());
 		};
 
 		for (const auto& [owner, cluster] : ownerClusters)
@@ -75,14 +62,11 @@ public:
 		for (const auto& [triShape, cluster] : orphanClusters)
 			addCluster(cluster.get());
 
-		if (markers)
-			commandList->endMarker();
+		const uint32_t numInstances = scene->GetSceneGraph()->GetNumInstancesFrame();
+		const uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
 
-		uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
-
-		if (scene->GetSceneGraph()->GetNumInstancesFrame() != topLevelInstances)
-			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances ({}) and TLAS instances ({}).",
-				scene->GetSceneGraph()->GetNumInstancesFrame(), topLevelInstances);
+		if (numInstances != topLevelInstances)
+			logger::critical("TopLevelAS::UpdateInstance - Mismatch in number of instances ({}) and TLAS instances ({}).", numInstances, topLevelInstances);
 
 		const auto ringSlot = Renderer::GetSingleton()->GetCurrentSlot();
 

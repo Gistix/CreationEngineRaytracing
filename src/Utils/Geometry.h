@@ -14,7 +14,7 @@ namespace Util
 
 		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance);
 
-		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<uint8_t>& outVisibility);
+		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility);
 
 		bool HasDoubleSidedGeom(Mesh* mesh);
 
