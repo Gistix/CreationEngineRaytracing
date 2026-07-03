@@ -70,6 +70,9 @@ protected:
 	// Populates m_SkinToBones from the static skin data, called once during construction.
 	void InitSkinToBones(RE::NiSkinInstance* skinInstance);
 
+	// Initialize dismember skin instance
+	void InitDismemberSkin(RE::NiSkinInstance* skinInstance);
+
 	// Creates the live (skinning output) byte-address UAV buffer seeded from the CPU rest-pose data, plus
 	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT
 	// read (VertexDescriptors) to the live buffer. Returns the live buffer for the BLAS geometry desc.

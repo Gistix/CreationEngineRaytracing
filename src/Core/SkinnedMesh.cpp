@@ -76,20 +76,11 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	InitSkinToBones(skinInstance);
 
-	// Dismember skin instance
-	const bool isDismemberSkinInstance = netimmerse_cast<RE::BSDismemberSkinInstance*>(skinInstance) != nullptr;
-	if (isDismemberSkinInstance) {
-		m_Flags.set(Flags::DismemberSkinInstance);
-		Util::Geometry::GetDismemberPartitionVisibility(skinInstance, m_PartitionVisibility);
-		RefreshVisibleGeometryCache();
-	}
+	InitDismemberSkin(skinInstance);
 }
 
 void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
 {
-	if (!skinInstance)
-		return;
-
 	auto* skinData = skinInstance->skinData.get();
 	if (!skinData || skinData->bones == 0)
 		return;
@@ -97,6 +88,17 @@ void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
 	m_SkinToBones.resize(skinData->bones);
 	for (uint32_t i = 0; i < skinData->bones; i++)
 		PackNiTransform(skinData->boneData[i].skinToBone, m_SkinToBones[i]);
+}
+
+void SkinnedMesh::InitDismemberSkin(RE::NiSkinInstance* skinInstance)
+{
+	const bool isDismemberSkinInstance = netimmerse_cast<RE::BSDismemberSkinInstance*>(skinInstance) != nullptr;
+	if (!isDismemberSkinInstance)
+		return;
+
+	m_Flags.set(Flags::DismemberSkinInstance);
+	Util::Geometry::GetDismemberPartitionVisibility(skinInstance, m_PartitionVisibility);
+	RefreshVisibleGeometryCache();
 }
 
 void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
