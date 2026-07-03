@@ -627,8 +627,7 @@ void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
 {
 	if (!cluster) 
 		return;
-	
-	cluster->MarkDirty();
+
 	m_DirtyClusters.emplace(cluster);
 }
 
