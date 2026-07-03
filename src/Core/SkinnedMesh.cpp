@@ -242,7 +242,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 				PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
 
-				m_DirtyFlags.set(DirtyFlags::Skin);
+				MarkDirty(DirtyFlags::Skin);
 			}
 		}
 	}
