@@ -75,6 +75,14 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	CreateMaterial();
 
 	InitSkinToBones(skinInstance);
+
+	// Dismember skin instance
+	const bool isDismemberSkinInstance = netimmerse_cast<RE::BSDismemberSkinInstance*>(skinInstance) != nullptr;
+	if (isDismemberSkinInstance) {
+		m_Flags.set(Flags::DismemberSkinInstance);
+		Util::Geometry::GetDismemberPartitionVisibility(skinInstance, m_PartitionVisibility);
+		RefreshVisibleGeometryCache();
+	}
 }
 
 void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
@@ -214,10 +222,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 	const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
 
-	auto* skinInstance = geometryData.skinInstance.get();
-
-	// UBE crash fix: rootParent must be valid.
-	if (skinInstance && skinInstance->rootParent) {
+	if (auto* skinInstance = geometryData.skinInstance.get()) {
 		auto* scene = Scene::GetSingleton();
 		const bool isPathTracing = scene->IsPathTracingActive();
 		const bool isForceCulled = isPathTracing; // Should also check for kEye and kEnvMap materials
@@ -245,11 +250,40 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 				MarkDirty(DirtyFlags::Skin);
 			}
 		}
+
+		// Dismember update.
+		if (m_Flags.all(Flags::DismemberSkinInstance)) {
+			const auto previousVisibility = m_PartitionVisibility;
+			Util::Geometry::GetDismemberPartitionVisibility(skinInstance, m_PartitionVisibility);
+
+			if (previousVisibility != m_PartitionVisibility)
+				MarkDirty(DirtyFlags::Visibility);
+
+			RefreshVisibleGeometryCache();
+		}
 	}
 
 	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.
 	if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
 		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
 			skinningPass->QueueUpdate(m_DirtyFlags.get(), this);
+	}
+}
+
+void SkinnedMesh::RefreshVisibleGeometryCache()
+{
+	m_VisibleGeometryDescs.clear();
+	m_VisibleGeometrySourceIndices.clear();
+
+	m_VisibleGeometryDescs.reserve(m_GeometryDescs.size());
+	m_VisibleGeometrySourceIndices.reserve(m_GeometryDescs.size());
+
+	for (size_t i = 0; i < m_GeometryDescs.size(); ++i) {
+		const auto partitionIndex = (i < m_GeometryPartitionIndices.size()) ? m_GeometryPartitionIndices[i] : i;
+		if (partitionIndex >= m_PartitionVisibility.size() || m_PartitionVisibility[partitionIndex] == 0)
+			continue;
+
+		m_VisibleGeometryDescs.push_back(m_GeometryDescs[i]);
+		m_VisibleGeometrySourceIndices.push_back(i);
 	}
 }

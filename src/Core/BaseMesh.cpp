@@ -1,5 +1,4 @@
 #include "Core/BaseMesh.h"
-#include "Core/DismemberMesh.h"
 #include "Core/DirectMesh.h"
 #include "Core/LandLODMesh.h"
 #include "Core/SkinnedMesh.h"
@@ -25,13 +24,8 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
 		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
 
-	auto* skinInstance = geometryData.skinInstance.get();
-	if (skinInstance) {	
-		if (auto dismemberSkin = netimmerse_cast<RE::BSDismemberSkinInstance*>(skinInstance))
-			return eastl::make_unique<DismemberMesh>(bsTriShape, commandList);
-		else 
-			return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
-	}
+	if (geometryData.skinInstance.get())
+		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
 
 	logger::warn("BaseMesh::Create - No renderer data or skin instance for {}", MakeDebugName(bsTriShape));
 	return nullptr;

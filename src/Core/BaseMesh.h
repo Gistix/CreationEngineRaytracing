@@ -10,7 +10,6 @@
 #include "Util.h"
 
 class SkinnedMesh;
-class DismemberMesh;
 class DynamicMesh;
 class BLASCluster;
 
@@ -45,7 +44,8 @@ public:
 	enum class Flags : uint8_t
 	{
 		None = 0,
-		LandLOD4 = 1 << 0
+		LandLOD4 = 1 << 0,
+		DismemberSkinInstance = 1 << 1
 	};
 
 	virtual ~BaseMesh() = default;
@@ -61,8 +61,6 @@ public:
 	void OnDestroy();
 
 	virtual SkinnedMesh* AsSkinnedMesh() { return nullptr; }
-
-	virtual DismemberMesh* AsDismemberMesh() { return nullptr; }
 
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
 

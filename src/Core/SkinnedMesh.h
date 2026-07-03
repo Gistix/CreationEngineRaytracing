@@ -14,6 +14,13 @@ public:
 
 	bool IsUpdatable() const override { return true; }
 
+	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const override {
+		if (m_Flags.none(Flags::DismemberSkinInstance))
+			return BaseMesh::GetGeometryDescs();
+
+		return m_VisibleGeometryDescs;
+	}
+
 	// Copies raw boneWorld transforms from the game skin instance (no matrix math — that moves to GPU).
 	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
 	void Update(nvrhi::ICommandList* commandList) override;
@@ -40,7 +47,15 @@ public:
 
 	bool GetModelSpaceNormal() const { return m_ModelSpaceNormal; }
 
-	uint16_t GetIndexID(size_t geometryIndex) const override { return static_cast<uint16_t>(m_IndexBuffers[geometryIndex].m_Descriptor.Get()); }
+	uint16_t GetIndexID(size_t geometryIndex) const override { 
+		if (m_Flags.none(Flags::DismemberSkinInstance))
+			return static_cast<uint16_t>(m_IndexBuffers[geometryIndex].m_Descriptor.Get());
+
+		if (geometryIndex >= m_VisibleGeometrySourceIndices.size())
+			return 0;
+
+		return static_cast<uint16_t>(m_IndexBuffers[m_VisibleGeometrySourceIndices[geometryIndex]].m_Descriptor.Get());
+	}
 
 	uint16_t GetVertexID() const override { return static_cast<uint16_t>(m_VertexBuffer.m_Descriptor.Get()); }
 protected:
@@ -59,6 +74,14 @@ protected:
 	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT
 	// read (VertexDescriptors) to the live buffer. Returns the live buffer for the BLAS geometry desc.
 	void CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride);
+
+	void RefreshVisibleGeometryCache();
+
+	// One entry per skin partition.
+	eastl::vector<bool> m_PartitionVisibility;
+
+	mutable eastl::vector<nvrhi::rt::GeometryDesc> m_VisibleGeometryDescs;
+	mutable eastl::vector<size_t> m_VisibleGeometrySourceIndices;
 
 	// Native (rest-pose) byte-address vertex buffer; the original source consumed by the skinning pass.
 	BufferDescriptor m_VertexBuffer;
