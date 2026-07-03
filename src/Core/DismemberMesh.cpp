@@ -51,7 +51,6 @@ void DismemberMesh::Update(nvrhi::ICommandList* commandList)
 {
 	SkinnedMesh::Update(commandList);
 
-	bool visibilityChanged = false;
 	const auto previousVisibility = m_PartitionVisibility;
 	const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
 	Util::Geometry::GetDismemberPartitionVisibility(geometryData.skinInstance.get(), m_PartitionVisibility);
@@ -63,7 +62,6 @@ void DismemberMesh::Update(nvrhi::ICommandList* commandList)
 			logger::info("\tVisible[{}]: {}", i, m_PartitionVisibility[i]);
 
 		MarkDirty(DirtyFlags::Visibility);
-		visibilityChanged = true;
 	}
 
 	RefreshVisibleGeometryCache();

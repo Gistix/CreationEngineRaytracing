@@ -388,6 +388,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		destroyedMeshes = eastl::move(m_DestroyedMeshes);
 	}
 
+	const uint64_t fence = Renderer::GetSingleton()->GetLastSubmittedFence();
+
 	// Defer release until the owning slot's GPU work completes; ProcessPendingMeshDestroys
 	// is called from StartExecution() after the per-slot fence resolves.
 	for (auto destroyedMesh: destroyedMeshes)
@@ -401,10 +403,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (auto* cluster = mesh->GetCluster()) {
 			cluster->RemoveMember(mesh);
 			MarkClusterDirty(cluster);
-			mesh->SetCluster(nullptr);
 		}
 
-		uint64_t fence = Renderer::GetSingleton()->GetLastSubmittedFence();
 		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
 		m_DirectMeshes.erase(it);
 	}
@@ -526,19 +526,17 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	});
 
 	// Hide meshes whose trishapes were not visited by the traversal this frame
-	{
-		for (auto& mesh : m_PreviousVisible) {
-			if (mesh->GetLastVisitedFrame() != frameIndex) {
-				mesh->SetHidden(true);
-				if (auto* cluster = mesh->GetCluster()) {
-					cluster->RemoveMember(mesh);
-					MarkClusterDirty(cluster);
-					mesh->SetCluster(nullptr);
-				}
+	for (auto& mesh : m_PreviousVisible) {
+		if (mesh->GetLastVisitedFrame() != frameIndex) {
+			mesh->SetHidden(true);
+
+			if (auto* cluster = mesh->GetCluster()) {
+				cluster->RemoveMember(mesh);
+				MarkClusterDirty(cluster);
 			}
 		}
-		m_PreviousVisible = eastl::move(m_CurrentVisible);
 	}
+	m_PreviousVisible = eastl::move(m_CurrentVisible);
 
 	// Upload pending material data to material buffer
 	m_MaterialManager->Flush(commandList);
@@ -546,7 +544,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// Drop clusters whose meshes were all destroyed this frame.
 	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
 		if (it->second->Empty()) {
-			eastl::erase(m_DirtyClusters, it->second.get());
+			m_DirtyClusters.erase(it->second.get());
 			it = m_OwnerClusters.erase(it);
 		}
 		else
@@ -555,7 +553,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	for (auto it = m_OrphanClusters.begin(); it != m_OrphanClusters.end(); ) {
 		if (it->second->Empty()) {
-			eastl::erase(m_DirtyClusters, it->second.get());
+			m_DirtyClusters.erase(it->second.get());
 			it = m_OrphanClusters.erase(it);
 		}
 		else
@@ -627,11 +625,12 @@ BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriS
 
 void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
 {
-	if (!cluster) return;
+	if (!cluster) 
+		return;
 	
 	if (!cluster->m_IsDirty) {
 		cluster->MarkDirty();
-		m_DirtyClusters.push_back(cluster);
+		m_DirtyClusters.emplace(cluster);
 	}
 }
 
@@ -643,7 +642,6 @@ void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 	
 	m_DirtyClusters.clear();
 }
-
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
 {

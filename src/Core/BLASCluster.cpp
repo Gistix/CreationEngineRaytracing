@@ -22,13 +22,9 @@ void BLASCluster::MarkDirty()
 	
 void BLASCluster::AddMember(BaseMesh* mesh)
 {
-	m_Members.push_back(mesh);
 	mesh->SetCluster(this);
-	
-	if (mesh->IsUpdatable())
-		m_Updatable = true;
-	
-	m_MembershipDirty = true;
+	m_Members.emplace(mesh);
+	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
 
@@ -36,16 +32,12 @@ void BLASCluster::RemoveMember(BaseMesh* mesh)
 {
 	mesh->SetCluster(nullptr);
 
-	const size_t before = m_Members.size();
+	const auto prevMembers = m_Members;
 
-	m_Members.erase(
-		eastl::remove_if(m_Members.begin(), m_Members.end(),
-			[mesh](BaseMesh* member) { return member == mesh; }),
-		m_Members.end());
+	m_Members.erase(mesh);
 	
-	if (m_Members.size() != before) {
-		m_MembershipDirty = true;
-	}
+	if (m_Members != prevMembers)
+		m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
 
@@ -77,7 +69,7 @@ void BLASCluster::UpdateTransform() {
 			m_PrevTransform = Constants::kIdentityTransform;
 		}
 		else {
-			const auto& mesh = m_Members.front();
+			const auto& mesh = m_Members.begin().get_node()->mValue;
 			m_Transform = mesh->GetTransform();
 			m_PrevTransform = mesh->GetPrevTransform();
 		}
@@ -159,7 +151,6 @@ void BLASCluster::Update(MeshData* meshData, uint32_t& meshCount,
 	const uint32_t firstGeometry = meshCount;
 
 	m_Updatable = false;
-	m_DirtyFlags.reset();
 
 	m_GeometryDescs.clear();
 	m_GeometryDescs.reserve(m_Members.size());
@@ -238,7 +229,6 @@ nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 
 void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph)
 {
-	m_IsDirty = false;
 	auto* renderer = Renderer::GetSingleton();
 	auto* device = renderer->GetDevice();
 	const auto frameIndex = renderer->GetFrameIndex();
@@ -249,43 +239,36 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	}
 
 	// Pull dirty state from the members; upload any pending GPU data while we're here.
-	const bool anyStructure = m_DirtyFlags.any(DirtyFlags::Visibility);
+	const bool anyStructure = m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh);
 	const bool anyUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
 
 	// Decide what to do from dirtiness only. An empty/failed cluster keeps m_BLAS == null, so basing
 	// this on (!m_BLAS) would force a "rebuild" every frame forever; gate the first build on m_LastBuild instead.
 	const bool firstBuild = (m_LastBuild == Constants::INVALID_FRAME_INDEX);
 
-	bool rebuild;
+	bool rebuild = false;
 
-	if (firstBuild || m_MembershipDirty || anyStructure) {
+	if (firstBuild || anyStructure) {
 		rebuild = true;
-		m_NumUpdatesSinceRebuild = 0;
 	}
 	else if (anyUpdate) {
 		if (m_NumUpdatesSinceRebuild >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE) {
-			if (sceneGraph->TryMaintenanceRebuild(frameIndex)) {
-				rebuild = true;
-				m_NumUpdatesSinceRebuild = 0;
-			}
-			else {
-				rebuild = false;
-			}
-		}
-		else {
-			m_NumUpdatesSinceRebuild++;
-			rebuild = false;
+			rebuild = sceneGraph->TryMaintenanceRebuild(frameIndex);
 		}
 	}
 	else {
-		logger::warn("BLASCluster::BuildUpdate - {} no work needed (firstBuild: {}, membershipDirty: {}, anyStructure: {}, anyUpdate: {})",
-			m_Name, firstBuild, m_MembershipDirty, anyStructure, anyUpdate);
+		logger::warn("BLASCluster::BuildUpdate - {} no work needed (firstBuild: {}, anyStructure: {}, anyUpdate: {})",
+			m_Name, firstBuild, anyStructure, anyUpdate);
 		return;
 	}
 
+	/*if (rebuild)
+		m_NumUpdatesSinceRebuild = 0;
+	else
+		m_NumUpdatesSinceRebuild++;*/
+
 	if (m_GeometryDescs.empty()) {
 		m_BLAS = nullptr;
-		m_MembershipDirty = false;
 		m_LastBuild = frameIndex;
 		return;
 	}
@@ -297,7 +280,7 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		rebuild = true;
 
 	auto blasDesc = MakeDesc(!rebuild);
-	blasDesc.bottomLevelGeometries = decltype(blasDesc.bottomLevelGeometries)(m_GeometryDescs.begin(), m_GeometryDescs.end());
+	blasDesc.bottomLevelGeometries = m_GeometryDescs;
 
 	if (!allocate && rebuild) {
 		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);
@@ -309,6 +292,7 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
 
-	m_MembershipDirty = false;
+	m_DirtyFlags.reset();
 	m_LastBuild = frameIndex;
+	m_IsDirty = false;
 }

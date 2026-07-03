@@ -21,9 +21,9 @@ class BLASCluster
 {
 	RE::TESObjectREFR* m_Owner = nullptr; // null for orphan (no-owner) clusters; comparison key only
 
-	eastl::vector<BaseMesh*> m_Members;
+	eastl::hash_set<BaseMesh*> m_Members;
 
-	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
+	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
 	nvrhi::rt::AccelStructHandle m_BLAS;
 
@@ -37,9 +37,6 @@ class BLASCluster
 
 	// world-space bounding sphere radius, accumulated from member bounds
 	float m_ClusterRadius = 0.0f; 
-
-	// member added/removed/pruned -> full rebuild
-	bool m_MembershipDirty = true;
 
 	// any member is updatable (dynamic)
 	bool m_Updatable = false;

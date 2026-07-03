@@ -107,7 +107,7 @@ class SceneGraph
 
 	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
-	eastl::vector<BLASCluster*> m_DirtyClusters;
+	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 	
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 
