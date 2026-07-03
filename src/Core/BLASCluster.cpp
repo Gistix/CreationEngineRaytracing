@@ -15,11 +15,6 @@ BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
 		m_Name = { "Cluster (orphan)" };
 }
 
-void BLASCluster::MarkDirty()
-{
-	m_IsDirty = true;
-}
-	
 void BLASCluster::AddMember(BaseMesh* mesh)
 {
 	mesh->SetCluster(this);
@@ -262,14 +257,15 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		return;
 	}
 
-	/*if (rebuild)
+	if (rebuild)
 		m_NumUpdatesSinceRebuild = 0;
 	else
-		m_NumUpdatesSinceRebuild++;*/
+		m_NumUpdatesSinceRebuild++;
 
 	if (m_GeometryDescs.empty()) {
 		m_BLAS = nullptr;
 		m_LastBuild = frameIndex;
+		m_DirtyFlags.reset();
 		return;
 	}
 
@@ -294,5 +290,4 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 
 	m_DirtyFlags.reset();
 	m_LastBuild = frameIndex;
-	m_IsDirty = false;
 }

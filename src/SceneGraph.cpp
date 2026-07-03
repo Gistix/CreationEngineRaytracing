@@ -628,10 +628,8 @@ void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
 	if (!cluster) 
 		return;
 	
-	if (!cluster->m_IsDirty) {
-		cluster->MarkDirty();
-		m_DirtyClusters.emplace(cluster);
-	}
+	cluster->MarkDirty();
+	m_DirtyClusters.emplace(cluster);
 }
 
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)

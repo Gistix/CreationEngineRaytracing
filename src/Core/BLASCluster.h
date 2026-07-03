@@ -41,9 +41,6 @@ class BLASCluster
 	// any member is updatable (dynamic)
 	bool m_Updatable = false;
 
-	// Pending rebuild/refit (set exclusively by SceneGraph::MarkClusterDirty)
-	bool m_IsDirty = false;
-	
 	friend class SceneGraph;
 
 	uint32_t m_NumUpdatesSinceRebuild = 0;
@@ -65,9 +62,8 @@ public:
 	explicit BLASCluster(RE::TESObjectREFR* owner);
 
 	void AddMember(BaseMesh* mesh);
-
 	void RemoveMember(BaseMesh* mesh);
-	void MarkDirty();
+
 	const auto& GetMembers() const { return m_Members; }
 
 	// Grow the world-space bounding sphere to include the given bound (center + radius in world space).
