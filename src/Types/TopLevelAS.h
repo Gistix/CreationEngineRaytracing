@@ -12,7 +12,7 @@ class TopLevelAS
 {
 	eastl::array<nvrhi::rt::AccelStructHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_Handle;
 	eastl::vector<nvrhi::rt::InstanceDesc> m_InstanceDescs;
-	uint32_t m_NumInstances = 0;
+	uint32_t m_NumInstances[Constants::MAX_FRAMES_IN_FLIGHT] = {0};
 
 	eastl::vector<ITLASUpdateListener*> m_Listeners;
 
@@ -70,18 +70,18 @@ public:
 
 		const auto ringSlot = Renderer::GetSingleton()->GetCurrentSlot();
 
-		if (!m_Handle[ringSlot] || topLevelInstances > m_NumInstances - Constants::TLAS_INSTANCES_THRESHOLD) {
+		if (!m_Handle[ringSlot] || topLevelInstances > m_NumInstances[ringSlot] - Constants::TLAS_INSTANCES_THRESHOLD) {
 			float topLevelInstancesRatio = std::ceil(topLevelInstances / static_cast<float>(Constants::TLAS_INSTANCES_STEP));
 
 			uint32_t topLevelMaxInstances = static_cast<uint32_t>(topLevelInstancesRatio) * Constants::TLAS_INSTANCES_STEP;
 
-			m_NumInstances = std::max(topLevelMaxInstances + Constants::TLAS_INSTANCES_STEP, Constants::TLAS_INSTANCES_MIN);
+			m_NumInstances[ringSlot] = std::max(topLevelMaxInstances + Constants::TLAS_INSTANCES_STEP, Constants::TLAS_INSTANCES_MIN);
 
-			logger::debug("TopLevelAS::UpdateInstance - TLAS Max Instances: {}", m_NumInstances);
+			logger::debug("TopLevelAS::UpdateInstance - TLAS Max Instances [{}]: {}", ringSlot, m_NumInstances[ringSlot]);
 
 			nvrhi::rt::AccelStructDesc tlasDesc;
 			tlasDesc.isTopLevel = true;
-			tlasDesc.topLevelMaxInstances = m_NumInstances;
+			tlasDesc.topLevelMaxInstances = m_NumInstances[ringSlot];
 			tlasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 			m_Handle[ringSlot] = Renderer::GetSingleton()->GetDevice()->createAccelStruct(tlasDesc);
 
