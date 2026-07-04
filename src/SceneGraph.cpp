@@ -439,16 +439,20 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
 		const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
 
+		// Exclude alpha blended effects
+		auto* alphaProperty = geometryData.alphaProperty;
+		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+		const bool validEffect = isEffectShader && !isAlphaBlend;
+
+		if (!isLightingShader && !validEffect && !isWaterShader)
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+
+		// Exclude tree lod and grass for now
 		const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
 		const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
 		const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
 
-		auto* alphaProperty = geometryData.alphaProperty;
-		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
-
-		const bool validEffect = isEffectShader && !isAlphaBlend;
-
-		if (!isLightingShader && !validEffect && !isWaterShader && !isTreeLODShader && !isGrassShader)
+		if (isTreeLODShader || isGrassShader)
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 
 		const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
