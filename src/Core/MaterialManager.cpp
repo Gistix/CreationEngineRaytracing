@@ -97,11 +97,6 @@ uint64_t MaterialManager::Allocate()
 	return offset;
 }
 
-void MaterialManager::Free(uint64_t offset)
-{
-	m_FreeOffsets.push_back(offset);
-}
-
 void MaterialManager::Write(MaterialBase* material)
 {
 	const uint64_t offset = material->GetOffset();
@@ -128,10 +123,19 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 
 	std::scoped_lock lock(m_MaterialMutex);
 
-	auto& material = m_Material[shaderMaterial];
+	eastl::shared_ptr<MaterialBase> material = nullptr;
 
-	if (material)
-		return material;
+	bool isEmplaced = false;
+
+	auto it = m_Material.find(shaderMaterial);
+	if (it != m_Material.end()) {
+		isEmplaced = true;
+
+		material = it->second.lock();
+
+		if (material)
+			return material;
+	}
 
 	auto offset = Allocate();
 
@@ -198,24 +202,23 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 		material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
 	}
 
+	material->SetManager(shared_from_this());
+
+	if (isEmplaced)
+		it->second = material;
+	else
+		m_Material.emplace(shaderMaterial, material);
+
 	Write(material.get());
 
 	return material;
 }
 
-void MaterialManager::Release(RE::BSShaderMaterial* shaderMaterial)
+void MaterialManager::Release(uint64_t offset)
 {
 	std::scoped_lock lock(m_MaterialMutex);
 
-	auto it = m_Material.find(shaderMaterial);
-	if (it == m_Material.end())
-		return;
-
-	// The last reference is the one held by the manager, so erase it
-	if (it->second.unique()) {
-		Free(it->second->GetOffset());
-		m_Material.erase(it);
-	}
+	m_FreeOffsets.push_back(offset);
 }
 
 void MaterialManager::Update(MaterialBase* material)

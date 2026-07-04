@@ -1,14 +1,29 @@
 #include "Core/Material/MaterialBase.h"
-
+#include "Core/MaterialManager.h"
 #include "Util.h"
 
-MaterialBase::MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset) 
+MaterialBase::MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
+	: m_Offset(offset)
 {
-	m_Offset = offset;
-
 	m_Data = eastl::make_unique<Data>();
 
 	Initialize(m_Data.get(), shaderMaterial);
+}
+
+MaterialBase::~MaterialBase()
+{
+	auto managerPtr = m_Manager.lock();
+	if (!managerPtr) {
+		logger::error("Missing material manager during material destruction");
+		return;
+	}
+
+	managerPtr->Release(m_Offset);
+}
+
+void MaterialBase::SetManager(const eastl::shared_ptr<MaterialManager>& managerPtr)
+{
+	m_Manager = managerPtr;
 }
 
 void MaterialBase::Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial)

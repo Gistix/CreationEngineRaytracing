@@ -2,6 +2,8 @@
 
 #include "Interop/Material/MaterialBaseData.hlsli"
 
+class MaterialManager;
+
 struct MaterialBase
 {
 	using Data = MaterialBaseData;
@@ -22,6 +24,10 @@ struct MaterialBase
 
 	MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
+	~MaterialBase();
+
+	void SetManager(const eastl::shared_ptr<MaterialManager>& managerPtr);
+
 	void Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial);
 
 	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial);
@@ -35,6 +41,8 @@ struct MaterialBase
 	// Material has to be aligned to 4 bytes by design, so we compress the offset to send as a uint32_t
 	uint32_t GetOffsetComp() const { return static_cast<uint32_t>(m_Offset / 4); }
 protected:
+	eastl::weak_ptr<MaterialManager> m_Manager;
+
 	// Material buffer offset
 	uint64_t m_Offset = 0;
 

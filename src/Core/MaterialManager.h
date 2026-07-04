@@ -21,7 +21,7 @@
 #include "Interop/Material/Skyrim/WaterMaterialData.hlsli"
 #include "Types/BindlessTable.h"
 
-class MaterialManager
+class MaterialManager : public eastl::enable_shared_from_this<MaterialManager>
 {
 	// Uniform slot size: the largest material-data struct, so every material fits its slot.
 	static constexpr size_t kSizeReference = std::max({
@@ -43,7 +43,7 @@ class MaterialManager
 		sizeof(WaterMaterialData)
 	});
 
-	eastl::unordered_map<RE::BSShaderMaterial*, eastl::shared_ptr<MaterialBase>> m_Material;
+	eastl::unordered_map<RE::BSShaderMaterial*, eastl::weak_ptr<MaterialBase>> m_Material;
 	mutable std::mutex m_MaterialMutex;
 
 	// Stable GPU material data buffer (materials keep a fixed offset for their lifetime)
@@ -64,7 +64,6 @@ class MaterialManager
 	uint64_t m_NextOffset = 0;
 
 	uint64_t Allocate();
-	void Free(uint64_t offset);
 	void Write(MaterialBase* material);
 
 	// (Re)creates m_Buffer at the current m_Size and points the descriptor table at it.
@@ -82,7 +81,7 @@ public:
 	inline auto& GetDescriptors() const { return m_Descriptors; }
 
 	eastl::shared_ptr<MaterialBase> Get(RE::BSShaderMaterial* shaderMaterial);
-	void Release(RE::BSShaderMaterial* shaderMaterial);
+	void Release(uint64_t offset);
 
 	void Update(MaterialBase* material);
 	void Flush(nvrhi::ICommandList* commandList);

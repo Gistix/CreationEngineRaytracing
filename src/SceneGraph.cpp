@@ -33,7 +33,7 @@ void SceneGraph::Initialize()
 	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
 
-	m_MaterialManager = eastl::make_unique<MaterialManager>();
+	m_MaterialManager = eastl::make_shared<MaterialManager>();
 
 	// Triangle bindless descriptor table
 	{

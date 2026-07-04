@@ -53,7 +53,7 @@ class SceneGraph
 	mutable std::mutex m_MeshDestroyMutex;
 
 	// Material manager
-	eastl::unique_ptr<MaterialManager> m_MaterialManager;
+	eastl::shared_ptr<MaterialManager> m_MaterialManager;
 
 	// Model Path, Model data ptr
 	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
