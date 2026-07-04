@@ -28,7 +28,7 @@
 float3 evalSingleScatteringTransmission(
     const Surface sourceSurface,
     const BRDFContext sourceBRDFContext,
-    const Material sourceMaterial,
+    const LightingMaterialData sourceLightingMaterialData,
     const Instance sourceInstance,
     const SubsurfaceMaterialData subsurfaceMaterialData,
     const SubsurfaceInteraction subsurfaceInteraction,
@@ -68,8 +68,8 @@ float3 evalSingleScatteringTransmission(
                 float3 localPosition = transmissionRay.Origin + refractedRayDirection * payload.hitDistance;
 
                 Instance sampleInstance;
-                Material sampleMaterial;
-                Surface sampleSurface = SurfaceMaker::make(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleMaterial, false);
+                LightingMaterialData sampleLightingMaterialData;
+                Surface sampleSurface = SurfaceMaker::make(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleLightingMaterialData, false);
 
                 const float3 sampleGeometryNormal = sampleSurface.FaceNormal;
                 const float3 sampleShadingNormal = sampleSurface.Normal;
@@ -141,8 +141,8 @@ float3 evalSingleScatteringTransmission(
                 float3 scatterLocalPosition = scatteringRay.Origin + scatteringDirection * scatteringPayload.hitDistance;
 
                 Instance scatterInstance;
-                Material scatterMaterial;
-                Surface scatterSurface = SurfaceMaker::make(scatterLocalPosition, scatteringPayload, scatteringDirection, rayCone, scatterInstance, scatterMaterial, false);
+                LightingMaterialData scatterLightingMaterialData;
+                Surface scatterSurface = SurfaceMaker::make(scatterLocalPosition, scatteringPayload, scatteringDirection, rayCone, scatterInstance, scatterLightingMaterialData, false);
 
                 const float3 scatteringSampleGeometryNormal = scatterSurface.FaceNormal;
 
@@ -190,7 +190,7 @@ float3 evalSingleScatteringTransmission(
 float3 EvaluateSubsurfaceDiffuseNEE(
     const Surface surface,
     const BRDFContext brdfContext,
-    const Material material,
+    const LightingMaterialData material,
     const Instance instance,
     const Payload initialPayload,
     RayCone rayCone,
@@ -274,8 +274,8 @@ float3 EvaluateSubsurfaceDiffuseNEE(
             {
                 const float3 sampleLocalPosition = subsurfaceSample.samplePosition + samplePayload.hitDistance * (-subsurfaceInteraction.normal);
                 Instance sampleInstance;
-                Material sampleMaterial;
-                Surface sampleSurface = SurfaceMaker::make(sampleLocalPosition, samplePayload, -subsurfaceInteraction.normal, rayCone, sampleInstance, sampleMaterial, primary);
+                LightingMaterialData sampleLightingMaterialData;
+                Surface sampleSurface = SurfaceMaker::make(sampleLocalPosition, samplePayload, -subsurfaceInteraction.normal, rayCone, sampleInstance, sampleLightingMaterialData, primary);
                 if (sampleSurface.SubsurfaceData.HasSubsurface == 0)
                 {
                     continue;

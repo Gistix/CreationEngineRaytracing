@@ -85,11 +85,11 @@ namespace Util
 {
 	namespace Geometry
 	{
-		std::uint32_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags)
+		std::uint16_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags)
 		{
 			using RE::BSGraphics::Vertex;
 
-			std::uint32_t vertexSize = 0;
+			std::uint16_t vertexSize = 0;
 
 			if (flags & Vertex::VF_VERTEX) {
 				vertexSize += sizeof(float) * 4;
@@ -122,9 +122,41 @@ namespace Util
 			return vertexSize;
 		}
 
-		uint16_t GetStoredVertexSize(uint64_t desc)
+		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc vertexDesc)
 		{
-			return (desc & 0xF) * 4;
+			const auto vertexDescUInt = *reinterpret_cast<uint64_t*>(&vertexDesc);
+			return ((vertexDescUInt & 0xF) << 2);
+		}
+
+		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance)
+		{
+#if defined(SKYRIM)
+			if (!skinInstance)
+				return false;
+
+			return skinInstance->GetRTTI() == Constants::rtti::BSDismemberSkinInstance.get();
+#else
+			(void)skinInstance;
+			return false;
+#endif
+		}
+
+		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility)
+		{
+			outVisibility.clear();
+
+#if defined(SKYRIM)
+			if (!skinInstance)
+				return;
+
+			auto& runtime = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance)->GetRuntimeData();
+			outVisibility.resize(runtime.numPartitions);
+
+			for (int32_t i = 0; i < runtime.numPartitions; ++i)
+				outVisibility[i] = runtime.partitions[i].editorVisible;
+#else
+			(void)skinInstance;
+#endif
 		}
 
 		bool HasDoubleSidedGeom(Mesh* mesh)

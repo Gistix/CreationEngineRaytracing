@@ -53,12 +53,6 @@ namespace magic_enum::customize
 	};
 
 	template <>
-	struct enum_range<Material::WaterShaderFlags>
-	{
-		static constexpr bool is_flags = true;
-	};
-
-	template <>
 	struct enum_range<SupportedFeatures>
 	{
 		static constexpr bool is_flags = true;

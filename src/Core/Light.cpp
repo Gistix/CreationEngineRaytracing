@@ -7,9 +7,7 @@
 
 void Light::UpdateInstances()
 {
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-	auto runtimeData = Util::Adapter::GetLightRuntimeData(m_Light->light.get());
+	/*auto runtimeData = Util::Adapter::GetLightRuntimeData(m_Light->light.get());
 
 	auto& position = m_Light->light->world.translate;
 
@@ -27,7 +25,7 @@ void Light::UpdateInstances()
 		m_Instances.emplace(instance.get());
 
 		return Iterator::Continue;
-	});
+	});*/
 }
 
 void Light::UpdateTLAS(nvrhi::ICommandList* commandList)
