@@ -48,6 +48,7 @@ void DefaultMaterial(inout Surface surface, in float2 texCoord0, in float4 verte
     
     const bool skinEnabled = (material.Type == Type::Lighting) &&
         (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint) &&
+        !(mesh.Properties.AlphaFlags & AlphaFlags::Additive) &&
         SKINSETTINGS.skinParams.w > 0.0f;
     
     float3 normal = clampSampler ? 
