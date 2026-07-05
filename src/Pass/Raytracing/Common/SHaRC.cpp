@@ -68,7 +68,7 @@ namespace Pass
 		if (m_Enabled && (!wasEnabled || definesChanged)) {
 			SetupUpdate();
 			SetupResolve();
-			m_DirtyBindings = true;
+			m_BindingSetDirty.fill(true);
 		}
 
 		if (m_Enabled && (!wasEnabled || cacheSettingsChanged || definesChanged))
@@ -126,7 +126,8 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		m_UpdatePass.m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 	}
@@ -180,14 +181,17 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_ResolveBuffer),
 		};
 
-		m_ResolvePass.m_BindingSet = device->createBindingSet(bindingSetDesc, m_ResolvePass.m_BindingLayout);
+		auto resolveBindingSet = device->createBindingSet(bindingSetDesc, m_ResolvePass.m_BindingLayout);
+		for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++)
+			m_ResolvePass.m_BindingSets[i] = resolveBindingSet;
 
 		m_ResolvePass.m_Initialized = true;
 	}
 
 	void SHaRC::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_UpdatePass.m_BindingSets[currentSlot])
 			return;
 
 		auto* scene = Scene::GetSingleton();
@@ -216,9 +220,9 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)
 		};
 
-		m_UpdatePass.m_BindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_UpdatePass.m_BindingLayout);
+		m_UpdatePass.m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_UpdatePass.m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void SHaRC::ClearCache(nvrhi::ICommandList* commandList)
@@ -233,6 +237,8 @@ namespace Pass
 
 	void SHaRC::Execute(nvrhi::ICommandList* commandList)
 	{
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
 		if (!m_Enabled)
 			return;
 
@@ -253,13 +259,14 @@ namespace Pass
 			CheckBindings();
 
 			state.bindings = {
-				m_UpdatePass.m_BindingSet,
+				m_UpdatePass.m_BindingSets[currentSlot],
 				sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-				sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+				sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
-				sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
+				sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+				sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 			};
 			commandList->setComputeState(state);
 
@@ -270,8 +277,7 @@ namespace Pass
 				Util::Math::DivideRoundUp(resolution.y, 5u)
 			};
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, 16);
-
+			auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, Constants::PT_DISPATCH_THREADS);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 
@@ -279,7 +285,20 @@ namespace Pass
 		{
 			nvrhi::ComputeState state;
 			state.pipeline = m_ResolvePass.m_ComputePipeline;
-			state.bindings = { m_ResolvePass.m_BindingSet };
+
+			if (!m_ResolvePass.m_BindingSets[currentSlot]) {
+				nvrhi::BindingSetDesc bindingSetDesc;
+				bindingSetDesc.bindings = {
+					nvrhi::BindingSetItem::ConstantBuffer(0, Scene::GetSingleton()->GetCameraBuffer()),
+					nvrhi::BindingSetItem::ConstantBuffer(1, m_SHaRCBuffer),
+					nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
+					nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_AccumulationBuffer),
+					nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_ResolveBuffer),
+				};
+				m_ResolvePass.m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_ResolvePass.m_BindingLayout);
+			}
+
+			state.bindings = { m_ResolvePass.m_BindingSets[currentSlot] };
 			commandList->setComputeState(state);
 
 			const auto threadGroupSize = Util::Math::DivideRoundUp(MAX_CAPACITY, RESOLVE_LINEAR_BLOCK_SIZE);

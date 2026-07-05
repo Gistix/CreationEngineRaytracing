@@ -24,9 +24,9 @@ namespace Pass::Common
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
-		nvrhi::BindingSetHandle m_BindingSet;
+		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 
-		bool m_DirtyBindings = true;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 	public:
 		GIComposite(Renderer* renderer);

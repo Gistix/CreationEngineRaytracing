@@ -87,11 +87,6 @@ struct Model
 
 	bool ShouldQueueMSNConversion() const
 	{
-		for (auto& mesh : m_Meshes) {
-			if (mesh->material->shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals) && mesh->material->shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kLODLandscape))
-				return true;
-		}
-
 		return false;
 	}
 
@@ -130,12 +125,12 @@ struct Model
 
 	auto GetShaderTypes() const
 	{
-		return shaderTypes;
+		return 0;
 	}
 
 	auto GetAlphaFlags() const
 	{
-		return m_AlphaFlags;
+		return 0;
 	}
 
 	auto GetShaderFlags() const
@@ -166,8 +161,6 @@ private:
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	CESEAdapter::REX::EnumSet<Mesh::Flags> meshFlags = Mesh::Flags::None;
 	EnumFlags<Mesh::Type> m_MeshTypes = 0;
-	CESEAdapter::REX::EnumSet<Material::AlphaFlags> m_AlphaFlags = Material::AlphaFlags::None;
-	EnumFlags<Material::ShaderType> shaderTypes = 0;
 	CESEAdapter::REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	eastl::atomic<int> refCount{ 0 };
 

@@ -4,6 +4,8 @@
 
 #include "Types/Settings.h"
 
+#include "Constants.h"
+
 class Renderer;
 class PassResources;
 class FrameGraph;

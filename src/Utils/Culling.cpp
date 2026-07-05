@@ -5,14 +5,14 @@ namespace Util
 {
 	namespace Culling
 	{
-		bool ShouldCull(RE::BSGeometry& geometry)
+		bool ShouldCull(RE::BSGeometry* geometry)
 		{
 			static const REL::Relocation<const RE::NiRTTI*> skyRTTI{ NiRTTI(BSSkyShaderProperty) };
 #if defined(SKYRIM)
 			static const REL::Relocation<const RE::NiRTTI*> particleRTTI{ NiRTTI(BSParticleShaderProperty) };
 #endif
 
-			auto runtimeData = Util::Adapter::GetGeometryRuntimeData(&geometry);
+			auto runtimeData = Util::Adapter::GetGeometryRuntimeData(geometry);
 			auto* shaderPropertyRTTI = runtimeData.shaderProperty->GetRTTI();
 
 			if (shaderPropertyRTTI == skyRTTI.get())

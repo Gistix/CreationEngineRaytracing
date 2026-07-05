@@ -65,16 +65,11 @@ void Model::UpdateMeshFlags()
 {
 	meshFlags.reset();
 	m_MeshTypes.reset();
-	m_AlphaFlags.reset();
-	shaderTypes = 0;
 	shaderFlags.reset();
 
 	for (auto& mesh : m_Meshes) {
 		meshFlags.set(mesh->flags.get());
 		m_MeshTypes.set(mesh->m_Type);
-		m_AlphaFlags.set(mesh->material->alphaFlags);
-		shaderTypes.set(mesh->material->shaderType);
-		shaderFlags.set(mesh->material->shaderFlags.get());
 	}
 }
 
@@ -149,19 +144,10 @@ void Model::Update(RE::NiAVObject* object, bool isPlayer, nvrhi::ICommandList* c
 
 	UpdateFlags();
 
-	auto skinningPass = renderer->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>();
-
 	auto externalEmittance = GetExternalEmittance();
 
 	for (auto& mesh : m_Meshes) {
 		auto dirtyFlags = mesh->Update(object, isPlayer, meshFlags.get());
-
-		bool vertexUpdate = (dirtyFlags & DirtyFlags::Vertex) != DirtyFlags::None;
-		bool skinUpdate = (dirtyFlags & DirtyFlags::Skin) != DirtyFlags::None;
-
-		if (skinningPass && (vertexUpdate || skinUpdate)) {
-			skinningPass->QueueUpdate(dirtyFlags, mesh.get());
-		}
 
 		if (!mesh->IsHidden())
 			mesh->UpdateData(commandList, externalEmittance);

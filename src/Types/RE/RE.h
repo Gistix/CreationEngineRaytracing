@@ -2,6 +2,7 @@
 
 #include "PCH.h"
 
+#include "TriShapeDX12.h"
 #include "BGSObjectBlock.h"
 #if defined(SKYRIM)
 #include "CellAttachDetachEvent.h"

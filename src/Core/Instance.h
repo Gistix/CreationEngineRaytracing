@@ -65,9 +65,6 @@ struct Instance
 	{
 		auto instanceMask = InstanceMask::None;
 
-		if (model->GetShaderTypes().any(Material::ShaderType::Water))
-			instanceMask |= InstanceMask::Water;
-
 		if (instanceMask == InstanceMask::None)
 			instanceMask = InstanceMask::Default;
 

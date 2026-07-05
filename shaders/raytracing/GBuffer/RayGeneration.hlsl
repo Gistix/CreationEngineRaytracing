@@ -27,10 +27,6 @@
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
-#ifndef THREAD_GROUP_SIZE
-#define THREAD_GROUP_SIZE (32)
-#endif
-
 #if USE_RAY_QUERY
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 #   if defined(GROUP_TILING)
@@ -95,7 +91,7 @@ void Main()
     float3 worldPosition = ray.Origin + ray.Direction * payload.hitDistance;
     
     Instance instance;
-    Material material;
+    LightingMaterialData material;
 
     Surface surface = SurfaceMaker::make(worldPosition, payload, ray.Direction, rayCone, instance, material);
 

@@ -33,13 +33,13 @@ namespace Pass::Raytracing
 
 		// Binding layout and sets
 		nvrhi::BindingLayoutHandle m_BindingLayout;
-		nvrhi::BindingSetHandle m_BindingSet;
+		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
 		SceneTLAS* m_SceneTLAS;
 
-		bool m_DirtyBindings = true;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 		bool m_Enabled = false;
 		rtxdi::ReSTIRGI_ResamplingMode m_ResamplingMode = rtxdi::ReSTIRGI_ResamplingMode::TemporalAndSpatial;
 		eastl::vector<ShaderDefine> m_Defines;

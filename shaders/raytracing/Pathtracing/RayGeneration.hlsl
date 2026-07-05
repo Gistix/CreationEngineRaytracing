@@ -40,10 +40,6 @@
 
 #include "include/NRD.hlsli"
 
-#ifndef THREAD_GROUP_SIZE
-#define THREAD_GROUP_SIZE (32)
-#endif
-
 #if USE_RAY_QUERY
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 #   if defined(GROUP_TILING)
@@ -214,7 +210,7 @@ void Main()
     float3 sourcePosition = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
     
     Instance sourceInstance;
-    Material sourceMaterial;
+    LightingMaterialData sourceMaterial;
 
     Surface sourceSurface = SurfaceMaker::make(sourcePosition, sourcePayload, sourceDirection, sourceRayCone, sourceInstance, sourceMaterial, true);
 
@@ -222,7 +218,7 @@ void Main()
     float3 primaryEffectEmissive = float3(0, 0, 0);
 #if defined(EFFECT_PASSTHROUGH)    
     [loop]
-    for (uint effectPrimPass = 0; effectPrimPass < 16 && sourceMaterial.ShaderType == ShaderType::Effect; effectPrimPass++)
+    for (uint effectPrimPass = 0; effectPrimPass < 16 && sourceMaterial.Type == Type::Effect; effectPrimPass++)
     {
         primaryEffectEmissive += sourceSurface.Emissive;
 
@@ -301,9 +297,9 @@ void Main()
         sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
     }
 
-    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);    
-    
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
+
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
     
  #if !(defined(SHARC) && SHARC_UPDATE)
     // Coat-priority GBuffer: when coat is present, use coat normal/roughness for denoiser;
@@ -423,6 +419,7 @@ void Main()
             Camera.Position.xyz, sourceDirection, sourcePayload.hitDistance,
             buildSceneLength, buildThp, buildMVs, buildImageXform, buildRoughnessAccum,
             sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant,
+            sourceMaterial,
             sourceInstance, randomSeed,
             buildInsideWater, buildWaterAbsorption);
 
@@ -456,7 +453,7 @@ void Main()
 
             float3 buildHitPos = buildRay.Origin + buildRay.Direction * buildPayload.hitDistance;
             Instance buildInstance;
-            Material buildMaterial;
+            LightingMaterialData buildMaterial;
             RayCone buildRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * buildSceneLength, Raytracing.PixelConeSpreadAngle);
             Surface buildSurface = SurfaceMaker::make(buildHitPos, buildPayload, hitResult.nextRayDir, buildRayCone, buildInstance, buildMaterial, true);
             BRDFContext buildBrdfCtx = BRDFContext::make(buildSurface, -hitResult.nextRayDir);
@@ -466,13 +463,14 @@ void Main()
                 buildBrdfCtx.NdotV = saturate(dot(buildSurface.Normal, buildBrdfCtx.ViewDirection));
             }
             AdjustShadingNormal(buildSurface, buildBrdfCtx, true, false);
-            StandardBSDF buildBsdf = StandardBSDF::make(buildSurface, buildIsEnter);
+            StandardBSDF buildBsdf = StandardBSDF::make(buildSurface, buildSurface.Normal, buildBrdfCtx.ViewDirection, buildIsEnter);
 
             hitResult = StablePlanesHandleHit(
                 spCtx, idx, buildPlaneIndex, hitResult.nextVertexIndex, hitResult.nextBranchID,
                 hitResult.nextRayOrigin, hitResult.nextRayDir, buildPayload.hitDistance,
                 buildSceneLength, hitResult.nextThp, buildMVs, hitResult.nextImageXform,
                 hitResult.nextRoughnessAccum, buildSurface, buildBrdfCtx, buildBsdf, buildIsDominant,
+                buildMaterial,
                 buildInstance, randomSeed,
                 hitResult.nextInsideWater, hitResult.nextWaterAbsorption);
         }
@@ -518,7 +516,7 @@ void Main()
             {
                 float3 expHitPos = expRay.Origin + expRay.Direction * expPayload.hitDistance;
                 Instance expInstance;
-                Material expMaterial;
+                LightingMaterialData expMaterial;
                 RayCone expRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * expSceneLength, Raytracing.PixelConeSpreadAngle);
                 Surface expSurface = SurfaceMaker::make(expHitPos, expPayload, ep.rayDir, expRayCone, expInstance, expMaterial, false);
                 BRDFContext expBrdfCtx = BRDFContext::make(expSurface, -ep.rayDir);
@@ -528,13 +526,14 @@ void Main()
                     expBrdfCtx.NdotV = saturate(dot(expSurface.Normal, expBrdfCtx.ViewDirection));
                 }
                 AdjustShadingNormal(expSurface, expBrdfCtx, true, false);
-                StandardBSDF expBsdf = StandardBSDF::make(expSurface, expIsEnter);
+                StandardBSDF expBsdf = StandardBSDF::make(expSurface, expSurface.Normal, expBrdfCtx.ViewDirection, expIsEnter);
 
                 StablePlanesHitResult expHitResult = StablePlanesHandleHit(
                     spCtx, idx, buildPlaneIndex, ep.vertexIndex, ep.stableBranchID,
                     ep.rayOrigin, ep.rayDir, expPayload.hitDistance,
                     expSceneLength, ep.throughput, ep.motionVectors, ep.imageXform,
                     ep.roughnessAccum, expSurface, expBrdfCtx, expBsdf, buildIsDominant,
+                    expMaterial,
                     expInstance, randomSeed,
                     ep.insideWaterVolume, ep.waterVolumeAbsorption);
 
@@ -564,7 +563,7 @@ void Main()
 
                     float3 contHitPos = contRay.Origin + contRay.Direction * contPayload.hitDistance;
                     Instance contInstance;
-                    Material contMaterial;
+                    LightingMaterialData contMaterial;
                     RayCone contRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * expSceneLength, Raytracing.PixelConeSpreadAngle);
                     Surface contSurface = SurfaceMaker::make(contHitPos, contPayload, expHitResult.nextRayDir, contRayCone, contInstance, contMaterial, false);
                     BRDFContext contBrdfCtx = BRDFContext::make(contSurface, -expHitResult.nextRayDir);
@@ -574,13 +573,14 @@ void Main()
                         contBrdfCtx.NdotV = saturate(dot(contSurface.Normal, contBrdfCtx.ViewDirection));
                     }
                     AdjustShadingNormal(contSurface, contBrdfCtx, true, false);
-                    StandardBSDF contBsdf = StandardBSDF::make(contSurface, contIsEnter);
+                    StandardBSDF contBsdf = StandardBSDF::make(contSurface, contSurface.Normal, contBrdfCtx.ViewDirection, contIsEnter);
 
                     expHitResult = StablePlanesHandleHit(
                         spCtx, idx, buildPlaneIndex, expHitResult.nextVertexIndex, expHitResult.nextBranchID,
                         expHitResult.nextRayOrigin, expHitResult.nextRayDir, contPayload.hitDistance,
                         expSceneLength, expHitResult.nextThp, ep.motionVectors, expHitResult.nextImageXform,
                         expHitResult.nextRoughnessAccum, contSurface, contBrdfCtx, contBsdf, buildIsDominant,
+                        contMaterial,
                         contInstance, randomSeed,
                         expHitResult.nextInsideWater, expHitResult.nextWaterAbsorption);
                 }
@@ -644,7 +644,7 @@ void Main()
             sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
         }
         AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);
-        sourceBSDF = StandardBSDF::make(sourceSurface, sourceIsEnter);
+        sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
         fillPlaneThp = fillThp;
 
         // SurfaceDataBuffer for ReSTIR GI is now written in the bounce loop
@@ -750,12 +750,12 @@ void Main()
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
-                StandardBSDF specBsdf = StandardBSDF::make(specSurface, true);
-                direct += EvaluateDirectRadiance(sourceMaterial, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
+                StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
             }
             else
 #endif
-                direct += EvaluateDirectRadiance(sourceMaterial, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
         }
         
         // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights.
@@ -806,7 +806,7 @@ void Main()
     Payload payload;
 
     Instance instance;
-    Material material;
+    LightingMaterialData material;
 
     Surface surface;
     BRDFContext brdfContext;
@@ -919,7 +919,7 @@ void Main()
             float4 scatterSamples;
             float2 scatterExtraSamples;
             GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
-            bool isValid = bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, scatterSamples, scatterExtraSamples);
+            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples);
             
             if (isValid)
                 direction = bsdfSample.wo;
@@ -1075,7 +1075,7 @@ void Main()
             // Pass through Effect materials in bounce: accumulate emissive, continue ray unchanged
             bool effectMiss = false;
             [loop]
-            for (uint effectBouncePass = 0; effectBouncePass < 16 && material.ShaderType == ShaderType::Effect; effectBouncePass++)
+            for (uint effectBouncePass = 0; effectBouncePass < 16 && material.Type == Type::Effect; effectBouncePass++)
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if !defined(RESTIR_PT)
@@ -1231,7 +1231,7 @@ void Main()
             }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, isEnter);
+            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
@@ -1248,13 +1248,13 @@ void Main()
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
                 }
             }
             

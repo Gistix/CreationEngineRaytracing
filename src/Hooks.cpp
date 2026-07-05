@@ -3,84 +3,258 @@
 #include "Util.h"
 
 #include "Core/D3D12Texture.h"
+#include "Core/DynamicMesh.h"
 
 namespace Hooks
 {
-	struct TES_AttachModel
+	struct ID3D11Device_CreateBuffer
 	{
-		static void thunk(RE::TES* tes, RE::TESObjectREFR* refr, RE::TESObjectCELL* cell, void* queuedTree, bool a5, RE::NiAVObject* a6)
+		static HRESULT thunk(ID3D11Device* a_device, const D3D11_BUFFER_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Buffer** ppBuffer)
 		{
-			func(tes, refr, cell, queuedTree, a5, a6);
+			if (!pDesc)
+				return func(a_device, pDesc, pInitialData, ppBuffer);
 
-			Scene::GetSingleton()->AttachModel(refr);
-		}
+			D3D11_BUFFER_DESC desc = *pDesc;
 
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
+			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0 && (desc.BindFlags & D3D11_BIND_VERTEX_BUFFER || desc.BindFlags & D3D11_BIND_INDEX_BUFFER))
+				desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
 
-	struct TESObjectLAND_Attach3D
-	{
-		static RE::NiNode* GetCell3D(RE::TESObjectCELL* a_cell)
-		{
-#if defined(SKYRIM)
-			auto result = a_cell->GetRuntimeData().loadedData;
-#elif defined(FALLOUT4)
-			auto result = a_cell->loadedData;
-#endif
+			auto hr = func(a_device, &desc, pInitialData, ppBuffer);
 
-			if (result)
-				return result->cell3D.get();
-
-			return nullptr;
-		}
-
-		static void thunk(RE::TESObjectLAND* a_land, bool a_hasMopp)
-		{
-			bool hadMesh = a_land->loadedData->mesh[0];
-
-			func(a_land, a_hasMopp);
-
-			if (a_land->parentCell && GetCell3D(a_land->parentCell)) {
-				bool hasMesh = a_land->loadedData->mesh[0];
-
-				// Landscape mesh loaded
-				if (!hadMesh && hasMesh) {
-					// Attach3D will conditionally release landscape when loading another cell (going through doors)
-					// So release any related instances before attempting to attach
-					Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_land, true);
-					Scene::GetSingleton()->AttachLand(a_land);
-				}
+			if (FAILED(hr)) {
+				logger::error("ID3D11Device::CreateBuffer - Failed with HR: 0x{:08X}", static_cast<UINT>(hr));
+				hr = func(a_device, pDesc, pInitialData, ppBuffer);
 			}
-		};
+
+			return hr;
+		}
+
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct TESObjectLAND_Detach3D
+	struct MemoryManager_AllocateTriShape
 	{
-		static void thunk(RE::TESObjectLAND* a_land)
+		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_land, true);
+			return func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+		}
 
-			func(a_land);
-		};
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-#if defined(SKYRIM)
-	void TESWaterSystem_AddWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj, RE::TESWaterForm* a_waterType, float a_waterHeight, const RE::BSTArray<RE::NiPointer<RE::BSMultiBoundAABB>>* a_multiBoundShape, bool a_noDisplacement, bool a_isProcedural)
+	struct BSGraphics_CreateTriShape
 	{
-		func(a_waterSystem, a_waterObj, a_waterType, a_waterHeight, a_multiBoundShape, a_noDisplacement, a_isProcedural);
+		static RE::BSGraphics::TriShapeDX12* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			RE::BSStream* a_bsStream,
+			RE::BSGraphics::VertexDesc a_vertexDesc,
+			uint16_t a_vertexCount, 
+			uint32_t a_indexCount)
+		{
+			auto triShape = func(a_renderer, a_bsStream, a_vertexDesc, a_vertexCount, a_indexCount);
 
-		Scene::GetSingleton()->GetSceneGraph()->CreateWaterModel(a_waterType, a_waterObj);
+			// Share vertex buffer
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+	
+			// Share index buffer
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
+
+			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	void TESWaterSystem_RemoveWater::thunk(RE::TESWaterSystem* a_waterSystem, RE::NiAVObject* a_waterObj)
+	struct BSGraphics_CreateTriShapeParticles
 	{
-		Scene::GetSingleton()->GetSceneGraph()->ReleaseWaterInstance(a_waterObj);
+		static RE::BSGraphics::TriShapeDX12* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			uint8_t* vertexData, 
+			uint32_t vertexDataSize,
+			RE::BSGraphics::VertexDesc vertexDesc,
+			uint16_t* indexData, 
+			uint32_t numIndices)
+		{
+			auto triShape = func(a_renderer, vertexData, vertexDataSize, vertexDesc, indexData, numIndices);
 
-		func(a_waterSystem, a_waterObj);
+			// Share vertex buffer
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+
+			// Share index buffer
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
+
+			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
 	};
-#endif
+
+	struct BSGraphics_CreateTriShapeVertex
+	{
+		struct IndexRenderData
+		{
+			ID3D11Buffer* indexBuffer;
+			int32_t refCount;
+		};
+
+		static RE::BSGraphics::TriShapeDX12* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			uint8_t* a_vertexData,
+			uint32_t a_vertexDataSize,
+			RE::BSGraphics::VertexDesc a_vertexDesc,
+			IndexRenderData* a_indexRenderData)
+		{
+			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a_indexRenderData);
+
+			// Share vertex buffer
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+
+			// The original code does 'triShape->indexBuffer = a_indexRenderData->indexBuffer' and calls 'AddRef'
+			// We have no way of copying the original indexBufferDX12 here, so we just share it again
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
+
+			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSGraphics_CreateTriShapeIndex
+	{
+		struct VertexRenderData
+		{
+			ID3D11Buffer* vertexBuffer;				// 00
+			ID3D11Buffer* indexBuffer;				// 08
+			RE::BSGraphics::VertexDesc vertexDesc;  // 10
+		};
+
+		static RE::BSGraphics::TriShapeDX12* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			VertexRenderData* a_vertexRenderData,
+			RE::BSGraphics::VertexDesc vertexDesc,
+			uint16_t* a_indexData,
+			uint32_t a_numIndices)
+		{
+			auto triShape = func(a_renderer, a_vertexRenderData, vertexDesc, a_indexData, a_numIndices);
+
+			// Share vertex buffer
+			// The original function utilizes 'BSGraphics::CopyTriShapeVertices' to copy from 'VertexRenderData' into 'RE::BSGraphics::TriShape'
+			// TODO: Find all sites where 'VertexRenderData' is created and extend it with DX12 buffers as well
+			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
+
+			// Share index buffer
+			Util::CreateSharedBuffer(triShape->indexBuffer, &triShape->indexBufferDX12);
+
+			return triShape;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// Releases dst vertexBuffer, copies src vertexBuffer pointer and calls 'AddRef'
+	// Frees dst rawVertexData, then allocates memory for src rawVertexData
+	struct BSGraphics_CopyTriShapeVertices
+	{
+		static int32_t thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			BSGraphics_CreateTriShapeIndex::VertexRenderData* a_dstTriShape,
+			BSGraphics_CreateTriShapeIndex::VertexRenderData* a_srcTriShape)
+		{
+			return func(a_renderer, a_dstTriShape, a_srcTriShape);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSTriShape_Dtor
+	{
+		static void thunk(RE::BSTriShape* a_bsTriShape, bool a_release)
+		{
+			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsTriShape);
+
+			func(a_bsTriShape, a_release);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSDynamicTriShape_Dtor
+	{
+		static void thunk(RE::BSDynamicTriShape* a_bsDynamicTriShape, bool a_release)
+		{
+			logger::info("BSDynamicTriShape::Dtor - {}", fmt::ptr(a_bsDynamicTriShape));
+
+			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsDynamicTriShape);
+
+			func(a_bsDynamicTriShape, a_release);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// Copies new float3* dynamic data to the dynamic trishape's float4* dynamic data
+	struct BSDynamicTriShape_UpdateDynamicData
+	{
+		static void thunk(RE::BSDynamicTriShape* a_bsDynamicTriShape, float3* a_dynamicData, bool a_recalculateBounds)
+		{
+			func(a_bsDynamicTriShape, a_dynamicData, a_recalculateBounds);
+
+			// Dynamic data is ready as float4* after the original function ran
+			Scene::GetSingleton()->GetSceneGraph()->UpdateDynamicData(a_bsDynamicTriShape);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct TriShape_Dtor
+	{
+		static void thunk([[ maybe_unused ]] void* a1, RE::BSGraphics::TriShape* a_triShape)
+		{
+			if (a_triShape && _InterlockedExchangeAdd(&a_triShape->refCount, 0xFFFFFFFF) == 1)
+			{
+				auto indexBuffer = reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer);
+				if (indexBuffer)
+					indexBuffer->Release();
+
+				auto vertexBuffer = reinterpret_cast<ID3D11Buffer*>(a_triShape->vertexBuffer);
+				if (vertexBuffer)
+					vertexBuffer->Release();
+
+				auto* mm = RE::MemoryManager::GetSingleton();
+
+				if (a_triShape->rawVertexData)
+					mm->Deallocate(a_triShape->rawVertexData, false);
+
+				if (a_triShape->rawIndexData)
+					mm->Deallocate(a_triShape->rawIndexData, false);
+
+				if (a_triShape->pad1C == 1) {
+					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape);
+
+					if (triShapeDX12->indexBufferDX12)
+						triShapeDX12->indexBufferDX12->Release();
+
+					if (triShapeDX12->vertexBufferDX12)
+						triShapeDX12->vertexBufferDX12->Release();
+				}
+
+				mm->Deallocate(a_triShape, false);
+			}
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSTextureSet_SetTexture
+	{
+		static void thunk(RE::BSTextureSet* a_bsTextureSet, RE::BSTextureSet::Texture a_texture, RE::NiSourceTexturePtr& a_srcTexture)
+		{
+			func(a_bsTextureSet, a_texture, a_srcTexture);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
@@ -94,28 +268,6 @@ namespace Hooks
 
 		func(oThis);
 	}
-
-	struct TESObject_UnClone3D
-	{
-		static void thunk(RE::TESObject* a_object, RE::TESObjectREFR* a_refr)
-		{
-			logger::trace("TESObject::UnClone3D - Object {:0X} {}", a_object->formID, Util::Adapter::GetName(a_object));
-
-			if (a_refr) {
-				logger::trace("TESObject::UnClone3D - Refr {:0X}", a_refr->formID);
-
-				if (auto* baseObject = Util::Adapter::GetBaseObject(a_refr)) {
-					if (auto* model = ce_cast<RE::TESModel*>(baseObject))
-						logger::trace("\tTESObject::UnClone3D - Model: {}", model->GetModel());
-				}
-
-				Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_refr, true);
-			}
-
-			func(a_object, a_refr);
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
 
 #if defined(SKYRIM)
 	struct BSGraphicsTexture_Dtor
@@ -344,6 +496,106 @@ namespace Hooks
 		}
 	}
 
+	struct CreateTexture2DAndSRV
+	{
+		static uint32_t GetBitsPerPixel(DXGI_FORMAT a_format)
+		{
+			auto fmt = static_cast<uint32_t>(a_format);
+			if (fmt >= 1 && fmt <= 4)       return 128;
+			if (fmt >= 5 && fmt <= 8)       return 96;
+			if (fmt >= 9 && fmt <= 22)      return 64;
+			if (fmt >= 23 && fmt <= 45)     return 32;
+			if (fmt == 87)                  return 32;
+			if (fmt >= 48 && fmt <= 59)     return 16;
+			if (fmt >= 60 && fmt <= 65)     return 8;
+			return 0;
+		}
+
+		static RE::BSGraphics::Texture* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			uint32_t a_width,
+			uint32_t a_height,
+			void* a_pixelData,
+			D3D11_USAGE a_usage,
+			DXGI_FORMAT a_format,
+			bool a_unorderedAccess)
+		{
+			auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+
+			auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(
+				scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
+
+			if (!texture)
+				return nullptr;
+
+			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
+
+			D3D11_TEXTURE2D_DESC desc = {};
+			desc.Width = a_width;
+			desc.Height = a_height;
+			desc.MipLevels = 1;
+			desc.ArraySize = 1;
+			desc.Format = a_format;
+			desc.SampleDesc.Count = 1;
+			desc.SampleDesc.Quality = 0;
+			desc.Usage = a_usage;
+			desc.BindFlags = (a_usage == D3D11_USAGE_STAGING) ? 0 : D3D11_BIND_SHADER_RESOURCE;
+
+			if (a_unorderedAccess)
+				desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+
+			if (a_usage == D3D11_USAGE_DYNAMIC)
+				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			else if (a_usage == D3D11_USAGE_STAGING)
+				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ;
+			else
+				desc.CPUAccessFlags = 0;
+
+			desc.MiscFlags = (a_usage == 0 || a_usage == D3D11_USAGE_IMMUTABLE) ? D3D11_RESOURCE_MISC_SHARED : 0;
+
+			D3D11_SUBRESOURCE_DATA subresData = {};
+			D3D11_SUBRESOURCE_DATA* pSubres = nullptr;
+			if (a_pixelData) {
+				auto bpp = GetBitsPerPixel(a_format);
+				subresData.pSysMem = a_pixelData;
+				subresData.SysMemPitch = (bpp >> 3) * a_width;
+				subresData.SysMemSlicePitch = 0;
+				pSubres = &subresData;
+			}
+
+			auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
+
+			ID3D11Texture2D* d3dTex = nullptr;
+			HRESULT hr = device->CreateTexture2D(&desc, pSubres, &d3dTex);
+
+			if (FAILED(hr) || !d3dTex)
+				return nullptr;
+
+			texture->texture = d3dTex;
+			texture->width = static_cast<uint16_t>(a_width);
+			texture->height = static_cast<uint16_t>(a_height);
+			texture->format = static_cast<uint8_t>(a_format);
+			texture->mips = 1;
+			texture->unk1E = 0;
+			texture->refCount = 1;
+			texture->pad24 = NO_DX12RESOURCE;
+
+			if (a_usage != D3D11_USAGE_STAGING) {
+				D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+				srvDesc.Format = a_format;
+				srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+				srvDesc.Texture2D.MostDetailedMip = 0;
+				srvDesc.Texture2D.MipLevels = 1;
+
+				device->CreateShaderResourceView(d3dTex, &srvDesc, &texture->resourceView);
+			}
+
+			return texture;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	void CreateRenderTarget::thunk(
 		RE::BSGraphics::Renderer* a_renderer,
 		RE::RENDER_TARGETS::RENDER_TARGET a_target,
@@ -516,25 +768,17 @@ namespace Hooks
 		}
 	}
 
-	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
+	void BSCullingProcess_AppendVirtual::thunk(RE::BSCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
+		if (geometry && Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(cullingProcess, geometry, a_arg2);
 	}
 
-	void BSFadeNodeCuller_AppendVirtual::thunk(RE::BSFadeNodeCuller* culler, RE::BSGeometry& geometry, uint32_t a_arg2)
+	void NiCullingProcess_AppendVirtual::thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2)
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
-			return;
-
-		func(culler, geometry, a_arg2);
-	}
-
-	void NiCullingProcess_AppendVirtual::thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry& geometry, uint32_t a_arg2)
-	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
+		if (geometry && Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
 			return;
 
 		func(cullingProcess, geometry, a_arg2);
@@ -601,7 +845,12 @@ namespace Hooks
 		{
 			auto result = func(a_block, a_terrainManager, a_stream, a4, a5);
 
-			Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+			if (result && result->node && result->land) {
+				auto lodLevel = static_cast<std::int32_t>(result->node->GetLODLevel());
+				auto key = RE::BSFixedString(Constants::ExtraData::LandLOD);
+				auto extra = RE::NiIntegersExtraData::Create(key, { lodLevel });
+				result->land->AddExtraData(extra);
+			}
 
 			return result;
 		}
@@ -613,8 +862,6 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
-
 			func(a_block);
 		}
 
@@ -626,9 +873,6 @@ namespace Hooks
 		static RE::BGSObjectBlock* thunk(RE::BGSObjectBlock* a_block, RE::BGSTerrainNode* a_terrainNode, RE::BSStream* a_stream)
 		{
 			auto result = func(a_block, a_terrainNode, a_stream);
-
-			Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
-
 			return result;
 		}
 
@@ -639,8 +883,6 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSObjectBlock* a_block)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
-
 			return func(a_block);
 		}
 
@@ -656,10 +898,9 @@ namespace Hooks
 			func(a_block, a2);
 
 			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			bool existed = true;
 			if (a_block->doneLoading && valid) {
-				if (!a_block->treeGroups.empty())
-					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+				if (!a_block->treeGroups.empty()) {
+				}
 			}
 		}
 
@@ -675,10 +916,10 @@ namespace Hooks
 			func(a_block);
 
 			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			bool existed = true;
 			if (a_block->doneLoading && valid) {
-				if (!a_block->treeGroups.empty())
-					existed = Scene::GetSingleton()->GetSceneGraph()->CreateLODModel(a_block);
+				if (!a_block->treeGroups.empty()) {
+
+				}
 			}
 		}
 
@@ -689,8 +930,6 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSDistantTreeBlock* a_block)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(a_block);
-
 			func(a_block);
 		}
 
@@ -711,80 +950,14 @@ namespace Hooks
 			func(a_entryDB, a2, a3, a4);
 
 			if (a2 && block) {
-				if (block != a2->block)
-					Scene::GetSingleton()->GetSceneGraph()->ReleaseInstances(block);
+				if (block != a2->block) {
+				}
 			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 	
-	struct LoadAndAttachAddon
-	{
-		static RE::NiAVObject* thunk(RE::TESModel* a_model, RE::BIPED_OBJECT a_bipedObj, RE::TESObjectREFR* a_actor, RE::BSTSmartPointer<RE::BipedAnim>& a_biped, RE::NiAVObject* a_root)
-		{
-			auto* result = func(a_model, a_bipedObj, a_actor, a_biped, a_root);
-
-			if (auto* animObject = stl::adjust_pointer<RE::TESObjectANIO>(a_model->GetAsModelTextureSwap(), -0x20); animObject) {
-				auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-				if (auto* actorRefr = sceneGraph->GetActorRefr(a_actor->GetFormID())) {
-					actorRefr->AttachAnimObject(animObject, result);
-				}
-			}
-
-			return result;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct DetachAddonSE
-	{
-		static int32_t thunk(RE::AnimationObject* a_animObject)
-		{
-			if (a_animObject) {
-				if (auto refrPtr = a_animObject->handle.get()) {
-					if (auto* object = a_animObject->object) {
-						auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-						if (auto* actorRefr = sceneGraph->GetActorRefr(refrPtr->GetFormID())) {
-							actorRefr->DetachAnimObject(object);
-						}
-					}
-				}
-			}
-
-			return func(a_animObject);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct DetachAddonAE
-	{
-		static int32_t thunk(RE::BSTArray<RE::AnimationObject>& a_animObjects, uint32_t a_index, uint32_t a3)
-		{
-			if (a3) {
-				auto& animObject = a_animObjects[a_index];
-
-				if (auto refrPtr = animObject.handle.get()) {
-					if (auto* object = animObject.object) {
-						auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-						if (auto* actorRefr = sceneGraph->GetActorRefr(refrPtr->GetFormID())) {
-							actorRefr->DetachAnimObject(object);
-						}
-					}
-				}
-			}
-
-			return func(a_animObjects, a_index, a3);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	// 1401B6AF0 SE/140203810 AE
 	struct GrassManager_CreateInstances
 	{
@@ -792,8 +965,8 @@ namespace Hooks
 		{
 			auto instances = func(a_grassManager, a_createGrassParams);
 
-			if (instances > 0)
-				Scene::GetSingleton()->GetSceneGraph()->CreateGrassModel(a_grassManager, a_createGrassParams, instances);
+			if (instances > 0) {
+			}
 
 			return instances;
 		}
@@ -807,29 +980,59 @@ namespace Hooks
 
 	void Install()
 	{
-#if defined(SKYRIM)
 		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
-#endif
 
 #if defined(SKYRIM)
+		const auto createTriShapeA = REL::RelocationID(75473, 77259);
+		const auto createTriShapeB = REL::RelocationID(75474, 77260);
+		const auto createTriShapeC = REL::RelocationID(75475, 77261);
+		const auto createTriShapeD = REL::RelocationID(75476, 77262);
+
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeA.address() + 0x9f);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeB.address() + 0x87);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeC.address() + 0x82);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeD.address() + REL::Relocate(0x85, 0x87));
+
+		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
+		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
+		stl::detour_thunk<BSGraphics_CreateTriShapeVertex>(createTriShapeC); // Landscape
+		stl::detour_thunk<BSGraphics_CreateTriShapeIndex>(createTriShapeD);  // NiSkinPartition::Partition::buffData
+
+		// This function is inlined in some places on AE
+		//stl::detour_thunk<BSGraphics_CopyTriShapeVertices>(REL::RelocationID(74735, 76477));
+
+		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 70666));  // BSTriShape
+		//stl::detour_thunk<BSDynamicTriShape_Dtor>(REL::RelocationID(69573, 0));  // BSDynamicTriShape
+		//stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(75033, 0));  // BSSubIndexTriShape
+		//stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(74611, 0));  // BSMultiStreamInstanceTriShape
+
+		// Use a hook to update dynamic data, else we risk trying accessing dynamic data while the engine has already released it
+		stl::detour_thunk<BSDynamicTriShape_UpdateDynamicData>(REL::RelocationID(69570, 70954));
+		
+		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
+		
+		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
+		
+		// All textures loaded from DDS
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
+
+		// Flowmap and Player FaceGen Tint
+		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
+
 		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
-		stl::detour_thunk<TES_AttachModel>(REL::RelocationID(13209, 13355));
-		stl::detour_thunk<TESObject_UnClone3D>(REL::RelocationID(17249, 17642));
-	
 		// Terrain LOD
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
-		stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
+		//stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
 
 		// Object LOD
-		stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30737, 31575));
+		//stl::detour_thunk<BGSObjectBlock_Load>(REL::RelocationID(30737, 31575));
 
 		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree
-		stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
+		//stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD
 		/*if (REL::Module::IsSE()) {
@@ -842,21 +1045,24 @@ namespace Hooks
 		}*/
 		
 		// Landscape
-		stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
-		stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
+		//stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));
+		//stl::detour_thunk<TESObjectLAND_Detach3D>(REL::RelocationID(18335, 18751));
 
 		// Water
-		stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
-		stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
+		//stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
+		//stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
 		// Grass
 		//stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
 
-		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
-		stl::write_vfunc<0x18, BSFadeNodeCuller_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
-		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
+		/*stl::detour_thunk<NiCullingProcess_AppendVirtual>(REL::RelocationID(26533, 27130));
+		stl::detour_thunk<BSCullingProcess_AppendVirtual>(REL::RelocationID(74807, 76556));*/
 
-		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(0, 107644));
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
+		stl::write_vfunc<0x18, BSCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
+
+		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100854, 107644));
 
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
@@ -871,18 +1077,16 @@ namespace Hooks
 		REL::Relocation<bool*> g_BypassSubIndexVisibility{ REL::RelocationID(524687, 411302) };
 		scene->g_BypassSubIndexVisibility = g_BypassSubIndexVisibility.get();
 
-		stl::write_thunk_call<LoadAndAttachAddon>(REL::RelocationID(42420, 43576).address() + REL::Relocate(0x22A, 0x21F));
-
-		if (REL::Module::IsSE())
-			stl::detour_thunk<DetachAddonSE>(REL::RelocationID(42412, 0));
-		else
-			stl::detour_thunk<DetachAddonAE>(REL::RelocationID(0, 43585));
-
 #elif defined(FALLOUT4)
 #	if defined(FALLOUT_POST_NG)
 		stl::detour_thunk<TES_AttachModel>(REL::ID(2192085));
 #	endif
 #endif
 		logger::info("[Raytracing] Installed hooks");
+	}
+
+	void InstallD3D11(ID3D11Device* a_device)
+	{
+		stl::detour_vfunc<3, ID3D11Device_CreateBuffer>(a_device);
 	}
 }

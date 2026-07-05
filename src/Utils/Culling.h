@@ -4,6 +4,6 @@ namespace Util
 {
 	namespace Culling
 	{
-		bool ShouldCull(RE::BSGeometry& geometry);
+		bool ShouldCull(RE::BSGeometry* geometry);
 	}
 }
