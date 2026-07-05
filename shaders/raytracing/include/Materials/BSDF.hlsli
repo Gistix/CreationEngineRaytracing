@@ -1127,7 +1127,7 @@ struct StandardBSDF
         }
     }
 
-    bool SampleBSDF(const BRDFContext brdfContext, const Material material, const Surface surface, out BSDFSample result, inout uint randomSeed)
+    bool SampleBSDF(const BRDFContext brdfContext, const LightingMaterialData material, const Surface surface, out BSDFSample result, inout uint randomSeed)
     {
         float4 preGeneratedSamples = float4(
             Random(randomSeed),
@@ -1136,7 +1136,7 @@ struct StandardBSDF
             Random(randomSeed)
         );
         float2 extraSamples = float2(Random(randomSeed), Random(randomSeed));
-        return SampleBSDF(brdfContext, material, surface, result, preGeneratedSamples, extraSamples);
+        return SampleBSDF(brdfContext, material.Feature, surface, result, preGeneratedSamples, extraSamples);
     }
 
     float EvalPdf(const BRDFContext brdfContext, const Surface surface, const float3 wo)

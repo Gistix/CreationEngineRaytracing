@@ -7,9 +7,7 @@
 //   NO GBuffer reconstruction heuristics.
 
 #include "ReSTIRGI/Registers.hlsli"
-
-// Material type required by StandardBSDF method signatures in BSDF.hlsli
-#include "interop/Material.hlsli"
+#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
 
 // Include advanced settings for DIFFUSE_MODE defaults
 #include "raytracing/include/AdvancedSettings.hlsli"

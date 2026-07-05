@@ -266,7 +266,7 @@ StablePlanesHitResult StablePlanesHandleHit(
     const BRDFContext brdfContext,
     const StandardBSDF bsdf,
     const bool isDominant,
-    const Material material,
+    const LightingMaterialData material,
     const Instance instance,
     inout uint randomSeed,
     const bool insideWaterVolume,
@@ -350,7 +350,7 @@ StablePlanesHitResult StablePlanesHandleHit(
 
     // Above-water hits keep the reflected branch as the denoiser's dominant plane.
     // Underwater paths keep the default transmission-first order.
-    if (material.ShaderType == ShaderType::Water && !insideWaterVolume)
+    if (material.Type == Type::Water && !insideWaterVolume)
     {
         for (int k3 = 0; k3 < deltaLobeCount; k3++)
         {
@@ -407,7 +407,7 @@ StablePlanesHitResult StablePlanesHandleHit(
     for (int lobeOrder = 0; lobeOrder < deltaLobeCount; lobeOrder++)
     {
         int lobeIdx = lobeOrder;
-        if (material.ShaderType == ShaderType::Water && !insideWaterVolume && firstActiveLobe >= 0)
+        if (material.Type == Type::Water && !insideWaterVolume && firstActiveLobe >= 0)
         {
             if (lobeOrder == 0)
                 lobeIdx = firstActiveLobe;
