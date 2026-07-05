@@ -457,6 +457,9 @@ void SceneGraph::ProcessGeometry(RE::TESObjectREFR* refr, RE::BSTriShape* bsTriS
 		m_CurrentVisible.push_back(mesh);
 	}
 	else {
+		if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
+			return;
+
 		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 			created->SetOwner(refr);
 
