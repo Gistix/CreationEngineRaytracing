@@ -57,7 +57,7 @@ namespace Pass::Raytracing
 
 	void GBuffer::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
-		m_DirtyBindings = true;
+		m_BindingSetDirty.fill(true);
 	}
 
 	void GBuffer::CreateRootSignature()
@@ -134,8 +134,10 @@ namespace Pass::Raytracing
 			m_BindingLayout,
 			sceneGraph->GetTriangleDescriptors()->m_Layout,
 			sceneGraph->GetVertexDescriptors()->m_Layout,
+			sceneGraph->GetMaterialDescriptors()->m_Layout,
 			sceneGraph->GetTextureDescriptors()->m_Layout,
-			sceneGraph->GetCubemapDescriptors()->m_Layout
+			sceneGraph->GetCubemapDescriptors()->m_Layout,
+			sceneGraph->GetDynamicVertexDescriptors()->m_Layout
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
@@ -186,8 +188,10 @@ namespace Pass::Raytracing
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
+			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
 
@@ -199,7 +203,8 @@ namespace Pass::Raytracing
 
 	void GBuffer::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* renderer = GetRenderer();
@@ -251,23 +256,27 @@ namespace Pass::Raytracing
 		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 
-		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void GBuffer::Execute(nvrhi::ICommandList* commandList)
 	{
 		CheckBindings();
 
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
-			m_BindingSet,
+			m_BindingSets[currentSlot],
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();

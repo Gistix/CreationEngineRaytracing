@@ -5,9 +5,6 @@
 #include "Types.h"
 #include "Vertex.hlsli"
 #include "Triangle.hlsli"
-#include "Skinning.hlsli"
-
-#include "Material.h"
 
 #include "Framework/DescriptorTableManager.h"
 
@@ -67,7 +64,6 @@ struct Mesh
 		uint count = 0;
 		eastl::vector<float4> dynamicPosition;
 		eastl::vector<Vertex> vertices;
-		eastl::vector<Skinning> skinning;
 		eastl::vector<uint16_t> remap;
 		eastl::vector<float4> dynamicPositionRemapped;
 		eastl::vector<float3> position;
@@ -92,8 +88,6 @@ struct Mesh
 	eastl::vector<float3x4> m_BoneMatrices;
 
 	nvrhi::rt::GeometryDesc geometryDesc;
-
-	eastl::unique_ptr<Material> material;
 
 	CESEAdapter::REX::EnumSet<Flags> flags = Flags::None;
 

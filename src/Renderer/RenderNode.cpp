@@ -2,6 +2,8 @@
 #include "Scene.h"
 #include "Renderer.h"
 
+#include <chrono>
+
 void RenderNode::AddNode(RenderNode renderNode)
 {
 	m_Children.push_back(eastl::move(renderNode));
@@ -46,16 +48,26 @@ void RenderNode::Execute(nvrhi::ICommandList* commandList)
 		if (debugSettings.Markers)
 			commandList->beginMarker(std::format("{} - Pass", m_Name.c_str()).c_str());
 
-		if (!m_TimerQuery)
-			m_TimerQuery = Renderer::GetSingleton()->GetDevice()->createTimerQuery();
+		auto currentSlot = Renderer::GetSingleton()->GetCurrentSlot();
 
-		if (debugSettings.Timings)
-			commandList->beginTimerQuery(m_TimerQuery);
+		if (debugSettings.Timings) {
+			if (!m_TimerQueries[currentSlot])
+				m_TimerQueries[currentSlot] = Renderer::GetSingleton()->GetDevice()->createTimerQuery();
 
-		m_RenderPass->Execute(commandList);
+			commandList->beginTimerQuery(m_TimerQueries[currentSlot]);
 
-		if (debugSettings.Timings)
-			commandList->endTimerQuery(m_TimerQuery);
+			auto cpuStart = std::chrono::high_resolution_clock::now();
+
+			m_RenderPass->Execute(commandList);
+
+			auto cpuEnd = std::chrono::high_resolution_clock::now();
+
+			commandList->endTimerQuery(m_TimerQueries[currentSlot]);
+
+			m_CpuTimes[currentSlot] = std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count();
+		} else {
+			m_RenderPass->Execute(commandList);
+		}
 
 		if (debugSettings.Markers)
 			commandList->endMarker();

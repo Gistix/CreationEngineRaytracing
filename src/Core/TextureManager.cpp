@@ -59,8 +59,6 @@ TextureManager::TextureManager()
 
 		m_CubemapDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
 	}
-
-	m_MSNConverter = eastl::make_unique<Pipeline::MSNConverter>();
 }
 
 uint64_t TextureManager::GetFakeDoubledVRAMUsage()
@@ -71,12 +69,6 @@ uint64_t TextureManager::GetFakeDoubledVRAMUsage()
 	{
 		if (texture)
 			vramUsage += texture->size;
-	}
-
-	for (const auto& [key, normalMap] : m_NormalMaps)
-	{
-		if (normalMap)
-			vramUsage += normalMap->size;
 	}
 
 	return vramUsage;
@@ -134,7 +126,6 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 		key = texture->texture;
 
 	m_Textures.erase(key);
-	m_NormalMaps.erase(key);
 }
 
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType)
@@ -178,11 +169,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 		}
 	}
 
-	if (textureType == TextureType::ModelSpaceNormalMap) {
-		if (auto refIt = m_NormalMaps.find(key); refIt != m_NormalMaps.end())
-			return refIt->second->descriptorHandle;
-	}
-	else {
+	if (textureType == TextureType::Standard) {
 		if (auto refIt = m_Textures.find(key); refIt != m_Textures.end())
 			return refIt->second->descriptorHandle;
 	}
@@ -250,46 +237,15 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 
 	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 
-	if (textureType == TextureType::ModelSpaceNormalMap) {
-		auto [it, emplaced] = m_NormalMaps.emplace(d3d11Resource, nullptr);
+	auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
 
-		if (!emplaced) {
-			logger::warn("TextureManager::GetDescriptor - NormalMap emplace failed.");
-			return nullptr;
-		}
-
-		auto device = Renderer::GetSingleton()->GetDevice();
-
-		// The converted normal map
-		auto normalMapRT = device->createTexture(
-			nvrhi::TextureDesc()
-			.setWidth(textureDesc.width)
-			.setHeight(textureDesc.height)
-			.setFormat(nvrhi::Format::R10G10B10A2_UNORM)
-			.setInitialState(nvrhi::ResourceStates::ShaderResource)
-			.setKeepInitialState(true)
-			.setIsRenderTarget(true)
-			.setClearValue(nvrhi::Color(0.5f, 0.5f, 1.0f, 1.0f))
-			.setUseClearValue(true)
-			.setDebugName("Converted MSN Texture"));
-
-		it->second = eastl::make_unique<MSNReference>(normalMapRT, textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
-
-		m_MSNConverter->Allocate(it->second->descriptorHandle->Get(), d3d11Resource);
-
-		return it->second->descriptorHandle;
+	if (!emplaced) {
+		logger::error("TextureManager::GetDescriptor - TextureReference emplace failed.");
+		return nullptr;
 	}
-	else {
-		auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
 
-		if (!emplaced) {
-			logger::error("TextureManager::GetDescriptor - TextureReference emplace failed.");
-			return nullptr;
-		}
-
-		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get(), residentMipOffset);
-		return it->second->descriptorHandle;
-	}
+	it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get(), residentMipOffset);
+	return it->second->descriptorHandle;
 
 	return nullptr;
 }

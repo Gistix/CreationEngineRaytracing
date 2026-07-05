@@ -51,6 +51,15 @@ namespace Util
 #endif
 		}
 
+		RE::BSTriShape* AsTriShape(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->AsTriShape();
+#elif defined(FALLOUT4)
+			return a_object->IsTriShape();
+#endif
+		}
+
 		RE::NiNode* AsNode(RE::NiAVObject* a_object) {
 #if defined(SKYRIM)
 			return a_object->AsNode();
@@ -76,6 +85,15 @@ namespace Util
 #endif	
 		}
 
+		RE::TESObjectREFR* GetOwner(RE::BSFadeNode* a_fadeNode)
+		{
+#if defined(SKYRIM)
+			return REL::RelocateMember<RE::TESObjectREFR*>(a_fadeNode, 0x0F8, 0x110);
+#elif defined(FALLOUT4)
+			return;
+#endif	
+		}
+		
 		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node) {
 #if defined(SKYRIM)
 			return a_node->GetChildren();

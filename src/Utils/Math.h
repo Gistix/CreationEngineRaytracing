@@ -10,6 +10,8 @@ namespace Util
 
 		uint32_t DivideRoundUp(uint32_t x, float divisor);
 
+		float2 Float2(RE::NiPoint2 niPoint);
+
 		float3 Float3(RE::NiPoint3 niPoint);
 
 		float3 Float3(RE::NiColor niColor);

@@ -22,6 +22,10 @@ namespace Util
 			return static_cast<uint32_t>(ceil(x / divisor));
 		}
 
+		float2 Float2(RE::NiPoint2 niPoint)
+		{
+			return float2(niPoint.x, niPoint.y);
+		}
 
 		float3 Float3(RE::NiPoint3 niPoint)
 		{

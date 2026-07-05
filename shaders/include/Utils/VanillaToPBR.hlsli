@@ -13,6 +13,11 @@ float RemappedSpecularity(float specularity)
 	return 1.0f - (specularity * 0.75f + 0.25f); 	
 }
 
+float ShininessToRoughness(float shininess)
+{
+	return pow(2.0f / (min(abs(shininess), 1024.0f) + 2.0f), 0.25f);
+}
+
 float CalcRoughness(float roughnessFromShininess, float specularity)
 {
 	return roughnessFromShininess * RemappedSpecularity(specularity);

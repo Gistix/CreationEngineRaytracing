@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Constants.h"
+
 namespace Util
 {
 	namespace Traversal
@@ -85,5 +87,56 @@ namespace Util
 			return result;
 		}
 
+		// A custom visit controller built to pass down visibility and owner reference
+		static CESEAdapter::RE::BSVisitControl ScenegraphTriShapes(
+			RE::NiAVObject* a_object, 
+			std::function<CESEAdapter::RE::BSVisitControl(RE::BSTriShape*, RE::TESObjectREFR*)> a_func, 
+			RE::TESObjectREFR* parentRefr = nullptr)
+		{
+			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
+
+			if (!a_object)
+				return result;
+
+			auto rtti = a_object->GetRTTI();
+
+			if (rtti == Constants::rtti::NiBillboardNode.get())
+				return result;
+
+			if (rtti == Constants::rtti::BSOrderedNode.get())
+				return result;
+
+			if (Util::Adapter::IsNiAVObjectHidden(a_object))
+				return result;
+
+			// Set as parent refr to propagate it downwards
+			auto refr = parentRefr; 
+
+			// Update refr if it actually exists (else keep the parent refr)
+			if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
+				if (auto owner = Util::Adapter::GetOwner(fadeNode))
+					refr = owner;
+
+			auto geom = Util::Adapter::AsTriShape(a_object);
+			if (geom) {
+				return a_func(geom, refr);
+			}
+
+			auto node = Util::Adapter::AsNode(a_object);
+			if (node) {
+				for (auto& child : Util::Adapter::GetChildren(node)) {
+					if (!child)
+						continue;
+
+					result = ScenegraphTriShapes(child.get(), a_func, refr);
+
+					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
+						break;
+					}
+				}
+			}
+
+			return result;
+		}
 	}
 }

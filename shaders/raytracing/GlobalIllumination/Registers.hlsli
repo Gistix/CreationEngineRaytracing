@@ -74,11 +74,12 @@ Texture2D<float4>                           SkinDetailNormal            : regist
 Texture2D<float4>                           PhysicalSkyTrLUT            : register(t13);
 
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
-StructuredBuffer<Vertex>                    Vertices[]                  : register(t0, space2);
-StructuredBuffer<Material>                  Materials[]                 : register(t0, space3);
+ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
+ByteAddressBuffer                           Materials[]                 : register(t0, space3);
 
 Texture2D<float4>                           Textures[]                  : register(t0, space4);
 TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
+StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);

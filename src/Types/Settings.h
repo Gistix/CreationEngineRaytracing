@@ -4,7 +4,8 @@ enum class Mode
 {
 	None,
 	GlobalIllumination,
-	PathTracing
+	PathTracing,
+	Debug
 };
 
 enum class Denoiser

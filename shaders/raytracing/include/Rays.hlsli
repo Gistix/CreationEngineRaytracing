@@ -11,7 +11,7 @@
 #include "raytracing/include/Transparency.hlsli"
 
 #ifndef RAY_FLAGS
-#   define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES)
+#   define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_CULL_BACK_FACING_TRIANGLES)
 #endif
 
 #ifndef INSTANCE_MASK
@@ -123,7 +123,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
 
 #if USE_RAY_QUERY
-    RayQuery<RAY_FLAGS> rayQuery;
+    RayQuery<RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
 
     while (rayQuery.Proceed())
@@ -150,7 +150,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
         shadowPayload.missed = 1.0f;
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(scene, RAY_FLAGS | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, INSTANCE_MASK, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
+    TraceRay(scene, RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, INSTANCE_MASK, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
  #endif
     
     randomSeed = shadowPayload.randomSeed;

@@ -70,7 +70,7 @@ namespace
 
     void set_tspace_basic(const SMikkTSpaceContext* context,
         const float* tangentu,
-        const float fSign, const int iFace, const int iVert) {
+        [[ maybe_unused ]] const float fSign, const int iFace, const int iVert) {
         auto* working_mesh = reinterpret_cast<Mesh*> (context->m_pUserData);
 
         auto index = get_vertex_index(context, iFace, iVert);
@@ -79,7 +79,7 @@ namespace
         vertex.Tangent.x = tangentu[0];
         vertex.Tangent.y = tangentu[1];
         vertex.Tangent.z = tangentu[2];
-        vertex.Handedness = fSign;
+        //vertex.Handedness = fSign;
     }
 }
 
