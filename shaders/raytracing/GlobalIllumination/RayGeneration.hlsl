@@ -28,10 +28,6 @@
 
 #include "include/NRD.hlsli"
 
-#ifndef THREAD_GROUP_SIZE
-#define THREAD_GROUP_SIZE (32)
-#endif
-
 #if USE_RAY_QUERY
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 #   if defined(GROUP_TILING)
@@ -144,15 +140,15 @@ void Main()
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
-    Material sourceMaterial = (Material)0;
+    LightingMaterialData sourceMaterial = (LightingMaterialData)0;
     sourceMaterial.Feature = Feature::kDefault;
     
     Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo, roughness, metalness, 0, ao);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
-    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, true);     
-    
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
+
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);     
 
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(DLSS_RR)
@@ -175,7 +171,7 @@ void Main()
     Payload payload;
 
     Instance instance;
-    Material material;
+    LightingMaterialData material;
 
     Surface surface;
     BRDFContext brdfContext;
@@ -199,6 +195,9 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
+        const uint sampleIndex = Camera.FrameIndex * MAX_SAMPLES + i;
+        randomSeed = InitRandomSeed(idx, size, sampleIndex);
+
 #if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif
@@ -218,6 +217,7 @@ void Main()
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
         float materialRoughnessPrev = 0.0f;
         bool isEnter = true;
+        uint diffuseBounceCount = 0;
 
         // Water volume tracking for Beer-Lambert absorption
         bool insideWaterVolume = false;
@@ -236,7 +236,11 @@ void Main()
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
        
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
-            direction = surface.Mul(SampleCosineHemisphere(randomSeed));
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            direction = surface.Mul(SampleCosineHemisphere(scatterSamples.xy));
+            diffuseBounceCount++;
 
             float NdotD = saturate(dot(surface.Normal, direction));
 
@@ -245,13 +249,18 @@ void Main()
             
             const bool hasTransmission = false;
 #else
-            if (bsdf.SampleBSDF(brdfContext, material, surface, bsdfSample, randomSeed))
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples))
                 direction = bsdfSample.wo;
             else
                 break;            
  
             if (j == 0)
                 isSpecular = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
+            if (bsdfSample.isLobe(LobeType::Diffuse))
+                diffuseBounceCount++;
             
 #if defined(RAW_RADIANCE) && !defined(NRD)
             const bool demodulatedThroughput = (j == 0 && !isSpecular);
@@ -428,7 +437,7 @@ void Main()
             }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, isEnter);
+            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
@@ -445,13 +454,13 @@ void Main()
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material, surface, brdfContext, instance, bsdf, randomSeed, false);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, false);
                 }
             }
             

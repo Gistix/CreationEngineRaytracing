@@ -14,6 +14,8 @@ Renderer::Renderer()
 
 bool Renderer::Initialize(RendererParams rendererParams)
 {
+	Hooks::InstallD3D11(rendererParams.d3d11Device);
+
 	// NVRHI Device
 	nvrhi::d3d12::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
@@ -21,8 +23,11 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	deviceDesc.pGraphicsCommandQueue = rendererParams.commandQueue;
 	deviceDesc.pComputeCommandQueue = rendererParams.computeCommandQueue;
 	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
-	deviceDesc.aftermathEnabled = true;
+	deviceDesc.aftermathEnabled = false;
 	deviceDesc.logBufferLifetime = false;
+#if defined(NVRHI_ENHANCED_BARRIERS)
+	deviceDesc.enableEnhancedBarriers = true;
+#endif
 
 	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
 
@@ -68,9 +73,12 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::ShaderExecutionReordering))
 		m_SupportedFeatures |= SupportedFeatures::ShaderExecutionReordering;
 
-	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
+#if defined(NVRHI_ENHANCED_BARRIERS)
+	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::EnhancedBarriers))
+		m_SupportedFeatures |= SupportedFeatures::EnhancedBarriers;
+#endif
 
-	m_RenderGraphQuery = m_NVRHIDevice->createEventQuery();
+	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
 
 	return true;
 }
@@ -84,11 +92,12 @@ void Renderer::InitDefaultTextures()
 	uint8_t rmaos[] = { 128u, 0u, 255u, 255u };
 	uint8_t detail[] = { 63u, 64u, 63u, 255u };
 
-	nvrhi::TextureDesc desc;
-	desc.width = 1;
-	desc.height = 1;
-	desc.mipLevels = 1;
-	desc.format = nvrhi::Format::RGBA8_UNORM;
+	auto desc = nvrhi::TextureDesc()
+		.setWidth(1)
+		.setHeight(1)
+		.setMipLevels(1)
+		.setFormat(nvrhi::Format::RGBA8_UNORM)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::Common);
 
 	auto* textureDescriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptors()->m_DescriptorTable.get();
 
@@ -113,17 +122,8 @@ void Renderer::InitDefaultTextures()
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
 	// Write the textures using a temporary CL
-	nvrhi::CommandListHandle commandList = GetCopyCommandList();
+	nvrhi::CommandListHandle commandList = GetGraphicsCommandList();
 	commandList->open();
-
-	commandList->beginTrackingTextureState(m_WhiteTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-	commandList->beginTrackingTextureState(m_GrayTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-	commandList->beginTrackingTextureState(m_NormalTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-	commandList->beginTrackingTextureState(m_BlackTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-#if defined(SKYRIM)
-	commandList->beginTrackingTextureState(m_RMAOSTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
-#endif
-	commandList->beginTrackingTextureState(m_DetailTexture->texture, nvrhi::AllSubresources, nvrhi::ResourceStates::Common);
 
 	commandList->writeTexture(m_WhiteTexture->texture, 0, 0, white, 4);
 	commandList->writeTexture(m_GrayTexture->texture, 0, 0, gray, 4);
@@ -134,22 +134,11 @@ void Renderer::InitDefaultTextures()
 #endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
 
-	commandList->setPermanentTextureState(m_WhiteTexture->texture, nvrhi::ResourceStates::Common);
-	commandList->setPermanentTextureState(m_GrayTexture->texture, nvrhi::ResourceStates::Common);
-	commandList->setPermanentTextureState(m_NormalTexture->texture, nvrhi::ResourceStates::Common);
-	commandList->setPermanentTextureState(m_BlackTexture->texture, nvrhi::ResourceStates::Common);
-#if defined(SKYRIM)
-	commandList->setPermanentTextureState(m_RMAOSTexture->texture, nvrhi::ResourceStates::Common);
-#endif
-	commandList->setPermanentTextureState(m_DetailTexture->texture, nvrhi::ResourceStates::Common);
-
-	commandList->commitBarriers();
-
 	commandList->close();
 
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
-		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Copy);
+		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
 	}
 }
 
@@ -460,50 +449,81 @@ void Renderer::SettingsChanged(const Settings& settings)
 
 nvrhi::ICommandList* Renderer::StartExecution()
 {
-	logger::trace("Renderer::ExecutePasses - Begin");
+	logger::trace("Renderer::StartExecution - Begin (Slot {})", m_NextSlot);
 
 	m_DynamicResolutionRatio = Util::Adapter::GetDynamicResolutionRatios();
 
-	// Get a new command list every frame, NVRHI command lists are single-use and they can hold stale scratch data
-	m_CommandList = GetGraphicsCommandList();
+	m_CurrentSlot = m_NextSlot;
 
-	m_CommandList->open();
+	auto device = GetDevice();
+
+	auto& slot = m_FrameSlots[m_CurrentSlot];
+
+	if (slot.inFlight) {
+		device->waitEventQuery(slot.eventQuery);
+		RunPostExecutionForSlot(m_CurrentSlot);
+		device->resetEventQuery(slot.eventQuery);
+		slot.inFlight = false;
+	}
+
+	// Release meshes whose recorded fence has been passed by the GPU.
+	Scene::GetSingleton()->GetSceneGraph()->ProcessPendingMeshDestroys(slot.fenceValue);
+
+	if (!slot.eventQuery)
+		slot.eventQuery = device->createEventQuery();
+
+	m_FrameIndex++;
+
+	slot.commandList = GetGraphicsCommandList();
+	slot.commandList->open();
+
+	m_CommandList = slot.commandList;
 
 	return m_CommandList;
 }
 
 void Renderer::EndExecution()
 {
-	// Close it
 	m_CommandList->close();
 
 	auto device = GetDevice();
 
-	// Execute it
+	uint64_t fenceValue;
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
-		m_LastSubmittedInstance = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+		fenceValue = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
+		m_LastSubmittedInstance = fenceValue;
 	}
 
-	device->setEventQuery(m_RenderGraphQuery, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
+	auto& slot = m_FrameSlots[m_CurrentSlot];
+	slot.fenceValue = fenceValue;
+	device->setEventQuery(slot.eventQuery, nvrhi::CommandQueue::Graphics, fenceValue);
+	slot.inFlight = true;
 
-	logger::trace("Renderer::ExecutePasses - End");
+	m_NextSlot = (m_CurrentSlot + 1) % Constants::MAX_FRAMES_IN_FLIGHT;
+
+	logger::trace("Renderer::EndExecution - Slot {} submitted (fence {}), next slot will be {}", m_CurrentSlot, fenceValue, m_NextSlot);
 }
 
-void Renderer::WaitExecution()
+uint32_t Renderer::PostExecution()
 {
-	// Fence only the render graph execution and not any of the others async command lists
-	GetDevice()->waitEventQuery(m_RenderGraphQuery);
+	auto& slot = m_FrameSlots[m_CurrentSlot];
 
-	PostExecution();
+	if (!slot.inFlight)
+		return m_LastCompletedSlot;
+
+	if (GetDevice()->pollEventQuery(slot.eventQuery)) {
+		RunPostExecutionForSlot(m_CurrentSlot);
+		slot.inFlight = false;
+	}
+
+	return m_LastCompletedSlot;
 }
 
-void Renderer::PostExecution()
+void Renderer::RunPostExecutionForSlot(uint32_t slot)
 {
 	auto device = GetDevice();
-
 	auto* scene = Scene::GetSingleton();
-
 	const auto timings = scene->m_Settings.DebugSettings.Timings;
 
 	m_PassTimings.clear();
@@ -511,20 +531,20 @@ void Renderer::PostExecution()
 	if (timings) {
 		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
 			rootNode->ForEach([&](RenderNode* node) {
-				if (node->m_TimerQuery && device->pollTimerQuery(node->m_TimerQuery))
-					m_PassTimings.push_back(PassTiming(node->m_Name.c_str(), m_NVRHIDevice->getTimerQueryTime(node->m_TimerQuery) * 1000.0f));
+				if (node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))
+					m_PassTimings.push_back(PassTiming{ node->m_Name.c_str(), device->getTimerQueryTime(node->m_TimerQueries[slot]) * 1000.0f, node->m_CpuTimes[slot] });
 			});
 		}
+
+		if (m_FrameTimerQueries[slot] && device->pollTimerQuery(m_FrameTimerQueries[slot]))
+			m_PassTimings.push_back(PassTiming{ "Total", device->getTimerQueryTime(m_FrameTimerQueries[slot]) * 1000.0f, m_FrameCpuTimes[slot] });
 	}
 
-	m_FrameIndex++;
+	m_LastCompletedSlot = slot;
 
-	// Run garbage collection to release resources that are no longer in use
 	device->runGarbageCollection();
 
-	scene->GetSceneGraph()->RunGarbageCollection();
-
-	logger::trace("Renderer::ExecutePasses - Post");
+	logger::trace("Renderer::RunPostExecutionForSlot - Slot {} completed", slot);
 }
 
 nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)

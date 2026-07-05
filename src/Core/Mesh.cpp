@@ -52,14 +52,11 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 
 	vertexData.vertices.resize(vertexCountIn);
 
-	if (skinned)
-		vertexData.skinning.resize(vertexCountIn);
-
 	if (skinned || dynamic)
 		vertexData.position.resize(vertexCountIn);
 
 	auto vertexSize = Util::Geometry::GetSkyrimVertexSize(vertexFlags);
-	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(*reinterpret_cast<uint64_t*>(&vertexDesc));
+	auto vertexSize2 = Util::Geometry::GetStoredVertexSize(vertexDesc);
 
 	if (vertexSize != vertexSize2)
 		logger::warn("Mesh::BuildVertices - Vertex size mismatch: {} != {}", vertexSize, vertexSize2);
@@ -140,7 +137,7 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 
 				vertex.Tangent = Util::Math::Normalize(T);
 
-				vertex.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
+				//vertex.Handedness = -(N.Cross(T).Dot(B) < 0 ? -1.0f : 1.0f);
 			}
 		}
 
@@ -183,8 +180,6 @@ Mesh::VertexData Mesh::BuildVertices(CESEAdapter::REX::EnumSet<Flags>& flags, [[
 
 			fillSkinningData(weights);
 			fillSkinningData(boneIds);
-
-			vertexData.skinning[i] = Skinning(weights, boneIds);
 		}
 
 		if (vertexFlags & RE::BSGraphics::Vertex::VF_LANDDATA) {
@@ -261,7 +256,6 @@ void Mesh::ClearUnusedVertices()
 	}
 
 	cleanVertexData.vertices.resize(vertexCount);
-	cleanVertexData.skinning.resize(vertexCount);
 	cleanVertexData.remap.resize(vertexCount);
 
 	uint16_t i = 0;
@@ -271,7 +265,6 @@ void Mesh::ClearUnusedVertices()
 			cleanVertexData.dynamicPositionRemapped[i] = vertexData.dynamicPosition[v];
 	
 		cleanVertexData.vertices[i] = vertexData.vertices[v];
-		cleanVertexData.skinning[i] = vertexData.skinning[v];
 
 		// New -> Old
 		cleanVertexData.remap[i] = v;
@@ -377,22 +370,71 @@ eastl::vector<Triangle> Mesh::GetLandscapeTriangles()
 	return triangles;
 }
 
-void Mesh::BuildMaterial(const GeometryRuntimeData& runtimeData, RE::FormID formID)
+void Mesh::BuildMaterial([[ maybe_unused ]] const GeometryRuntimeData& runtimeData, [[ maybe_unused ]] RE::FormID formID)
 {
-	material = eastl::make_unique<Material>(m_Name, runtimeData, formID);
 
-	// Attempt to clear up fake positives
-	if (material->shaderFlags.all(RE::BSShaderProperty::EShaderPropertyFlag::kTwoSided))
-		flags.reset(Mesh::Flags::DoubleSidedGeom);
+}
 
-	geometryDesc.flags = (material->alphaFlags == Material::AlphaFlags::None) ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
+eastl::unique_ptr<Mesh> Mesh::Clone(RE::NiAVObject* rootNode, RE::FormID formID) const
+{
+	RE::BSGeometry* foundGeom = nullptr;
+
+	Util::Traversal::ScenegraphRTGeometries(rootNode, nullptr, [&](RE::BSGeometry* pGeometry) -> CESEAdapter::RE::BSVisitControl {
+		if (eastl::string(pGeometry->name.c_str()) == m_Name) {
+			foundGeom = pGeometry;
+			return CESEAdapter::RE::BSVisitControl::kStop;
+		}
+		return CESEAdapter::RE::BSVisitControl::kContinue;
+	});
+
+	if (!foundGeom)
+		return nullptr;
+
+	auto rootWorldInverse = rootNode->world.Invert();
+	const bool isRootOrigin = rootNode->world.translate == Util::Adapter::GetNiPoint3Zero();
+	const bool isOrigin = foundGeom->world.translate == Util::Adapter::GetNiPoint3Zero();
+
+	auto cloneFlags = flags;
+	cloneFlags.reset(Mesh::Flags::Origin);
+
+	float3x4 localToRoot;
+	if (!isOrigin || (isOrigin && isRootOrigin)) {
+		localToRoot = Util::Math::ComputeLocalToRoot(rootWorldInverse, foundGeom->world);
+	} else {
+		localToRoot = float3x4(
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f);
+		cloneFlags.set(Mesh::Flags::Origin);
+	}
+
+	auto clone = eastl::make_unique<Mesh>(m_FormType, m_Type, cloneFlags.get(), m_Name.c_str(), foundGeom, localToRoot, m_Identifier);
+
+	clone->vertexData = vertexData;
+	clone->triangleData = triangleData;
+	clone->vertexFlags = vertexFlags;
+	clone->m_BoneMatrices = m_BoneMatrices;
+	clone->m_PrevLocalToRoot = localToRoot;
+
+	const auto& runtimeData = Util::Adapter::GetGeometryRuntimeData(foundGeom);
+	clone->BuildMaterial(runtimeData, formID);
+
+	clone->m_FrameID = 0;
+	clone->m_State = State::None;
+
+	return clone;
+}
+
+bool Mesh::Updatable() const
+{
+	return flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;
 }
 
 void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandList)
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	bool updatable = flags.any(Flags::Dynamic, Flags::Skinned) || m_Type == Type::LandLOD;
+	bool updatable = Updatable();
 
 	logger::debug("Mesh::CreateBuffers - {}", m_Name);
 
@@ -440,7 +482,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 
 		{
 			auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.dynamicPositionBuffer);
-			device->writeDescriptorTable(sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable, bindingSet);
+			device->writeDescriptorTable(sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->GetDescriptorTable(), bindingSet);
 		}
 
 	}
@@ -464,7 +506,7 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		commandList->writeBuffer(buffers.vertexBuffer, vertexData.vertices.data(), size);
 
 		auto vertexBindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.vertexBuffer);
-		device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable, vertexBindingSet);
+		//device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable, vertexBindingSet);
 
 		if (updatable) {
 			auto uavBindingSet = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.vertexBuffer);
@@ -490,23 +532,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable, bindingSet);
 	}
 
-	if (flags.all(Flags::Skinned)) {
-		const size_t size = sizeof(Skinning) * vertexData.count;
-
-		auto& skinningBufferDesc = nvrhi::BufferDesc()
-			.setByteSize(size)
-			.setStructStride(sizeof(Skinning))
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::Common)
-			.setDebugName(std::format("{} (Skinning Buffer)", m_Name.c_str()));
-
-		buffers.skinningBuffer = device->createBuffer(skinningBufferDesc);
-
-		commandList->writeBuffer(buffers.skinningBuffer, vertexData.skinning.data(), size);
-
-		auto bindingSet = nvrhi::BindingSetItem::StructuredBuffer_SRV(descriptorIndex, buffers.skinningBuffer);
-		device->writeDescriptorTable(sceneGraph->GetSkinningDescriptors()->m_DescriptorTable, bindingSet);
-	}
-
 	// Previous position buffer for per-vertex motion vectors
 	if (flags.any(Flags::Skinned, Flags::Dynamic)) {
 		const size_t prevPosSize = sizeof(float3) * vertexData.count;
@@ -528,9 +553,6 @@ void Mesh::CreateBuffers(SceneGraph* sceneGraph, nvrhi::ICommandList* commandLis
 		auto prevPosUavBinding = nvrhi::BindingSetItem::StructuredBuffer_UAV(descriptorIndex, buffers.prevPositionBuffer);
 		device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable, prevPosUavBinding);
 	}
-
-	// Material Buffer
-	material->CreateBuffer(m_Name, descriptorIndex);
 
 	// Geometry description
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
@@ -612,12 +634,16 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 #if defined(SKYRIM)
 	auto* scene = Scene::GetSingleton();
 	const bool isPathTracing = scene->IsPathTracingActive();
-	const bool applyPathTracingCull = scene->ApplyPathTracingCull();
-	const bool isCulled = applyPathTracingCull || (isPathTracing && (material->feature == RE::BSShaderMaterial::Feature::kEnvironmentMap || material->feature == RE::BSShaderMaterial::Feature::kEye));
+	const bool isForceCulled = isPathTracing;
+	
+	bool isVisible = false;
+	if (isForceCulled) {	
+		isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(bsGeometryPtr.get());
+	}
 
 	const auto frameID = skinInstance->frameID;
 
-	if (!isCulled && frameID == Constants::INVALID_FRAME_ID)
+	if (!isVisible && frameID == Constants::INVALID_FRAME_ID)
 		return false;
 
 	auto* rootParent = skinInstance->rootParent;
@@ -631,7 +657,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 
 	// Only update if the game has updated the animation
 	// Part 1 of COtR fix
-	if (!isCulled && !unparentedPlayer && m_FrameID == frameID)
+	if (!isVisible && !unparentedPlayer && m_FrameID == frameID)
 		return false;
 
 	m_FrameID = frameID;
@@ -641,7 +667,7 @@ bool Mesh::UpdateSkinning([[maybe_unused]] bool isPlayer)
 	if (!skinData)
 		return false;
 
-	if (!isCulled && skinInstance->numMatrices != skinData->bones)
+	if (!isForceCulled && skinInstance->numMatrices != skinData->bones)
 		logger::warn("Mesh::UpdateSkinning - Num Matrices: {}, Num Bones: {}", skinInstance->numMatrices, skinData->bones);
 
 	if (skinData->bones == 0)
@@ -788,8 +814,6 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	}
 #endif
 
-	material->Update(Util::Adapter::GetGeometryRuntimeData(bsGeometryPtr.get()).shaderProperty);
-
 	const auto dynamic = flags.all(Mesh::Flags::Dynamic);
 	const auto skinned = flags.all(Mesh::Flags::Skinned);
 
@@ -832,20 +856,14 @@ DirtyFlags Mesh::Update(RE::NiAVObject* instanceRoot, bool isPlayer, Flags model
 	return updateFlags;
 }
 
-void Mesh::UpdateData(nvrhi::ICommandList* commandList, float3 externalEmittance)
+void Mesh::UpdateData([[ maybe_unused ]] nvrhi::ICommandList* commandList, [[ maybe_unused ]] float3 externalEmittance)
 {
 
-	material->UpdateData(commandList, externalEmittance);
 }
 
 MeshData Mesh::GetData()
 {
-	return MeshData(
-		static_cast<uint32_t>(m_DescriptorHandle.Get()),
-		flags.underlying(),
-		m_LocalToRoot,
-		m_PrevLocalToRoot
-	);
+	return MeshData();
 }
 
 bool Mesh::IsHidden() const

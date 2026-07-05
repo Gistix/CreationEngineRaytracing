@@ -39,7 +39,7 @@ namespace Pass
 		nvrhi::rt::ShaderTableHandle m_FillShaderTable;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
-		nvrhi::BindingSetHandle m_BindingSet;
+		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 		nvrhi::SamplerHandle m_LinearClampSampler;
@@ -51,7 +51,7 @@ namespace Pass
 
 		eastl::vector<ShaderDefine> m_Defines;
 
-		bool m_DirtyBindings = true;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 		bool m_UseStablePlanes = false;  // Toggle for stable planes vs reference mode
 		bool m_UseRestirGI = false;
 	public:
@@ -59,7 +59,7 @@ namespace Pass
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{
-			m_DirtyBindings = true;
+			m_BindingSetDirty.fill(true);
 		}
 
 		virtual void ResolutionChanged(uint2 resolution) override;

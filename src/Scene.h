@@ -13,6 +13,8 @@
 #include "Types/MenuState.h"
 #include "Types/Settings.h"
 
+#include "INISettings.h"
+
 struct Scene
 {
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
@@ -20,6 +22,7 @@ struct Scene
 	eastl::unique_ptr<RenderNode> m_GlobalIllumination;
 	eastl::unique_ptr<RenderNode> m_PathTracing;
 	eastl::unique_ptr<RenderNode> m_GBuffer;
+	eastl::unique_ptr<RenderNode> m_Debug;
 
 	eastl::unique_ptr<CameraData> m_CameraData;
 	nvrhi::BufferHandle m_CameraBuffer;
@@ -54,6 +57,8 @@ struct Scene
 	uint m_MenuStateUpdateFrame = 0;
 
 	Settings m_Settings;
+
+	INISettings m_INISettings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
 
@@ -105,8 +110,7 @@ struct Scene
 
 	inline bool ApplyPathTracingCull() 
 	{ 
-		return m_Settings.Enabled && 
-			m_Settings.GeneralSettings.Mode == Mode::PathTracing && 
+		return IsPathTracingActive() &&
 			m_Settings.ExperimentalSettings.PathTracingCull && 
 			GetMenuState().none(MenuState::MainMenu, MenuState::LoadingMenu);
 	}
@@ -120,6 +124,8 @@ struct Scene
 
 	RenderNode* GetPathTracing();
 
+	RenderNode* GetDebug();
+
 	RenderNode* GetModeNode(Mode mode);
 
 	bool IsModeInitialized(Mode mode);
@@ -129,12 +135,6 @@ struct Scene
 	void Initialize();
 
 	void Execute();
-
-	void ClearDirtyStates();
-
-	void AttachModel(RE::TESForm* form);
-
-	void AttachLand(RE::TESObjectLAND* land);
 
 	void UpdateCameraData() const;
 

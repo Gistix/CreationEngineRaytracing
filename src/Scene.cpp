@@ -3,11 +3,12 @@
 #include "SceneGraph.h"
 
 #include "Hooks.h"
-#include "Events.h"
 
 #include "framework/DescriptorTableManager.h"
 
 #include "Renderer.h"
+
+#include <chrono>
 
 #include "Renderer/RenderNode.h"
 
@@ -22,6 +23,7 @@
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
+#include "Pass/Raytracing/Debug.h"
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/NRDIntegration.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
@@ -42,11 +44,12 @@ void Scene::Load()
 void Scene::PostPostLoad()
 {
 	Hooks::Install();
+	m_INISettings.Initialize();
 }
 
 void Scene::DataLoaded()
 {
-	Events::Register();
+
 }
 
 void Scene::SetLogLevel(spdlog::level::level_enum a_level)
@@ -122,7 +125,7 @@ RenderNode* Scene::GetGlobalIllumination()
 		m_GlobalIllumination->AddNode({
 			true,
 			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination)
 		});
 
 		m_GlobalIllumination->AddNode({
@@ -191,7 +194,7 @@ RenderNode* Scene::GetPathTracing()
 		m_PathTracing->AddNode({
 			true,
 			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR)
+			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing)
 		});
 
 		m_PathTracing->AddNode({
@@ -210,22 +213,58 @@ RenderNode* Scene::GetPathTracing()
 	return m_PathTracing.get();
 }
 
-RenderNode* Scene::GetModeNode(Mode mode)
+RenderNode* Scene::GetDebug()
+{
+	if (!m_Debug) {
+		auto* renderer = Renderer::GetSingleton();
+
+		m_Debug = eastl::make_unique<RenderNode>(true, "Debug");
+
+		m_Debug->AddNode({
+			true,
+			"Skinning",
+			eastl::make_unique<Pass::Skinning>(renderer)
+		});
+
+		m_Debug->AddNode({
+			true,
+			"Scene TLAS",
+			eastl::make_unique<Pass::SceneTLAS>(renderer)
+		});
+
+		m_Debug->AddNode({
+			true,
+			"Debug",
+			eastl::make_unique<Pass::Debug>(
+				renderer,
+				m_Debug->GetPass<Pass::SceneTLAS>()
+			)
+		});
+	}
+
+	return m_Debug.get();
+}
+
+RenderNode* Scene::GetModeNode([[ maybe_unused ]] Mode mode)
 {
 	if (mode == Mode::GlobalIllumination)
 		return GetGlobalIllumination();
 	else if (mode == Mode::PathTracing)
 		return GetPathTracing();
+	else if (mode == Mode::Debug)
+		return GetDebug();
 
 	return nullptr;
 }
 
-bool Scene::IsModeInitialized(Mode mode)
+bool Scene::IsModeInitialized([[ maybe_unused ]] Mode mode)
 {
 	if (mode == Mode::GlobalIllumination)
 		return m_GlobalIllumination != nullptr;
 	else if (mode == Mode::PathTracing)
 		return m_PathTracing != nullptr;
+	else if (mode == Mode::Debug)
+		return m_Debug != nullptr;
 
 	return false;
 }
@@ -269,7 +308,7 @@ void Scene::Execute()
 
 	auto* sceneGraph = GetSceneGraph();
 
-	sceneGraph->UpdateActors();
+	sceneGraph->UpdateCamera();
 
 	sceneGraph->UpdateLODVisibility();
 
@@ -277,77 +316,42 @@ void Scene::Execute()
 
 	auto* commandList = renderer->StartExecution();
 
-	// Update all scene related data and their buffers
-	sceneGraph->Update(commandList);
+	const auto currentSlot = renderer->GetCurrentSlot();
+	const auto& timings = m_Settings.DebugSettings.Timings;
 
-	commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
+	if (timings) {
+		auto cpuStart = std::chrono::high_resolution_clock::now();
 
-	commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
+		if (!renderer->GetFrameTimerQuery(currentSlot))
+			renderer->GetFrameTimerQuery(currentSlot) = renderer->GetDevice()->createTimerQuery();
 
-	// Executes attached render nodes
-	renderer->GetRenderGraph()->Execute(commandList);
+		commandList->beginTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
 
-	ClearDirtyStates();
+		// Update all scene related data and their buffers
+		sceneGraph->Update(commandList);
+
+		commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
+		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
+
+		// Executes attached render nodes
+		renderer->GetRenderGraph()->Execute(commandList);
+
+		commandList->endTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
+
+		auto cpuEnd = std::chrono::high_resolution_clock::now();
+		renderer->SetFrameCpuTime(currentSlot, std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
+	} else {
+		// Update all scene related data and their buffers
+		sceneGraph->Update(commandList);
+
+		commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
+		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
+
+		// Executes attached render nodes
+		renderer->GetRenderGraph()->Execute(commandList);
+	}
 
 	renderer->EndExecution();
-}
-
-void Scene::ClearDirtyStates()
-{
-	GetSceneGraph()->ClearDirtyStates();
-}
-
-void Scene::AttachModel(RE::TESForm* form) 
-{
-	auto* refr = Util::Adapter::AsReference(form);
-
-	auto* baseObject = Util::Adapter::GetBaseObject(refr);
-
-	RE::FormType type = baseObject->GetFormType();
-
-#if defined(SKYRIM)
-	if (type == RE::FormType::IdleMarker)
-		return;
-#elif defined(FALLOUT4)
-	if (type == RE::FormType::kIDLM)
-		return;
-#endif
-
-	if (baseObject->IsMarker())
-		return;
-
-	auto* node = refr->Get3D();
-
-	if (!node)
-		return;
-
-	if (auto* model = ce_cast<RE::TESModel*>(baseObject)) {
-		GetSceneGraph()->CreateModel(refr, model->GetModel(), node);
-		return;
-	}
-
-	if (Util::IsPlayer(refr)) {
-		if (auto* player = reinterpret_cast<RE::PlayerCharacter*>(refr)) {
-			// First Person
-			//rt.CreateModelInternal(refr, std::format("{}_1stPerson", name).c_str(), node);
-
-			// Third Person
-			GetSceneGraph()->CreateActorModel(player);
-			return;
-		}
-	}
-
-	if (auto* actor = ce_cast<RE::Actor*>(refr)) {
-		GetSceneGraph()->CreateActorModel(actor, node);
-	}
-}
-
-void Scene::AttachLand(RE::TESObjectLAND* land)
-{
-	if (!land)
-		return;
-
-	GetSceneGraph()->CreateLandModel(land);
 }
 
 void Scene::UpdateCameraData() const

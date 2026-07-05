@@ -14,6 +14,7 @@ struct DataParams
 	bool alreadyUpdated;
 	bool hidden;
 	uint32_t firstMeshID;
+	uint32_t numMeshes;
 };
 
 struct Model
@@ -26,10 +27,17 @@ struct Model
 			BLASBuilt = 1 << 1
 		};
 	};
-
 	using Flag = Flags::Flag;
 
+	enum class Type : uint8_t
+	{
+		Default,
+		Actor
+	};
+
 	eastl::string m_Name;
+	
+	Type m_Type = Type::Default;
 
 	eastl::vector<eastl::unique_ptr<Mesh>> m_Meshes;
 
@@ -57,7 +65,7 @@ struct Model
 
 	Flag m_Flags = Flags::None;
 
-	Model(eastl::string name, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
+	Model(eastl::string name, Type type, RE::NiAVObject* node, RE::TESForm* form, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 
 	void UpdateMeshFlags();
 
@@ -71,18 +79,14 @@ struct Model
 
 	void UpdateFlags();
 
-	static std::string KeySuffix(RE::NiAVObject* root)
+	static eastl::string KeySuffix(RE::NiAVObject* root)
 	{
-		return std::format("_{:08X}", reinterpret_cast<uintptr_t>(root));
+		auto suffix = std::format("_{:08X}", reinterpret_cast<uintptr_t>(root));
+		return eastl::string(suffix.c_str());
 	}
 
 	bool ShouldQueueMSNConversion() const
 	{
-		for (auto& mesh : m_Meshes) {
-			if (mesh->material->shaderFlags.any(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals) && mesh->material->shaderFlags.none(RE::BSShaderProperty::EShaderPropertyFlag::kLODLandscape))
-				return true;
-		}
-
 		return false;
 	}
 
@@ -91,6 +95,8 @@ struct Model
 	DataParams GetData(MeshData* meshData, uint32_t& index);
 
 	void BuildUpdateBLAS(nvrhi::ICommandList* commandList);
+
+	eastl::unique_ptr<Model> Clone(RE::NiAVObject* node, RE::FormID formID) const;
 
 	void AppendMeshes(SceneGraph* sceneGraph, eastl::vector<eastl::unique_ptr<Mesh>>& meshes);
 	void RemoveMeshes(const eastl::vector<Mesh*>& a_meshes);
@@ -119,12 +125,12 @@ struct Model
 
 	auto GetShaderTypes() const
 	{
-		return shaderTypes;
+		return 0;
 	}
 
 	auto GetAlphaFlags() const
 	{
-		return m_AlphaFlags;
+		return 0;
 	}
 
 	auto GetShaderFlags() const
@@ -155,8 +161,6 @@ private:
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	CESEAdapter::REX::EnumSet<Mesh::Flags> meshFlags = Mesh::Flags::None;
 	EnumFlags<Mesh::Type> m_MeshTypes = 0;
-	CESEAdapter::REX::EnumSet<Material::AlphaFlags> m_AlphaFlags = Material::AlphaFlags::None;
-	EnumFlags<Material::ShaderType> shaderTypes = 0;
 	CESEAdapter::REX::EnumSet<RE::BSShaderProperty::EShaderPropertyFlag, std::uint64_t> shaderFlags;
 	eastl::atomic<int> refCount{ 0 };
 

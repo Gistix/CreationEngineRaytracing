@@ -10,6 +10,8 @@ namespace Util
 
 		uint32_t DivideRoundUp(uint32_t x, float divisor);
 
+		float2 Float2(RE::NiPoint2 niPoint);
+
 		float3 Float3(RE::NiPoint3 niPoint);
 
 		float3 Float3(RE::NiColor niColor);
@@ -19,6 +21,13 @@ namespace Util
 		float3 Normalize(float3 vector);
 
 		DirectX::XMMATRIX GetXMFromNiTransform(const RE::NiTransform& Transform);
+
+		inline float3x4 ComputeLocalToRoot(const RE::NiTransform& rootWorldInverse, const RE::NiTransform& geometryWorld)
+		{
+			float3x4 result;
+			XMStoreFloat3x4(&result, GetXMFromNiTransform(rootWorldInverse * geometryWorld));
+			return result;
+		}
 
 		bool MatrixNearEqual(const float3x4& a, const float3x4& b, float epsilon = 1e-5f);
 

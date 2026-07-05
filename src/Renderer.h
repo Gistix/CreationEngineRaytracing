@@ -13,6 +13,8 @@
 #include "Renderer/RenderGraph.h"
 #include "Renderer/RenderTargetManager.h"
 
+#include "Constants.h"
+
 #include <d3d12compatibility.h>
 
 struct MessageCallback : public nvrhi::IMessageCallback
@@ -57,8 +59,19 @@ class Renderer
 	// Fence used to synchronize 'executeCommandList' since it is not thread safe and we need the returned fence value to synchronize GPU resources
 	mutable std::mutex m_ExecutionMutex;
 
+	struct FrameSlot
+	{
+		nvrhi::CommandListHandle commandList = nullptr;
+		nvrhi::EventQueryHandle eventQuery = nullptr;
+		uint64_t fenceValue = 0;
+		bool inFlight = false;
+	};
+	eastl::array<FrameSlot, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameSlots;
+	uint32_t m_CurrentSlot = 0;
+	uint32_t m_NextSlot = 0;
+	uint32_t m_LastCompletedSlot = 0;
+
 	uint64_t m_LastSubmittedInstance = 0;
-	nvrhi::EventQueryHandle m_RenderGraphQuery;
 
 	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
@@ -77,6 +90,9 @@ class Renderer
 	eastl::unique_ptr<RenderGraph> m_RenderGraph;
 
 	eastl::vector<PassTiming> m_PassTimings;
+
+	eastl::array<nvrhi::TimerQueryHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameTimerQueries = {};
+	eastl::array<float, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameCpuTimes = {};
 
 	RenderTargetManager m_RenderTargetManager;
 
@@ -144,8 +160,7 @@ public:
 	struct RendererSettings
 	{
 		bool UseRayQuery = true;
-		bool ValidationLayer = true;
-		bool VariableUpdateRate = false;
+		bool ValidationLayer = false;
 	} m_Settings;
 
 	static Renderer* GetSingleton()
@@ -196,9 +211,18 @@ public:
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();
 
-	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main); }
+	inline auto GetLastSubmittedFence() const { return m_LastSubmittedInstance; }
+
+	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main, m_CurrentSlot); }
 
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
+
+	inline auto GetCurrentSlot() const { return m_CurrentSlot; }
+	inline auto GetCompletedSlot() const { return m_LastCompletedSlot; }
+
+	inline auto& GetFrameTimerQuery(uint32_t slot) { return m_FrameTimerQueries[slot]; }
+	inline void SetFrameCpuTime(uint32_t slot, float ms) { m_FrameCpuTimes[slot] = ms; }
+	inline float GetFrameCpuTime(uint32_t slot) const { return m_FrameCpuTimes[slot]; }
 
 	inline auto GetJitter() const { return m_Jitter; }
 
@@ -211,17 +235,17 @@ public:
 
 	inline auto& RenderTargetManager() { return m_RenderTargetManager; }
 
-	inline auto& GetBlackTexture() const { return m_BlackTexture->texture; }
+	inline auto& GetBlackDescriptor() const { return m_BlackTexture->texture; }
 
-	inline auto& GetWhiteTextureIndex() const { return m_WhiteTexture->descriptorHandle; }
-	inline auto& GetGrayTextureIndex() const { return m_GrayTexture->descriptorHandle; }
-	inline auto& GetNormalTextureIndex() const { return m_NormalTexture->descriptorHandle; }
+	inline auto& GetWhiteTextureDescriptor() const { return m_WhiteTexture->descriptorHandle; }
+	inline auto& GetGrayTextureDescriptor() const { return m_GrayTexture->descriptorHandle; }
+	inline auto& GetNormalTextureDescriptor() const { return m_NormalTexture->descriptorHandle; }
 	inline nvrhi::ITexture* GetNormalTexture() const { return m_NormalTexture->texture; }
-	inline auto& GetBlackTextureIndex() const { return m_BlackTexture->descriptorHandle; }
+	inline auto& GetBlackTextureDescriptor() const { return m_BlackTexture->descriptorHandle; }
 #if defined(SKYRIM)
-	inline auto& GetRMAOSTextureIndex() const { return m_RMAOSTexture->descriptorHandle; }
+	inline auto& GetRMAOSTextureDescriptor() const { return m_RMAOSTexture->descriptorHandle; }
 #endif
-	inline auto& GetDetailTextureIndex() const { return m_DetailTexture->descriptorHandle; }
+	inline auto& GetDetailTextureDescriptor() const { return m_DetailTexture->descriptorHandle; }
 
 	inline auto GetPassTimings() const { return m_PassTimings; };
 
@@ -294,7 +318,7 @@ public:
 
 	void EndExecution();
 
-	void WaitExecution();
+	uint32_t PostExecution();
 
-	void PostExecution();
+	void RunPostExecutionForSlot(uint32_t slot);
 };

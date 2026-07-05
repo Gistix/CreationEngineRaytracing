@@ -77,13 +77,13 @@ float3 EvalDiffuse(in float3 l, in Surface surface, in BRDFContext brdfContext)
     return surface.DiffuseAlbedo * NdotL * BRDF::Diffuse_Lambert();
 }
 
-float3 EvalLight(in float3 l, in Material material, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf)
+float3 EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf)
 {
 #if LIGHTEVAL_MODE == LIGHTEVAL_MODE_DIFFUSE
     return EvalDiffuse(l, surface, brdfContext);
 #else
     float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
-    float4 bsdfEval = bsdf.Eval(brdfContext, material, surface, l) * shadowTerminator * (material.ShaderType == ShaderType::TruePBR ? 1.0f : PBRLightingCompensation * PBRLightingScale);
+    float4 bsdfEval = bsdf.Eval(brdfContext, feature, surface, l) * shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingCompensation * PBRLightingScale);
     return bsdfEval.xyz;
 #endif
 }
@@ -102,12 +102,12 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
     irradiance *= 2.0f / (1.0f + cosSunDisk);
 }
 
-float3 EvalDirectionalLight(in Material material, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 irradiance;
     float3 lr;
     GetDirectionalLightIrradiance(irradiance, lr, randomSeed);
-    float3 direct = EvalLight(lr, material, surface, brdfContext, bsdf) * irradiance;
+    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * irradiance;
     [branch]
     if (any(direct > MIN_DIFFUSE_SHADOW))
     {
@@ -244,7 +244,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #endif
 }
 
-float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 lightIrradiance;
     float3 lr;
@@ -255,7 +255,7 @@ float3 EvalPointLight(in Material material, in Surface surface, in BRDFContext b
     if (lightIndex < 0)
         return 0.0f;
     
-    float3 direct = EvalLight(lr, material, surface, brdfContext, bsdf) * lightIrradiance;
+    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
 
     [branch]
     if (any(direct > MIN_DIFFUSE_SHADOW))
@@ -368,10 +368,10 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
     return totalRadiance;
 }
 
-float3 EvaluateDirectRadiance(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
+float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
-    float3 radiance = EvalDirectionalLight(material, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
-    radiance += EvalPointLight(material, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
+    float3 radiance = EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
+    radiance += EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
 
     return radiance;
 }
@@ -419,14 +419,14 @@ void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 
     }
 }
 
-float3 EvaluateDirectRadianceMIS(in Material material, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvaluateDirectRadianceMIS(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 lightIrradiance;
     float3 lr;
     float distance;
     GetLightIrradianceMIS(instance, surface, lightIrradiance, lr, distance, randomSeed);
 
-    float3 direct = EvalLight(lr, material, surface, brdfContext, bsdf) * lightIrradiance;
+    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
 
     return direct;
 }

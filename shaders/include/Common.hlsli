@@ -11,6 +11,14 @@
 #define DIV_EPSILON (1e-4f)
 #define LAND_MIN_WEIGHT (0.01f)
 
+void CreateOrthonormalBasis(in float3 normal, out float3 tangent, out float3 bitangent)
+{
+    float3 up = abs(normal.z) < 0.999 ? float3(0, 0, 1) : float3(0, 1, 0);
+
+    tangent = normalize(cross(up, normal));
+    bitangent = cross(normal, tangent);
+}
+
 float3 SafeNormalize(float3 input)
 {
     float lenSq = dot(input,input);
@@ -28,21 +36,21 @@ float F0toIOR(float3 F0)
 	return (1.0 + sqrt(f0)) / (1.0 - sqrt(f0));
 }
 
-void NormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
+void NormalMap(float3 normalMap, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
 {
 	normalMap = normalize(normalMap * 2.0f - 1.0f);
 	
     normalWS = normalize(normalMap.x * geomTangentWS + normalMap.y * geomBitangentWS + normalMap.z * geomNormalWS);
     tangentWS = normalize(geomTangentWS - normalWS * dot(geomTangentWS, normalWS));
-    bitangentWS = cross(normalWS, tangentWS) * handedness;
+    bitangentWS = cross(normalWS, tangentWS);
+    bitangentWS *= (dot(bitangentWS, geomBitangentWS) < 0.0f) ? -1.0f : 1.0f;
 }
 
-void ModelSpaceNormalMap(float3 normalMap, float handedness, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
+void ModelSpaceNormalMap(float3 normalMap, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
 {
     // Swizzle matches vanilla shaders
     normalWS = normalize(normalMap.xzy * 2.0f - 1.0f);
-    tangentWS = normalize(geomTangentWS - normalWS * dot(geomTangentWS, normalWS));
-    bitangentWS = cross(normalWS, tangentWS) * handedness;
+    CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
 }
 
 float Remap(float x, float min, float max)
@@ -120,6 +128,18 @@ float3 computeMotionVector(float3 posW, float3 prevPosW)
     return motion * float3(0.5f, -0.5f, 1.0f);
 }
 
+float3 computeMotionVectorCameraRelative(float3 posCamera, float3 prevPosCamera)
+{
+    float4 currClip = mul(Camera.ViewProj, float4(posCamera, 1.0));
+    float4 prevClip = mul(Camera.PrevViewProj, float4(prevPosCamera, 1.0));
+
+    float3 currNDC = currClip.xyz / currClip.w;
+    float3 prevNDC = prevClip.xyz / prevClip.w;
+
+    float3 motion = prevNDC - currNDC;
+    return motion * float3(0.5f, -0.5f, 1.0f);
+}
+
 // ============================================================================
 // Clip-space Depth Computation
 // ============================================================================
@@ -127,6 +147,12 @@ float3 computeMotionVector(float3 posW, float3 prevPosW)
 float computeClipDepth(float3 posW)
 {
     float4 clipPos = mul(Camera.ViewProj, float4(posW - Camera.Position, 1.0));
+    return clipPos.z / clipPos.w;
+}
+
+float computeClipDepthCameraRelative(float3 posCamera)
+{
+    float4 clipPos = mul(Camera.ViewProj, float4(posCamera, 1.0));
     return clipPos.z / clipPos.w;
 }
 
@@ -173,5 +199,71 @@ float3 ComputeNormalImproved(const Texture2D<float> depth, in float2 id, in int2
 
     // Invert normals so they match GBuffer
     return normalize(cross(dpdy, dpdx));
+}
+
+float3 TransformPointCameraRelative(float3x4 transform, float3 position, float3 cameraPosition)
+{
+    float3 translation = float3(transform._m03, transform._m13, transform._m23);
+    return mul((float3x3) transform, position) + (translation - cameraPosition);
+}
+
+float3 TransformMeshInstancePointCameraRelative(float3 objectSpacePosition, float3x4 meshTransform, float3x4 instanceTransform, float3 cameraPosition)
+{
+    float3 rootSpacePosition = mul(meshTransform, float4(objectSpacePosition, 1.0));
+    return TransformPointCameraRelative(instanceTransform, rootSpacePosition, cameraPosition);
+}
+
+float3 RotateByQuaternion(float3 v, float4 q)
+{
+    float3 t = 2.0 * cross(q.xyz, v);
+    return v + q.w * t + cross(q.xyz, t);
+}
+
+float4 MatrixToQuaternionLocal(float3x3 m)
+{
+    float4 q;
+    float trace = m[0][0] + m[1][1] + m[2][2];
+
+    if (trace > 0.0)
+    {
+        float s = sqrt(trace + 1.0) * 2.0;
+        q.w = 0.25 * s;
+        q.x = (m[2][1] - m[1][2]) / s;
+        q.y = (m[0][2] - m[2][0]) / s;
+        q.z = (m[1][0] - m[0][1]) / s;
+    }
+    else if (m[0][0] > m[1][1] && m[0][0] > m[2][2])
+    {
+        float s = sqrt(1.0 + m[0][0] - m[1][1] - m[2][2]) * 2.0;
+        q.w = (m[2][1] - m[1][2]) / s;
+        q.x = 0.25 * s;
+        q.y = (m[0][1] + m[1][0]) / s;
+        q.z = (m[0][2] + m[2][0]) / s;
+    }
+    else if (m[1][1] > m[2][2])
+    {
+        float s = sqrt(1.0 + m[1][1] - m[0][0] - m[2][2]) * 2.0;
+        q.w = (m[0][2] - m[2][0]) / s;
+        q.x = (m[0][1] + m[1][0]) / s;
+        q.y = 0.25 * s;
+        q.z = (m[1][2] + m[2][1]) / s;
+    }
+    else
+    {
+        float s = sqrt(1.0 + m[2][2] - m[0][0] - m[1][1]) * 2.0;
+        q.w = (m[1][0] - m[0][1]) / s;
+        q.x = (m[0][2] + m[2][0]) / s;
+        q.y = (m[1][2] + m[2][1]) / s;
+        q.z = 0.25 * s;
+    }
+
+    return normalize(q);
+}
+
+float4 QuaternionMultiplyLocal(float4 a, float4 b)
+{
+    return float4(
+        a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz),
+        a.w * b.w - dot(a.xyz, b.xyz));
 }
 #endif // COMMON_HLSLI

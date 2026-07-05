@@ -11,6 +11,8 @@ namespace Constants
 
 	static constexpr uint32_t MAX_CB_VERSIONS = 16;
 
+	static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
 	static constexpr uint32_t PLAYER_REFR_FORMID = 0x00000014;
 
 	static constexpr uint32_t LIGHTS_MAX = 256;
@@ -18,6 +20,10 @@ namespace Constants
 
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
 	static constexpr uint32_t NUM_MESHES_MAX = 16 * 1024;
+
+	static constexpr uint32_t NUM_MATERIALS_MIN = 1024;
+	static constexpr uint32_t NUM_MATERIALS_THRESHOLD = 256;
+	static constexpr uint32_t NUM_MATERIALS_STEP = 512;
 
 	static constexpr uint32_t TLAS_INSTANCES_MIN = 2048;
 	static constexpr uint32_t TLAS_INSTANCES_THRESHOLD = 256;
@@ -45,4 +51,28 @@ namespace Constants
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
 
 	static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;
+
+	namespace ExtraData
+	{
+		static constexpr auto LandLOD = "CERT::LandLOD";
+	}
+
+	static constexpr uint32_t PT_DISPATCH_THREADS = 8;
+
+	static constexpr uint32_t GI_DISPATCH_THREADS = 16;
+
+	namespace rtti
+	{
+		static REL::Relocation<const RE::NiRTTI*> NiBillboardNode{ NiRTTI(NiBillboardNode) };
+		static REL::Relocation<const RE::NiRTTI*> BSOrderedNode{ NiRTTI(BSOrderedNode) };
+		static REL::Relocation<const RE::NiRTTI*> BSDistantTreeShaderProperty{ NiRTTI(BSDistantTreeShaderProperty) };
+		static REL::Relocation<const RE::NiRTTI*> BSGrassShaderProperty{ NiRTTI(BSGrassShaderProperty) };
+		static REL::Relocation<const RE::NiRTTI*> BSDismemberSkinInstance{ NiRTTI(BSDismemberSkinInstance) };
+	}
+
+	static constexpr float3x4 kIdentityTransform = {
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f
+	};
 }

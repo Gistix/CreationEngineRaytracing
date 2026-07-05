@@ -8,9 +8,13 @@ namespace Util
 {
 	namespace Geometry
 	{
-		std::uint32_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags);
+		std::uint16_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags);
 
-		uint16_t GetStoredVertexSize(uint64_t desc);
+		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc desc);
+
+		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance);
+
+		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility);
 
 		bool HasDoubleSidedGeom(Mesh* mesh);
 

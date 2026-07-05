@@ -47,6 +47,9 @@ namespace Pass
 		m_RaytracingData->WaterAbsorptionScale = settings.WaterSettings.AbsorptionScale;
 		m_RaytracingData->EnableReSTIRGI = settings.ReSTIRGI.Enabled ? 1 : 0;
 
+		m_RaytracingData->NumMeshes = sceneGraph->GetNumMeshesFrame();
+		m_RaytracingData->NumInstances = sceneGraph->GetNumInstancesFrame();
+
 		m_RaytracingData->HitDistSettings = float4(
 			3.0f * Util::Units::M_TO_GAME_UNIT,  // (units > 0) - constant value
 			0.1f * Util::Units::M_TO_GAME_UNIT,  // (> 0) - viewZ based linear scale (1 m - 10 cm, 10 m - 1 m, 100 m - 10 m)
@@ -85,6 +88,9 @@ namespace Pass
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
-		m_TopLevelAS.Update(commandList, sceneGraph->GetInstances());
+		// Upload pending dynamic buffers and build/refit the per-owner BLAS clusters before the TLAS build.
+		sceneGraph->BuildClusters(commandList);
+
+		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters());
 	}
 }

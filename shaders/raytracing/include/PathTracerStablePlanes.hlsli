@@ -18,18 +18,19 @@ void computePSRMotionVectorsAndDepth(
     const uint2 pixelPos,
     const float totalSceneLength,
     const float3x3 imageXform,
-    const float3 surfacePosition,
-    const float3 surfacePrevPosition,
+    const float3 surfaceCameraPosition,
+    const float3 surfacePrevCameraPosition,
     out float3 outMotionVectors,
     out float outDepth)
 {
     float3 cameraRayDir = normalize(mul((float3x3)Camera.ViewInverse,
         GetView(pixelPos, Camera.RenderSize, Camera.ProjInverse)));
-    float3 virtualWorldPos = Camera.Position.xyz + cameraRayDir * totalSceneLength;
-    float3 worldMotion = surfacePrevPosition - surfacePosition;
+    float3 virtualCameraPos = cameraRayDir * totalSceneLength;
+    float3 cameraDelta = Camera.Position - Camera.PositionPrev;
+    float3 worldMotion = surfacePrevCameraPosition - surfaceCameraPosition - cameraDelta;
     float3 virtualMotion = mul(imageXform, worldMotion);
-    outMotionVectors = computeMotionVector(virtualWorldPos, virtualWorldPos + virtualMotion);
-    outDepth = computeClipDepth(virtualWorldPos);
+    outMotionVectors = computeMotionVectorCameraRelative(virtualCameraPos, virtualCameraPos + virtualMotion + cameraDelta);
+    outDepth = computeClipDepthCameraRelative(virtualCameraPos);
 }
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
@@ -201,7 +202,7 @@ void StablePlanesHandleMiss(
 {
     float3 skyMV; float skyDepth;
     computePSRMotionVectorsAndDepth(pixelPos, kEnvironmentMapSceneDistance, imageXform,
-        float3(0,0,0), float3(0,0,0), skyMV, skyDepth);
+        float3(0,0,0), Camera.Position - Camera.PositionPrev, skyMV, skyDepth);
 
     float3 planeNormal = -rayDir;
 
@@ -265,6 +266,7 @@ StablePlanesHitResult StablePlanesHandleHit(
     const BRDFContext brdfContext,
     const StandardBSDF bsdf,
     const bool isDominant,
+    const Material material,
     const Instance instance,
     inout uint randomSeed,
     const bool insideWaterVolume,
@@ -301,7 +303,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.Position, surface.PrevPosition, psrMV, psrDepth);
+            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
@@ -346,6 +348,20 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
     }
 
+    // Above-water hits keep the reflected branch as the denoiser's dominant plane.
+    // Underwater paths keep the default transmission-first order.
+    if (material.ShaderType == ShaderType::Water && !insideWaterVolume)
+    {
+        for (int k3 = 0; k3 < deltaLobeCount; k3++)
+        {
+            if (any(deltaLobes[k3].thp > 0) && deltaLobes[k3].transmission == 0)
+            {
+                firstActiveLobe = k3;
+                break;
+            }
+        }
+    }
+
     float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
 
     if (nonDeltaPart > 1e-5 || activeDeltaLobes == 0)
@@ -355,7 +371,7 @@ StablePlanesHitResult StablePlanesHandleHit(
 
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.Position, surface.PrevPosition, psrMV, psrDepth);
+            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
@@ -388,8 +404,17 @@ StablePlanesHitResult StablePlanesHandleHit(
 
     int forkedCount = 0;
 
-    for (int lobeIdx = 0; lobeIdx < deltaLobeCount; lobeIdx++)
+    for (int lobeOrder = 0; lobeOrder < deltaLobeCount; lobeOrder++)
     {
+        int lobeIdx = lobeOrder;
+        if (material.ShaderType == ShaderType::Water && !insideWaterVolume && firstActiveLobe >= 0)
+        {
+            if (lobeOrder == 0)
+                lobeIdx = firstActiveLobe;
+            else if (lobeOrder <= firstActiveLobe)
+                lobeIdx = lobeOrder - 1;
+        }
+
         if (!any(deltaLobes[lobeIdx].thp > 0))
             continue;
 
@@ -444,7 +469,7 @@ StablePlanesHitResult StablePlanesHandleHit(
         bool storeAsDominant = isDominant && canReuseCurrent;
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.Position, surface.PrevPosition, psrMV, psrDepth);
+            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
