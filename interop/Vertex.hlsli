@@ -10,16 +10,10 @@ struct Vertex
 	half2 Texcoord0;
 	half3 Normal;
 	half3 Tangent;
-	float Handedness;
-#if defined(BAKED_TEXTURES)	// Probably misaligned, but no being used atm
-	ubyte4f Albedo;
-    byte16f Roughness;
-    byte16f Metallic;
-#else
+    half3 Bitangent;
 	ubyte4f Color;
 	ubyte4f LandBlend0;
 	ubyte4f LandBlend1;
-#endif
 };
 VALIDATE_ALIGNMENT(Vertex, 4);
 

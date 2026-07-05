@@ -40,7 +40,7 @@ namespace Pass
 
 	void PathTracing::ResolutionChanged([[maybe_unused]] uint2 resolution)
 	{
-		m_DirtyBindings = true;
+		m_BindingSetDirty.fill(true);
 	}
 
 	void PathTracing::SettingsChanged(const Settings& settings)
@@ -54,7 +54,7 @@ namespace Pass
 			m_Defines = defines;
 			CreateBindingLayout();
 			CreatePipeline();
-			m_DirtyBindings = true;
+			m_BindingSetDirty.fill(true);
 		}
 	}
 
@@ -189,7 +189,8 @@ namespace Pass
 		.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 		.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 		.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-		.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
+		.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
+		.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		pipelineDesc.maxPayloadSize = 20;
 
@@ -257,7 +258,8 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
+		.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		outPipeline = device->createComputePipeline(pipelineDesc);
 	}
@@ -278,7 +280,8 @@ namespace Pass
 
 	void PathTracing::CheckBindings()
 	{
-		if (!m_DirtyBindings)
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		if (!m_BindingSetDirty[currentSlot] && m_BindingSets[currentSlot])
 			return;
 
 		auto* renderer = GetRenderer();
@@ -362,9 +365,9 @@ namespace Pass
 		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 
-		m_BindingSet = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
+		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 
-		if (!m_BindingSet) {
+		if (!m_BindingSets[currentSlot]) {
 
 			for (const auto& binding : bindingSetDesc.bindings)
 			{
@@ -372,23 +375,26 @@ namespace Pass
 			}
 		}
 
-		m_DirtyBindings = false;
+		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void PathTracing::ExecuteDispatch(nvrhi::ICommandList* commandList,
 		nvrhi::rt::PipelineHandle rayPipeline, nvrhi::rt::ShaderTableHandle shaderTable,
 		nvrhi::ComputePipelineHandle computePipeline)
 	{
+		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		nvrhi::BindingSetVector bindings = {
-			m_BindingSet,
+			m_BindingSets[currentSlot],
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
-			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 		};
 
 		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
@@ -412,7 +418,7 @@ namespace Pass
 			state.bindings = bindings;
 			commandList->setComputeState(state);
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 32);
+			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, Constants::PT_DISPATCH_THREADS);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 	}
