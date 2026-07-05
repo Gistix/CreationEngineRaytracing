@@ -77,7 +77,6 @@ uint64_t TextureManager::GetFakeDoubledVRAMUsage()
 void TextureManager::LogMemoryStats()
 {
 	uint64_t standardBytes = 0;
-	uint64_t normalBytes = 0;
 	uint32_t streamedTextures = 0;
 	uint64_t streamedBytes = 0;
 
@@ -94,19 +93,11 @@ void TextureManager::LogMemoryStats()
 		}
 	}
 
-	for (const auto& [key, normalMap] : m_NormalMaps)
-	{
-		if (normalMap)
-			normalBytes += normalMap->size;
-	}
-
 	logger::info(
-		"TextureManager - RT texture memory: total={} MiB, standard={} MiB ({} textures), normal={} MiB ({} textures), streamed={} MiB ({} textures)",
-		(standardBytes + normalBytes) / (1024 * 1024),
+		"TextureManager - RT texture memory: total={} MiB, standard={} MiB ({} textures), streamed={} MiB ({} textures)",
+		standardBytes / (1024 * 1024),
 		standardBytes / (1024 * 1024),
 		m_Textures.size(),
-		normalBytes / (1024 * 1024),
-		m_NormalMaps.size(),
 		streamedBytes / (1024 * 1024),
 		streamedTextures);
 }
