@@ -22,7 +22,7 @@ struct PackedSurfaceData
     uint32_t roughMetallic;     // 4  (fp16 roughness | fp16 metallic)
     uint32_t materialData;      // 4  (low 16: material feature, high 16: surface flags)
     float    viewDepth;         // 4  (negative = empty)
-    uint32_t materialIndex;     // 4  (bindless material descriptor index)
+    uint32_t materialIndex;     // 4  (material byte offset in Materials[0])
     uint32_t instanceIndex;     // 4  (TLAS instance index)
     uint32_t psrData;           // 4  (packed stable plane / PSR metadata)
 };

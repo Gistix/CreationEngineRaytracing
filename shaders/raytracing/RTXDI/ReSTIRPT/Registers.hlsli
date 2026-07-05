@@ -11,7 +11,7 @@
 #include "interop/Mesh.hlsli"
 #include "interop/Light.hlsli"
 #include "interop/Instance.hlsli"
-#include "interop/Material.hlsli"
+#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
 
 // Constant buffers
 ConstantBuffer<CameraData>     Camera      : register(b0);
@@ -53,11 +53,12 @@ Texture2D<float3> PrimaryDiffuseAlbedo     : register(t17);
 Texture2D<float3> PrimarySpecularAlbedo    : register(t18);
 
 StructuredBuffer<Triangle> Triangles[]     : register(t0, space1);
-StructuredBuffer<Vertex> Vertices[]        : register(t0, space2);
-StructuredBuffer<Material> Materials[]     : register(t0, space3);
+ByteAddressBuffer Vertices[]              : register(t0, space2);
+ByteAddressBuffer Materials[]              : register(t0, space3);
 Texture2D<float4> Textures[]               : register(t0, space4);
 StructuredBuffer<float3> PrevPositions[]   : register(t0, space6);
 TextureCube<float4> CubeTextures[]         : register(t0, space7);
+StructuredBuffer<float4> DynamicPositions[] : register(t0, space8);
 
 // PT reservoir buffer (read/write)
 RWStructuredBuffer<RTXDI_PackedPTReservoir> PTReservoirs : register(u0);

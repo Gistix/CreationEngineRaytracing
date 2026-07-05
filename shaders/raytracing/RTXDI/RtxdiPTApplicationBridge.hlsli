@@ -7,9 +7,6 @@
 
 #include "ReSTIRPT/Registers.hlsli"
 
-// Material type required by StandardBSDF
-#include "interop/Material.hlsli"
-
 // Include advanced settings for DIFFUSE_MODE defaults
 #include "raytracing/include/AdvancedSettings.hlsli"
 
@@ -30,6 +27,11 @@
 // ---------------------------------------------------------------------------
 // RAB_Surface — reconstructed from PackedSurfaceData
 // ---------------------------------------------------------------------------
+LightingMaterialData GetMaterial(uint materialOffset)
+{
+    return Materials[0].Load<LightingMaterialData>(materialOffset);
+}
+
 struct RAB_Surface
 {
     Surface surface;
@@ -45,14 +47,14 @@ struct RAB_Surface
 
     float4 Eval(float3 wo)
     {
-        Material material = GetMaterial(materialIndex);
-        StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
-        return bsdf.Eval(brdfContext, material, surface, wo);
+        LightingMaterialData material = GetMaterial(materialIndex);
+        StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
+        return bsdf.Eval(brdfContext, material.Feature, surface, wo);
     }
 
     float EvalPdf(float3 wo)
     {
-        StandardBSDF bsdf = StandardBSDF::make(surface, isEnter);
+        StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
         return bsdf.EvalPdf(brdfContext, surface, wo);
     }
 };
@@ -187,7 +189,7 @@ RAB_Surface RAB_MakeSurfaceFromPayload(float3 position, Payload payload, float3 
 {
     RAB_Surface rab;
     Instance instance;
-    Material material;
+    LightingMaterialData material;
     rab.surface = SurfaceMaker::make(position, payload, rayDir, rayCone, instance, material, primary);
     rab.brdfContext = BRDFContext::make(rab.surface, -rayDir);
     bool isEnter = dot(rab.surface.FaceNormal, rab.brdfContext.ViewDirection) >= 0.0f;
@@ -202,7 +204,7 @@ RAB_Surface RAB_MakeSurfaceFromPayload(float3 position, Payload payload, float3 
     rab.hasSpecularTransmission = rab.surface.SpecTrans > 0.0f;
     rab.viewDepth = length(rab.surface.Position - Camera.Position.xyz);
     Mesh mesh = GetMesh(payload, instance);
-    rab.materialIndex = mesh.GeometryIdx;
+    rab.materialIndex = mesh.GetMaterialOffset();
     rab.instanceIndex = payload.GetInstanceIndex();
     rab.psrData = 0;
     rab.pathThroughput = 1.0f;
@@ -310,8 +312,7 @@ bool RAB_AreMaterialsSimilar(RAB_Material a, RAB_Material b)
 
 bool RAB_IsTwoSidedMaterial(RAB_Surface rab)
 {
-    Material material = GetMaterial(rab.materialIndex);
-    return (material.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+    return false;
 }
 
 bool RAB_IsDirectionUsableForOpaqueReflection(RAB_Surface rab, float3 direction)
@@ -334,9 +335,9 @@ float3 RAB_GetPTSampleTargetPdfForSurface(float3 samplePosition, float3 sampleRa
     if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
         return 0.0f;
 
-    Material material = GetMaterial(rab.materialIndex);
-    StandardBSDF bsdf = StandardBSDF::make(rab.surface, rab.isEnter);
-    return max(EvalLight(L, material, rab.surface, rab.brdfContext, bsdf) * sampleRadiance * rab.pathThroughput, 0.0f);
+    LightingMaterialData material = GetMaterial(rab.materialIndex);
+    StandardBSDF bsdf = StandardBSDF::make(rab.surface, rab.surface.Normal, rab.brdfContext.ViewDirection, rab.isEnter);
+    return max(EvalLight(L, material.Type, material.Feature, rab.surface, rab.brdfContext, bsdf) * sampleRadiance * rab.pathThroughput, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -356,9 +357,9 @@ float3 RAB_GetReflectedBsdfRadianceForSurface(float3 lightPos, float3 lightRadia
     if (!RAB_IsDirectionUsableForOpaqueReflection(rab, L))
         return 0.0f;
 
-    Material material = GetMaterial(rab.materialIndex);
-    StandardBSDF bsdf = StandardBSDF::make(rab.surface, rab.isEnter);
-    return EvalLight(L, material, rab.surface, rab.brdfContext, bsdf) * lightRadiance * rab.pathThroughput;
+    LightingMaterialData material = GetMaterial(rab.materialIndex);
+    StandardBSDF bsdf = StandardBSDF::make(rab.surface, rab.surface.Normal, rab.brdfContext.ViewDirection, rab.isEnter);
+    return EvalLight(L, material.Type, material.Feature, rab.surface, rab.brdfContext, bsdf) * lightRadiance * rab.pathThroughput;
 }
 
 // ---------------------------------------------------------------------------

@@ -81,7 +81,7 @@ void RAB_SetBrdfRaySampleFromBSDF(inout RTXDI_PathTracerContext ctx, BSDFSample 
 bool RAB_SampleBSDFWithRtxdiRng(
     StandardBSDF standardBsdf,
     BRDFContext brdfContext,
-    Material material,
+    LightingMaterialData material,
     Surface surface,
     out BSDFSample result,
     inout RTXDI_RandomSamplerState rng)
@@ -135,7 +135,7 @@ bool RAB_SampleBSDFWithRtxdiRng(
 bool RAB_RecordDirectionalNee(
     inout RTXDI_PathTracerContext ctx,
     RAB_Surface rab,
-    Material material,
+    LightingMaterialData material,
     StandardBSDF bsdf,
     inout RTXDI_PathTracerRandomContext ptRandContext)
 {
@@ -150,7 +150,7 @@ bool RAB_RecordDirectionalNee(
     if (!RAB_IsDirectionUsableForOpaqueReflection(rab, lightDir))
         return false;
 
-    float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
+    float3 reflected = EvalLight(lightDir, material.Type, material.Feature, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
     if (!any(reflected > MIN_DIFFUSE_SHADOW))
         return false;
 
@@ -172,7 +172,7 @@ bool RAB_RecordDirectionalNee(
 bool RAB_RecordPointNee(
     inout RTXDI_PathTracerContext ctx,
     RAB_Surface rab,
-    Material material,
+    LightingMaterialData material,
     Instance instance,
     StandardBSDF bsdf,
     inout RTXDI_PathTracerRandomContext ptRandContext)
@@ -193,7 +193,7 @@ bool RAB_RecordPointNee(
     if (!RAB_IsDirectionUsableForOpaqueReflection(rab, lightDir))
         return false;
 
-    float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
+    float3 reflected = EvalLight(lightDir, material.Type, material.Feature, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
     if (!any(reflected > MIN_DIFFUSE_SHADOW))
         return false;
 
@@ -215,7 +215,7 @@ bool RAB_RecordPointNee(
 bool RAB_RecordSkyNee(
     inout RTXDI_PathTracerContext ctx,
     RAB_Surface rab,
-    Material material,
+    LightingMaterialData material,
     StandardBSDF bsdf,
     inout RTXDI_PathTracerRandomContext ptRandContext)
 {
@@ -234,7 +234,7 @@ bool RAB_RecordSkyNee(
     if (!RAB_IsDirectionUsableForOpaqueReflection(rab, lightDir))
         return false;
 
-    float3 reflected = EvalLight(lightDir, material, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
+    float3 reflected = EvalLight(lightDir, material.Type, material.Feature, rab.surface, rab.brdfContext, bsdf) * lightSample.radiance;
     if (!any(reflected > MIN_DIFFUSE_SHADOW))
         return false;
 
@@ -270,9 +270,9 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
 
         RAB_Surface currentRab = rab;
         Surface surface = currentRab.surface;
-        Material material = GetMaterial(currentRab.materialIndex);
+        LightingMaterialData material = GetMaterial(currentRab.materialIndex);
         BRDFContext brdfContext = currentRab.brdfContext;
-        StandardBSDF bsdf = StandardBSDF::make(surface, currentRab.isEnter);
+        StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, currentRab.isEnter);
 
         currentRab.surface = surface;
         currentRab.brdfContext = brdfContext;
@@ -365,10 +365,10 @@ void RAB_PathTrace(inout RTXDI_PathTracerContext ctx, inout RTXDI_PathTracerRand
             break;
 
         Surface hitSurface = rab.surface;
-        Material hitMaterial = GetMaterial(rab.materialIndex);
+        LightingMaterialData hitMaterial = GetMaterial(rab.materialIndex);
         Instance hitInstance = Instances[NonUniformResourceIndex(rab.instanceIndex)];
         BRDFContext hitBrdfContext = rab.brdfContext;
-        StandardBSDF hitBsdf = StandardBSDF::make(hitSurface, rab.isEnter);
+        StandardBSDF hitBsdf = StandardBSDF::make(hitSurface, hitSurface.Normal, hitBrdfContext.ViewDirection, rab.isEnter);
 
         rab.surface = hitSurface;
         rab.brdfContext = hitBrdfContext;
