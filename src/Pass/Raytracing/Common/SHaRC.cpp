@@ -78,6 +78,8 @@ namespace Pass
 	void SHaRC::SetupUpdate()
 	{
 		auto device = GetRenderer()->GetDevice();
+		m_UpdatePass.m_ComputeShader = nullptr;
+		m_UpdatePass.m_ComputePipeline = nullptr;
 
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
@@ -115,7 +117,16 @@ namespace Pass
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
 		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
+		if (!rayGenBlob) {
+			logger::error("SHaRC::SetupUpdate - Failed to compile update shader.");
+			return;
+		}
+
 		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
+		if (!m_UpdatePass.m_ComputeShader) {
+			logger::error("SHaRC::SetupUpdate - Failed to create update shader.");
+			return;
+		}
 
 		auto* sceneGraph = scene->GetSceneGraph();
 
@@ -131,6 +142,9 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		m_UpdatePass.m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
+		if (!m_UpdatePass.m_ComputePipeline) {
+			logger::error("SHaRC::SetupUpdate - Failed to create update pipeline.");
+		}
 	}
 
 	void SHaRC::SetupResolve()
@@ -139,6 +153,8 @@ namespace Pass
 			return;
 
 		auto device = GetRenderer()->GetDevice();
+		m_ResolvePass.m_ComputeShader = nullptr;
+		m_ResolvePass.m_ComputePipeline = nullptr;
 
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
@@ -165,13 +181,26 @@ namespace Pass
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
 		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/SharcResolve.hlsl", defines, L"cs_6_5");
+		if (!rayGenBlob) {
+			logger::error("SHaRC::SetupResolve - Failed to compile resolve shader.");
+			return;
+		}
+
 		m_ResolvePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Resolve Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
+		if (!m_ResolvePass.m_ComputeShader) {
+			logger::error("SHaRC::SetupResolve - Failed to create resolve shader.");
+			return;
+		}
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
 			.setComputeShader(m_ResolvePass.m_ComputeShader)
 			.addBindingLayout(m_ResolvePass.m_BindingLayout);
 
 		m_ResolvePass.m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+		if (!m_ResolvePass.m_ComputePipeline) {
+			logger::error("SHaRC::SetupResolve - Failed to create resolve pipeline.");
+			return;
+		}
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -255,6 +284,9 @@ namespace Pass
 		{
 			auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
+			if (!m_UpdatePass.m_ComputePipeline)
+				return;
+
 			nvrhi::ComputeState state;
 			state.pipeline = m_UpdatePass.m_ComputePipeline;
 
@@ -285,6 +317,9 @@ namespace Pass
 
 		// Resolve Pass
 		{
+			if (!m_ResolvePass.m_ComputePipeline)
+				return;
+
 			nvrhi::ComputeState state;
 			state.pipeline = m_ResolvePass.m_ComputePipeline;
 

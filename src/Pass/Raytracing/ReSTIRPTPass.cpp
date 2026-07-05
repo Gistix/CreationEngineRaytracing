@@ -89,81 +89,43 @@ namespace Pass::Raytracing
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(DxcDefine{ L"USE_RAY_QUERY", L"1" });
 
-		// Initial Sampling
-		{
-			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTInitialSampling.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_InitialSamplingShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_InitialSamplingPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_InitialSamplingShader)
-					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
-			}
-		}
+		auto createPipeline = [&](const wchar_t* shaderPath, const char* stageName, nvrhi::ShaderHandle& shader, nvrhi::ComputePipelineHandle& pipeline) {
+			shader = nullptr;
+			pipeline = nullptr;
 
-		// Temporal Resampling
-		{
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTTemporalResampling.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_TemporalShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_TemporalPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_TemporalShader)
-					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
+			ShaderUtils::CompileShader(blob, shaderPath, defines, L"cs_6_5");
+			if (!blob) {
+				logger::error("ReSTIRPTPass::CreatePipeline - Failed to compile {} shader.", stageName);
+				return;
 			}
-		}
 
-		// Spatial Resampling
-		{
-			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTSpatialResampling.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_SpatialShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_SpatialPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_SpatialShader)
-					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
+			shader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
+			if (!shader) {
+				logger::error("ReSTIRPTPass::CreatePipeline - Failed to create {} shader.", stageName);
+				return;
 			}
-		}
 
-		// Final Shading
-		{
-			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTFinalShading.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_FinalShadingShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_FinalShadingPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_FinalShadingShader)
-					.addBindingLayout(m_BindingLayout)
-					.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
-					.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout));
+			pipeline = device->createComputePipeline(
+				nvrhi::ComputePipelineDesc()
+				.setComputeShader(shader)
+				.addBindingLayout(m_BindingLayout)
+				.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout));
+			if (!pipeline) {
+				logger::error("ReSTIRPTPass::CreatePipeline - Failed to create {} pipeline.", stageName);
 			}
-		}
+		};
+
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTInitialSampling.hlsl", "initial sampling", m_InitialSamplingShader, m_InitialSamplingPipeline);
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTTemporalResampling.hlsl", "temporal resampling", m_TemporalShader, m_TemporalPipeline);
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTSpatialResampling.hlsl", "spatial resampling", m_SpatialShader, m_SpatialPipeline);
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRPT/PTFinalShading.hlsl", "final shading", m_FinalShadingShader, m_FinalShadingPipeline);
 	}
 
 	void ReSTIRPTPass::ResolutionChanged(uint2 resolution)
@@ -275,8 +237,8 @@ namespace Pass::Raytracing
 		// Material textures may not be available (only exist under NRD/DLSS_RR). Use black as fallback.
 		auto diffuseAlbedoTex = textureManager.GetTexture(RenderTarget::DiffuseAlbedo);
 		auto specularAlbedoTex = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo);
-		if (!diffuseAlbedoTex) diffuseAlbedoTex = renderer->GetBlackTexture();
-		if (!specularAlbedoTex) specularAlbedoTex = renderer->GetBlackTexture();
+		if (!diffuseAlbedoTex) diffuseAlbedoTex = renderer->GetBlackDescriptor();
+		if (!specularAlbedoTex) specularAlbedoTex = renderer->GetBlackDescriptor();
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
@@ -398,11 +360,12 @@ namespace Pass::Raytracing
 		nvrhi::BindingSetVector bindings = {
 			m_BindingSet,
 			sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-			sceneGraph->GetVertexDescriptors()->m_DescriptorTable,
+			sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 			sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 			sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
-			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable()
+			sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 		};
 
 		DispatchInitialSampling(commandList, bindings, threadGroupSize);
