@@ -9,8 +9,8 @@ Properties::Properties(RE::BSTriShape* triShape)
 	m_Data.ShaderFlags = 0;
 	m_Data.AlphaFlags = AlphaFlags::None;
 	m_Data.AlphaThreshold = 0.5f;
-	m_Data.EmissiveColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.Alpha = 1.0f;
+	m_Data.EmissiveColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.ProjectedUVParams0 = half4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.ProjectedUVParams1 = half4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.ProjectedUVParams2 = half4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -57,15 +57,13 @@ Properties::Properties(RE::BSTriShape* triShape)
 			if (materialType == RE::BSShaderMaterial::Type::kLighting) {
 				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 
-				float4 emissive = float4(1.0f, 1.0f, 1.0f, lightingShaderProp->emissiveMult);
-
-				if (lightingShaderProp->flags.all(EShaderPropertyFlag::kOwnEmit) && lightingShaderProp->emissiveColor) {
-					emissive.x = lightingShaderProp->emissiveColor->red;
-					emissive.y = lightingShaderProp->emissiveColor->green;
-					emissive.z = lightingShaderProp->emissiveColor->blue;
+				if (lightingShaderProp->emissiveColor) {
+					m_Data.EmissiveColor.x = lightingShaderProp->emissiveColor->red;
+					m_Data.EmissiveColor.y = lightingShaderProp->emissiveColor->green;
+					m_Data.EmissiveColor.z = lightingShaderProp->emissiveColor->blue;
 				}
 
-				m_Data.EmissiveColor = emissive;
+				m_Data.EmissiveColor.w = lightingShaderProp->emissiveMult;
 
 				if (lightingShaderProp->flags.all(EShaderPropertyFlag::kProjectedUV)) {
 					auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
