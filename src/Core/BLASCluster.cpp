@@ -14,28 +14,33 @@ BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
 		m_Name = { std::format("Cluster {:08X}", m_Owner->GetFormID()).c_str() };
 	else
 		m_Name = { "Cluster (orphan)" };
+
+	m_IsPlayer = owner && Util::IsPlayer(owner);
 }
 
 void BLASCluster::AddMember(BaseMesh* mesh)
 {
+	auto [it, inserted] = m_MemberSet.emplace(mesh);
+	if (!inserted)
+		return;
+
+	m_Members.push_back(mesh);
+
 	mesh->SetCluster(this);
-	m_Members.emplace(mesh);
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
-
 void BLASCluster::RemoveMember(BaseMesh* mesh)
 {
+	const bool removed = m_MemberSet.erase(mesh);
+	if (!removed)
+		return;
+
+	m_Members.erase_last(mesh);
+
 	mesh->SetCluster(nullptr);
-
-	const auto prevMembers = m_Members;
-
-	m_Members.erase(mesh);
-	
-	if (m_Members != prevMembers)
-		m_DirtyFlags.set(DirtyFlags::Mesh);
+	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
-
 
 void BLASCluster::GrowBounds(const RE::NiBound& bound)
 {
@@ -65,7 +70,7 @@ void BLASCluster::UpdateTransform() {
 			m_PrevTransform = Constants::kIdentityTransform;
 		}
 		else {
-			const auto& mesh = m_Members.begin().get_node()->mValue;
+			const auto& mesh = m_Members.front();
 			m_Transform = mesh->GetTransform();
 			m_PrevTransform = mesh->GetPrevTransform();
 		}

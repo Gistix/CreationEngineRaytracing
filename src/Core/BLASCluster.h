@@ -21,7 +21,8 @@ class BLASCluster
 {
 	RE::TESObjectREFR* m_Owner = nullptr; // null for orphan (no-owner) clusters; comparison key only
 
-	eastl::hash_set<BaseMesh*> m_Members;
+	eastl::vector<BaseMesh*> m_Members;
+	eastl::hash_set<BaseMesh*> m_MemberSet;
 
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
@@ -40,6 +41,8 @@ class BLASCluster
 
 	// any member is updatable (dynamic)
 	bool m_Updatable = false;
+
+	bool m_IsPlayer = false;
 
 	friend class SceneGraph;
 
