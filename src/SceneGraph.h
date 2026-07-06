@@ -6,19 +6,8 @@
 
 #include "core/Light.h"
 #include "core/MaterialManager.h"
-#include "core/Model.h"
 #include "Core/TextureManager.h"
 
-#if defined(SKYRIM)
-#include "core/TreeLODInstance.h"
-#include "core/GrassInstance.h"
-#endif
-
-#include "Core/Reference/ObjectLODBlockReference.h"
-#if defined(SKYRIM)
-#include "Core/Reference/TreeLODBlockReference.h"
-#include "Core/Reference/GrassReference.h"
-#endif
 #include "Light.hlsli"
 #include "Mesh.hlsli"
 #include "Instance.hlsli"
@@ -28,7 +17,6 @@
 #include "Types/BindlessTableManager.h"
 #include "Types/BindlessTable.h"
 #include "Types/VectorStorage.h"
-#include "Types/ReleasedData.h"
 #include "Types/RE/RE.h"
 #include "Types/RingBuffer.h"
 
@@ -55,24 +43,8 @@ class SceneGraph
 	// Material manager
 	eastl::shared_ptr<MaterialManager> m_MaterialManager;
 
-	// Model Path, Model data ptr
-	eastl::unordered_map<eastl::string, eastl::unique_ptr<Model>> m_Models;
-	mutable std::mutex m_ModelMutex;
-
-	eastl::unordered_map<RE::FormID, eastl::vector<Instance*>> m_InstancesFormIDs;
-
-	// Water
-	eastl::unordered_map<RE::NiAVObject*, Instance*> m_WaterInstances;
-
 	// LOD
-	eastl::unordered_map<RE::BGSObjectBlock*, eastl::unique_ptr<ObjectLODBlockReference>> m_ObjectLODInstances;
 	eastl::unordered_map<LandLODMesh*, LandLODUpdate> m_LandLODMeshUpdates;
-#if defined(SKYRIM)
-	eastl::unordered_map<RE::BGSDistantTreeBlock*, eastl::unique_ptr<TreeLODBlockReference>> m_TreeLODInstances;
-
-	// Grass
-	eastl::unordered_map<RE::GrassTypeKey, GrassReference> m_GrassInstances;
-#endif
 
 	eastl::unordered_set<RE::BSLight*> m_TempActiveLights;
 	eastl::map<RE::BSLight*, Light> m_Lights;
@@ -145,7 +117,6 @@ public:
 
 	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
 
-	inline auto& GetModels() { return m_Models; }
 	inline auto& GetLandLODMeshUpdates() { return m_LandLODMeshUpdates; }
 
 	inline auto& GetLights() { return m_Lights; }
@@ -168,9 +139,6 @@ public:
 
 	// Update Camera reference
 	void UpdateCamera();
-
-	// Update LOD visibility
-	void UpdateLODVisibility();
 
 	bool TryMaintenanceRebuild(uint64_t frameIndex);
 

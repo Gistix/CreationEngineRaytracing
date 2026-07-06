@@ -36,11 +36,11 @@ void Light::UpdateTLAS(nvrhi::ICommandList* commandList)
 
 	DirtyFlags dirtyFlags = DirtyFlags::None;
 
-	for (auto* instance : m_Instances)
+	/*for (auto* instance : m_Instances)
 	{
 		dirtyFlags |= instance->GetDirtyFlags();
 		m_InstanceDescs.push_back(instance->GetInstanceDesc());
-	}
+	}*/
 
 	bool rebuild = false;
 

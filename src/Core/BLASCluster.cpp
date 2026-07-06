@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "Util.h"
 #include "Types/RE/RE.h"
+#include "Types/InstanceMask.h"
 
 #include <eastl/algorithm.h>
 

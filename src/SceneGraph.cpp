@@ -2,8 +2,6 @@
 
 #include "Scene.h"
 
-#include "core/Mesh.h"
-
 #include "Renderer.h"
 #include "Util.h"
 #include "ShaderUtils.h"
@@ -331,21 +329,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 	}
 
 	commandList->writeBuffer(GetLightBuffer(), m_LightData.data(), numLights * sizeof(LightData));
-#endif
-}
-
-void SceneGraph::UpdateLODVisibility()
-{
-	for (auto& [block, ref] : m_ObjectLODInstances)
-	{
-		ref->UpdateVisibility();
-	}
-
-#if defined(SKYRIM)
-	for (auto& [block, ref] : m_TreeLODInstances)
-	{
-		ref->UpdateVisibility();
-	}
 #endif
 }
 
