@@ -320,8 +320,6 @@ void Scene::Execute()
 
 	sceneGraph->UpdateCamera();
 
-	sceneGraph->UpdateLODVisibility();
-
 	auto* renderer = Renderer::GetSingleton();
 
 	auto* commandList = renderer->StartExecution();

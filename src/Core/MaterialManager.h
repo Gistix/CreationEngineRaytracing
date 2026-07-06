@@ -60,11 +60,12 @@ class MaterialManager : public eastl::enable_shared_from_this<MaterialManager>
 	eastl::vector<uint64_t> m_FreeOffsets;
 	eastl::vector<eastl::pair<uint64_t, uint64_t>> m_DirtyRanges;
 
+	mutable std::mutex m_InternalMutex;
+
 	uint64_t m_Size;
 	uint64_t m_NextOffset = 0;
 
 	uint64_t Allocate();
-	void Write(MaterialBase* material);
 
 	// (Re)creates m_Buffer at the current m_Size and points the descriptor table at it.
 	void CreateBuffer();

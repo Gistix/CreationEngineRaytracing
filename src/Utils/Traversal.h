@@ -118,21 +118,33 @@ namespace Util
 					refr = owner;
 
 			auto geom = Util::Adapter::AsTriShape(a_object);
-			if (geom) {
+			if (geom)
 				return a_func(geom, refr);
-			}
 
 			auto node = Util::Adapter::AsNode(a_object);
 			if (node) {
-				for (auto& child : Util::Adapter::GetChildren(node)) {
-					if (!child)
-						continue;
+				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
+					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
+					if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+						// Iterate over PortalGraph always render children
+						// This list contains rendered nodes that are outside of the normal SceneGraph
+						for (auto& child : portalGraph->alwaysRenderChildren)
+						{
+							// Only those who are outside the Scenegraph
+							if (child->parent)
+								continue;
 
-					result = ScenegraphTriShapes(child.get(), a_func, refr);
-
-					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
-						break;
+							result = ScenegraphTriShapes(child.get(), a_func, refr);
+							if (result == CESEAdapter::RE::BSVisitControl::kStop)
+								break;
+						}
 					}
+				}
+
+				for (auto& child : Util::Adapter::GetChildren(node)) {
+					result = ScenegraphTriShapes(child.get(), a_func, refr);
+					if (result == CESEAdapter::RE::BSVisitControl::kStop)
+						break;
 				}
 			}
 

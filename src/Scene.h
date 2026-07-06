@@ -1,7 +1,5 @@
 #pragma once
 
-#include "core/Mesh.h"
-#include "core/Model.h"
 #include "SceneGraph.h"
 #include "Types/RendererParams.h"
 

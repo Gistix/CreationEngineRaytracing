@@ -1,8 +1,6 @@
 #pragma once
 
 #include "Renderer.h"
-#include "Core/Instance.h"
-#include "Renderer.h"
 #include "Core/BaseMesh.h"
 #include "Core/BLASCluster.h"
 #include "Scene.h"

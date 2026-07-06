@@ -79,6 +79,8 @@ void MaterialManager::Grow()
 
 uint64_t MaterialManager::Allocate()
 {
+	std::scoped_lock lock(m_InternalMutex);
+
 	if (!m_FreeOffsets.empty()) {
 		uint64_t offset = m_FreeOffsets.back();
 		m_FreeOffsets.pop_back();
@@ -97,23 +99,10 @@ uint64_t MaterialManager::Allocate()
 	return offset;
 }
 
-void MaterialManager::Write(MaterialBase* material)
+void MaterialManager::Release(uint64_t offset)
 {
-	const uint64_t offset = material->GetOffset();
-	const size_t size = material->GetDataSize();
-
-	if (size > kSizeReference) {
-		logger::critical("MaterialManager::Write - material data exceeds the reference slot size");
-		return;
-	}
-
-	if (offset + size > m_Size) {
-		logger::critical("MaterialManager::Write - material data write out of bounds");
-		return;
-	}
-
-	std::memcpy(m_Data.data() + offset, material->GetData(), size);
-	m_DirtyRanges.push_back({ offset, size });
+	std::scoped_lock lock(m_InternalMutex);
+	m_FreeOffsets.push_back(offset);
 }
 
 eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shaderMaterial)
@@ -133,8 +122,13 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 
 		material = it->second.lock();
 
-		if (material)
-			return material;
+		if (material) {
+			// If the hash key is different the original material was released and we're looking at an reused pointer
+			if (material->GetHashKey() == shaderMaterial->hashKey)
+				return material;
+			else
+				logger::info("BSShaderMaterial - Pointer {} reused, Hash - old: {}, new: {}", fmt::ptr(shaderMaterial), material->GetHashKey(), shaderMaterial->hashKey);
+		}
 	}
 
 	auto offset = Allocate();
@@ -209,35 +203,40 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	else
 		m_Material.emplace(shaderMaterial, material);
 
-	Write(material.get());
+	Update(material.get());
 
 	return material;
 }
 
-void MaterialManager::Release(uint64_t offset)
-{
-	std::scoped_lock lock(m_MaterialMutex);
-
-	m_FreeOffsets.push_back(offset);
-}
-
 void MaterialManager::Update(MaterialBase* material)
 {
-	std::scoped_lock lock(m_MaterialMutex);
+	std::scoped_lock lock(m_InternalMutex);
 
 	const uint64_t offset = material->GetOffset();
 	const size_t size = material->GetDataSize();
+
+
+	if (size > kSizeReference) {
+		logger::critical("MaterialManager::Write - material data exceeds the reference slot size");
+		return;
+	}
+
+	if (offset + size > m_Size) {
+		logger::critical("MaterialManager::Write - material data write out of bounds");
+		return;
+	}
 
 	// Skip the upload entirely when the data is identical to what is already staged
 	if (std::memcmp(m_Data.data() + offset, material->GetData(), size) == 0)
 		return;
 
-	Write(material);
+	std::memcpy(m_Data.data() + offset, material->GetData(), size);
+	m_DirtyRanges.push_back({ offset, size });
 }
 
 void MaterialManager::Flush(nvrhi::ICommandList* commandList)
 {
-	std::scoped_lock lock(m_MaterialMutex);
+	std::scoped_lock lock(m_InternalMutex);
 
 	// Recreate the GPU buffer here (not during Allocate) if the logical capacity outgrew it.
 	if (m_Buffer->getDesc().byteSize < m_Size)
