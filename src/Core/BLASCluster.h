@@ -19,6 +19,14 @@ struct Light;
 // and the instance (owner-world) transform is cached here via SetInstanceTransform.
 class BLASCluster
 {
+	enum Flags
+	{
+		None = 0,
+		Updatable = 1 << 0,
+		Player = 1 << 1,
+		TwoSided = 1 << 2
+	};
+
 	RE::TESObjectREFR* m_Owner = nullptr; // null for orphan (no-owner) clusters; comparison key only
 
 	eastl::vector<BaseMesh*> m_Members;
@@ -39,11 +47,6 @@ class BLASCluster
 	// world-space bounding sphere radius, accumulated from member bounds
 	float m_ClusterRadius = 0.0f; 
 
-	// any member is updatable (dynamic)
-	bool m_Updatable = false;
-
-	bool m_IsPlayer = false;
-
 	friend class SceneGraph;
 
 	uint32_t m_NumUpdatesSinceRebuild = 0;
@@ -51,6 +54,8 @@ class BLASCluster
 
 	// TLAS instance slot, assigned during SceneGraph::Update population
 	uint32_t m_InstanceIndex = 0; 
+
+	CESEAdapter::REX::EnumSet<Flags> m_Flags = Flags::None;
 
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
 

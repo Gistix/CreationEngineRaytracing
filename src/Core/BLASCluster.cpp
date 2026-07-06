@@ -15,7 +15,7 @@ BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
 	else
 		m_Name = { "Cluster (orphan)" };
 
-	m_IsPlayer = owner && Util::IsPlayer(owner);
+	m_Flags.set(owner && Util::IsPlayer(owner), Flags::Player);
 }
 
 void BLASCluster::AddMember(BaseMesh* mesh)
@@ -153,10 +153,10 @@ void BLASCluster::Update(MeshData* meshData, uint32_t& meshCount,
 
 	const uint32_t firstGeometry = meshCount;
 
-	m_Updatable = false;
-
 	m_GeometryDescs.clear();
 	m_GeometryDescs.reserve(m_Members.size());
+
+	m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
 	for (const auto& mesh : m_Members) {
 		if (mesh->IsHidden())
@@ -174,7 +174,10 @@ void BLASCluster::Update(MeshData* meshData, uint32_t& meshCount,
 			m_GeometryDescs.push_back(desc);
 
 		if (mesh->IsUpdatable())
-			m_Updatable = true;
+			m_Flags.set(Flags::Updatable);
+
+		if (mesh->IsTwoSided())
+			m_Flags.set(Flags::TwoSided);
 
 		m_DirtyFlags |= mesh->GetDirtyFlags();
 
@@ -208,7 +211,7 @@ nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
 		.setDebugName(m_Name.c_str());
 
 	// Updatable clusters favour fast builds (frequent refits); static clusters favour fast traversal.
-	blasDesc.buildFlags = m_Updatable
+	blasDesc.buildFlags = m_Flags.all(Flags::Updatable)
 		? nvrhi::rt::AccelStructBuildFlags::PreferFastBuild
 		: nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 
@@ -222,9 +225,10 @@ nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
 nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 {
 	auto instanceDesc = nvrhi::rt::InstanceDesc()
-		.setInstanceMask(InstanceMask::Default)
 		.setInstanceID(m_InstanceIndex)
+		.setInstanceMask(InstanceMask::Default)
 		.setTransform(m_Transform.f)
+		.setFlags(m_Flags.all(Flags::TwoSided) ? nvrhi::rt::InstanceFlags::TriangleCullDisable : nvrhi::rt::InstanceFlags::None)
 		.setBLAS(m_BLAS);
 
 	return instanceDesc;

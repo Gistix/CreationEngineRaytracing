@@ -75,6 +75,8 @@ public:
 	// True for meshes whose vertex data changes per frame, so their cluster BLAS must be refit.
 	virtual bool IsUpdatable() const { return false; }
 
+	bool IsTwoSided();
+
 	// Returns the mesh's geometry descs (identity transform with the local-to-owner transform baked in).
 	// DirectMesh holds a single desc; SkinnedMesh/DynamicMesh hold one per partition.
 	virtual const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const { return m_GeometryDescs; }

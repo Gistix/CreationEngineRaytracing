@@ -237,6 +237,11 @@ bool BaseMesh::SetHidden(bool hidden)
 	return false;
 }
 
+bool BaseMesh::IsTwoSided()
+{
+	return m_Properties.GetData().ShaderFlags & Properties::ShaderFlags::kTwoSided;
+}
+
 bool BaseMesh::IsHidden() const
 {
 	return m_State.any(State::Hidden);
