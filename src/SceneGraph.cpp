@@ -2,8 +2,6 @@
 
 #include "Scene.h"
 
-#include "core/Mesh.h"
-
 #include "Renderer.h"
 #include "Util.h"
 #include "ShaderUtils.h"
@@ -334,21 +332,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 #endif
 }
 
-void SceneGraph::UpdateLODVisibility()
-{
-	for (auto& [block, ref] : m_ObjectLODInstances)
-	{
-		ref->UpdateVisibility();
-	}
-
-#if defined(SKYRIM)
-	for (auto& [block, ref] : m_TreeLODInstances)
-	{
-		ref->UpdateVisibility();
-	}
-#endif
-}
-
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
 	auto it = m_DirectMeshes.find(bsTriShape);
@@ -375,6 +358,108 @@ void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 		// Function is called through a hook thats already between lock
 		// Acessing without locking here is safe and correct
 		dynamicMesh->UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
+	}
+}
+
+void SceneGraph::ProcessGeometry(RE::TESObjectREFR* refr, RE::BSTriShape* bsTriShape, const uint64_t& frameIndex, nvrhi::ICommandList* commandList)
+{
+	if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
+		return;
+
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
+
+	auto* shaderProperty = geometryData.shaderProperty;
+	if (!shaderProperty)
+		return;
+
+	const auto materialType = shaderProperty->GetMaterialType();
+
+	const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
+	const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
+	const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+
+	// Exclude alpha blended effects
+	auto* alphaProperty = geometryData.alphaProperty;
+	const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+	const bool validEffect = isEffectShader && !isAlphaBlend;
+
+	if (!isLightingShader && !validEffect && !isWaterShader)
+		return;
+
+	// Exclude tree lod and grass for now
+	const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+	const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
+	const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
+
+	if (isTreeLODShader || isGrassShader)
+		return;
+
+	const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
+	if (!skinned) {
+		const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+		if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0) {
+			logger::warn("BSTriShape \"{}\" has either vertex ({}) or triangle ({}) count of 0, skipping.", bsTriShape->name, trishapeData.vertexCount, trishapeData.triangleCount);
+			return;
+		}
+	}
+
+	const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+	if (!rendererData) {
+		logger::warn("BSTriShape \"{}\" has no renderer data, skipping.", bsTriShape->name);
+		return;
+	}
+
+	auto it = m_DirectMeshes.find(bsTriShape);
+	if (it != m_DirectMeshes.end()) {
+		auto mesh = it->second.get();
+
+		// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
+		mesh->SetLastVisitedFrame(frameIndex);
+
+		// SetOwner returns true if the owner has changed
+		const bool ownerChanged = mesh->SetOwner(refr);
+
+		// Get current cluster
+		auto cluster = mesh->GetCluster();
+
+		if (ownerChanged || !cluster) {
+			// Remove from old cluster if it existed
+			if (cluster) {
+				cluster->RemoveMember(mesh);
+				MarkClusterDirty(cluster);
+			}
+
+			cluster = GetOrCreateCluster(refr, bsTriShape);
+			cluster->AddMember(mesh);
+			MarkClusterDirty(cluster);
+		}
+
+		mesh->SetHidden(false);
+
+		mesh->Update(commandList);
+		m_CurrentVisible.push_back(mesh);
+	}
+	else {
+		if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
+			return;
+
+		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
+			created->SetOwner(refr);
+
+			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
+			if (inserted) {
+				auto mesh = it2->second.get();
+
+				auto* cluster = GetOrCreateCluster(refr, bsTriShape);
+				cluster->AddMember(mesh);
+				MarkClusterDirty(cluster);
+
+				mesh->SetLastVisitedFrame(frameIndex);
+
+				mesh->Update(commandList);
+				m_CurrentVisible.push_back(mesh);
+			}
+		}
 	}
 }
 
@@ -409,11 +494,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		m_DirectMeshes.erase(it);
 	}
 
-	auto shadowSceneNode = Util::Adapter::GetShaderManagerState().shadowSceneNode[0];
-
-	// Hardcoded for now
-	const bool skipClustering = false;
-
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
 	
@@ -422,110 +502,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	Util::Traversal::ScenegraphTriShapes(shadowSceneNode, [&](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* ownerRefr) -> CESEAdapter::RE::BSVisitControl {
-
-		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
-			return CESEAdapter::RE::BSVisitControl::kContinue;
-
-		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
-
-		auto* shaderProperty = geometryData.shaderProperty;
-		if (!shaderProperty) 
-			return CESEAdapter::RE::BSVisitControl::kContinue;
-
-		const auto materialType = shaderProperty->GetMaterialType();
-
-		const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
-		const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
-		const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
-
-		const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-		const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
-		const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
-
-		auto* alphaProperty = geometryData.alphaProperty;
-		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
-
-		const bool validEffect = isEffectShader && !isAlphaBlend;
-
-		if (!isLightingShader && !validEffect && !isWaterShader && !isTreeLODShader && !isGrassShader)
-			return CESEAdapter::RE::BSVisitControl::kContinue;
-
-		const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
-
-		if (!skinned) {
-			const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
-			if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0) {
-				logger::warn("BSTriShape \"{}\" has either vertex ({}) or triangle ({}) count of 0, skipping.", bsTriShape->name, trishapeData.vertexCount, trishapeData.triangleCount);
-				return CESEAdapter::RE::BSVisitControl::kContinue;
-			}
-		}
-		
-		const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
-		if (!rendererData) {
-			logger::warn("BSTriShape \"{}\" has no renderer data, skipping.", bsTriShape->name);
-			return CESEAdapter::RE::BSVisitControl::kContinue;
-		}
-
-		// When clustering is skipped, force a null owner so every mesh lands in its own orphan cluster.
-		RE::TESObjectREFR* const clusterOwner = skipClustering ? nullptr : ownerRefr;
-
-		auto it = m_DirectMeshes.find(bsTriShape);
-		if (it != m_DirectMeshes.end()) {
-			auto mesh = it->second.get();
-
-			// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
-			mesh->SetLastVisitedFrame(frameIndex);
-
-			// SetOwner returns true if the owner changed
-			const bool ownerChanged = mesh->SetOwner(clusterOwner);
-
-			// Get current cluster
-			auto cluster = mesh->GetCluster();
-
-			if (ownerChanged || !cluster) {
-				// Remove from old cluster if it existed
-				if (cluster) {
-					cluster->RemoveMember(mesh);
-					MarkClusterDirty(cluster);
-				}
-
-				cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
-				cluster->AddMember(mesh);
-				MarkClusterDirty(cluster);
-			}
-
-			mesh->SetHidden(false);
-
-			mesh->Update(commandList);
-			m_CurrentVisible.push_back(mesh);
-		}
-		else {
-			if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
-				created->SetOwner(clusterOwner);
-	
-				auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
-				if (inserted) {
-					auto mesh = it2->second.get();
-	
-					auto* cluster = GetOrCreateCluster(clusterOwner, bsTriShape);
-					cluster->AddMember(mesh);
-					MarkClusterDirty(cluster);
-
-					mesh->SetLastVisitedFrame(frameIndex);
-	
-					mesh->Update(commandList);
-					m_CurrentVisible.push_back(mesh);
-				}
-			}
-		}
-
-
-
+	auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
+	Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex, commandList](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
+		ProcessGeometry(refr, bsTriShape, frameIndex, commandList);
 		return CESEAdapter::RE::BSVisitControl::kContinue;
 	});
 
-	// Hide meshes whose trishapes were not visited by the traversal this frame
+	// Hide meshes whose trishapes where not visited by the traversal this frame
 	for (auto& mesh : m_PreviousVisible) {
 		if (mesh->GetLastVisitedFrame() != frameIndex) {
 			mesh->SetHidden(true);

@@ -40,6 +40,8 @@ struct MaterialBase
 
 	// Material has to be aligned to 4 bytes by design, so we compress the offset to send as a uint32_t
 	uint32_t GetOffsetComp() const { return static_cast<uint32_t>(m_Offset / 4); }
+
+	uint32_t GetHashKey() const { return m_HashKey; }
 protected:
 	eastl::weak_ptr<MaterialManager> m_Manager;
 
@@ -48,4 +50,6 @@ protected:
 
 	// Material data sent to the GPU
 	eastl::unique_ptr<Data> m_Data;
+
+	uint32_t m_HashKey = std::numeric_limits<uint32_t>::max();
 };
