@@ -53,6 +53,7 @@ INTEROP_DATA_STRUCT(Properties, 4)
 { 
     uint ShaderFlags;
     uint16_t AlphaFlags;
+    uint16_t Pad;
     half AlphaThreshold;
     half Alpha;
     half4 EmissiveColor;
@@ -60,7 +61,6 @@ INTEROP_DATA_STRUCT(Properties, 4)
     half4 ProjectedUVParams1;
     half4 ProjectedUVParams2;
     half4 ProjectedUVParams3;
-    uint16_t Pad;
 };
 VALIDATE_ALIGNMENT(PropertiesData, 4);
 
