@@ -6,6 +6,7 @@
 EyeMaterial::EyeMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
 	m_Offset = offset;
+	m_HashKey = shaderMaterial->hashKey;
 
 	m_Data = eastl::make_unique<EyeMaterialData>();
 

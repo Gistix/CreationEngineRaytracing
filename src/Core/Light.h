@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Light.hlsli"
-#include "Core/Instance.h"
+#include "Core/BLASCluster.h"
 
 struct Light
 {
@@ -14,9 +14,9 @@ struct Light
 	uint8_t m_Index;
 
 	// Instances that are affected by the light, calculated from instance node worldBound center + radius and light position + radius
-	eastl::hash_set<Instance*> m_Instances;
+	eastl::hash_set<BLASCluster*> m_Instances;
 
-	eastl::hash_set<Instance*> m_PrevInstances;
+	eastl::hash_set<BLASCluster*> m_PrevInstances;
 	nvrhi::rt::AccelStructHandle m_TopLevelAS;
 	uint64_t m_LastUpdate = 0;
 

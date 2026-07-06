@@ -3,8 +3,10 @@
 #include "Util.h"
 
 MaterialBase::MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
-	: m_Offset(offset)
 {
+	m_Offset = offset;
+	m_HashKey = shaderMaterial->hashKey;
+
 	m_Data = eastl::make_unique<Data>();
 
 	Initialize(m_Data.get(), shaderMaterial);
