@@ -94,16 +94,42 @@ namespace Util
 
 	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
 	{
+		if (d3d12Buffer)
+			*d3d12Buffer = nullptr;
+
+		if (!d3d11Buffer || !d3d12Buffer) {
+			logger::warn("CreateSharedBuffer - Invalid buffer pointer");
+			return;
+		}
+
 		// Get underlying resource
 		winrt::com_ptr<IDXGIResource1> dxgiResource;
-		d3d11Buffer->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+		auto hr = d3d11Buffer->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+		if (FAILED(hr) || !dxgiResource) {
+			logger::warn("CreateSharedBuffer - QueryInterface failed with HR: 0x{:08X}", static_cast<UINT>(hr));
+			return;
+		}
 
 		// Get shared handle from D3D11 texture to enable D3D12 access
 		HANDLE sharedHandle = nullptr;
-		dxgiResource->GetSharedHandle(&sharedHandle);
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+		if (FAILED(hr) || !sharedHandle) {
+			logger::warn("CreateSharedBuffer - GetSharedHandle failed with HR: 0x{:08X}", static_cast<UINT>(hr));
+			return;
+		}
+
+		auto* nativeDevice = Renderer::GetNativeD3D12Device();
+		if (!nativeDevice) {
+			logger::warn("CreateSharedBuffer - Native D3D12 device is unavailable");
+			return;
+		}
 
 		// Open the shared D3D11 texture as D3D12 resource
-		Renderer::GetNativeD3D12Device()->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Buffer));
+		hr = nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Buffer));
+		if (FAILED(hr) || !*d3d12Buffer) {
+			logger::warn("CreateSharedBuffer - OpenSharedHandle failed with HR: 0x{:08X}", static_cast<UINT>(hr));
+			return;
+		}
 	};
 
 	void CreateSharedBuffer(RE::ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)

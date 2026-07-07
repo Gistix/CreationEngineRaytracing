@@ -115,6 +115,11 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 
 	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
 
+	if (!triShapeDX12->indexBuffer || !triShapeDX12->indexBufferDX12) {
+		logger::warn("BaseMesh::CreateIndexBuffer - Missing native index buffer");
+		return indexBuffer;
+	}
+
 	auto indexDesc = triShapeDX12->indexBufferDX12->GetDesc();
 
 	D3D11_BUFFER_DESC indexDesc11;
@@ -151,6 +156,11 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	BufferDescriptor vertexBuffer{};
 
 	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
+
+	if (!triShapeDX12->vertexBuffer || !triShapeDX12->vertexBufferDX12) {
+		logger::warn("BaseMesh::CreateVertexBuffer - Missing native vertex buffer");
+		return vertexBuffer;
+	}
 
 	auto vertexDesc = triShapeDX12->vertexBufferDX12->GetDesc();
 
