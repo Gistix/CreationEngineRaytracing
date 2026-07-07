@@ -27,7 +27,7 @@ void PBRMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 	pbrData->TexCoordOffset = Util::Math::Float2(shaderMaterial->texCoordOffset[0]);
 	pbrData->TexCoordScale = Util::Math::Float2(shaderMaterial->texCoordScale[0]);
 
-	auto pbrMaterial = static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
+	auto pbrMaterial = reinterpret_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
 
 	pbrData->SpecularColor = Util::Math::Float3(pbrMaterial->specularColor);
 	pbrData->SpecularLevel = pbrMaterial->GetSpecularLevel();
@@ -60,26 +60,33 @@ void PBRMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 
 void PBRMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
-	auto pbrMaterial = static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
+	auto pbrMaterial = reinterpret_cast<BSLightingShaderMaterialPBR*>(shaderMaterial);
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_DiffuseTexture = MaterialManager::GetTexture(pbrMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor());
-	m_NormalTexture = MaterialManager::GetTexture(pbrMaterial->normalTexture, renderer->GetNormalTextureDescriptor());
-	m_RimSoftLightingTexture = MaterialManager::GetTexture(pbrMaterial->rimSoftLightingTexture, renderer->GetBlackTextureDescriptor());
-	m_SpecularBackLightingTexture = MaterialManager::GetTexture(pbrMaterial->specularBackLightingTexture, renderer->GetBlackTextureDescriptor());
-	m_RMAOSTexture = MaterialManager::GetTexture(pbrMaterial->rmaosTexture, renderer->GetRMAOSTextureDescriptor());
-	m_EmissiveTexture = MaterialManager::GetTexture(pbrMaterial->emissiveTexture, renderer->GetBlackTextureDescriptor());
-	m_FeaturesTexture0 = MaterialManager::GetTexture(pbrMaterial->featuresTexture0, renderer->GetWhiteTextureDescriptor());
-	m_FeaturesTexture1 = MaterialManager::GetTexture(pbrMaterial->featuresTexture1, renderer->GetWhiteTextureDescriptor());
-
 	auto pbrData = reinterpret_cast<Data*>(m_Data.get());
-	pbrData->DiffuseTexture = m_DiffuseTexture.GetDescriptorIndex();
-	pbrData->NormalTexture = m_NormalTexture.GetDescriptorIndex();
-	pbrData->RimSoftLightingTexture = m_RimSoftLightingTexture.GetDescriptorIndex();
-	pbrData->SpecularBackLightingTexture = m_SpecularBackLightingTexture.GetDescriptorIndex();
-	pbrData->RMAOSTexture = m_RMAOSTexture.GetDescriptorIndex();
-	pbrData->EmissiveTexture = m_EmissiveTexture.GetDescriptorIndex();
-	pbrData->FeaturesTexture0 = m_FeaturesTexture0.GetDescriptorIndex();
-	pbrData->FeaturesTexture1 = m_FeaturesTexture1.GetDescriptorIndex();
+
+	if (m_DiffuseTexture.Update(pbrMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor()))
+		pbrData->DiffuseTexture = m_DiffuseTexture.texture.GetDescriptorIndex();
+
+	if (m_NormalTexture.Update(pbrMaterial->normalTexture, renderer->GetNormalTextureDescriptor()))
+		pbrData->NormalTexture = m_NormalTexture.texture.GetDescriptorIndex();
+
+	if (m_RimSoftLightingTexture.Update(pbrMaterial->rimSoftLightingTexture, renderer->GetBlackTextureDescriptor()))
+		pbrData->RimSoftLightingTexture = m_RimSoftLightingTexture.texture.GetDescriptorIndex();
+
+	if (m_SpecularBackLightingTexture.Update(pbrMaterial->specularBackLightingTexture, renderer->GetBlackTextureDescriptor()))
+		pbrData->SpecularBackLightingTexture = m_SpecularBackLightingTexture.texture.GetDescriptorIndex();
+
+	if (m_RMAOSTexture.Update(pbrMaterial->rmaosTexture, renderer->GetRMAOSTextureDescriptor()))
+		pbrData->RMAOSTexture = m_RMAOSTexture.texture.GetDescriptorIndex();
+
+	if (m_EmissiveTexture.Update(pbrMaterial->emissiveTexture, renderer->GetBlackTextureDescriptor()))
+		pbrData->EmissiveTexture = m_EmissiveTexture.texture.GetDescriptorIndex();
+
+	if (m_FeaturesTexture0.Update(pbrMaterial->featuresTexture0, renderer->GetWhiteTextureDescriptor()))
+		pbrData->FeaturesTexture0 = m_FeaturesTexture0.texture.GetDescriptorIndex();
+
+	if (m_FeaturesTexture1.Update(pbrMaterial->featuresTexture1, renderer->GetWhiteTextureDescriptor()))
+		pbrData->FeaturesTexture1 = m_FeaturesTexture1.texture.GetDescriptorIndex();
 }

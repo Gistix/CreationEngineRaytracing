@@ -2,7 +2,7 @@
 
 #include "Core/Material/MaterialBase.h"
 #include "Interop/Material/Skyrim/LightingMaterialData.hlsli"
-#include "Core/Texture.h"
+#include "Core/MaterialTexture.h"
 
 struct LightingMaterial : public MaterialBase
 {
@@ -20,8 +20,8 @@ struct LightingMaterial : public MaterialBase
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_DiffuseTexture;
-	Texture m_NormalTexture;
-	Texture m_RimSoftLightingTexture;
-	Texture m_SpecularBackLightingTexture;
+	MaterialTexture m_DiffuseTexture;
+	MaterialTexture m_NormalTexture;
+	MaterialTexture m_RimSoftLightingTexture;
+	MaterialTexture m_SpecularBackLightingTexture;
 };

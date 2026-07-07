@@ -31,8 +31,8 @@ void ParallaxOccMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto parallaxMaterial = reinterpret_cast<RE::BSLightingShaderMaterialParallaxOcc*>(shaderMaterial);
 
-	m_HeightTexture = MaterialManager::GetTexture(parallaxMaterial->heightTexture, Renderer::GetSingleton()->GetWhiteTextureDescriptor());
-
 	auto parallaxData = reinterpret_cast<Data*>(m_Data.get());
-	parallaxData->HeightTexture = m_HeightTexture.GetDescriptorIndex();
+
+	if (m_HeightTexture.Update(parallaxMaterial->heightTexture, Renderer::GetSingleton()->GetWhiteTextureDescriptor()))
+		parallaxData->HeightTexture = m_HeightTexture.texture.GetDescriptorIndex();
 }

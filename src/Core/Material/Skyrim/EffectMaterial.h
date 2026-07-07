@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Material/MaterialBase.h"
-#include "Core/Texture.h"
+#include "Core/MaterialTexture.h"
 #include "Interop/Material/Skyrim/EffectMaterialData.hlsli"
 
 struct EffectMaterial : public MaterialBase
@@ -20,6 +20,6 @@ struct EffectMaterial : public MaterialBase
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_SourceTexture;
-	Texture m_EffectTexture;
+	MaterialTexture m_SourceTexture;
+	MaterialTexture m_EffectTexture;
 };

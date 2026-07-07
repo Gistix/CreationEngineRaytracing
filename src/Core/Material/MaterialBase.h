@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Interop/Material/MaterialBaseData.hlsli"
+#include "Constants.h"
 
 class MaterialManager;
 
@@ -54,4 +55,6 @@ protected:
 	eastl::unique_ptr<Data> m_Data;
 
 	uint32_t m_HashKey = std::numeric_limits<uint32_t>::max();
+
+	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
 };

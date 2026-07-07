@@ -53,14 +53,17 @@ void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	auto& defaultNormal = renderer->GetNormalTextureDescriptor();
 
 	auto waterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
-	m_NormalTexture0 = MaterialManager::GetTexture(waterMaterial->normalTexture1, defaultNormal);
-	m_NormalTexture1 = MaterialManager::GetTexture(waterMaterial->normalTexture2, defaultNormal);
-	m_NormalTexture2 = MaterialManager::GetTexture(waterMaterial->normalTexture3, defaultNormal);
-	m_NormalTexture3 = MaterialManager::GetTexture(waterMaterial->normalTexture4, defaultNormal);
-
 	auto waterData = reinterpret_cast<Data*>(m_Data.get());
-	waterData->NormalsTexture0 = m_NormalTexture0.GetDescriptorIndex();
-	waterData->NormalsTexture1 = m_NormalTexture1.GetDescriptorIndex();
-	waterData->NormalsTexture2 = m_NormalTexture2.GetDescriptorIndex();
-	waterData->FlowmapTexture = m_NormalTexture3.GetDescriptorIndex();
+
+	if (m_NormalTexture0.Update(waterMaterial->normalTexture1, defaultNormal))
+		waterData->NormalsTexture0 = m_NormalTexture0.texture.GetDescriptorIndex();
+
+	if (m_NormalTexture1.Update(waterMaterial->normalTexture2, defaultNormal))
+		waterData->NormalsTexture1 = m_NormalTexture1.texture.GetDescriptorIndex();
+
+	if (m_NormalTexture2.Update(waterMaterial->normalTexture3, defaultNormal))
+		waterData->NormalsTexture2 = m_NormalTexture2.texture.GetDescriptorIndex();
+
+	if (m_NormalTexture3.Update(waterMaterial->normalTexture4, defaultNormal))
+		waterData->FlowmapTexture = m_NormalTexture3.texture.GetDescriptorIndex();
 }

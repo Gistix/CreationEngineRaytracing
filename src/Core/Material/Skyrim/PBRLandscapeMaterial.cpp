@@ -27,7 +27,7 @@ void PBRLandscapeMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 	landData->TexCoordOffset = Util::Math::Float2(shaderMaterial->texCoordOffset[0]);
 	landData->TexCoordScale = Util::Math::Float2(shaderMaterial->texCoordScale[0]);
 
-	auto landMaterial = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
+	auto landMaterial = reinterpret_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
 
 	landData->SpecularColor = Util::Math::Float3(landMaterial->specularColor);
 	landData->SpecularLevel = landMaterial->specularPower;
@@ -60,47 +60,66 @@ void PBRLandscapeMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 
 void PBRLandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
-	auto landMaterial = static_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
+	auto landMaterial = reinterpret_cast<BSLightingShaderMaterialPBRLandscape*>(shaderMaterial);
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_DiffuseTexture = MaterialManager::GetTexture(landMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor());
-	m_NormalTexture = MaterialManager::GetTexture(landMaterial->normalTexture, renderer->GetNormalTextureDescriptor());
-	m_RimSoftLightingTexture = MaterialManager::GetTexture(landMaterial->rimSoftLightingTexture, renderer->GetBlackTextureDescriptor());
-	m_SpecularBackLightingTexture = MaterialManager::GetTexture(landMaterial->specularBackLightingTexture, renderer->GetBlackTextureDescriptor());
-
-	for (uint32_t i = 0; i < 6; i++) {
-		m_BaseColorTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeBaseColorTextures[i], renderer->GetGrayTextureDescriptor());
-		m_NormalTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeNormalTextures[i], renderer->GetNormalTextureDescriptor());
-		m_RMAOSTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeRMAOSTextures[i], renderer->GetRMAOSTextureDescriptor());
-	}
-
-	m_OverlayTexture = MaterialManager::GetTexture(landMaterial->terrainOverlayTexture, renderer->GetBlackTextureDescriptor());
-	m_NoiseTexture = MaterialManager::GetTexture(landMaterial->terrainNoiseTexture, renderer->GetBlackTextureDescriptor());
-
 	auto landData = reinterpret_cast<Data*>(m_Data.get());
-	landData->DiffuseTexture = m_DiffuseTexture.GetDescriptorIndex();
-	landData->NormalTexture = m_NormalTexture.GetDescriptorIndex();
-	landData->RimSoftLightingTexture = m_RimSoftLightingTexture.GetDescriptorIndex();
-	landData->SpecularBackLightingTexture = m_SpecularBackLightingTexture.GetDescriptorIndex();
-	landData->BaseColorTexture0 = m_BaseColorTextures[0].GetDescriptorIndex();
-	landData->BaseColorTexture1 = m_BaseColorTextures[1].GetDescriptorIndex();
-	landData->BaseColorTexture2 = m_BaseColorTextures[2].GetDescriptorIndex();
-	landData->BaseColorTexture3 = m_BaseColorTextures[3].GetDescriptorIndex();
-	landData->BaseColorTexture4 = m_BaseColorTextures[4].GetDescriptorIndex();
-	landData->BaseColorTexture5 = m_BaseColorTextures[5].GetDescriptorIndex();
-	landData->NormalTexture0 = m_NormalTextures[0].GetDescriptorIndex();
-	landData->NormalTexture1 = m_NormalTextures[1].GetDescriptorIndex();
-	landData->NormalTexture2 = m_NormalTextures[2].GetDescriptorIndex();
-	landData->NormalTexture3 = m_NormalTextures[3].GetDescriptorIndex();
-	landData->NormalTexture4 = m_NormalTextures[4].GetDescriptorIndex();
-	landData->NormalTexture5 = m_NormalTextures[5].GetDescriptorIndex();
-	landData->RMAOSTexture0 = m_RMAOSTextures[0].GetDescriptorIndex();
-	landData->RMAOSTexture1 = m_RMAOSTextures[1].GetDescriptorIndex();
-	landData->RMAOSTexture2 = m_RMAOSTextures[2].GetDescriptorIndex();
-	landData->RMAOSTexture3 = m_RMAOSTextures[3].GetDescriptorIndex();
-	landData->RMAOSTexture4 = m_RMAOSTextures[4].GetDescriptorIndex();
-	landData->RMAOSTexture5 = m_RMAOSTextures[5].GetDescriptorIndex();
-	landData->OverlayTexture = m_OverlayTexture.GetDescriptorIndex();
-	landData->NoiseTexture = m_NoiseTexture.GetDescriptorIndex();
+
+	if (m_DiffuseTexture.Update(landMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor()))
+		landData->DiffuseTexture = m_DiffuseTexture.texture.GetDescriptorIndex();
+
+	if (m_NormalTexture.Update(landMaterial->normalTexture, renderer->GetNormalTextureDescriptor()))
+		landData->NormalTexture = m_NormalTexture.texture.GetDescriptorIndex();
+
+	if (m_RimSoftLightingTexture.Update(landMaterial->rimSoftLightingTexture, renderer->GetBlackTextureDescriptor()))
+		landData->RimSoftLightingTexture = m_RimSoftLightingTexture.texture.GetDescriptorIndex();
+
+	if (m_SpecularBackLightingTexture.Update(landMaterial->specularBackLightingTexture, renderer->GetBlackTextureDescriptor()))
+		landData->SpecularBackLightingTexture = m_SpecularBackLightingTexture.texture.GetDescriptorIndex();
+
+	if (m_BaseColorTextures[0].Update(landMaterial->landscapeBaseColorTextures[0], renderer->GetGrayTextureDescriptor()))
+		landData->BaseColorTexture0 = m_BaseColorTextures[0].texture.GetDescriptorIndex();
+	if (m_BaseColorTextures[1].Update(landMaterial->landscapeBaseColorTextures[1], renderer->GetGrayTextureDescriptor()))
+		landData->BaseColorTexture1 = m_BaseColorTextures[1].texture.GetDescriptorIndex();
+	if (m_BaseColorTextures[2].Update(landMaterial->landscapeBaseColorTextures[2], renderer->GetGrayTextureDescriptor()))
+		landData->BaseColorTexture2 = m_BaseColorTextures[2].texture.GetDescriptorIndex();
+	if (m_BaseColorTextures[3].Update(landMaterial->landscapeBaseColorTextures[3], renderer->GetGrayTextureDescriptor()))
+		landData->BaseColorTexture3 = m_BaseColorTextures[3].texture.GetDescriptorIndex();
+	if (m_BaseColorTextures[4].Update(landMaterial->landscapeBaseColorTextures[4], renderer->GetGrayTextureDescriptor()))
+		landData->BaseColorTexture4 = m_BaseColorTextures[4].texture.GetDescriptorIndex();
+	if (m_BaseColorTextures[5].Update(landMaterial->landscapeBaseColorTextures[5], renderer->GetGrayTextureDescriptor()))
+		landData->BaseColorTexture5 = m_BaseColorTextures[5].texture.GetDescriptorIndex();
+
+	if (m_NormalTextures[0].Update(landMaterial->landscapeNormalTextures[0], renderer->GetNormalTextureDescriptor()))
+		landData->NormalTexture0 = m_NormalTextures[0].texture.GetDescriptorIndex();
+	if (m_NormalTextures[1].Update(landMaterial->landscapeNormalTextures[1], renderer->GetNormalTextureDescriptor()))
+		landData->NormalTexture1 = m_NormalTextures[1].texture.GetDescriptorIndex();
+	if (m_NormalTextures[2].Update(landMaterial->landscapeNormalTextures[2], renderer->GetNormalTextureDescriptor()))
+		landData->NormalTexture2 = m_NormalTextures[2].texture.GetDescriptorIndex();
+	if (m_NormalTextures[3].Update(landMaterial->landscapeNormalTextures[3], renderer->GetNormalTextureDescriptor()))
+		landData->NormalTexture3 = m_NormalTextures[3].texture.GetDescriptorIndex();
+	if (m_NormalTextures[4].Update(landMaterial->landscapeNormalTextures[4], renderer->GetNormalTextureDescriptor()))
+		landData->NormalTexture4 = m_NormalTextures[4].texture.GetDescriptorIndex();
+	if (m_NormalTextures[5].Update(landMaterial->landscapeNormalTextures[5], renderer->GetNormalTextureDescriptor()))
+		landData->NormalTexture5 = m_NormalTextures[5].texture.GetDescriptorIndex();
+
+	if (m_RMAOSTextures[0].Update(landMaterial->landscapeRMAOSTextures[0], renderer->GetRMAOSTextureDescriptor()))
+		landData->RMAOSTexture0 = m_RMAOSTextures[0].texture.GetDescriptorIndex();
+	if (m_RMAOSTextures[1].Update(landMaterial->landscapeRMAOSTextures[1], renderer->GetRMAOSTextureDescriptor()))
+		landData->RMAOSTexture1 = m_RMAOSTextures[1].texture.GetDescriptorIndex();
+	if (m_RMAOSTextures[2].Update(landMaterial->landscapeRMAOSTextures[2], renderer->GetRMAOSTextureDescriptor()))
+		landData->RMAOSTexture2 = m_RMAOSTextures[2].texture.GetDescriptorIndex();
+	if (m_RMAOSTextures[3].Update(landMaterial->landscapeRMAOSTextures[3], renderer->GetRMAOSTextureDescriptor()))
+		landData->RMAOSTexture3 = m_RMAOSTextures[3].texture.GetDescriptorIndex();
+	if (m_RMAOSTextures[4].Update(landMaterial->landscapeRMAOSTextures[4], renderer->GetRMAOSTextureDescriptor()))
+		landData->RMAOSTexture4 = m_RMAOSTextures[4].texture.GetDescriptorIndex();
+	if (m_RMAOSTextures[5].Update(landMaterial->landscapeRMAOSTextures[5], renderer->GetRMAOSTextureDescriptor()))
+		landData->RMAOSTexture5 = m_RMAOSTextures[5].texture.GetDescriptorIndex();
+
+	if (m_OverlayTexture.Update(landMaterial->terrainOverlayTexture, renderer->GetBlackTextureDescriptor()))
+		landData->OverlayTexture = m_OverlayTexture.texture.GetDescriptorIndex();
+
+	if (m_NoiseTexture.Update(landMaterial->terrainNoiseTexture, renderer->GetBlackTextureDescriptor()))
+		landData->NoiseTexture = m_NoiseTexture.texture.GetDescriptorIndex();
 }

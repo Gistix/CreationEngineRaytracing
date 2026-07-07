@@ -36,12 +36,14 @@ void MultiLayerParallaxMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMate
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_LayerTexture = MaterialManager::GetTexture(layerMaterial->layerTexture, renderer->GetBlackTextureDescriptor());
-	m_EnvironmentTexture = MaterialManager::GetTexture(layerMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap);
-	m_EnvironmentMaskTexture = MaterialManager::GetTexture(layerMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor());
-
 	auto layerData = reinterpret_cast<Data*>(m_Data.get());
-	layerData->LayerTexture = m_LayerTexture.GetDescriptorIndex();
-	layerData->EnvironmentTexture = m_EnvironmentTexture.GetDescriptorIndex();
-	layerData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.GetDescriptorIndex();
+
+	if (m_LayerTexture.Update(layerMaterial->layerTexture, renderer->GetBlackTextureDescriptor()))
+		layerData->LayerTexture = m_LayerTexture.texture.GetDescriptorIndex();
+
+	if (m_EnvironmentTexture.Update(layerMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+		layerData->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
+
+	if (m_EnvironmentMaskTexture.Update(layerMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor()))
+		layerData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.texture.GetDescriptorIndex();
 }

@@ -17,7 +17,7 @@ struct FacegenMaterial : public LightingMaterial
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_TintTexture;
-	Texture m_DetailTexture;
-	Texture m_SubsurfaceTexture;
+	MaterialTexture m_TintTexture;
+	MaterialTexture m_DetailTexture;
+	MaterialTexture m_SubsurfaceTexture;
 };

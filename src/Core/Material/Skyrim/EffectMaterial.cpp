@@ -38,10 +38,11 @@ void EffectMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_SourceTexture = MaterialManager::GetTexture(effectMaterial->sourceTexture, renderer->GetBlackTextureDescriptor());
-	m_EffectTexture = MaterialManager::GetTexture(effectMaterial->greyscaleTexture, renderer->GetBlackTextureDescriptor());
-
 	auto effectData = reinterpret_cast<Data*>(m_Data.get());
-	effectData->SourceTexture = m_SourceTexture.GetDescriptorIndex();
-	effectData->EffectTexture = m_EffectTexture.GetDescriptorIndex();
+
+	if (m_SourceTexture.Update(effectMaterial->sourceTexture, renderer->GetBlackTextureDescriptor()))
+		effectData->SourceTexture = m_SourceTexture.texture.GetDescriptorIndex();
+
+	if (m_EffectTexture.Update(effectMaterial->greyscaleTexture, renderer->GetBlackTextureDescriptor()))
+		effectData->EffectTexture = m_EffectTexture.texture.GetDescriptorIndex();
 }

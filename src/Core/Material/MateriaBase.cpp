@@ -1,6 +1,7 @@
 #include "Core/Material/MaterialBase.h"
 #include "Core/MaterialManager.h"
 #include "Util.h"
+#include "Renderer.h"
 
 MaterialBase::MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -46,8 +47,20 @@ void MaterialBase::UpdateTextures([[ maybe_unused ]] RE::BSShaderMaterial* shade
 
 void MaterialBase::Update(RE::BSShaderMaterial* shaderMaterial)
 {
+	const auto& frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+	if (m_LastUpdate == frameIndex)
+		return;
+
 	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 
 	auto manager = m_Manager.lock();
+	if (!manager) {
+		logger::error("Missing material manager during material update");
+		return;
+	}
+
 	manager->Update(this);
+
+	m_LastUpdate = frameIndex;
 }

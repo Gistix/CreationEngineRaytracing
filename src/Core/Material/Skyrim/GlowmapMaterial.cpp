@@ -25,8 +25,8 @@ void GlowmapMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto glowMaterial = reinterpret_cast<RE::BSLightingShaderMaterialGlowmap*>(shaderMaterial);
 
-	m_GlowTexture = MaterialManager::GetTexture(glowMaterial->glowTexture, Renderer::GetSingleton()->GetBlackTextureDescriptor());
-
 	auto glowData = reinterpret_cast<Data*>(m_Data.get());
-	glowData->GlowTexture = m_GlowTexture.GetDescriptorIndex();
+
+	if (m_GlowTexture.Update(glowMaterial->glowTexture, Renderer::GetSingleton()->GetBlackTextureDescriptor()))
+		glowData->GlowTexture = m_GlowTexture.texture.GetDescriptorIndex();
 }

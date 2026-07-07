@@ -32,10 +32,11 @@ void EyeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_EnvironmentTexture = MaterialManager::GetTexture(eyeMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap);
-	m_EnvironmentMaskTexture = MaterialManager::GetTexture(eyeMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor());
-
 	auto eyeData = reinterpret_cast<Data*>(m_Data.get());
-	eyeData->EnvironmentTexture = m_EnvironmentTexture.GetDescriptorIndex();
-	eyeData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.GetDescriptorIndex();
+
+	if (m_EnvironmentTexture.Update(eyeMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+		eyeData->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
+
+	if (m_EnvironmentMaskTexture.Update(eyeMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor()))
+		eyeData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.texture.GetDescriptorIndex();
 }

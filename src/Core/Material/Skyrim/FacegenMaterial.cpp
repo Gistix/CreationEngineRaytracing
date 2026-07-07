@@ -27,12 +27,14 @@ void FacegenMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_TintTexture = MaterialManager::GetTexture(facegenMaterial->tintTexture, renderer->GetWhiteTextureDescriptor());
-	m_DetailTexture = MaterialManager::GetTexture(facegenMaterial->detailTexture, renderer->GetDetailTextureDescriptor());
-	m_SubsurfaceTexture = MaterialManager::GetTexture(facegenMaterial->subsurfaceTexture, renderer->GetBlackTextureDescriptor());
-
 	auto facegenData = reinterpret_cast<Data*>(m_Data.get());
-	facegenData->TintTexture = m_TintTexture.GetDescriptorIndex();
-	facegenData->DetailTexture = m_DetailTexture.GetDescriptorIndex();
-	facegenData->SubsurfaceTexture = m_SubsurfaceTexture.GetDescriptorIndex();
+
+	if (m_TintTexture.Update(facegenMaterial->tintTexture, renderer->GetWhiteTextureDescriptor()))
+		facegenData->TintTexture = m_TintTexture.texture.GetDescriptorIndex();
+
+	if (m_DetailTexture.Update(facegenMaterial->detailTexture, renderer->GetDetailTextureDescriptor()))
+		facegenData->DetailTexture = m_DetailTexture.texture.GetDescriptorIndex();
+
+	if (m_SubsurfaceTexture.Update(facegenMaterial->subsurfaceTexture, renderer->GetBlackTextureDescriptor()))
+		facegenData->SubsurfaceTexture = m_SubsurfaceTexture.texture.GetDescriptorIndex();
 }

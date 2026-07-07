@@ -17,6 +17,6 @@ struct EnvmapMaterial : public LightingMaterial
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_EnvironmentTexture;
-	Texture m_EnvironmentMaskTexture;
+	MaterialTexture m_EnvironmentTexture;
+	MaterialTexture m_EnvironmentMaskTexture;
 };

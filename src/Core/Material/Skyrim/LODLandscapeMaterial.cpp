@@ -34,12 +34,14 @@ void LODLandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_ParentDiffuseTexture = MaterialManager::GetTexture(lodMaterial->parentDiffuseTexture, renderer->GetGrayTextureDescriptor());
-	m_ParentNormalTexture = MaterialManager::GetTexture(lodMaterial->parentNormalTexture, renderer->GetNormalTextureDescriptor());
-	m_NoiseTexture = MaterialManager::GetTexture(lodMaterial->landscapeNoiseTexture, renderer->GetBlackTextureDescriptor());
-
 	auto lodData = reinterpret_cast<Data*>(m_Data.get());
-	lodData->ParentDiffuseTexture = m_ParentDiffuseTexture.GetDescriptorIndex();
-	lodData->ParentNormalTexture = m_ParentNormalTexture.GetDescriptorIndex();
-	lodData->NoiseTexture = m_NoiseTexture.GetDescriptorIndex();
+
+	if (m_ParentDiffuseTexture.Update(lodMaterial->parentDiffuseTexture, renderer->GetGrayTextureDescriptor()))
+		lodData->ParentDiffuseTexture = m_ParentDiffuseTexture.texture.GetDescriptorIndex();
+
+	if (m_ParentNormalTexture.Update(lodMaterial->parentNormalTexture, renderer->GetNormalTextureDescriptor()))
+		lodData->ParentNormalTexture = m_ParentNormalTexture.texture.GetDescriptorIndex();
+
+	if (m_NoiseTexture.Update(lodMaterial->landscapeNoiseTexture, renderer->GetBlackTextureDescriptor()))
+		lodData->NoiseTexture = m_NoiseTexture.texture.GetDescriptorIndex();
 }

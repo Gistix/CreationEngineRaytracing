@@ -32,10 +32,11 @@ void EnvmapMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_EnvironmentTexture = MaterialManager::GetTexture(envMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap);
-	m_EnvironmentMaskTexture = MaterialManager::GetTexture(envMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor());
-
 	auto envData = reinterpret_cast<Data*>(m_Data.get());
-	envData->EnvironmentTexture = m_EnvironmentTexture.GetDescriptorIndex();
-	envData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.GetDescriptorIndex();
+
+	if (m_EnvironmentTexture.Update(envMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+		envData->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
+
+	if (m_EnvironmentMaskTexture.Update(envMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor()))
+		envData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.texture.GetDescriptorIndex();
 }

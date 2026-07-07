@@ -17,5 +17,5 @@ struct ParallaxMaterial : public LightingMaterial
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_HeightTexture;
+	MaterialTexture m_HeightTexture;
 };

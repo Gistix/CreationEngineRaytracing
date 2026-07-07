@@ -274,6 +274,12 @@ void BaseMesh::CreateMaterial()
 
 void BaseMesh::UpdateMaterial()
 {
-	if (m_Material)
-		m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+	if (!m_Material)
+		return;
+
+	// Only update water for now, saves some precious CPU time which we cannot afford (yet)
+	if (m_Material->GetData()->Type != MaterialBase::Type::Water)
+		return;
+
+	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
 }

@@ -17,7 +17,7 @@ struct LODLandscapeMaterial : public LightingMaterial
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_ParentDiffuseTexture;
-	Texture m_ParentNormalTexture;
-	Texture m_NoiseTexture;
+	MaterialTexture m_ParentDiffuseTexture;
+	MaterialTexture m_ParentNormalTexture;
+	MaterialTexture m_NoiseTexture;
 };

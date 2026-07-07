@@ -17,7 +17,7 @@ struct MultiLayerParallaxMaterial : public LightingMaterial
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_LayerTexture;
-	Texture m_EnvironmentTexture;
-	Texture m_EnvironmentMaskTexture;
+	MaterialTexture m_LayerTexture;
+	MaterialTexture m_EnvironmentTexture;
+	MaterialTexture m_EnvironmentMaskTexture;
 };
