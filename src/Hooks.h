@@ -68,6 +68,12 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct DrawWorld_BuildSceneLists
+	{
+		static void* thunk();
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 #elif defined(FALLOUT4)
 
 #endif
