@@ -109,20 +109,19 @@ namespace Util
 			if (Util::Adapter::IsNiAVObjectHidden(a_object))
 				return result;
 
-			// Set as parent refr to propagate it downwards
-			auto refr = parentRefr; 
+			// Early return for TriShapes — most common actionable leaf
+			if (auto geom = Util::Adapter::AsTriShape(a_object))
+				return a_func(geom, parentRefr);
 
-			// Update refr if it actually exists (else keep the parent refr)
-			if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
-				if (auto owner = Util::Adapter::GetOwner(fadeNode))
-					refr = owner;
+			// Only nodes can have children or be FadeNodes
+			if (auto node = Util::Adapter::AsNode(a_object))
+			{
+				// Propagate owner refr through FadeNodes
+				auto refr = parentRefr;
+				if (rtti == Constants::rtti::BSFadeNode.get())
+					if (auto owner = Util::Adapter::GetOwner(a_object))
+						refr = owner;
 
-			auto geom = Util::Adapter::AsTriShape(a_object);
-			if (geom)
-				return a_func(geom, refr);
-
-			auto node = Util::Adapter::AsNode(a_object);
-			if (node) {
 				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
 					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
 					if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {

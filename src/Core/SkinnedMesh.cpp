@@ -79,6 +79,16 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	InitDismemberSkin(skinInstance);
 }
 
+void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform, bool isClusterOrigin)
+{
+	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform, isClusterOrigin);
+
+	for (auto& desc : m_VisibleGeometryDescs)
+	{
+		desc.setTransform(m_LocalTransform.f);
+	}
+}
+
 void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
 {
 	auto* skinData = skinInstance->skinData.get();
@@ -194,8 +204,10 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 			continue;
 		}
 
-		if (partition.triangles == 0)
+		if (partition.triangles == 0) {
+			logger::warn("SkinnedMesh::BuildSkinned - Partition {} has no triangles for {}, skipping partition.", i, m_Name);
 			continue;
+		}
 
 		// Enforce the single-vertex-buffer invariant: every partition must reference the same vertex buffer.
 		if (requireSharedNativeVertexBuffer && partitionBuffer->vertexBuffer != basePartitionBuffer->vertexBuffer) {
@@ -207,8 +219,10 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		}
 
 		auto indexBuffer = CreateIndexBuffer(partitionBuffer);
-		if (!indexBuffer.m_Buffer)
+		if (!indexBuffer.m_Buffer) {
+			logger::warn("SkinnedMesh::BuildSkinned - Failed to create partition {} index buffer for {}, skipping partition.", i, m_Name);
 			continue;
+		}
 
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 

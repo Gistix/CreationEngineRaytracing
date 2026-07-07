@@ -199,6 +199,8 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 
 	m_Transform = transform;
 	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_BSTriShape->previousWorld));
+
+	UpdateMaterial();
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
@@ -237,6 +239,11 @@ bool BaseMesh::SetHidden(bool hidden)
 	return false;
 }
 
+bool BaseMesh::IsTwoSided()
+{
+	return m_Properties.GetData().ShaderFlags & Properties::ShaderFlags::kTwoSided;
+}
+
 bool BaseMesh::IsHidden() const
 {
 	return m_State.any(State::Hidden);
@@ -263,4 +270,16 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 void BaseMesh::CreateMaterial()
 {
 	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+}
+
+void BaseMesh::UpdateMaterial()
+{
+	if (!m_Material)
+		return;
+
+	// Only update water for now, saves some precious CPU time which we cannot afford (yet)
+	if (m_Material->GetData()->Type != MaterialBase::Type::Water)
+		return;
+
+	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
 }

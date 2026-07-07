@@ -12,6 +12,8 @@ public:
 
 	virtual SkinnedMesh* AsSkinnedMesh() override { return this; }
 
+	virtual void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform, bool isClusterOrigin) override;
+
 	bool IsUpdatable() const override { return true; }
 
 	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const override {

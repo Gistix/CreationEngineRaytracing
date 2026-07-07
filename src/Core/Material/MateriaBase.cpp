@@ -1,6 +1,7 @@
 #include "Core/Material/MaterialBase.h"
 #include "Core/MaterialManager.h"
 #include "Util.h"
+#include "Renderer.h"
 
 MaterialBase::MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -9,7 +10,7 @@ MaterialBase::MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset
 
 	m_Data = eastl::make_unique<Data>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
 }
 
 MaterialBase::~MaterialBase()
@@ -28,8 +29,10 @@ void MaterialBase::SetManager(const eastl::shared_ptr<MaterialManager>& managerP
 	m_Manager = managerPtr;
 }
 
-void MaterialBase::Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial)
+void MaterialBase::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
+	auto data = m_Data.get();
+
 	data->Type = Type::Lighting;
 	data->Feature = static_cast<uint16_t>(shaderMaterial->GetFeature());
 
@@ -40,4 +43,24 @@ void MaterialBase::Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial)
 void MaterialBase::UpdateTextures([[ maybe_unused ]] RE::BSShaderMaterial* shaderMaterial)
 {
 
+}
+
+void MaterialBase::Update(RE::BSShaderMaterial* shaderMaterial)
+{
+	const auto& frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+	if (m_LastUpdate == frameIndex)
+		return;
+
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
+
+	auto manager = m_Manager.lock();
+	if (!manager) {
+		logger::error("Missing material manager during material update");
+		return;
+	}
+
+	manager->Update(this);
+
+	m_LastUpdate = frameIndex;
 }

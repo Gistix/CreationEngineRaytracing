@@ -64,6 +64,11 @@ public:
 		return specularPower;
 	}
 
+	float GetDisplacementScale() const
+	{
+		return rimLightPower;
+	}
+
 	const RE::NiColor& GetSubsurfaceColor() const
 	{
 		return specularColor;

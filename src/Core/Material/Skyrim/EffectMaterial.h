@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Material/MaterialBase.h"
-#include "Core/Texture.h"
+#include "Core/MaterialTexture.h"
 #include "Interop/Material/Skyrim/EffectMaterialData.hlsli"
 
 struct EffectMaterial : public MaterialBase
@@ -12,14 +12,14 @@ struct EffectMaterial : public MaterialBase
 
 	EffectMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
-	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
+	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual MaterialBase::Data* GetData() override { return m_Data.get(); }
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_SourceTexture;
-	Texture m_EffectTexture;
+	MaterialTexture m_SourceTexture;
+	MaterialTexture m_EffectTexture;
 };

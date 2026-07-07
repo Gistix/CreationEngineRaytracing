@@ -11,13 +11,13 @@ struct MultiLayerParallaxMaterial : public LightingMaterial
 
 	MultiLayerParallaxMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
-	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
+	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_LayerTexture;
-	Texture m_EnvironmentTexture;
-	Texture m_EnvironmentMaskTexture;
+	MaterialTexture m_LayerTexture;
+	MaterialTexture m_EnvironmentTexture;
+	MaterialTexture m_EnvironmentMaskTexture;
 };

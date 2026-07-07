@@ -11,15 +11,15 @@ struct LandscapeMaterial : public LightingMaterial
 
 	LandscapeMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
-	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
+	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
 	// Layer 0 lives in the inherited LightingMaterial diffuse/normal; these are layers 1-5.
-	Texture m_DiffuseTextures[5];
-	Texture m_NormalTextures[5];
-	Texture m_OverlayTexture;
-	Texture m_NoiseTexture;
+	MaterialTexture m_DiffuseTextures[5];
+	MaterialTexture m_NormalTextures[5];
+	MaterialTexture m_OverlayTexture;
+	MaterialTexture m_NoiseTexture;
 };
