@@ -50,6 +50,17 @@ namespace Pass
 		m_RaytracingData->NumMeshes = sceneGraph->GetNumMeshesFrame();
 		m_RaytracingData->NumInstances = sceneGraph->GetNumInstancesFrame();
 
+		// Water ObjectUV
+		{
+			int32_t flowMapSize = *scene->g_FlowMapSize;
+
+			m_RaytracingData->WaterObjectUV = {
+				static_cast<float>(flowMapSize),
+				scene->g_DisplacementMeshFlowCellOffset->x,
+				1.0f - scene->g_DisplacementMeshFlowCellOffset->y
+			};
+		}
+
 		m_RaytracingData->HitDistSettings = float4(
 			3.0f * Util::Units::M_TO_GAME_UNIT,  // (units > 0) - constant value
 			0.1f * Util::Units::M_TO_GAME_UNIT,  // (> 0) - viewZ based linear scale (1 m - 10 cm, 10 m - 1 m, 100 m - 10 m)

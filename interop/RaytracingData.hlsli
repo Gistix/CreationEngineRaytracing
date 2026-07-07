@@ -37,7 +37,8 @@ INTEROP_STRUCT(RaytracingData, 16)
     SubSurfaceScattering SubSurfaceScattering;
     float4 HitDistSettings;
     uint NumInstances;
-    uint Pad0;
+    half3 WaterObjectUV;
+    half Pad0;
     uint Pad1;
     uint Pad2;
 };

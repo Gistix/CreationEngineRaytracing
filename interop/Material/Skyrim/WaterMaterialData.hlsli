@@ -9,19 +9,21 @@
 
 INTEROP_STRUCT(WaterMaterialData : MaterialBaseData, 4)
 {
-    half4 NormalScrolls;         // (scroll1.xy, scroll2.xy)
-    half4 NormalScroll3AndScale; // (scroll3.xy, uvScale[0], uvScale[1])
-    half4 UVScaleAndObjectUV;    // (uvScale[2], objectUV.xyz)
-    half4 CellTexCoordOffset;    // (flowX, flowY, cellX, cellY)
-    half Amplitude0;
+    half3 ShallowColor;
+    half Pad0;
+    half2 NormalScroll1;
+    half2 NormalScroll2;
+    half2 NormalScroll3;
+    half UVScale1;
+    half UVScale2;
+    half UVScale3;
     half Amplitude1;
     half Amplitude2;
-    half4 ShallowColor;          // shallowWaterColor (RGB)
-    uint16_t NormalsTexture0;
+    half Amplitude3;   
     uint16_t NormalsTexture1;
     uint16_t NormalsTexture2;
-    uint16_t FlowmapTexture;
-    uint16_t Pad;
+    uint16_t NormalsTexture3;
+    uint16_t NormalsTexture4;
 };
 VALIDATE_ALIGNMENT(WaterMaterialData, 4);
 

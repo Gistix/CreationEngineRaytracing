@@ -20,8 +20,8 @@ struct WaterMaterial : public MaterialBase
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	MaterialTexture m_NormalTexture0;
 	MaterialTexture m_NormalTexture1;
 	MaterialTexture m_NormalTexture2;
 	MaterialTexture m_NormalTexture3;
+	MaterialTexture m_NormalTexture4;
 };

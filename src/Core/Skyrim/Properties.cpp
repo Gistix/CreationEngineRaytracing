@@ -4,7 +4,7 @@
 
 #include "Scene.h"
 
-#include <typeinfo>
+#include "Types/WaterFlags.h"
 
 Properties::Properties(RE::BSTriShape* triShape)
 {
@@ -26,6 +26,7 @@ Properties::Properties(RE::BSTriShape* triShape)
 	AlphaFlags alphaFlags = AlphaFlags::None;
 	Feature feature = Feature::kDefault;
 	bool hasPbrEmissive = false;
+	bool isWater = false;
 
 	auto alphaProperty = runtimeData.alphaProperty;
 	if (alphaProperty) {
@@ -46,16 +47,27 @@ Properties::Properties(RE::BSTriShape* triShape)
 
 	auto shaderProperty = runtimeData.shaderProperty;
 	if (shaderProperty) {
+		m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
 		m_Data.Alpha = shaderProperty->alpha;
 
 		const auto materialType = shaderProperty->GetMaterialType();
 		if (materialType == RE::BSShaderMaterial::Type::kWater) {
 			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
-			m_Data.ShaderFlags = MapWaterShaderFlags(waterShaderProperty);
+			m_Data.WaterFlags = MapWaterShaderFlags(waterShaderProperty);
+
+			int32_t flowMapSize = *Scene::GetSingleton()->g_FlowMapSize;
+
+			// CellTexCoordOffset
+			m_Data.ProjectedUVParams0 = {
+				static_cast<float>(waterShaderProperty->flowX),
+				static_cast<float>(flowMapSize - waterShaderProperty->flowY - 1),
+				static_cast<float>(waterShaderProperty->cellX),
+				static_cast<float>(-waterShaderProperty->cellY)
+			};
+
+			isWater = true;
 		}
 		else {
-			m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
-
 			if (materialType == RE::BSShaderMaterial::Type::kLighting) {
 				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 
@@ -115,14 +127,12 @@ Properties::Properties(RE::BSTriShape* triShape)
 			alphaFlags |= AlphaFlags::Transmission;
 		}
 
-		if (shaderFlags.any(EShaderPropertyFlag::kRefraction) && alphaFlags == AlphaFlags::None) {
-			alphaFlags |= AlphaFlags::Transmission;
-		}
+		if (alphaFlags == AlphaFlags::None) {
+			const bool isRefraction = shaderFlags.any(EShaderPropertyFlag::kRefraction);
+			const bool isWindow = (feature == Feature::kGlowMap || hasPbrEmissive) && shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask);
 
-		const bool isWindow = (feature == Feature::kGlowMap || hasPbrEmissive) &&
-			shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask);
-		if (isWindow && alphaFlags == AlphaFlags::None) {
-			alphaFlags |= AlphaFlags::Transmission;
+			if (isRefraction || isWindow || isWater)
+				alphaFlags |= AlphaFlags::Transmission;
 		}
 	}
 
@@ -163,16 +173,17 @@ uint32_t Properties::MapShaderFlags(RE::BSShaderProperty* shaderProperty)
 	return result;
 }
 
-uint32_t Properties::MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp)
+uint16_t Properties::MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp)
 {
-	using WaterFlag = RE::BSWaterShaderProperty::WaterFlag;
-	const auto& waterFlags = waterShaderProp->waterFlags;
+	const auto& waterFlags = waterShaderProp->waterFlags.underlying();
 
-	uint32_t result = 0;
+	uint16_t result = 0;
 
-	if (waterFlags.any(WaterFlag::kEnableFlowmap)) result |= kWaterEnableFlowmap;
-	if (waterFlags.any(WaterFlag::kBlendNormals)) result |= kWaterBlendNormals;
-	if (waterFlags.underlying() & (1 << 8)) result |= kWaterVertexUV;
+	if (waterFlags & WaterFlags::kActorInWater) result |= kActorInWater;
+	if (waterFlags & WaterFlags::kActorMovingInWater) result |= kActorMovingInWater;
+	if (waterFlags & WaterFlags::kVertexUV) result |= kWaterVertexUV;
+	if (waterFlags & WaterFlags::kEnableFlowmap) result |= kWaterEnableFlowmap;
+	if (waterFlags & WaterFlags::kBlendNormals) result |= kWaterBlendNormals;
 
 	return result;
 }
