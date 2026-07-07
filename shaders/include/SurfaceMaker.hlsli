@@ -246,7 +246,7 @@ struct SurfaceMaker
         }
         else
         {
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, -rayDir, payload.hitDistance);
         }
 #   else   
 #   endif
@@ -312,9 +312,7 @@ struct SurfaceMaker
         surface.CoatBitangent = bitangentWS;
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
-    
-        float4 boneRotation = float4(1.0f, 1.0f, 1.0f, 1.0f);
-        
+
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh);
@@ -327,7 +325,12 @@ struct SurfaceMaker
         else if (material.Type == Type::Grass)
             GrassMaterial(surface, texCoord0, mesh);
         else
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
+        {
+            float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
+            float dist = length(surface.CameraRelativePosition);
+            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, viewDir, dist);
+        }
 #   else   
 #   endif
    

@@ -32,9 +32,11 @@ INTEROP_STRUCT(PBRMaterialData : MaterialBaseData, 4)
     uint16_t PBRFlags;
     uint16_t RMAOSTexture;
     uint16_t EmissiveTexture;
+    uint16_t DisplacementTexture;
     uint16_t FeaturesTexture0;
     uint16_t FeaturesTexture1;
     half FeatureScalar;
+    half DisplacementScale;
 };
 VALIDATE_ALIGNMENT(PBRMaterialData, 4);
 

@@ -52,6 +52,8 @@ void PBRMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 		pbrData->FeatureColor = float4(pbrMaterial->fuzzColor.red, pbrMaterial->fuzzColor.green, pbrMaterial->fuzzColor.blue, pbrMaterial->fuzzWeight);
 	}
 
+	pbrData->DisplacementScale = pbrMaterial->GetDisplacementScale();
+
 	if (pbrMaterial->glintParameters.enabled) {
 		const auto& glint = pbrMaterial->GetGlintParameters();
 		pbrData->GlintParameters = float4(glint.screenSpaceScale, glint.logMicrofacetDensity, glint.microfacetRoughness, glint.densityRandomization);
@@ -83,6 +85,9 @@ void PBRMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	if (m_EmissiveTexture.Update(pbrMaterial->emissiveTexture, renderer->GetBlackTextureDescriptor()))
 		pbrData->EmissiveTexture = m_EmissiveTexture.texture.GetDescriptorIndex();
+
+	if (m_DisplacementTexture.Update(pbrMaterial->displacementTexture, renderer->GetBlackTextureDescriptor()))
+		pbrData->DisplacementTexture = m_DisplacementTexture.texture.GetDescriptorIndex();
 
 	if (m_FeaturesTexture0.Update(pbrMaterial->featuresTexture0, renderer->GetWhiteTextureDescriptor()))
 		pbrData->FeaturesTexture0 = m_FeaturesTexture0.texture.GetDescriptorIndex();

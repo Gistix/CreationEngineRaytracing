@@ -26,6 +26,7 @@ struct PBRMaterial : public MaterialBase
 	MaterialTexture m_SpecularBackLightingTexture;
 	MaterialTexture m_RMAOSTexture;
 	MaterialTexture m_EmissiveTexture;
+	MaterialTexture m_DisplacementTexture;
 	MaterialTexture m_FeaturesTexture0;
 	MaterialTexture m_FeaturesTexture1;
 };

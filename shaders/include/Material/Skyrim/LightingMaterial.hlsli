@@ -15,12 +15,15 @@
 #include "interop/Material/Skyrim/FacegenMaterialData.hlsli"
 #include "interop/Material/Skyrim/FacegenTintMaterialData.hlsli"
 #include "interop/Material/Skyrim/EyeMaterialData.hlsli"
+#include "interop/Material/Skyrim/ParallaxMaterialData.hlsli"
+#include "interop/Material/Skyrim/ParallaxOccMaterialData.hlsli"
 #include "include/Wetness.hlsli"
 #include "include/Common/Triplanar.hlsli"
+#include "include/Common/ExtendedMaterials.hlsli"
 
-#include "include/Material/Skyrim/SurfaceSkyrimShared.hlsli"
+#include "include/Material/Skyrim/Common.hlsli"
 
-void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, float4 boneRotation)
+void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, float4 boneRotation, float3 viewDir, float dist)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     float mipLevel = surface.MipLevel;
@@ -34,6 +37,63 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     const bool skinEnabled = (material.Type == Type::Lighting) &&
         (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint) &&
         SKINSETTINGS.skinParams.w > 0.0f;
+    
+    const bool isTruePBR = material.Type == Type::TruePBR;
+    
+    const bool enabledParallax = Features.ExtendedMaterial.EnableParallax;
+    
+    const bool isVanillaParallax = enabledParallax && !isTruePBR && material.Feature == Feature::kParallax;
+    const bool isVanillaParallaxOcc = enabledParallax && !isTruePBR && material.Feature == Feature::kParallaxOcc;
+    
+    bool isPBRParallax = false;
+ 
+    PBRMaterialData pbr;
+    if (isTruePBR)
+    {
+        pbr = Materials[0].Load<PBRMaterialData>(mesh.GetMaterialOffset());
+        
+        isPBRParallax = enabledParallax && (pbr.PBRFlags & PBR::Flags::HasDisplacement) != 0;
+    }
+    
+    // Parallax
+    if (isPBRParallax || isVanillaParallax || isVanillaParallaxOcc)
+    {
+        uint16_t displacementTextureIdx = 0;
+        float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
+        float noise = 0;
+        float pixelOffset;
+        
+        DisplacementParams displacementParams;
+        displacementParams.DisplacementScale = 1.f;
+        displacementParams.DisplacementOffset = 0.f;
+        displacementParams.HeightScale = 1;
+        displacementParams.FlattenAmount = 0;
+        
+        bool interlayer = false;
+        
+        [branch]
+        if (isPBRParallax)
+        {
+            displacementTextureIdx = pbr.DisplacementTexture;
+            displacementParams.HeightScale *= pbr.DisplacementScale;
+                    
+            interlayer = (pbr.PBRFlags & PBR::Flags::InterlayerParallax) != 0;
+        }
+        else if (isVanillaParallax || isVanillaParallaxOcc)
+        {
+            // Load ParallaxOcc for Parallax as well
+            ParallaxOccMaterialData parallaxOccMaterial = Materials[0].Load<ParallaxOccMaterialData>(mesh.GetMaterialOffset());
+           
+            displacementTextureIdx = parallaxOccMaterial.HeightTexture;
+
+            // Only valid if material is ParallaxOcc
+            if (isVanillaParallaxOcc)
+                displacementParams.HeightScale *= parallaxOccMaterial.Scale;
+        }
+        
+        Texture2D displacementTexture = Textures[NonUniformResourceIndex(displacementTextureIdx)];
+        texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, viewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, interlayer, pixelOffset);
+    }
     
     float3 normal = clampSampler ? 
         normalTexture.SampleLevel(ClampSampler, texCoord0, mipLevel).xyz : 
@@ -88,7 +148,6 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     [branch]
     if (material.Type == Type::TruePBR)
     {
-        PBRMaterialData pbr = Materials[0].Load<PBRMaterialData>(mesh.GetMaterialOffset());
         Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
         Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
 
