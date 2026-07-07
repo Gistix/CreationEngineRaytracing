@@ -1110,8 +1110,6 @@ void Main()
             float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.gridParameters);
             bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
             
-            const bool oldValidHit = isValidHit;
-            
             if (isValidHit) {
                 materialRoughnessPrev = min(materialRoughnessPrev, 0.99f);
                 float a2 = materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev;
@@ -1232,8 +1230,7 @@ void Main()
         
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE        
 #   if defined(NRD)
-        float normHitDist = accumulatedHitDist;
-        normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
+        float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
         
         if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
