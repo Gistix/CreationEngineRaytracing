@@ -4,6 +4,8 @@
 
 #include "Scene.h"
 
+#include <typeinfo>
+
 Properties::Properties(RE::BSTriShape* triShape)
 {
 	m_Data.ShaderFlags = 0;
@@ -21,10 +23,12 @@ Properties::Properties(RE::BSTriShape* triShape)
 
 	auto runtimeData = Util::Adapter::GetGeometryRuntimeData(triShape);
 
+	AlphaFlags alphaFlags = AlphaFlags::None;
+	Feature feature = Feature::kDefault;
+	bool hasPbrEmissive = false;
+
 	auto alphaProperty = runtimeData.alphaProperty;
 	if (alphaProperty) {
-		AlphaFlags alphaFlags = AlphaFlags::None;
-
 		if (alphaProperty->GetAlphaBlending()) {
 			using AlphaFunction = RE::NiAlphaProperty::AlphaFunction;
 
@@ -38,8 +42,6 @@ Properties::Properties(RE::BSTriShape* triShape)
 			alphaFlags |= AlphaFlags::Test;
 			m_Data.AlphaThreshold = alphaProperty->alphaThreshold / 255.0f;
 		}
-
-		m_Data.AlphaFlags = alphaFlags;
 	}
 
 	auto shaderProperty = runtimeData.shaderProperty;
@@ -57,6 +59,14 @@ Properties::Properties(RE::BSTriShape* triShape)
 			if (materialType == RE::BSShaderMaterial::Type::kLighting) {
 				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 
+				if (auto shaderMaterial = lightingShaderProp->material) {
+					feature = shaderMaterial->GetFeature();
+
+					if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR)) {
+						const auto pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial));
+						hasPbrEmissive = pbrFlags.any(PBRShaderFlags::HasEmissive);
+					}
+				}
 				if (lightingShaderProp->emissiveColor) {
 					m_Data.EmissiveColor.x = lightingShaderProp->emissiveColor->red;
 					m_Data.EmissiveColor.y = lightingShaderProp->emissiveColor->green;
@@ -89,6 +99,34 @@ Properties::Properties(RE::BSTriShape* triShape)
 			}
 		}
 	}
+
+	if (shaderProperty) {
+		const auto& shaderFlags = shaderProperty->flags;
+
+		bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
+		blendMaterial |= shaderFlags.any(EShaderPropertyFlag::kDecal, EShaderPropertyFlag::kDynamicDecal);
+
+		if ((alphaFlags & AlphaFlags::Additive) != AlphaFlags::None) {
+			alphaFlags &= ~AlphaFlags::Blend;
+			alphaFlags |= AlphaFlags::Transmission;
+		}
+		else if ((alphaFlags & AlphaFlags::Blend) != AlphaFlags::None && !blendMaterial) {
+			alphaFlags &= ~AlphaFlags::Blend;
+			alphaFlags |= AlphaFlags::Transmission;
+		}
+
+		if (shaderFlags.any(EShaderPropertyFlag::kRefraction) && alphaFlags == AlphaFlags::None) {
+			alphaFlags |= AlphaFlags::Transmission;
+		}
+
+		const bool isWindow = (feature == Feature::kGlowMap || hasPbrEmissive) &&
+			shaderFlags.any(EShaderPropertyFlag::kAssumeShadowmask);
+		if (isWindow && alphaFlags == AlphaFlags::None) {
+			alphaFlags |= AlphaFlags::Transmission;
+		}
+	}
+
+	m_Data.AlphaFlags = alphaFlags;
 }
 
 uint32_t Properties::MapShaderFlags(RE::BSShaderProperty* shaderProperty)
