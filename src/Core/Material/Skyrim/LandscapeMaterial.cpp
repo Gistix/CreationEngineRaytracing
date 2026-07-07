@@ -10,23 +10,32 @@ LandscapeMaterial::LandscapeMaterial(RE::BSShaderMaterial* shaderMaterial, uint6
 
 	m_Data = eastl::make_unique<LandscapeMaterialData>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void LandscapeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void LandscapeMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
+	LightingMaterial::UpdateData(shaderMaterial);
+}
 
-	auto landData = reinterpret_cast<Data*>(data);
+void LandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
+{
+	LightingMaterial::UpdateTextures(shaderMaterial);
 
-	auto landMaterial = skyrim_cast<RE::BSLightingShaderMaterialLandscape*>(shaderMaterial);
-	if (!landMaterial) {
-		logger::error("LandscapeMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialLandscape");
-		return;
+	auto landMaterial = reinterpret_cast<RE::BSLightingShaderMaterialLandscape*>(shaderMaterial);
+
+	auto renderer = Renderer::GetSingleton();
+
+	for (uint32_t i = 0; i < 5; i++) {
+		m_DiffuseTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeDiffuseTexture[i], renderer->GetGrayTextureDescriptor());
+		m_NormalTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeNormalTexture[i], renderer->GetNormalTextureDescriptor());
 	}
 
-	UpdateTextures(landMaterial);
+	m_OverlayTexture = MaterialManager::GetTexture(landMaterial->terrainOverlayTexture, renderer->GetBlackTextureDescriptor());
+	m_NoiseTexture = MaterialManager::GetTexture(landMaterial->terrainNoiseTexture, renderer->GetBlackTextureDescriptor());
 
+	auto landData = reinterpret_cast<Data*>(m_Data.get());
 	landData->DiffuseTexture1 = m_DiffuseTextures[0].GetDescriptorIndex();
 	landData->DiffuseTexture2 = m_DiffuseTextures[1].GetDescriptorIndex();
 	landData->DiffuseTexture3 = m_DiffuseTextures[2].GetDescriptorIndex();
@@ -41,26 +50,4 @@ void LandscapeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMateria
 
 	landData->OverlayTexture = m_OverlayTexture.GetDescriptorIndex();
 	landData->NoiseTexture = m_NoiseTexture.GetDescriptorIndex();
-}
-
-void LandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
-{
-	LightingMaterial::UpdateTextures(shaderMaterial);
-
-	auto landMaterial = skyrim_cast<RE::BSLightingShaderMaterialLandscape*>(shaderMaterial);
-	if (!landMaterial) {
-		logger::error("LandscapeMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialLandscape");
-		return;
-	}
-
-	auto renderer = Renderer::GetSingleton();
-
-	// Unused layers carry null texture pointers, so GetTexture resolves them to the defaults.
-	for (uint32_t i = 0; i < 5; i++) {
-		m_DiffuseTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeDiffuseTexture[i], renderer->GetGrayTextureDescriptor());
-		m_NormalTextures[i] = MaterialManager::GetTexture(landMaterial->landscapeNormalTexture[i], renderer->GetNormalTextureDescriptor());
-	}
-
-	m_OverlayTexture = MaterialManager::GetTexture(landMaterial->terrainOverlayTexture, renderer->GetBlackTextureDescriptor());
-	m_NoiseTexture = MaterialManager::GetTexture(landMaterial->terrainNoiseTexture, renderer->GetBlackTextureDescriptor());
 }

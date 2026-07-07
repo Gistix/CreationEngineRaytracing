@@ -11,12 +11,13 @@ EffectMaterial::EffectMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t of
 
 	m_Data = eastl::make_unique<Data>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void EffectMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void EffectMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	auto effectData = reinterpret_cast<Data*>(data);
+	auto effectData = reinterpret_cast<Data*>(m_Data.get());
 
 	effectData->Type = MaterialBase::Type::Effect;
 	effectData->Feature = static_cast<uint16_t>(shaderMaterial->GetFeature());
@@ -24,32 +25,23 @@ void EffectMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* 
 	effectData->TexCoordOffset = Util::Math::Float2(shaderMaterial->texCoordOffset[0]);
 	effectData->TexCoordScale = Util::Math::Float2(shaderMaterial->texCoordScale[0]);
 
-	auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
-	if (!effectMaterial) {
-		logger::error("EffectMaterial::Initialize - Shader material is not BSEffectShaderMaterial");
-		return;
-	}
+	auto effectMaterial = reinterpret_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
 
 	effectData->BaseColor = float4(effectMaterial->baseColor.red, effectMaterial->baseColor.green,
 	                               effectMaterial->baseColor.blue, effectMaterial->baseColor.alpha);
 	effectData->BaseColorScale = effectMaterial->baseColorScale;
-
-	UpdateTextures(shaderMaterial);
-
-	effectData->SourceTexture = m_SourceTexture.GetDescriptorIndex();
-	effectData->EffectTexture = m_EffectTexture.GetDescriptorIndex();
 }
 
 void EffectMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
-	auto effectMaterial = skyrim_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
-	if (!effectMaterial) {
-		logger::error("EffectMaterial::UpdateTextures - Shader material is not BSEffectShaderMaterial");
-		return;
-	}
+	auto effectMaterial = reinterpret_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
 
 	auto renderer = Renderer::GetSingleton();
 
 	m_SourceTexture = MaterialManager::GetTexture(effectMaterial->sourceTexture, renderer->GetBlackTextureDescriptor());
 	m_EffectTexture = MaterialManager::GetTexture(effectMaterial->greyscaleTexture, renderer->GetBlackTextureDescriptor());
+
+	auto effectData = reinterpret_cast<Data*>(m_Data.get());
+	effectData->SourceTexture = m_SourceTexture.GetDescriptorIndex();
+	effectData->EffectTexture = m_EffectTexture.GetDescriptorIndex();
 }

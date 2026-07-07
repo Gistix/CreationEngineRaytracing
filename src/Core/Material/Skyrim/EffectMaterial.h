@@ -12,9 +12,9 @@ struct EffectMaterial : public MaterialBase
 
 	EffectMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
-	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
+	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual MaterialBase::Data* GetData() override { return m_Data.get(); }
 

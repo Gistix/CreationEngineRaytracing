@@ -12,7 +12,7 @@ struct WaterMaterial : public MaterialBase
 
 	WaterMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial);
 
 	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 

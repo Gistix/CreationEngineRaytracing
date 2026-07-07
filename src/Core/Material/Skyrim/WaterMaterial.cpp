@@ -11,12 +11,14 @@ WaterMaterial::WaterMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offs
 
 	m_Data = eastl::make_unique<Data>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+
+	UpdateTextures(shaderMaterial);
 }
 
-void WaterMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void WaterMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	auto waterData = reinterpret_cast<Data*>(data);
+	auto waterData = reinterpret_cast<Data*>(m_Data.get());
 
 	waterData->Type = MaterialBase::Type::Water;
 	waterData->Feature = static_cast<uint16_t>(shaderMaterial->GetFeature());
@@ -24,11 +26,7 @@ void WaterMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* s
 	waterData->TexCoordOffset = Util::Math::Float2(shaderMaterial->texCoordOffset[0]);
 	waterData->TexCoordScale = Util::Math::Float2(shaderMaterial->texCoordScale[0]);
 
-	auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
-	if (!waterMaterial) {
-		logger::error("WaterMaterial::Initialize - Shader material is not BSWaterShaderMaterial");
-		return;
-	}
+	auto waterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
 
 	waterData->ShallowColor = half4(
 		waterMaterial->shallowWaterColor.red,
@@ -47,28 +45,22 @@ void WaterMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* s
 		waterMaterial->normalScroll3.x, waterMaterial->normalScroll3.y,
 		waterMaterial->uvScaleA[0], waterMaterial->uvScaleA[1]);
 	waterData->UVScaleAndObjectUV.x = waterMaterial->uvScaleA[2];
-
-	UpdateTextures(shaderMaterial);
-
-	waterData->NormalsTexture0 = m_NormalTexture0.GetDescriptorIndex();
-	waterData->NormalsTexture1 = m_NormalTexture1.GetDescriptorIndex();
-	waterData->NormalsTexture2 = m_NormalTexture2.GetDescriptorIndex();
-	waterData->FlowmapTexture = m_NormalTexture3.GetDescriptorIndex();
 }
 
 void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
-	auto waterMaterial = skyrim_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
-	if (!waterMaterial) {
-		logger::error("WaterMaterial::UpdateTextures - Shader material is not BSWaterShaderMaterial");
-		return;
-	}
-
 	auto renderer = Renderer::GetSingleton();
-
 	auto& defaultNormal = renderer->GetNormalTextureDescriptor();
+
+	auto waterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
 	m_NormalTexture0 = MaterialManager::GetTexture(waterMaterial->normalTexture1, defaultNormal);
 	m_NormalTexture1 = MaterialManager::GetTexture(waterMaterial->normalTexture2, defaultNormal);
 	m_NormalTexture2 = MaterialManager::GetTexture(waterMaterial->normalTexture3, defaultNormal);
 	m_NormalTexture3 = MaterialManager::GetTexture(waterMaterial->normalTexture4, defaultNormal);
+
+	auto waterData = reinterpret_cast<Data*>(m_Data.get());
+	waterData->NormalsTexture0 = m_NormalTexture0.GetDescriptorIndex();
+	waterData->NormalsTexture1 = m_NormalTexture1.GetDescriptorIndex();
+	waterData->NormalsTexture2 = m_NormalTexture2.GetDescriptorIndex();
+	waterData->FlowmapTexture = m_NormalTexture3.GetDescriptorIndex();
 }

@@ -10,39 +10,32 @@ EyeMaterial::EyeMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 
 	m_Data = eastl::make_unique<EyeMaterialData>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void EyeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void EyeMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
+	LightingMaterial::UpdateData(shaderMaterial);
 
-	auto eyeData = reinterpret_cast<Data*>(data);
+	auto eyeMaterial = reinterpret_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial);
 
-	auto eyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial);
-	if (!eyeMaterial) {
-		logger::error("EyeMaterial::Initialize - Shader material is not BSLightingShaderMaterialEye");
-		return;
-	}
-
+	auto eyeData = reinterpret_cast<Data*>(m_Data.get());
 	eyeData->EnvironmentScale = eyeMaterial->envMapScale;
-
-	eyeData->EnvironmentTexture = m_EnvironmentTexture.GetDescriptorIndex();
-	eyeData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.GetDescriptorIndex();
 }
 
 void EyeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
 
-	auto eyeMaterial = skyrim_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial);
-	if (!eyeMaterial) {
-		logger::error("EyeMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialEye");
-		return;
-	}
+	auto eyeMaterial = reinterpret_cast<RE::BSLightingShaderMaterialEye*>(shaderMaterial);
 
 	auto renderer = Renderer::GetSingleton();
 
 	m_EnvironmentTexture = MaterialManager::GetTexture(eyeMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap);
 	m_EnvironmentMaskTexture = MaterialManager::GetTexture(eyeMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor());
+
+	auto eyeData = reinterpret_cast<Data*>(m_Data.get());
+	eyeData->EnvironmentTexture = m_EnvironmentTexture.GetDescriptorIndex();
+	eyeData->EnvironmentMaskTexture = m_EnvironmentMaskTexture.GetDescriptorIndex();
 }

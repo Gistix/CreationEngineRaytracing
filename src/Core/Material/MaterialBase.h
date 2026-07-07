@@ -28,7 +28,7 @@ struct MaterialBase
 
 	void SetManager(const eastl::shared_ptr<MaterialManager>& managerPtr);
 
-	void Initialize(Data* data, RE::BSShaderMaterial* shaderMaterial);
+	virtual void UpdateData(RE::BSShaderMaterial* shaderMaterial);
 
 	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial);
 
@@ -42,6 +42,8 @@ struct MaterialBase
 	uint32_t GetOffsetComp() const { return static_cast<uint32_t>(m_Offset / 4); }
 
 	uint32_t GetHashKey() const { return m_HashKey; }
+
+	void Update(RE::BSShaderMaterial* shaderMaterial);
 protected:
 	eastl::weak_ptr<MaterialManager> m_Manager;
 

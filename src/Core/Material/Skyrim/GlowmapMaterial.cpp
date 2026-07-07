@@ -10,27 +10,23 @@ GlowmapMaterial::GlowmapMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t 
 
 	m_Data = eastl::make_unique<GlowmapMaterialData>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void GlowmapMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void GlowmapMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
-
-	auto glowData = reinterpret_cast<Data*>(data);
-
-	glowData->GlowTexture = m_GlowTexture.GetDescriptorIndex();
+	LightingMaterial::UpdateData(shaderMaterial);
 }
 
 void GlowmapMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
 
-	auto glowMaterial = skyrim_cast<RE::BSLightingShaderMaterialGlowmap*>(shaderMaterial);
-	if (!glowMaterial) {
-		logger::error("GlowmapMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialGlowmap");
-		return;
-	}
+	auto glowMaterial = reinterpret_cast<RE::BSLightingShaderMaterialGlowmap*>(shaderMaterial);
 
 	m_GlowTexture = MaterialManager::GetTexture(glowMaterial->glowTexture, Renderer::GetSingleton()->GetBlackTextureDescriptor());
+
+	auto glowData = reinterpret_cast<Data*>(m_Data.get());
+	glowData->GlowTexture = m_GlowTexture.GetDescriptorIndex();
 }

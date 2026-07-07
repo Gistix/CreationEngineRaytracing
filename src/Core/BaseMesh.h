@@ -17,6 +17,7 @@ class BaseMesh
 {
 	void ClearDirtyFlags() { m_DirtyFlags.reset(); }
 
+	void UpdateMaterial();
 public:
 	struct BufferDescriptor {
 		nvrhi::BufferHandle m_Buffer;

@@ -10,45 +10,36 @@ LODLandscapeMaterial::LODLandscapeMaterial(RE::BSShaderMaterial* shaderMaterial,
 
 	m_Data = eastl::make_unique<LODLandscapeMaterialData>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void LODLandscapeMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void LODLandscapeMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
+	LightingMaterial::UpdateData(shaderMaterial);
 
-	auto lodData = reinterpret_cast<Data*>(data);
+	auto lodMaterial = reinterpret_cast<RE::BSLightingShaderMaterialLODLandscape*>(shaderMaterial);
 
-	auto lodMaterial = skyrim_cast<RE::BSLightingShaderMaterialLODLandscape*>(shaderMaterial);
-	if (!lodMaterial) {
-		logger::error("LODLandscapeMaterial::Initialize - Shader material is not BSLightingShaderMaterialLODLandscape");
-		return;
-	}
-
-	UpdateTextures(shaderMaterial);
-
+	auto lodData = reinterpret_cast<Data*>(m_Data.get());
 	lodData->TexOffsetX = lodMaterial->terrainTexOffsetX;
 	lodData->TexOffsetY = lodMaterial->terrainTexOffsetY;
 	lodData->TexFade = lodMaterial->terrainTexFade;
-
-	lodData->ParentDiffuseTexture = m_ParentDiffuseTexture.GetDescriptorIndex();
-	lodData->ParentNormalTexture = m_ParentNormalTexture.GetDescriptorIndex();
-	lodData->NoiseTexture = m_NoiseTexture.GetDescriptorIndex();
 }
 
 void LODLandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
 
-	auto lodMaterial = skyrim_cast<RE::BSLightingShaderMaterialLODLandscape*>(shaderMaterial);
-	if (!lodMaterial) {
-		logger::error("LODLandscapeMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialLODLandscape");
-		return;
-	}
+	auto lodMaterial = reinterpret_cast<RE::BSLightingShaderMaterialLODLandscape*>(shaderMaterial);
 
 	auto renderer = Renderer::GetSingleton();
 
 	m_ParentDiffuseTexture = MaterialManager::GetTexture(lodMaterial->parentDiffuseTexture, renderer->GetGrayTextureDescriptor());
 	m_ParentNormalTexture = MaterialManager::GetTexture(lodMaterial->parentNormalTexture, renderer->GetNormalTextureDescriptor());
 	m_NoiseTexture = MaterialManager::GetTexture(lodMaterial->landscapeNoiseTexture, renderer->GetBlackTextureDescriptor());
+
+	auto lodData = reinterpret_cast<Data*>(m_Data.get());
+	lodData->ParentDiffuseTexture = m_ParentDiffuseTexture.GetDescriptorIndex();
+	lodData->ParentNormalTexture = m_ParentNormalTexture.GetDescriptorIndex();
+	lodData->NoiseTexture = m_NoiseTexture.GetDescriptorIndex();
 }
