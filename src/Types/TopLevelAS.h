@@ -89,7 +89,12 @@ public:
 		if (markers)
 			commandList->beginMarker("TLAS Update");
 
+		auto cpuStart = std::chrono::high_resolution_clock::now();
+
 		commandList->buildTopLevelAccelStruct(m_Handle[ringSlot], m_InstanceDescs.data(), m_InstanceDescs.size(), nvrhi::rt::AccelStructBuildFlags::PreferFastTrace);
+
+		auto cpuEnd = std::chrono::high_resolution_clock::now();
+		logger::info("BuildTLAS Time: {}", std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
 
 		if (markers)
 			commandList->endMarker();

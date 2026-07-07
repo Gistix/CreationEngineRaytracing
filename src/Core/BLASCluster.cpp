@@ -137,8 +137,19 @@ InstanceLightData BLASCluster::GetInstanceLightData(
 	return InstanceLightData(lightIds, numLights);
 }
 
-void BLASCluster::Update(MeshData* meshData, uint32_t& meshCount,
-	InstanceData* instanceData, uint32_t& instanceCount,
+uint32_t BLASCluster::GetMeshEntryCount() const
+{
+	uint32_t count = 0;
+	for (const auto& mesh : m_Members) {
+		if (mesh->IsHidden())
+			continue;
+		count += static_cast<uint32_t>(mesh->GetGeometryDescs().size());
+	}
+	return count;
+}
+
+void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
+	uint32_t meshStart, uint32_t instanceIndex,
     const eastl::map<RE::BSLight*, Light>& lights,
      const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
 {
@@ -151,7 +162,7 @@ void BLASCluster::Update(MeshData* meshData, uint32_t& meshCount,
 
 	const auto isOrigin = float3(m_Transform._14, m_Transform._24, m_Transform._34) == float3::Zero;
 
-	const uint32_t firstGeometry = meshCount;
+	uint32_t meshCount = meshStart;
 
 	m_GeometryDescs.clear();
 	m_GeometryDescs.reserve(m_Members.size());
@@ -184,20 +195,20 @@ void BLASCluster::Update(MeshData* meshData, uint32_t& meshCount,
 		meshCount += mesh->WriteMeshData(&meshData[meshCount]);
 	}
 
-	const uint32_t numGeometry = meshCount - firstGeometry;
+	const uint32_t numGeometry = meshCount - meshStart;
 
 	if (numGeometry == 0) {
 		logger::warn("BLASCluster::GetData - BLASCluster {} has no geometry", fmt::ptr(this));
 		return;
 	}
 
-	InstanceData& outInstance = instanceData[instanceCount++];
+	InstanceData& outInstance = instanceData[instanceIndex];
 	outInstance.Transform = m_Transform;
 	outInstance.PrevTransform = m_PrevTransform;
 
 	outInstance.LightData = GetInstanceLightData(lights, lightData);
 
-	outInstance.FirstGeometryID = firstGeometry;
+	outInstance.FirstGeometryID = meshStart;
 	outInstance.NumGeometry = numGeometry;
 	outInstance.Alpha = 1.0f;
 

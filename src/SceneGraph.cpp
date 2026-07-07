@@ -23,6 +23,11 @@ nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.curren
 nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
 nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
 
+SceneGraph::SceneGraph() :
+	m_ThreadPool(std::max(1u, std::min(std::thread::hardware_concurrency() - 1u, 8u)))
+{
+}
+
 void SceneGraph::Initialize()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
@@ -496,33 +501,159 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
-	
+
 	m_CurrentVisible.clear();
 	m_CurrentVisible.reserve(m_DirectMeshes.size());
+	m_UpdateList.clear();
+	m_CreateList.clear();
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
-	Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex, commandList](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
-		ProcessGeometry(refr, bsTriShape, frameIndex, commandList);
-		return CESEAdapter::RE::BSVisitControl::kContinue;
-	});
+	// Phase A: Fast traversal — collect into update/create lists, skip heavy processing
+	{
+		auto cpuStart = std::chrono::high_resolution_clock::now();
 
-	// Hide meshes whose trishapes where not visited by the traversal this frame
+		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
+		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
+			auto it = m_DirectMeshes.find(bsTriShape);
+			if (it != m_DirectMeshes.end()) {
+				auto mesh = it->second.get();
+				m_UpdateList.push_back({ mesh, refr });
+				m_CurrentVisible.push_back(mesh);
+			} else {
+				m_CreateList.push_back({ bsTriShape, refr });
+			}
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+		});
+
+		auto cpuEnd = std::chrono::high_resolution_clock::now();
+		logger::info("Traversal Time: {}", std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
+	}
+
+	// Phase B (parallel): Update known meshes via thread pool
+	{
+		const size_t numWorkers = m_ThreadPool.GetThreadCount();
+		const size_t totalWork = m_UpdateList.size();
+
+		auto doUpdate = [&](auto& entry) {
+			auto& [mesh, refr] = entry;
+			mesh->SetLastVisitedFrame(frameIndex);
+			const bool ownerChanged = mesh->SetOwner(refr);
+			auto cluster = mesh->GetCluster();
+
+			if (ownerChanged || !cluster) {
+				if (cluster) {
+					cluster->RemoveMember(mesh);
+					MarkClusterDirty(cluster);
+				}
+
+				cluster = GetOrCreateCluster(refr, mesh->GetTriShape());
+				cluster->AddMember(mesh);
+				MarkClusterDirty(cluster);
+			}
+
+			mesh->SetHidden(false);
+			mesh->Update(commandList);
+		};
+
+		auto cpuStart = std::chrono::high_resolution_clock::now();
+
+		if (totalWork > 0) {
+			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
+
+			for (size_t start = 0; start < totalWork; start += chunkSize) {
+				size_t end = std::min(start + chunkSize, totalWork);
+
+				m_ThreadPool.Enqueue([&, start, end]() {
+					for (size_t i = start; i < end; ++i)
+						doUpdate(m_UpdateList[i]);
+				});
+			}
+
+			m_ThreadPool.WaitAll();
+		}
+
+		auto cpuEnd = std::chrono::high_resolution_clock::now();
+		logger::info("Update Time: {}", std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
+	}
+
+	// Phase C (serial): Create new meshes
+	for (auto& [bsTriShape, refr] : m_CreateList) {
+		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
+			continue;
+
+		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
+		auto* shaderProperty = geometryData.shaderProperty;
+		if (!shaderProperty)
+			continue;
+
+		const auto materialType = shaderProperty->GetMaterialType();
+		const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
+		const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
+		const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+		auto* alphaProperty = geometryData.alphaProperty;
+		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+		const bool validEffect = isEffectShader && !isAlphaBlend;
+		if (!isLightingShader && !validEffect && !isWaterShader)
+			continue;
+
+		const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+		if (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get() ||
+			shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get())
+			continue;
+
+		const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
+		if (!skinned) {
+			const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+			if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
+				continue;
+		}
+
+		const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+		if (!rendererData)
+			continue;
+
+		if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
+			continue;
+
+		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
+			created->SetOwner(refr);
+			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
+			if (inserted) {
+				auto mesh = it2->second.get();
+
+				{
+					auto* cluster = GetOrCreateCluster(refr, bsTriShape);
+					cluster->AddMember(mesh);
+					MarkClusterDirty(cluster);
+				}
+
+				mesh->SetLastVisitedFrame(frameIndex);
+				mesh->Update(commandList);
+				m_CurrentVisible.push_back(mesh);
+			}
+		}
+	}
+
+	auto tStart = std::chrono::high_resolution_clock::now();
+
+	// Phase D: Hide meshes whose trishapes were not visited by the traversal this frame
 	for (auto& mesh : m_PreviousVisible) {
 		if (mesh->GetLastVisitedFrame() != frameIndex) {
 			mesh->SetHidden(true);
-
 			if (auto* cluster = mesh->GetCluster()) {
 				cluster->RemoveMember(mesh);
 				MarkClusterDirty(cluster);
 			}
 		}
 	}
+	auto tHide = std::chrono::high_resolution_clock::now();
+
 	m_PreviousVisible = eastl::move(m_CurrentVisible);
 
-	// Upload pending material data to material buffer
+	// Phase E: Material flush
 	m_MaterialManager->Flush(commandList);
+	auto tFlush = std::chrono::high_resolution_clock::now();
 
 	// Drop clusters whose meshes were all destroyed this frame.
 	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
@@ -542,21 +673,64 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		else
 			++it;
 	}
+	auto tCleanup = std::chrono::high_resolution_clock::now();
 
-	// Populate per-instance + per-geometry data for shader-side geometry lookup, in the same
-	// owner-then-orphan / member order the TLAS and BLAS use (so InstanceID()/GeometryIndex() align).
-	auto processCluster = [&](BLASCluster* cluster) {
-		if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
-			return;
+	// Phase E1 (serial): pre-compute per-cluster array offsets
+	struct ClusterWork { BLASCluster* cluster; uint32_t meshStart; uint32_t instanceIndex; };
+	eastl::vector<ClusterWork> clusterWork;
+	clusterWork.reserve(m_OwnerClusters.size() + m_OrphanClusters.size());
 
-		cluster->Update(m_MeshData.data(), m_NumMeshes, m_InstanceData.data(), m_NumInstances, m_Lights, m_LightData);
+	uint32_t meshCounter = 0;
+	uint32_t instanceCounter = 0;
+
+	auto reserveCluster = [&](BLASCluster* cluster) {
+		uint32_t numMeshes = cluster->GetMeshEntryCount();
+		if (numMeshes > 0 && instanceCounter < Constants::NUM_INSTANCES_MAX) {
+			clusterWork.push_back({ cluster, meshCounter, instanceCounter });
+			meshCounter += numMeshes;
+			instanceCounter++;
+		}
 	};
 
 	for (auto& [owner, cluster] : m_OwnerClusters)
-		processCluster(cluster.get());
-
+		reserveCluster(cluster.get());
 	for (auto& [bsTriShape, cluster] : m_OrphanClusters)
-		processCluster(cluster.get());
+		reserveCluster(cluster.get());
+
+	m_NumMeshes = meshCounter;
+	m_NumInstances = instanceCounter;
+
+	// Phase E2 (parallel): update each cluster at its reserved offsets
+	{
+		const size_t numWorkers = m_ThreadPool.GetThreadCount();
+		const size_t totalWork = clusterWork.size();
+
+		if (totalWork > 0) {
+			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
+
+			for (size_t start = 0; start < totalWork; start += chunkSize) {
+				size_t end = std::min(start + chunkSize, totalWork);
+
+				m_ThreadPool.Enqueue([&, start, end]() {
+					for (size_t i = start; i < end; ++i) {
+						auto& w = clusterWork[i];
+						w.cluster->Update(m_MeshData.data(), m_InstanceData.data(),
+							w.meshStart, w.instanceIndex, m_Lights, m_LightData);
+					}
+				});
+			}
+
+			m_ThreadPool.WaitAll();
+		}
+	}
+
+	auto tProcess = std::chrono::high_resolution_clock::now();
+
+	logger::info("Hide: {}  Flush: {}  Cleanup: {}  Process: {}",
+		std::chrono::duration<float, std::milli>(tHide - tStart).count(),
+		std::chrono::duration<float, std::milli>(tFlush - tHide).count(),
+		std::chrono::duration<float, std::milli>(tCleanup - tFlush).count(),
+		std::chrono::duration<float, std::milli>(tProcess - tCleanup).count());
 
 	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
 		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
@@ -569,6 +743,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+	auto tWrite = std::chrono::high_resolution_clock::now();
+	logger::info("Writes: {}", std::chrono::duration<float, std::milli>(tWrite - tProcess).count());
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
@@ -588,6 +764,8 @@ bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
 
 BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape)
 {
+	std::scoped_lock lock(m_ClusterMutex);
+
 	if (owner) {
 		auto& slot = m_OwnerClusters[owner];
 		if (!slot) {
@@ -611,6 +789,7 @@ void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
 	if (!cluster) 
 		return;
 
+	std::scoped_lock lock(m_ClusterDirtyMutex);
 	m_DirtyClusters.emplace(cluster);
 }
 

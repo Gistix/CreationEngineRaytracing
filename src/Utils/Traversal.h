@@ -118,9 +118,8 @@ namespace Util
 			{
 				// Propagate owner refr through FadeNodes
 				auto refr = parentRefr;
-				if (rtti == Constants::rtti::BSFadeNode.get())
-					if (auto owner = Util::Adapter::GetOwner(a_object))
-						refr = owner;
+				if (auto owner = Util::Adapter::GetOwner(a_object))
+					refr = owner;
 
 				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
 					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);

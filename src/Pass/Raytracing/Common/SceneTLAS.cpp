@@ -88,9 +88,19 @@ namespace Pass
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
+		auto cpuStart = std::chrono::high_resolution_clock::now();
+
 		// Upload pending dynamic buffers and build/refit the per-owner BLAS clusters before the TLAS build.
 		sceneGraph->BuildClusters(commandList);
 
+		auto cpuEnd = std::chrono::high_resolution_clock::now();
+		logger::info("BuildClusters Time: {}", std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
+
+		cpuStart = cpuEnd;
+
 		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters());
+
+		cpuEnd = std::chrono::high_resolution_clock::now();
+		logger::info("TLAS Update Time: {}", std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
 	}
 }

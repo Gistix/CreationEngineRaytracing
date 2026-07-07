@@ -2,7 +2,7 @@
 
 #include "Core/BaseMesh.h"
 #include "Core/BLASCluster.h"
-
+#include "Core/ThreadPool.h"
 
 #include "core/Light.h"
 #include "core/MaterialManager.h"
@@ -80,11 +80,27 @@ class SceneGraph
 	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
+
+	mutable std::mutex m_ClusterDirtyMutex;
+	mutable std::mutex m_ClusterMutex;
+
+	ThreadPool m_ThreadPool;
+	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
+	eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>> m_CreateList;
 	
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
+
+	struct PerThreadResult
+	{
+		eastl::vector<eastl::pair<LightData, RE::BSLight*>> lights;
+		eastl::vector<LightData> orphanLights;
+		eastl::vector<eastl::pair<MeshData, RE::BSTriShape*>> meshes;
+		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
+	};
 public:
+	SceneGraph();
 	void Initialize();
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }

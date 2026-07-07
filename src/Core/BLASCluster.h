@@ -83,6 +83,9 @@ public:
 	// Has visible meshes
 	bool Valid() const;
 	
+	// Returns total number of MeshData entries across visible members (zero if all hidden or empty).
+	uint32_t GetMeshEntryCount() const;
+
 	// Rebuilds or refits the BLAS as needed (once per frame), pulling dirty state from its members.
 	void BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph);
 
@@ -92,11 +95,9 @@ public:
 
 	uint32_t GetInstanceIndex() const { return m_InstanceIndex; }
 
-	// Appends one MeshData per visible geometry (in BLAS order) and fills the cluster's InstanceData,
-	// including per-instance light-affected data calculated from the scene lights.
-	// Returns false if the cluster has no visible geometry (skip as a TLAS instance).
-	void Update(MeshData* meshData, uint32_t& meshCount, 
-		InstanceData* instanceData, uint32_t& instanceCount,
+	// Writes one MeshData per visible geometry and one InstanceData at the given array offsets.
+	void Update(MeshData* meshData, InstanceData* instanceData,
+		uint32_t meshStart, uint32_t instanceIndex,
 	    const eastl::map<RE::BSLight*, Light>& lights,
 	    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 };
