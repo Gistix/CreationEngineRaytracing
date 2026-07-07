@@ -7,7 +7,6 @@
 #include "raytracing/include/Materials/TexLODHelpers.hlsli"
 
 #include "include/Common.hlsli"
-#include "raytracing/include/SampleGenerators.hlsli"
 
 #ifndef MAX_BOUNCES
 #   define MAX_BOUNCES (2)
@@ -73,30 +72,20 @@ RayDesc SetupPrimaryRay(uint2 idx, uint2 size, CameraData camera)
 
 uint InitRandomSeed(uint2 coord, uint2 size, uint frameCount)
 {
-    uint seed = Hash32(frameCount + kRandomFrameSalt);
-    seed = Hash32Combine(seed, (coord.x << 16) | (coord.y & 0xFFFFu));
-    seed = Hash32Combine(seed, size.x);
-    seed = Hash32Combine(seed, size.y);
-    return seed;
-}
-
-uint InitRandomSeed(uint2 coord, uint2 size, uint frameCount, uint vertexIndex, uint effectSeed)
-{
-    uint seed = InitRandomSeed(coord, size, frameCount);
-    seed = Hash32Combine(seed, vertexIndex);
-    seed = Hash32Combine(seed, effectSeed);
-    return seed;
+    return coord.x + coord.y * size.x + frameCount * 719393;
 }
 
 uint PCGHash(uint seed)
 {
-    return Hash32(seed + kRandomStepSalt);
+    uint state = seed * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
 }
 
 float Random(inout uint seed)
 {
-    seed = Hash32(seed + kRandomStepSalt);
-    return Hash32ToFloat(seed);
+    seed = PCGHash(seed);
+    return float(seed) / 4294967296.0; // Divide by 2^32
 }
 
 float ComputeRayConeTriangleLODValue(in Vertex v0, in Vertex v1, in Vertex v2, float3x3 world)
@@ -133,21 +122,19 @@ float3 SampleConeUniform(inout uint randomSeed, in float cosMax)
     );
 }
 
-float3 SampleCosineHemisphere(float2 sample)
+float3 SampleCosineHemisphere(inout uint seed)
 {
-    float r = sqrt(sample.x);
-    float theta = 2.0 * K_PI * sample.y;
+    float u1 = Random(seed);
+    float u2 = Random(seed);
+
+    float r = sqrt(u1);
+    float theta = 2.0 * K_PI * u2;
 
     float x = r * cos(theta);
     float y = r * sin(theta);
-    float z = sqrt(1.0 - sample.x);
+    float z = sqrt(1.0 - u1);
 
     return float3(x, y, z);
-}
-
-float3 SampleCosineHemisphere(inout uint seed)
-{
-    return SampleCosineHemisphere(float2(Random(seed), Random(seed)));
 }
 
 float3 SampleCosineHemisphereScaled(inout uint randomSeed, in float scale)
