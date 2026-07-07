@@ -21,7 +21,7 @@
 #endif
 
 #if defined(SKYRIM)   
-#   include "include/SurfaceSkyrim.hlsli"
+#   include "include/Material/SkyrimMaterials.hlsli"
 #elif defined(FALLOUT4)
 #   include "include/SurfaceFallout4.hlsli"
 #endif
@@ -246,7 +246,7 @@ struct SurfaceMaker
         }
         else
         {
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
         }
 #   else   
 #   endif
@@ -327,7 +327,7 @@ struct SurfaceMaker
         else if (material.Type == Type::Grass)
             GrassMaterial(surface, texCoord0, mesh);
         else
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
 #   else   
 #   endif
    
