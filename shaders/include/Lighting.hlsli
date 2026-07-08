@@ -8,7 +8,6 @@
 
 #include "raytracing/include/Common.hlsli"
 #include "include/ColorConversions.hlsli"
-#include "raytracing/include/Common.hlsli"
 #include "raytracing/include/Rays.hlsli"
 #include "raytracing/include/MonteCarlo.hlsli"
 #include "include/Surface.hlsli"
@@ -19,6 +18,7 @@ static const float ISL_SCALE = 0.8f;
 static const float ISL_METRES_TO_UNITS = 70.f;
 static const float ISL_METRES_TO_UNITS_SQ = ISL_METRES_TO_UNITS * ISL_METRES_TO_UNITS;
 static const float ISL_SCALED_UNITS_SQ = ISL_SCALE * ISL_METRES_TO_UNITS_SQ;
+static const float RCP_ISL_SCALED_UNITS_SQ = rcp(ISL_SCALED_UNITS_SQ);
 static const float NON_ISL_ESTIMATED_LIGHT_SOURCE_RADIUS_PER_FADE = 1.0f / GAME_UNIT_TO_CM;
 static const float NON_ISL_ATTENUATION_FADE_START = 0.8f;
 static const float NON_ISL_ATTENUATION_BRIGHT_FADE_START = 0.55f;
@@ -202,7 +202,7 @@ float GetLightSourceAngle(Light light, float dist)
 {
     if ((light.Flags & LightFlags::ISL) != 0)
     {
-        float size = sqrt((light.SizeBias * 2.0f) / (0.8f * 4900.0f));
+        float size = sqrt((light.SizeBias * 2.0f) * RCP_ISL_SCALED_UNITS_SQ);
         return atan2(size, dist);
     }
 
@@ -226,6 +226,16 @@ float GetAttenuation(Light light, float dist, inout float lightSourceAngle)
 	}
     lightSourceAngle = GetLightSourceAngle(light, dist);
     return atten;
+}
+
+float GetLightAngle(Light light, float dist)
+{
+    if ((light.Flags & LightFlags::ISL) != 0)
+    {
+        float size = sqrt((light.SizeBias * 2.0f) * RCP_ISL_SCALED_UNITS_SQ);
+        return atan2(size, dist);
+    }
+    return 0.005f;
 }
 
 float GetLightSampleWeight(Surface surface, Light light)

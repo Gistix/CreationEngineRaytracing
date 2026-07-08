@@ -64,6 +64,33 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     return true;
 }
 
+float3 ComputeShadowNormal(
+    Instance instance, Mesh mesh,
+    Vertex v0, Vertex v1, Vertex v2, float3 uvw,
+    LightingMaterialData material, float2 texCoord)
+{
+    float3x3 objectToWorld3x3 = mul((float3x3)instance.Transform, (float3x3)mesh.Transform);
+    float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
+    float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
+    float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
+    Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
+    float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
+    float3 N, T, B;
+    NormalMap(normal, normalWS, tangentWS, bitangentWS, N, T, B);
+    return N;
+}
+
+void ApplyFresnelTransmittance(
+    float3 normal, float3 F0, float3 direction,
+    inout float3 transmittance, inout float3 transmitanceInOut)
+{
+    float3 viewDir = -normalize(direction);
+    float NdotV = abs(dot(normal, viewDir));
+    float3 F = BRDF::F_Schlick(F0, NdotV);
+    transmittance *= (1.0f - F) / (1.0f + F);
+    transmitanceInOut *= transmittance;
+}
+
 bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed, in float3 direction, float hitDistance, inout float3 transmitanceInOut)
 {
     Instance instance;
@@ -95,13 +122,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         WaterMaterial(surface, texCoord, tangentWS, bitangentWS, mesh);
         
         float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
-
-        float3 viewDir = -normalize(direction);
-        float NdotV = max(abs(dot(surface.Normal, viewDir)), 0.01f);
-        float3 F = BRDF::F_Schlick(surface.F0, NdotV);
-        transmittance *= (1.0f - F) / (1.0f + F);
-
-        transmitanceInOut *= transmittance;
+        ApplyFresnelTransmittance(surface.Normal, surface.F0, direction, transmittance, transmitanceInOut);
         return false;        
     }else
     {   
@@ -140,36 +161,11 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             else
             {
                 float3 baseColor = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
-                baseColor *= float3(1.0f, 1.0f, 1.0f);
                 transmittance = lerp(float3(1.0f, 1.0f, 1.0f), baseColor, alpha);
             }
 
-            float3 F0 = 0.04f;
-
-            float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
-
-            float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
-            float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-            float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));    
-        
-            Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
-            float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
-
-            float3 Normal, Tangent, Bitangent;
-
-            NormalMap(
-                    normal,
-                    normalWS, tangentWS, bitangentWS,
-                    Normal, Tangent, Bitangent
-                );
-
-            float3 viewDir = -normalize(direction);
-            float NdotV = abs(dot(Normal, viewDir));
-
-            float3 F = BRDF::F_Schlick(F0, NdotV);
-            transmittance *= (1.0f - F) / (1.0f + F);
-
-            transmitanceInOut *= transmittance;
+            float3 Normal = ComputeShadowNormal(instance, mesh, v0, v1, v2, uvw, material, texCoord);
+            ApplyFresnelTransmittance(Normal, 0.04f, direction, transmittance, transmitanceInOut);
             return false;
         }
     
@@ -208,31 +204,8 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 F0 = pbr.SpecularLevel * specular;
             }
 
-            float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
-
-            float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
-            float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-            float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
-        
-            Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
-            float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
-
-            float3 Normal, Tangent, Bitangent;
-
-            NormalMap(
-                    normal,
-                    normalWS, tangentWS, bitangentWS,
-                    Normal, Tangent, Bitangent
-                );
-
-            float3 viewDir = -normalize(direction);
-
-            float NdotV = abs(dot(Normal, viewDir));
-
-            float3 F = BRDF::F_Schlick(F0, NdotV);
-            transmittance *= (1.0f - F) / (1.0f + F);
-
-            transmitanceInOut *= transmittance;
+            float3 Normal = ComputeShadowNormal(instance, mesh, v0, v1, v2, uvw, material, texCoord);
+            ApplyFresnelTransmittance(Normal, F0, direction, transmittance, transmitanceInOut);
             return false;
         }        
     }

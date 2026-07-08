@@ -1,6 +1,7 @@
 #ifndef SKYRIM_MATERIAL_COMMON_HLSL
 #define SKYRIM_MATERIAL_COMMON_HLSL
 
+#include "interop/Properties.hlsli"
 #include "interop/Material/MaterialBaseData.hlsli"
 #include "interop/Material/Skyrim/LightingMaterialData.hlsli"
 

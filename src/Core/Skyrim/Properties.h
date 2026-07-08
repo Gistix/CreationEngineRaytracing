@@ -49,9 +49,11 @@ struct Properties
 	// Written into the same ShaderFlags field; the shader disambiguates by material Type::Water.
 	enum WaterShaderFlags : uint32_t
 	{
-		kWaterVertexUV      = 1 << 8,
-		kWaterEnableFlowmap  = 1 << 15,
-		kWaterBlendNormals   = 1 << 16
+		kActorInWater		 = 1 << 0,
+		kActorMovingInWater  = 1 << 1,
+		kWaterVertexUV       = 1 << 2,
+		kWaterEnableFlowmap  = 1 << 3,
+		kWaterBlendNormals   = 1 << 4
 	};
 
 	enum AlphaFlags : uint16_t
@@ -72,5 +74,5 @@ struct Properties
 	auto& GetData() const { return m_Data; }
 private:
 	static uint32_t MapShaderFlags(RE::BSShaderProperty* shaderProperty);
-	static uint32_t MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp);
+	static uint16_t MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp);
 };

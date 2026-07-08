@@ -38,8 +38,8 @@ INTEROP_STRUCT(RaytracingData, 16)
     float4 HitDistSettings;
     uint NumInstances;
     uint EnableReSTIRPT;
-    uint Pad0;
-    uint Pad1;
+    half3 WaterObjectUV;
+    half Pad0;
 };
 VALIDATE_CBUFFER(RaytracingData, 16);
 
