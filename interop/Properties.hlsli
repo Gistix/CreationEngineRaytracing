@@ -62,10 +62,10 @@ INTEROP_DATA_STRUCT(Properties, 4)
     half AlphaThreshold;
     half Alpha;
     half4 EmissiveColor;
-    half4 ProjectedUVParams0;
-    half4 ProjectedUVParams1;
+    half4 ProjectedUVParams;
     half4 ProjectedUVParams2;
     half4 ProjectedUVParams3;
+    half4 TextureProj;
 };
 VALIDATE_ALIGNMENT(PropertiesData, 4);
 

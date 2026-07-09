@@ -13,10 +13,10 @@ Properties::Properties(RE::BSTriShape* triShape)
 	m_Data.AlphaThreshold = 0.5f;
 	m_Data.Alpha = 1.0f;
 	m_Data.EmissiveColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
-	m_Data.ProjectedUVParams0 = half4(0.0f, 0.0f, 0.0f, 0.0f);
-	m_Data.ProjectedUVParams1 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.ProjectedUVParams = half4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.ProjectedUVParams2 = half4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 0.0f, 0.0f);
+	m_Data.TextureProj = half4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	if (!triShape)
 		return;
@@ -60,7 +60,7 @@ Properties::Properties(RE::BSTriShape* triShape)
 			int32_t flowMapSize = *scene->g_FlowMapSize;
 
 			// CellTexCoordOffset - Flowmap
-			m_Data.ProjectedUVParams0 = {
+			m_Data.ProjectedUVParams = {
 				static_cast<float>(waterShaderProperty->flowX),
 				static_cast<float>(flowMapSize - waterShaderProperty->flowY - 1),
 				static_cast<float>(waterShaderProperty->cellX),
@@ -93,8 +93,8 @@ Properties::Properties(RE::BSTriShape* triShape)
 					auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
 					float oneMinusAlpha = 1.0f - params.w;
 
-					m_Data.ProjectedUVParams0 = half4(oneMinusAlpha * params.x, 0.0f, params.z, (oneMinusAlpha * params.y) + params.w);
-					m_Data.ProjectedUVParams1 = Util::Math::Float4(lightingShaderProp->projectedUVColor);
+					m_Data.ProjectedUVParams = half4(oneMinusAlpha * params.x, 0.0f, params.z, (oneMinusAlpha * params.y) + params.w);
+					m_Data.ProjectedUVParams2 = Util::Math::Float4(lightingShaderProp->projectedUVColor);
 
 					const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
 
@@ -104,7 +104,7 @@ Properties::Properties(RE::BSTriShape* triShape)
 						auto renderFlags = 0;
 						bool enableProjectedNormals = iniSettings.enableProjecteUVDiffuseNormals && (!(renderFlags & 0x8) || !iniSettings.enableProjecteUVDiffuseNormalsOnCubemap);
 
-						m_Data.ProjectedUVParams2 = half4(
+						m_Data.ProjectedUVParams3 = half4(
 							iniSettings.projectedUVDiffuseNormalTilingScale,
 							iniSettings.projectedUVNormalDetailTilingScale,
 							0.0f,
@@ -113,7 +113,7 @@ Properties::Properties(RE::BSTriShape* triShape)
 					}
 
 					// Texture Projection - Non-Default if BSGeometry::IsMultiIndexTriShape() is true
-					m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 1.0f, 0.0f);
+					m_Data.TextureProj = half4(0.0f, 0.0f, 1.0f, 0.0f);
 				}
 			}
 		}

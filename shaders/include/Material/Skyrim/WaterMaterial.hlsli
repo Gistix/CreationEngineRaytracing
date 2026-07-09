@@ -36,7 +36,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
     float3 objectUV = Raytracing.WaterObjectUV;
 
-    float4 cellTexCoordOffset = mesh.Properties.ProjectedUVParams0;
+    float4 cellTexCoordOffset = mesh.Properties.ProjectedUVParams;
 
     float2 scrollAdjust1;
     float2 scrollAdjust2;
