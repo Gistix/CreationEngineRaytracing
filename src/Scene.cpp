@@ -44,12 +44,11 @@ void Scene::Load()
 void Scene::PostPostLoad()
 {
 	Hooks::Install();
-	m_INISettings.Initialize();
 }
 
 void Scene::DataLoaded()
 {
-
+	m_INISettings.Initialize();
 }
 
 void Scene::SetLogLevel(spdlog::level::level_enum a_level)
