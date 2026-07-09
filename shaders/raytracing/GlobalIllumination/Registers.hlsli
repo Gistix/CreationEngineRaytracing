@@ -70,6 +70,7 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 #endif
 Texture2D<float4>                           WaterDisplacementMap        : register(t13);
 Texture2D<float4>                           SkinDetailNormal            : register(t14);
+Texture2D<float4>                           ProjNoiseMap                : register(t15);
 
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);

@@ -536,7 +536,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         const float4 projectedUVParams3 = mesh.Properties.ProjectedUVParams3;
             
         float3 triWeights = Triplanar::GetWeights(surface.GeomNormal, surface.FaceNormal);
-        float projNoise = Triplanar::Sample(Textures[0], DefaultSampler, mipLevel, surface.Position, triWeights, projectedUVParams.z).x;
+        float projNoise = Triplanar::Sample(ProjNoiseMap, DefaultSampler, mipLevel, surface.Position, triWeights, projectedUVParams.z).x;
 
         float3 texProj = mesh.Properties.TextureProj.xyz;
              

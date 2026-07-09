@@ -103,6 +103,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::Texture_SRV(13),
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
+			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
@@ -234,6 +235,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_ResolveBuffer),
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)
