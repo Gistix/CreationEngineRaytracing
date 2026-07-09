@@ -4,6 +4,7 @@
 #include "include/Common.hlsli"
 #include "include/ColorConversions.hlsli"
 #include "include/Surface.hlsli"
+#include "include/Material/Skyrim/Common.hlsli"
 #include "interop/Material/Skyrim/WaterMaterialData.hlsli"
 #include "include/FlowMap.hlsli"
 #include "include/Wetness.hlsli"
@@ -19,25 +20,23 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.F0 = 0.02f;
     surface.IOR = 1.33f;
 
-    const bool hasFlowMap = (mesh.Properties.ShaderFlags & WaterShaderFlags::kEnableFlowmap) != 0;
+    const bool hasFlowMap = (mesh.Properties.WaterFlags & WaterFlags::kEnableFlowmap) != 0;
     const bool hasBlendNormals = true;
-    const bool hasNormalTexcoord = (mesh.Properties.ShaderFlags & WaterShaderFlags::kVertexUV) != 0;
-
-    const bool hasWading = false;
+    const bool hasNormalTexcoord = (mesh.Properties.WaterFlags & WaterFlags::kVertexUV) != 0;
 
     const bool hasVertexColor = false;
 
     const float scale = 0.001f;
 
-    float2 normalScroll1 = water.NormalScrolls.xy;
-    float2 normalScroll2 = water.NormalScrolls.zw;
-    float2 normalScroll3 = water.NormalScroll3AndScale.xy;
+    float2 normalScroll1 = water.NormalScroll1;
+    float2 normalScroll2 = water.NormalScroll2;
+    float2 normalScroll3 = water.NormalScroll3;
 
-    float3 normalsScale = float3(water.NormalScroll3AndScale.z, water.NormalScroll3AndScale.w, water.UVScaleAndObjectUV.x);
+    float3 normalsScale = float3(water.UVScale1, water.UVScale2, water.UVScale3);
 
-    float3 objectUV = water.UVScaleAndObjectUV.yzw;
+    float3 objectUV = Raytracing.WaterObjectUV;
 
-    float4 cellTexCoordOffset = water.CellTexCoordOffset;
+    float4 cellTexCoordOffset = mesh.Properties.ProjectedUVParams;
 
     float2 scrollAdjust1;
     float2 scrollAdjust2;
@@ -59,22 +58,10 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
     if (hasFlowMap)
     {
-        float4 flowCoord = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-        if (hasWading)
-        {
-            flowCoord.xy =
-                ((-0.5 + texCoord0.xy) * 0.1 + cellTexCoordOffset.xy) +
-                float2(cellTexCoordOffset.z,
-                       -cellTexCoordOffset.w + objectUV.x) / objectUV.xx;
-
-            flowCoord.zw = -0.25 + (texCoord0.xy * 0.5 + objectUV.yz);
-        }
-        else
-        {
-            flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
-            flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
-        }
+        float4 flowCoord;
+        flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
+        flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
 
         const float flowScroll = Camera.Time;
 
@@ -83,7 +70,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
         float2 normalMul = 0.5 + -(-0.5 + abs(frac(flowCoord.xy * (64 * flowmapDimensions)) * 2 - 1));
 
-        Texture2D normals04Texture = Textures[NonUniformResourceIndex(water.FlowmapTexture)];
+        Texture2D normals04Texture = Textures[NonUniformResourceIndex(water.NormalsTexture4)];
 
         float3 normals1 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, uvShift, 9.92, 0, flowScroll, mipLevel);
         float3 normals2 = GetFlowmapNormal(WaterFlowMap, PointWrapSampler, normals04Texture, DefaultSampler, flowCoord, float2(0, uvShift.y), 10.64, 0.27, flowScroll, mipLevel);
@@ -100,11 +87,21 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         float3 flowmapNormal = float3(((-0.5 + flowmapNormalWeighted) / (flowmapDenominator.x * flowmapDenominator.y)), 0);
         flowmapNormal.z = sqrt(1 - flowmapNormal.x * flowmapNormal.x - flowmapNormal.y * flowmapNormal.y);
 
+        // Always enabled for flowmapped water, since we do not render the displacement water mesh
+        {   
+            // Project UV from displacement mesh position and size
+            float2 displacementUv = ((surface.Position.xy - Raytracing.WaterDisplacementPosition.xy) + 1024.0) / 2048.0;
+            displacementUv.y = 1.0f - displacementUv.y;
+            
+            float3 displacement = normalize(float3(water.Amplitude4 * (-0.5 + WaterDisplacementMap.SampleLevel(ClampSampler, displacementUv, mipLevel).zw), 0.04));
+            flowmapNormal = lerp(displacement, flowmapNormal, displacement.z);
+        }
+
         surface.Normal = normalize(flowmapNormal);
     } else
     {
         float2 normalCoord1 = normalScroll1 + scrollAdjust1;
-        Texture2D normals01Texture = Textures[NonUniformResourceIndex(water.NormalsTexture0)];
+        Texture2D normals01Texture = Textures[NonUniformResourceIndex(water.NormalsTexture1)];
         float3 normals1 = normals01Texture.SampleLevel(DefaultSampler, normalCoord1, mipLevel).xyz * 2.0 + float3(-1, -1, -2);
 
         if (hasBlendNormals)
@@ -112,17 +109,17 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             float2 normalCoord2 = normalScroll2 + scrollAdjust2;
             float2 normalCoord3 = normalScroll3 + scrollAdjust3;
 
-            Texture2D normals02Texture = Textures[NonUniformResourceIndex(water.NormalsTexture1)];
-            Texture2D normals03Texture = Textures[NonUniformResourceIndex(water.NormalsTexture2)];
+            Texture2D normals02Texture = Textures[NonUniformResourceIndex(water.NormalsTexture2)];
+            Texture2D normals03Texture = Textures[NonUniformResourceIndex(water.NormalsTexture3)];
 
             float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
             float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
 
             surface.Normal = normalize(
                 float3(0, 0, 1) +
-                water.Amplitude0 * normals1 +
-                water.Amplitude1 * normals2 +
-                water.Amplitude2 * normals3
+                water.Amplitude1 * normals1 +
+                water.Amplitude2 * normals2 +
+                water.Amplitude3 * normals3
             );
         }
         else

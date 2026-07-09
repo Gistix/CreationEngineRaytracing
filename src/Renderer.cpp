@@ -161,6 +161,16 @@ nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
 	return m_MotionVectorTexture;
 }
 
+nvrhi::ITexture* Renderer::GetWaterDisplacementTexture() {
+#if defined(SKYRIM)
+	if (!m_WaterDisplacementTexture) {
+		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
+		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::ShaderResource);
+	}
+#endif
+	return m_WaterDisplacementTexture;
+}
+
 void Renderer::InitGBufferOutput()
 {
 	m_GBufferOutput = eastl::make_unique<GBufferOutput>();
@@ -579,7 +589,7 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeResource, textureDesc);
 }
 
-nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown)
+nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
 {
 	if (!d3d11Texture) {
 		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");

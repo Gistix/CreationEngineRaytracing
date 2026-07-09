@@ -226,7 +226,7 @@ struct SurfaceMaker
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
             
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, -rayDir, payload.hitDistance);
         }
         else if (material.Type == Type::Effect)
         {
@@ -315,7 +315,11 @@ struct SurfaceMaker
 
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh);
+        {
+            float dist = length(surface.CameraRelativePosition);
+            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, viewDir, dist);
+        }
         else if (material.Type == Type::Effect)
             EffectMaterial(surface, texCoord0, vertexColor, mesh);
         else if (material.Type == Type::Water)

@@ -10,6 +10,7 @@
 #if defined(SKYRIM)
 #include "Types/CommunityShaders/LightLimitFix.h"
 #include "Types/CommunityShaders/ISLCommon.h"
+#include "Types/WaterFlags.h"
 #endif
 
 #include "Pass/Raytracing/Common/Skinning.h"
@@ -387,6 +388,14 @@ void SceneGraph::ProcessGeometry(RE::TESObjectREFR* refr, RE::BSTriShape* bsTriS
 	auto* alphaProperty = geometryData.alphaProperty;
 	const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
 	const bool validEffect = isEffectShader && !isAlphaBlend;
+
+	if (isWaterShader) {
+		auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
+		const auto waterFlags = waterShaderProperty->waterFlags.underlying();
+
+		if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
+			return;
+	}
 
 	if (!isLightingShader && !validEffect && !isWaterShader)
 		return;

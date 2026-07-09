@@ -83,9 +83,9 @@ void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float
 {
 	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform, isClusterOrigin);
 
-	for (auto& desc : m_VisibleGeometryDescs)
-	{
-		desc.setTransform(m_LocalTransform.f);
+	if (m_Flags.all(Flags::DismemberSkinInstance)) {
+		for (auto& desc : m_VisibleGeometryDescs)
+			desc.setTransform(m_LocalTransform.f);
 	}
 }
 

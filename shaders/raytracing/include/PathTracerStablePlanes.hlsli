@@ -266,6 +266,7 @@ StablePlanesHitResult StablePlanesHandleHit(
     const BRDFContext brdfContext,
     const StandardBSDF bsdf,
     const bool isDominant,
+    const LightingMaterialData material,
     const Instance instance,
     inout uint randomSeed,
     const bool insideWaterVolume,
@@ -347,6 +348,20 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
     }
 
+    // Above-water hits keep the reflected branch as the denoiser's dominant plane.
+    // Underwater paths keep the default transmission-first order.
+    if (material.Type == Type::Water && !insideWaterVolume)
+    {
+        for (int k3 = 0; k3 < deltaLobeCount; k3++)
+        {
+            if (any(deltaLobes[k3].thp > 0) && deltaLobes[k3].transmission == 0)
+            {
+                firstActiveLobe = k3;
+                break;
+            }
+        }
+    }
+
     float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
 
     if (nonDeltaPart > 1e-5 || activeDeltaLobes == 0)
@@ -389,8 +404,17 @@ StablePlanesHitResult StablePlanesHandleHit(
 
     int forkedCount = 0;
 
-    for (int lobeIdx = 0; lobeIdx < deltaLobeCount; lobeIdx++)
+    for (int lobeOrder = 0; lobeOrder < deltaLobeCount; lobeOrder++)
     {
+        int lobeIdx = lobeOrder;
+        if (material.Type == Type::Water && !insideWaterVolume && firstActiveLobe >= 0)
+        {
+            if (lobeOrder == 0)
+                lobeIdx = firstActiveLobe;
+            else if (lobeOrder <= firstActiveLobe)
+                lobeIdx = lobeOrder - 1;
+        }
+
         if (!any(deltaLobes[lobeIdx].thp > 0))
             continue;
 

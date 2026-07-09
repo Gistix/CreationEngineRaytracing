@@ -72,57 +72,36 @@ namespace Pass::Raytracing
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(DxcDefine{ L"USE_RAY_QUERY", L"1" });
 
-		// Temporal Resampling
-		{
-			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GITemporalResampling.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_TemporalShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_TemporalPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_TemporalShader)
-					.addBindingLayout(m_BindingLayout));
-			}
-		}
+		auto createPipeline = [&](const wchar_t* shaderPath, const char* stageName, nvrhi::ShaderHandle& shader, nvrhi::ComputePipelineHandle& pipeline) {
+			shader = nullptr;
+			pipeline = nullptr;
 
-		// Spatial Resampling
-		{
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GISpatialResampling.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_SpatialShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_SpatialPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_SpatialShader)
-					.addBindingLayout(m_BindingLayout));
+			ShaderUtils::CompileShader(blob, shaderPath, defines, L"cs_6_5");
+			if (!blob) {
+				logger::error("ReSTIRGIPass::CreatePipeline - Failed to compile {} shader.", stageName);
+				return;
 			}
-		}
 
-		// Fused Spatiotemporal Resampling
-		{
-			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GIFusedResampling.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_FusedShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_FusedPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_FusedShader)
-					.addBindingLayout(m_BindingLayout));
+			shader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
+			if (!shader) {
+				logger::error("ReSTIRGIPass::CreatePipeline - Failed to create {} shader.", stageName);
+				return;
 			}
-		}
 
-		// Final Shading
-		{
-			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/raytracing/RTXDI/ReSTIRGI/GIFinalShading.hlsl", defines, L"cs_6_5");
-			if (blob) {
-				m_FinalShadingShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
-				m_FinalShadingPipeline = device->createComputePipeline(
-					nvrhi::ComputePipelineDesc()
-					.setComputeShader(m_FinalShadingShader)
-					.addBindingLayout(m_BindingLayout));
+			pipeline = device->createComputePipeline(
+				nvrhi::ComputePipelineDesc()
+				.setComputeShader(shader)
+				.addBindingLayout(m_BindingLayout));
+			if (!pipeline) {
+				logger::error("ReSTIRGIPass::CreatePipeline - Failed to create {} pipeline.", stageName);
 			}
-		}
+		};
+
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRGI/GITemporalResampling.hlsl", "temporal resampling", m_TemporalShader, m_TemporalPipeline);
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRGI/GISpatialResampling.hlsl", "spatial resampling", m_SpatialShader, m_SpatialPipeline);
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRGI/GIFusedResampling.hlsl", "fused spatiotemporal resampling", m_FusedShader, m_FusedPipeline);
+		createPipeline(L"data/shaders/raytracing/RTXDI/ReSTIRGI/GIFinalShading.hlsl", "final shading", m_FinalShadingShader, m_FinalShadingPipeline);
 	}
 
 	void ReSTIRGIPass::ResolutionChanged(uint2 resolution)

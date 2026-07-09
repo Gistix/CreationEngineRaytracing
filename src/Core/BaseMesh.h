@@ -153,12 +153,12 @@ protected:
 	BLASCluster* m_Cluster = nullptr;
 
 	// Cached world transform from BSTriShape, refreshed in Update().
-	float3x4 m_Transform;
-	float3x4 m_PrevTransform;
+	float3x4 m_Transform = Constants::kIdentityTransform;
+	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 
 	// Local to the BLASCluster
-	float3x4 m_LocalTransform;
-	float3x4 m_PrevLocalTransform;
+	float3x4 m_LocalTransform = Constants::kIdentityTransform;
+	float3x4 m_PrevLocalTransform = Constants::kIdentityTransform;
 
 	RE::NiBound m_WorldBound;
 

@@ -1094,6 +1094,7 @@ struct StandardBSDF
             Random(randomSeed),
             Random(randomSeed)
         );
+        
         float3 wi = brdfContext.ViewDirection;
         float3 N = surface.Normal;
 
@@ -1131,6 +1132,11 @@ struct StandardBSDF
             result.wo = surface.FromLocal(woLocal);
             return valid;
         }
+    }
+
+    bool SampleBSDF(const BRDFContext brdfContext, const LightingMaterialData material, const Surface surface, out BSDFSample result, inout uint randomSeed)
+    {
+        return SampleBSDF(brdfContext, material.Feature, surface, result, randomSeed);
     }
 
     float EvalPdf(const BRDFContext brdfContext, const Surface surface, const float3 wo)

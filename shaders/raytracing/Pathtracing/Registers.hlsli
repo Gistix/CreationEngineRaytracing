@@ -97,6 +97,8 @@ StructuredBuffer<float3>                    PrevPositions[]             : regist
 TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
 StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
 Texture2D<float4>                           SkinDetailNormal            : register(t8);
+Texture2D<float4>                           WaterDisplacementMap        : register(t9);
+Texture2D<float4>                           ProjNoiseMap                : register(t10);
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);

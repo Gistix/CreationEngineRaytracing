@@ -78,6 +78,8 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
+			nvrhi::BindingLayoutItem::Texture_SRV(9),           // Water displacement
+			nvrhi::BindingLayoutItem::Texture_SRV(10),          // Projection noise
 			nvrhi::BindingLayoutItem::Texture_UAV(0),           // Color output
 			nvrhi::BindingLayoutItem::Texture_UAV(1),           // Normal Roughness
 			nvrhi::BindingLayoutItem::Texture_UAV(2),           // MotionVectors (RWTexture2D<float4>)
@@ -311,6 +313,8 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(7, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(9, renderer->GetWaterDisplacementTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(1, rts->normalRoughness),
 			nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::MotionVectors3D)),

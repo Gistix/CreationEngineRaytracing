@@ -606,6 +606,7 @@ namespace Hooks
 		{
 		case RE::RENDER_TARGETS::kMOTION_VECTOR:
 		case RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT:
+		case RE::RENDER_TARGETS::kWATER_DISPLACEMENT:
 			break;
 		default:
 			func(a_renderer, a_target, a_RenderTarget, a_properties);
@@ -833,6 +834,13 @@ namespace Hooks
 		func(pass, technique, alphaTest, renderFlags);
 	}
 
+	void* DrawWorld_BuildSceneLists::thunk()
+	{
+		if (Scene::GetSingleton()->ApplyPathTracingCull())
+			return nullptr;
+		return func();
+	}
+
 	struct BGSTerrainBlock_Load
 	{
 		static RE::BGSTerrainBlock* thunk(RE::BGSTerrainBlock* a_block, RE::BGSTerrainManager* a_terrainManager, RE::BSStream* a_stream, int32_t a4, int32_t a5)
@@ -1058,10 +1066,13 @@ namespace Hooks
 
 		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100854, 107644));
 
+		//stl::detour_thunk<DrawWorld_BuildSceneLists>(REL::RelocationID(35630, 36643));
+
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
+		scene->g_DisplacementMeshPos = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(516235, 402400).address());
 
 		REL::Relocation<float*> g_Time{ REL::RelocationID(513213, 390953) };
 		scene->g_Time = g_Time.get();

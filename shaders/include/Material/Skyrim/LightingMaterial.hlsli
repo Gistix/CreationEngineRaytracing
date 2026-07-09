@@ -36,6 +36,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     
     const bool skinEnabled = (material.Type == Type::Lighting) &&
         (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint) &&
+        !(mesh.Properties.AlphaFlags & AlphaFlags::Additive) &&
         SKINSETTINGS.skinParams.w > 0.0f;
     
     const bool isTruePBR = material.Type == Type::TruePBR;
@@ -530,14 +531,14 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     [branch]
     if (mesh.Properties.ShaderFlags & ShaderFlags::kProjectedUV)
     {
-        const float4 projectedUVParams = mesh.Properties.ProjectedUVParams0;
-        const float4 projectedUVParams2 = mesh.Properties.ProjectedUVParams1;
-        const float4 projectedUVParams3 = mesh.Properties.ProjectedUVParams2;
+        const float4 projectedUVParams = mesh.Properties.ProjectedUVParams;
+        const float4 projectedUVParams2 = mesh.Properties.ProjectedUVParams2;
+        const float4 projectedUVParams3 = mesh.Properties.ProjectedUVParams3;
             
         float3 triWeights = Triplanar::GetWeights(surface.GeomNormal, surface.FaceNormal);
-        float projNoise = Triplanar::Sample(Textures[0], DefaultSampler, mipLevel, surface.Position, triWeights, projectedUVParams.z).x;
-            
-        float3 texProj = mesh.Properties.ProjectedUVParams3.xyz;
+        float projNoise = Triplanar::Sample(ProjNoiseMap, DefaultSampler, mipLevel, surface.Position, triWeights, projectedUVParams.z).x;
+
+        float3 texProj = mesh.Properties.TextureProj.xyz;
              
         float vertexAlpha;
         if ((mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim) || (mesh.Properties.ShaderFlags & ShaderFlags::kHDLODObjects))

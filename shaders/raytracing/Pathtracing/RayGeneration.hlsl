@@ -394,6 +394,7 @@ void Main()
             Camera.Position.xyz, sourceDirection, sourcePayload.hitDistance,
             buildSceneLength, buildThp, buildMVs, buildImageXform, buildRoughnessAccum,
             sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant,
+            sourceMaterial,
             sourceInstance, randomSeed,
             buildInsideWater, buildWaterAbsorption);
 
@@ -444,6 +445,7 @@ void Main()
                 hitResult.nextRayOrigin, hitResult.nextRayDir, buildPayload.hitDistance,
                 buildSceneLength, hitResult.nextThp, buildMVs, hitResult.nextImageXform,
                 hitResult.nextRoughnessAccum, buildSurface, buildBrdfCtx, buildBsdf, buildIsDominant,
+                buildMaterial,
                 buildInstance, randomSeed,
                 hitResult.nextInsideWater, hitResult.nextWaterAbsorption);
         }
@@ -506,6 +508,7 @@ void Main()
                     ep.rayOrigin, ep.rayDir, expPayload.hitDistance,
                     expSceneLength, ep.throughput, ep.motionVectors, ep.imageXform,
                     ep.roughnessAccum, expSurface, expBrdfCtx, expBsdf, buildIsDominant,
+                    expMaterial,
                     expInstance, randomSeed,
                     ep.insideWaterVolume, ep.waterVolumeAbsorption);
 
@@ -552,6 +555,7 @@ void Main()
                         expHitResult.nextRayOrigin, expHitResult.nextRayDir, contPayload.hitDistance,
                         expSceneLength, expHitResult.nextThp, ep.motionVectors, expHitResult.nextImageXform,
                         expHitResult.nextRoughnessAccum, contSurface, contBrdfCtx, contBsdf, buildIsDominant,
+                        contMaterial,
                         contInstance, randomSeed,
                         expHitResult.nextInsideWater, expHitResult.nextWaterAbsorption);
                 }
@@ -1106,8 +1110,6 @@ void Main()
             float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.gridParameters);
             bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
             
-            const bool oldValidHit = isValidHit;
-            
             if (isValidHit) {
                 materialRoughnessPrev = min(materialRoughnessPrev, 0.99f);
                 float a2 = materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev;
@@ -1228,8 +1230,7 @@ void Main()
         
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE        
 #   if defined(NRD)
-        float normHitDist = accumulatedHitDist;
-        normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
+        float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
         
         if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        

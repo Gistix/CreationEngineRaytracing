@@ -2,6 +2,7 @@
 
 #include "Core/MaterialManager.h"
 #include "Renderer.h"
+#include "Scene.h"
 #include "Util.h"
 
 WaterMaterial::WaterMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
@@ -28,23 +29,20 @@ void WaterMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 
 	auto waterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
 
-	waterData->ShallowColor = half4(
-		waterMaterial->shallowWaterColor.red,
-		waterMaterial->shallowWaterColor.green,
-		waterMaterial->shallowWaterColor.blue,
-		1.0f);
+	waterData->ShallowColor = Util::Math::Float3(waterMaterial->shallowWaterColor);
 
-	waterData->Amplitude0 = waterMaterial->amplitudeA[0];
-	waterData->Amplitude1 = waterMaterial->amplitudeA[1];
-	waterData->Amplitude2 = waterMaterial->amplitudeA[2];
+	waterData->NormalScroll1 = Util::Math::Float2(waterMaterial->normalScroll1);
+	waterData->NormalScroll2 = Util::Math::Float2(waterMaterial->normalScroll2);
+	waterData->NormalScroll3 = Util::Math::Float2(waterMaterial->normalScroll3);
 
-	waterData->NormalScrolls = half4(
-		waterMaterial->normalScroll1.x, waterMaterial->normalScroll1.y,
-		waterMaterial->normalScroll2.x, waterMaterial->normalScroll2.y);
-	waterData->NormalScroll3AndScale = half4(
-		waterMaterial->normalScroll3.x, waterMaterial->normalScroll3.y,
-		waterMaterial->uvScaleA[0], waterMaterial->uvScaleA[1]);
-	waterData->UVScaleAndObjectUV.x = waterMaterial->uvScaleA[2];
+	waterData->UVScale1 = waterMaterial->uvScaleA[0];
+	waterData->UVScale2 = waterMaterial->uvScaleA[1];
+	waterData->UVScale3 = waterMaterial->uvScaleA[2];
+
+	waterData->Amplitude1 = waterMaterial->amplitudeA[0];
+	waterData->Amplitude2 = waterMaterial->amplitudeA[1];
+	waterData->Amplitude3 = waterMaterial->amplitudeA[2];
+	waterData->Amplitude4 = waterMaterial->displacementDampener;
 }
 
 void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
@@ -55,15 +53,15 @@ void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	auto waterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
 	auto waterData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_NormalTexture0.Update(waterMaterial->normalTexture1, defaultNormal))
-		waterData->NormalsTexture0 = m_NormalTexture0.texture.GetDescriptorIndex();
-
-	if (m_NormalTexture1.Update(waterMaterial->normalTexture2, defaultNormal))
+	if (m_NormalTexture1.Update(waterMaterial->normalTexture1, defaultNormal))
 		waterData->NormalsTexture1 = m_NormalTexture1.texture.GetDescriptorIndex();
 
-	if (m_NormalTexture2.Update(waterMaterial->normalTexture3, defaultNormal))
+	if (m_NormalTexture2.Update(waterMaterial->normalTexture2, defaultNormal))
 		waterData->NormalsTexture2 = m_NormalTexture2.texture.GetDescriptorIndex();
 
-	if (m_NormalTexture3.Update(waterMaterial->normalTexture4, defaultNormal))
-		waterData->FlowmapTexture = m_NormalTexture3.texture.GetDescriptorIndex();
+	if (m_NormalTexture3.Update(waterMaterial->normalTexture3, defaultNormal))
+		waterData->NormalsTexture3 = m_NormalTexture3.texture.GetDescriptorIndex();
+
+	if (m_NormalTexture4.Update(waterMaterial->normalTexture4, defaultNormal))
+		waterData->NormalsTexture4 = m_NormalTexture4.texture.GetDescriptorIndex();
 }
