@@ -76,6 +76,7 @@ class Renderer
 	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;
+	nvrhi::TextureHandle m_WaterDisplacementTexture;
 
 	uint64_t m_FrameIndex = 0;
 
@@ -210,6 +211,7 @@ public:
 
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();
+	nvrhi::ITexture* GetWaterDisplacementTexture();
 
 	inline auto GetLastSubmittedFence() const { return m_LastSubmittedInstance; }
 

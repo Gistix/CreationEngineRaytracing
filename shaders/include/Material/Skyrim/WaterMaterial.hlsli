@@ -24,8 +24,6 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     const bool hasBlendNormals = true;
     const bool hasNormalTexcoord = (mesh.Properties.WaterFlags & WaterFlags::kVertexUV) != 0;
 
-    const bool hasWading = false;
-
     const bool hasVertexColor = false;
 
     const float scale = 0.001f;
@@ -60,22 +58,10 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
     if (hasFlowMap)
     {
-        float4 flowCoord = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-        if (hasWading)
-        {
-            flowCoord.xy =
-                ((-0.5 + texCoord0.xy) * 0.1 + cellTexCoordOffset.xy) +
-                float2(cellTexCoordOffset.z,
-                       -cellTexCoordOffset.w + objectUV.x) / objectUV.xx;
-
-            flowCoord.zw = -0.25 + (texCoord0.xy * 0.5 + objectUV.yz);
-        }
-        else
-        {
-            flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
-            flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
-        }
+        float4 flowCoord;
+        flowCoord.xy = (cellTexCoordOffset.xy + texCoord0.xy) / objectUV.xx;
+        flowCoord.zw = (cellTexCoordOffset.zw + texCoord0.xy);
 
         const float flowScroll = Camera.Time;
 
@@ -100,6 +86,16 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
         float3 flowmapNormal = float3(((-0.5 + flowmapNormalWeighted) / (flowmapDenominator.x * flowmapDenominator.y)), 0);
         flowmapNormal.z = sqrt(1 - flowmapNormal.x * flowmapNormal.x - flowmapNormal.y * flowmapNormal.y);
+
+        // Always enabled for flowmapped water, since we do not render the displacement water mesh
+        {   
+            // Project UV from displacement mesh position and size
+            float2 displacementUv = ((surface.Position.xy - Raytracing.WaterDisplacementPosition.xy) + 1024.0) / 2048.0;
+            displacementUv.y = 1.0f - displacementUv.y;
+            
+            float3 displacement = normalize(float3(water.Amplitude4 * (-0.5 + WaterDisplacementMap.SampleLevel(ClampSampler, displacementUv, mipLevel).zw), 0.04));
+            flowmapNormal = lerp(displacement, flowmapNormal, displacement.z);
+        }
 
         surface.Normal = normalize(flowmapNormal);
     } else

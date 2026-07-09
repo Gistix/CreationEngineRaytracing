@@ -59,6 +59,8 @@ namespace Pass
 				scene->g_DisplacementMeshFlowCellOffset->x,
 				1.0f - scene->g_DisplacementMeshFlowCellOffset->y
 			};
+
+			m_RaytracingData->WaterDisplacementPosition = Util::Math::Float2(*scene->g_DisplacementMeshPos);
 		}
 
 		m_RaytracingData->HitDistSettings = float4(

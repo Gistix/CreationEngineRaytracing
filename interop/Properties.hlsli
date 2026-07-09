@@ -48,6 +48,9 @@ namespace WaterFlags
     static const uint16_t kVertexUV = (1 << 2);
     static const uint16_t kEnableFlowmap = (1 << 3);
     static const uint16_t kBlendNormals = (1 << 4);
+    static const uint16_t kDisplacement = (1 << 5);
+    static const uint16_t kVertexAlphaDepth = (1 << 6);
+    static const uint16_t kDepth = (1 << 7);
 }
 #endif
 

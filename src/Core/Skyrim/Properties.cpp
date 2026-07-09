@@ -55,9 +55,11 @@ Properties::Properties(RE::BSTriShape* triShape)
 			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 			m_Data.WaterFlags = MapWaterShaderFlags(waterShaderProperty);
 
-			int32_t flowMapSize = *Scene::GetSingleton()->g_FlowMapSize;
+			auto scene = Scene::GetSingleton();
 
-			// CellTexCoordOffset
+			int32_t flowMapSize = *scene->g_FlowMapSize;
+
+			// CellTexCoordOffset - Flowmap
 			m_Data.ProjectedUVParams0 = {
 				static_cast<float>(waterShaderProperty->flowX),
 				static_cast<float>(flowMapSize - waterShaderProperty->flowY - 1),
@@ -184,6 +186,9 @@ uint16_t Properties::MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderP
 	if (waterFlags & WaterFlags::kVertexUV) result |= kWaterVertexUV;
 	if (waterFlags & WaterFlags::kEnableFlowmap) result |= kWaterEnableFlowmap;
 	if (waterFlags & WaterFlags::kBlendNormals) result |= kWaterBlendNormals;
+	if (waterFlags & WaterFlags::kDisplacement) result |= kWaterDisplacement;
+	if (waterFlags & WaterFlags::kVertexAlphaDepth) result |= kWaterVertexAlphaDepth;
+	if (waterFlags & WaterFlags::kDepth) result |= kWaterDepth;
 
 	return result;
 }
