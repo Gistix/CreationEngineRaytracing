@@ -98,16 +98,21 @@ Properties::Properties(RE::BSTriShape* triShape)
 
 					const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
 
-					auto renderFlags = 0;
-					bool enableProjectedNormals = iniSettings.enableProjecteUVDiffuseNormals && (!(renderFlags & 0x8) || !iniSettings.enableProjecteUVDiffuseNormalsOnCubemap);
+					// All yoinked from Nukem 
+					// https://github.com/Nukem9/skyrimse-test/blob/328916305165a46c4e4b527735bbcfd46b09a0ca/skyrim64_test/src/patches/TES/BSShader/Shaders/BSLightingShader.cpp#L883
+					{
+						auto renderFlags = 0;
+						bool enableProjectedNormals = iniSettings.enableProjecteUVDiffuseNormals && (!(renderFlags & 0x8) || !iniSettings.enableProjecteUVDiffuseNormalsOnCubemap);
 
-					m_Data.ProjectedUVParams2 = half4(
-						iniSettings.projectedUVDiffuseNormalTilingScale,
-						iniSettings.projectedUVNormalDetailTilingScale,
-						0.0f,
-						enableProjectedNormals ? 1.0f : 0.0f
-					);
+						m_Data.ProjectedUVParams2 = half4(
+							iniSettings.projectedUVDiffuseNormalTilingScale,
+							iniSettings.projectedUVNormalDetailTilingScale,
+							0.0f,
+							enableProjectedNormals ? 1.0f : 0.0f
+						);
+					}
 
+					// Texture Projection - Non-Default if BSGeometry::IsMultiIndexTriShape() is true
 					m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 1.0f, 0.0f);
 				}
 			}
