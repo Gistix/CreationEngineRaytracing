@@ -26,6 +26,7 @@ struct PBRLandscapeMaterial : public MaterialBase
 	MaterialTexture m_SpecularBackLightingTexture;
 	MaterialTexture m_BaseColorTextures[6];
 	MaterialTexture m_NormalTextures[6];
+	MaterialTexture m_DisplacementTextures[6];
 	MaterialTexture m_RMAOSTextures[6];
 	MaterialTexture m_OverlayTexture;
 	MaterialTexture m_NoiseTexture;
