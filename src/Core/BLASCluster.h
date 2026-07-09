@@ -38,8 +38,8 @@ class BLASCluster
 
 	eastl::string m_Name;
 
-	float3x4 m_Transform;
-	float3x4 m_PrevTransform;
+	float3x4 m_Transform = Constants::kIdentityTransform;
+	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 
 	// cached translation of m_InstanceTransform, invalid when transform changes
 	float3 m_ClusterPosition;
