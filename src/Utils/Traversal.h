@@ -98,6 +98,13 @@ namespace Util
 			if (!a_object)
 				return result;
 
+			if (Util::Adapter::IsNiAVObjectHidden(a_object))
+				return result;
+
+			// Early return for TriShapes — most common actionable leaf
+			if (auto geom = Util::Adapter::AsTriShape(a_object))
+				return a_func(geom, parentRefr);
+
 			auto rtti = a_object->GetRTTI();
 
 			if (rtti == Constants::rtti::NiBillboardNode.get())
@@ -106,44 +113,44 @@ namespace Util
 			if (rtti == Constants::rtti::BSOrderedNode.get())
 				return result;
 
-			if (Util::Adapter::IsNiAVObjectHidden(a_object))
-				return result;
-
-			// Early return for TriShapes — most common actionable leaf
-			if (auto geom = Util::Adapter::AsTriShape(a_object))
-				return a_func(geom, parentRefr);
-
 			// Only nodes can have children or be FadeNodes
 			if (auto node = Util::Adapter::AsNode(a_object))
 			{
-				// Propagate owner refr through FadeNodes
-				auto refr = parentRefr;
-				if (rtti == Constants::rtti::BSFadeNode.get())
-					if (auto owner = Util::Adapter::GetOwner(a_object))
-						refr = owner;
+				auto& children = Util::Adapter::GetChildren(node);
+				if (auto switchNode = node->AsSwitchNode()) {
+					auto index = static_cast<uint16_t>(switchNode->index);
+					result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr);
+				}
+				else {
+					// Propagate owner refr through FadeNodes
+					auto refr = parentRefr;
+					if (rtti == Constants::rtti::BSFadeNode.get()) {
+						if (auto owner = Util::Adapter::GetOwner(a_object))
+							refr = owner;
+					}
+					else if (rtti == Constants::rtti::ShadowSceneNode.get()) {
+						auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
+						if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+							// Iterate over PortalGraph always render children
+							// This list contains rendered nodes that are outside of the normal SceneGraph
+							for (auto& child : portalGraph->alwaysRenderChildren)
+							{
+								// Only those who are outside the Scenegraph
+								if (child->parent)
+									continue;
 
-				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
-					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
-					if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
-						// Iterate over PortalGraph always render children
-						// This list contains rendered nodes that are outside of the normal SceneGraph
-						for (auto& child : portalGraph->alwaysRenderChildren)
-						{
-							// Only those who are outside the Scenegraph
-							if (child->parent)
-								continue;
-
-							result = ScenegraphTriShapes(child.get(), a_func, refr);
-							if (result == CESEAdapter::RE::BSVisitControl::kStop)
-								break;
+								result = ScenegraphTriShapes(child.get(), a_func, refr);
+								if (result == CESEAdapter::RE::BSVisitControl::kStop)
+									break;
+							}
 						}
 					}
-				}
 
-				for (auto& child : Util::Adapter::GetChildren(node)) {
-					result = ScenegraphTriShapes(child.get(), a_func, refr);
-					if (result == CESEAdapter::RE::BSVisitControl::kStop)
-						break;
+					for (auto& child : children) {
+						result = ScenegraphTriShapes(child.get(), a_func, refr);
+						if (result == CESEAdapter::RE::BSVisitControl::kStop)
+							break;
+					}
 				}
 			}
 
