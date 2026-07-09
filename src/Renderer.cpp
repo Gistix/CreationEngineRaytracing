@@ -589,7 +589,7 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeResource, textureDesc);
 }
 
-nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown)
+nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
 {
 	if (!d3d11Texture) {
 		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");
