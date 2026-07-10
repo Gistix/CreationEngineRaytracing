@@ -39,20 +39,13 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 	return { bsTriShape->name.c_str() };
 }
 
-void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform, bool isClusterOrigin)
+void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
-	const auto isOrigin = float3(m_Transform._14, m_Transform._24, m_Transform._34) == float3::Zero;
-	if (isOrigin && !isClusterOrigin) {
-		m_LocalTransform = Constants::kIdentityTransform;
-		m_PrevLocalTransform = Constants::kIdentityTransform;
-	}
-	else {
-		XMStoreFloat3x4(&m_LocalTransform,
-			XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
+	XMStoreFloat3x4(&m_LocalTransform,
+		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
 
-		XMStoreFloat3x4(&m_PrevLocalTransform,
-			XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
-	}
+	XMStoreFloat3x4(&m_PrevLocalTransform,
+		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
 
 	for (auto& desc: m_GeometryDescs)
 	{

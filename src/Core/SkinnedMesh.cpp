@@ -79,9 +79,9 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	InitDismemberSkin(skinInstance);
 }
 
-void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform, bool isClusterOrigin)
+void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
-	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform, isClusterOrigin);
+	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform);
 
 	if (m_Flags.all(Flags::DismemberSkinInstance)) {
 		for (auto& desc : m_VisibleGeometryDescs)

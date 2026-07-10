@@ -162,8 +162,6 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 	const auto invTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_Transform));
 	const auto invPrevTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_PrevTransform));
 
-	const auto isOrigin = float3(m_Transform._14, m_Transform._24, m_Transform._34) == float3::Zero;
-
 	uint32_t meshCount = meshStart;
 
 	m_GeometryDescs.clear();
@@ -177,7 +175,7 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 
 		GrowBounds(mesh->GetWorldBound());
 
-		mesh->UpdateLocalTransform(invTransform, invPrevTransform, isOrigin);
+		mesh->UpdateLocalTransform(invTransform, invPrevTransform);
 
 		const auto& descs = mesh->GetGeometryDescs();
 		if (descs.empty())
