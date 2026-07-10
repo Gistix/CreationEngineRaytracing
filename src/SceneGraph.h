@@ -23,6 +23,8 @@
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
 
+#include <shared_mutex>
+
 class LandLODMesh;
 
 class SceneGraph
@@ -81,8 +83,10 @@ class SceneGraph
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
+	std::shared_mutex m_OwnerClusterMutex;
+	std::shared_mutex m_OrphanClusterMutex;
+
 	mutable std::mutex m_ClusterDirtyMutex;
-	mutable std::mutex m_ClusterMutex;
 
 	ThreadPool m_ThreadPool;
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
@@ -91,6 +95,8 @@ class SceneGraph
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
+	template <typename Key, typename Map>
+	BLASCluster* GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a_mutex, Key a_key, RE::TESObjectREFR* a_owner);
 
 	struct PerThreadResult
 	{

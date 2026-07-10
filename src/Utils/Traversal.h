@@ -87,10 +87,11 @@ namespace Util
 			return result;
 		}
 
-		// A custom visit controller built to pass down visibility and owner reference
+		// A custom visit controller built to propagate down the "owning" TESObjectREFR
+		template <typename Func>
 		static CESEAdapter::RE::BSVisitControl ScenegraphTriShapes(
 			RE::NiAVObject* a_object, 
-			std::function<CESEAdapter::RE::BSVisitControl(RE::BSTriShape*, RE::TESObjectREFR*)> a_func, 
+			Func&& a_func,
 			RE::TESObjectREFR* parentRefr = nullptr)
 		{
 			auto result = CESEAdapter::RE::BSVisitControl::kContinue;

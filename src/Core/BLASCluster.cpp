@@ -20,6 +20,7 @@ BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
 
 void BLASCluster::AddMember(BaseMesh* mesh)
 {
+	std::scoped_lock lock(m_MemberMutex);
 	auto [it, inserted] = m_MemberSet.emplace(mesh);
 	if (!inserted)
 		return;
@@ -32,6 +33,7 @@ void BLASCluster::AddMember(BaseMesh* mesh)
 
 void BLASCluster::RemoveMember(BaseMesh* mesh)
 {
+	std::scoped_lock lock(m_MemberMutex);
 	const bool removed = m_MemberSet.erase(mesh);
 	if (!removed)
 		return;

@@ -403,7 +403,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_CurrentVisible.clear();
 	m_CurrentVisible.reserve(m_DirectMeshes.size());
+
 	m_UpdateList.clear();
+	m_UpdateList.reserve(m_DirectMeshes.size());
+
 	m_CreateList.clear();
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
@@ -460,6 +463,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		if (totalWork > 0) {
 			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
 
+			logger::info("Total Work: {}, Chunk Size: {}", totalWork, chunkSize);
+
 			for (size_t start = 0; start < totalWork; start += chunkSize) {
 				size_t end = std::min(start + chunkSize, totalWork);
 
@@ -468,6 +473,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						doUpdate(m_UpdateList[i]);
 				});
 			}
+
+			logger::info("All enqueued.");
 
 			m_ThreadPool.WaitAll();
 		}
@@ -563,11 +570,15 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	}
 	auto tHide = std::chrono::high_resolution_clock::now();
 
+	logger::info("Hide: {}", std::chrono::duration<float, std::milli>(tHide - tStart).count());
+
 	m_PreviousVisible = eastl::move(m_CurrentVisible);
 
 	// Phase E: Material flush
 	m_MaterialManager->Flush(commandList);
 	auto tFlush = std::chrono::high_resolution_clock::now();
+
+	logger::info("Flush: {}", std::chrono::duration<float, std::milli>(tFlush - tHide).count());
 
 	// Drop clusters whose meshes were all destroyed this frame.
 	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
@@ -588,6 +599,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			++it;
 	}
 	auto tCleanup = std::chrono::high_resolution_clock::now();
+
+	logger::info("Cleanup: {}", std::chrono::duration<float, std::milli>(tCleanup - tFlush).count());
 
 	// Phase E1 (serial): pre-compute per-cluster array offsets
 	struct ClusterWork { BLASCluster* cluster; uint32_t meshStart; uint32_t instanceIndex; };
@@ -640,11 +653,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	auto tProcess = std::chrono::high_resolution_clock::now();
 
-	logger::info("Hide: {}  Flush: {}  Cleanup: {}  Process: {}",
-		std::chrono::duration<float, std::milli>(tHide - tStart).count(),
-		std::chrono::duration<float, std::milli>(tFlush - tHide).count(),
-		std::chrono::duration<float, std::milli>(tCleanup - tFlush).count(),
-		std::chrono::duration<float, std::milli>(tProcess - tCleanup).count());
+	logger::info("Process: {}", std::chrono::duration<float, std::milli>(tProcess - tCleanup).count());
 
 	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
 		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
@@ -676,26 +685,38 @@ bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
 	return false;
 }
 
+template <typename Key, typename Map>
+BLASCluster* SceneGraph::GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a_mutex, Key a_key, RE::TESObjectREFR* a_owner)
+{
+	{
+		std::shared_lock lock(a_mutex);
+		auto it = a_map.find(a_key);
+		if (it != a_map.end())
+			return it->second.get();
+	}
+
+	BLASCluster* result = nullptr;
+	bool didInsert = false;
+	{
+		std::unique_lock lock(a_mutex);
+		auto [it, inserted] = a_map.try_emplace(a_key, nullptr);
+		if (inserted)
+			it->second = eastl::make_unique<BLASCluster>(a_owner);
+		result = it->second.get();
+		didInsert = inserted;
+	} // exclusive lock released here
+
+	if (didInsert)
+		MarkClusterDirty(result); // separate mutex, safe outside the cluster lock
+
+	return result;
+}
+
 BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape)
 {
-	std::scoped_lock lock(m_ClusterMutex);
-
-	if (owner) {
-		auto& slot = m_OwnerClusters[owner];
-		if (!slot) {
-			slot = eastl::make_unique<BLASCluster>(owner);
-			MarkClusterDirty(slot.get());
-		}
-		return slot.get();
-	}
-	
-	auto& slot = m_OrphanClusters[bsTriShape];
-	if (!slot) {
-		slot = eastl::make_unique<BLASCluster>(nullptr);
-		MarkClusterDirty(slot.get());
-	}
-	return slot.get();
-
+	return owner
+		? GetOrCreateClusterImpl(m_OwnerClusters, m_OwnerClusterMutex, owner, owner)
+		: GetOrCreateClusterImpl(m_OrphanClusters, m_OrphanClusterMutex, bsTriShape, nullptr);
 }
 
 void SceneGraph::MarkClusterDirty(BLASCluster* cluster)

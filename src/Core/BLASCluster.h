@@ -6,6 +6,8 @@
 #include "Instance.hlsli"
 #include "Light.hlsli"
 
+#include <mutex>
+
 class SceneGraph;
 
 struct Light;
@@ -31,6 +33,7 @@ class BLASCluster
 
 	eastl::vector<BaseMesh*> m_Members;
 	eastl::hash_set<BaseMesh*> m_MemberSet;
+	mutable std::mutex m_MemberMutex;
 
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
