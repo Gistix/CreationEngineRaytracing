@@ -484,7 +484,8 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 	m_FrameIndex++;
 
-	slot.commandList = GetGraphicsCommandList();
+	if (!slot.commandList)
+		slot.commandList = GetGraphicsCommandList();
 	slot.commandList->open();
 
 	m_CommandList = slot.commandList;

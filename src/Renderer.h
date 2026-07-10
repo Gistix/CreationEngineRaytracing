@@ -188,6 +188,7 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Graphics)
 			.setEnableImmediateExecution(false)
+			.setScratchChunkSize(16 * 1024 * 1024)
 		);
 	}
 
@@ -196,6 +197,7 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Compute)
 			.setEnableImmediateExecution(false)
+			.setScratchChunkSize(16 * 1024 * 1024)
 		);
 	}
 
@@ -204,6 +206,7 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Copy)
 			.setEnableImmediateExecution(false)
+			.setScratchChunkSize(16 * 1024 * 1024)
 		);
 	}
 

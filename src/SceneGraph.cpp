@@ -413,8 +413,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	// Phase A: Fast traversal — collect into update/create lists, skip heavy processing
 	{
-		auto cpuStart = std::chrono::high_resolution_clock::now();
-
 		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
 		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
 			auto it = m_DirectMeshes.find(bsTriShape);
@@ -427,9 +425,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			}
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 		});
-
-		auto cpuEnd = std::chrono::high_resolution_clock::now();
-		logger::info("Traversal Time: {}", std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
 	}
 
 	// Phase B (parallel): Update known meshes via thread pool
@@ -458,12 +453,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			mesh->Update(commandList);
 		};
 
-		auto cpuStart = std::chrono::high_resolution_clock::now();
-
 		if (totalWork > 0) {
 			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
-
-			logger::info("Total Work: {}, Chunk Size: {}", totalWork, chunkSize);
 
 			for (size_t start = 0; start < totalWork; start += chunkSize) {
 				size_t end = std::min(start + chunkSize, totalWork);
@@ -474,13 +465,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				});
 			}
 
-			logger::info("All enqueued.");
-
 			m_ThreadPool.WaitAll();
 		}
-
-		auto cpuEnd = std::chrono::high_resolution_clock::now();
-		logger::info("Update Time: {}", std::chrono::duration<float, std::milli>(cpuEnd - cpuStart).count());
 	}
 
 	// Phase C (serial): Create new meshes
@@ -556,8 +542,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 	}
 
-	auto tStart = std::chrono::high_resolution_clock::now();
-
 	// Phase D: Hide meshes whose trishapes were not visited by the traversal this frame
 	for (auto& mesh : m_PreviousVisible) {
 		if (mesh->GetLastVisitedFrame() != frameIndex) {
@@ -568,17 +552,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			}
 		}
 	}
-	auto tHide = std::chrono::high_resolution_clock::now();
-
-	logger::info("Hide: {}", std::chrono::duration<float, std::milli>(tHide - tStart).count());
 
 	m_PreviousVisible = eastl::move(m_CurrentVisible);
 
 	// Phase E: Material flush
 	m_MaterialManager->Flush(commandList);
-	auto tFlush = std::chrono::high_resolution_clock::now();
-
-	logger::info("Flush: {}", std::chrono::duration<float, std::milli>(tFlush - tHide).count());
 
 	// Drop clusters whose meshes were all destroyed this frame.
 	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
@@ -598,9 +576,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		else
 			++it;
 	}
-	auto tCleanup = std::chrono::high_resolution_clock::now();
-
-	logger::info("Cleanup: {}", std::chrono::duration<float, std::milli>(tCleanup - tFlush).count());
 
 	// Phase E1 (serial): pre-compute per-cluster array offsets
 	struct ClusterWork { BLASCluster* cluster; uint32_t meshStart; uint32_t instanceIndex; };
@@ -651,10 +626,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 	}
 
-	auto tProcess = std::chrono::high_resolution_clock::now();
-
-	logger::info("Process: {}", std::chrono::duration<float, std::milli>(tProcess - tCleanup).count());
-
 	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
 		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
 
@@ -666,8 +637,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
-	auto tWrite = std::chrono::high_resolution_clock::now();
-	logger::info("Writes: {}", std::chrono::duration<float, std::milli>(tWrite - tProcess).count());
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
