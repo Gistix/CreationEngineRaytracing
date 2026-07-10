@@ -408,6 +408,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_UpdateList.reserve(m_DirectMeshes.size());
 
 	m_CreateList.clear();
+	m_CreateCandidates.clear();
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
@@ -427,10 +428,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		});
 	}
 
-	// Phase B (parallel): Update known meshes via thread pool
+	// Phase B + C1 (parallel): Update known meshes AND filter new meshes via thread pool
 	{
 		const size_t numWorkers = m_ThreadPool.GetThreadCount();
 		const size_t totalWork = m_UpdateList.size();
+		const size_t totalCreate = m_CreateList.size();
 
 		auto doUpdate = [&](auto& entry) {
 			auto& [mesh, refr] = entry;
@@ -453,6 +455,66 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			mesh->Update(commandList);
 		};
 
+		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
+			for (size_t i = start; i < end; ++i) {
+				auto& [bsTriShape, refr] = m_CreateList[i];
+
+				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
+					continue;
+
+				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
+				auto* shaderProperty = geometryData.shaderProperty;
+				if (!shaderProperty)
+					continue;
+
+				const auto materialType = shaderProperty->GetMaterialType();
+				const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
+				const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
+				const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+
+				auto* alphaProperty = geometryData.alphaProperty;
+				const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+				const bool validEffect = isEffectShader && !isAlphaBlend;
+
+				// Exclude procedural and displacement water
+				if (isWaterShader) {
+					auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
+					const auto waterFlags = waterShaderProperty->waterFlags.underlying();
+
+					if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
+						continue;
+				}
+
+				if (!isLightingShader && !validEffect && !isWaterShader)
+					continue;
+
+				// Exclude tree lod and grass for now
+				const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+				if (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get() ||
+				    shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get())
+					continue;
+
+				if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
+					continue;
+
+				const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
+				if (!skinned) {
+					const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+					if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
+						continue;
+				}
+
+				const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+				if (!rendererData)
+					continue;
+
+				out.push_back({ bsTriShape, refr });
+			}
+		};
+
+		eastl::vector<eastl::vector<MeshCreateCandidate>> perWorkerCandidates(numWorkers);
+		bool anyDispatched = false;
+
 		if (totalWork > 0) {
 			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
 
@@ -465,64 +527,34 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				});
 			}
 
-			m_ThreadPool.WaitAll();
+			anyDispatched = true;
 		}
+
+		if (totalCreate > 0) {
+			const size_t chunkSize = (totalCreate + numWorkers - 1) / numWorkers;
+
+			for (size_t start = 0; start < totalCreate; start += chunkSize) {
+				size_t end = std::min(start + chunkSize, totalCreate);
+				const size_t idx = start / chunkSize;
+
+				m_ThreadPool.Enqueue([&, start, end, idx]() {
+					doFilter(start, end, perWorkerCandidates[idx]);
+				});
+			}
+
+			anyDispatched = true;
+		}
+
+		if (anyDispatched)
+			m_ThreadPool.WaitAll();
+
+		m_CreateCandidates.clear();
+		for (auto& wc : perWorkerCandidates)
+			m_CreateCandidates.insert(m_CreateCandidates.end(), wc.begin(), wc.end());
 	}
 
-	// Phase C (serial): Create new meshes
-	for (auto& [bsTriShape, refr] : m_CreateList) {
-		if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
-			continue;
-
-		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
-		auto* shaderProperty = geometryData.shaderProperty;
-		if (!shaderProperty)
-			continue;
-
-		const auto materialType = shaderProperty->GetMaterialType();
-		const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
-		const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
-		const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
-
-		// Exclude alpha blended effects
-		auto* alphaProperty = geometryData.alphaProperty;
-		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
-		const bool validEffect = isEffectShader && !isAlphaBlend;
-
-		// Exclude procedural and displacement water
-		if (isWaterShader) {
-			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
-			const auto waterFlags = waterShaderProperty->waterFlags.underlying();
-
-			if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
-				continue;
-		}
-
-		if (!isLightingShader && !validEffect && !isWaterShader)
-			continue;
-
-		// Exclude tree lod and grass for now
-		const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-		const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
-		const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
-
-		if (isTreeLODShader || isGrassShader)
-			continue;
-
-		const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
-		if (!skinned) {
-			const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
-			if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
-				continue;
-		}
-
-		const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
-		if (!rendererData)
-			continue;
-
-		if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
-			continue;
-
+	// Phase C2 (serial): GPU resource creation for validated candidates
+	for (auto& [bsTriShape, refr] : m_CreateCandidates) {
 		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 			created->SetOwner(refr);
 			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));

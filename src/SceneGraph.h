@@ -91,6 +91,12 @@ class SceneGraph
 	ThreadPool m_ThreadPool;
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
 	eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>> m_CreateList;
+
+	struct MeshCreateCandidate {
+		RE::BSTriShape* bsTriShape;
+		RE::TESObjectREFR* refr;
+	};
+	eastl::vector<MeshCreateCandidate> m_CreateCandidates;
 	
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 
