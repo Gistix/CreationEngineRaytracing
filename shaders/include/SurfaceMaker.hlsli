@@ -37,7 +37,6 @@ struct SurfaceMaker
         surface.Primary = primary;
         
         surface.Position = position;
-        surface.PrevPosition = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
@@ -98,7 +97,6 @@ struct SurfaceMaker
 
             // Override position with SIA precise interpolation result
             surface.Position = siaWldPosition;
-            surface.PrevPosition = siaWldPosition; // Will be overridden by HAS_PREV_POSITIONS if available
             surface.FaceNormal = siaWldFaceNormal;
             surface.PositionError = 0.0f; // Not used in SIA path
             surface.SIAOffset = siaWldOffset;
@@ -141,8 +139,6 @@ struct SurfaceMaker
 
             // Apply object motion after current/previous reconstruction cancel, so
             // static geometry does not inherit world-coordinate cancellation error.
-            surface.PrevPosition = surface.Position + (prevWorldRelPos - currentWorldRelPos);
-
             // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.
             surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
                 prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.PositionPrev);        
@@ -276,7 +272,6 @@ struct SurfaceMaker
         surface.Primary = false;
         
         surface.Position = position;
-        surface.PrevPosition = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
@@ -361,14 +356,13 @@ struct SurfaceMaker
         Surface surface = (Surface)0;
 
         surface.Primary = false;        
-        
+         
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
         surface.Position = position;
-        surface.PrevPosition = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
 
@@ -414,11 +408,13 @@ struct SurfaceMaker
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
 
+#if defined(GLINT)
         surface.GlintScreenSpaceScale = 1.0f;
         surface.GlintLogMicrofacetDensity = 0.0f;
         surface.GlintMicrofacetRoughness = 0.0f;
         surface.GlintDensityRandomization = 0.0f;
         surface.GlintTexCoord = float2(0.0f, 0.0f);
+#endif
         
         return surface; 
     }

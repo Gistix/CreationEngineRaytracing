@@ -243,6 +243,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
 
         // Glint (Discrete Stochastic Microfacet Model)
+#if defined(GLINT)
         if (pbr.PBRFlags & PBR::Flags::Glint)
         {
             half4 glintParams = pbr.GlintParameters;
@@ -252,6 +253,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.GlintDensityRandomization = glintParams.w;
             surface.GlintTexCoord = texCoord0;
         }
+#endif
 
         // OpenPBR 3.11: Emission sits below the coat and is absorbed.
         // At normal incidence, coat_color = T^2 gives the round-trip absorption.
