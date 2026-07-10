@@ -151,8 +151,6 @@ public:
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
 
-	void ProcessGeometry(RE::TESObjectREFR* refr, RE::BSTriShape* bsTriShape, const uint64_t& frameIndex, nvrhi::ICommandList* commandList);
-
 	// Update Camera reference
 	void UpdateCamera();
 

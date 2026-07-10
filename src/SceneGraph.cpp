@@ -367,116 +367,6 @@ void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 	}
 }
 
-void SceneGraph::ProcessGeometry(RE::TESObjectREFR* refr, RE::BSTriShape* bsTriShape, const uint64_t& frameIndex, nvrhi::ICommandList* commandList)
-{
-	if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
-		return;
-
-	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
-
-	auto* shaderProperty = geometryData.shaderProperty;
-	if (!shaderProperty)
-		return;
-
-	const auto materialType = shaderProperty->GetMaterialType();
-
-	const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
-	const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
-	const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
-
-	// Exclude alpha blended effects
-	auto* alphaProperty = geometryData.alphaProperty;
-	const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
-	const bool validEffect = isEffectShader && !isAlphaBlend;
-
-	if (isWaterShader) {
-		auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
-		const auto waterFlags = waterShaderProperty->waterFlags.underlying();
-
-		if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
-			return;
-	}
-
-	if (!isLightingShader && !validEffect && !isWaterShader)
-		return;
-
-	// Exclude tree lod and grass for now
-	const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-	const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
-	const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
-
-	if (isTreeLODShader || isGrassShader)
-		return;
-
-	const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
-	if (!skinned) {
-		const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
-		if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0) {
-			logger::warn("BSTriShape \"{}\" has either vertex ({}) or triangle ({}) count of 0, skipping.", bsTriShape->name, trishapeData.vertexCount, trishapeData.triangleCount);
-			return;
-		}
-	}
-
-	const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
-	if (!rendererData) {
-		logger::warn("BSTriShape \"{}\" has no renderer data, skipping.", bsTriShape->name);
-		return;
-	}
-
-	auto it = m_DirectMeshes.find(bsTriShape);
-	if (it != m_DirectMeshes.end()) {
-		auto mesh = it->second.get();
-
-		// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
-		mesh->SetLastVisitedFrame(frameIndex);
-
-		// SetOwner returns true if the owner has changed
-		const bool ownerChanged = mesh->SetOwner(refr);
-
-		// Get current cluster
-		auto cluster = mesh->GetCluster();
-
-		if (ownerChanged || !cluster) {
-			// Remove from old cluster if it existed
-			if (cluster) {
-				cluster->RemoveMember(mesh);
-				MarkClusterDirty(cluster);
-			}
-
-			cluster = GetOrCreateCluster(refr, bsTriShape);
-			cluster->AddMember(mesh);
-			MarkClusterDirty(cluster);
-		}
-
-		mesh->SetHidden(false);
-
-		mesh->Update(commandList);
-		m_CurrentVisible.push_back(mesh);
-	}
-	else {
-		if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
-			return;
-
-		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
-			created->SetOwner(refr);
-
-			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
-			if (inserted) {
-				auto mesh = it2->second.get();
-
-				auto* cluster = GetOrCreateCluster(refr, bsTriShape);
-				cluster->AddMember(mesh);
-				MarkClusterDirty(cluster);
-
-				mesh->SetLastVisitedFrame(frameIndex);
-
-				mesh->Update(commandList);
-				m_CurrentVisible.push_back(mesh);
-			}
-		}
-	}
-}
-
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
@@ -600,15 +490,30 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
 		const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
 		const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+
+		// Exclude alpha blended effects
 		auto* alphaProperty = geometryData.alphaProperty;
 		const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
 		const bool validEffect = isEffectShader && !isAlphaBlend;
+
+		// Exclude procedural and displacement water
+		if (isWaterShader) {
+			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
+			const auto waterFlags = waterShaderProperty->waterFlags.underlying();
+
+			if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
+				continue;
+		}
+
 		if (!isLightingShader && !validEffect && !isWaterShader)
 			continue;
 
+		// Exclude tree lod and grass for now
 		const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-		if (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get() ||
-			shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get())
+		const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
+		const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
+
+		if (isTreeLODShader || isGrassShader)
 			continue;
 
 		const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
