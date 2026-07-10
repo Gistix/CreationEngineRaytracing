@@ -75,8 +75,11 @@ private:
 				m_Tasks.pop();
 			}
 			task();
-			if (m_Pending.fetch_sub(1, std::memory_order_release) == 1)
+			if (m_Pending.fetch_sub(1, std::memory_order_acq_rel) == 1)
+			{
+				std::scoped_lock lock(m_Mutex); // synchronizes with WaitAll's wait registration; fixes lost-wakeup
 				m_DoneCV.notify_one();
+			}
 		}
 	}
 
