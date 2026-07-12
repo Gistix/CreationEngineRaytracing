@@ -12,6 +12,7 @@ namespace MeshType
     static const uint Default = 1;
     static const uint Skinned = 2;
     static const uint Dynamic = 3;
+    static const uint SubIndex = 4;
 }
 #endif
 

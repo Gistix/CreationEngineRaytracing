@@ -3,6 +3,7 @@
 #include "Core/LandLODMesh.h"
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
+#include "Core/SubIndexMesh.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
@@ -18,6 +19,10 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 			if (extra->size > 0 && extra->value[0] == 4)
 				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
 		}
+
+		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
+			return eastl::make_unique<SubIndexMesh>(subIndexTriShape, commandList);
+
 		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
 	}
 
@@ -135,6 +140,9 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable;
 		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, indexBuffer.m_Buffer));
 	}
+	else {
+		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+	}
 
 	return indexBuffer;
 }
@@ -172,6 +180,9 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetVertexDescriptors()->m_DescriptorTable;
 		vertexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, vertexBuffer.m_Buffer));
 	}
+	else {
+		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+	}
 
 	return vertexBuffer;
 }
@@ -196,14 +207,14 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	UpdateMaterial();
 }
 
-nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
 {
 	nvrhi::rt::GeometryDesc geometryDesc;
 
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
 	geometryTriangles.indexBuffer = indexBuffer;
-	geometryTriangles.indexOffset = 0;
+	geometryTriangles.indexOffset = indexOffset * sizeof(uint16_t); // Byte offset into index buffer GPU VA
 	geometryTriangles.indexFormat = nvrhi::Format::R16_UINT;
 	geometryTriangles.indexCount = indexCount;
 

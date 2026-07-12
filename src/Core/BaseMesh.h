@@ -20,7 +20,7 @@ class BaseMesh
 	void UpdateMaterial();
 public:
 	struct BufferDescriptor {
-		nvrhi::BufferHandle m_Buffer;
+		nvrhi::BufferHandle m_Buffer = nullptr;
 		DescriptorHandle m_Descriptor;
 	};
 
@@ -39,7 +39,8 @@ public:
 		Base,
 		Default,
 		Skinned,
-		Dynamic
+		Dynamic,
+		SubIndex
 	};
 
 	enum class Flags : uint8_t
@@ -64,6 +65,8 @@ public:
 	virtual SkinnedMesh* AsSkinnedMesh() { return nullptr; }
 
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
+
+	virtual class SubIndexMesh* AsSubIndexMesh() { return nullptr; }
 
 	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
 	virtual uint32_t GetDynamicIndex() const { return 0; }
@@ -135,7 +138,7 @@ protected:
 
 	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
-	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
+	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
 
 	void CreateMaterial();
 
