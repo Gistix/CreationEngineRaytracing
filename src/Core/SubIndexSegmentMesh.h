@@ -29,6 +29,11 @@ public:
 
 	virtual uint16_t GetIndexID(size_t geometryIndex) const override;
 	virtual uint16_t GetVertexID() const override;
+	virtual void SetSubIndexHidden(bool subIndexHidden);
+
+	// Copies world state (transform, worldBound, properties, material) from the
+	// manager, clears dirty flags, and marks Transform dirty if it changed.
+	void SyncFrom(const SubIndexMesh& manager);
 
 	uint32_t GetStart() const { return m_Start; }
 	uint32_t GetNumTris() const { return m_NumTris; }

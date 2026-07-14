@@ -84,16 +84,21 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();
 
-	// Track segment keys seen in this frame (for orphan detection — segments that
-	// are in m_SegmentMap but not in the current runtimeData get SubIndexHidden).
-	eastl::hash_set<uint64_t> visitedKeys;
-	visitedKeys.reserve(runtimeData.numSegments + m_SegmentMap.size());
+	// Clear stale dirty flags and copy fresh world state from the manager to existing
+	// segments. Must run before the visibility loop so MarkDirty(Visibility) set by
+	// SetSubIndexHidden survives to Phase E2.
+	for (auto& seg : m_Segments) {
+		seg->SyncFrom(*this);
+	}
 
 	for (size_t i = 0; i < runtimeData.numSegments; i++) {
 		const auto& segment = runtimeData.segmentData[i];
 
+		const bool firstSegment = (i == 0);
+
 		const uint32_t start = segment.index;
-		const uint32_t numTris = segment.numTris;
+		const uint32_t numTris = (firstSegment ? segment.numTris : segment.unkTriCount);
+		const uint8_t flags = (firstSegment ? segment.flags : segment.unkFlags);
 
 		if (numTris == 0)
 			continue;
@@ -104,11 +109,9 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 			continue;
 		}
 
+		const bool visible = bypassVisibility || (flags != 0u);
+
 		const uint64_t key = MakeSegmentKey(start, numTris);
-		visitedKeys.insert(key);
-
-		const bool visible = bypassVisibility || (segment.flags != 0u);
-
 		auto it = m_SegmentMap.find(key);
 		if (it == m_SegmentMap.end()) {
 			// New segment: create only if currently visible. Hidden segments
@@ -121,23 +124,6 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 			it->second->SetSubIndexHidden(!visible);
 		}
 	}
-
-	// Hide segments that weren't visited (engine removed them from runtimeData, or
-	// their (start, numTris) changed). They stay in m_SegmentMap and their cluster
-	// stays in m_SubIndexSegmentClusters — the cluster's BuildUpdate releases the BLAS
-	// when m_GeometryDescs is empty.
-	for (auto& [key, segMesh] : m_SegmentMap) {
-		if (!visitedKeys.contains(key))
-			segMesh->SetSubIndexHidden(true);
-	}
-
-	// Update all segments (including SubIndexHidden ones) so their m_Transform and
-	// m_PrevTransform track the parent's latest world. Hidden segments are skipped
-	// by the cluster's Update/Valid/GetMeshEntryCount, but their transforms stay
-	// fresh so that re-showing them produces correct geometry.
-	for (auto& seg : m_Segments) {
-		seg->Update(commandList);
-	}
 }
 
 void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
@@ -149,12 +135,13 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 	// Pass `this` as a raw back-pointer. Lifetime is safe: the SubIndexMesh owns the
 	// SubIndexSegmentMesh via unique_ptr in m_Segments, so the segment is destroyed
 	// before the manager.
-	auto segMesh = eastl::make_unique<SubIndexSegmentMesh>(
-		this,
-		subIndexShape,
-		start, numTris);
+	auto segMesh = eastl::make_unique<SubIndexSegmentMesh>(this, subIndexShape, start, numTris);
 
 	auto* rawSeg = segMesh.get();
+
+	// Copy world state from the manager (SyncSegments already cleared old segments
+	// before the visibility loop; new segments get their world state here).
+	rawSeg->SyncFrom(*this);
 
 	// Create a per-segment cluster in SceneGraph::m_SubIndexSegmentClusters and add
 	// the segment to it. Each segment gets its own BLAS / InstanceData / TLAS entry.

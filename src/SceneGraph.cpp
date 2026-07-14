@@ -456,8 +456,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				}
 			}
 
-			mesh->SetHidden(false);
 			mesh->Update(commandList);
+			mesh->SetHidden(false);
 		};
 
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {

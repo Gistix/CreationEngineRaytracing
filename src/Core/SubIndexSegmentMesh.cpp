@@ -38,3 +38,27 @@ uint16_t SubIndexSegmentMesh::GetVertexID() const
 {
 	return m_Manager->GetVertexID();
 }
+
+void SubIndexSegmentMesh::SetSubIndexHidden(bool subIndexHidden)
+{
+	const bool wasSubIndexHidden = m_State.any(State::SubIndexHidden);
+
+	m_State.set(subIndexHidden, State::SubIndexHidden);
+
+	if (wasSubIndexHidden != subIndexHidden)
+		MarkDirty(DirtyFlags::Visibility);
+}
+
+void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh& manager)
+{
+	m_DirtyFlags.reset();
+	m_Properties = manager.GetProperties();
+	m_WorldBound = manager.GetWorldBound();
+
+	const auto& transform = manager.GetTransform();
+	if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+		MarkDirty(DirtyFlags::Transform);
+
+	m_Transform = transform;
+	m_PrevTransform = manager.GetPrevTransform();
+}

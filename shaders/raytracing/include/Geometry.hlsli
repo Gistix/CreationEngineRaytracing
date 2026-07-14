@@ -218,7 +218,7 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
 {
     const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
     
-    const Triangle geomTriangle = GetTriangle(mesh.IndexID, safePrimitiveIndex);
+    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset + safePrimitiveIndex);
 
     const bool isMSN = mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals;
     
@@ -243,7 +243,7 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
 {
     const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
 
-    Triangle geomTriangle = GetTriangle(mesh.IndexID, safePrimitiveIndex);
+    Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset + safePrimitiveIndex);
 
     const bool isMSN = mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals;
 

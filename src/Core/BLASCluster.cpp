@@ -275,8 +275,8 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		}
 	}
 	else {
-		logger::warn("BLASCluster::BuildUpdate - {} no work needed (firstBuild: {}, anyStructure: {}, anyUpdate: {})",
-			m_Name, firstBuild, anyStructure, anyUpdate);
+		logger::warn("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set.",
+			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size());
 		return;
 	}
 

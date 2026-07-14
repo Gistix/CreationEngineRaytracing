@@ -60,8 +60,6 @@ public:
 
 	bool IsHidden() const;
 
-	void SetSubIndexHidden(bool hidden) { m_State.set(hidden, State::SubIndexHidden); }
-
 	virtual void OnDestroy();
 
 	virtual SkinnedMesh* AsSkinnedMesh() { return nullptr; }
@@ -106,6 +104,9 @@ public:
 	const float3x4& GetPrevTransform() const { return m_PrevTransform; }
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
+	
+	const Properties& GetProperties() const { return m_Properties; }
+	const eastl::shared_ptr<MaterialBase>& GetMaterial() const { return m_Material; }
 	
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
 
