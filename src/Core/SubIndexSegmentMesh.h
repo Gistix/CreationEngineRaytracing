@@ -12,35 +12,24 @@ class SubIndexMesh;
 //
 // m_Manager is a non-owning raw pointer: the SubIndexMesh owns the SubIndexSegmentMesh
 // via unique_ptr in its m_Segments vector, so the segment is destroyed before the manager.
+//
+// Identity: a segment is uniquely identified by (m_Start, m_NumTris) — the index
+// range in the parent's index buffer. This is stable across frames even if the engine
+// reorders the segment data array.
 class SubIndexSegmentMesh : public BaseMesh
 {
 	SubIndexMesh* m_Manager = nullptr;
 
-	DescriptorHandle m_IndexDescriptor;
-	DescriptorHandle m_VertexDescriptor;
+	// Identity: (segment.index, segment.numTris) from the parent's segment data.
+	uint32_t m_Start = 0;
+	uint32_t m_NumTris = 0;
 
 public:
-	SubIndexSegmentMesh(
-		SubIndexMesh* manager,
-		RE::BSSubIndexTriShape* parent,
-		uint32_t segmentIndex,
-		nvrhi::ICommandList* commandList);
+	SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTriShape* parent, uint32_t start, uint32_t numTris);
 
-	uint16_t GetIndexID([[maybe_unused]] size_t geometryIndex) const override
-	{
-		return static_cast<uint16_t>(m_IndexDescriptor.Get());
-	}
+	virtual uint16_t GetIndexID(size_t geometryIndex) const override;
+	virtual uint16_t GetVertexID() const override;
 
-	uint16_t GetVertexID() const override
-	{
-		return static_cast<uint16_t>(m_VertexDescriptor.Get());
-	}
-
-	// Removes this segment from its cluster (if any) so the cluster no longer
-	// references it. Safe to call from any thread; the cluster guards its member
-	// list with a mutex. Does not destroy the segment — the owning SubIndexMesh
-	// manager owns its lifetime.
-	void DetachFromCluster();
-
-	void Update(nvrhi::ICommandList* commandList) override;
+	uint32_t GetStart() const { return m_Start; }
+	uint32_t GetNumTris() const { return m_NumTris; }
 };

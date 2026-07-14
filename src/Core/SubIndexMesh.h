@@ -7,47 +7,73 @@ class SubIndexSegmentMesh;
 
 // Manager for a BSSubIndexTriShape. Owns the shared GPU resources (index/vertex buffer
 // handles, vertex stride, vertex desc) and a vector of SubIndexSegmentMesh children,
-// one per currently-visible segment. Each child is a regular BaseMesh and lives in its
+// one per currently-known segment. Each child is a regular BaseMesh and lives in its
 // own BLASCluster (in SceneGraph::m_SubIndexSegmentClusters) so it gets its own BLAS,
 // InstanceData, and TLAS entry.
 //
 // SubIndexMesh itself is a BaseMesh in SceneGraph::m_DirectMeshes (for lifecycle
 // tracking via the existing OnDestroy / deferred-destroy flow) but is NOT a member
 // of any BLASCluster; its m_GeometryDescs is empty.
+//
+// Segment identity: segments are keyed by (start, numTris) in m_SegmentMap — the
+// segment's position in the parent's index buffer. This is stable across frames
+// even if the engine reorders the segment data array. Segments whose engine-side
+// visibility flag goes to 0 are hidden (State::SubIndexHidden) rather than destroyed;
+// the SubIndexMesh owns them for the parent's lifetime and reuses them when the
+// engine flips the flag back on.
 class SubIndexMesh : public BaseMesh
 {
-	SceneGraph* m_SceneGraph = nullptr;
-
 	// Shared across all K SubIndexSegmentMesh children. Created once in ctor from
 	// the parent's D3D12 resources; released when the manager is destroyed.
-	nvrhi::BufferHandle m_SharedIndexBuffer;
-	nvrhi::BufferHandle m_SharedVertexBuffer;
+	nvrhi::BufferHandle m_IndexBuffer;
+	nvrhi::BufferHandle m_VertexBuffer;
+
+	DescriptorHandle m_IndexDescriptor;
+	DescriptorHandle m_VertexDescriptor;
 
 	RE::BSGraphics::VertexDesc m_VertexDesc;
 
 	eastl::vector<eastl::unique_ptr<SubIndexSegmentMesh>> m_Segments;
-	eastl::hash_map<uint32_t, SubIndexSegmentMesh*> m_SegmentMap;  // non-owning lookup
 
-	void CreateSegment(uint32_t segmentIndex);
-	void DestroySegment(uint32_t segmentIndex);
+	// Key: (start << 32) | numTris — the segment's identity in the parent's index buffer.
+	// Non-owning lookup into m_Segments.
+	eastl::hash_map<uint64_t, SubIndexSegmentMesh*> m_SegmentMap;
+
+	void CreateSegment(uint32_t start, uint32_t numTris);
 
 public:
-	SubIndexMesh(RE::BSSubIndexTriShape* triShape, SceneGraph* sceneGraph);
+	SubIndexMesh(RE::BSSubIndexTriShape* triShape);
 
-	SceneGraph* GetSceneGraph() const { return m_SceneGraph; }
-	nvrhi::BufferHandle GetSharedIndexBuffer() const { return m_SharedIndexBuffer; }
-	nvrhi::BufferHandle GetSharedVertexBuffer() const { return m_SharedVertexBuffer; }
+	virtual void SetHidden(bool hidden) override;
+
+	// Stable segment identity: (segment.index, segment.numTris) packed into a 64-bit key.
+	// The engine may reorder the segmentData array between frames, so iteration order
+	// is not a stable key — but (start, numTris) is, because it identifies the
+	// segment's position in the parent's index buffer.
+	inline uint64_t MakeSegmentKey(uint32_t start, uint32_t numTris)
+	{
+		return (static_cast<uint64_t>(start) << 32) | static_cast<uint64_t>(numTris);
+	}
+
+	nvrhi::BufferHandle GetIndexBuffer() const { return m_IndexBuffer; }
+	nvrhi::BufferHandle GetVertexBuffer() const { return m_VertexBuffer; }
 	const RE::BSGraphics::VertexDesc& GetVertexDesc() const { return m_VertexDesc; }
 
-	// SubIndexMesh has no geometry of its own (m_GeometryDescs is empty). These are
-	// only required to make the class non-abstract — they're never called because
-	// SubIndexMesh is not a member of any BLASCluster.
-	uint16_t GetIndexID([[maybe_unused]] size_t geometryIndex) const override { return 0; }
-	uint16_t GetVertexID() const override { return 0; }
+	uint16_t GetIndexID([[maybe_unused]] size_t geometryIndex) const override
+	{
+		return static_cast<uint16_t>(m_IndexDescriptor.Get());
+	}
+
+	uint16_t GetVertexID() const override
+	{
+		return static_cast<uint16_t>(m_VertexDescriptor.Get());
+	}
 
 	// Sync the K SubIndexSegmentMesh children with the parent's current segment
-	// visibility. Creates new segments for newly-visible flags, destroys segments
-	// whose flags went to zero. Called from the traversal update path.
+	// visibility. Segments are identified by (start, numTris); new segments are
+	// created, existing segments have their SubIndexHidden flag toggled to match
+	// the engine's segment flag. Segments missing from runtimeData (engine removed
+	// them) are marked SubIndexHidden.
 	void Update(nvrhi::ICommandList* commandList) override;
 
 	// Destroy all K SubIndexSegmentMesh children. Used when the manager is hidden

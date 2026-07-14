@@ -30,7 +30,8 @@ public:
 		Hidden = 1 << 0,
 		Detached = 1 << 1,
 		DismemberHidden = 1 << 2,
-		Destroyed = 1 << 3
+		SubIndexHidden = 1 << 3,
+		Destroyed = 1 << 4
 	};
 
 	enum class Type : uint8_t
@@ -55,9 +56,11 @@ public:
 	static eastl::unique_ptr<BaseMesh> Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
 	// Returns true if the hidden state changed (which flags the mesh structurally dirty).
-	bool SetHidden(bool hidden);
+	virtual void SetHidden(bool hidden);
 
 	bool IsHidden() const;
+
+	void SetSubIndexHidden(bool hidden) { m_State.set(hidden, State::SubIndexHidden); }
 
 	virtual void OnDestroy();
 

@@ -88,7 +88,7 @@ bool BLASCluster::Empty() const
 
 bool BLASCluster::Valid() const
 {
-	for (const auto& mesh : m_Members) {
+	for (const auto* mesh : m_Members) {
 		if (mesh->IsHidden())
 			continue;
 
@@ -142,7 +142,7 @@ InstanceLightData BLASCluster::GetInstanceLightData(
 uint32_t BLASCluster::GetMeshEntryCount() const
 {
 	uint32_t count = 0;
-	for (const auto& mesh : m_Members) {
+	for (const auto* mesh : m_Members) {
 		if (mesh->IsHidden())
 			continue;
 		count += static_cast<uint32_t>(mesh->GetGeometryDescs().size());

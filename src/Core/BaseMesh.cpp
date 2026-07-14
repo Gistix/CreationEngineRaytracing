@@ -21,7 +21,7 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		}
 
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
-			return eastl::make_unique<SubIndexMesh>(subIndexTriShape, Scene::GetSingleton()->GetSceneGraph());
+			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
 		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
 	}
@@ -229,18 +229,14 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	return geometryDesc;
 }
 
-bool BaseMesh::SetHidden(bool hidden)
+void BaseMesh::SetHidden(bool hidden)
 {
 	const bool wasHidden = m_State.any(State::Hidden);
 
 	m_State.set(hidden, State::Hidden);
 
-	if (wasHidden != hidden) {
+	if (wasHidden != hidden)
 		MarkDirty(DirtyFlags::Visibility);
-		return true;
-	}
-
-	return false;
 }
 
 bool BaseMesh::IsTwoSided()
@@ -250,7 +246,7 @@ bool BaseMesh::IsTwoSided()
 
 bool BaseMesh::IsHidden() const
 {
-	return m_State.any(State::Hidden);
+	return m_State.any(State::Hidden) || m_State.any(State::SubIndexHidden);
 }
 
 void BaseMesh::OnDestroy() {

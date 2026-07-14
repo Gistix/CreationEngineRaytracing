@@ -7,10 +7,9 @@
 #include "interop/Triangle.hlsli"
 #include "Util.h"
 
-SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape, SceneGraph* sceneGraph)
+SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 {
 	m_BSTriShape = triShape;
-	m_SceneGraph = sceneGraph;
 	m_Name = MakeDebugName(triShape);
 	m_Type = Type::SubIndex;
 
@@ -32,6 +31,7 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape, SceneGraph* sceneGr
 
 	auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(rendererData);
 	auto* device = Renderer::GetSingleton()->GetDevice();
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	// Create the shared nvrhi index buffer handle from the parent's D3D12 resource.
 	// All K SubIndexSegmentMesh children will share this handle (different descriptor
@@ -42,10 +42,10 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape, SceneGraph* sceneGr
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("SubIndex Index Buffer");
-	m_SharedIndexBuffer = device->createHandleForNativeBuffer(
-		nvrhi::ObjectTypes::D3D12_Resource,
-		nvrhi::Object(triShapeDX12->indexBufferDX12),
-		indexBufferDesc);
+
+	m_IndexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->indexBufferDX12), indexBufferDesc);
+
+	m_IndexDescriptor = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_IndexBuffer));
 
 	// Create the shared nvrhi vertex buffer handle from the parent's D3D12 resource.
 	auto vertexBufferDesc = nvrhi::BufferDesc()
@@ -54,23 +54,24 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape, SceneGraph* sceneGr
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("SubIndex Vertex Buffer");
-	m_SharedVertexBuffer = device->createHandleForNativeBuffer(
-		nvrhi::ObjectTypes::D3D12_Resource,
-		nvrhi::Object(triShapeDX12->vertexBufferDX12),
-		vertexBufferDesc);
 
-	// m_GeometryDescs is intentionally left empty: the SubIndexMesh itself does not
-	// contribute geometry to any cluster. The K SubIndexSegmentMesh children each
-	// contribute their own 1-element GeometryDesc to their own cluster.
+	m_VertexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->vertexBufferDX12), vertexBufferDesc);
+
+	m_VertexDescriptor = sceneGraph->GetVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, m_VertexBuffer));
+}
+
+void SubIndexMesh::SetHidden(bool hidden)
+{
+	BaseMesh::SetHidden(hidden);
+
+	// Propagate to segments
+	for (auto& seg : m_Segments) {
+		seg->SetHidden(hidden);
+	}
 }
 
 void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 {
-	// Guard against the dtor hook (which sets m_BSTriShape = null) racing with the
-	// traversal callback. If the parent is gone, skip the inherited update entirely.
-	if (!m_BSTriShape)
-		return;
-
 	BaseMesh::Update(commandList);
 
 	auto* triShape = m_BSTriShape;
@@ -78,52 +79,68 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	if (!subIndexShape)
 		return;
 
-	const bool bypass = Scene::GetSingleton()->g_BypassSubIndexVisibility && *Scene::GetSingleton()->g_BypassSubIndexVisibility;
+	const bool bypassVisibility = *Scene::GetSingleton()->g_BypassSubIndexVisibility;
 
 	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();
 
-	// Track currently-visible segment indices for the destruction sweep.
-	eastl::hash_set<uint32_t> currentlyVisible;
-	currentlyVisible.reserve(runtimeData.numSegments);
+	// Track segment keys seen in this frame (for orphan detection — segments that
+	// are in m_SegmentMap but not in the current runtimeData get SubIndexHidden).
+	eastl::hash_set<uint64_t> visitedKeys;
+	visitedKeys.reserve(runtimeData.numSegments + m_SegmentMap.size());
 
 	for (size_t i = 0; i < runtimeData.numSegments; i++) {
 		const auto& segment = runtimeData.segmentData[i];
 
-		const bool visible = bypass || (segment.flags != 0u);
-		if (!visible || segment.numTris == 0)
+		const uint32_t start = segment.index;
+		const uint32_t numTris = segment.numTris;
+
+		if (numTris == 0)
 			continue;
 
-		const auto finalIndex = segment.index + (segment.numTris * 3u);
-		if (finalIndex > triShapeData.triangleCount * 3u) {
-			logger::warn("SubIndexMesh::Update - Segment {} index {} exceeds the maximum of {}",
-				i, finalIndex, triShapeData.triangleCount * 3u);
+		const uint32_t end = start + numTris * 3u;
+		if (end > triShapeData.triangleCount * 3u) {
+			logger::warn("SubIndexMesh::Update - Segment {} index {} exceeds the maximum of {}", i, end, triShapeData.triangleCount * 3u);
 			continue;
 		}
 
-		currentlyVisible.insert(static_cast<uint32_t>(i));
+		const uint64_t key = MakeSegmentKey(start, numTris);
+		visitedKeys.insert(key);
 
-		if (m_SegmentMap.find(static_cast<uint32_t>(i)) == m_SegmentMap.end())
-			CreateSegment(static_cast<uint32_t>(i));
-	}
+		const bool visible = bypassVisibility || (segment.flags != 0u);
 
-	// Destroy segments that are no longer visible.
-	for (auto it = m_SegmentMap.begin(); it != m_SegmentMap.end(); ) {
-		if (!currentlyVisible.contains(it->first)) {
-			DestroySegment(it->first);
-			it = m_SegmentMap.erase(it);
+		auto it = m_SegmentMap.find(key);
+		if (it == m_SegmentMap.end()) {
+			// New segment: create only if currently visible. Hidden segments
+			// (e.g. engine flag = 0) don't need an entry — when the flag flips
+			// on, a future Update will see a missing key and create it then.
+			if (visible)
+				CreateSegment(start, numTris);
 		} else {
-			++it;
+			// Existing segment: just toggle its SubIndexHidden flag.
+			it->second->SetSubIndexHidden(!visible);
 		}
 	}
 
-	// Update surviving segments (so they read fresh world transforms / refresh material).
+	// Hide segments that weren't visited (engine removed them from runtimeData, or
+	// their (start, numTris) changed). They stay in m_SegmentMap and their cluster
+	// stays in m_SubIndexSegmentClusters — the cluster's BuildUpdate releases the BLAS
+	// when m_GeometryDescs is empty.
+	for (auto& [key, segMesh] : m_SegmentMap) {
+		if (!visitedKeys.contains(key))
+			segMesh->SetSubIndexHidden(true);
+	}
+
+	// Update all segments (including SubIndexHidden ones) so their m_Transform and
+	// m_PrevTransform track the parent's latest world. Hidden segments are skipped
+	// by the cluster's Update/Valid/GetMeshEntryCount, but their transforms stay
+	// fresh so that re-showing them produces correct geometry.
 	for (auto& seg : m_Segments) {
 		seg->Update(commandList);
 	}
 }
 
-void SubIndexMesh::CreateSegment(uint32_t segmentIndex)
+void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 {
 	// m_BSTriShape is known to be a BSSubIndexTriShape here (Update verified via
 	// AsSubIndexTriShape before calling CreateSegment). The cast is safe.
@@ -135,54 +152,42 @@ void SubIndexMesh::CreateSegment(uint32_t segmentIndex)
 	auto segMesh = eastl::make_unique<SubIndexSegmentMesh>(
 		this,
 		subIndexShape,
-		segmentIndex,
-		nullptr);
+		start, numTris);
 
 	auto* rawSeg = segMesh.get();
 
 	// Create a per-segment cluster in SceneGraph::m_SubIndexSegmentClusters and add
 	// the segment to it. Each segment gets its own BLAS / InstanceData / TLAS entry.
-	auto* cluster = m_SceneGraph->GetOrCreateSegmentCluster(rawSeg, m_Owner);
+	// The cluster lives in m_SubIndexSegmentClusters for the lifetime of the segment
+	// (the segment is never destroyed unless the parent is destroyed), so the cluster's
+	// hash-map address is stable → iteration order in Phase E1 is stable.
+	auto sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	auto* cluster = sceneGraph->GetOrCreateSegmentCluster(rawSeg, m_Owner);
 	cluster->AddMember(rawSeg);
-	m_SceneGraph->MarkClusterDirty(cluster);
+	sceneGraph->MarkClusterDirty(cluster);
 
+	const uint64_t key = MakeSegmentKey(start, numTris);
 	m_Segments.push_back(eastl::move(segMesh));
-	m_SegmentMap[segmentIndex] = rawSeg;
-}
-
-void SubIndexMesh::DestroySegment(uint32_t segmentIndex)
-{
-	auto it = m_SegmentMap.find(segmentIndex);
-	if (it == m_SegmentMap.end())
-		return;
-
-	auto* segMesh = it->second;
-
-	// Remove the segment from its cluster and erase the cluster from
-	// SceneGraph::m_SubIndexSegmentClusters. The cluster is destroyed here.
-	m_SceneGraph->RemoveSegmentCluster(segMesh);
-
-	// Erase the unique_ptr from m_Segments (which destroys the segment, releasing
-	// its two descriptor handles back to the bindless tables).
-	for (auto segIt = m_Segments.begin(); segIt != m_Segments.end(); ++segIt) {
-		if (segIt->get() == segMesh) {
-			m_Segments.erase(segIt);
-			break;
-		}
-	}
+	m_SegmentMap[key] = rawSeg;
 }
 
 void SubIndexMesh::DestroyAllSegments()
 {
-	// Snapshot indices before invalidation.
-	eastl::vector<uint32_t> indices;
-	indices.reserve(m_SegmentMap.size());
+	// Snapshot keys before invalidation.
+	eastl::vector<uint64_t> keys;
+	keys.reserve(m_SegmentMap.size());
 	for (auto& [k, _] : m_SegmentMap)
-		indices.push_back(k);
+		keys.push_back(k);
 
-	for (auto idx : indices)
-		DestroySegment(idx);
+	auto sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
+	for (auto key : keys) {
+		auto it = m_SegmentMap.find(key);
+		if (it == m_SegmentMap.end())
+			continue;
+		auto* segMesh = it->second;
+		sceneGraph->RemoveSegmentCluster(segMesh);
+	}
 	m_SegmentMap.clear();
 	m_Segments.clear();
 }

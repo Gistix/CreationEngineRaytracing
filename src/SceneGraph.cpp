@@ -439,12 +439,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		auto doUpdate = [&](auto& entry) {
 			auto& [mesh, refr] = entry;
 			mesh->SetLastVisitedFrame(frameIndex);
-			const bool ownerChanged = mesh->SetOwner(refr);
 
-			// SubIndexMesh is in m_DirectMeshes (for lifecycle) but NOT a member of any
-			// BLASCluster itself; the K SubIndexSegmentMesh children live in their own
-			// clusters in m_SubIndexSegmentClusters, managed by SubIndexMesh::Update.
-			if (!mesh->AsSubIndexMesh()) {			
+			if (!mesh->AsSubIndexMesh()) {	
+				const bool ownerChanged = mesh->SetOwner(refr);
 				auto cluster = mesh->GetCluster();
 
 				if (ownerChanged || !cluster) {
@@ -588,14 +585,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto& mesh : m_PreviousVisible) {
 		if (mesh->GetLastVisitedFrame() != frameIndex) {
 			mesh->SetHidden(true);
-
-			// SubIndexMesh: not a member of any cluster itself, but owns K SubIndexSegmentMesh
-			// children in m_SubIndexSegmentClusters. Tear them all down; they'll be re-created
-			// on the next Update when the parent is visited again.
-			if (auto* subIndexMesh = mesh->AsSubIndexMesh()) {
-				subIndexMesh->DestroyAllSegments();
-				continue;
-			}
 
 			if (auto* cluster = mesh->GetCluster()) {
 				cluster->RemoveMember(mesh);
