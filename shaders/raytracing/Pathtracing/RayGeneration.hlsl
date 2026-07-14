@@ -702,7 +702,7 @@ void Main()
         {
 #if defined(SUBSURFACE_SCATTERING)
             if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
-                direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
+                    direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
                 isSssPath = true;
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
@@ -1177,7 +1177,7 @@ void Main()
             {
 #ifdef SUBSURFACE_SCATTERING
                 if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, surface.Primary);
+                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, instance, payload, rayCone, randomSeed, surface.Primary);
                     isSssPath = true;
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;

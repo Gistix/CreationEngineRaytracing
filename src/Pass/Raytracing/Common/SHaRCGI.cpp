@@ -115,9 +115,6 @@ namespace Pass::Raytracing::Common
 
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 
-		const auto threadGroupSizeWStr = std::to_wstring(UPDATE_THREAD_GROUP_SIZE);
-		defines.emplace_back(L"THREAD_GROUP_SIZE", threadGroupSizeWStr.c_str());
-
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 		defines.emplace_back(L"SHARC_ENABLE_SH_ENCODING", L"1");
 

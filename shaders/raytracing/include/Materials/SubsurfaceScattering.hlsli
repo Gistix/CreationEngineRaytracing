@@ -93,19 +93,17 @@ float4 SampleBurleyProfileMIS(
 }
 
 void EvalBurleyDiffusionProfile(
-    in const SubsurfaceMaterialData subsurfaceMaterialData,
+    in const SubsurfaceMaterialCoefficients sssMaterialCoefficients,
     in const SubsurfaceInteraction subsurfaceInteraction,
     in const float maxSampleRadius,
     in const bool enableTransmission,
     in const float2 rand2,
     inout SubsurfaceSample sssSample)
 {
-    const SubsurfaceMaterialCoefficients sssMaterialCoeffcients = ComputeSubsurfaceMaterialCoefficients(subsurfaceMaterialData);
-
     const float4 burleyProfileMisSample = SampleBurleyProfileMIS(rand2.x,
-                                                                sssMaterialCoeffcients.sigma_t,
-                                                                sssMaterialCoeffcients.albedo,
-                                                                sssMaterialCoeffcients.ssAlbedo,
+                                                                sssMaterialCoefficients.sigma_t,
+                                                                sssMaterialCoefficients.albedo,
+                                                                sssMaterialCoefficients.ssAlbedo,
                                                                 enableTransmission);
     const float3 bssrdfWeight = burleyProfileMisSample.xyz; // bssrdf / pdf
     const float r = burleyProfileMisSample.w;
