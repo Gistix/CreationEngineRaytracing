@@ -81,6 +81,12 @@ void BLASCluster::UpdateTransform() {
 	m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
 }
 
+void BLASCluster::CollectMemberDirtyFlags()
+{
+	for (const auto* mesh : m_Members)
+		m_DirtyFlags |= mesh->GetDirtyFlags();
+}
+
 bool BLASCluster::Empty() const
 {
 	return m_Members.empty();
@@ -88,18 +94,7 @@ bool BLASCluster::Empty() const
 
 bool BLASCluster::Valid() const
 {
-	for (const auto* mesh : m_Members) {
-		if (mesh->IsHidden())
-			continue;
-
-		const auto& descs = mesh->GetGeometryDescs();
-		if (descs.empty())
-			continue;
-
-		return true;
-	}
-
-	return false;
+	return GetMeshEntryCount() != 0;
 }
 
 InstanceLightData BLASCluster::GetInstanceLightData(
@@ -114,7 +109,7 @@ InstanceLightData BLASCluster::GetInstanceLightData(
 			continue;
 
 		if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
-			logger::error("ComputeInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}, for light {} of {}", 
+			logger::error("BLASCluster::GetInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}, for light {} of {}",
 				numLights, 
 				Constants::INSTANCE_LIGHTS_MAX, 
 				light.m_Index,
@@ -165,7 +160,12 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 	uint32_t meshCount = meshStart;
 
 	m_GeometryDescs.clear();
-	m_GeometryDescs.reserve(m_Members.size());
+	size_t geometryCount = 0;
+	for (const auto* mesh : m_Members) {
+		if (!mesh->IsHidden())
+			geometryCount += mesh->GetGeometryDescs().size();
+	}
+	m_GeometryDescs.reserve(geometryCount);
 
 	m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
@@ -190,8 +190,6 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 		if (mesh->IsTwoSided())
 			m_Flags.set(Flags::TwoSided);
 
-		m_DirtyFlags |= mesh->GetDirtyFlags();
-
 		meshCount += mesh->WriteMeshData(&meshData[meshCount]);
 	}
 
@@ -215,7 +213,7 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 	return;
 }
 
-nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
+nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(BuildMode mode) const
 {
 	auto blasDesc = nvrhi::rt::AccelStructDesc()
 		.setIsTopLevel(false)
@@ -226,11 +224,33 @@ nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(bool update) const
 		? nvrhi::rt::AccelStructBuildFlags::PreferFastBuild
 		: nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 
-	blasDesc.buildFlags |= (update
+	blasDesc.buildFlags |= (mode == BuildMode::Update
 		? nvrhi::rt::AccelStructBuildFlags::PerformUpdate
 		: nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
 
 	return blasDesc;
+}
+
+BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex)
+{
+	const bool firstBuild = (m_LastBuildFrame == Constants::INVALID_FRAME_INDEX);
+	const bool hasMesh = m_DirtyFlags.any(DirtyFlags::Mesh);
+	const bool hasVisibility = m_DirtyFlags.any(DirtyFlags::Visibility);
+	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
+	const bool isOrphan = (m_Owner == nullptr);
+
+	if (firstBuild || !m_BLAS || hasMesh || (!isOrphan && hasVisibility))
+		return BuildMode::Rebuild;
+
+	if (hasUpdate) {
+		if (m_UpdateCount >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE &&
+			sceneGraph->TryMaintenanceRebuild(frameIndex))
+			return BuildMode::Rebuild;
+
+		return BuildMode::Update;
+	}
+
+	return BuildMode::Skip;
 }
 
 nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
@@ -251,66 +271,59 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	auto* device = renderer->GetDevice();
 	const auto frameIndex = renderer->GetFrameIndex();
 
-	if (frameIndex == m_LastBuild) {
+	if (frameIndex == m_LastBuildFrame) {
 		logger::info("BLASCluster::BuildUpdate - {} already built this frame, skipping", m_Name);
 		return;
 	}
 
-	// Pull dirty state from the members; upload any pending GPU data while we're here.
-	const bool anyStructure = m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh);
-	const bool anyUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
+	// Update() normally collects these flags, but clusters with no visible mesh are not
+	// included in SceneGraph's update work list. Keep the build decision correct for those
+	// clusters as well (notably sub-index segments toggling visibility).
+	CollectMemberDirtyFlags();
 
-	// Decide what to do from dirtiness only. An empty/failed cluster keeps m_BLAS == null, so basing
-	// this on (!m_BLAS) would force a "rebuild" every frame forever; gate the first build on m_LastBuild instead.
-	const bool firstBuild = (m_LastBuild == Constants::INVALID_FRAME_INDEX);
-
-	bool rebuild = false;
-
-	if (firstBuild || anyStructure) {
-		rebuild = true;
+	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
+	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags.any(DirtyFlags::Visibility)) {
+		// Orphan clusters contain one mesh and are excluded from the TLAS while hidden.
+		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
+		m_DirtyFlags.reset();
+		m_LastBuildFrame = frameIndex;
+		return;
 	}
-	else if (anyUpdate) {
-		if (m_NumUpdatesSinceRebuild >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE) {
-			rebuild = sceneGraph->TryMaintenanceRebuild(frameIndex);
-		}
-	}
-	else {
-		logger::warn("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set.",
+	if (buildMode == BuildMode::Skip) {
+		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set.",
 			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size());
 		return;
 	}
 
-	if (rebuild)
-		m_NumUpdatesSinceRebuild = 0;
+	if (buildMode == BuildMode::Rebuild)
+		m_UpdateCount = 0;
 	else
-		m_NumUpdatesSinceRebuild++;
+		m_UpdateCount++;
 
 	if (m_GeometryDescs.empty()) {
 		m_BLAS = nullptr;
-		m_LastBuild = frameIndex;
+		m_LastBuildFrame = frameIndex;
 		m_DirtyFlags.reset();
 		return;
 	}
 
-	// Allocate a new accel struct on first build or when the required size grows; a refit needs an
-	// existing BLAS, so if there isn't one yet, promote to a full rebuild.
-	bool allocate = !m_BLAS;
-	if (allocate)
-		rebuild = true;
+	// Allocate a new accel struct on first build or when the required size grows.
+	const bool allocate = !m_BLAS;
 
-	auto blasDesc = MakeDesc(!rebuild);
+	auto blasDesc = MakeDesc(buildMode);
 	blasDesc.bottomLevelGeometries = m_GeometryDescs;
 
-	if (!allocate && rebuild) {
+	bool needsAllocation = allocate;
+	if (!needsAllocation && buildMode == BuildMode::Rebuild) {
 		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);
-		allocate = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
+		needsAllocation = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
 	}
 
-	if (allocate)
+	if (needsAllocation)
 		m_BLAS = device->createAccelStruct(blasDesc);
 
 	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
 
 	m_DirtyFlags.reset();
-	m_LastBuild = frameIndex;
+	m_LastBuildFrame = frameIndex;
 }

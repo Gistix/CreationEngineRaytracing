@@ -21,6 +21,13 @@ struct Light;
 // and the instance (owner-world) transform is cached here via SetInstanceTransform.
 class BLASCluster
 {
+	enum class BuildMode
+	{
+		Skip,
+		Rebuild,
+		Update
+	};
+
 	enum Flags
 	{
 		None = 0,
@@ -52,8 +59,8 @@ class BLASCluster
 
 	friend class SceneGraph;
 
-	uint32_t m_NumUpdatesSinceRebuild = 0;
-	uint64_t m_LastBuild = Constants::INVALID_FRAME_INDEX;
+	uint32_t m_UpdateCount = 0;
+	uint64_t m_LastBuildFrame = Constants::INVALID_FRAME_INDEX;
 
 	// TLAS instance slot, assigned during SceneGraph::Update population
 	uint32_t m_InstanceIndex = 0; 
@@ -63,8 +70,10 @@ class BLASCluster
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
 
 	void UpdateTransform();
+	void CollectMemberDirtyFlags();
+	BuildMode DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex);
 
-	nvrhi::rt::AccelStructDesc MakeDesc(bool update) const;
+	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
 
 	InstanceLightData GetInstanceLightData(
 		const eastl::map<RE::BSLight*, Light>& lights,
