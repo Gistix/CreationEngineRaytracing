@@ -417,29 +417,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// Phase A: Fast traversal — collect into update/create lists, skip heavy processing
 	{
 		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
-		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex, commandList](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
-			// BSSubIndexTriShape is handled inline: a SubIndexMesh manager is stored in
-			// m_DirectMeshes (for lifecycle) and owns K SubIndexSegmentMesh children, one
-			// per visible segment. Each child lives in its own cluster in
-			// m_SubIndexSegmentClusters, so it gets its own BLAS / InstanceData / TLAS entry.
-			if (auto* subIndexShape = Util::Adapter::AsSubIndexTriShape(bsTriShape)) {
-				auto it = m_DirectMeshes.find(bsTriShape);
-				SubIndexMesh* subIndexMesh = nullptr;
-				if (it != m_DirectMeshes.end()) {
-					subIndexMesh = static_cast<SubIndexMesh*>(it->second.get());
-				} else {
-					auto created = eastl::make_unique<SubIndexMesh>(subIndexShape, this);
-					subIndexMesh = created.get();
-					m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
-				}
-				subIndexMesh->SetOwner(refr);
-				subIndexMesh->SetLastVisitedFrame(frameIndex);
-				subIndexMesh->SetHidden(false);
-				subIndexMesh->Update(commandList);
-				m_CurrentVisible.push_back(subIndexMesh);
-				return CESEAdapter::RE::BSVisitControl::kContinue;
-			}
-
+		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
 			auto it = m_DirectMeshes.find(bsTriShape);
 			if (it != m_DirectMeshes.end()) {
 				auto mesh = it->second.get();
@@ -462,17 +440,23 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			auto& [mesh, refr] = entry;
 			mesh->SetLastVisitedFrame(frameIndex);
 			const bool ownerChanged = mesh->SetOwner(refr);
-			auto cluster = mesh->GetCluster();
 
-			if (ownerChanged || !cluster) {
-				if (cluster) {
-					cluster->RemoveMember(mesh);
+			// SubIndexMesh is in m_DirectMeshes (for lifecycle) but NOT a member of any
+			// BLASCluster itself; the K SubIndexSegmentMesh children live in their own
+			// clusters in m_SubIndexSegmentClusters, managed by SubIndexMesh::Update.
+			if (!mesh->AsSubIndexMesh()) {			
+				auto cluster = mesh->GetCluster();
+
+				if (ownerChanged || !cluster) {
+					if (cluster) {
+						cluster->RemoveMember(mesh);
+						MarkClusterDirty(cluster);
+					}
+
+					cluster = GetOrCreateCluster(refr, mesh->GetTriShape());
+					cluster->AddMember(mesh);
 					MarkClusterDirty(cluster);
 				}
-
-				cluster = GetOrCreateCluster(refr, mesh->GetTriShape());
-				cluster->AddMember(mesh);
-				MarkClusterDirty(cluster);
 			}
 
 			mesh->SetHidden(false);
@@ -585,7 +569,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			if (inserted) {
 				auto mesh = it2->second.get();
 
-				{
+				// SubIndexMesh: not a member of any cluster itself; the K SubIndexSegmentMesh
+				// children will be added to their own clusters by SubIndexMesh::Update.
+				if (!mesh->AsSubIndexMesh()) {
 					auto* cluster = GetOrCreateCluster(refr, bsTriShape);
 					cluster->AddMember(mesh);
 					MarkClusterDirty(cluster);
