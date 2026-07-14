@@ -292,6 +292,7 @@ float3 EvaluateSubsurfaceDiffuseNEE(
 
                     }
                 }
+            }
         }
 
         if (sampleCount > 0)
