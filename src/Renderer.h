@@ -161,7 +161,7 @@ public:
 	struct RendererSettings
 	{
 		bool UseRayQuery = true;
-		bool ValidationLayer = false;
+		bool ValidationLayer = true;
 	} m_Settings;
 
 	static Renderer* GetSingleton()

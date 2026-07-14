@@ -17,6 +17,8 @@
 
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
+#include "Core/SubIndexMesh.h"
+#include "Core/SubIndexSegmentMesh.h"
 
 #include <chrono>
 
@@ -415,7 +417,29 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// Phase A: Fast traversal — collect into update/create lists, skip heavy processing
 	{
 		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
-		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
+		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex, commandList](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
+			// BSSubIndexTriShape is handled inline: a SubIndexMesh manager is stored in
+			// m_DirectMeshes (for lifecycle) and owns K SubIndexSegmentMesh children, one
+			// per visible segment. Each child lives in its own cluster in
+			// m_SubIndexSegmentClusters, so it gets its own BLAS / InstanceData / TLAS entry.
+			if (auto* subIndexShape = Util::Adapter::AsSubIndexTriShape(bsTriShape)) {
+				auto it = m_DirectMeshes.find(bsTriShape);
+				SubIndexMesh* subIndexMesh = nullptr;
+				if (it != m_DirectMeshes.end()) {
+					subIndexMesh = static_cast<SubIndexMesh*>(it->second.get());
+				} else {
+					auto created = eastl::make_unique<SubIndexMesh>(subIndexShape, this);
+					subIndexMesh = created.get();
+					m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
+				}
+				subIndexMesh->SetOwner(refr);
+				subIndexMesh->SetLastVisitedFrame(frameIndex);
+				subIndexMesh->SetHidden(false);
+				subIndexMesh->Update(commandList);
+				m_CurrentVisible.push_back(subIndexMesh);
+				return CESEAdapter::RE::BSVisitControl::kContinue;
+			}
+
 			auto it = m_DirectMeshes.find(bsTriShape);
 			if (it != m_DirectMeshes.end()) {
 				auto mesh = it->second.get();
@@ -459,7 +483,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			for (size_t i = start; i < end; ++i) {
 				auto& [bsTriShape, refr] = m_CreateList[i];
 
-				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
+				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
 					continue;
 
 				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
@@ -578,6 +602,15 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto& mesh : m_PreviousVisible) {
 		if (mesh->GetLastVisitedFrame() != frameIndex) {
 			mesh->SetHidden(true);
+
+			// SubIndexMesh: not a member of any cluster itself, but owns K SubIndexSegmentMesh
+			// children in m_SubIndexSegmentClusters. Tear them all down; they'll be re-created
+			// on the next Update when the parent is visited again.
+			if (auto* subIndexMesh = mesh->AsSubIndexMesh()) {
+				subIndexMesh->DestroyAllSegments();
+				continue;
+			}
+
 			if (auto* cluster = mesh->GetCluster()) {
 				cluster->RemoveMember(mesh);
 				MarkClusterDirty(cluster);
@@ -609,10 +642,19 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			++it;
 	}
 
+	for (auto it = m_SubIndexSegmentClusters.begin(); it != m_SubIndexSegmentClusters.end(); ) {
+		if (it->second->Empty()) {
+			m_DirtyClusters.erase(it->second.get());
+			it = m_SubIndexSegmentClusters.erase(it);
+		}
+		else
+			++it;
+	}
+
 	// Phase E1 (serial): pre-compute per-cluster array offsets
 	struct ClusterWork { BLASCluster* cluster; uint32_t meshStart; uint32_t instanceIndex; };
 	eastl::vector<ClusterWork> clusterWork;
-	clusterWork.reserve(m_OwnerClusters.size() + m_OrphanClusters.size());
+	clusterWork.reserve(m_OwnerClusters.size() + m_OrphanClusters.size() + m_SubIndexSegmentClusters.size());
 
 	uint32_t meshCounter = 0;
 	uint32_t instanceCounter = 0;
@@ -629,6 +671,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto& [owner, cluster] : m_OwnerClusters)
 		reserveCluster(cluster.get());
 	for (auto& [bsTriShape, cluster] : m_OrphanClusters)
+		reserveCluster(cluster.get());
+	for (auto& [segment, cluster] : m_SubIndexSegmentClusters)
 		reserveCluster(cluster.get());
 
 	m_NumMeshes = meshCounter;
@@ -718,6 +762,31 @@ BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriS
 	return owner
 		? GetOrCreateClusterImpl(m_OwnerClusters, m_OwnerClusterMutex, owner, owner)
 		: GetOrCreateClusterImpl(m_OrphanClusters, m_OrphanClusterMutex, bsTriShape, nullptr);
+}
+
+BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner)
+{
+	auto it = m_SubIndexSegmentClusters.find(segment);
+	if (it != m_SubIndexSegmentClusters.end())
+		return it->second.get();
+
+	auto cluster = eastl::make_unique<BLASCluster>(owner);
+	auto* rawCluster = cluster.get();
+	m_SubIndexSegmentClusters.emplace(segment, eastl::move(cluster));
+	return rawCluster;
+}
+
+void SceneGraph::RemoveSegmentCluster(SubIndexSegmentMesh* segment)
+{
+	auto it = m_SubIndexSegmentClusters.find(segment);
+	if (it == m_SubIndexSegmentClusters.end())
+		return;
+
+	auto* cluster = it->second.get();
+	// The segment is the cluster's only member; remove it and drop the cluster.
+	cluster->RemoveMember(segment);
+	m_DirtyClusters.erase(cluster);
+	m_SubIndexSegmentClusters.erase(it);
 }
 
 void SceneGraph::MarkClusterDirty(BLASCluster* cluster)

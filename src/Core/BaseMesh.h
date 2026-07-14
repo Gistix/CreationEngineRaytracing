@@ -30,8 +30,7 @@ public:
 		Hidden = 1 << 0,
 		Detached = 1 << 1,
 		DismemberHidden = 1 << 2,
-		SubIndexHidden = 1 << 3,
-		Destroyed = 1 << 4
+		Destroyed = 1 << 3
 	};
 
 	enum class Type : uint8_t
@@ -60,7 +59,7 @@ public:
 
 	bool IsHidden() const;
 
-	void OnDestroy();
+	virtual void OnDestroy();
 
 	virtual SkinnedMesh* AsSkinnedMesh() { return nullptr; }
 

@@ -26,6 +26,7 @@
 #include <shared_mutex>
 
 class LandLODMesh;
+class SubIndexSegmentMesh;
 
 class SceneGraph
 {
@@ -38,6 +39,11 @@ class SceneGraph
 	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
+
+	// One BLAS / TLAS instance per SubIndexMesh segment. Each SubIndexSegmentMesh lives
+	// in its own cluster so it gets its own BLAS, InstanceData slot, and TLAS entry —
+	// independent of the parent BSSubIndexTriShape and independent of any siblings.
+	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	mutable std::mutex m_MeshDestroyMutex;
@@ -137,7 +143,13 @@ public:
 
 	inline auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline auto& GetOrphanClusters() { return m_OrphanClusters; }
+	inline auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
 	inline auto& GetDirtyClusters() { return m_DirtyClusters; }
+
+	// Per-segment cluster helpers. Called by SubIndexMesh when it creates/destroys a
+	// SubIndexSegmentMesh child. The segment is the unique key into m_SubIndexSegmentClusters.
+	BLASCluster* GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner);
+	void RemoveSegmentCluster(SubIndexSegmentMesh* segment);
 	
 	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 

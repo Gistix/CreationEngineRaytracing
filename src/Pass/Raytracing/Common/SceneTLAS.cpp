@@ -103,6 +103,6 @@ namespace Pass
 
 		sceneGraph->BuildClusters(commandList);
 
-		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters());
+		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters(), sceneGraph->GetSubIndexSegmentClusters());
 	}
 }

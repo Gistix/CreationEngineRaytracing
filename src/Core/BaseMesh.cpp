@@ -12,6 +12,12 @@
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
+	// BSSubIndexTriShape is handled separately by SceneGraph::Update: the traversal
+	// callback creates a SubIndexMesh manager (stored in m_DirectMeshes) which then
+	// owns K SubIndexSegmentMesh children. Skip it here so we don't double-create.
+	if (Util::Adapter::AsSubIndexTriShape(bsTriShape))
+		return nullptr;
+
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 
 	if (geometryData.rendererData) {
@@ -19,9 +25,6 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 			if (extra->size > 0 && extra->value[0] == 4)
 				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
 		}
-
-		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
-			return eastl::make_unique<SubIndexMesh>(subIndexTriShape, commandList);
 
 		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
 	}

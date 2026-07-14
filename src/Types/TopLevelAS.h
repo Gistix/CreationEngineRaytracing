@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "Core/BaseMesh.h"
 #include "Core/BLASCluster.h"
+#include "Core/SubIndexSegmentMesh.h"
 #include "Scene.h"
 #include "Events/ITLASUpdateListener.h"
 
@@ -38,10 +39,11 @@ public:
 
 	void Update(nvrhi::ICommandList* commandList,
 		const eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>>& ownerClusters,
-		const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>>& orphanClusters)
+		const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>>& orphanClusters,
+		const eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>>& subIndexSegmentClusters)
 	{
 		m_InstanceDescs.clear();
-		m_InstanceDescs.reserve(ownerClusters.size() + orphanClusters.size());
+		m_InstanceDescs.reserve(ownerClusters.size() + orphanClusters.size() + subIndexSegmentClusters.size());
 
 		auto* scene = Scene::GetSingleton();
 		const auto& markers = scene->m_Settings.DebugSettings.Markers;
@@ -58,6 +60,11 @@ public:
 			addCluster(cluster.get());
 
 		for (const auto& [triShape, cluster] : orphanClusters)
+			addCluster(cluster.get());
+
+		// Per-segment clusters: each SubIndexMesh segment gets its own BLAS, InstanceData,
+		// and TLAS entry — independent of the parent BSSubIndexTriShape and its siblings.
+		for (const auto& [segment, cluster] : subIndexSegmentClusters)
 			addCluster(cluster.get());
 
 		const uint32_t numInstances = scene->GetSceneGraph()->GetNumInstancesFrame();
