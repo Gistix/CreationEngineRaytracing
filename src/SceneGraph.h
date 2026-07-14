@@ -103,6 +103,7 @@ class SceneGraph
 		RE::TESObjectREFR* refr;
 	};
 	eastl::vector<MeshCreateCandidate> m_CreateCandidates;
+	eastl::vector<eastl::vector<MeshCreateCandidate>> m_PerWorkerCreateCandidates;
 	
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 
