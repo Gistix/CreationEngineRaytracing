@@ -192,7 +192,7 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 { 
 	ClearDirtyFlags();
 
-	m_Properties = { m_BSTriShape };
+	m_Properties = { m_BSTriShape, m_Flags.all(Flags::Eyes)};
 
 	m_WorldBound = m_BSTriShape->worldBound;
 
@@ -271,7 +271,35 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 	
 	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
 	MarkDirty(DirtyFlags::Visibility);
+	
+	SetEyeFlag();
+
 	return true;
+}
+
+void BaseMesh::SetEyeFlag()
+{
+	if (!m_Owner)
+		return;
+
+	// Once an eye, always an eye.
+	if (!m_Flags.none(Flags::Eyes))
+		return;
+
+	auto baseObj = m_Owner->GetBaseObject();
+	if (!baseObj)
+		return;
+
+	auto npc = baseObj->As<RE::TESNPC>();
+	if (!npc)
+		return;
+
+	auto eyePart = npc->GetCurrentHeadPartByType(RE::BGSHeadPart::HeadPartType::kEyes);
+	if (!eyePart)
+		return;
+
+	const bool isEye = (strcmp(eyePart->formEditorID.c_str(), m_Name.c_str()) == 0);
+	m_Flags.set(isEye, Flags::Eyes);
 }
 
 void BaseMesh::CreateMaterial()

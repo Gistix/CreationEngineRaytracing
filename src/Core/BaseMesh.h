@@ -47,7 +47,8 @@ public:
 	{
 		None = 0,
 		LandLOD4 = 1 << 0,
-		DismemberSkinInstance = 1 << 1
+		DismemberSkinInstance = 1 << 1,
+		Eyes = 1 << 2
 	};
 
 	virtual ~BaseMesh() = default;
@@ -98,6 +99,10 @@ public:
 
 	// Stores the owner pointer for grouping/comparison only (never dereferenced); returns true if it changed.
 	bool SetOwner(RE::TESObjectREFR* owner);
+
+	// Some eye meshes use EnvironmentMap shader instead of Eye shader
+	// Detect them by comparing geometry name to headpart name
+	void SetEyeFlag();
 
 	const float3x4& GetTransform() const { return m_Transform; }
 
