@@ -87,16 +87,24 @@ namespace Util
 			return result;
 		}
 
-		// A custom visit controller built to pass down visibility and owner reference
+		// A custom visit controller built to propagate down the "owning" TESObjectREFR
+		template <typename Func>
 		static CESEAdapter::RE::BSVisitControl ScenegraphTriShapes(
 			RE::NiAVObject* a_object, 
-			std::function<CESEAdapter::RE::BSVisitControl(RE::BSTriShape*, RE::TESObjectREFR*)> a_func, 
+			Func&& a_func,
 			RE::TESObjectREFR* parentRefr = nullptr)
 		{
 			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
 			if (!a_object)
 				return result;
+
+			if (Util::Adapter::IsNiAVObjectHidden(a_object))
+				return result;
+
+			// Early return for TriShapes — most common actionable leaf
+			if (auto geom = Util::Adapter::AsTriShape(a_object))
+				return a_func(geom, parentRefr);
 
 			auto rtti = a_object->GetRTTI();
 
@@ -106,32 +114,43 @@ namespace Util
 			if (rtti == Constants::rtti::BSOrderedNode.get())
 				return result;
 
-			if (Util::Adapter::IsNiAVObjectHidden(a_object))
-				return result;
+			// Only nodes can have children or be FadeNodes
+			if (auto node = Util::Adapter::AsNode(a_object))
+			{
+				auto& children = Util::Adapter::GetChildren(node);
+				if (auto switchNode = node->AsSwitchNode()) {
+					auto index = static_cast<uint16_t>(switchNode->index);
+					result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr);
+				}
+				else {
+					// Propagate owner refr through FadeNodes
+					auto refr = parentRefr;
+					if (rtti == Constants::rtti::BSFadeNode.get()) {
+						if (auto owner = Util::Adapter::GetOwner(a_object))
+							refr = owner;
+					}
+					else if (rtti == Constants::rtti::ShadowSceneNode.get()) {
+						auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
+						if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+							// Iterate over PortalGraph always render children
+							// This list contains rendered nodes that are outside of the normal SceneGraph
+							for (auto& child : portalGraph->alwaysRenderChildren)
+							{
+								// Only those who are outside the Scenegraph
+								if (child->parent)
+									continue;
 
-			// Set as parent refr to propagate it downwards
-			auto refr = parentRefr; 
+								result = ScenegraphTriShapes(child.get(), a_func, refr);
+								if (result == CESEAdapter::RE::BSVisitControl::kStop)
+									break;
+							}
+						}
+					}
 
-			// Update refr if it actually exists (else keep the parent refr)
-			if (auto fadeNode = Util::Adapter::AsFadeNode(a_object))
-				if (auto owner = Util::Adapter::GetOwner(fadeNode))
-					refr = owner;
-
-			auto geom = Util::Adapter::AsTriShape(a_object);
-			if (geom) {
-				return a_func(geom, refr);
-			}
-
-			auto node = Util::Adapter::AsNode(a_object);
-			if (node) {
-				for (auto& child : Util::Adapter::GetChildren(node)) {
-					if (!child)
-						continue;
-
-					result = ScenegraphTriShapes(child.get(), a_func, refr);
-
-					if (result == CESEAdapter::RE::BSVisitControl::kStop) {
-						break;
+					for (auto& child : children) {
+						result = ScenegraphTriShapes(child.get(), a_func, refr);
+						if (result == CESEAdapter::RE::BSVisitControl::kStop)
+							break;
 					}
 				}
 			}

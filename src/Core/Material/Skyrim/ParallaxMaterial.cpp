@@ -6,30 +6,27 @@
 ParallaxMaterial::ParallaxMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
 	m_Offset = offset;
+	m_HashKey = shaderMaterial->hashKey;
 
 	m_Data = eastl::make_unique<ParallaxMaterialData>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void ParallaxMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void ParallaxMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
-
-	auto parallaxData = reinterpret_cast<Data*>(data);
-
-	parallaxData->HeightTexture = m_HeightTexture.GetDescriptorIndex();
+	LightingMaterial::UpdateData(shaderMaterial);
 }
 
 void ParallaxMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
 
-	auto parallaxMaterial = skyrim_cast<RE::BSLightingShaderMaterialParallax*>(shaderMaterial);
-	if (!parallaxMaterial) {
-		logger::error("ParallaxMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialParallax");
-		return;
-	}
+	auto parallaxMaterial = reinterpret_cast<RE::BSLightingShaderMaterialParallax*>(shaderMaterial);
 
-	m_HeightTexture = MaterialManager::GetTexture(parallaxMaterial->heightTexture, Renderer::GetSingleton()->GetWhiteTextureDescriptor());
+	auto parallaxData = reinterpret_cast<Data*>(m_Data.get());
+
+	if (m_HeightTexture.Update(parallaxMaterial->heightTexture, Renderer::GetSingleton()->GetWhiteTextureDescriptor()))
+		parallaxData->HeightTexture = m_HeightTexture.texture.GetDescriptorIndex();
 }

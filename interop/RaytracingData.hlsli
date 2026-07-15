@@ -36,10 +36,11 @@ INTEROP_STRUCT(RaytracingData, 16)
     INTEROP_DATA_TYPE(Light) DirectionalLight;
     SubSurfaceScattering SubSurfaceScattering;
     float4 HitDistSettings;
+    float3 WaterObjectUV;
     uint NumInstances;
     uint EnableReSTIRPT;
     uint Pad0;
-    uint Pad1;
+    float2 WaterDisplacementPosition;
 };
 VALIDATE_CBUFFER(RaytracingData, 16);
 

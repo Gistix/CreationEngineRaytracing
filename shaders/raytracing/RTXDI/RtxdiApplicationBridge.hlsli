@@ -79,7 +79,9 @@ Surface PSD_UnpackToSurface(PackedSurfaceData d)
     s.Roughness    = f16tof32(d.roughMetallic & 0xFFFF);
     s.Metallic     = f16tof32(d.roughMetallic >> 16);
     s.Albedo       = s.Metallic > 0.5 ? s.F0 : s.DiffuseAlbedo;
+#if defined(RASTER)
     s.Alpha        = 1.0;
+#endif
 
     // Compute derived fields
     float maxF0 = max(max(s.F0.r, s.F0.g), s.F0.b);

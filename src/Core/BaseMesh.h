@@ -17,9 +17,10 @@ class BaseMesh
 {
 	void ClearDirtyFlags() { m_DirtyFlags.reset(); }
 
+	void UpdateMaterial();
 public:
 	struct BufferDescriptor {
-		nvrhi::BufferHandle m_Buffer;
+		nvrhi::BufferHandle m_Buffer = nullptr;
 		DescriptorHandle m_Descriptor;
 	};
 
@@ -38,7 +39,8 @@ public:
 		Base,
 		Default,
 		Skinned,
-		Dynamic
+		Dynamic,
+		SubIndex
 	};
 
 	enum class Flags : uint8_t
@@ -54,15 +56,17 @@ public:
 	static eastl::unique_ptr<BaseMesh> Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
 	// Returns true if the hidden state changed (which flags the mesh structurally dirty).
-	bool SetHidden(bool hidden);
+	virtual void SetHidden(bool hidden);
 
 	bool IsHidden() const;
 
-	void OnDestroy();
+	virtual void OnDestroy();
 
 	virtual SkinnedMesh* AsSkinnedMesh() { return nullptr; }
 
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
+
+	virtual class SubIndexMesh* AsSubIndexMesh() { return nullptr; }
 
 	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
 	virtual uint32_t GetDynamicIndex() const { return 0; }
@@ -74,6 +78,8 @@ public:
 
 	// True for meshes whose vertex data changes per frame, so their cluster BLAS must be refit.
 	virtual bool IsUpdatable() const { return false; }
+
+	bool IsTwoSided();
 
 	// Returns the mesh's geometry descs (identity transform with the local-to-owner transform baked in).
 	// DirectMesh holds a single desc; SkinnedMesh/DynamicMesh hold one per partition.
@@ -99,9 +105,12 @@ public:
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
 	
+	const Properties& GetProperties() const { return m_Properties; }
+	const eastl::shared_ptr<MaterialBase>& GetMaterial() const { return m_Material; }
+	
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
 
-	void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform);
+	virtual void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform);
 
 	// Writes one MeshData per geometry into 'out' (starting at out[0]); returns the number written.
 	uint32_t WriteMeshData(MeshData* out) const;
@@ -132,7 +141,7 @@ protected:
 
 	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
-	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
+	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
 
 	void CreateMaterial();
 
@@ -150,12 +159,12 @@ protected:
 	BLASCluster* m_Cluster = nullptr;
 
 	// Cached world transform from BSTriShape, refreshed in Update().
-	float3x4 m_Transform;
-	float3x4 m_PrevTransform;
+	float3x4 m_Transform = Constants::kIdentityTransform;
+	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 
 	// Local to the BLASCluster
-	float3x4 m_LocalTransform;
-	float3x4 m_PrevLocalTransform;
+	float3x4 m_LocalTransform = Constants::kIdentityTransform;
+	float3x4 m_PrevLocalTransform = Constants::kIdentityTransform;
 
 	RE::NiBound m_WorldBound;
 

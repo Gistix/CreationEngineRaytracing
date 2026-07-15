@@ -41,11 +41,16 @@ namespace AlphaFlags
     static const uint16_t Additive = (1 << 3);
 }
 
-namespace WaterShaderFlags
+namespace WaterFlags
 {
-    static const uint kEnableFlowmap = (1 << 15);
-    static const uint kBlendNormals = (1 << 16);
-    static const uint kVertexUV = (1 << 8);
+    static const uint16_t kActorInWater = (1 << 0);
+    static const uint16_t kActorMovingInWater = (1 << 1);
+    static const uint16_t kVertexUV = (1 << 2);
+    static const uint16_t kEnableFlowmap = (1 << 3);
+    static const uint16_t kBlendNormals = (1 << 4);
+    static const uint16_t kDisplacement = (1 << 5);
+    static const uint16_t kVertexAlphaDepth = (1 << 6);
+    static const uint16_t kDepth = (1 << 7);
 }
 #endif
 
@@ -53,14 +58,14 @@ INTEROP_DATA_STRUCT(Properties, 4)
 { 
     uint ShaderFlags;
     uint16_t AlphaFlags;
+    uint16_t WaterFlags;
     half AlphaThreshold;
     half Alpha;
     half4 EmissiveColor;
-    half4 ProjectedUVParams0;
-    half4 ProjectedUVParams1;
+    half4 ProjectedUVParams;
     half4 ProjectedUVParams2;
     half4 ProjectedUVParams3;
-    uint16_t Pad;
+    half4 TextureProj;
 };
 VALIDATE_ALIGNMENT(PropertiesData, 4);
 

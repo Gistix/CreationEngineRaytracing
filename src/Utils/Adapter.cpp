@@ -85,10 +85,10 @@ namespace Util
 #endif	
 		}
 
-		RE::TESObjectREFR* GetOwner(RE::BSFadeNode* a_fadeNode)
+		RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object)
 		{
 #if defined(SKYRIM)
-			return REL::RelocateMember<RE::TESObjectREFR*>(a_fadeNode, 0x0F8, 0x110);
+			return REL::RelocateMember<RE::TESObjectREFR*>(a_object, 0x0F8, 0x110);
 #elif defined(FALLOUT4)
 			return;
 #endif	

@@ -11,13 +11,13 @@ struct FacegenMaterial : public LightingMaterial
 
 	FacegenMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
-	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
+	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_TintTexture;
-	Texture m_DetailTexture;
-	Texture m_SubsurfaceTexture;
+	MaterialTexture m_TintTexture;
+	MaterialTexture m_DetailTexture;
+	MaterialTexture m_SubsurfaceTexture;
 };

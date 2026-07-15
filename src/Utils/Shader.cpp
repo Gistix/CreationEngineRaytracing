@@ -44,7 +44,7 @@ namespace Util
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
 
-			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::GI_DISPATCH_THREADS);
+			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::PT_DISPATCH_THREADS);
 
 			defines.emplace_back(L"HAS_PREV_POSITIONS", L"1");
 			

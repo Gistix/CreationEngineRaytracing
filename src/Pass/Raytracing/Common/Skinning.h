@@ -66,6 +66,7 @@ namespace Pass
 		};
 
 		eastl::unordered_map<SkinnedMesh*, QueuedMesh> queuedMeshes;
+		std::mutex m_QueueMutex;
 
 	public:
 		Skinning(Renderer* renderer);

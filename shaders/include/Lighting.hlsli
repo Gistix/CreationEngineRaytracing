@@ -8,7 +8,6 @@
 
 #include "raytracing/include/Common.hlsli"
 #include "include/ColorConversions.hlsli"
-#include "raytracing/include/Common.hlsli"
 #include "raytracing/include/Rays.hlsli"
 #include "raytracing/include/MonteCarlo.hlsli"
 #include "include/Surface.hlsli"
@@ -19,6 +18,7 @@ static const float ISL_SCALE = 0.8f;
 static const float ISL_METRES_TO_UNITS = 70.f;
 static const float ISL_METRES_TO_UNITS_SQ = ISL_METRES_TO_UNITS * ISL_METRES_TO_UNITS;
 static const float ISL_SCALED_UNITS_SQ = ISL_SCALE * ISL_METRES_TO_UNITS_SQ;
+static const float RCP_ISL_SCALED_UNITS_SQ = rcp(ISL_SCALED_UNITS_SQ);
 
 #define DIRECTIONAL_LIGHT Raytracing.DirectionalLight
 #define SKY_HEMI SkyHemisphere
@@ -144,7 +144,7 @@ float GetAttenuation(Light light, float dist, inout float lightSourceAngle)
 		float t = saturate((light.Radius - dist) * light.FadeZone);
 		float fastSmoothstep = t * t * (3.0f - 2.0f * t);
 		atten = invSq * fastSmoothstep;
-        float size = sqrt((light.SizeBias * 2.0f) / (0.8 * 4900));
+        float size = sqrt((light.SizeBias * 2.0f) * RCP_ISL_SCALED_UNITS_SQ);
         lightSourceAngle = atan2(size, dist);
 	}
 	else
@@ -153,6 +153,16 @@ float GetAttenuation(Light light, float dist, inout float lightSourceAngle)
 		atten = 1.0f - intensityFactor * intensityFactor;
 	}
     return atten;
+}
+
+float GetLightAngle(Light light, float dist)
+{
+    if ((light.Flags & LightFlags::ISL) != 0)
+    {
+        float size = sqrt((light.SizeBias * 2.0f) * RCP_ISL_SCALED_UNITS_SQ);
+        return atan2(size, dist);
+    }
+    return 0.005f;
 }
 
 float GetLightSampleWeight(Surface surface, Light light)
@@ -338,9 +348,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
             {
                 // Compute the angular size of this light as seen from the surface
                 Light light = Lights[lightIndex];
-                float lightSourceAngle = 0.005f;
-                float distM = dist * GAME_UNIT_TO_M;
-                GetAttenuation(light, distM, lightSourceAngle);
+                float lightSourceAngle = GetLightAngle(light, dist * GAME_UNIT_TO_M);
                 
                 // Check if delta direction is within the light's angular extent
                 float3 dirToLight = normalize(light.Vector - surface.Position);

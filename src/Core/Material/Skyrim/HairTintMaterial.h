@@ -11,7 +11,7 @@ struct HairTintMaterial : public LightingMaterial
 
 	HairTintMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 };
