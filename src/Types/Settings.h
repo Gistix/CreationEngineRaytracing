@@ -239,6 +239,7 @@ struct ExperimentalSettings
 	bool PathTracingCull = false;
 	TextureMode TextureMode = TextureMode::Share;
 	uint32_t TextureCutOff = 0;
+	bool GlobalLights = false;
 };
 
 struct DebugSettings
