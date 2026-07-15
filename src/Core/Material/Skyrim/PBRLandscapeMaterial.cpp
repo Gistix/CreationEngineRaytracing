@@ -104,6 +104,19 @@ void PBRLandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	if (m_NormalTextures[5].Update(landMaterial->landscapeNormalTextures[5], renderer->GetNormalTextureDescriptor()))
 		landData->NormalTexture5 = m_NormalTextures[5].texture.GetDescriptorIndex();
 
+	if (m_DisplacementTextures[0].Update(landMaterial->landscapeDisplacementTextures[0], renderer->GetBlackTextureDescriptor()))
+		landData->DisplacementTexture0 = m_DisplacementTextures[0].texture.GetDescriptorIndex();
+	if (m_DisplacementTextures[1].Update(landMaterial->landscapeDisplacementTextures[1], renderer->GetBlackTextureDescriptor()))
+		landData->DisplacementTexture1 = m_DisplacementTextures[1].texture.GetDescriptorIndex();
+	if (m_DisplacementTextures[2].Update(landMaterial->landscapeDisplacementTextures[2], renderer->GetBlackTextureDescriptor()))
+		landData->DisplacementTexture2 = m_DisplacementTextures[2].texture.GetDescriptorIndex();
+	if (m_DisplacementTextures[3].Update(landMaterial->landscapeDisplacementTextures[3], renderer->GetBlackTextureDescriptor()))
+		landData->DisplacementTexture3 = m_DisplacementTextures[3].texture.GetDescriptorIndex();
+	if (m_DisplacementTextures[4].Update(landMaterial->landscapeDisplacementTextures[4], renderer->GetBlackTextureDescriptor()))
+		landData->DisplacementTexture4 = m_DisplacementTextures[4].texture.GetDescriptorIndex();
+	if (m_DisplacementTextures[5].Update(landMaterial->landscapeDisplacementTextures[5], renderer->GetBlackTextureDescriptor()))
+		landData->DisplacementTexture5 = m_DisplacementTextures[5].texture.GetDescriptorIndex();
+
 	if (m_RMAOSTextures[0].Update(landMaterial->landscapeRMAOSTextures[0], renderer->GetRMAOSTextureDescriptor()))
 		landData->RMAOSTexture0 = m_RMAOSTextures[0].texture.GetDescriptorIndex();
 	if (m_RMAOSTextures[1].Update(landMaterial->landscapeRMAOSTextures[1], renderer->GetRMAOSTextureDescriptor()))

@@ -56,12 +56,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct NiCullingProcess_AppendVirtual
-	{
-		static void thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2);
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BSBatchRenderer_RenderPassImmediately
 	{
 		static void thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags);

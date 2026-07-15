@@ -72,7 +72,9 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
+			nvrhi::BindingLayoutItem::Texture_SRV(13),           // Water displacement
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
+			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
 		};
 
@@ -110,17 +112,18 @@ namespace Pass::Raytracing
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"0");
+		eastl::vector<DxcDefine> commonDefines;
 		//defines.emplace_back(L"DISABLE_NORMAL_REJECTION", L"1");
 
 		auto device = GetRenderer()->GetDevice();
 
 		// Compile Libraries
 		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines);
-		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", defines);
-		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", defines);
-		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", defines);
-		auto shadowMissLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowMiss.hlsl", defines);
-		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", defines);
+		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", commonDefines);
+		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", commonDefines);
+		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", commonDefines);
+		auto shadowMissLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowMiss.hlsl", commonDefines);
+		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", commonDefines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
 
@@ -259,7 +262,9 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 

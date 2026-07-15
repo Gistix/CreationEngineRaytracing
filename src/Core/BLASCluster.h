@@ -6,6 +6,8 @@
 #include "Instance.hlsli"
 #include "Light.hlsli"
 
+#include <mutex>
+
 class SceneGraph;
 
 struct Light;
@@ -19,6 +21,13 @@ struct Light;
 // and the instance (owner-world) transform is cached here via SetInstanceTransform.
 class BLASCluster
 {
+	enum class BuildMode
+	{
+		Skip,
+		Rebuild,
+		Update
+	};
+
 	enum Flags
 	{
 		None = 0,
@@ -31,6 +40,7 @@ class BLASCluster
 
 	eastl::vector<BaseMesh*> m_Members;
 	eastl::hash_set<BaseMesh*> m_MemberSet;
+	mutable std::mutex m_MemberMutex;
 
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
@@ -38,8 +48,8 @@ class BLASCluster
 
 	eastl::string m_Name;
 
-	float3x4 m_Transform;
-	float3x4 m_PrevTransform;
+	float3x4 m_Transform = Constants::kIdentityTransform;
+	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 
 	// cached translation of m_InstanceTransform, invalid when transform changes
 	float3 m_ClusterPosition;
@@ -49,8 +59,8 @@ class BLASCluster
 
 	friend class SceneGraph;
 
-	uint32_t m_NumUpdatesSinceRebuild = 0;
-	uint64_t m_LastBuild = Constants::INVALID_FRAME_INDEX;
+	uint32_t m_UpdateCount = 0;
+	uint64_t m_LastBuildFrame = Constants::INVALID_FRAME_INDEX;
 
 	// TLAS instance slot, assigned during SceneGraph::Update population
 	uint32_t m_InstanceIndex = 0; 
@@ -60,8 +70,10 @@ class BLASCluster
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
 
 	void UpdateTransform();
+	void CollectMemberDirtyFlags();
+	BuildMode DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex);
 
-	nvrhi::rt::AccelStructDesc MakeDesc(bool update) const;
+	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
 
 	InstanceLightData GetInstanceLightData(
 		const eastl::map<RE::BSLight*, Light>& lights,
@@ -83,6 +95,9 @@ public:
 	// Has visible meshes
 	bool Valid() const;
 	
+	// Returns total number of MeshData entries across visible members (zero if all hidden or empty).
+	uint32_t GetMeshEntryCount() const;
+
 	// Rebuilds or refits the BLAS as needed (once per frame), pulling dirty state from its members.
 	void BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph);
 
@@ -92,11 +107,9 @@ public:
 
 	uint32_t GetInstanceIndex() const { return m_InstanceIndex; }
 
-	// Appends one MeshData per visible geometry (in BLAS order) and fills the cluster's InstanceData,
-	// including per-instance light-affected data calculated from the scene lights.
-	// Returns false if the cluster has no visible geometry (skip as a TLAS instance).
-	void Update(MeshData* meshData, uint32_t& meshCount, 
-		InstanceData* instanceData, uint32_t& instanceCount,
+	// Writes one MeshData per visible geometry and one InstanceData at the given array offsets.
+	void Update(MeshData* meshData, InstanceData* instanceData,
+		uint32_t meshStart, uint32_t instanceIndex,
 	    const eastl::map<RE::BSLight*, Light>& lights,
 	    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 };

@@ -10,18 +10,26 @@
 #if defined(SKYRIM)
 #include "Types/CommunityShaders/LightLimitFix.h"
 #include "Types/CommunityShaders/ISLCommon.h"
+#include "Types/WaterFlags.h"
 #endif
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
+#include "Core/SubIndexMesh.h"
+#include "Core/SubIndexSegmentMesh.h"
 
 #include <chrono>
 
 nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
 nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
 nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
+
+SceneGraph::SceneGraph() :
+	m_ThreadPool(std::max(1u, std::min(std::thread::hardware_concurrency() - 1u, 8u)))
+{
+}
 
 void SceneGraph::Initialize()
 {
@@ -361,108 +369,6 @@ void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 	}
 }
 
-void SceneGraph::ProcessGeometry(RE::TESObjectREFR* refr, RE::BSTriShape* bsTriShape, const uint64_t& frameIndex, nvrhi::ICommandList* commandList)
-{
-	if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape))
-		return;
-
-	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
-
-	auto* shaderProperty = geometryData.shaderProperty;
-	if (!shaderProperty)
-		return;
-
-	const auto materialType = shaderProperty->GetMaterialType();
-
-	const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
-	const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
-	const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
-
-	// Exclude alpha blended effects
-	auto* alphaProperty = geometryData.alphaProperty;
-	const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
-	const bool validEffect = isEffectShader && !isAlphaBlend;
-
-	if (!isLightingShader && !validEffect && !isWaterShader)
-		return;
-
-	// Exclude tree lod and grass for now
-	const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-	const bool isTreeLODShader = (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get());
-	const bool isGrassShader = (shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get());
-
-	if (isTreeLODShader || isGrassShader)
-		return;
-
-	const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
-	if (!skinned) {
-		const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
-		if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0) {
-			logger::warn("BSTriShape \"{}\" has either vertex ({}) or triangle ({}) count of 0, skipping.", bsTriShape->name, trishapeData.vertexCount, trishapeData.triangleCount);
-			return;
-		}
-	}
-
-	const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
-	if (!rendererData) {
-		logger::warn("BSTriShape \"{}\" has no renderer data, skipping.", bsTriShape->name);
-		return;
-	}
-
-	auto it = m_DirectMeshes.find(bsTriShape);
-	if (it != m_DirectMeshes.end()) {
-		auto mesh = it->second.get();
-
-		// If exists - update owner/visibility/data state (dirty flags live inside the mesh), else - create if visible 
-		mesh->SetLastVisitedFrame(frameIndex);
-
-		// SetOwner returns true if the owner has changed
-		const bool ownerChanged = mesh->SetOwner(refr);
-
-		// Get current cluster
-		auto cluster = mesh->GetCluster();
-
-		if (ownerChanged || !cluster) {
-			// Remove from old cluster if it existed
-			if (cluster) {
-				cluster->RemoveMember(mesh);
-				MarkClusterDirty(cluster);
-			}
-
-			cluster = GetOrCreateCluster(refr, bsTriShape);
-			cluster->AddMember(mesh);
-			MarkClusterDirty(cluster);
-		}
-
-		mesh->SetHidden(false);
-
-		mesh->Update(commandList);
-		m_CurrentVisible.push_back(mesh);
-	}
-	else {
-		if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
-			return;
-
-		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
-			created->SetOwner(refr);
-
-			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
-			if (inserted) {
-				auto mesh = it2->second.get();
-
-				auto* cluster = GetOrCreateCluster(refr, bsTriShape);
-				cluster->AddMember(mesh);
-				MarkClusterDirty(cluster);
-
-				mesh->SetLastVisitedFrame(frameIndex);
-
-				mesh->Update(commandList);
-				m_CurrentVisible.push_back(mesh);
-			}
-		}
-	}
-}
-
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
 	UpdateLights(commandList);
@@ -496,19 +402,189 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_NumMeshes = 0;
 	m_NumInstances = 0;
-	
+
 	m_CurrentVisible.clear();
 	m_CurrentVisible.reserve(m_DirectMeshes.size());
 
+	m_UpdateList.clear();
+	m_UpdateList.reserve(m_DirectMeshes.size());
+
+	m_CreateList.clear();
+	m_CreateCandidates.clear();
+
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
-	Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex, commandList](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
-		ProcessGeometry(refr, bsTriShape, frameIndex, commandList);
-		return CESEAdapter::RE::BSVisitControl::kContinue;
-	});
+	// Phase A: Fast traversal — collect into update/create lists, skip heavy processing
+	{
+		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
+		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
+			auto it = m_DirectMeshes.find(bsTriShape);
+			if (it != m_DirectMeshes.end()) {
+				auto mesh = it->second.get();
+				m_UpdateList.push_back({ mesh, refr });
+				m_CurrentVisible.push_back(mesh);
+			} else {
+				m_CreateList.push_back({ bsTriShape, refr });
+			}
+			return CESEAdapter::RE::BSVisitControl::kContinue;
+		});
+	}
 
-	// Hide meshes whose trishapes where not visited by the traversal this frame
+	// Phase B + C1 (parallel): Update known meshes AND filter new meshes via thread pool
+	{
+		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool.GetThreadCount());
+		const size_t totalWork = m_UpdateList.size();
+		const size_t totalCreate = m_CreateList.size();
+
+		auto doUpdate = [&](auto& entry) {
+			auto& [mesh, refr] = entry;
+			mesh->SetLastVisitedFrame(frameIndex);
+
+			if (!mesh->AsSubIndexMesh()) {	
+				const bool ownerChanged = mesh->SetOwner(refr);
+				auto cluster = mesh->GetCluster();
+
+				if (ownerChanged || !cluster) {
+					if (cluster) {
+						cluster->RemoveMember(mesh);
+						MarkClusterDirty(cluster);
+					}
+
+					cluster = GetOrCreateCluster(refr, mesh->GetTriShape());
+					cluster->AddMember(mesh);
+					MarkClusterDirty(cluster);
+				}
+			}
+
+			mesh->Update(commandList);
+			mesh->SetHidden(false);
+		};
+
+		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
+			for (size_t i = start; i < end; ++i) {
+				auto& [bsTriShape, refr] = m_CreateList[i];
+
+				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
+					continue;
+
+				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
+				auto* shaderProperty = geometryData.shaderProperty;
+				if (!shaderProperty)
+					continue;
+
+				const auto materialType = shaderProperty->GetMaterialType();
+				const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
+				const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
+				const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+
+				auto* alphaProperty = geometryData.alphaProperty;
+				const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+				const bool validEffect = isEffectShader && !isAlphaBlend;
+
+				// Exclude procedural and displacement water
+				if (isWaterShader) {
+					auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
+					const auto waterFlags = waterShaderProperty->waterFlags.underlying();
+
+					if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
+						continue;
+				}
+
+				if (!isLightingShader && !validEffect && !isWaterShader)
+					continue;
+
+				// Exclude tree lod and grass for now
+				const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+				if (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get() ||
+				    shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get())
+					continue;
+
+				if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
+					continue;
+
+				const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
+				if (!skinned) {
+					const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+					if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
+						continue;
+				}
+
+				const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+				if (!rendererData)
+					continue;
+
+				out.push_back({ bsTriShape, refr });
+			}
+		};
+
+		m_PerWorkerCreateCandidates.resize(numWorkers);
+		for (auto& candidates : m_PerWorkerCreateCandidates)
+			candidates.clear();
+
+		bool anyDispatched = false;
+
+		if (totalWork > 0) {
+			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
+
+			for (size_t start = 0; start < totalWork; start += chunkSize) {
+				size_t end = std::min(start + chunkSize, totalWork);
+
+				m_ThreadPool.Enqueue([&, start, end]() {
+					for (size_t i = start; i < end; ++i)
+						doUpdate(m_UpdateList[i]);
+				});
+			}
+
+			anyDispatched = true;
+		}
+
+		if (totalCreate > 0) {
+			const size_t chunkSize = (totalCreate + numWorkers - 1) / numWorkers;
+
+			for (size_t start = 0; start < totalCreate; start += chunkSize) {
+				size_t end = std::min(start + chunkSize, totalCreate);
+				const size_t idx = start / chunkSize;
+
+				m_ThreadPool.Enqueue([&, start, end, idx]() {
+					doFilter(start, end, m_PerWorkerCreateCandidates[idx]);
+				});
+			}
+
+			anyDispatched = true;
+		}
+
+		if (anyDispatched)
+			m_ThreadPool.WaitAll();
+
+		m_CreateCandidates.reserve(m_CreateList.size());
+		for (auto& wc : m_PerWorkerCreateCandidates)
+			m_CreateCandidates.insert(m_CreateCandidates.end(), wc.begin(), wc.end());
+	}
+
+	// Phase C2 (serial): GPU resource creation for validated candidates
+	for (auto& [bsTriShape, refr] : m_CreateCandidates) {
+		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
+			created->SetOwner(refr);
+			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
+			if (inserted) {
+				auto mesh = it2->second.get();
+
+				// SubIndexMesh: not a member of any cluster itself; the K SubIndexSegmentMesh
+				// children will be added to their own clusters by SubIndexMesh::Update.
+				if (!mesh->AsSubIndexMesh()) {
+					auto* cluster = GetOrCreateCluster(refr, bsTriShape);
+					cluster->AddMember(mesh);
+					MarkClusterDirty(cluster);
+				}
+
+				mesh->SetLastVisitedFrame(frameIndex);
+				mesh->Update(commandList);
+				m_CurrentVisible.push_back(mesh);
+			}
+		}
+	}
+
+	// Phase D: Hide meshes whose trishapes were not visited by the traversal this frame
 	for (auto& mesh : m_PreviousVisible) {
 		if (mesh->GetLastVisitedFrame() != frameIndex) {
 			mesh->SetHidden(true);
@@ -519,53 +595,102 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			}
 		}
 	}
-	m_PreviousVisible = eastl::move(m_CurrentVisible);
 
-	// Upload pending material data to material buffer
+	m_PreviousVisible.swap(m_CurrentVisible);
+
+	// Phase E: Material flush
 	m_MaterialManager->Flush(commandList);
 
 	// Drop clusters whose meshes were all destroyed this frame.
-	for (auto it = m_OwnerClusters.begin(); it != m_OwnerClusters.end(); ) {
-		if (it->second->Empty()) {
-			m_DirtyClusters.erase(it->second.get());
-			it = m_OwnerClusters.erase(it);
+	auto removeEmptyClusters = [this](auto& clusters) {
+		for (auto it = clusters.begin(); it != clusters.end(); ) {
+			if (it->second->Empty()) {
+				m_DirtyClusters.erase(it->second.get());
+				it = clusters.erase(it);
+			} else {
+				++it;
+			}
 		}
-		else
-			++it;
-	}
+	};
+	removeEmptyClusters(m_OwnerClusters);
+	removeEmptyClusters(m_OrphanClusters);
+	removeEmptyClusters(m_SubIndexSegmentClusters);
 
-	for (auto it = m_OrphanClusters.begin(); it != m_OrphanClusters.end(); ) {
-		if (it->second->Empty()) {
-			m_DirtyClusters.erase(it->second.get());
-			it = m_OrphanClusters.erase(it);
-		}
-		else
-			++it;
-	}
+	// Phase E1 (serial): pre-compute per-cluster array offsets
+	struct ClusterWork { BLASCluster* cluster; uint32_t meshStart; uint32_t instanceIndex; };
+	eastl::vector<ClusterWork> clusterWork;
+	clusterWork.reserve(m_OwnerClusters.size() + m_OrphanClusters.size() + m_SubIndexSegmentClusters.size());
 
-	// Populate per-instance + per-geometry data for shader-side geometry lookup, in the same
-	// owner-then-orphan / member order the TLAS and BLAS use (so InstanceID()/GeometryIndex() align).
-	auto processCluster = [&](BLASCluster* cluster) {
-		if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
+	uint32_t meshCounter = 0;
+	uint32_t instanceCounter = 0;
+
+	bool reportedMeshLimit = false;
+	bool reportedInstanceLimit = false;
+	auto reserveCluster = [&](BLASCluster* cluster) {
+		const uint32_t numMeshes = cluster->GetMeshEntryCount();
+		if (numMeshes == 0)
 			return;
 
-		cluster->Update(m_MeshData.data(), m_NumMeshes, m_InstanceData.data(), m_NumInstances, m_Lights, m_LightData);
+		if (instanceCounter >= Constants::NUM_INSTANCES_MAX) {
+			if (!reportedInstanceLimit) {
+				logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} mesh entries.",
+					Constants::NUM_INSTANCES_MAX, numMeshes);
+				reportedInstanceLimit = true;
+			}
+			return;
+		}
+
+		if (numMeshes > Constants::NUM_MESHES_MAX - meshCounter) {
+			if (!reportedMeshLimit) {
+				logger::critical("SceneGraph::Update - Mesh capacity ({}) reached; omitting a cluster with {} mesh entries.",
+					Constants::NUM_MESHES_MAX, numMeshes);
+				reportedMeshLimit = true;
+			}
+			return;
+		}
+
+		clusterWork.push_back({ cluster, meshCounter, instanceCounter });
+		meshCounter += numMeshes;
+		instanceCounter++;
 	};
 
-	for (auto& [owner, cluster] : m_OwnerClusters)
-		processCluster(cluster.get());
+	auto reserveClusters = [&reserveCluster](auto& clusters) {
+		for (auto& [_, cluster] : clusters)
+			reserveCluster(cluster.get());
+	};
+	reserveClusters(m_OwnerClusters);
+	reserveClusters(m_OrphanClusters);
+	reserveClusters(m_SubIndexSegmentClusters);
 
-	for (auto& [bsTriShape, cluster] : m_OrphanClusters)
-		processCluster(cluster.get());
+	m_NumMeshes = meshCounter;
+	m_NumInstances = instanceCounter;
 
-	if (m_NumMeshes >= Constants::NUM_MESHES_MAX)
-		logger::critical("SceneGraph::Update - Number of meshes of {} exceeds the maximum of {}", m_NumMeshes, Constants::NUM_MESHES_MAX);
+	// Phase E2 (parallel): update each cluster at its reserved offsets
+	{
+		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool.GetThreadCount());
+		const size_t totalWork = clusterWork.size();
+
+		if (totalWork > 0) {
+			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
+
+			for (size_t start = 0; start < totalWork; start += chunkSize) {
+				size_t end = std::min(start + chunkSize, totalWork);
+
+				m_ThreadPool.Enqueue([&, start, end]() {
+					for (size_t i = start; i < end; ++i) {
+						auto& w = clusterWork[i];
+						w.cluster->Update(m_MeshData.data(), m_InstanceData.data(),
+							w.meshStart, w.instanceIndex, m_Lights, m_LightData);
+					}
+				});
+			}
+
+			m_ThreadPool.WaitAll();
+		}
+	}
 
 	if (m_NumMeshes > 0)
 		commandList->writeBuffer(GetMeshBuffer(), m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
-
-	if (m_NumInstances >= Constants::NUM_INSTANCES_MAX)
-		logger::critical("SceneGraph::Update - Number of instances of {} exceeds the maximum of {}", m_NumInstances, Constants::NUM_INSTANCES_MAX);
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
@@ -586,24 +711,63 @@ bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
 	return false;
 }
 
+template <typename Key, typename Map>
+BLASCluster* SceneGraph::GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a_mutex, Key a_key, RE::TESObjectREFR* a_owner)
+{
+	{
+		std::shared_lock lock(a_mutex);
+		auto it = a_map.find(a_key);
+		if (it != a_map.end())
+			return it->second.get();
+	}
+
+	BLASCluster* result = nullptr;
+	bool didInsert = false;
+	{
+		std::unique_lock lock(a_mutex);
+		auto [it, inserted] = a_map.try_emplace(a_key, nullptr);
+		if (inserted)
+			it->second = eastl::make_unique<BLASCluster>(a_owner);
+		result = it->second.get();
+		didInsert = inserted;
+	} // exclusive lock released here
+
+	if (didInsert)
+		MarkClusterDirty(result); // separate mutex, safe outside the cluster lock
+
+	return result;
+}
+
 BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape)
 {
-	if (owner) {
-		auto& slot = m_OwnerClusters[owner];
-		if (!slot) {
-			slot = eastl::make_unique<BLASCluster>(owner);
-			MarkClusterDirty(slot.get());
-		}
-		return slot.get();
-	}
-	
-	auto& slot = m_OrphanClusters[bsTriShape];
-	if (!slot) {
-		slot = eastl::make_unique<BLASCluster>(nullptr);
-		MarkClusterDirty(slot.get());
-	}
-	return slot.get();
+	return owner
+		? GetOrCreateClusterImpl(m_OwnerClusters, m_OwnerClusterMutex, owner, owner)
+		: GetOrCreateClusterImpl(m_OrphanClusters, m_OrphanClusterMutex, bsTriShape, nullptr);
+}
 
+BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner)
+{
+	auto it = m_SubIndexSegmentClusters.find(segment);
+	if (it != m_SubIndexSegmentClusters.end())
+		return it->second.get();
+
+	auto cluster = eastl::make_unique<BLASCluster>(owner);
+	auto* rawCluster = cluster.get();
+	m_SubIndexSegmentClusters.emplace(segment, eastl::move(cluster));
+	return rawCluster;
+}
+
+void SceneGraph::RemoveSegmentCluster(SubIndexSegmentMesh* segment)
+{
+	auto it = m_SubIndexSegmentClusters.find(segment);
+	if (it == m_SubIndexSegmentClusters.end())
+		return;
+
+	auto* cluster = it->second.get();
+	// The segment is the cluster's only member; remove it and drop the cluster.
+	cluster->RemoveMember(segment);
+	m_DirtyClusters.erase(cluster);
+	m_SubIndexSegmentClusters.erase(it);
 }
 
 void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
@@ -611,6 +775,7 @@ void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
 	if (!cluster) 
 		return;
 
+	std::scoped_lock lock(m_ClusterDirtyMutex);
 	m_DirtyClusters.emplace(cluster);
 }
 

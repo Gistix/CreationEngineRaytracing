@@ -349,7 +349,9 @@ void Main()
 #   endif   
 #endif   
     
+#ifdef SUBSURFACE_SCATTERING
     bool isSssPath = false;
+#endif
     
     float3 direct = sourceSurface.Emissive + primaryEffectEmissive;
     
@@ -700,7 +702,7 @@ void Main()
         {
 #if defined(SUBSURFACE_SCATTERING)
             if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
-                direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceBRDFContext, sourceMaterial, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
+                    direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
                 isSssPath = true;
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
@@ -729,7 +731,9 @@ void Main()
 #endif
     
     float3 direction;
+#if defined(RAW_RADIANCE)
     MonteCarlo::BRDFWeight brdfWeight;
+#endif
 
     float3 radiance = 0;
     bool isSpecular = false;
@@ -795,6 +799,7 @@ void Main()
         uint diffuseBounceCount = 0;
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(RESTIR_GI)
         // ReSTIR GI: multi-bounce secondary radiance accumulation
         float3 giSecRadiance = 0;
         float3 giSecThroughput = 0;
@@ -805,6 +810,7 @@ void Main()
         float3 giScatterThp = 0;
         uint giScatterFeature = Feature::kDefault;
         bool giScatterHasSpecularTransmission = false;
+#   endif
 #endif
 
         // Water volume tracking for Beer-Lambert absorption
@@ -829,6 +835,7 @@ void Main()
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(RESTIR_GI)
             // ReSTIR GI: snapshot the current scattering surface for SurfaceDataBuffer.
             // Updated each iteration until giSecStarted; the final snapshot is the
             // surface from which the first non-delta ray was emitted.
@@ -840,6 +847,7 @@ void Main()
                 giScatterFeature = material.Feature;
                 giScatterHasSpecularTransmission = surface.SpecTrans > 0.0f;
             }
+#   endif
 #endif
 
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
@@ -848,8 +856,6 @@ void Main()
             GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
             direction = surface.Mul(SampleCosineHemisphere(scatterSamples.xy));
             diffuseBounceCount++;
-
-            float NdotD = saturate(dot(surface.Normal, direction));
 
             throughput *= surface.AO;
             throughput *= surface.Albedo;
@@ -888,14 +894,12 @@ void Main()
                 waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
-            brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
 #   if defined(RAW_RADIANCE)
+            brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
-#   endif
             brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            
-#   if defined(RAW_RADIANCE)
+
             float3 brdfWeightOriginal = brdfWeight.diffuse * surface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
 
 #       if defined(SHARC) && SHARC_UPDATE
@@ -988,13 +992,16 @@ void Main()
                 SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
                 // In FILL mode: skip sky if on stable branch (already captured in BUILD)
+#   if defined(RESTIR_GI)
                 if (giSecStarted)
                 {
                     // ReSTIR GI owns this radiance — divert, don't accumulate into fillPathL
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += skyIrradiance * relTp;
                 }
-                else if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
+                else
+#   endif
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(skyIrradiance * throughput) : 0;
                     fillPathL += float4(skyIrradiance * throughput, specAvg);
@@ -1016,7 +1023,11 @@ void Main()
             for (uint effectBouncePass = 0; effectBouncePass < 16 && material.Type == Type::Effect; effectBouncePass++)
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(RESTIR_GI)
                 if (!giSecStarted && !fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
+#   else
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
+#   endif
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(surface.Emissive * throughput) : 0;
                     fillPathL += float4(surface.Emissive * throughput, specAvg);
@@ -1057,12 +1068,15 @@ void Main()
 #if defined(SHARC) && SHARC_UPDATE
                 SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(RESTIR_GI)
                 if (giSecStarted)
                 {
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += skyIrradiance * relTp;
                 }
-                else if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
+                else
+#   endif
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(skyIrradiance * throughput) : 0;
                     fillPathL += float4(skyIrradiance * throughput, specAvg);
@@ -1135,12 +1149,15 @@ void Main()
             if (!arrivedViaDelta && isValidHit && SharcGetCachedRadiance(sharcParameters, sharcHitData, sharcRadiance, false))
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(RESTIR_GI)
                 if (giSecStarted)
                 {
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += sharcRadiance * relTp;
                 }
-                else if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
+                else
+#   endif
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(sharcRadiance * throughput) : 0;
                     fillPathL += float4(sharcRadiance * throughput, specAvg);
@@ -1173,7 +1190,7 @@ void Main()
             {
 #ifdef SUBSURFACE_SCATTERING
                 if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, surface.Primary);
+                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, instance, payload, rayCone, randomSeed, surface.Primary);
                     isSssPath = true;
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;
@@ -1195,6 +1212,7 @@ void Main()
             }
             
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(RESTIR_GI)
             if (giSecStarted)
             {
                 // ReSTIR GI owns radiance from secondary surface onward — divert everything
@@ -1202,6 +1220,7 @@ void Main()
                 giSecRadiance += (directRadiance + surface.Emissive) * relTp;
             }
             else
+#   endif
             {
                 // NEE/direct radiance: always accumulated (not captured in BUILD)
                 if (any(directRadiance > 0))

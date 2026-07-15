@@ -101,7 +101,9 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::Texture_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
+			nvrhi::BindingLayoutItem::Texture_SRV(13),
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
+			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
@@ -112,9 +114,6 @@ namespace Pass::Raytracing::Common
 		auto* scene = Scene::GetSingleton();
 
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
-
-		const auto threadGroupSizeWStr = std::to_wstring(UPDATE_THREAD_GROUP_SIZE);
-		defines.emplace_back(L"THREAD_GROUP_SIZE", threadGroupSizeWStr.c_str());
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 		defines.emplace_back(L"SHARC_ENABLE_SH_ENCODING", L"1");
@@ -231,7 +230,9 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_ResolveBuffer),
+			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)

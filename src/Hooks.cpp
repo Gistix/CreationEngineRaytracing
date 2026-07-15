@@ -32,6 +32,7 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	template <typename = decltype([] {}) >
 	struct MemoryManager_AllocateTriShape
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
@@ -166,27 +167,37 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BSTriShape_Dtor
+	// Blends vertex data between two BSTriShapes (body morphs).
+	// Calls CopyTriShapeVertices internally, which replaces src's vertexBuffer.
+	// We must re-share the new D3D11 vertex buffer to D3D12 after the blend.
+	struct BSTriShape_ApplyBodyMorph
 	{
-		static void thunk(RE::BSTriShape* a_bsTriShape, bool a_release)
+		static bool thunk(RE::BSTriShape* src, RE::BSTriShape* tgt, double weight)
 		{
-			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsTriShape);
+			auto result = func(src, tgt, weight);
 
-			func(a_bsTriShape, a_release);
+			if (src) {
+				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
+				if (geomData.rendererData) {
+					auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(geomData.rendererData);
+					Util::CreateSharedBuffer(triShapeDX12->vertexBuffer, &triShapeDX12->vertexBufferDX12);
+				}
+			}
+
+			return result;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BSDynamicTriShape_Dtor
+	template <std::derived_from<RE::BSTriShape> T>
+	struct BSTriShape_Dtor
 	{
-		static void thunk(RE::BSDynamicTriShape* a_bsDynamicTriShape, bool a_release)
+		static void thunk(T* a_bsTriShape, uint8_t a_release)
 		{
-			logger::info("BSDynamicTriShape::Dtor - {}", fmt::ptr(a_bsDynamicTriShape));
+			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsTriShape);
 
-			Scene::GetSingleton()->GetSceneGraph()->OnDestroy(a_bsDynamicTriShape);
-
-			func(a_bsDynamicTriShape, a_release);
+			func(a_bsTriShape, a_release);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -606,6 +617,7 @@ namespace Hooks
 		{
 		case RE::RENDER_TARGETS::kMOTION_VECTOR:
 		case RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT:
+		case RE::RENDER_TARGETS::kWATER_DISPLACEMENT:
 			break;
 		default:
 			func(a_renderer, a_target, a_RenderTarget, a_properties);
@@ -768,15 +780,20 @@ namespace Hooks
 		}
 	}
 
-	void NiCullingProcess_AppendVirtual::thunk(RE::NiCullingProcess* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2)
+	template <std::derived_from<RE::NiCullingProcess> T>
+	struct NiCullingProcess_AppendVirtual
 	{
-		if (geometry) {
-			if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
-				return;
-		}
+		static void thunk(T* cullingProcess, RE::BSGeometry* geometry, uint32_t a_arg2)
+		{
+			if (geometry) {
+				if (Scene::GetSingleton()->ApplyPathTracingCull() && Util::Culling::ShouldCull(geometry))
+					return;
+			}
 
-		func(cullingProcess, geometry, a_arg2);
-	}
+			func(cullingProcess, geometry, a_arg2);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	void BSBatchRenderer_RenderPassImmediately::thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags)
 	{
@@ -989,10 +1006,10 @@ namespace Hooks
 		const auto createTriShapeC = REL::RelocationID(75475, 77261);
 		const auto createTriShapeD = REL::RelocationID(75476, 77262);
 
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeA.address() + 0x9f);
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeB.address() + 0x87);
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeC.address() + 0x82);
-		stl::write_thunk_call<MemoryManager_AllocateTriShape>(createTriShapeD.address() + REL::Relocate(0x85, 0x87));
+		stl::write_thunk_call<MemoryManager_AllocateTriShape<>>(createTriShapeA.address() + 0x9f);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape<>>(createTriShapeB.address() + 0x87);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape<>>(createTriShapeC.address() + 0x82);
+		stl::write_thunk_call<MemoryManager_AllocateTriShape<>>(createTriShapeD.address() + REL::Relocate(0x85, 0x87));
 
 		stl::detour_thunk<BSGraphics_CreateTriShape>(createTriShapeA);
 		stl::detour_thunk<BSGraphics_CreateTriShapeParticles>(createTriShapeB);
@@ -1002,10 +1019,12 @@ namespace Hooks
 		// This function is inlined in some places on AE
 		//stl::detour_thunk<BSGraphics_CopyTriShapeVertices>(REL::RelocationID(74735, 76477));
 
-		stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(69294, 70666));  // BSTriShape
-		//stl::detour_thunk<BSDynamicTriShape_Dtor>(REL::RelocationID(69573, 0));  // BSDynamicTriShape
-		//stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(75033, 0));  // BSSubIndexTriShape
-		//stl::detour_thunk<BSTriShape_Dtor>(REL::RelocationID(74611, 0));  // BSMultiStreamInstanceTriShape
+		stl::detour_thunk<BSTriShape_ApplyBodyMorph>(REL::RelocationID(74720, 76460));
+
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSTriShape>>(RE::VTABLE_BSTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSDynamicTriShape>>(RE::VTABLE_BSDynamicTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSubIndexTriShape>>(RE::VTABLE_BSSubIndexTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSMultiStreamInstanceTriShape>>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
 
 		// Use a hook to update dynamic data, else we risk trying accessing dynamic data while the engine has already released it
 		stl::detour_thunk<BSDynamicTriShape_UpdateDynamicData>(REL::RelocationID(69570, 70954));
@@ -1059,9 +1078,9 @@ namespace Hooks
 		/*stl::detour_thunk<NiCullingProcess_AppendVirtual>(REL::RelocationID(26533, 27130));
 		stl::detour_thunk<BSCullingProcess_AppendVirtual>(REL::RelocationID(74807, 76556));*/
 
-		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_NiCullingProcess[0]);
-		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_BSFadeNodeCuller[0]);
-		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual>(RE::VTABLE_BSCullingProcess[0]);
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual<RE::NiCullingProcess>>(RE::VTABLE_NiCullingProcess[0]);
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual<RE::BSFadeNodeCuller>>(RE::VTABLE_BSFadeNodeCuller[0]);
+		stl::write_vfunc<0x18, NiCullingProcess_AppendVirtual<RE::BSCullingProcess>>(RE::VTABLE_BSCullingProcess[0]);
 
 		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100854, 107644));
 
@@ -1071,6 +1090,7 @@ namespace Hooks
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
 		scene->g_DisplacementMeshFlowCellOffset = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(528164, 415109).address());
+		scene->g_DisplacementMeshPos = reinterpret_cast<RE::NiPoint2*>(REL::RelocationID(516235, 402400).address());
 
 		REL::Relocation<float*> g_Time{ REL::RelocationID(513213, 390953) };
 		scene->g_Time = g_Time.get();

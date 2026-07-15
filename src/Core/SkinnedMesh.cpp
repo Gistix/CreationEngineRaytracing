@@ -79,13 +79,13 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	InitDismemberSkin(skinInstance);
 }
 
-void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform, bool isClusterOrigin)
+void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
-	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform, isClusterOrigin);
+	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform);
 
-	for (auto& desc : m_VisibleGeometryDescs)
-	{
-		desc.setTransform(m_LocalTransform.f);
+	if (m_Flags.all(Flags::DismemberSkinInstance)) {
+		for (auto& desc : m_VisibleGeometryDescs)
+			desc.setTransform(m_LocalTransform.f);
 	}
 }
 
@@ -227,7 +227,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, indexCount, vertexBuffer, vertexStride, vertexCount));
+		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount));
 		m_GeometryPartitionIndices.push_back(i);
 	}
 }

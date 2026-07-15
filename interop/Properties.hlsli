@@ -48,6 +48,9 @@ namespace WaterFlags
     static const uint16_t kVertexUV = (1 << 2);
     static const uint16_t kEnableFlowmap = (1 << 3);
     static const uint16_t kBlendNormals = (1 << 4);
+    static const uint16_t kDisplacement = (1 << 5);
+    static const uint16_t kVertexAlphaDepth = (1 << 6);
+    static const uint16_t kDepth = (1 << 7);
 }
 #endif
 
@@ -59,10 +62,10 @@ INTEROP_DATA_STRUCT(Properties, 4)
     half AlphaThreshold;
     half Alpha;
     half4 EmissiveColor;
-    half4 ProjectedUVParams0;
-    half4 ProjectedUVParams1;
+    half4 ProjectedUVParams;
     half4 ProjectedUVParams2;
     half4 ProjectedUVParams3;
+    half4 TextureProj;
 };
 VALIDATE_ALIGNMENT(PropertiesData, 4);
 

@@ -76,6 +76,7 @@ class Renderer
 	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
 	nvrhi::TextureHandle m_MotionVectorTexture;
+	nvrhi::TextureHandle m_WaterDisplacementTexture;
 
 	uint64_t m_FrameIndex = 0;
 
@@ -160,7 +161,7 @@ public:
 	struct RendererSettings
 	{
 		bool UseRayQuery = true;
-		bool ValidationLayer = false;
+		bool ValidationLayer = true;
 	} m_Settings;
 
 	static Renderer* GetSingleton()
@@ -187,6 +188,7 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Graphics)
 			.setEnableImmediateExecution(false)
+			.setScratchChunkSize(16 * 1024 * 1024)
 		);
 	}
 
@@ -195,6 +197,7 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Compute)
 			.setEnableImmediateExecution(false)
+			.setScratchChunkSize(16 * 1024 * 1024)
 		);
 	}
 
@@ -203,6 +206,7 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Copy)
 			.setEnableImmediateExecution(false)
+			.setScratchChunkSize(16 * 1024 * 1024)
 		);
 	}
 
@@ -210,6 +214,7 @@ public:
 
 	nvrhi::ITexture* GetDepthTexture();
 	nvrhi::ITexture* GetMotionVectorTexture();
+	nvrhi::ITexture* GetWaterDisplacementTexture();
 
 	inline auto GetLastSubmittedFence() const { return m_LastSubmittedInstance; }
 
@@ -302,7 +307,7 @@ public:
 
 	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
 
-	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState);
+	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
 
 	void InitDefaultTextures();
 

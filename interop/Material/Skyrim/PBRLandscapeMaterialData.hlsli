@@ -36,6 +36,12 @@ INTEROP_STRUCT(PBRLandscapeMaterialData : MaterialBaseData, 4)
     uint16_t NormalTexture3;
     uint16_t NormalTexture4;
     uint16_t NormalTexture5;
+    uint16_t DisplacementTexture0;
+    uint16_t DisplacementTexture1;
+    uint16_t DisplacementTexture2;
+    uint16_t DisplacementTexture3;
+    uint16_t DisplacementTexture4;
+    uint16_t DisplacementTexture5;
     uint16_t RMAOSTexture0;
     uint16_t RMAOSTexture1;
     uint16_t RMAOSTexture2;

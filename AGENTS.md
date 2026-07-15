@@ -20,8 +20,10 @@ BaseMesh                              (BaseMesh.h/.cpp)
   +-- SkinnedMesh                     (SkinnedMesh.h/.cpp)
   |     |
   |     +-- DynamicMesh               (DynamicMesh.h/.cpp)
+  |
+  +-- SubIndexMesh                    (SubIndexMesh.h/.cpp)
 
-MeshType: { Base=0, Default=1, Skinned=2, Dynamic=3 }
+MeshType: { Base=0, Default=1, Skinned=2, Dynamic=3, SubIndex=4 }
 DirtyFlags: Visibility, Transform, Vertex, Skin, Mesh
 ```
 
@@ -32,17 +34,20 @@ DirtyFlags: Visibility, Transform, Vertex, Skin, Mesh
 | `LandLODMesh` | Terrain LOD4 meshes (inherits DirectMesh). Creates live GPU-owned vertex buffer, repoints RT vertex descriptor. `UpdateOcclusion()` computes LandLODUpdate for occluder pass. |
 | `SkinnedMesh` | GPU-skinned geometry. Per-mesh vertex buffer, per-partition index buffers + geometry descs. `m_LiveVertexBuffer` (BLAS source), `m_PrevPositionBuffer`, `m_BoneWorlds`/`m_SkinToBones`. Delegates to `Pass::Skinning`. |
 | `DynamicMesh` | Skinned + per-frame morphs (`BSDynamicTriShape`). Lives in `DynamicPositions` bindless slot (float4 stride, RGB32_FLOAT). |
+| `SubIndexMesh` | Wraps `BSSubIndexTriShape` (object LOD / body part segments). Pre-builds one `GeometryDesc` per segment at construction. `Update()` toggles per-segment visibility from runtime segment flags. Each visible segment produces its own BLAS + TLAS instance via the owning `BLASCluster`. |
 
 ### BLASCluster (`src/Core/BLASCluster.h/.cpp`)
 
-Replaces the old 1:1 `Instance`→BLAS mapping. Aggregates all meshes belonging to the same `TESObjectREFR*` owner into a single BLAS / single TLAS instance. Meshes without an owner (null-owner) get degenerate per-mesh clusters ("orphan clusters").
+Aggregates all meshes belonging to the same `TESObjectREFR*` owner into a single cluster. Meshes without an owner (null-owner) get degenerate per-mesh clusters ("orphan clusters"). When a cluster contains a `SubIndexMesh` member, it switches to **segmented mode**: one BLAS per visible segment, each producing its own TLAS instance.
 
 ```cpp
 class BLASCluster {
     RE::TESObjectREFR* m_Owner;                    // grouping key only
     eastl::vector<BaseMesh*> m_Members;            // weak references
-    eastl::vector<nvrhi::rt::GeometryDesc> m_Geom;// aggregated from members
-    nvrhi::rt::AccelStructHandle m_BLAS;           // single BLAS per cluster
+    std::vector<nvrhi::rt::GeometryDesc> m_Geom;  // aggregated from members (or per-segment)
+    eastl::vector<nvrhi::rt::AccelStructHandle> m_BLAS;  // 1 for normal, N for segmented
+    eastl::vector<bool> m_SegmentDirty;            // per-segment dirty tracking (segmented only)
+    uint32_t m_SegmentVisibleCount;                 // visible segment count (segmented only)
     float3x4 m_Transform, m_PrevTransform;          // owner-world transform
     float3 m_ClusterPosition;                       // cached for light culling
     float m_ClusterRadius;                          // world-space bounding sphere
@@ -54,9 +59,10 @@ class BLASCluster {
 **Lifecycle:**
 - `SceneGraph::GetOrCreateCluster(owner, bsTriShape)` — creates or looks up cluster per owner.
 - `AddMember(mesh)` / `RemoveMember(mesh)` — sets mesh's back-pointer.
-- `Update(sceneGraph)` — computes cluster/world transforms, aggregates geometry descs, writes `MeshData`/`InstanceData` to GPU buffers.
-- `BuildUpdate(commandList, sceneGraph)` — decides rebuild vs refit vs maintenance rebuild.
-- `MakeInstanceDesc()` → `nvrhi::rt::InstanceDesc` (with `InstanceMask::Default`).
+- `Update(meshData, instanceData)` — writes `MeshData`/`InstanceData` to GPU buffers. Segmented path: writes one entry per visible segment from the `SubIndexMesh`'s pre-built segment data.
+- `BuildUpdate(commandList, sceneGraph)` — decides rebuild vs refit vs maintenance rebuild. Segmented path: builds one BLAS per visible segment.
+- `MakeInstanceDescs(out)` → pushes one `InstanceDesc` per BLAS in `m_BLAS` (1 for normal clusters, N for segmented).
+- `GetInstanceCount()` → returns 1 for normal clusters, `m_SegmentCount` for segmented.
 
 **BLAS Build Decision:**
 ```
@@ -153,18 +159,19 @@ Central scene management class. Per-frame traversal + mesh/cluster/material upda
 
 **Per-frame flow:**
 ```
-SceneGraph::Update()
-  ├── UpdateLights() — collect active lights
-  ├── Traversal::ScenegraphTriShapes(worldRoot, callback)
-  │     └── ProcessGeometry(refr, bsTriShape)
-  │           ├── Filter by type/alpha/skin
-  │           ├── Find/create BaseMesh
-  │           ├── GetOrCreateCluster(refr) → BLASCluster
-  │           ├── AddMember(mesh), mesh->Update()
-  │           └── ...
-  ├── Hide stale meshes, drop empty clusters
-  ├── Flush material manager
-  └── Write m_MeshData / m_InstanceData buffers
+    SceneGraph::Update()
+      ├── UpdateLights() — collect active lights
+      ├── Traversal::ScenegraphTriShapes(worldRoot, callback)
+      │     └── ProcessGeometry(refr, bsTriShape)
+      │           ├── Filter by type/alpha/skin (kTriShape, kDynamicTriShape, kSubIndexTriShape)
+      │           ├── Find/create BaseMesh
+      │           ├── GetOrCreateCluster(refr) → BLASCluster
+      │           ├── AddMember(mesh), mesh->Update()
+      │           └── ...
+      ├── Hide stale meshes, drop empty clusters
+      ├── Flush material manager
+      └── Write m_MeshData / m_InstanceData buffers
+
 
 SceneGraph::BuildClusters(commandList)
   └── for each dirty BLASCluster:
@@ -222,12 +229,22 @@ struct Settings {
 
 `TopLevelAS::Update(commandList, ownerClusters, orphanClusters)`:
 1. Clears instance descs
-2. For each cluster: `MakeInstanceDesc()` → push back
+2. For each cluster: `cluster->MakeInstanceDescs(out)` → pushes 1 or N instance descs
 3. Resize TLAS when count exceeds threshold (step=512, min=2048, threshold=256)
 4. `NotifyResized()` → notify `ITLASUpdateListener`s
 5. `buildTopLevelAccelStruct()`
 
 Per-light TLAS (`Light::UpdateTLAS(commandList)`) when `AdvancedSettings.PerLightTLAS` is enabled.
+
+### BufferDescriptor (`BaseMesh.h`)
+```cpp
+struct BufferDescriptor {
+    nvrhi::BufferHandle m_Buffer;
+    DescriptorHandle m_Descriptor;
+    uint32_t m_ByteSize = 0;   // D3D11 ByteWidth (OpenSharedHandle can report wrong size)
+};
+```
+Note: `CreateIndexBuffer`/`CreateVertexBuffer` read `ByteWidth` from the D3D11 `ID3D11Buffer::GetDesc()` and pass it to NVRHI's `BufferDesc::setByteSize()`. The D3D12 resource's `GetDesc().Width` from `OpenSharedHandle` is unreliable and used only for diagnostic comparison.
 
 ### Key Constants (`src/Constants.h`)
 | Constant | Value | Purpose |
