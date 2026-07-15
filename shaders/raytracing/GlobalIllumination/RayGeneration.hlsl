@@ -159,10 +159,14 @@ void Main()
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
+#ifdef SUBSURFACE_SCATTERING
     bool isSssPath = false;
+#endif
 
     float3 direction;
+#if defined(RAW_RADIANCE) && !defined(NRD)
     MonteCarlo::BRDFWeight brdfWeight;
+#endif
 
     float3 radiance = 0;
     bool isSpecular = false;
@@ -242,8 +246,6 @@ void Main()
             direction = surface.Mul(SampleCosineHemisphere(scatterSamples.xy));
             diffuseBounceCount++;
 
-            float NdotD = saturate(dot(surface.Normal, direction));
-
             throughput *= surface.AO;
             throughput *= surface.Albedo;
             
@@ -278,11 +280,11 @@ void Main()
                 waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
+#   if defined(RAW_RADIANCE) && !defined(NRD)
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);            
-            
-#   if defined(RAW_RADIANCE) && !defined(NRD)
+            brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+
             if (demodulatedThroughput) {
                 originalThroughput = throughput * bsdfSample.weight;
 
@@ -411,8 +413,6 @@ void Main()
             float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.gridParameters);
             bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
             
-            const bool oldValidHit = isValidHit;
-            
             if (isValidHit) {
                 materialRoughnessPrev = min(materialRoughnessPrev, 0.99f);
                 float a2 = materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev * materialRoughnessPrev;
@@ -449,7 +449,7 @@ void Main()
             {
 #ifdef SUBSURFACE_SCATTERING
                 if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, brdfContext, material, instance, payload, rayCone, randomSeed, false);
+                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, instance, payload, rayCone, randomSeed, false);
                     isSssPath = true;
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;

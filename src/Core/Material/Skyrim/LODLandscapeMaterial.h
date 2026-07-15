@@ -11,13 +11,13 @@ struct LODLandscapeMaterial : public LightingMaterial
 
 	LODLandscapeMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
-	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
+	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_ParentDiffuseTexture;
-	Texture m_ParentNormalTexture;
-	Texture m_NoiseTexture;
+	MaterialTexture m_ParentDiffuseTexture;
+	MaterialTexture m_ParentNormalTexture;
+	MaterialTexture m_NoiseTexture;
 };

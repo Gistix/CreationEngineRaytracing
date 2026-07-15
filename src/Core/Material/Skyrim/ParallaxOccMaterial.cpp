@@ -6,39 +6,33 @@
 ParallaxOccMaterial::ParallaxOccMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
 	m_Offset = offset;
+	m_HashKey = shaderMaterial->hashKey;
 
 	m_Data = eastl::make_unique<ParallaxOccMaterialData>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void ParallaxOccMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void ParallaxOccMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
+	LightingMaterial::UpdateData(shaderMaterial);
 
-	auto parallaxData = reinterpret_cast<Data*>(data);
+	auto parallaxMaterial = reinterpret_cast<RE::BSLightingShaderMaterialParallaxOcc*>(shaderMaterial);
 
-	auto parallaxMaterial = skyrim_cast<RE::BSLightingShaderMaterialParallaxOcc*>(shaderMaterial);
-	if (!parallaxMaterial) {
-		logger::error("ParallaxOccMaterial::Initialize - Shader material is not BSLightingShaderMaterialParallaxOcc");
-		return;
-	}
-
+	auto parallaxData = reinterpret_cast<Data*>(m_Data.get());
 	parallaxData->MaxPasses = parallaxMaterial->parallaxOccMaxPasses;
 	parallaxData->Scale = parallaxMaterial->parallaxOccScale;
-
-	parallaxData->HeightTexture = m_HeightTexture.GetDescriptorIndex();
 }
 
 void ParallaxOccMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
 
-	auto parallaxMaterial = skyrim_cast<RE::BSLightingShaderMaterialParallaxOcc*>(shaderMaterial);
-	if (!parallaxMaterial) {
-		logger::error("ParallaxOccMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialParallaxOcc");
-		return;
-	}
+	auto parallaxMaterial = reinterpret_cast<RE::BSLightingShaderMaterialParallaxOcc*>(shaderMaterial);
 
-	m_HeightTexture = MaterialManager::GetTexture(parallaxMaterial->heightTexture, Renderer::GetSingleton()->GetWhiteTextureDescriptor());
+	auto parallaxData = reinterpret_cast<Data*>(m_Data.get());
+
+	if (m_HeightTexture.Update(parallaxMaterial->heightTexture, Renderer::GetSingleton()->GetWhiteTextureDescriptor()))
+		parallaxData->HeightTexture = m_HeightTexture.texture.GetDescriptorIndex();
 }

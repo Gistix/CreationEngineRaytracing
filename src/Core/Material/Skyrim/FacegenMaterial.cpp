@@ -6,36 +6,35 @@
 FacegenMaterial::FacegenMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
 	m_Offset = offset;
+	m_HashKey = shaderMaterial->hashKey;
 
 	m_Data = eastl::make_unique<FacegenMaterialData>();
 
-	Initialize(m_Data.get(), shaderMaterial);
+	UpdateData(shaderMaterial);
+	UpdateTextures(shaderMaterial);
 }
 
-void FacegenMaterial::Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial)
+void FacegenMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
-	LightingMaterial::Initialize(data, shaderMaterial);
-
-	auto facegenData = reinterpret_cast<Data*>(data);
-
-	facegenData->TintTexture = m_TintTexture.GetDescriptorIndex();
-	facegenData->DetailTexture = m_DetailTexture.GetDescriptorIndex();
-	facegenData->SubsurfaceTexture = m_SubsurfaceTexture.GetDescriptorIndex();
+	LightingMaterial::UpdateData(shaderMaterial);
 }
 
 void FacegenMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
 
-	auto facegenMaterial = skyrim_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial);
-	if (!facegenMaterial) {
-		logger::error("FacegenMaterial::UpdateTextures - Shader material is not BSLightingShaderMaterialFacegen");
-		return;
-	}
+	auto facegenMaterial = reinterpret_cast<RE::BSLightingShaderMaterialFacegen*>(shaderMaterial);
 
 	auto renderer = Renderer::GetSingleton();
 
-	m_TintTexture = MaterialManager::GetTexture(facegenMaterial->tintTexture, renderer->GetWhiteTextureDescriptor());
-	m_DetailTexture = MaterialManager::GetTexture(facegenMaterial->detailTexture, renderer->GetDetailTextureDescriptor());
-	m_SubsurfaceTexture = MaterialManager::GetTexture(facegenMaterial->subsurfaceTexture, renderer->GetBlackTextureDescriptor());
+	auto facegenData = reinterpret_cast<Data*>(m_Data.get());
+
+	if (m_TintTexture.Update(facegenMaterial->tintTexture, renderer->GetWhiteTextureDescriptor()))
+		facegenData->TintTexture = m_TintTexture.texture.GetDescriptorIndex();
+
+	if (m_DetailTexture.Update(facegenMaterial->detailTexture, renderer->GetDetailTextureDescriptor()))
+		facegenData->DetailTexture = m_DetailTexture.texture.GetDescriptorIndex();
+
+	if (m_SubsurfaceTexture.Update(facegenMaterial->subsurfaceTexture, renderer->GetBlackTextureDescriptor()))
+		facegenData->SubsurfaceTexture = m_SubsurfaceTexture.texture.GetDescriptorIndex();
 }

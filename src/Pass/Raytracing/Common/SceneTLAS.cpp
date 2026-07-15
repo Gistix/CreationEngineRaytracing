@@ -50,6 +50,19 @@ namespace Pass
 		m_RaytracingData->NumMeshes = sceneGraph->GetNumMeshesFrame();
 		m_RaytracingData->NumInstances = sceneGraph->GetNumInstancesFrame();
 
+		// Water ObjectUV
+		{
+			int32_t flowMapSize = *scene->g_FlowMapSize;
+
+			m_RaytracingData->WaterObjectUV = {
+				static_cast<float>(flowMapSize),
+				scene->g_DisplacementMeshFlowCellOffset->x,
+				1.0f - scene->g_DisplacementMeshFlowCellOffset->y
+			};
+
+			m_RaytracingData->WaterDisplacementPosition = Util::Math::Float2(*scene->g_DisplacementMeshPos);
+		}
+
 		m_RaytracingData->HitDistSettings = float4(
 			3.0f * Util::Units::M_TO_GAME_UNIT,  // (units > 0) - constant value
 			0.1f * Util::Units::M_TO_GAME_UNIT,  // (> 0) - viewZ based linear scale (1 m - 10 cm, 10 m - 1 m, 100 m - 10 m)
@@ -88,9 +101,8 @@ namespace Pass
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
-		// Upload pending dynamic buffers and build/refit the per-owner BLAS clusters before the TLAS build.
 		sceneGraph->BuildClusters(commandList);
 
-		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters());
+		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters(), sceneGraph->GetSubIndexSegmentClusters());
 	}
 }

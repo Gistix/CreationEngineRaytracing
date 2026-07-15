@@ -21,7 +21,7 @@
 #endif
 
 #if defined(SKYRIM)   
-#   include "include/SurfaceSkyrim.hlsli"
+#   include "include/Material/SkyrimMaterials.hlsli"
 #elif defined(FALLOUT4)
 #   include "include/SurfaceFallout4.hlsli"
 #endif
@@ -37,7 +37,6 @@ struct SurfaceMaker
         surface.Primary = primary;
         
         surface.Position = position;
-        surface.PrevPosition = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
@@ -98,7 +97,6 @@ struct SurfaceMaker
 
             // Override position with SIA precise interpolation result
             surface.Position = siaWldPosition;
-            surface.PrevPosition = siaWldPosition; // Will be overridden by HAS_PREV_POSITIONS if available
             surface.FaceNormal = siaWldFaceNormal;
             surface.PositionError = 0.0f; // Not used in SIA path
             surface.SIAOffset = siaWldOffset;
@@ -120,26 +118,30 @@ struct SurfaceMaker
 
         // Previous-frame positions for motion vectors.
 #if defined(HAS_PREV_POSITIONS)
-        {
+        {       
             // Previous object-space position: per-vertex skinned/dynamic positions, else current.
             float3 prevObjectSpacePos = currentObjectSpacePos;
             if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
                 prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
 
-            // Reconstruct the world-space current/previous delta and apply it to surface.Position so
-            // static geometry does not inherit world-coordinate cancellation error.
-            float3 currentRootSpacePos = mul(mesh.Transform, float4(currentObjectSpacePos, 1.0));
-            float3 currentWorldPosition = mul(instance.Transform, float4(currentRootSpacePos, 1.0));
-        
-            float3 prevRootSpacePos = mul(mesh.PrevTransform, float4(prevObjectSpacePos, 1.0));
-            float3 prevWorldPosition = mul(instance.PrevTransform, float4(prevRootSpacePos, 1.0));
-        
-            // Apply object motion after current/previous reconstruction cancel, so
-            // static geometry does not inherit world-coordinate cancellation error.        
-            surface.PrevPosition = surface.Position + (prevWorldPosition - currentWorldPosition);
+            // Reconstruct the current/previous delta in camera-relative space (using the SAME
+            // camera reference, Camera.Position, for both terms) so the subtraction stays
+            // well-conditioned regardless of how far the object is from the world origin.
+            // For static geometry (identical transforms + identical object-space positions)
+            // this cancels to exactly zero, just as the naive world-space version did —
+            // but for skinned/dynamic geometry it avoids catastrophic cancellation between
+            // two large, nearly-equal world-space coordinates.
+            float3 currentWorldRelPos = TransformMeshInstancePointCameraRelative(
+                currentObjectSpacePos, mesh.Transform, instance.Transform, Camera.Position);
 
+            float3 prevWorldRelPos = TransformMeshInstancePointCameraRelative(
+                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.Position); // NOTE: Camera.Position (current), not PositionPrev — keeps both terms in the same reference frame
+
+            // Apply object motion after current/previous reconstruction cancel, so
+            // static geometry does not inherit world-coordinate cancellation error.
+            // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.
             surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
-                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.PositionPrev);
+                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.PositionPrev);        
         }
 #else
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
@@ -226,7 +228,7 @@ struct SurfaceMaker
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
             float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
             
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, -rayDir, payload.hitDistance);
         }
         else if (material.Type == Type::Effect)
         {
@@ -246,7 +248,7 @@ struct SurfaceMaker
         }
         else
         {
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, -rayDir, payload.hitDistance);
         }
 #   else   
 #   endif
@@ -270,7 +272,6 @@ struct SurfaceMaker
         surface.Primary = false;
         
         surface.Position = position;
-        surface.PrevPosition = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
@@ -312,12 +313,14 @@ struct SurfaceMaker
         surface.CoatBitangent = bitangentWS;
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
-    
-        float4 boneRotation = float4(1.0f, 1.0f, 1.0f, 1.0f);
-        
+
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh);
+        {
+            float dist = length(surface.CameraRelativePosition);
+            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, viewDir, dist);
+        }
         else if (material.Type == Type::Effect)
             EffectMaterial(surface, texCoord0, vertexColor, mesh);
         else if (material.Type == Type::Water)
@@ -327,7 +330,12 @@ struct SurfaceMaker
         else if (material.Type == Type::Grass)
             GrassMaterial(surface, texCoord0, mesh);
         else
-            DefaultMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation);
+        {
+            float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
+            float dist = length(surface.CameraRelativePosition);
+            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, viewDir, dist);
+        }
 #   else   
 #   endif
    
@@ -348,14 +356,13 @@ struct SurfaceMaker
         Surface surface = (Surface)0;
 
         surface.Primary = false;        
-        
+         
         surface.SubsurfaceData = (Subsurface)0;
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
         surface.Position = position;
-        surface.PrevPosition = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
 
@@ -401,11 +408,13 @@ struct SurfaceMaker
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
 
+#if defined(GLINT)
         surface.GlintScreenSpaceScale = 1.0f;
         surface.GlintLogMicrofacetDensity = 0.0f;
         surface.GlintMicrofacetRoughness = 0.0f;
         surface.GlintDensityRandomization = 0.0f;
         surface.GlintTexCoord = float2(0.0f, 0.0f);
+#endif
         
         return surface; 
     }

@@ -11,11 +11,11 @@ struct ParallaxMaterial : public LightingMaterial
 
 	ParallaxMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset);
 
-	void Initialize(MaterialBase::Data* data, RE::BSShaderMaterial* shaderMaterial);
+	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
-	virtual void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
+	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
-	Texture m_HeightTexture;
+	MaterialTexture m_HeightTexture;
 };

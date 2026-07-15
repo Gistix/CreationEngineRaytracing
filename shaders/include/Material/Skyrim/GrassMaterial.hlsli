@@ -1,0 +1,20 @@
+#ifndef GRASS_MATERIAL_FUNC_HLSL
+#define GRASS_MATERIAL_FUNC_HLSL
+
+#include "include/Common.hlsli"
+#include "include/ColorConversions.hlsli"
+#include "include/Surface.hlsli"
+#include "include/Utils/VanillaToPBR.hlsli"
+#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+
+void GrassMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh)
+{
+    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
+    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
+    float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
+    float alpha = diffuse.a * mesh.Properties.Alpha;
+
+    surface.Albedo = VanillaDiffuseColor(diffuse.rgb);
+}
+
+#endif // GRASS_MATERIAL_FUNC_HLSL

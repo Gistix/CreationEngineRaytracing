@@ -19,7 +19,6 @@ namespace Pass
 {
 	class SHaRC : public RenderPass, ITLASUpdateListener
 	{		
-		static constexpr uint UPDATE_THREAD_GROUP_SIZE = 16;
 		static constexpr uint RESOLVE_LINEAR_BLOCK_SIZE = 256;
 		static constexpr size_t MAX_CAPACITY = 4 * 1024 * 1024;
 

@@ -3,6 +3,7 @@
 #include "Core/LandLODMesh.h"
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
+#include "Core/SubIndexMesh.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
@@ -18,6 +19,10 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 			if (extra->size > 0 && extra->value[0] == 4)
 				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
 		}
+
+		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
+			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
+
 		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
 	}
 
@@ -73,6 +78,7 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			m_Properties.GetData(),
 			static_cast<uint16_t>(m_Type),
 			static_cast<uint16_t>(GetDynamicIndex()),
+			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
 			m_Material->GetOffsetComp(),
 			m_LocalTransform,
 			m_PrevLocalTransform
@@ -135,6 +141,9 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable;
 		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, indexBuffer.m_Buffer));
 	}
+	else {
+		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+	}
 
 	return indexBuffer;
 }
@@ -172,6 +181,9 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetVertexDescriptors()->m_DescriptorTable;
 		vertexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, vertexBuffer.m_Buffer));
 	}
+	else {
+		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+	}
 
 	return vertexBuffer;
 }
@@ -192,16 +204,18 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 
 	m_Transform = transform;
 	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_BSTriShape->previousWorld));
+
+	UpdateMaterial();
 }
 
-nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
 {
 	nvrhi::rt::GeometryDesc geometryDesc;
 
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
 	geometryTriangles.indexBuffer = indexBuffer;
-	geometryTriangles.indexOffset = 0;
+	geometryTriangles.indexOffset = indexOffset * sizeof(uint16_t); // Byte offset into index buffer GPU VA
 	geometryTriangles.indexFormat = nvrhi::Format::R16_UINT;
 	geometryTriangles.indexCount = indexCount;
 
@@ -216,23 +230,24 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	return geometryDesc;
 }
 
-bool BaseMesh::SetHidden(bool hidden)
+void BaseMesh::SetHidden(bool hidden)
 {
 	const bool wasHidden = m_State.any(State::Hidden);
 
 	m_State.set(hidden, State::Hidden);
 
-	if (wasHidden != hidden) {
+	if (wasHidden != hidden)
 		MarkDirty(DirtyFlags::Visibility);
-		return true;
-	}
+}
 
-	return false;
+bool BaseMesh::IsTwoSided()
+{
+	return m_Properties.GetData().ShaderFlags & Properties::ShaderFlags::kTwoSided;
 }
 
 bool BaseMesh::IsHidden() const
 {
-	return m_State.any(State::Hidden);
+	return m_State.any(State::Hidden) || m_State.any(State::SubIndexHidden);
 }
 
 void BaseMesh::OnDestroy() {
@@ -256,4 +271,16 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 void BaseMesh::CreateMaterial()
 {
 	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+}
+
+void BaseMesh::UpdateMaterial()
+{
+	if (!m_Material)
+		return;
+
+	// Only update water for now, saves some precious CPU time which we cannot afford (yet)
+	if (m_Material->GetData()->Type != MaterialBase::Type::Water)
+		return;
+
+	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
 }
