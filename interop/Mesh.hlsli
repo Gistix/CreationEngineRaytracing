@@ -12,6 +12,7 @@ namespace MeshType
     static const uint Default = 1;
     static const uint Skinned = 2;
     static const uint Dynamic = 3;
+    static const uint SubIndex = 4;
 }
 #endif
 
@@ -25,6 +26,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     INTEROP_DATA_TYPE(Properties) Properties;
     uint16_t Type;
     uint16_t DynamicID;
+    uint32_t IndexOffset;
     uint MaterialOffsetComp;
     INTEROP_ROW_MAJOR(float3x4) Transform;  
     INTEROP_ROW_MAJOR(float3x4) PrevTransform;

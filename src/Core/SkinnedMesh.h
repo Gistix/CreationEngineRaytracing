@@ -12,7 +12,7 @@ public:
 
 	virtual SkinnedMesh* AsSkinnedMesh() override { return this; }
 
-	virtual void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform, bool isClusterOrigin) override;
+	virtual void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform) override;
 
 	bool IsUpdatable() const override { return true; }
 

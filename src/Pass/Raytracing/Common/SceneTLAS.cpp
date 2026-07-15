@@ -60,6 +60,8 @@ namespace Pass
 				scene->g_DisplacementMeshFlowCellOffset->x,
 				1.0f - scene->g_DisplacementMeshFlowCellOffset->y
 			};
+
+			m_RaytracingData->WaterDisplacementPosition = Util::Math::Float2(*scene->g_DisplacementMeshPos);
 		}
 
 		m_RaytracingData->HitDistSettings = float4(
@@ -100,9 +102,8 @@ namespace Pass
 
 		commandList->writeBuffer(m_RaytracingBuffer, m_RaytracingData.get(), sizeof(RaytracingData));
 
-		// Upload pending dynamic buffers and build/refit the per-owner BLAS clusters before the TLAS build.
 		sceneGraph->BuildClusters(commandList);
 
-		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters());
+		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters(), sceneGraph->GetSubIndexSegmentClusters());
 	}
 }

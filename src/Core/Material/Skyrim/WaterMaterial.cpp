@@ -42,6 +42,7 @@ void WaterMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 	waterData->Amplitude1 = waterMaterial->amplitudeA[0];
 	waterData->Amplitude2 = waterMaterial->amplitudeA[1];
 	waterData->Amplitude3 = waterMaterial->amplitudeA[2];
+	waterData->Amplitude4 = waterMaterial->displacementDampener;
 }
 
 void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)

@@ -106,8 +106,10 @@ RaytracingAccelerationStructure             LightTLAS[]                 : regist
 StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space6);
 TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
 StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
-Texture2D<float4>                           PhysicalSkyTrLUT            : register(t8);
-Texture2D<float4>                           SkinDetailNormal            : register(t9); 
+Texture2D<float4>                           SkinDetailNormal            : register(t8); 
+Texture2D<float4>                           WaterDisplacementMap        : register(t9);
+Texture2D<float4>                           ProjNoiseMap                : register(t10);
+Texture2D<float4>                           PhysicalSkyTrLUT            : register(t11);
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);

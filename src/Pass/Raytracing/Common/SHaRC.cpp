@@ -100,6 +100,8 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
+			nvrhi::BindingLayoutItem::Texture_SRV(10),          // Projection noise
+			nvrhi::BindingLayoutItem::Texture_SRV(11),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
@@ -110,9 +112,6 @@ namespace Pass
 		auto* scene = Scene::GetSingleton();
 
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
-
-		const auto threadGroupSizeWStr = std::to_wstring(UPDATE_THREAD_GROUP_SIZE);
-		defines.emplace_back(L"THREAD_GROUP_SIZE", threadGroupSizeWStr.c_str());
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
@@ -244,8 +243,10 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_ResolveBuffer),
-			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetPhysicalSkyTrLUTTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(9, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(9, GetRenderer()->GetWaterDisplacementTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(11, scene->GetPhysicalSkyTrLUTTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)

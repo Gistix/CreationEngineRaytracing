@@ -24,23 +24,26 @@ namespace ShaderUtils
 		sourceBuffer.Size = source->GetBufferSize();
 		sourceBuffer.Encoding = DXC_CP_ACP;
 
-		LPCWSTR args[] = {
+		eastl::vector<LPCWSTR> args = {
 			FilePath,
 			L"-E",  EntryPoint,
 			L"-enable-16bit-types",
 			L"-T", Target,
 			L"-I", L"Data/shaders",
 			L"-I", L"extern/RTXDI-Library/Include",
-			L"-Zi",
-			L"-Zss",
-			L"-Qembed_debug",
 			L"-O3"
 		};
+
+#ifndef NDEBUG
+		// Embedded source/debug information substantially increases DXC work and
+		// shader-library size. Keep it for development builds only.
+		args.insert(args.end(), { L"-Zi", L"-Zss", L"-Qembed_debug" });
+#endif
 
 		winrt::com_ptr<IDxcCompilerArgs> compilerArgs;
 		dxc->DxcCreateInstance(CLSID_DxcCompilerArgs, IID_PPV_ARGS(&compilerArgs));
 
-		compilerArgs->AddArguments(args, _countof(args));
+		compilerArgs->AddArguments(args.data(), static_cast<uint>(args.size()));
 
 #if defined(SKYRIM)
 		defines.emplace_back(L"SKYRIM", L"");

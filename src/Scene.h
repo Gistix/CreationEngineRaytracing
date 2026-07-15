@@ -36,6 +36,8 @@ struct Scene
 	ID3D12Resource* m_SkinDetailNormalResource = nullptr;
 	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
+	mutable nvrhi::TextureHandle m_ProjNoiseTexture;
+
 	ID3D12Resource* m_WaterFlowMapResource = nullptr;
 	nvrhi::TextureHandle m_WaterFlowMapTexture;
 
@@ -118,6 +120,8 @@ struct Scene
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
 	inline nvrhi::ITexture* GetPhysicalSkyTrLUTTexture() const { return m_PhysicalSkyTrLUTTexture; }
 	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
+
+	nvrhi::ITexture* GetProjNoiseTexture() const;
 
 	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 

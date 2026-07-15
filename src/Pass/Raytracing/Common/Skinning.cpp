@@ -96,6 +96,7 @@ namespace Pass
 
 	void Skinning::QueueUpdate(DirtyFlags updateFlags, SkinnedMesh* mesh)
 	{
+		std::scoped_lock lock(m_QueueMutex);
 		queuedMeshes.emplace(
 			mesh,
 			QueuedMesh(updateFlags, mesh->GetName()));

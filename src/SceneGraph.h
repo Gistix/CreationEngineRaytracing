@@ -2,7 +2,7 @@
 
 #include "Core/BaseMesh.h"
 #include "Core/BLASCluster.h"
-
+#include "Core/ThreadPool.h"
 
 #include "core/Light.h"
 #include "core/MaterialManager.h"
@@ -23,7 +23,10 @@
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
 
+#include <shared_mutex>
+
 class LandLODMesh;
+class SubIndexSegmentMesh;
 
 class SceneGraph
 {
@@ -36,6 +39,11 @@ class SceneGraph
 	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
+
+	// One BLAS / TLAS instance per SubIndexMesh segment. Each SubIndexSegmentMesh lives
+	// in its own cluster so it gets its own BLAS, InstanceData slot, and TLAS entry —
+	// independent of the parent BSSubIndexTriShape and independent of any siblings.
+	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	mutable std::mutex m_MeshDestroyMutex;
@@ -80,11 +88,38 @@ class SceneGraph
 	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
+
+	std::shared_mutex m_OwnerClusterMutex;
+	std::shared_mutex m_OrphanClusterMutex;
+
+	mutable std::mutex m_ClusterDirtyMutex;
+
+	ThreadPool m_ThreadPool;
+	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
+	eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>> m_CreateList;
+
+	struct MeshCreateCandidate {
+		RE::BSTriShape* bsTriShape;
+		RE::TESObjectREFR* refr;
+	};
+	eastl::vector<MeshCreateCandidate> m_CreateCandidates;
+	eastl::vector<eastl::vector<MeshCreateCandidate>> m_PerWorkerCreateCandidates;
 	
 	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
 
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
+	template <typename Key, typename Map>
+	BLASCluster* GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a_mutex, Key a_key, RE::TESObjectREFR* a_owner);
+
+	struct PerThreadResult
+	{
+		eastl::vector<eastl::pair<LightData, RE::BSLight*>> lights;
+		eastl::vector<LightData> orphanLights;
+		eastl::vector<eastl::pair<MeshData, RE::BSTriShape*>> meshes;
+		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
+	};
 public:
+	SceneGraph();
 	void Initialize();
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
@@ -109,7 +144,13 @@ public:
 
 	inline auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline auto& GetOrphanClusters() { return m_OrphanClusters; }
+	inline auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
 	inline auto& GetDirtyClusters() { return m_DirtyClusters; }
+
+	// Per-segment cluster helpers. Called by SubIndexMesh when it creates/destroys a
+	// SubIndexSegmentMesh child. The segment is the unique key into m_SubIndexSegmentClusters.
+	BLASCluster* GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner);
+	void RemoveSegmentCluster(SubIndexSegmentMesh* segment);
 	
 	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 
@@ -134,8 +175,6 @@ public:
 
 	void Update(nvrhi::ICommandList* commandList);
 	void UpdateLights(nvrhi::ICommandList* commandList);
-
-	void ProcessGeometry(RE::TESObjectREFR* refr, RE::BSTriShape* bsTriShape, const uint64_t& frameIndex, nvrhi::ICommandList* commandList);
 
 	// Update Camera reference
 	void UpdateCamera();

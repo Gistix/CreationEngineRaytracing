@@ -19,7 +19,6 @@ struct Surface
     bool Primary;
     
     float3 Position;
-    float3 PrevPosition;
     float3 CameraRelativePosition;
     float3 PrevCameraRelativePosition;
     float3 GeomNormal;
@@ -29,7 +28,9 @@ struct Surface
     float3 Bitangent;
     float3 FaceNormal;
     float3 Albedo;
+#if defined(RASTER)
     float Alpha;
+#endif
     float3 DiffuseAlbedo;
     float Roughness;
     float Metallic;
@@ -55,11 +56,13 @@ struct Surface
     float3 FuzzColor;
     float FuzzWeight;
 
+#if defined(GLINT)
     float GlintScreenSpaceScale;
     float GlintLogMicrofacetDensity;
     float GlintMicrofacetRoughness;
     float GlintDensityRandomization;
     float2 GlintTexCoord;
+#endif
 
     float MipLevel;
     float PositionError;

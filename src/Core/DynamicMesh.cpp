@@ -132,7 +132,12 @@ void DynamicMesh::Update(nvrhi::ICommandList* commandList)
 		return;
 
 	// Upload the latest morph positions to the skinning input; the skinning pass produces the live buffer.
-	commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
+	// Static mutex serializes concurrent uploads from parallel worker threads.
+	{
+		static std::mutex uploadMutex;
+		std::scoped_lock lock(uploadMutex);
+		commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
+	}
 
 	MarkDirty(DirtyFlags::Vertex);
 

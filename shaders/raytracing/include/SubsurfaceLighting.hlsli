@@ -27,9 +27,6 @@
 
 float3 evalSingleScatteringTransmission(
     const Surface sourceSurface,
-    const BRDFContext sourceBRDFContext,
-    const LightingMaterialData sourceLightingMaterialData,
-    const Instance sourceInstance,
     const SubsurfaceMaterialData subsurfaceMaterialData,
     const SubsurfaceInteraction subsurfaceInteraction,
     RayCone rayCone,
@@ -46,7 +43,6 @@ float3 evalSingleScatteringTransmission(
         const float3 hitPos = subsurfaceInteraction.centerPosition;
 
         float thickness = 0.0f;
-        float3 backPosition;
         {
             RayDesc transmissionRay;
 #if USE_SIA_INTERPOLATION
@@ -60,25 +56,18 @@ float3 evalSingleScatteringTransmission(
 
             Payload payload = TraceRayOpaque(Scene, transmissionRay, randomSeed);
 
-            thickness = payload.hitDistance;
-            backPosition = transmissionRay.Origin + thickness * transmissionRay.Direction;
+            if (!payload.Hit())
+                continue;
 
-            if (payload.Hit())
-            {
-                float3 localPosition = transmissionRay.Origin + refractedRayDirection * payload.hitDistance;
+            thickness = payload.hitDistance;
+
+            float3 localPosition = transmissionRay.Origin + refractedRayDirection * payload.hitDistance;
 
                 Instance sampleInstance;
                 LightingMaterialData sampleLightingMaterialData;
                 Surface sampleSurface = SurfaceMaker::make(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleLightingMaterialData, false);
 
-                const float3 sampleGeometryNormal = sampleSurface.FaceNormal;
                 const float3 sampleShadingNormal = sampleSurface.Normal;
-#if USE_SIA_INTERPOLATION
-                backPosition = OffsetRaySIA(backPosition, sampleGeometryNormal, sampleSurface.SIAOffset, false);
-#else
-                backPosition = OffsetRay(backPosition, sampleGeometryNormal, sampleSurface.PositionError, false);
-#endif
-
                 // Prepare data needed to evaluate the light
                 float3 incidentVector = 0.0f;
                 float lightDistance = 0.0f;
@@ -102,9 +91,9 @@ float3 evalSingleScatteringTransmission(
 
                         // Li * bsdf * cosTheta / CosineLobePDF = Li * bsdf * cosTheta / (cosTheta / pi) = Li * bsdf * pi
                         radiance += lightRadiance * transmissionBsdf * K_PI;
-                    }
                 }
             }
+
         }
 
         // Trace rays along the scattering ray
@@ -189,8 +178,6 @@ float3 evalSingleScatteringTransmission(
 
 float3 EvaluateSubsurfaceDiffuseNEE(
     const Surface surface,
-    const BRDFContext brdfContext,
-    const LightingMaterialData material,
     const Instance instance,
     const Payload initialPayload,
     RayCone rayCone,
@@ -229,11 +216,8 @@ float3 EvaluateSubsurfaceDiffuseNEE(
     float3 irradiance;
     GetLightIrradianceMIS(instance, surface, irradiance, incidentVector, lightDistance, randomSeed);
     const float3 vectorToLight = normalize(incidentVector);
-    const float3 lightVector = vectorToLight * lightDistance;
-
-    if (any(irradiance) > MIN_DIFFUSE_SHADOW)
+    if (any(irradiance > MIN_DIFFUSE_SHADOW))
     {
-        const float3 centerSpecularF0 = surface.F0;
         const float3 diffuseAlbedo = surface.DiffuseAlbedo;
         subsurfaceMaterialData.transmissionColor = SSS_SETTINGS.MaterialOverride ? subsurfaceMaterialData.transmissionColor : diffuseAlbedo;
 
@@ -254,17 +238,19 @@ float3 EvaluateSubsurfaceDiffuseNEE(
             subsurfaceInteraction.biTangent = cross(cameraUp, -cameraDirection);
         }
 
-        uint effectiveSample = 0;
+        const SubsurfaceMaterialCoefficients sssMaterialCoefficients =
+            ComputeSubsurfaceMaterialCoefficients(subsurfaceMaterialData);
+        const uint sampleCount = min(SSS_SETTINGS.SampleCount, (uint)MAX_SSS_SAMPLE_COUNT);
 
-        for (uint sssSampleIndex = 0; sssSampleIndex < SSS_SETTINGS.SampleCount; ++sssSampleIndex)
+        for (uint sssSampleIndex = 0; sssSampleIndex < sampleCount; ++sssSampleIndex)
         {
             SubsurfaceSample subsurfaceSample;
 
             const float2 rand2 = float2(Random(randomSeed), Random(randomSeed));
-            EvalBurleyDiffusionProfile(subsurfaceMaterialData,
+            EvalBurleyDiffusionProfile(sssMaterialCoefficients,
                                       subsurfaceInteraction,
                                       SSS_SETTINGS.MaxSampleRadius,
-                                      SSS_SETTINGS.EnableTransmission && false, // disable normalization
+                                      false, // disable normalization
                                       rand2,
                                       subsurfaceSample);
 
@@ -286,13 +272,6 @@ float3 EvaluateSubsurfaceDiffuseNEE(
                 const bool transition = dot(vectorToLight, sampleGeometryNormal) < 0.0f;
                 const float3 samplePosition = subsurfaceSample.samplePosition - subsurfaceInteraction.normal * samplePayload.hitDistance;
 
-                float3 sampleShadowHitPos;
-#if USE_SIA_INTERPOLATION
-                sampleShadowHitPos = OffsetRaySIA(samplePosition, sampleGeometryNormal, sampleSurface.SIAOffset, transition);
-#else
-                sampleShadowHitPos = OffsetRay(samplePosition, sampleGeometryNormal, sampleSurface.PositionError, transition);
-#endif
-
                 // Prepare data needed to evaluate the sample light
                 float3 sampleIncidentVector = float3(0.0f, 0.0f, 0.0f);
                 float sampleLightDistance = 0.0f;
@@ -311,22 +290,19 @@ float3 EvaluateSubsurfaceDiffuseNEE(
                         const float cosThetaI = min(max(0.00001f, dot(vectorToLight, sampleShadingNormal)), 1.0f);
                         radiance += max(EvalBssrdf(subsurfaceSample, sampleLightRadiance, cosThetaI), 0.0f);
 
-                        ++effectiveSample;
                     }
                 }
             }
         }
 
-        radiance /= (float)SSS_SETTINGS.SampleCount;
+        if (sampleCount > 0)
+            radiance /= (float)sampleCount;
     }
 
     if (SSS_SETTINGS.EnableTransmission)
     {
         radiance += max(evalSingleScatteringTransmission(
             surface,
-            brdfContext,
-            material,
-            instance,
             subsurfaceMaterialData,
             subsurfaceInteraction,
             rayCone,
