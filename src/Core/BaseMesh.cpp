@@ -202,13 +202,14 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	if (!Util::Math::MatrixNearEqual(transform, m_Transform))
 		MarkDirty(DirtyFlags::Transform);
 
-	m_Transform = transform;
 	if (m_NeedsPrevInit) {
-		m_PrevTransform = m_Transform;
+		m_PrevTransform = transform;
 		m_NeedsPrevInit = false;
 	} else {
-		XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_BSTriShape->previousWorld));
+		m_PrevTransform = m_Transform;
 	}
+
+	m_Transform = transform;
 
 	UpdateMaterial();
 }

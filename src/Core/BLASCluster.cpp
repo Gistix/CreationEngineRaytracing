@@ -63,13 +63,18 @@ void BLASCluster::UpdateTransform() {
 
 	if (m_Owner) {
 		const RE::NiAVObject* object = m_Owner->Get3D();
-		XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(object->world));
+
+		float3x4 transform;
+		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(object->world));
+
 		if (m_NeedsPrevInit) {
-			m_PrevTransform = m_Transform;
+			m_PrevTransform = transform;
 			m_NeedsPrevInit = false;
 		} else {
-			XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(object->previousWorld));
+			m_PrevTransform = m_Transform;
 		}
+
+		m_Transform = transform;
 	}
 	else {
 		if (m_Members.empty()) {
@@ -80,6 +85,7 @@ void BLASCluster::UpdateTransform() {
 		else {
 			const auto& mesh = m_Members.front();
 			m_Transform = mesh->GetTransform();
+
 			if (m_NeedsPrevInit) {
 				m_PrevTransform = m_Transform;
 				m_NeedsPrevInit = false;
