@@ -55,10 +55,11 @@ void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh& manager)
 	m_Properties = manager.GetProperties();
 	m_WorldBound = manager.GetWorldBound();
 
-	const auto& transform = manager.GetTransform();
-	if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+	m_Transform = manager.GetTransform();
+	m_PrevTransform = manager.GetPrevTransform();
+
+	if (manager.GetDirtyFlags().all(DirtyFlags::Transform))
 		MarkDirty(DirtyFlags::Transform);
 
-	m_Transform = transform;
-	m_PrevTransform = manager.GetPrevTransform();
+	m_NeedsPrevInit = false;
 }

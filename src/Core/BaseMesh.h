@@ -161,6 +161,7 @@ protected:
 	// Cached world transform from BSTriShape, refreshed in Update().
 	float3x4 m_Transform = Constants::kIdentityTransform;
 	float3x4 m_PrevTransform = Constants::kIdentityTransform;
+	bool m_NeedsPrevInit = true;
 
 	// Local to the BLASCluster
 	float3x4 m_LocalTransform = Constants::kIdentityTransform;
