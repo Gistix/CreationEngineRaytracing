@@ -31,6 +31,7 @@ namespace Pass
 
 		m_UseStablePlanes = settings.AdvancedSettings.StablePlanes;
 		m_UseRestirGI = settings.ReSTIRGI.Enabled;
+		m_UseRestirDI = settings.ReSTIRDISettings.Enabled;
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
@@ -47,6 +48,7 @@ namespace Pass
 	{
 		m_UseStablePlanes = settings.AdvancedSettings.StablePlanes;
 		m_UseRestirGI = settings.ReSTIRGI.Enabled;
+		m_UseRestirDI = settings.ReSTIRDISettings.Enabled;
 
 		auto defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);
 
@@ -128,6 +130,11 @@ namespace Pass
 
 			// ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(17)); // SurfaceDataBuffer
+		}
+
+		if (m_UseRestirDI) {
+			// ReSTIR DI: Reservoir buffer (RGBA16_UINT)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(18)); // ReSTIRDI_Reservoir
 		}
 
 #if defined(NVAPI)
@@ -364,6 +371,10 @@ namespace Pass
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(15, rgi->secondaryGBufferDiffuseAlbedo));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(16, rgi->secondaryGBufferSpecularF0Roughness));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(17, rgi->surfaceDataBuffer));
+		}
+
+		if (m_UseRestirDI) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(18, textureManager.GetTexture(RenderTarget::ReSTIRDI_Reservoir)));
 		}
 
 #if defined(NVAPI)

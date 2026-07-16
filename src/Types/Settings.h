@@ -182,6 +182,11 @@ struct WaterSettings
 	float AbsorptionScale = 1.0f;
 };
 
+struct ReSTIRDISettings
+{
+	bool Enabled = false;
+};
+
 enum struct ReSTIRGIResamplingMode : int32_t
 {
 	None = 0,
@@ -260,6 +265,7 @@ struct Settings
 	AdvancedSettings AdvancedSettings;
 	WaterSettings WaterSettings;
 	ExperimentalSettings ExperimentalSettings;
+	ReSTIRDISettings ReSTIRDISettings;
 	ReSTIRGISettings ReSTIRGI;
 	DebugSettings DebugSettings;
 };

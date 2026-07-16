@@ -54,6 +54,9 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 		case RenderTarget::RRSpecularHitDist:
 			desc.format = nvrhi::Format::R32_FLOAT;
 			break;
+		case RenderTarget::ReSTIRDI_Reservoir:
+			desc.format = nvrhi::Format::RGBA16_UINT;
+			break;
 		default:
 			break;
 		}

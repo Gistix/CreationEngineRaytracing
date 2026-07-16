@@ -178,9 +178,32 @@ float GetLightSampleWeight(Surface surface, Light light)
     return atten * intensity;
 }
 
+struct LightSampleResult
+{
+    int index;
+    float3 direction;
+    float dist;
+    float3 irradiance;
+#if defined(RESTIR_DI)
+    float3 rawIrradiance;    
+    float weight;
+#endif    
+};
+
 // Get irradiance for point light without BRDF evaluation
-int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, out float3 irradiance, out float3 lr, out float dist, inout uint randomSeed)
+LightSampleResult GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, inout uint randomSeed)
 {   
+    LightSampleResult result;
+    result.index = -1;
+    result.direction = float3(0, 0, 0);
+    result.dist = 0.0f;
+    result.irradiance = float3(0, 0, 0);    
+   
+#if defined(RESTIR_DI)
+    result.rawIrradiance = float3(0, 0, 0);      
+    result.weight = 0.0f;
+#endif     
+    
 #if defined(GLOBAL_LIGHTS)
     const uint lightCount = Raytracing.NumLights;
 #else
@@ -188,12 +211,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #endif
     
     if (lightCount == 0)
-    {
-        irradiance = float3(0, 0, 0);
-        lr = float3(0, 0, 0);
-        dist = 0.0f;
-        return -1;
-    }
+        return result;
 
     float lightWeight = float(lightCount);
 
@@ -244,7 +262,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 
     const uint lightIdx = min(uint(Random(randomSeed) * lightCount), lightCount - 1);
     
-#   if defined(GLOBAL_LIGHTS)    
+#   if defined(GLOBAL_LIGHTS)
     const uint lightID = lightIdx;
 #   else
     const uint lightID = lightData.GetID(lightIdx);
@@ -256,8 +274,8 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     const bool isLinear = (light.Flags & LightFlags::LinearLight) != 0;
     light.Color = PointLightToLinear(light.Color, isLinear);
 
-    lr = (light.Vector - surface.Position);
-    dist = length(lr);
+    float3 lr = (light.Vector - surface.Position);
+    const float dist = length(lr);
     lr /= dist;
 
     float lightSourceAngle = 0.005f;
@@ -265,40 +283,66 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     float atten = GetAttenuation(light, dist, lightSourceAngle);
     atten *= GetSpotAttenuation(light, lr);
 
-    irradiance = light.Color * light.Fade * atten * lightWeight;
-    lr = TangentToWorld(lr, SampleCosineHemisphereScaled(randomSeed, lightSourceAngle));
+    const float3 rawIrradiance = light.Color * light.Fade * atten;
+    const float3 irradiance = rawIrradiance * lightWeight;
+    lr = TangentToWorld(lr, SampleCosineHemisphereScaled(randomSeed, lightSourceAngle));      
+   
+    result.direction = lr;
+    result.dist = dist;
+    result.irradiance = irradiance;
     
 #if defined(RIS)
-    return selectedLightID;
+    result.index = selectedLightID;
 #else
-    return lightID;
+#   if defined(RESTIR_DI)
+    result.rawIrradiance = rawIrradiance;      
+    result.weight = lightWeight;
+#   endif      
+    
+    result.index = lightID;
 #endif
+    
+    return result;
 }
 
-float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, in uint2 idx, inout uint randomSeed)
 {
     float3 lightIrradiance;
-    float3 lr;
-    float dist;
-    
-    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
 
-    if (lightIndex < 0)
+#if defined(RESTIR_DI)
+    if (surface.Primary) {
+        uint2 prevReservoir = ReSTIRDIReservoir[idx].xy;
+        uint prevIndex = uint(prevReservoir.x);
+        float prevWeight = f16tof32(prevReservoir.y);   
+    }
+#endif       
+
+    LightSampleResult lightSample = GetPointLightIrradiance(lightData, surface, randomSeed);
+
+    if (lightSample.index < 0)
         return 0.0f;
-    
-    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
+ 
+    float3 radiance = EvalLight(lightSample.direction, type, feature, surface, brdfContext, bsdf);
 
+#if defined(RESTIR_DI)
+    if (surface.Primary) {
+        float weight = Color::RGBToLuminance(radiance * lightSample.rawIrradiance);
+        ReSTIRDIReservoir[idx].zw = uint2(lightSample.index, f32tof16(weight))  
+    }
+#endif    
+
+    float3 direct = radiance * lightSample.irradiance;
+    
     [branch]
     if (any(direct > MIN_DIFFUSE_SHADOW))
-    {
-        
+    {  
 #if USE_LIGHT_TLAS    
 #   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
 #else
 #   define LIGHT_TLAS Scene     
 #endif
         
-        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
+        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lightSample.direction, lightSample.dist, randomSeed);
     }
     else
     {
@@ -360,33 +404,29 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
         if (instance.LightData.Count > 0)
         {
             // Evaluate delta lobe against each visible point light (using the same RIS selection as standard NEE)
-            float3 lightIrradiance;
-            float3 lr;
-            float dist;
-            int lightIndex = GetPointLightIrradiance(instance.LightData, surface, lightIrradiance, lr, dist, randomSeed);
+            LightSampleResult lightSample = GetPointLightIrradiance(instance.LightData, surface, randomSeed);
             
-            if (lightIndex >= 0)
+            if (lightSample.index >= 0)
             {
                 // Compute the angular size of this light as seen from the surface
-                Light light = Lights[lightIndex];
-                float lightSourceAngle = GetLightAngle(light, dist * GAME_UNIT_TO_M);
+                Light light = Lights[lightSample.index];
+                float lightSourceAngle = GetLightAngle(light, lightSample.dist * GAME_UNIT_TO_M);
                 
                 // Check if delta direction is within the light's angular extent
-                float3 dirToLight = normalize(light.Vector - surface.Position);
                 float cosAngle = cos(lightSourceAngle);
-                float cosDelta = dot(deltaDir, dirToLight);
+                float cosDelta = dot(deltaDir, lightSample.direction);
                 
                 if (cosDelta >= cosAngle)
                 {
-                    float3 contribution = deltaThroughput * lightIrradiance * (isPrimary ? 1.0f : Raytracing.Point);
+                    float3 contribution = deltaThroughput * lightSample.irradiance * (isPrimary ? 1.0f : Raytracing.Point);
                     
                     // Shadow ray toward the light
 #if USE_LIGHT_TLAS    
-#   define DELTA_LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
+#   define DELTA_LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightSample.index)]
 #else
 #   define DELTA_LIGHT_TLAS Scene     
 #endif
-                    contribution *= TraceRayShadowFinite(DELTA_LIGHT_TLAS, surface, deltaDir, dist, randomSeed);
+                    contribution *= TraceRayShadowFinite(DELTA_LIGHT_TLAS, surface, deltaDir, lightSample.dist, randomSeed);
                     
                     totalRadiance += contribution;
                 }
@@ -397,10 +437,15 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
     return totalRadiance;
 }
 
+float3 EvaluateDirectRadianceReSTIR(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, uint2 idx, inout uint randomSeed)
+{
+    return EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, idx, randomSeed);
+}
+
 float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
     float3 radiance = EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
-    radiance += EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
+    radiance += EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, uint2(0, 0), randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
 
     return radiance;
 }
@@ -411,15 +456,12 @@ void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 
     float3 dirLr;
     GetDirectionalLightIrradiance(directionalIrradiance, dirLr, randomSeed);
 
-    float3 pointIrradiance;
-    float3 pointLr;
-    float pointDist;
-    GetPointLightIrradiance(instance.LightData, surface, pointIrradiance, pointLr, pointDist, randomSeed);
+    LightSampleResult lightSample = GetPointLightIrradiance(instance.LightData, surface, randomSeed);
 
     float3 dirVisibility = TraceRayShadow(Scene, surface, dirLr, randomSeed);
 
     float pDirLight = Luminance(directionalIrradiance * dirVisibility);
-    float pPointLight = Luminance(pointIrradiance);
+    float pPointLight = Luminance(lightSample.irradiance);
 
     float total = pDirLight + pPointLight;
     if (total < 1e-6f)
@@ -442,22 +484,10 @@ void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 
     }
     else
     {
-        irradiance = pointIrradiance / pPointLight;
-        lr = pointLr;
-        distance = pointDist;
+        irradiance = lightSample.irradiance / pPointLight;
+        lr = lightSample.direction;
+        distance = lightSample.dist;
     }
-}
-
-float3 EvaluateDirectRadianceMIS(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed)
-{
-    float3 lightIrradiance;
-    float3 lr;
-    float distance;
-    GetLightIrradianceMIS(instance, surface, lightIrradiance, lr, distance, randomSeed);
-
-    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
-
-    return direct;
 }
 
 bool ComputeTangentSpace(inout Surface surface, const bool ignoreTangent)

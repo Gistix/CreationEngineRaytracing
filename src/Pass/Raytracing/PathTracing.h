@@ -54,6 +54,7 @@ namespace Pass
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 		bool m_UseStablePlanes = false;  // Toggle for stable planes vs reference mode
 		bool m_UseRestirGI = false;
+		bool m_UseRestirDI = false;
 	public:
 		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);
 

@@ -34,7 +34,11 @@ namespace Util
 
 			defines.emplace_back(L"DIFFUSE_MODE", static_cast<int>(settings.AdvancedSettings.DiffuseBRDF));
 
-			if (settings.ExperimentalSettings.GlobalLights)
+			const bool restirDI = settings.ReSTIRDISettings.Enabled && !sharcUpdate;
+			if (restirDI)
+				defines.emplace_back(L"RESTIR_DI", L"1");
+
+			if (settings.ExperimentalSettings.GlobalLights || restirDI)
 				defines.emplace_back(L"GLOBAL_LIGHTS", L"1");
 
 			if (sharcEnabled)

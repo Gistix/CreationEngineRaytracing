@@ -24,6 +24,7 @@ struct RenderTargetManager
 		RRSpecularAlbedo = SpecularFactor,
 		RRSpecularHitDist,
 		Accumulation,
+		ReSTIRDI_Reservoir,
 		Total
 	};
 
