@@ -7,7 +7,6 @@
 #include "Core/TextureManager.h"
 
 #include "Types/RendererParams.h"
-#include "Types/SupportedFeatures.h"
 #include "Types/PassTiming.h"
 
 #include "Renderer/RenderGraph.h"
@@ -54,7 +53,7 @@ class Renderer
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
 
-	SupportedFeatures m_SupportedFeatures;
+	eastl::array<bool, magic_enum::enum_count<nvrhi::Feature>()> m_SupportedFeatures;
 
 	// Fence used to synchronize 'executeCommandList' since it is not thread safe and we need the returned fence value to synchronize GPU resources
 	mutable std::mutex m_ExecutionMutex;

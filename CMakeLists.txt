@@ -124,6 +124,12 @@ if(AUTO_DEPLOYMENT)
 
     install(FILES "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>" DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins OPTIONAL)
 
+    file(GLOB_RECURSE D3D12_CORE_DLL "${CMAKE_BINARY_DIR}/vcpkg_installed/*/bin/D3D12Core.dll")
+    if(D3D12_CORE_DLL)
+        list(GET D3D12_CORE_DLL 0 D3D12_CORE_DLL_FIRST)
+        install(FILES ${D3D12_CORE_DLL_FIRST} DESTINATION "${DEPLOY_DIR}/${ScriptExtenderName}/Plugins")
+    endif()
+
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/Shaders)
 
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/interop/ DESTINATION ${DEPLOY_DIR}/Shaders/Interop)

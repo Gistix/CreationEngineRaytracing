@@ -57,28 +57,18 @@ bool Renderer::Initialize(RendererParams rendererParams)
 			m_FormatMapping.emplace(nativeFormat, format);
 		}
 
-	// This one is quite obvious, but just to be sure...
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingPipeline))
-		m_SupportedFeatures |= SupportedFeatures::Raytracing;
+	std::string features = "";
 
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingOpacityMicromap))
-		m_SupportedFeatures |= SupportedFeatures::OpacityMicroMaps;
+	for (size_t i = 0; i < m_SupportedFeatures.size(); i++)
+	{
+		const bool supported = m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingPipeline);
+		m_SupportedFeatures[i] = supported;
 
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::LinearSweptSpheres))
-		m_SupportedFeatures |= SupportedFeatures::LinearSweptSpheres;
-	
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayQuery))
-		m_SupportedFeatures |= SupportedFeatures::InlineRaytracing;
-	
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::ShaderExecutionReordering))
-		m_SupportedFeatures |= SupportedFeatures::ShaderExecutionReordering;
+		if (supported)
+			features += fmt::format("{} ", magic_enum::enum_name(static_cast<nvrhi::Feature>(i)));
+	}
 
-#if defined(NVRHI_ENHANCED_BARRIERS)
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::EnhancedBarriers))
-		m_SupportedFeatures |= SupportedFeatures::EnhancedBarriers;
-#endif
-
-	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
+	logger::info("Supported Features: {}", features);
 
 	return true;
 }
