@@ -13,6 +13,10 @@ class TopLevelAS
 	eastl::vector<nvrhi::rt::InstanceDesc> m_InstanceDescs;
 	uint32_t m_NumInstances[Constants::MAX_FRAMES_IN_FLIGHT] = {0};
 
+	// Per-ring-slot hash of the instance set (count + BLAS pointers) from the last build.
+	// Used to decide between a full TLAS rebuild and a cheaper refit (PerformUpdate).
+	eastl::array<uint64_t, Constants::MAX_FRAMES_IN_FLIGHT> m_InstanceSetHash = {};
+
 	eastl::vector<ITLASUpdateListener*> m_Listeners;
 
 	void NotifyResized()
@@ -75,6 +79,19 @@ public:
 
 		const auto ringSlot = Renderer::GetSingleton()->GetCurrentSlot();
 
+		// FNV-1a over the instance count and BLAS pointers (in submission order).
+		// A refit (PerformUpdate) is only legal when the instance count and the
+		// referenced BLAS set are unchanged; instance transforms may change freely.
+		uint64_t instanceSetHash = 1469598103934665603ull;
+		auto hashCombine = [&instanceSetHash](uint64_t value) {
+			instanceSetHash = (instanceSetHash ^ value) * 1099511628211ull;
+		};
+		hashCombine(static_cast<uint64_t>(m_InstanceDescs.size()));
+		for (const auto& desc : m_InstanceDescs)
+			hashCombine(reinterpret_cast<uint64_t>(desc.bottomLevelAS));
+
+		bool recreated = false;
+
 		if (!m_Handle[ringSlot] || topLevelInstances > m_NumInstances[ringSlot] - Constants::TLAS_INSTANCES_THRESHOLD) {
 			float topLevelInstancesRatio = std::ceil(topLevelInstances / static_cast<float>(Constants::TLAS_INSTANCES_STEP));
 
@@ -87,8 +104,10 @@ public:
 			nvrhi::rt::AccelStructDesc tlasDesc;
 			tlasDesc.isTopLevel = true;
 			tlasDesc.topLevelMaxInstances = m_NumInstances[ringSlot];
-			tlasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+			tlasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::AllowUpdate | nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 			m_Handle[ringSlot] = Renderer::GetSingleton()->GetDevice()->createAccelStruct(tlasDesc);
+
+			recreated = true;
 
 			NotifyResized();
 		}
@@ -96,7 +115,17 @@ public:
 		if (markers)
 			commandList->beginMarker("TLAS Update");
 
-		commandList->buildTopLevelAccelStruct(m_Handle[ringSlot], m_InstanceDescs.data(), m_InstanceDescs.size(), nvrhi::rt::AccelStructBuildFlags::PreferFastTrace);
+		// Refit when the instance set is identical to the last build on this ring slot
+		// (moving instances only update their transforms, which PerformUpdate allows).
+		const bool refit = !recreated && m_InstanceSetHash[ringSlot] == instanceSetHash;
+
+		const auto buildFlags = refit
+			? nvrhi::rt::AccelStructBuildFlags::PerformUpdate | nvrhi::rt::AccelStructBuildFlags::PreferFastTrace
+			: nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+
+		commandList->buildTopLevelAccelStruct(m_Handle[ringSlot], m_InstanceDescs.data(), m_InstanceDescs.size(), buildFlags);
+
+		m_InstanceSetHash[ringSlot] = instanceSetHash;
 
 		if (markers)
 			commandList->endMarker();
