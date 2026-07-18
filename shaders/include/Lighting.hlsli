@@ -198,7 +198,12 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     float lightWeight = float(lightCount);
 
 #if defined(RIS)
+#   if defined(GLOBAL_LIGHTS)
+    const uint candidateCount = lightCount;
+#   else
     const uint candidateCount = min(RIS_MAX_CANDIDATES, lightCount);
+#   endif    
+
     uint selectedLightID = 0;
     float totalWeight = 0.0f;
     float selectedWeight = 0.0f;
