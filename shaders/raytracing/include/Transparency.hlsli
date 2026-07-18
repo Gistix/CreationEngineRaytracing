@@ -91,6 +91,11 @@ void ApplyFresnelTransmittance(
     transmitanceInOut *= transmittance;
 }
 
+// Shadow rays don't need exact per-texel alpha coverage; sampling a fixed
+// coarse mip for the alpha cutout/blend test is cheaper (better cache reuse,
+// no fine-mip dependency). Primary/bounce rays keep the exact mip-0 fetch.
+#define SHADOW_ALPHA_MIP 3
+
 bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed, in float3 direction, float hitDistance, inout float3 transmitanceInOut)
 {
     Instance instance;
@@ -126,7 +131,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         return false;        
     }else
     {   
-        float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
+        float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, SHADOW_ALPHA_MIP).a;
     
         alpha *= mesh.Properties.Alpha * instance.Alpha;
     
