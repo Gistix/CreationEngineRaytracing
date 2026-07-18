@@ -53,6 +53,9 @@ class SceneGraph
 
 	// LOD
 	eastl::unordered_map<LandLODMesh*, LandLODUpdate> m_LandLODMeshUpdates;
+	// Guards m_LandLODMeshUpdates writes; entries are submitted from parallel
+	// worker threads in SceneGraph::Update (LandLODMesh::UpdateOcclusion).
+	std::mutex m_LandLODUpdateMutex;
 
 	eastl::unordered_set<RE::BSLight*> m_TempActiveLights;
 	eastl::map<RE::BSLight*, Light> m_Lights;
@@ -159,6 +162,15 @@ public:
 	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
 
 	inline auto& GetLandLODMeshUpdates() { return m_LandLODMeshUpdates; }
+
+	// Thread-safe writer for m_LandLODMeshUpdates (called from worker threads).
+	// The reader (LandLODOccluder pass) runs later on the render thread, after
+	// SceneGraph::Update has joined its workers, so it needs no lock.
+	void SetLandLODMeshUpdate(LandLODMesh* mesh, const LandLODUpdate& update)
+	{
+		std::scoped_lock lock(m_LandLODUpdateMutex);
+		m_LandLODMeshUpdates[mesh] = update;
+	}
 
 	inline auto& GetLights() { return m_Lights; }
 

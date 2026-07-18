@@ -81,15 +81,29 @@ void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 	m_Intersecting = Util::Math::Intersects(loadedPosition, loadedSize, m_AABBCenter, m_AABBSize);
 
 	if (m_Intersecting || m_PrevIntersecting)
-		UpdateOcclusion();
+		UpdateOcclusion(loadedRange);
 }
 
-void LandLODMesh::UpdateOcclusion()
+void LandLODMesh::UpdateOcclusion(const float4& loadedRange)
 {
 	if (m_GeometryDescs.empty()) {
-		logger::info("LandLODMesh::UpdateOcclusion - No geometry");
+		logger::trace("LandLODMesh::UpdateOcclusion - No geometry");
 		return;
 	}
+
+	// Only resubmit when the occluder inputs actually changed. loadedRange shifts
+	// in discrete cell-sized steps as cells load/unload; the transform is static
+	// for terrain LOD in practice.
+	constexpr float kRangeEpsilon = 1e-3f;
+	const bool unchanged = m_OcclusionUpdateWritten &&
+		Util::Math::MatrixNearEqual(m_LastOcclusionTransform, m_Transform) &&
+		std::abs(m_LastLoadedRange.x - loadedRange.x) <= kRangeEpsilon &&
+		std::abs(m_LastLoadedRange.y - loadedRange.y) <= kRangeEpsilon &&
+		std::abs(m_LastLoadedRange.z - loadedRange.z) <= kRangeEpsilon &&
+		std::abs(m_LastLoadedRange.w - loadedRange.w) <= kRangeEpsilon;
+
+	if (unchanged)
+		return;
 
 	const auto& firstDesc = m_GeometryDescs[0];
 
@@ -100,7 +114,11 @@ void LandLODMesh::UpdateOcclusion()
 		m_Transform);
 
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	sceneGraph->GetLandLODMeshUpdates()[this] = update;
+	sceneGraph->SetLandLODMeshUpdate(this, update);
+
+	m_LastOcclusionTransform = m_Transform;
+	m_LastLoadedRange = loadedRange;
+	m_OcclusionUpdateWritten = true;
 
 	MarkDirty(DirtyFlags::Vertex);
 }
