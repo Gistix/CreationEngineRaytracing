@@ -20,6 +20,7 @@
 #include "Types/RE/RE.h"
 #include "Types/RingBuffer.h"
 
+#include <eastl/array.h>
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
 
@@ -94,7 +95,7 @@ class SceneGraph
 
 	mutable std::mutex m_ClusterDirtyMutex;
 
-	ThreadPool m_ThreadPool;
+	eastl::unique_ptr<ThreadPool> m_ThreadPool;
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
 	eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>> m_CreateList;
 
@@ -119,7 +120,6 @@ class SceneGraph
 		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
 	};
 public:
-	SceneGraph();
 	void Initialize();
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
