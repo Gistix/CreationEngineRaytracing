@@ -253,7 +253,11 @@ BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, u
 	const bool firstBuild = (m_LastBuildFrame == Constants::INVALID_FRAME_INDEX);
 	const bool hasMesh = m_DirtyFlags.any(DirtyFlags::Mesh);
 	const bool hasVisibility = m_DirtyFlags.any(DirtyFlags::Visibility);
-	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
+	// DirtyFlags::Transform is deliberately NOT a refit trigger: geometry descs store
+	// cluster-relative local transforms (BaseMesh::UpdateLocalTransform), while rigid
+	// world motion is carried by the TLAS instance transform, which is rewritten every
+	// frame (BLASCluster::Update -> InstanceData, TopLevelAS::Update -> InstanceDesc).
+	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin);
 	const bool isOrphan = (m_Owner == nullptr);
 
 	if (firstBuild || !m_BLAS || hasMesh || (!isOrphan && hasVisibility))
