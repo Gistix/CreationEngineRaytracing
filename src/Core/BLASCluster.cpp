@@ -293,7 +293,7 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	const auto frameIndex = renderer->GetFrameIndex();
 
 	if (frameIndex == m_LastBuildFrame) {
-		logger::info("BLASCluster::BuildUpdate - {} already built this frame, skipping", m_Name);
+		logger::trace("BLASCluster::BuildUpdate - {} already built this frame, skipping", m_Name);
 		return;
 	}
 
@@ -311,7 +311,7 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		return;
 	}
 	if (buildMode == BuildMode::Skip) {
-		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set.",
+		logger::trace("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set.",
 			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size());
 		return;
 	}

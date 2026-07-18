@@ -56,7 +56,13 @@ void Scene::SetLogLevel(spdlog::level::level_enum a_level)
 	logLevel = a_level;
 
 	spdlog::set_level(logLevel);
+#ifdef NDEBUG
+	// Release builds: only flush to disk for warnings and above so per-frame
+	// info/trace logging stays buffered instead of hitting the disk every call.
+	spdlog::flush_on(std::max(logLevel, spdlog::level::warn));
+#else
 	spdlog::flush_on(logLevel);
+#endif
 
 	logger::info("Log Level set to {} ({})", magic_enum::enum_name(logLevel), magic_enum::enum_integer(logLevel));
 }
