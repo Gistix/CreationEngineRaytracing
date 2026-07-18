@@ -34,9 +34,24 @@ namespace Pass::NRD
 		eastl::vector<nvrhi::TextureHandle> m_PermanentPool;
 		eastl::vector<nvrhi::TextureHandle> m_TransientPool;
 
-		nvrhi::TextureHandle m_MotionVectorsScratch;
 		nvrhi::TextureHandle m_FallbackSrvTexture;
 		nvrhi::TextureHandle m_FallbackUavTexture;
+
+		// Source motion vector texture for the current Execute (game MVs for GI,
+		// MotionVectors3D for PT); bound directly as IN_MV.
+		nvrhi::ITexture* m_CurrentMotionVectors = nullptr;
+
+		// Per-dispatch binding set cache. NVRHI binding sets hold references to their
+		// bound resources, so a cached set keeps its textures alive; the pointer
+		// comparison below therefore doubles as an identity check and a stale-entry
+		// can never reference a destroyed texture.
+		struct DispatchBindingCache
+		{
+			eastl::vector<nvrhi::ITexture*> srvTextures;
+			eastl::vector<nvrhi::ITexture*> uavTextures;
+			nvrhi::BindingSetHandle bindingSet;
+		};
+		eastl::vector<DispatchBindingCache> m_DispatchBindingCache;
 
 		nrd::Instance* m_NRD = nullptr;
 		nrd::ReblurSettings m_ReblurSettings = {};
