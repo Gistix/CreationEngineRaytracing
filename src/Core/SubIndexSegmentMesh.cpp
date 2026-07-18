@@ -61,5 +61,7 @@ void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh& manager)
 	if (manager.GetDirtyFlags().all(DirtyFlags::Transform))
 		MarkDirty(DirtyFlags::Transform);
 
+	UpdateGeometryFlags();
+
 	m_NeedsPrevInit = false;
 }

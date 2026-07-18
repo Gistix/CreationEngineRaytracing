@@ -148,6 +148,12 @@ protected:
 
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
 
+	// Sets GeometryFlags::Opaque on all geometry descs when the material/alpha state
+	// guarantees every triangle hit is committed (skips any-hit evaluation for this
+	// geometry). Marks the cluster for a BLAS rebuild when the computed state changes,
+	// since the flag is baked into the acceleration structure at build time.
+	void UpdateGeometryFlags();
+
 	void CreateMaterial();
 
 	eastl::string m_Name;
@@ -193,6 +199,9 @@ protected:
 
 	// Shader and Alpha properties
 	Properties m_Properties;
+
+	// Last opacity state baked into the geometry descs (see UpdateGeometryFlags).
+	bool m_GeometryOpaque = false;
 
 	eastl::shared_ptr<MaterialBase> m_Material;
 };
