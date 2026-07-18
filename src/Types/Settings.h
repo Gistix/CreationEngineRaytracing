@@ -166,6 +166,7 @@ struct SSSSettings
 
 struct AdvancedSettings
 {
+	uint NumWorkerThreads = 8;
 	float TexLODBias = -1.0f;
 	bool VariableUpdateRate = true;
 	bool GGXEnergyConservation = true;
