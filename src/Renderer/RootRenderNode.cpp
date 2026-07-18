@@ -30,7 +30,7 @@ void RootRenderNode::ResolutionChanged(uint2 resolution)
 
 	for (auto* child : m_Children)
 	{
-		if (child)
+		if (!child)
 			continue;
 
 		child->ResolutionChanged(resolution);
