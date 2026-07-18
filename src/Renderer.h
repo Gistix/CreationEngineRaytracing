@@ -6,7 +6,6 @@
 
 #include "Core/TextureManager.h"
 
-#include "Types/RendererParams.h"
 #include "Types/PassTiming.h"
 
 #include "Renderer/RenderGraph.h"
@@ -171,7 +170,7 @@ public:
 
 	Renderer();
 
-	bool Initialize(RendererParams parameters);
+	bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 

@@ -12,17 +12,17 @@ Renderer::Renderer()
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
 }
 
-bool Renderer::Initialize(RendererParams rendererParams)
+bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
-	Hooks::InstallD3D11(rendererParams.d3d11Device);
+	Hooks::InstallD3D11(d3d11Device);
 
 	// NVRHI Device
 	nvrhi::d3d12::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
-	deviceDesc.pDevice = rendererParams.d3d12Device;
-	deviceDesc.pGraphicsCommandQueue = rendererParams.commandQueue;
-	deviceDesc.pComputeCommandQueue = rendererParams.computeCommandQueue;
-	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
+	deviceDesc.pDevice = d3d12Device;
+	deviceDesc.pGraphicsCommandQueue = commandQueue;
+	deviceDesc.pComputeCommandQueue = computeCommandQueue;
+	deviceDesc.pCopyCommandQueue = copyCommandQueue;
 	deviceDesc.aftermathEnabled = false;
 	deviceDesc.logBufferLifetime = false;
 #if defined(NVRHI_ENHANCED_BARRIERS)
@@ -40,8 +40,8 @@ bool Renderer::Initialize(RendererParams rendererParams)
 		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
 	}
 
-	m_NativeD3D11Device = rendererParams.d3d11Device;
-	m_NativeD3D12Device = rendererParams.d3d12Device;
+	m_NativeD3D11Device = d3d11Device;
+	m_NativeD3D12Device = d3d12Device;
 
 	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
 

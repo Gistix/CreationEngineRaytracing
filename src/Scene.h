@@ -1,7 +1,6 @@
 #pragma once
 
 #include "SceneGraph.h"
-#include "Types/RendererParams.h"
 
 #include "Renderer/RenderNode.h"
 
