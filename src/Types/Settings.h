@@ -44,7 +44,7 @@ struct ReblurSettings
 	// [0; maxAccumulatedFrameNum] - maximum number of linearly accumulated frames for stabilized radiance
 	// "0" disables the stabilization pass
 	// Values ">= maxAccumulatedFrameNum" get clamped to "maxAccumulatedFrameNum"
-	uint32_t maxStabilizedFrameNum = 32;
+	uint32_t maxStabilizedFrameNum = 63;
 
 	// [0; maxFastAccumulatedFrameNum) - number of reconstructed frames after history reset
 	uint32_t historyFixFrameNum = 3;
@@ -59,8 +59,8 @@ struct ReblurSettings
 	float fastHistoryClampingSigmaScale = 2.0f; // 2 is old default, 1.5 works well even for dirty signals, 1.1 is a safe value for occlusion denoising
 
 	// (pixels) - pre-accumulation spatial reuse pass blur radius (0 = disabled, must be used in case of badly defined signals and probabilistic sampling)
-	float diffusePrepassBlurRadius = 20.0f;
-	float specularPrepassBlurRadius = 32.0f;
+	float diffusePrepassBlurRadius = 30.0f;
+	float specularPrepassBlurRadius = 50.0f;
 
 	// (0; 0.2] - bigger values reduce sensitivity to shadows in spatial passes, smaller values are recommended for signals with relatively clean hit distance (like RTXDI/RESTIR)
 	float minHitDistanceWeight = 0.1f;

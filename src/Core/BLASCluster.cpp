@@ -63,6 +63,25 @@ void BLASCluster::UpdateTransform() {
 
 	if (m_Owner) {
 		const RE::NiAVObject* object = m_Owner->Get3D();
+		if (!object) {
+			// A reference can lose its 3D during unload before every mesh-destroy
+			// notification is consumed. Fall back to a member transform rather
+			// than dereferencing a null scene object on a render worker.
+			if (m_Members.empty()) {
+				m_Transform = Constants::kIdentityTransform;
+				m_PrevTransform = Constants::kIdentityTransform;
+				m_NeedsPrevInit = false;
+			}
+			else {
+				const auto* mesh = m_Members.front();
+				m_Transform = mesh->GetTransform();
+				m_PrevTransform = m_NeedsPrevInit ? m_Transform : mesh->GetPrevTransform();
+				m_NeedsPrevInit = false;
+			}
+
+			m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
+			return;
+		}
 
 		float3x4 transform;
 		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(object->world));
@@ -241,9 +260,11 @@ nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(BuildMode mode) const
 		? nvrhi::rt::AccelStructBuildFlags::PreferFastBuild
 		: nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
 
-	blasDesc.buildFlags |= (mode == BuildMode::Update
-		? nvrhi::rt::AccelStructBuildFlags::PerformUpdate
-		: nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
+	// DXR requires ALLOW_UPDATE to remain present on update builds. Keep it on
+	// every build and add PERFORM_UPDATE only for refits.
+	blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::AllowUpdate;
+	if (mode == BuildMode::Update)
+		blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::PerformUpdate;
 
 	return blasDesc;
 }
@@ -253,11 +274,11 @@ BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, u
 	const bool firstBuild = (m_LastBuildFrame == Constants::INVALID_FRAME_INDEX);
 	const bool hasMesh = m_DirtyFlags.any(DirtyFlags::Mesh);
 	const bool hasVisibility = m_DirtyFlags.any(DirtyFlags::Visibility);
-	// DirtyFlags::Transform is deliberately NOT a refit trigger: geometry descs store
-	// cluster-relative local transforms (BaseMesh::UpdateLocalTransform), while rigid
-	// world motion is carried by the TLAS instance transform, which is rewritten every
-	// frame (BLASCluster::Update -> InstanceData, TopLevelAS::Update -> InstanceDesc).
-	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin);
+	// Transform is now raised only when BaseMesh::UpdateLocalTransform detects a
+	// cluster-relative change. Rigid owner motion remains TLAS-only, while genuine
+	// child/local motion correctly refits the BLAS.
+	const bool hasUpdate = m_DirtyFlags.any(
+		DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
 	const bool isOrphan = (m_Owner == nullptr);
 
 	if (firstBuild || !m_BLAS || hasMesh || (!isOrphan && hasVisibility))

@@ -242,6 +242,10 @@ namespace Pass::NRD
 		const uint2 resolution = GetRenderer()->GetResolution();
 		auto device = GetRenderer()->GetDevice();
 
+		// Cached binding sets own references to pool textures. Release them before
+		// replacing the pools so a resolution change cannot retain old allocations.
+		m_DispatchBindingCache.clear();
+
 		m_PermanentPool.clear();
 		m_PermanentPool.resize(instanceDesc.permanentPoolSize);
 

@@ -185,8 +185,8 @@ protected:
 	// Native 64-bit vertex descriptor (RE::BSGraphics::VertexDesc) for MeshData::Flags.
 	RE::BSGraphics::VertexDesc m_VertexDesc;
 
-	// Mesh-owned dirty state consumed by the owning BLASCluster (Visibility => rebuild, Vertex/Skin => refit).
-	// Transform is tracked for prev-transform/motion bookkeeping only; world motion is carried by the TLAS instance.
+	// Mesh-owned dirty state consumed by the owning BLASCluster. Transform is set
+	// only for cluster-relative motion; rigid owner motion stays in the TLAS.
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
 
 	CESEAdapter::REX::EnumSet<State> m_State = State::None;

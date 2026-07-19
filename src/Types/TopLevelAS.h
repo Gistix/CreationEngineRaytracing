@@ -119,9 +119,15 @@ public:
 		// (moving instances only update their transforms, which PerformUpdate allows).
 		const bool refit = !recreated && m_InstanceSetHash[ringSlot] == instanceSetHash;
 
+		// DXR requires ALLOW_UPDATE on the initial build and on every subsequent
+		// update build. Preference flags must also remain consistent.
+		const auto commonBuildFlags =
+			nvrhi::rt::AccelStructBuildFlags::AllowUpdate |
+			nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+
 		const auto buildFlags = refit
-			? nvrhi::rt::AccelStructBuildFlags::PerformUpdate | nvrhi::rt::AccelStructBuildFlags::PreferFastTrace
-			: nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+			? nvrhi::rt::AccelStructBuildFlags::PerformUpdate | commonBuildFlags
+			: commonBuildFlags;
 
 		commandList->buildTopLevelAccelStruct(m_Handle[ringSlot], m_InstanceDescs.data(), m_InstanceDescs.size(), buildFlags);
 

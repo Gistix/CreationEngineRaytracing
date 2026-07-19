@@ -46,11 +46,22 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 
 void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
-	XMStoreFloat3x4(&m_LocalTransform,
+	float3x4 localTransform;
+	XMStoreFloat3x4(&localTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
 
-	XMStoreFloat3x4(&m_PrevLocalTransform,
+	float3x4 prevLocalTransform;
+	XMStoreFloat3x4(&prevLocalTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
+
+	// Rigid owner motion is represented by the TLAS instance transform and leaves
+	// this value unchanged. A mesh moving relative to its owner changes the BLAS
+	// geometry transform and therefore still requires a refit.
+	if (!Util::Math::MatrixNearEqual(localTransform, m_LocalTransform))
+		MarkDirty(DirtyFlags::Transform);
+
+	m_LocalTransform = localTransform;
+	m_PrevLocalTransform = prevLocalTransform;
 
 	for (auto& desc: m_GeometryDescs)
 	{
