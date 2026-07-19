@@ -46,11 +46,22 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 
 void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
-	XMStoreFloat3x4(&m_LocalTransform,
+	float3x4 localTransform;
+	XMStoreFloat3x4(&localTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
 
-	XMStoreFloat3x4(&m_PrevLocalTransform,
+	float3x4 prevLocalTransform;
+	XMStoreFloat3x4(&prevLocalTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
+
+	// Rigid owner motion is represented by the TLAS instance transform and leaves
+	// this value unchanged. A mesh moving relative to its owner changes the BLAS
+	// geometry transform and therefore still requires a refit.
+	if (!Util::Math::MatrixNearEqual(localTransform, m_LocalTransform))
+		MarkDirty(DirtyFlags::Transform);
+
+	m_LocalTransform = localTransform;
+	m_PrevLocalTransform = prevLocalTransform;
 
 	for (auto& desc: m_GeometryDescs)
 	{
@@ -212,6 +223,41 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	m_Transform = transform;
 
 	UpdateMaterial();
+
+	UpdateGeometryFlags();
+}
+
+void BaseMesh::UpdateGeometryFlags()
+{
+	// Opaque is only safe when the any-hit transparency evaluation is guaranteed to
+	// commit every triangle hit for this geometry (see ConsiderTransparentMaterial and
+	// ConsiderTransparentMaterialShadow in Transparency.hlsli):
+	// - lighting-family material (Lighting/landscape or TruePBR; water, effect, grass
+	//   and particle types attenuate or pass through and are excluded)
+	// - no alpha test, blend, additive or transmission state on the mesh
+	// - no refraction or shadow-attenuating "window" (kAssumeShadowmask) shader flags
+	bool opaque = false;
+	if (m_Material && m_Material->GetData()) {
+		const auto type = m_Material->GetData()->Type;
+		const auto& props = m_Properties.GetData();
+
+		const bool lightingFamily = (type == MaterialBase::Type::Lighting || type == MaterialBase::Type::TruePBR);
+		const uint32_t shadowFlags = Properties::ShaderFlags::kRefraction | Properties::ShaderFlags::kAssumeShadowmask;
+
+		opaque = lightingFamily && props.AlphaFlags == 0 && (props.ShaderFlags & shadowFlags) == 0;
+	}
+
+	if (opaque == m_GeometryOpaque)
+		return;
+
+	m_GeometryOpaque = opaque;
+
+	const auto flags = opaque ? nvrhi::rt::GeometryFlags::Opaque : nvrhi::rt::GeometryFlags::None;
+	for (auto& desc : m_GeometryDescs)
+		desc.setFlags(flags);
+
+	// The flag is baked into the BLAS at build time, so a state change needs a rebuild.
+	MarkDirty(DirtyFlags::Mesh);
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)

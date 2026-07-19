@@ -119,8 +119,18 @@ namespace Util
 			{
 				auto& children = Util::Adapter::GetChildren(node);
 				if (auto switchNode = node->AsSwitchNode()) {
-					auto index = static_cast<uint16_t>(switchNode->index);
-					result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr);
+					const auto index = static_cast<uint32_t>(switchNode->index);
+
+					// NiSwitchNode may expose a stale/sentinel index while Skyrim
+					// mutates the scene graph. NiTArray::operator[] is valid only
+					// below capacity(), not size(), because the array can contain
+					// sparse/null slots.
+					if (index >= children.capacity())
+						return result;
+
+					const auto& child = children[index];
+					if (child)
+						result = ScenegraphTriShapes(child.get(), a_func, parentRefr);
 				}
 				else {
 					// Propagate owner refr through FadeNodes
@@ -137,7 +147,7 @@ namespace Util
 							for (auto& child : portalGraph->alwaysRenderChildren)
 							{
 								// Only those who are outside the Scenegraph
-								if (child->parent)
+								if (!child || child->parent)
 									continue;
 
 								result = ScenegraphTriShapes(child.get(), a_func, refr);

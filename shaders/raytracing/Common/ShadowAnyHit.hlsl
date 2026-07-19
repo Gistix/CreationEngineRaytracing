@@ -7,7 +7,7 @@
 [shader("anyhit")]
 void Main(inout ShadowPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
-    if (!ConsiderTransparentMaterialShadow(
+    bool committed = ConsiderTransparentMaterialShadow(
                 InstanceID(),
                 GeometryIndex(),
                 PrimitiveIndex(),
@@ -15,6 +15,14 @@ void Main(inout ShadowPayload payload, in BuiltInTriangleIntersectionAttributes 
                 payload.randomSeed,
                 WorldRayDirection(),
                 RayTCurrent(),
-                payload.transmission))
+                payload.transmission);
+
+    // Fully occluded: accept this hit to terminate the search immediately.
+    // The result is ~zero shadow either way (transmission * missed=0).
+    // Must run before IgnoreHit(), which would end the invocation.
+    if (all(payload.transmission <= 1e-3f))
+        AcceptHitAndEndSearch();
+
+    if (!committed)
         IgnoreHit();
 }

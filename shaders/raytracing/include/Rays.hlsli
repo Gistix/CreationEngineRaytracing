@@ -142,6 +142,11 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
             {
                 rayQuery.CommitNonOpaqueTriangleHit();
             }
+
+            // Fully occluded: transmission only decreases along the ray, so no
+            // further candidate can change the ~zero result - stop early.
+            if (all(shadowPayload.transmission <= 1e-3f))
+                break;
         }
     }
 

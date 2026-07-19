@@ -172,7 +172,7 @@ struct AdvancedSettings
 	bool GGXEnergyConservation = true;
 	bool PerLightTLAS = false;
 	RISSettings RIS;
-	HairBSDF HairBSDF = HairBSDF::FarFieldBCSDF;
+	HairBSDF HairBSDF = HairBSDF::ChiangBSDF;
 	DiffuseBRDF DiffuseBRDF = DiffuseBRDF::Burley;
 	SSSSettings SSSSettings;
 	bool StablePlanes = false;

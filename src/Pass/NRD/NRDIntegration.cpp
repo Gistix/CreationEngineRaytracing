@@ -52,7 +52,8 @@ namespace Pass::NRD
 		m_GlobalBindingLayout = nullptr;
 		m_ResourceBindingLayout = nullptr;
 		m_ConstantBuffer = nullptr;
-		m_MotionVectorsScratch = nullptr;
+		m_DispatchBindingCache.clear();
+		m_CurrentMotionVectors = nullptr;
 		m_FallbackSrvTexture = nullptr;
 		m_FallbackUavTexture = nullptr;
 	}
@@ -241,6 +242,10 @@ namespace Pass::NRD
 		const uint2 resolution = GetRenderer()->GetResolution();
 		auto device = GetRenderer()->GetDevice();
 
+		// Cached binding sets own references to pool textures. Release them before
+		// replacing the pools so a resolution change cannot retain old allocations.
+		m_DispatchBindingCache.clear();
+
 		m_PermanentPool.clear();
 		m_PermanentPool.resize(instanceDesc.permanentPoolSize);
 
@@ -273,25 +278,6 @@ namespace Pass::NRD
 			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
 			desc.debugName = debugName.c_str();
 			m_TransientPool[i] = device->createTexture(desc);
-		}
-
-		{
-			nvrhi::TextureDesc desc;
-			if (m_Mode == Mode::GlobalIllumination)
-				desc = GetRenderer()->GetMotionVectorTexture()->getDesc();
-			else
-				desc = GetRenderer()->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D)->getDesc();
-
-			desc.width = eastl::max<uint32_t>(1u, desc.width == 0 ? resolution.x : desc.width);
-			desc.height = eastl::max<uint32_t>(1u, desc.height == 0 ? resolution.y : desc.height);
-			desc.dimension = nvrhi::TextureDimension::Texture2D;
-			desc.mipLevels = 1;
-			desc.arraySize = 1;
-			desc.isUAV = true;
-			desc.keepInitialState = true;
-			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-			desc.debugName = "NRD Reblur Motion Vectors Scratch";
-			m_MotionVectorsScratch = device->createTexture(desc);
 		}
 
 		{
@@ -459,7 +445,7 @@ namespace Pass::NRD
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:
-			return m_MotionVectorsScratch;
+			return m_CurrentMotionVectors;
 		case nrd::ResourceType::IN_NORMAL_ROUGHNESS:
 			return renderTargets ? renderTargets->normalRoughness : nullptr;
 		case nrd::ResourceType::IN_VIEWZ:
@@ -520,17 +506,13 @@ namespace Pass::NRD
 
 		auto* renderer = GetRenderer();
 
-		nvrhi::ITexture* sourceMotionVectors = nullptr;
+		// Bind the source motion vectors directly as IN_MV (same format the scratch
+		// copy used, so the NRD shaders observe identical data) and skip the
+		// per-frame full-resolution copy.
 		if (m_Mode == Mode::GlobalIllumination)
-			sourceMotionVectors = renderer->GetMotionVectorTexture();
+			m_CurrentMotionVectors = renderer->GetMotionVectorTexture();
 		else
-			sourceMotionVectors = renderer->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D);
-
-		if (sourceMotionVectors && m_MotionVectorsScratch) {
-			const nvrhi::TextureDesc& mvDesc = sourceMotionVectors->getDesc();
-			auto mvRegion = nvrhi::TextureSlice{ 0, 0, 0, mvDesc.width, mvDesc.height, 1 };
-			commandList->copyTexture(m_MotionVectorsScratch, mvRegion, sourceMotionVectors, mvRegion);
-		}
+			m_CurrentMotionVectors = renderer->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D);
 
 		if (m_SettingsDirty) {
 			nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_ReblurSettings);
@@ -559,6 +541,9 @@ namespace Pass::NRD
 		const uint32_t maxTextures = GetMaxResourceCount(nrd::DescriptorType::TEXTURE);
 		const uint32_t maxStorageTextures = GetMaxResourceCount(nrd::DescriptorType::STORAGE_TEXTURE);
 
+		if (m_DispatchBindingCache.size() < dispatchCount)
+			m_DispatchBindingCache.resize(dispatchCount);
+
 		for (uint32_t dispatchIndex = 0; dispatchIndex < dispatchCount; ++dispatchIndex) {
 			const nrd::DispatchDesc& dispatchDesc = dispatchDescs[dispatchIndex];
 			if (dispatchDesc.pipelineIndex >= m_Pipelines.size())
@@ -575,7 +560,6 @@ namespace Pass::NRD
 			if (dispatchDesc.constantBufferData && dispatchDesc.constantBufferDataSize > 0)
 				commandList->writeBuffer(m_ConstantBuffer, dispatchDesc.constantBufferData, dispatchDesc.constantBufferDataSize);
 
-			nvrhi::BindingSetDesc resourceBindingDesc;
 			eastl::vector<nvrhi::ITexture*> srvTextures(maxTextures, m_FallbackSrvTexture);
 			eastl::vector<nvrhi::ITexture*> uavTextures(maxStorageTextures, m_FallbackUavTexture);
 			uint32_t resourceCursor = 0;
@@ -622,24 +606,33 @@ namespace Pass::NRD
 					uavBase += rangeDesc.descriptorsNum;
 			}
 
-			for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
-				item.arrayElement = textureIndex;
-				resourceBindingDesc.bindings.push_back(item);
-			}
+			// Reuse the cached binding set when the bound textures are unchanged
+			// (covers resolution/resource recreation via pointer identity).
+			auto& bindingCache = m_DispatchBindingCache[dispatchIndex];
 
-			for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
-				item.arrayElement = storageTextureIndex;
-				resourceBindingDesc.bindings.push_back(item);
-			}
+			if (!bindingCache.bindingSet || bindingCache.srvTextures != srvTextures || bindingCache.uavTextures != uavTextures) {
+				nvrhi::BindingSetDesc resourceBindingDesc;
 
-			nvrhi::BindingSetHandle resourceBindingSet =
-				renderer->GetDevice()->createBindingSet(resourceBindingDesc, m_ResourceBindingLayout);
+				for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
+					auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
+					item.arrayElement = textureIndex;
+					resourceBindingDesc.bindings.push_back(item);
+				}
+
+				for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
+					auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
+					item.arrayElement = storageTextureIndex;
+					resourceBindingDesc.bindings.push_back(item);
+				}
+
+				bindingCache.bindingSet = renderer->GetDevice()->createBindingSet(resourceBindingDesc, m_ResourceBindingLayout);
+				bindingCache.srvTextures = srvTextures;
+				bindingCache.uavTextures = uavTextures;
+			}
 
 			nvrhi::ComputeState state;
 			state.pipeline = pipeline.pipeline;
-			state.bindings = { m_GlobalBindingSet, resourceBindingSet };
+			state.bindings = { m_GlobalBindingSet, bindingCache.bindingSet };
 			commandList->setComputeState(state);
 			commandList->dispatch(dispatchDesc.gridWidth, dispatchDesc.gridHeight);
 
