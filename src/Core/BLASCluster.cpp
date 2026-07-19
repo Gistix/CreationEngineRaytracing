@@ -1,4 +1,5 @@
 #include "Core/BLASCluster.h"
+#include "Scene.h"
 #include "SceneGraph.h"
 #include "Renderer.h"
 #include "Util.h"
@@ -177,12 +178,6 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 	uint32_t meshCount = meshStart;
 
 	m_GeometryDescs.clear();
-	size_t geometryCount = 0;
-	for (const auto* mesh : m_Members) {
-		if (!mesh->IsHidden())
-			geometryCount += mesh->GetGeometryDescs().size();
-	}
-	m_GeometryDescs.reserve(geometryCount);
 
 	m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
@@ -198,8 +193,7 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 		if (descs.empty())
 			continue;
 
-		for (const auto& desc : descs)
-			m_GeometryDescs.push_back(desc);
+		m_GeometryDescs.insert(m_GeometryDescs.end(), descs.begin(), descs.end());
 
 		if (mesh->IsUpdatable())
 			m_Flags.set(Flags::Updatable);
@@ -221,7 +215,9 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 	outInstance.Transform = m_Transform;
 	outInstance.PrevTransform = m_PrevTransform;
 
-	outInstance.LightData = GetInstanceLightData(lights, lightData);
+	const bool skipInstanceLights = Scene::GetSingleton()->m_Settings.ExperimentalSettings.GlobalLights;
+	if (!skipInstanceLights)
+		outInstance.LightData = GetInstanceLightData(lights, lightData);
 
 	outInstance.FirstGeometryID = meshStart;
 	outInstance.NumGeometry = numGeometry;
