@@ -680,7 +680,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					for (size_t i = start; i < end; ++i) {
 						auto& w = clusterWork[i];
 						w.cluster->Update(m_MeshData.data(), m_InstanceData.data(),
-							w.meshStart, w.instanceIndex, m_Lights, m_LightData);
+							w.meshStart, w.instanceIndex);
 					}
 				});
 			}

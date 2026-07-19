@@ -708,18 +708,18 @@ void Main()
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
                 StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
-                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, specBsdf, randomSeed, true);
             }
             else
 #endif
-                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, sourceSurface, sourceBRDFContext, sourceBSDF, randomSeed, true);
         }
         
         // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights.
         // Skip for pure delta surfaces — their delta lighting was captured in BUILD's stable radiance.
         if (sourceHasDeltaLobes && sourceHasNonDeltaLobes)
         {
-            direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
+            direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceBSDF, randomSeed, true);
         }
     }
     
@@ -1183,19 +1183,19 @@ void Main()
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
                     StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, specBsdf, randomSeed, surface.Primary);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, bsdf, randomSeed, surface.Primary);
                 }
             }
             
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
             if (bounceHasDeltaLobes)
             {
-                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, bsdf, randomSeed, surface.Primary);
             }
             
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES

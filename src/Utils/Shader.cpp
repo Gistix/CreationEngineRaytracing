@@ -34,9 +34,6 @@ namespace Util
 
 			defines.emplace_back(L"DIFFUSE_MODE", static_cast<int>(settings.AdvancedSettings.DiffuseBRDF));
 
-			if (settings.ExperimentalSettings.GlobalLights)
-				defines.emplace_back(L"GLOBAL_LIGHTS", L"1");
-
 			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
 

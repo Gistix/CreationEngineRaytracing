@@ -179,13 +179,9 @@ float GetLightSampleWeight(Surface surface, Light light)
 }
 
 // Get irradiance for point light without BRDF evaluation
-int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, out float3 irradiance, out float3 lr, out float dist, inout uint randomSeed)
+int GetPointLightIrradiance(in Surface surface, out float3 irradiance, out float3 lr, out float dist, inout uint randomSeed)
 {   
-#if defined(GLOBAL_LIGHTS)
     const uint lightCount = Raytracing.NumLights;
-#else
-    const uint lightCount = lightData.Count;
-#endif
     
     if (lightCount == 0)
     {
@@ -198,11 +194,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     float lightWeight = float(lightCount);
 
 #if defined(RIS)
-#   if defined(GLOBAL_LIGHTS)
     const uint candidateCount = lightCount;
-#   else
-    const uint candidateCount = min(RIS_MAX_CANDIDATES, lightCount);
-#   endif    
 
     uint selectedLightID = 0;
     float totalWeight = 0.0f;
@@ -212,11 +204,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     {
         const uint lightIdx = min(uint(Random(randomSeed) * lightCount), lightCount - 1);
     
-#   if defined(GLOBAL_LIGHTS)    
         const uint lightID = lightIdx;
-#   else
-        const uint lightID = lightData.GetID(lightIdx);
-#   endif
     
         Light testLight = Lights[lightID];
     
@@ -249,11 +237,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 
     const uint lightIdx = min(uint(Random(randomSeed) * lightCount), lightCount - 1);
     
-#   if defined(GLOBAL_LIGHTS)    
     const uint lightID = lightIdx;
-#   else
-    const uint lightID = lightData.GetID(lightIdx);
-#   endif
     
     Light light = Lights[lightID];
 #endif
@@ -280,13 +264,13 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #endif
 }
 
-float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 lightIrradiance;
     float3 lr;
     float dist;
     
-    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
+    int lightIndex = GetPointLightIrradiance(surface, lightIrradiance, lr, dist, randomSeed);
 
     if (lightIndex < 0)
         return 0.0f;
@@ -319,7 +303,7 @@ float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface,
 // each delta direction falls within a light source's solid angle. If so, we contribute the delta lobe's
 // throughput multiplied by the light irradiance. This correctly handles sun glints, point light
 // reflections in mirrors, etc.
-float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance,
+float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext,
                               in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
     DeltaLobe deltaLobes[cMaxDeltaLobes];
@@ -362,13 +346,13 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
         }
 
         // --- Point Lights ---
-        if (instance.LightData.Count > 0)
+        if (Raytracing.NumLights > 0)
         {
             // Evaluate delta lobe against each visible point light (using the same RIS selection as standard NEE)
             float3 lightIrradiance;
             float3 lr;
             float dist;
-            int lightIndex = GetPointLightIrradiance(instance.LightData, surface, lightIrradiance, lr, dist, randomSeed);
+            int lightIndex = GetPointLightIrradiance(surface, lightIrradiance, lr, dist, randomSeed);
             
             if (lightIndex >= 0)
             {
@@ -402,15 +386,15 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
     return totalRadiance;
 }
 
-float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
+float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
     float3 radiance = EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
-    radiance += EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
+    radiance += EvalPointLight(type, feature, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
 
     return radiance;
 }
 
-void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 irradiance, out float3 lr, out float distance, inout uint randomSeed)
+void GetLightIrradianceMIS(in Surface surface, out float3 irradiance, out float3 lr, out float distance, inout uint randomSeed)
 {
     float3 directionalIrradiance;
     float3 dirLr;
@@ -419,7 +403,7 @@ void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 
     float3 pointIrradiance;
     float3 pointLr;
     float pointDist;
-    GetPointLightIrradiance(instance.LightData, surface, pointIrradiance, pointLr, pointDist, randomSeed);
+    GetPointLightIrradiance(surface, pointIrradiance, pointLr, pointDist, randomSeed);
 
     float3 dirVisibility = TraceRayShadow(Scene, surface, dirLr, randomSeed);
 
@@ -453,12 +437,12 @@ void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 
     }
 }
 
-float3 EvaluateDirectRadianceMIS(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvaluateDirectRadianceMIS(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 lightIrradiance;
     float3 lr;
     float distance;
-    GetLightIrradianceMIS(instance, surface, lightIrradiance, lr, distance, randomSeed);
+    GetLightIrradianceMIS(surface, lightIrradiance, lr, distance, randomSeed);
 
     float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
 

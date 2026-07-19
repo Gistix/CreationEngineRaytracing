@@ -4,13 +4,9 @@
 #include "Constants.h"
 
 #include "Instance.hlsli"
-#include "Light.hlsli"
-
 #include <mutex>
 
 class SceneGraph;
-
-struct Light;
 
 // Aggregates the geometry of all meshes belonging to a single owner (RE::TESObjectREFR) into one
 // BLAS / one TLAS instance, to avoid many small overlapping AABBs. Meshes are referenced (weak_ptr)
@@ -76,9 +72,6 @@ class BLASCluster
 
 	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
 
-	InstanceLightData GetInstanceLightData(
-		const eastl::map<RE::BSLight*, Light>& lights,
-		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 public:
 	explicit BLASCluster(RE::TESObjectREFR* owner);
 
@@ -110,7 +103,5 @@ public:
 
 	// Writes one MeshData per visible geometry and one InstanceData at the given array offsets.
 	void Update(MeshData* meshData, InstanceData* instanceData,
-		uint32_t meshStart, uint32_t instanceIndex,
-	    const eastl::map<RE::BSLight*, Light>& lights,
-	    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
+		uint32_t meshStart, uint32_t instanceIndex);
 };

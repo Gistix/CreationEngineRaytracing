@@ -1,5 +1,4 @@
 #include "Core/BLASCluster.h"
-#include "Scene.h"
 #include "SceneGraph.h"
 #include "Renderer.h"
 #include "Util.h"
@@ -115,43 +114,6 @@ bool BLASCluster::Valid() const
 	return GetMeshEntryCount() != 0;
 }
 
-InstanceLightData BLASCluster::GetInstanceLightData(
-    const eastl::map<RE::BSLight*, Light>& lights,
-    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
-{
-	uint8_t lightIds[Constants::INSTANCE_LIGHTS_MAX];
-	uint8_t numLights = 0;
-
-	for (const auto& [bsLight, light] : lights) {
-		if (!light.m_Active)
-			continue;
-
-		if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
-			logger::error("BLASCluster::GetInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}, for light {} of {}",
-				numLights, 
-				Constants::INSTANCE_LIGHTS_MAX, 
-				light.m_Index,
-				Constants::LIGHTS_MAX);
-			break;
-		}
-
-		const auto& ld = lightData[light.m_Index];
-
-		if (ld.Type == LightType::Directional) {
-			lightIds[numLights] = light.m_Index;
-			numLights++;
-		} else {
-			float dist = float3::Distance(m_ClusterPosition, ld.Vector);
-			if (dist - m_ClusterRadius <= ld.Radius) {
-				lightIds[numLights] = light.m_Index;
-				numLights++;
-			}
-		}
-	}
-
-	return InstanceLightData(lightIds, numLights);
-}
-
 uint32_t BLASCluster::GetMeshEntryCount() const
 {
 	uint32_t count = 0;
@@ -164,9 +126,7 @@ uint32_t BLASCluster::GetMeshEntryCount() const
 }
 
 void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
-	uint32_t meshStart, uint32_t instanceIndex,
-    const eastl::map<RE::BSLight*, Light>& lights,
-     const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
+	uint32_t meshStart, uint32_t instanceIndex)
 {
 	m_ClusterRadius = 0.0f;
 
@@ -214,10 +174,6 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 	InstanceData& outInstance = instanceData[instanceIndex];
 	outInstance.Transform = m_Transform;
 	outInstance.PrevTransform = m_PrevTransform;
-
-	const bool skipInstanceLights = Scene::GetSingleton()->m_Settings.ExperimentalSettings.GlobalLights;
-	if (!skipInstanceLights)
-		outInstance.LightData = GetInstanceLightData(lights, lightData);
 
 	outInstance.FirstGeometryID = meshStart;
 	outInstance.NumGeometry = numGeometry;

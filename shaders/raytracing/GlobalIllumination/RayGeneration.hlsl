@@ -442,19 +442,19 @@ void Main()
                     Surface specSurface = surface;
                     specSurface.DiffuseAlbedo = 0;
                     StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, specBsdf, randomSeed, false);
                 }
                 else
 #endif
                 { 
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, false);
+                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, bsdf, randomSeed, false);
                 }
             }
             
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
             if (bounceHasDeltaLobes)
             {
-                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
+                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, bsdf, randomSeed, true);
             }
             
             sampleRadiance += directRadiance * throughput;
