@@ -34,12 +34,6 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	if (!m_NVRHIDevice)
 		return false;
 
-	if (m_Settings.ValidationLayer)
-	{
-		nvrhi::DeviceHandle nvrhiValidationLayer = nvrhi::validation::createValidationLayer(m_NVRHIDevice);
-		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
-	}
-
 	m_NativeD3D11Device = d3d11Device;
 	m_NativeD3D12Device = d3d12Device;
 
@@ -57,6 +51,53 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 			m_FormatMapping.emplace(nativeFormat, format);
 		}
 
+	PostInitialize();
+
+	return true;
+}
+
+bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
+{
+	const char* deviceExtensions[] = {
+		"VK_KHR_acceleration_structure",
+		"VK_KHR_deferred_host_operations",
+		"VK_KHR_ray_tracing_pipeline",
+		// list the extensions that were requested when the device was created
+	};
+
+	nvrhi::vulkan::DeviceDesc deviceDesc;
+	deviceDesc.errorCB = &MessageCallback::GetInstance();
+	deviceDesc.physicalDevice = physicalDevice;
+	deviceDesc.device = device;
+	deviceDesc.graphicsQueue = graphicsQueue;
+	deviceDesc.graphicsQueueIndex = graphicsQueueIndex;
+	deviceDesc.transferQueue = transferQueue;
+	deviceDesc.transferQueueIndex = transferQueueIndex;
+	deviceDesc.computeQueue = computeQueue;
+	deviceDesc.computeQueueIndex = computeQueueIndex;
+	deviceDesc.deviceExtensions = deviceExtensions;
+	deviceDesc.numDeviceExtensions = std::size(deviceExtensions);
+
+	m_NVRHIDevice = nvrhi::vulkan::createDevice(deviceDesc);
+
+	if (!m_NVRHIDevice)
+		return false;
+
+	PostInitialize();
+
+	return true;
+}
+
+void Renderer::PostInitialize()
+{
+	// Setup Validation Layer
+	if (m_Settings.ValidationLayer)
+	{
+		nvrhi::DeviceHandle nvrhiValidationLayer = nvrhi::validation::createValidationLayer(m_NVRHIDevice);
+		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
+	}
+
+	// Print all supported features
 	std::string features = "";
 
 	for (size_t i = 0; i < m_SupportedFeatures.size(); i++)
@@ -69,8 +110,6 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	}
 
 	logger::info("Supported Features: {}", features);
-
-	return true;
 }
 
 void Renderer::InitDefaultTextures()

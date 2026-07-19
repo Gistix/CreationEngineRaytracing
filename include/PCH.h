@@ -127,6 +127,7 @@ using namespace std::literals;
 #include <directx/d3d12.h>
 
 #include <nvrhi/d3d12.h>
+#include <nvrhi/vulkan.h>
 #include <nvrhi/nvrhi.h>
 #include <nvrhi/utils.h>
 #include <nvrhi/validation.h>

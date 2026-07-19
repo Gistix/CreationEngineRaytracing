@@ -108,6 +108,8 @@ class Renderer
 
 	void InitGBufferOutput();
 
+	void PostInitialize();
+
 public:
 	struct GBufferOutput
 	{
@@ -171,6 +173,8 @@ public:
 	Renderer();
 
 	bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
+
+	bool Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 
