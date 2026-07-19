@@ -46,6 +46,10 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 
 void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
+	// Nothing to update if transform hasn't updated
+	if (!m_DirtyFlags.all(DirtyFlags::Transform))
+		return;
+
 	XMStoreFloat3x4(&m_LocalTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
 
@@ -199,7 +203,7 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	float3x4 transform;
 	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
 
-	if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+	if (m_NeedsPrevInit || !Util::Math::MatrixNearEqual(transform, m_Transform))
 		MarkDirty(DirtyFlags::Transform);
 
 	if (m_NeedsPrevInit) {
