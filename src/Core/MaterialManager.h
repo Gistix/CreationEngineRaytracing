@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/ResourceSlotManager.h"
 #include "Core/Texture.h"
 #include "Core/TextureManager.h"
 #include "Core/Material/MaterialBase.h"
@@ -23,7 +24,6 @@
 
 class MaterialManager : public eastl::enable_shared_from_this<MaterialManager>
 {
-	// Uniform slot size: the largest material-data struct, so every material fits its slot.
 	static constexpr size_t kSizeReference = std::max({
 		sizeof(LightingMaterialData),
 		sizeof(EnvmapMaterialData),
@@ -46,34 +46,13 @@ class MaterialManager : public eastl::enable_shared_from_this<MaterialManager>
 	eastl::unordered_map<RE::BSShaderMaterial*, eastl::weak_ptr<MaterialBase>> m_Material;
 	mutable std::mutex m_MaterialMutex;
 
-	// Stable GPU material data buffer (materials keep a fixed offset for their lifetime)
-	nvrhi::BufferHandle m_Buffer;
+	ResourceSlotManager m_Slots;
 
-	// Single-slot bindless table holding m_Buffer; passes bind the table so a future resize
-	// only needs to rewrite the descriptor instead of rebuilding every pass binding set.
+	nvrhi::BufferHandle m_Buffer;
 	eastl::unique_ptr<BindlessTable> m_Descriptors;
 
-	// CPU-side mirror of the GPU buffer; source of truth and previous-state comparison
-	eastl::vector<uint8_t> m_Data;
-
-	// Recycled slot offsets and pending GPU upload ranges
-	eastl::vector<uint64_t> m_FreeOffsets;
-	eastl::vector<eastl::pair<uint64_t, uint64_t>> m_DirtyRanges;
-
-	mutable std::mutex m_InternalMutex;
-
-	uint64_t m_Size;
-	uint64_t m_NextOffset = 0;
-
-	uint64_t Allocate();
-
-	// (Re)creates m_Buffer at the current m_Size and points the descriptor table at it.
 	void CreateBuffer();
-
-	// Writes m_Buffer into descriptor slot 0; call after creating or resizing the buffer.
 	void BindBuffer();
-
-	// Grows the buffer by NUM_MATERIALS_STEP materials and restages all data for re-upload.
 	void Grow();
 public:
 	MaterialManager();

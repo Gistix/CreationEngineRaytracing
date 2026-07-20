@@ -10,6 +10,12 @@
 #include "Types/RE/RE.h"
 #include "interop/Triangle.hlsli"
 
+BaseMesh::~BaseMesh()
+{
+	if (m_TransformIndex != UINT32_MAX)
+		Scene::GetSingleton()->GetSceneGraph()->GetTransformManager()->ReleaseTransformIndex(m_TransformIndex);
+}
+
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
@@ -46,16 +52,17 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 
 void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
+	// Nothing to update if transform hasn't updated
+	if (!m_DirtyFlags.all(DirtyFlags::Transform))
+		return;
+
 	XMStoreFloat3x4(&m_LocalTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
 
 	XMStoreFloat3x4(&m_PrevLocalTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
 
-	for (auto& desc: m_GeometryDescs)
-	{
-		desc.setTransform(m_LocalTransform.f);
-	}
+	WriteTransformData();
 }
 
 uint32_t BaseMesh::WriteMeshData(MeshData* out) const
@@ -80,8 +87,7 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			static_cast<uint16_t>(GetDynamicIndex()),
 			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
 			m_Material->GetOffsetComp(),
-			m_LocalTransform,
-			m_PrevLocalTransform
+			m_TransformIndex
 		};
 	}
 
@@ -192,23 +198,29 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 { 
 	ClearDirtyFlags();
 
-	m_Properties = { m_BSTriShape };
+	m_Properties = { m_BSTriShape, m_Flags.all(Flags::Eyes)};
 
 	m_WorldBound = m_BSTriShape->worldBound;
 
 	float3x4 transform;
 	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
 
-	if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+	if (m_NeedsPrevInit || !Util::Math::MatrixNearEqual(transform, m_Transform))
 		MarkDirty(DirtyFlags::Transform);
 
+	if (m_NeedsPrevInit) {
+		m_PrevTransform = transform;
+		m_NeedsPrevInit = false;
+	} else {
+		m_PrevTransform = m_Transform;
+	}
+
 	m_Transform = transform;
-	XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(m_BSTriShape->previousWorld));
 
 	UpdateMaterial();
 }
 
-nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)
 {
 	nvrhi::rt::GeometryDesc geometryDesc;
 
@@ -225,7 +237,12 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;
 
-	geometryDesc.setTransform(Constants::kIdentityTransform.f);
+	if (transformIndex == UINT32_MAX)
+		logger::critical("Mesh has unitialized transform index");
+
+	geometryDesc.setTransformBuffer(
+		Scene::GetSingleton()->GetSceneGraph()->GetTransformBuffer(),
+		transformIndex * sizeof(TransformData));
 
 	return geometryDesc;
 }
@@ -265,7 +282,35 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 	
 	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
 	MarkDirty(DirtyFlags::Visibility);
+	
+	SetEyeFlag();
+
 	return true;
+}
+
+void BaseMesh::SetEyeFlag()
+{
+	if (!m_Owner)
+		return;
+
+	// Once an eye, always an eye.
+	if (!m_Flags.none(Flags::Eyes))
+		return;
+
+	auto baseObj = m_Owner->GetBaseObject();
+	if (!baseObj)
+		return;
+
+	auto npc = baseObj->As<RE::TESNPC>();
+	if (!npc)
+		return;
+
+	auto eyePart = npc->GetCurrentHeadPartByType(RE::BGSHeadPart::HeadPartType::kEyes);
+	if (!eyePart)
+		return;
+
+	const bool isEye = (strcmp(eyePart->formEditorID.c_str(), m_Name.c_str()) == 0);
+	m_Flags.set(isEye, Flags::Eyes);
 }
 
 void BaseMesh::CreateMaterial()
@@ -283,4 +328,14 @@ void BaseMesh::UpdateMaterial()
 		return;
 
 	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+}
+
+void BaseMesh::AllocateTransformIndex()
+{
+	m_TransformIndex = Scene::GetSingleton()->GetSceneGraph()->AllocateTransformIndex();
+}
+
+void BaseMesh::WriteTransformData() const
+{
+	Scene::GetSingleton()->GetSceneGraph()->WriteTransformData(m_TransformIndex, m_LocalTransform, m_PrevLocalTransform);
 }

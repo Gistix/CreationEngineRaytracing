@@ -7,6 +7,7 @@
 #include "Framework/DescriptorTableManager.h"
 #include "Interop/LandLODUpdate.hlsli"
 #include "Mesh.hlsli"
+#include "Transform.hlsli"
 #include "Util.h"
 
 class SkinnedMesh;
@@ -47,10 +48,11 @@ public:
 	{
 		None = 0,
 		LandLOD4 = 1 << 0,
-		DismemberSkinInstance = 1 << 1
+		DismemberSkinInstance = 1 << 1,
+		Eyes = 1 << 2
 	};
 
-	virtual ~BaseMesh() = default;
+	virtual ~BaseMesh();
 
 	// Constructs the appropriate mesh type (DirectMesh, SkinnedMesh, DismemberMesh or DynamicMesh) for the given geometry.
 	static eastl::unique_ptr<BaseMesh> Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
@@ -99,9 +101,15 @@ public:
 	// Stores the owner pointer for grouping/comparison only (never dereferenced); returns true if it changed.
 	bool SetOwner(RE::TESObjectREFR* owner);
 
+	// Some eye meshes use EnvironmentMap shader instead of Eye shader
+	// Detect them by comparing geometry name to headpart name
+	void SetEyeFlag();
+
 	const float3x4& GetTransform() const { return m_Transform; }
 
 	const float3x4& GetPrevTransform() const { return m_PrevTransform; }
+
+	uint32_t GetTransformID() const { return m_TransformIndex; }
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
 	
@@ -141,9 +149,16 @@ protected:
 
 	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
-	static nvrhi::rt::GeometryDesc MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount);
+	static nvrhi::rt::GeometryDesc MakeGeometryDesc(
+		nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount,
+		nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount,
+		uint32_t transformIndex);
 
 	void CreateMaterial();
+
+	void AllocateTransformIndex();
+
+	void WriteTransformData() const;
 
 	eastl::string m_Name;
 
@@ -161,10 +176,13 @@ protected:
 	// Cached world transform from BSTriShape, refreshed in Update().
 	float3x4 m_Transform = Constants::kIdentityTransform;
 	float3x4 m_PrevTransform = Constants::kIdentityTransform;
+	bool m_NeedsPrevInit = true;
 
 	// Local to the BLASCluster
 	float3x4 m_LocalTransform = Constants::kIdentityTransform;
 	float3x4 m_PrevLocalTransform = Constants::kIdentityTransform;
+
+	uint32_t m_TransformIndex = UINT32_MAX;
 
 	RE::NiBound m_WorldBound;
 

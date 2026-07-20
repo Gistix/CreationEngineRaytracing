@@ -25,9 +25,10 @@ public:
 	// clears m_Tasks under the lock before requesting stop.
 	explicit ThreadPool(size_t a_count)
 	{
-		assert(a_count > 0 && "ThreadPool created with zero threads will never run enqueued tasks");
-		m_Workers.reserve(a_count);
-		for (size_t i = 0; i < a_count; ++i)
+		const auto numWorkers = std::max(1llu, a_count);
+
+		m_Workers.reserve(numWorkers);
+		for (size_t i = 0; i < numWorkers; ++i)
 			m_Workers.emplace_back([this](std::stop_token a_stopToken) { Worker(a_stopToken); });
 	}
 

@@ -75,6 +75,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(13),           // Water displacement
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
 			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
 		};
 
@@ -265,6 +266,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 

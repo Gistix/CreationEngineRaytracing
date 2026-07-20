@@ -166,6 +166,7 @@ struct SSSSettings
 
 struct AdvancedSettings
 {
+	uint NumWorkerThreads = 8;
 	float TexLODBias = -1.0f;
 	bool VariableUpdateRate = true;
 	bool GGXEnergyConservation = true;
@@ -239,6 +240,7 @@ struct ExperimentalSettings
 	bool PathTracingCull = false;
 	TextureMode TextureMode = TextureMode::Share;
 	uint32_t TextureCutOff = 0;
+	bool GlobalLights = false;
 };
 
 struct DebugSettings

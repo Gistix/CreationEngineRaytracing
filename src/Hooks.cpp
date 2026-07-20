@@ -14,6 +14,9 @@ namespace Hooks
 			if (!pDesc)
 				return func(a_device, pDesc, pInitialData, ppBuffer);
 
+			if (pDesc->ByteWidth == 0)
+				return func(a_device, pDesc, pInitialData, ppBuffer);
+
 			D3D11_BUFFER_DESC desc = *pDesc;
 
 			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0 && (desc.BindFlags & D3D11_BIND_VERTEX_BUFFER || desc.BindFlags & D3D11_BIND_INDEX_BUFFER))

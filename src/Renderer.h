@@ -6,8 +6,6 @@
 
 #include "Core/TextureManager.h"
 
-#include "Types/RendererParams.h"
-#include "Types/SupportedFeatures.h"
 #include "Types/PassTiming.h"
 
 #include "Renderer/RenderGraph.h"
@@ -54,7 +52,7 @@ class Renderer
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
 
-	SupportedFeatures m_SupportedFeatures;
+	eastl::array<bool, magic_enum::enum_count<nvrhi::Feature>()> m_SupportedFeatures;
 
 	// Fence used to synchronize 'executeCommandList' since it is not thread safe and we need the returned fence value to synchronize GPU resources
 	mutable std::mutex m_ExecutionMutex;
@@ -109,6 +107,8 @@ class Renderer
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
 
 	void InitGBufferOutput();
+
+	void PostInitialize();
 
 public:
 	struct GBufferOutput
@@ -172,7 +172,9 @@ public:
 
 	Renderer();
 
-	bool Initialize(RendererParams parameters);
+	bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
+
+	bool Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 
