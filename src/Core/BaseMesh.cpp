@@ -205,7 +205,11 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	float3x4 transform;
 	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
 
-	if (m_NeedsPrevInit || !Util::Math::MatrixNearEqual(transform, m_Transform))
+	if (m_NeedsPrevInit)
+		MarkDirty(DirtyFlags::Transform);
+	else if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+		MarkDirty(DirtyFlags::Transform);
+	else if (!Util::Math::MatrixNearEqual(m_Transform, m_PrevTransform))
 		MarkDirty(DirtyFlags::Transform);
 
 	if (m_NeedsPrevInit) {
