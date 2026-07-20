@@ -119,13 +119,14 @@ void Main()
     
     Instance sourceInstance;
     Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
+    Transform sourceTransform = Transforms[NonUniformResourceIndex(sourceMesh.TransformIndex)];
     
     Vertex v0;
     Vertex v1;
     Vertex v2;
     GetVertices(sourceMesh, sourcePayload.primitiveIndex, v0, v1, v2);
 
-    float3x3 objectToWorld3x3 = mul((float3x3) sourceInstance.Transform, (float3x3) sourceMesh.Transform);
+    float3x3 objectToWorld3x3 = mul((float3x3) sourceInstance.Transform, (float3x3) sourceTransform.Transform);
     
     float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
     float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));

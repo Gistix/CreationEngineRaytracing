@@ -46,6 +46,8 @@ struct SurfaceMaker
 
         Mesh mesh = GetMesh(payload, instance);
 
+        Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformIndex)];
+
         // Loads all geometry releated data
         Vertex v0, v1, v2;
         
@@ -65,18 +67,18 @@ struct SurfaceMaker
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
-        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
 
 #if USE_SIA_INTERPOLATION
         // NVIDIA Self-Intersection Avoidance: precise interpolation + tight error bound.
-        // Compose the full object-to-world transform: o2w = instance.Transform * mesh.Transform
+        // Compose the full object-to-world transform: o2w = instance.Transform * meshTransform.Transform
         // We build a combined float3x4 for the SIA function.
         {
             // Compose mesh-local to world: o2w = Instance.Transform * Mesh.Transform
             // Both are row-major float3x4 (3 rows, 4 cols: rotation|translation).
             float3x4 o2w;
             float3x3 rot = objectToWorld3x3;
-            float3 meshTranslation = float3(mesh.Transform._m03, mesh.Transform._m13, mesh.Transform._m23);
+            float3 meshTranslation = float3(meshTransform.Transform._m03, meshTransform.Transform._m13, meshTransform.Transform._m23);
             float3 instanceTranslation = float3(instance.Transform._m03, instance.Transform._m13, instance.Transform._m23);
             float3 translation = mul((float3x3) instance.Transform, meshTranslation) + instanceTranslation;
             o2w._m00 = rot._m00; o2w._m01 = rot._m01; o2w._m02 = rot._m02; o2w._m03 = translation.x;
@@ -114,7 +116,7 @@ struct SurfaceMaker
 #endif // USE_SIA_INTERPOLATION
 
         surface.CameraRelativePosition = TransformMeshInstancePointCameraRelative(
-            currentObjectSpacePos, mesh.Transform, instance.Transform, Camera.Position);
+            currentObjectSpacePos, meshTransform.Transform, instance.Transform, Camera.Position);
 
         // Previous-frame positions for motion vectors.
 #if defined(HAS_PREV_POSITIONS)
@@ -132,16 +134,16 @@ struct SurfaceMaker
             // but for skinned/dynamic geometry it avoids catastrophic cancellation between
             // two large, nearly-equal world-space coordinates.
             float3 currentWorldRelPos = TransformMeshInstancePointCameraRelative(
-                currentObjectSpacePos, mesh.Transform, instance.Transform, Camera.Position);
+                currentObjectSpacePos, meshTransform.Transform, instance.Transform, Camera.Position);
 
             float3 prevWorldRelPos = TransformMeshInstancePointCameraRelative(
-                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.Position); // NOTE: Camera.Position (current), not PositionPrev — keeps both terms in the same reference frame
+                prevObjectSpacePos, meshTransform.PrevTransform, instance.PrevTransform, Camera.Position); // NOTE: Camera.Position (current), not PositionPrev — keeps both terms in the same reference frame
 
             // Apply object motion after current/previous reconstruction cancel, so
             // static geometry does not inherit world-coordinate cancellation error.
             // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.
             surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
-                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.PositionPrev);        
+                prevObjectSpacePos, meshTransform.PrevTransform, instance.PrevTransform, Camera.PositionPrev);
         }
 #else
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);

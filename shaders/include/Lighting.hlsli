@@ -14,6 +14,8 @@
 
 #include "raytracing/include/Materials/BSDF.hlsli"
 
+#include "interop/Light.hlsli"
+
 static const float ISL_SCALE = 0.8f;
 static const float ISL_METRES_TO_UNITS = 70.f;
 static const float ISL_METRES_TO_UNITS_SQ = ISL_METRES_TO_UNITS * ISL_METRES_TO_UNITS;
@@ -178,8 +180,14 @@ float GetLightSampleWeight(Surface surface, Light light)
 
 // Get irradiance for point light without BRDF evaluation
 int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, out float3 irradiance, out float3 lr, out float dist, inout uint randomSeed)
-{
-    if (lightData.Count == 0)
+{   
+#if defined(GLOBAL_LIGHTS)
+    const uint lightCount = Raytracing.NumLights;
+#else
+    const uint lightCount = lightData.Count;
+#endif
+    
+    if (lightCount == 0)
     {
         irradiance = float3(0, 0, 0);
         lr = float3(0, 0, 0);
@@ -187,19 +195,31 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
         return -1;
     }
 
-    float lightWeight = float(lightData.Count);
+    float lightWeight = float(lightCount);
 
 #if defined(RIS)
-    const uint candidateCount = min(RIS_MAX_CANDIDATES, lightData.Count);
+#   if defined(GLOBAL_LIGHTS)
+    const uint candidateCount = lightCount;
+#   else
+    const uint candidateCount = min(RIS_MAX_CANDIDATES, lightCount);
+#   endif    
+
     uint selectedLightID = 0;
     float totalWeight = 0.0f;
     float selectedWeight = 0.0f;
 
     for (uint i = 0; i < candidateCount; i++)
     {
-        uint lightIdx = min(uint(Random(randomSeed) * lightData.Count), lightData.Count - 1);
-        uint lightID = lightData.GetID(lightIdx);
+        const uint lightIdx = min(uint(Random(randomSeed) * lightCount), lightCount - 1);
+    
+#   if defined(GLOBAL_LIGHTS)    
+        const uint lightID = lightIdx;
+#   else
+        const uint lightID = lightData.GetID(lightIdx);
+#   endif
+    
         Light testLight = Lights[lightID];
+    
         const bool isTestLinear = (testLight.Flags & LightFlags::LinearLight) != 0;
         testLight.Color = PointLightToLinear(testLight.Color, isTestLinear);
         float weight = GetLightSampleWeight(surface, testLight);
@@ -227,8 +247,14 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     Light light = Lights[selectedLightID];
 #else
 
-    uint lightIdx = min(uint(Random(randomSeed) * lightData.Count), lightData.Count - 1);
-    uint lightID = lightData.GetID(lightIdx);
+    const uint lightIdx = min(uint(Random(randomSeed) * lightCount), lightCount - 1);
+    
+#   if defined(GLOBAL_LIGHTS)    
+    const uint lightID = lightIdx;
+#   else
+    const uint lightID = lightData.GetID(lightIdx);
+#   endif
+    
     Light light = Lights[lightID];
 #endif
 

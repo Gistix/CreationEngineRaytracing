@@ -24,7 +24,8 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 
 	m_GeometryDescs.push_back(MakeGeometryDesc(
 		manager->GetIndexBuffer(), start, numTris * 3u,
-		manager->GetVertexBuffer(), vertexStride, triShapeData.vertexCount));
+		manager->GetVertexBuffer(), vertexStride, triShapeData.vertexCount,
+		manager->GetTransformID()));
 
 	CreateMaterial();
 }
@@ -55,10 +56,13 @@ void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh& manager)
 	m_Properties = manager.GetProperties();
 	m_WorldBound = manager.GetWorldBound();
 
-	const auto& transform = manager.GetTransform();
-	if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+	m_Transform = manager.GetTransform();
+	m_PrevTransform = manager.GetPrevTransform();
+
+	m_TransformIndex = manager.GetTransformID();
+
+	if (manager.GetDirtyFlags().all(DirtyFlags::Transform))
 		MarkDirty(DirtyFlags::Transform);
 
-	m_Transform = transform;
-	m_PrevTransform = manager.GetPrevTransform();
+	m_NeedsPrevInit = false;
 }

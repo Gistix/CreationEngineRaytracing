@@ -39,6 +39,7 @@ namespace Pass::Raster
 			nvrhi::BindingSetItem::PushConstants(3, sizeof(uint2)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler)
 		};

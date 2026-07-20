@@ -53,6 +53,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
+	AllocateTransformIndex();
+
 	m_VertexCount = vertexCount;
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);

@@ -5,7 +5,6 @@
 #include "magic_enum/magic_enum.hpp"
 
 #include "Core/DirtyFlags.h"
-#include "Types/SupportedFeatures.h"
 
 namespace magic_enum::customize
 {
@@ -41,12 +40,6 @@ namespace magic_enum::customize
 
 	template <>
 	struct enum_range<DirtyFlags>
-	{
-		static constexpr bool is_flags = true;
-	};
-
-	template <>
-	struct enum_range<SupportedFeatures>
 	{
 		static constexpr bool is_flags = true;
 	};

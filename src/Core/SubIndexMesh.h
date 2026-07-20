@@ -69,6 +69,8 @@ public:
 		return static_cast<uint16_t>(m_VertexDescriptor.Get());
 	}
 
+	auto GetTransformID() const { return m_TransformIndex; }
+
 	// Sync the K SubIndexSegmentMesh children with the parent's current segment
 	// visibility. Segments are identified by (start, numTris); new segments are
 	// created, existing segments have their SubIndexHidden flag toggled to match

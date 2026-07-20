@@ -25,19 +25,22 @@
 nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
 nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
 nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
-
-SceneGraph::SceneGraph() :
-	m_ThreadPool(std::max(1u, std::min(std::thread::hardware_concurrency() - 1u, 8u)))
-{
-}
+nvrhi::IBuffer* SceneGraph::GetTransformBuffer() const { return m_TransformManager->GetBuffer(); }
 
 void SceneGraph::Initialize()
 {
+	const auto maxThreads = std::thread::hardware_concurrency() - 1u;
+	const auto numWorkerThreads = std::min(maxThreads, Scene::GetSingleton()->m_Settings.AdvancedSettings.NumWorkerThreads);
+
+	m_ThreadPool = eastl::make_unique<ThreadPool>(numWorkerThreads);
+
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	m_MeshBuffer = Util::CreateStructuredRingBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
 	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
+
+	m_TransformManager = eastl::make_unique<TransformManager>();
 
 	m_MaterialManager = eastl::make_shared<MaterialManager>();
 
@@ -432,7 +435,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	// Phase B + C1 (parallel): Update known meshes AND filter new meshes via thread pool
 	{
-		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool.GetThreadCount());
+		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
 		const size_t totalWork = m_UpdateList.size();
 		const size_t totalCreate = m_CreateList.size();
 
@@ -529,7 +532,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			for (size_t start = 0; start < totalWork; start += chunkSize) {
 				size_t end = std::min(start + chunkSize, totalWork);
 
-				m_ThreadPool.Enqueue([&, start, end]() {
+				m_ThreadPool->Enqueue([&, start, end]() {
 					for (size_t i = start; i < end; ++i)
 						doUpdate(m_UpdateList[i]);
 				});
@@ -545,7 +548,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				size_t end = std::min(start + chunkSize, totalCreate);
 				const size_t idx = start / chunkSize;
 
-				m_ThreadPool.Enqueue([&, start, end, idx]() {
+				m_ThreadPool->Enqueue([&, start, end, idx]() {
 					doFilter(start, end, m_PerWorkerCreateCandidates[idx]);
 				});
 			}
@@ -554,7 +557,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 
 		if (anyDispatched)
-			m_ThreadPool.WaitAll();
+			m_ThreadPool->WaitAll();
 
 		m_CreateCandidates.reserve(m_CreateList.size());
 		for (auto& wc : m_PerWorkerCreateCandidates)
@@ -667,7 +670,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	// Phase E2 (parallel): update each cluster at its reserved offsets
 	{
-		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool.GetThreadCount());
+		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
 		const size_t totalWork = clusterWork.size();
 
 		if (totalWork > 0) {
@@ -676,7 +679,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			for (size_t start = 0; start < totalWork; start += chunkSize) {
 				size_t end = std::min(start + chunkSize, totalWork);
 
-				m_ThreadPool.Enqueue([&, start, end]() {
+				m_ThreadPool->Enqueue([&, start, end]() {
 					for (size_t i = start; i < end; ++i) {
 						auto& w = clusterWork[i];
 						w.cluster->Update(m_MeshData.data(), m_InstanceData.data(),
@@ -685,7 +688,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				});
 			}
 
-			m_ThreadPool.WaitAll();
+			m_ThreadPool->WaitAll();
 		}
 	}
 
@@ -694,6 +697,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+
+	m_TransformManager->Flush(commandList);
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
@@ -799,4 +804,14 @@ void SceneGraph::ProcessPendingMeshDestroys(uint64_t completedFence)
 		eastl::remove_if(m_PendingMeshDestroy.begin(), m_PendingMeshDestroy.end(),
 			[completedFence](const PendingDestroy& p) { return p.fenceValue <= completedFence; }),
 		m_PendingMeshDestroy.end());
+}
+
+uint32_t SceneGraph::AllocateTransformIndex()
+{
+	return m_TransformManager->AllocateTransformIndex();
+}
+
+void SceneGraph::WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform)
+{
+	m_TransformManager->WriteTransformData(index, transform, prevTransform);
 }

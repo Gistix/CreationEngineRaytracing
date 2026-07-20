@@ -6,6 +6,7 @@
 #include "interop/Triangle.hlsli"
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
+#include "interop/Transform.hlsli"
 
 struct InstanceConstants
 {
@@ -20,6 +21,7 @@ ConstantBuffer<InstanceConstants> InstanceConst  : register(b3);
 
 StructuredBuffer<Instance>        Instances      : register(t0);
 StructuredBuffer<Mesh>            Meshes         : register(t1);
+StructuredBuffer<Transform>   Transforms     : register(t2);
 
 StructuredBuffer<uint16_t3>       Triangles[]    : register(t0, space1);
 StructuredBuffer<Vertex>          Vertices[]     : register(t0, space2);
@@ -54,6 +56,7 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     uint meshIndex = instance.FirstGeometryID + InstanceConst.GeometryIndex;
     
     Mesh mesh = Meshes[meshIndex];
+    Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformIndex)];
     
     uint triangleID = vertexID / 3;
     uint vertexInTriangle = vertexID % 3;
@@ -63,12 +66,12 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     
     Vertex vertex = Vertices[mesh.GeometryIdx][triVertex];
 
-    float3 rootSpacePosition = mul(mesh.Transform, float4(vertex.Position, 1.0f));
+    float3 rootSpacePosition = mul(meshTransform.Transform, float4(vertex.Position, 1.0f));
     float3 worldSpacePosition = mul(instance.Transform, float4(rootSpacePosition, 1.0f));
 
     float4 clipSpacePosition = mul(Camera.ViewProj, float4(worldSpacePosition - Camera.Position, 1.0));
 
-    float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+    float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
     
     o.Position = clipSpacePosition;
     o.WorldPosition = worldSpacePosition;

@@ -476,6 +476,10 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                     surface.AO = rfaos.z;
                 }
             }
+            else
+            {
+                surface.Roughness *= K_2_PI;
+            }
         }
         else if (material.Feature == Feature::kEye)
         {

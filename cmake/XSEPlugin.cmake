@@ -95,7 +95,7 @@ if(BUILD_SKYRIM)
 	set(CommonLibPath "extern/CommonLibSSE-NG")
 	set(CommonLibTarget CommonLibSSE::CommonLibSSE)
 
-	set(ScripExtenderName "SKSE")
+	set(ScriptExtenderName "SKSE")
 
 	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
 elseif(BUILD_FALLOUT4)
@@ -109,7 +109,7 @@ elseif(BUILD_FALLOUT4)
 	set(CommonLibSharedName "CommonLibShared")
 	set(CommonLibSharedTarget CommonLibShared)
 
-	set(ScripExtenderName "F4SE")
+	set(ScriptExtenderName "F4SE")
 
 	include(CommonLibF4)
 endif()
