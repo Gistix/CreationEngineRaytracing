@@ -6,6 +6,7 @@
 
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
+#include "interop/Transform.hlsli"
 
 #include "interop/Vertex.hlsli"
 
@@ -94,6 +95,11 @@ Mesh GetMesh(in Payload payload, out Instance instance)
 {
     instance = GetInstance(payload.GetInstanceIndex());
     return Meshes[NonUniformResourceIndex(GetSafeMeshIndex(instance, payload.GetGeometryIndex()))];
+}
+
+Transform GetTransform(in uint meshIndex)
+{
+    return Transforms[NonUniformResourceIndex(meshIndex)];
 }
 
 Triangle GetTriangle(in uint meshIndex, in uint primitiveIdx)

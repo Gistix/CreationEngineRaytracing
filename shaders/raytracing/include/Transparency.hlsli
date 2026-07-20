@@ -65,11 +65,11 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
 }
 
 float3 ComputeShadowNormal(
-    Instance instance, Mesh mesh,
+    Instance instance, Mesh mesh, Transform meshTransform,
     Vertex v0, Vertex v1, Vertex v2, float3 uvw,
     LightingMaterialData material, float2 texCoord)
 {
-    float3x3 objectToWorld3x3 = mul((float3x3)instance.Transform, (float3x3)mesh.Transform);
+    float3x3 objectToWorld3x3 = mul((float3x3)instance.Transform, (float3x3)meshTransform.Transform);
     float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
     float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
     float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
@@ -95,6 +95,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 {
     Instance instance;
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
+    Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformIndex)];
     
     Vertex v0, v1, v2;
     GetVertices(mesh, primitiveIndex, v0, v1, v2);
@@ -112,7 +113,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
     if (material.Type == Type::Water)
     {
-        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
 
         float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));        
         float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
@@ -164,7 +165,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 transmittance = lerp(float3(1.0f, 1.0f, 1.0f), baseColor, alpha);
             }
 
-            float3 Normal = ComputeShadowNormal(instance, mesh, v0, v1, v2, uvw, material, texCoord);
+            float3 Normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, material, texCoord);
             ApplyFresnelTransmittance(Normal, 0.04f, direction, transmittance, transmitanceInOut);
             return false;
         }
@@ -204,7 +205,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 F0 = pbr.SpecularLevel * specular;
             }
 
-            float3 Normal = ComputeShadowNormal(instance, mesh, v0, v1, v2, uvw, material, texCoord);
+            float3 Normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, material, texCoord);
             ApplyFresnelTransmittance(Normal, F0, direction, transmittance, transmitanceInOut);
             return false;
         }        

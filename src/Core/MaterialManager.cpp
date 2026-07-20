@@ -25,11 +25,8 @@
 #include <typeinfo>
 
 MaterialManager::MaterialManager()
+	: m_Slots(kSizeReference, Constants::NUM_MATERIALS_MIN, Constants::NUM_MATERIALS_STEP)
 {
-	m_Size = kSizeReference * Constants::NUM_MATERIALS_MIN;
-
-	m_Data.resize(m_Size);
-
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
@@ -50,7 +47,7 @@ void MaterialManager::CreateBuffer()
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	auto bufferDesc = nvrhi::BufferDesc()
-		.setByteSize(m_Size)
+		.setByteSize(m_Slots.GetCapacity())
 		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName("Material Buffer");
@@ -68,41 +65,14 @@ void MaterialManager::BindBuffer()
 
 void MaterialManager::Grow()
 {
-	// Recreates the GPU buffer at the current (already grown) m_Size and rebinds it to the
-	// descriptor table; the table handle is stable so passes never need to rebind.
 	CreateBuffer();
 
-	// The freshly created buffer is empty; restage all live data for re-upload.
-	m_DirtyRanges.clear();
-	m_DirtyRanges.push_back({ 0, m_NextOffset });
-}
-
-uint64_t MaterialManager::Allocate()
-{
-	std::scoped_lock lock(m_InternalMutex);
-
-	if (!m_FreeOffsets.empty()) {
-		uint64_t offset = m_FreeOffsets.back();
-		m_FreeOffsets.pop_back();
-		return offset;
-	}
-
-	if (m_NextOffset + kSizeReference > m_Size) {
-		// Grow the logical capacity (and CPU mirror) now so Write() stays in-bounds; the GPU
-		// buffer itself is recreated lazily in Flush() where a command list is available.
-		m_Size += kSizeReference * Constants::NUM_MATERIALS_STEP;
-		m_Data.resize(m_Size);
-	}
-
-	uint64_t offset = m_NextOffset;
-	m_NextOffset += kSizeReference;
-	return offset;
+	m_Slots.MarkAllDirty();
 }
 
 void MaterialManager::Release(uint64_t offset)
 {
-	std::scoped_lock lock(m_InternalMutex);
-	m_FreeOffsets.push_back(offset);
+	m_Slots.Release(offset);
 }
 
 eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shaderMaterial)
@@ -131,7 +101,7 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 		}
 	}
 
-	auto offset = Allocate();
+	auto offset = m_Slots.Allocate();
 
 	auto type = shaderMaterial->GetType();
 	if (type == Type::kLighting) 
@@ -210,47 +180,36 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 
 void MaterialManager::Update(MaterialBase* material)
 {
-	std::scoped_lock lock(m_InternalMutex);
-
 	const uint64_t offset = material->GetOffset();
 	const size_t size = material->GetDataSize();
-
 
 	if (size > kSizeReference) {
 		logger::critical("MaterialManager::Write - material data exceeds the reference slot size");
 		return;
 	}
 
-	if (offset + size > m_Size) {
+	if (offset + size > m_Slots.GetCapacity()) {
 		logger::critical("MaterialManager::Write - material data write out of bounds");
 		return;
 	}
 
-	// Skip the upload entirely when the data is identical to what is already staged
-	if (std::memcmp(m_Data.data() + offset, material->GetData(), size) == 0)
-		return;
-
-	std::memcpy(m_Data.data() + offset, material->GetData(), size);
-	m_DirtyRanges.push_back({ offset, size });
+	m_Slots.Write(offset, material->GetData(), size);
 }
 
 void MaterialManager::Flush(nvrhi::ICommandList* commandList)
 {
-	std::scoped_lock lock(m_InternalMutex);
-
-	// Recreate the GPU buffer here (not during Allocate) if the logical capacity outgrew it.
-	if (m_Buffer->getDesc().byteSize < m_Size)
+	if (m_Slots.ConsumeGrowFlag() || m_Buffer->getDesc().byteSize < m_Slots.GetCapacity())
 		Grow();
 
-	for (const auto& [offset, size] : m_DirtyRanges) {
+	auto dirtyRanges = m_Slots.ConsumeDirtyRanges();
+
+	for (const auto& [offset, size] : dirtyRanges) {
 		if (offset + size > m_Buffer->getDesc().byteSize) {
 			logger::error("MaterialManager::Flush - Current range {} is greater than buffer size {}.", offset + size, m_Buffer->getDesc().byteSize);
 		}
 
-		commandList->writeBuffer(m_Buffer, m_Data.data() + offset, size, offset);
+		commandList->writeBuffer(m_Buffer, static_cast<const uint8_t*>(m_Slots.GetMirror()) + offset, size, offset);
 	}
-
-	m_DirtyRanges.clear();
 }
 
 Texture MaterialManager::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiSourceTexture>& niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, [[maybe_unused]] TextureType textureType)

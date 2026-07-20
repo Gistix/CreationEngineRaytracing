@@ -101,7 +101,8 @@ namespace Pass
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::Texture_SRV(10),          // Projection noise
-			nvrhi::BindingLayoutItem::Texture_SRV(11),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11), // Transforms
+			nvrhi::BindingLayoutItem::Texture_SRV(12),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
@@ -246,7 +247,8 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(9, GetRenderer()->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(11, scene->GetPhysicalSkyTrLUTTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(12, scene->GetPhysicalSkyTrLUTTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)

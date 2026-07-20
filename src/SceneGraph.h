@@ -4,6 +4,7 @@
 #include "Core/BLASCluster.h"
 #include "Core/ThreadPool.h"
 
+#include "Core/TransformManager.h"
 #include "core/Light.h"
 #include "core/MaterialManager.h"
 #include "Core/TextureManager.h"
@@ -11,6 +12,7 @@
 #include "Light.hlsli"
 #include "Mesh.hlsli"
 #include "Instance.hlsli"
+#include "Transform.hlsli"
 #include "Interop/LandLODUpdate.hlsli"
 
 #include "Constants.h"
@@ -20,6 +22,7 @@
 #include "Types/RE/RE.h"
 #include "Types/RingBuffer.h"
 
+#include <eastl/array.h>
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
 
@@ -89,12 +92,15 @@ class SceneGraph
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
+	// Transform buffer managed by TransformManager
+	eastl::unique_ptr<TransformManager> m_TransformManager;
+
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
 
 	mutable std::mutex m_ClusterDirtyMutex;
 
-	ThreadPool m_ThreadPool;
+	eastl::unique_ptr<ThreadPool> m_ThreadPool;
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
 	eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>> m_CreateList;
 
@@ -119,7 +125,6 @@ class SceneGraph
 		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
 	};
 public:
-	SceneGraph();
 	void Initialize();
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
@@ -138,6 +143,8 @@ public:
 	nvrhi::IBuffer* GetLightBuffer() const;
 	nvrhi::IBuffer* GetMeshBuffer() const;
 	nvrhi::IBuffer* GetInstanceBuffer() const;
+	nvrhi::IBuffer* GetTransformBuffer() const;
+	inline auto& GetTransformManager() const { return m_TransformManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
 	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
@@ -183,6 +190,9 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 	void MarkClusterDirty(BLASCluster* cluster);
+
+	uint32_t AllocateTransformIndex();
+	void WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform);
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
 

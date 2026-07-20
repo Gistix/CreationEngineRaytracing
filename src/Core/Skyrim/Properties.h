@@ -72,7 +72,7 @@ struct Properties
 
 	Properties() = default;
 
-	Properties(RE::BSTriShape* triShape);
+	Properties(RE::BSTriShape* triShape, bool isEye);
 
 	auto& GetData() const { return m_Data; }
 private:

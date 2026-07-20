@@ -6,7 +6,7 @@
 
 #include "Types/WaterFlags.h"
 
-Properties::Properties(RE::BSTriShape* triShape)
+Properties::Properties(RE::BSTriShape* triShape, bool isEye)
 {
 	m_Data.ShaderFlags = 0;
 	m_Data.AlphaFlags = AlphaFlags::None;
@@ -122,7 +122,9 @@ Properties::Properties(RE::BSTriShape* triShape)
 	if (shaderProperty) {
 		const auto& shaderFlags = shaderProperty->flags;
 
-		bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || feature == Feature::kEye;
+		const bool isEyeFeature = feature == Feature::kEye || (feature == Feature::kEnvironmentMap && isEye);
+
+		bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFaceGen || feature == Feature::kFaceGenRGBTint || isEyeFeature;
 		blendMaterial |= shaderFlags.any(EShaderPropertyFlag::kDecal, EShaderPropertyFlag::kDynamicDecal);
 
 		if ((alphaFlags & AlphaFlags::Additive) != AlphaFlags::None) {

@@ -58,6 +58,8 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 	m_VertexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->vertexBufferDX12), vertexBufferDesc);
 
 	m_VertexDescriptor = sceneGraph->GetVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, m_VertexBuffer));
+
+	AllocateTransformIndex();
 }
 
 void SubIndexMesh::SetHidden(bool hidden)

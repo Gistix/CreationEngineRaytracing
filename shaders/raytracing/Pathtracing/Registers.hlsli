@@ -12,6 +12,7 @@
 #include "interop/Triangle.hlsli"
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
+#include "interop/Transform.hlsli"
 #include "interop/Light.hlsli"
 #include "interop/SHaRCData.hlsli"
 
@@ -109,7 +110,8 @@ StructuredBuffer<float4>                    DynamicPositions[]          : regist
 Texture2D<float4>                           SkinDetailNormal            : register(t8); 
 Texture2D<float4>                           WaterDisplacementMap        : register(t9);
 Texture2D<float4>                           ProjNoiseMap                : register(t10);
-Texture2D<float4>                           PhysicalSkyTrLUT            : register(t11);
+StructuredBuffer<Transform>                 Transforms                  : register(t11);
+Texture2D<float4>                           PhysicalSkyTrLUT            : register(t12);
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);

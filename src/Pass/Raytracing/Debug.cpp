@@ -68,6 +68,7 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6), // Transforms
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -212,6 +213,7 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 

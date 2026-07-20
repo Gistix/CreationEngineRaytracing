@@ -12,17 +12,17 @@ Renderer::Renderer()
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
 }
 
-bool Renderer::Initialize(RendererParams rendererParams)
+bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
-	Hooks::InstallD3D11(rendererParams.d3d11Device);
+	Hooks::InstallD3D11(d3d11Device);
 
 	// NVRHI Device
 	nvrhi::d3d12::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
-	deviceDesc.pDevice = rendererParams.d3d12Device;
-	deviceDesc.pGraphicsCommandQueue = rendererParams.commandQueue;
-	deviceDesc.pComputeCommandQueue = rendererParams.computeCommandQueue;
-	deviceDesc.pCopyCommandQueue = rendererParams.copyCommandQueue;
+	deviceDesc.pDevice = d3d12Device;
+	deviceDesc.pGraphicsCommandQueue = commandQueue;
+	deviceDesc.pComputeCommandQueue = computeCommandQueue;
+	deviceDesc.pCopyCommandQueue = copyCommandQueue;
 	deviceDesc.aftermathEnabled = false;
 	deviceDesc.logBufferLifetime = false;
 #if defined(NVRHI_ENHANCED_BARRIERS)
@@ -34,14 +34,8 @@ bool Renderer::Initialize(RendererParams rendererParams)
 	if (!m_NVRHIDevice)
 		return false;
 
-	if (m_Settings.ValidationLayer)
-	{
-		nvrhi::DeviceHandle nvrhiValidationLayer = nvrhi::validation::createValidationLayer(m_NVRHIDevice);
-		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
-	}
-
-	m_NativeD3D11Device = rendererParams.d3d11Device;
-	m_NativeD3D12Device = rendererParams.d3d12Device;
+	m_NativeD3D11Device = d3d11Device;
+	m_NativeD3D12Device = d3d12Device;
 
 	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
 
@@ -57,30 +51,65 @@ bool Renderer::Initialize(RendererParams rendererParams)
 			m_FormatMapping.emplace(nativeFormat, format);
 		}
 
-	// This one is quite obvious, but just to be sure...
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingPipeline))
-		m_SupportedFeatures |= SupportedFeatures::Raytracing;
-
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingOpacityMicromap))
-		m_SupportedFeatures |= SupportedFeatures::OpacityMicroMaps;
-
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::LinearSweptSpheres))
-		m_SupportedFeatures |= SupportedFeatures::LinearSweptSpheres;
-	
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayQuery))
-		m_SupportedFeatures |= SupportedFeatures::InlineRaytracing;
-	
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::ShaderExecutionReordering))
-		m_SupportedFeatures |= SupportedFeatures::ShaderExecutionReordering;
-
-#if defined(NVRHI_ENHANCED_BARRIERS)
-	if (m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::EnhancedBarriers))
-		m_SupportedFeatures |= SupportedFeatures::EnhancedBarriers;
-#endif
-
-	logger::info("Supported Features: {}", Util::GetFlagsString<SupportedFeatures>(m_SupportedFeatures));
+	PostInitialize();
 
 	return true;
+}
+
+bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
+{
+	const char* deviceExtensions[] = {
+		"VK_KHR_acceleration_structure",
+		"VK_KHR_deferred_host_operations",
+		"VK_KHR_ray_tracing_pipeline",
+		// list the extensions that were requested when the device was created
+	};
+
+	nvrhi::vulkan::DeviceDesc deviceDesc;
+	deviceDesc.errorCB = &MessageCallback::GetInstance();
+	deviceDesc.physicalDevice = physicalDevice;
+	deviceDesc.device = device;
+	deviceDesc.graphicsQueue = graphicsQueue;
+	deviceDesc.graphicsQueueIndex = graphicsQueueIndex;
+	deviceDesc.transferQueue = transferQueue;
+	deviceDesc.transferQueueIndex = transferQueueIndex;
+	deviceDesc.computeQueue = computeQueue;
+	deviceDesc.computeQueueIndex = computeQueueIndex;
+	deviceDesc.deviceExtensions = deviceExtensions;
+	deviceDesc.numDeviceExtensions = std::size(deviceExtensions);
+
+	m_NVRHIDevice = nvrhi::vulkan::createDevice(deviceDesc);
+
+	if (!m_NVRHIDevice)
+		return false;
+
+	PostInitialize();
+
+	return true;
+}
+
+void Renderer::PostInitialize()
+{
+	// Setup Validation Layer
+	if (m_Settings.ValidationLayer)
+	{
+		nvrhi::DeviceHandle nvrhiValidationLayer = nvrhi::validation::createValidationLayer(m_NVRHIDevice);
+		m_NVRHIDevice = nvrhiValidationLayer; // make the rest of the application go through the validation layer
+	}
+
+	// Print all supported features
+	std::string features = "";
+
+	for (size_t i = 0; i < m_SupportedFeatures.size(); i++)
+	{
+		const bool supported = m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingPipeline);
+		m_SupportedFeatures[i] = supported;
+
+		if (supported)
+			features += fmt::format("{} ", magic_enum::enum_name(static_cast<nvrhi::Feature>(i)));
+	}
+
+	logger::info("Supported Features: {}", features);
 }
 
 void Renderer::InitDefaultTextures()

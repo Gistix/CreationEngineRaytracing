@@ -94,11 +94,8 @@ namespace Util
 
 	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
 	{
-		if (d3d12Buffer)
-			*d3d12Buffer = nullptr;
-
-		if (!d3d11Buffer || !d3d12Buffer) {
-			logger::warn("CreateSharedBuffer - Invalid buffer pointer");
+		if (!d3d11Buffer) {
+			logger::error("CreateSharedBuffer - D3D11 buffer is nullptr");
 			return;
 		}
 

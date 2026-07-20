@@ -62,6 +62,8 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
+	AllocateTransformIndex();
+
 	m_VertexCount = vertexCount;
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
@@ -82,11 +84,6 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
 {
 	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform);
-
-	if (m_Flags.all(Flags::DismemberSkinInstance)) {
-		for (auto& desc : m_VisibleGeometryDescs)
-			desc.setTransform(m_LocalTransform.f);
-	}
 }
 
 void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
@@ -227,7 +224,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount));
+		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetTransformID()));
 		m_GeometryPartitionIndices.push_back(i);
 	}
 }

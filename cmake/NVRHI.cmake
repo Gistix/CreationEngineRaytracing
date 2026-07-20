@@ -10,7 +10,7 @@ set(NVRHI_WITH_VALIDATION ON CACHE BOOL "" FORCE)
 set(NVRHI_INSTALL OFF CACHE BOOL "" FORCE)
 set(NVRHI_INSTALL_EXPORTS OFF CACHE BOOL "" FORCE)
 
-set(NVRHI_WITH_VULKAN OFF CACHE BOOL "" FORCE)
+set(NVRHI_WITH_VULKAN ON CACHE BOOL "" FORCE)
 
 # RTXMU disables OMM
 set(NVRHI_WITH_RTXMU OFF CACHE BOOL "" FORCE)
@@ -47,9 +47,13 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 )
 endif()
 
+target_compile_definitions(nvrhi_vk PRIVATE NVRHI_SHARED_LIBRARY_BUILD=1)
+
 target_link_libraries(
 	${PROJECT_NAME}
 	PRIVATE
 	nvrhi_d3d12
 	nvrhi
+	nvrhi_vk
+	Vulkan::Headers
 )

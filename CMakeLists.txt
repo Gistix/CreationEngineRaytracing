@@ -114,13 +114,21 @@ target_compile_definitions(
 if(AUTO_DEPLOYMENT)
     message(STATUS "Auto deployment enabled. Build output and addons will be copied to ${DEPLOY_DIR}")
 
-    install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${DEPLOY_DIR}/${ScripExtenderName}/Plugins)
+    install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins)
 
-    install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}> DESTINATION ${DEPLOY_DIR}/${ScripExtenderName}/Plugins OPTIONAL)
+    install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}> DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins OPTIONAL)
 
-    install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> DESTINATION ${DEPLOY_DIR}/${ScripExtenderName}/Plugins OPTIONAL)
+    install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins OPTIONAL)
 
-    install(FILES "$<TARGET_FILE_DIR:${PROJECT_NAME}>/GFSDK_Aftermath_Lib.x64.dll" DESTINATION ${DEPLOY_DIR}/${ScripExtenderName}/Plugins OPTIONAL)
+    install(FILES "$<TARGET_FILE_DIR:${PROJECT_NAME}>/GFSDK_Aftermath_Lib.x64.dll" DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins OPTIONAL)
+
+    install(FILES "$<TARGET_FILE:Microsoft::DirectXShaderCompiler>" DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins OPTIONAL)
+
+    file(GLOB_RECURSE D3D12_CORE_DLL "${CMAKE_BINARY_DIR}/vcpkg_installed/*/bin/D3D12Core.dll")
+    if(D3D12_CORE_DLL)
+        list(GET D3D12_CORE_DLL 0 D3D12_CORE_DLL_FIRST)
+        install(FILES ${D3D12_CORE_DLL_FIRST} DESTINATION "${DEPLOY_DIR}/${ScriptExtenderName}/Plugins")
+    endif()
 
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/Shaders)
 
