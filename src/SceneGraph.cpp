@@ -25,6 +25,7 @@
 nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
 nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
 nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
+nvrhi::IBuffer* SceneGraph::GetTransformBuffer() const { return m_TransformManager->GetBuffer(); }
 
 void SceneGraph::Initialize()
 {
@@ -38,6 +39,8 @@ void SceneGraph::Initialize()
 	m_MeshBuffer = Util::CreateStructuredRingBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
 	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
+
+	m_TransformManager = eastl::make_unique<TransformManager>();
 
 	m_MaterialManager = eastl::make_shared<MaterialManager>();
 
@@ -694,6 +697,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+
+	m_TransformManager->Flush(commandList);
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
@@ -799,4 +804,14 @@ void SceneGraph::ProcessPendingMeshDestroys(uint64_t completedFence)
 		eastl::remove_if(m_PendingMeshDestroy.begin(), m_PendingMeshDestroy.end(),
 			[completedFence](const PendingDestroy& p) { return p.fenceValue <= completedFence; }),
 		m_PendingMeshDestroy.end());
+}
+
+uint32_t SceneGraph::AllocateTransformIndex()
+{
+	return m_TransformManager->AllocateTransformIndex();
+}
+
+void SceneGraph::WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform)
+{
+	m_TransformManager->WriteTransformData(index, transform, prevTransform);
 }

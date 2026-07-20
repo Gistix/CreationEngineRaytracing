@@ -10,6 +10,12 @@
 #include "Types/RE/RE.h"
 #include "interop/Triangle.hlsli"
 
+BaseMesh::~BaseMesh()
+{
+	if (m_TransformIndex != UINT32_MAX)
+		Scene::GetSingleton()->GetSceneGraph()->GetTransformManager()->ReleaseTransformIndex(m_TransformIndex);
+}
+
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
@@ -56,10 +62,7 @@ void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4
 	XMStoreFloat3x4(&m_PrevLocalTransform,
 		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
 
-	for (auto& desc: m_GeometryDescs)
-	{
-		desc.setTransform(m_LocalTransform.f);
-	}
+	WriteTransformData();
 }
 
 uint32_t BaseMesh::WriteMeshData(MeshData* out) const
@@ -84,8 +87,7 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			static_cast<uint16_t>(GetDynamicIndex()),
 			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
 			m_Material->GetOffsetComp(),
-			m_LocalTransform,
-			m_PrevLocalTransform
+			m_TransformIndex
 		};
 	}
 
@@ -218,7 +220,7 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	UpdateMaterial();
 }
 
-nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount)
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)
 {
 	nvrhi::rt::GeometryDesc geometryDesc;
 
@@ -235,7 +237,12 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;
 
-	geometryDesc.setTransform(Constants::kIdentityTransform.f);
+	if (transformIndex == UINT32_MAX)
+		logger::critical("Mesh has unitialized transform index");
+
+	geometryDesc.setTransformBuffer(
+		Scene::GetSingleton()->GetSceneGraph()->GetTransformBuffer(),
+		transformIndex * sizeof(TransformData));
 
 	return geometryDesc;
 }
@@ -321,4 +328,14 @@ void BaseMesh::UpdateMaterial()
 		return;
 
 	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+}
+
+void BaseMesh::AllocateTransformIndex()
+{
+	m_TransformIndex = Scene::GetSingleton()->GetSceneGraph()->AllocateTransformIndex();
+}
+
+void BaseMesh::WriteTransformData() const
+{
+	Scene::GetSingleton()->GetSceneGraph()->WriteTransformData(m_TransformIndex, m_LocalTransform, m_PrevLocalTransform);
 }

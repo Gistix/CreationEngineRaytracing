@@ -28,8 +28,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint16_t DynamicID;
     uint32_t IndexOffset;
     uint MaterialOffsetComp;
-    INTEROP_ROW_MAJOR(float3x4) Transform;  
-    INTEROP_ROW_MAJOR(float3x4) PrevTransform;
+    uint TransformIndex;
     
     uint GetMaterialOffset()
     {

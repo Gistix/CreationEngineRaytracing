@@ -4,6 +4,7 @@
 #include "Core/BLASCluster.h"
 #include "Core/ThreadPool.h"
 
+#include "Core/TransformManager.h"
 #include "core/Light.h"
 #include "core/MaterialManager.h"
 #include "Core/TextureManager.h"
@@ -11,6 +12,7 @@
 #include "Light.hlsli"
 #include "Mesh.hlsli"
 #include "Instance.hlsli"
+#include "Transform.hlsli"
 #include "Interop/LandLODUpdate.hlsli"
 
 #include "Constants.h"
@@ -90,6 +92,9 @@ class SceneGraph
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
+	// Transform buffer managed by TransformManager
+	eastl::unique_ptr<TransformManager> m_TransformManager;
+
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
 
@@ -138,6 +143,8 @@ public:
 	nvrhi::IBuffer* GetLightBuffer() const;
 	nvrhi::IBuffer* GetMeshBuffer() const;
 	nvrhi::IBuffer* GetInstanceBuffer() const;
+	nvrhi::IBuffer* GetTransformBuffer() const;
+	inline auto& GetTransformManager() const { return m_TransformManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
 	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
@@ -183,6 +190,9 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 	void MarkClusterDirty(BLASCluster* cluster);
+
+	uint32_t AllocateTransformIndex();
+	void WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform);
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
 

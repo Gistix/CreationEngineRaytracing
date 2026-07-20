@@ -9,6 +9,7 @@
 #include "interop/Triangle.hlsli"
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
+#include "interop/Transform.hlsli"
 #include "interop/Light.hlsli"
 #include "interop/SHaRCData.hlsli"
 
@@ -71,6 +72,7 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 Texture2D<float4>                           WaterDisplacementMap        : register(t13);
 Texture2D<float4>                           SkinDetailNormal            : register(t14);
 Texture2D<float4>                           ProjNoiseMap                : register(t15);
+StructuredBuffer<Transform>                 Transforms                  : register(t16);
 
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
