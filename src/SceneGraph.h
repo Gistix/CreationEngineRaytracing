@@ -49,6 +49,8 @@ class SceneGraph
 	// Each SubIndexSegmentMesh lives in its own cluster so it gets its own BLAS
 	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
 
+	eastl::vector<BLASCluster*> m_AllClusters;
+
 	std::mutex m_BLASClusterUpdateMutex;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
@@ -150,13 +152,14 @@ public:
 	inline auto& GetTransformManager() const { return m_TransformManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
-	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
+	inline const auto& GetDirectMeshes() { return m_DirectMeshes; }
 
-	inline auto& GetOwnerClusters() { return m_OwnerClusters; }
-	inline auto& GetOrphanClusters() { return m_OrphanClusters; }
-	inline auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
-	inline auto& GetDirtyClusters() { return m_DirtyClusters; }
-
+	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
+	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }
+	inline const auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
+	inline const auto& GetDirtyClusters() { return m_DirtyClusters; }
+	inline const auto& GetAllClusters() { return m_AllClusters; }
+	
 	// Per-segment cluster helpers. Called by SubIndexMesh when it creates/destroys a
 	// SubIndexSegmentMesh child. The segment is the unique key into m_SubIndexSegmentClusters.
 	BLASCluster* GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner);

@@ -621,20 +621,20 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	// Phase F (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
 	{
-		eastl::vector<BLASCluster*> allClusters;
-		allClusters.reserve(
+		m_AllClusters.clear();
+		m_AllClusters.reserve(
 			m_OwnerClusters.size() +
 			m_OrphanClusters.size() +
 			m_SubIndexSegmentClusters.size());
 
 		for (auto& [_, cluster] : m_OwnerClusters)
-			allClusters.push_back(cluster.get());
+			m_AllClusters.push_back(cluster.get());
 
 		for (auto& [_, cluster] : m_OrphanClusters)
-			allClusters.push_back(cluster.get());
+			m_AllClusters.push_back(cluster.get());
 
 		for (auto& [_, cluster] : m_SubIndexSegmentClusters)
-			allClusters.push_back(cluster.get());
+			m_AllClusters.push_back(cluster.get());
 
 		m_NumMeshes = 0;
 		m_NumInstances = 0;
@@ -642,7 +642,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		bool reportedInstanceLimit = false;
 
 		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
-		const size_t totalWork = allClusters.size();
+		const size_t totalWork = m_AllClusters.size();
 
 		if (totalWork > 0) {
 			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
@@ -652,7 +652,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				m_ThreadPool->Enqueue([&, start, end]() {
 					for (size_t i = start; i < end; ++i) {
-						auto& cluster = allClusters[i];
+						auto& cluster = m_AllClusters[i];
 
 						const auto& meshData = cluster->Update();
 						const uint32_t meshCount = static_cast<uint32_t>(meshData.size());
