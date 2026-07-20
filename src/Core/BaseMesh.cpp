@@ -65,18 +65,17 @@ void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4
 	WriteTransformData();
 }
 
-uint32_t BaseMesh::WriteMeshData(MeshData* out) const
+void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
 {
 	using namespace DirectX;
 
-	const auto& descs = GetGeometryDescs();
-
 	const uint16_t vertexID = GetVertexID();
 
+	const auto& descs = GetGeometryDescs();
 	for (size_t i = 0; i < descs.size(); i++) {
 		auto& geomTris = descs[i].geometryData.triangles;
 
-		out[i] = {
+		meshData.emplace_back(
 			GetIndexID(i),
 			vertexID,
 			VertexDesc(GetVertexDescRaw()),
@@ -88,10 +87,8 @@ uint32_t BaseMesh::WriteMeshData(MeshData* out) const
 			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
 			m_Material->GetOffsetComp(),
 			m_TransformIndex
-		};
+		);
 	}
-
-	return static_cast<uint32_t>(descs.size());
 }
 
 void BaseMesh::MarkDirty(DirtyFlags flag) {

@@ -44,6 +44,8 @@ class BLASCluster
 
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
+	eastl::vector<MeshData> m_MeshData;
+
 	nvrhi::rt::AccelStructHandle m_BLAS;
 
 	eastl::string m_Name;
@@ -70,15 +72,20 @@ class BLASCluster
 
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
 
+	InstanceLightData m_InstanceLightData;
+
+	bool m_IsValid = false;
+
 	void UpdateTransform();
-	void CollectMemberDirtyFlags();
 	BuildMode DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex);
 
 	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
 
-	InstanceLightData GetInstanceLightData(
+	void UpdateInstanceLightData(
 		const eastl::map<RE::BSLight*, Light>& lights,
 		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
+
+	void SetValid(bool valid) { m_IsValid = valid; }
 public:
 	explicit BLASCluster(RE::TESObjectREFR* owner);
 
@@ -93,11 +100,8 @@ public:
 	// No live members remain.
 	bool Empty() const;
 
-	// Has visible meshes
+	// Has visible meshes — valid only after Update() has been called this frame.
 	bool Valid() const;
-	
-	// Returns total number of MeshData entries across visible members (zero if all hidden or empty).
-	uint32_t GetMeshEntryCount() const;
 
 	// Rebuilds or refits the BLAS as needed (once per frame), pulling dirty state from its members.
 	void BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph);
@@ -106,11 +110,8 @@ public:
 
 	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
 
-	uint32_t GetInstanceIndex() const { return m_InstanceIndex; }
+	// Updates the cluster and returns its visible MeshData entries.
+	const eastl::vector<MeshData>& Update();
 
-	// Writes one MeshData per visible geometry and one InstanceData at the given array offsets.
-	void Update(MeshData* meshData, InstanceData* instanceData,
-		uint32_t meshStart, uint32_t instanceIndex,
-	    const eastl::map<RE::BSLight*, Light>& lights,
-	    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
+	void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const;
 };

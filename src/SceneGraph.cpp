@@ -619,59 +619,30 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	removeEmptyClusters(m_OrphanClusters);
 	removeEmptyClusters(m_SubIndexSegmentClusters);
 
-	// Phase E1 (serial): pre-compute per-cluster array offsets
-	struct ClusterWork { BLASCluster* cluster; uint32_t meshStart; uint32_t instanceIndex; };
-	eastl::vector<ClusterWork> clusterWork;
-	clusterWork.reserve(m_OwnerClusters.size() + m_OrphanClusters.size() + m_SubIndexSegmentClusters.size());
-
-	uint32_t meshCounter = 0;
-	uint32_t instanceCounter = 0;
-
-	bool reportedMeshLimit = false;
-	bool reportedInstanceLimit = false;
-	auto reserveCluster = [&](BLASCluster* cluster) {
-		const uint32_t numMeshes = cluster->GetMeshEntryCount();
-		if (numMeshes == 0)
-			return;
-
-		if (instanceCounter >= Constants::NUM_INSTANCES_MAX) {
-			if (!reportedInstanceLimit) {
-				logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} mesh entries.",
-					Constants::NUM_INSTANCES_MAX, numMeshes);
-				reportedInstanceLimit = true;
-			}
-			return;
-		}
-
-		if (numMeshes > Constants::NUM_MESHES_MAX - meshCounter) {
-			if (!reportedMeshLimit) {
-				logger::critical("SceneGraph::Update - Mesh capacity ({}) reached; omitting a cluster with {} mesh entries.",
-					Constants::NUM_MESHES_MAX, numMeshes);
-				reportedMeshLimit = true;
-			}
-			return;
-		}
-
-		clusterWork.push_back({ cluster, meshCounter, instanceCounter });
-		meshCounter += numMeshes;
-		instanceCounter++;
-	};
-
-	auto reserveClusters = [&reserveCluster](auto& clusters) {
-		for (auto& [_, cluster] : clusters)
-			reserveCluster(cluster.get());
-	};
-	reserveClusters(m_OwnerClusters);
-	reserveClusters(m_OrphanClusters);
-	reserveClusters(m_SubIndexSegmentClusters);
-
-	m_NumMeshes = meshCounter;
-	m_NumInstances = instanceCounter;
-
-	// Phase E2 (parallel): update each cluster at its reserved offsets
+	// Phase F (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
 	{
+		eastl::vector<BLASCluster*> allClusters;
+		allClusters.reserve(
+			m_OwnerClusters.size() +
+			m_OrphanClusters.size() +
+			m_SubIndexSegmentClusters.size());
+
+		for (auto& [_, cluster] : m_OwnerClusters)
+			allClusters.push_back(cluster.get());
+
+		for (auto& [_, cluster] : m_OrphanClusters)
+			allClusters.push_back(cluster.get());
+
+		for (auto& [_, cluster] : m_SubIndexSegmentClusters)
+			allClusters.push_back(cluster.get());
+
+		m_NumMeshes = 0;
+		m_NumInstances = 0;
+		bool reportedMeshLimit = false;
+		bool reportedInstanceLimit = false;
+
 		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
-		const size_t totalWork = clusterWork.size();
+		const size_t totalWork = allClusters.size();
 
 		if (totalWork > 0) {
 			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
@@ -681,9 +652,52 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				m_ThreadPool->Enqueue([&, start, end]() {
 					for (size_t i = start; i < end; ++i) {
-						auto& w = clusterWork[i];
-						w.cluster->Update(m_MeshData.data(), m_InstanceData.data(),
-							w.meshStart, w.instanceIndex, m_Lights, m_LightData);
+						auto& cluster = allClusters[i];
+
+						const auto& meshData = cluster->Update();
+						const uint32_t meshCount = static_cast<uint32_t>(meshData.size());
+
+						if (meshCount == 0)
+							continue;
+
+						// Acdquire indices and advance counts atomically
+						uint32_t firstMesh = 0;
+						uint32_t instanceIndex = 0;
+						{
+							std::scoped_lock mutex(m_BLASClusterUpdateMutex);
+
+							if (m_NumMeshes + meshCount > Constants::NUM_MESHES_MAX) {
+								cluster->SetValid(false);
+								if (!reportedMeshLimit) {
+									logger::critical("SceneGraph::Update - Mesh capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_MESHES_MAX, meshCount);
+									reportedMeshLimit = true;
+								}
+								continue;
+							}
+
+							if (m_NumInstances + 1 > Constants::NUM_INSTANCES_MAX) {
+								cluster->SetValid(false);
+								if (!reportedInstanceLimit) {
+									logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_INSTANCES_MAX, meshCount);
+									reportedInstanceLimit = true;
+								}
+								continue;
+							}
+
+							firstMesh = m_NumMeshes;
+							m_NumMeshes += meshCount;
+
+							instanceIndex = m_NumInstances++;
+						}
+
+						// Update Mesh Data
+						std::memcpy(m_MeshData.data() + firstMesh, meshData.data(), meshCount * sizeof(MeshData));
+
+						// Set Instance Index
+						cluster->SetInstanceIndex(instanceIndex);
+
+						// Update Instance Data
+						cluster->WriteInstanceData(firstMesh, meshCount, m_InstanceData[instanceIndex]);
 					}
 				});
 			}

@@ -99,12 +99,6 @@ void BLASCluster::UpdateTransform() {
 	m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
 }
 
-void BLASCluster::CollectMemberDirtyFlags()
-{
-	for (const auto* mesh : m_Members)
-		m_DirtyFlags |= mesh->GetDirtyFlags();
-}
-
 bool BLASCluster::Empty() const
 {
 	return m_Members.empty();
@@ -112,10 +106,10 @@ bool BLASCluster::Empty() const
 
 bool BLASCluster::Valid() const
 {
-	return GetMeshEntryCount() != 0;
+	return m_IsValid;
 }
 
-InstanceLightData BLASCluster::GetInstanceLightData(
+void BLASCluster::UpdateInstanceLightData(
     const eastl::map<RE::BSLight*, Light>& lights,
     const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
 {
@@ -149,24 +143,10 @@ InstanceLightData BLASCluster::GetInstanceLightData(
 		}
 	}
 
-	return InstanceLightData(lightIds, numLights);
+	m_InstanceLightData = InstanceLightData(lightIds, numLights);
 }
 
-uint32_t BLASCluster::GetMeshEntryCount() const
-{
-	uint32_t count = 0;
-	for (const auto* mesh : m_Members) {
-		if (mesh->IsHidden())
-			continue;
-		count += static_cast<uint32_t>(mesh->GetGeometryDescs().size());
-	}
-	return count;
-}
-
-void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
-	uint32_t meshStart, uint32_t instanceIndex,
-    const eastl::map<RE::BSLight*, Light>& lights,
-     const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
+const eastl::vector<MeshData>& BLASCluster::Update()
 {
 	m_ClusterRadius = 0.0f;
 
@@ -175,13 +155,14 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 	const auto invTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_Transform));
 	const auto invPrevTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_PrevTransform));
 
-	uint32_t meshCount = meshStart;
-
-	m_GeometryDescs.clear();
-
 	m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
+	m_GeometryDescs.clear();
+	m_MeshData.clear();
+
 	for (const auto& mesh : m_Members) {
+		m_DirtyFlags |= mesh->GetDirtyFlags();
+
 		if (mesh->IsHidden())
 			continue;
 
@@ -201,29 +182,31 @@ void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
 		if (mesh->IsTwoSided())
 			m_Flags.set(Flags::TwoSided);
 
-		meshCount += mesh->WriteMeshData(&meshData[meshCount]);
+		mesh->WriteMeshData(m_MeshData);
 	}
 
-	const uint32_t numGeometry = meshCount - meshStart;
-
-	if (numGeometry == 0) {
-		logger::warn("BLASCluster::GetData - BLASCluster {} has no geometry", fmt::ptr(this));
-		return;
+	m_IsValid = !m_MeshData.empty();
+	if (m_IsValid) {
+		// TODO: Move this to the GPU - It doesn't scale well on CPU
+		auto scene = Scene::GetSingleton();
+		const bool skipInstanceLights = scene->m_Settings.ExperimentalSettings.GlobalLights;
+		if (!skipInstanceLights) {
+			auto sceneGraph = scene->GetSceneGraph();
+			UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
+		}
 	}
 
-	InstanceData& outInstance = instanceData[instanceIndex];
-	outInstance.Transform = m_Transform;
-	outInstance.PrevTransform = m_PrevTransform;
+	return m_MeshData;
+}
 
-	const bool skipInstanceLights = Scene::GetSingleton()->m_Settings.ExperimentalSettings.GlobalLights;
-	if (!skipInstanceLights)
-		outInstance.LightData = GetInstanceLightData(lights, lightData);
-
-	outInstance.FirstGeometryID = meshStart;
-	outInstance.NumGeometry = numGeometry;
-	outInstance.Alpha = 1.0f;
-
-	return;
+void BLASCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const
+{
+	instanceData.Transform = m_Transform;
+	instanceData.PrevTransform = m_PrevTransform;
+	instanceData.LightData = m_InstanceLightData;
+	instanceData.FirstGeometryID = firstMesh;
+	instanceData.NumGeometry = meshCount;
+	instanceData.Alpha = 1.0f;
 }
 
 nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(BuildMode mode) const
@@ -288,11 +271,6 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		logger::info("BLASCluster::BuildUpdate - {} already built this frame, skipping", m_Name);
 		return;
 	}
-
-	// Update() normally collects these flags, but clusters with no visible mesh are not
-	// included in SceneGraph's update work list. Keep the build decision correct for those
-	// clusters as well (notably sub-index segments toggling visibility).
-	CollectMemberDirtyFlags();
 
 	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
 	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags.any(DirtyFlags::Visibility)) {

@@ -62,8 +62,6 @@ public:
 		for (const auto& [triShape, cluster] : orphanClusters)
 			addCluster(cluster.get());
 
-		// Per-segment clusters: each SubIndexMesh segment gets its own BLAS, InstanceData,
-		// and TLAS entry — independent of the parent BSSubIndexTriShape and its siblings.
 		for (const auto& [segment, cluster] : subIndexSegmentClusters)
 			addCluster(cluster.get());
 

@@ -39,14 +39,17 @@ class SceneGraph
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
-	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
+	// One BLAS instance per owner reference
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
+
+	// Meshes without an owner get a degenerate per-mesh cluster
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
 
-	// One BLAS / TLAS instance per SubIndexMesh segment. Each SubIndexSegmentMesh lives
-	// in its own cluster so it gets its own BLAS, InstanceData slot, and TLAS entry —
-	// independent of the parent BSSubIndexTriShape and independent of any siblings.
+	// One BLAS instance per SubIndexMesh segment
+	// Each SubIndexSegmentMesh lives in its own cluster so it gets its own BLAS
 	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
+
+	std::mutex m_BLASClusterUpdateMutex;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	mutable std::mutex m_MeshDestroyMutex;
@@ -168,6 +171,7 @@ public:
 	inline auto& GetLandLODMeshUpdates() { return m_LandLODMeshUpdates; }
 
 	inline auto& GetLights() { return m_Lights; }
+	inline auto& GetLightData() { return m_LightData; }
 
 	inline auto& GetNumMeshesFrame() const { return m_NumMeshes; }
 	inline auto& GetNumInstancesFrame() const { return m_NumInstances; }

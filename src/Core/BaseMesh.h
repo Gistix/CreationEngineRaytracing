@@ -120,8 +120,8 @@ public:
 
 	virtual void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform);
 
-	// Writes one MeshData per geometry into 'out' (starting at out[0]); returns the number written.
-	uint32_t WriteMeshData(MeshData* out) const;
+	// Writes one MeshData per geometry
+	void WriteMeshData(eastl::vector<MeshData>& meshData) const;
 
 	void MarkDirty(DirtyFlags flag);
 

@@ -42,6 +42,19 @@
         #T " size mismatch")
 
 // -----------------------------------------------------
+// Explicit trivial validation
+// -----------------------------------------------------
+#       define VALIDATE_TRIVIAL(T)                                     \
+    static_assert(std::is_standard_layout_v<T>,                        \
+        #T " must be standard layout");                                \
+                                                                       \
+    static_assert(std::is_trivially_copyable_v<T>,                     \
+        #T " must be trivially copyable");                             \
+                                                                       \
+    static_assert(std::is_trivially_destructible_v<T>,                 \
+        #T " must be trivially destructible");                         \
+
+// -----------------------------------------------------
 // Explicit offset validation
 // -----------------------------------------------------
 #       define VALIDATE_OFFSET(T, MEMBER, EXPECTED_OFFSET)              \
@@ -59,6 +72,7 @@
 #       define VALIDATE_CBUFFER(T, EXPECTED_ALIGNMENT)
 #       define VALIDATE_ALIGNMENT(T, EXPECTED_ALIGNMENT)
 #       define VALIDATE_SIZE(T, EXPECTED_SIZE)
+#       define VALIDATE_TRIVIAL(T)
 #       define VALIDATE_OFFSET(T, MEMBER, EXPECTED_OFFSET)
 
 #   endif

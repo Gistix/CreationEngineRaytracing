@@ -35,5 +35,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
         return MaterialOffsetComp * 4;
     }
 };
+VALIDATE_TRIVIAL(MeshData);
 VALIDATE_ALIGNMENT(MeshData, 4);
+
 #endif
