@@ -32,7 +32,7 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
         if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
         {
             if (ConsiderTransparentMaterial(
-                rayQuery.CandidateInstanceIndex(),
+                rayQuery.CandidateInstanceID(),
                 rayQuery.CandidateGeometryIndex(),
                 rayQuery.CandidatePrimitiveIndex(),   
                 rayQuery.CandidateTriangleBarycentrics(),
@@ -49,7 +49,7 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
             rayQuery.CommittedRayT(),
             rayQuery.CommittedPrimitiveIndex(),
             rayQuery.CommittedTriangleBarycentrics(),
-            rayQuery.CommittedInstanceIndex(),
+            rayQuery.CommittedInstanceID(),
             rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
@@ -75,7 +75,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
         if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
         {
             if (ConsiderTransparentMaterial(
-                rayQuery.CandidateInstanceIndex(),
+                rayQuery.CandidateInstanceID(),
                 rayQuery.CandidateGeometryIndex(),
                 rayQuery.CandidatePrimitiveIndex(),   
                 rayQuery.CandidateTriangleBarycentrics(),
@@ -92,7 +92,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
             rayQuery.CommittedRayT(),
             rayQuery.CommittedPrimitiveIndex(),
             rayQuery.CommittedTriangleBarycentrics(),
-            rayQuery.CommittedInstanceIndex(),
+            rayQuery.CommittedInstanceID(),
             rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
@@ -131,7 +131,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
         if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
         {
             if (ConsiderTransparentMaterialShadow(
-                rayQuery.CandidateInstanceIndex(),
+                rayQuery.CandidateInstanceID(),
                 rayQuery.CandidateGeometryIndex(),
                 rayQuery.CandidatePrimitiveIndex(),   
                 rayQuery.CandidateTriangleBarycentrics(),
@@ -182,7 +182,7 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
         if (rayQuery.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE)
         {
             if (ConsiderTransparentMaterial(
-                rayQuery.CandidateInstanceIndex(),
+                rayQuery.CandidateInstanceID(),
                 rayQuery.CandidateGeometryIndex(),
                 rayQuery.CandidatePrimitiveIndex(),   
                 rayQuery.CandidateTriangleBarycentrics(),
@@ -199,7 +199,7 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
             rayQuery.CommittedRayT(),
             rayQuery.CommittedPrimitiveIndex(),
             rayQuery.CommittedTriangleBarycentrics(),
-            rayQuery.CommittedInstanceIndex(),
+            rayQuery.CommittedInstanceID(),
             rayQuery.CommittedGeometryIndex());    
        
     }

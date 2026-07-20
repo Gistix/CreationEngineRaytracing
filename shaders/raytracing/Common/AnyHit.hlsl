@@ -6,7 +6,7 @@
 void Main(inout Payload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
     if (!ConsiderTransparentMaterial(
-                InstanceIndex(),
+                InstanceID(),
                 GeometryIndex(),
                 PrimitiveIndex(),
                 attribs.barycentrics,
