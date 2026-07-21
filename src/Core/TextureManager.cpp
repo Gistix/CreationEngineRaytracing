@@ -109,6 +109,11 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 			return refIt->second->descriptorHandle;
 	}
 
+	// OpenSharedHandle returns an owned COM reference. Keep it in a com_ptr until
+	// the NVRHI wrapper takes its own reference, otherwise the opened reference
+	// outlives the TextureReference cache entry.
+	winrt::com_ptr<ID3D12Resource> openedSharedResource;
+
 	// Share texture from DX11 to DX12
 	if (shareResource) {
 		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
@@ -134,13 +139,14 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 
 		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
 
-		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(&d3d12Resource));
+		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(openedSharedResource.put()));
 
 		if (FAILED(hr)) {
 			logger::error("TextureManager::GetDescriptor - Failed to open shared handle.");
 			return nullptr;
 		}
 
+		d3d12Resource = openedSharedResource.get();
 		if (!d3d12Resource) {
 			logger::error("TextureManager::GetDescriptor - Failed to acquire DX12 texture.");
 			return nullptr;
