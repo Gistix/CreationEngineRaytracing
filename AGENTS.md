@@ -29,7 +29,7 @@ DirtyFlags: Visibility, Transform, Vertex, Skin, Mesh
 
 | Class | Purpose |
 |---|---|
-| `BaseMesh` | Root: owns `m_Material` (shared_ptr<MaterialBase>), `m_Cluster` back-pointer, `m_LocalTransform`/`m_PrevLocalTransform` (relative to owning BLASCluster). Static factory `Create()` dispatches by rendererData/skin/type. |
+| `BaseMesh` | Root: owns `m_Material` (shared_ptr<MaterialBase>), `m_Cluster` back-pointer. Local transform computed on GPU via `Pass::TransformComposition` from world transform input + instance inverse. Static factory `Create()` dispatches by rendererData/skin/type. |
 | `DirectMesh` | Static (non-skinned) geometry. One index/vertex buffer, one geometry desc. Native engine vertex buffer. |
 | `LandLODMesh` | Terrain LOD4 meshes (inherits DirectMesh). Creates live GPU-owned vertex buffer, repoints RT vertex descriptor. `UpdateOcclusion()` computes LandLODUpdate for occluder pass. |
 | `SkinnedMesh` | GPU-skinned geometry. Per-mesh vertex buffer, per-partition index buffers + geometry descs. `m_LiveVertexBuffer` (BLAS source), `m_PrevPositionBuffer`, `m_BoneWorlds`/`m_SkinToBones`. Delegates to `Pass::Skinning`. |
@@ -59,7 +59,7 @@ class BLASCluster {
 **Lifecycle:**
 - `SceneGraph::GetOrCreateCluster(owner, bsTriShape)` — creates or looks up cluster per owner.
 - `AddMember(mesh)` / `RemoveMember(mesh)` — sets mesh's back-pointer.
-- `Update(meshData, instanceData)` — writes `MeshData`/`InstanceData` to GPU buffers. Segmented path: writes one entry per visible segment from the `SubIndexMesh`'s pre-built segment data.
+- `Update(meshData, instanceData)` — writes `MeshData`/`InstanceData` to GPU buffers. No longer computes inverse transform or calls `mesh->UpdateLocalTransform()` — local transforms are now GPU-computed by `Pass::TransformComposition`. Segmented path: writes one entry per visible segment from the `SubIndexMesh`'s pre-built segment data.
 - `BuildUpdate(commandList, sceneGraph)` — decides rebuild vs refit vs maintenance rebuild. Segmented path: builds one BLAS per visible segment.
 - `MakeInstanceDescs(out)` → pushes one `InstanceDesc` per BLAS in `m_BLAS` (1 for normal clusters, N for segmented).
 - `GetInstanceCount()` → returns 1 for normal clusters, `m_SegmentCount` for segmented.
@@ -81,6 +81,52 @@ class BLASCluster {
 **Constants** (`src/Constants.h`):
 - `MAX_BLAS_UPDATES_BEFORE_MAINTENANCE = 256`
 - `MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME = 8`
+
+### TransformManager (`src/Core/TransformManager.h/.cpp`)
+
+GPU transform composition replaces CPU `m_LocalTransform` storage. Each `BaseMesh` uploads its **world** transform (from `BSTriShape->world`) to the TransformManager every frame. `Pass::TransformComposition` then computes `Local = Inverse(Instance) * MeshWorld` on the GPU.
+
+```
+TransformManager (owned by SceneGraph)
+  ├── m_TransformSlots (ResourceSlotManager — allocation + CPU mirror)
+  ├── m_PrevTransformSlots (DirtyRangeTracker — CPU mirror only, no allocation)
+  ├── m_CurrentBuffer (GPU SRV, float3x4 stride — mesh world transforms)
+  ├── m_PrevBuffer (GPU SRV, float3x4 stride — mesh previous world transforms)
+  └── m_Buffer (GPU UAV, TransformData stride — output local transforms, used by BLAS)
+```
+
+**Slot allocation:** `AllocateTransformIndex()` allocates in `m_TransformSlots` only. `m_PrevTransformSlots` is a `DirtyRangeTracker` (no free-list) — writes to it simply track dirty ranges without allocation.
+
+**Flush** (`Flush()`):
+1. `m_TransformSlots.ConsumeDirtyRanges()` → upload to `m_CurrentBuffer` at slot offset
+2. `m_PrevTransformSlots.ConsumeDirtyRanges()` → upload to `m_PrevBuffer` at slot offset
+
+Both mirrors write at 1:1 byte offset (no interleaving). The output `m_Buffer` is populated entirely by the `TransformComposition` compute shader.
+
+### DirtyRangeTracker (`src/Core/DirtyRangeTracker.h`)
+
+Extracted from `ResourceSlotManager` as a standalone CPU-mirror-with-dirty-tracking base. `ResourceSlotManager` (allocation + free-list) now inherits from it.
+
+`ConsumeDirtyRanges()` sorts and merges adjacent/overlapping ranges before returning, reducing the number of `writeBuffer` calls when consecutive slots are dirtied.
+
+### Pass::TransformComposition (`src/Pass/Raytracing/Common/TransformComposition.cpp/.h`)
+
+Compute shader that runs each frame before `SceneTLAS`. Dispatched with one thread per visible mesh (`numMeshes / 64` thread groups).
+
+**Inputs** (binding):
+- `MeshesData` (t0) — `StructuredBuffer<Mesh>`
+- `InstancesData` (t1) — `StructuredBuffer<Instance>`
+- `CurrentTransforms` (t2) — `StructuredBuffer<RowMajorFloat3x4>` (mesh world, indexed by `mesh.TransformID`)
+- `PrevTransforms` (t3) — `StructuredBuffer<RowMajorFloat3x4>` (mesh prev world)
+
+**Output** (u0):
+- `TransformsOut` — `RWStructuredBuffer<Transform>` (local transforms, written at `mesh.TransformID`)
+
+**Shader** (`shaders/TransformComposition.hlsl`):
+```hlsl
+float4x4 localMat = mul(InverseAffine(ToFloat4x4(instance.Transform)), ToFloat4x4(transform));
+```
+Uses `InverseAffine()` — a cheap 3×3 cross-product inverse optimized for affine transforms, rather than general 4×4 cofactor expansion.
 
 ### InstanceMask (`src/Types/InstanceMask.h`)
 ```cpp
@@ -134,8 +180,10 @@ Lighting=0, Effect=1, Grass=2, Water=3, BloodSplatter=4, DistantTree=5, Particle
 **Key interop files:**
 - `interop/Material/MaterialBaseData.hlsli` — base HLSL struct
 - `interop/Material/Skyrim/*.hlsli` — per-type HLSL data structs
-- `interop/Mesh.hlsli` — `MeshData` struct with `MaterialOffsetComp` (compressed byte offset into material buffer)
+- `interop/Mesh.hlsli` — `MeshData` struct with `MaterialOffsetComp` (compressed byte offset into material buffer), `TransformID` (uint16_t), `InstanceID` (uint16_t)
 - `interop/Instance.hlsli` — `InstanceData` with `FirstGeometryID`, `NumGeometry`, `InstanceLightData`
+- `interop/Transform.hlsli` — `TransformData` struct (Transform + PrevTransform as float3x4 pair)
+- `interop/RowMajorFloat3x4.hlsli` — Wraps a float3x4 with row-major qualifier for non-interleaved buffers
 
 **HLSL material reading** (`shaders/include/SurfaceMaker.hlsli`):
 ```hlsl
@@ -153,7 +201,7 @@ Central scene management class. Per-frame traversal + mesh/cluster/material upda
 - `m_DirectMeshes` (BSTriShape → BaseMesh map)
 - `m_OwnerClusters` (TESObjectREFR → BLASCluster)
 - `m_OrphanClusters` (BSTriShape → BLASCluster)
-- `m_MaterialManager`, `m_TextureManager`
+- `m_MaterialManager`, `m_TextureManager` (thread-safe texture release via `m_ReleaseMutex`)`
 - `m_MeshData` / `m_InstanceData` (GPU ring buffers)
 - `m_TriangleDescriptors`, `m_VertexDescriptors`, `m_SkinningDescriptors`, `m_DynamicVertexDescriptors` (BindlessTableManager)
 
@@ -170,6 +218,7 @@ Central scene management class. Per-frame traversal + mesh/cluster/material upda
       │           └── ...
       ├── Hide stale meshes, drop empty clusters
       ├── Flush material manager
+      ├── Flush TransformManager (upload mesh world + prev-world)
       └── Write m_MeshData / m_InstanceData buffers
 
 
@@ -246,24 +295,9 @@ struct BufferDescriptor {
 ```
 Note: `CreateIndexBuffer`/`CreateVertexBuffer` read `ByteWidth` from the D3D11 `ID3D11Buffer::GetDesc()` and pass it to NVRHI's `BufferDesc::setByteSize()`. The D3D12 resource's `GetDesc().Width` from `OpenSharedHandle` is unreliable and used only for diagnostic comparison.
 
-### Key Constants (`src/Constants.h`)
-| Constant | Value | Purpose |
-|---|---|---|
-| `MAX_FRAMES_IN_FLIGHT` | 2 | Double buffering |
-| `PLAYER_REFR_FORMID` | 0x00000014 | Player reference |
-| `LIGHTS_MAX` | 256 | Max active lights |
-| `INSTANCE_LIGHTS_MAX` | 32 | Max lights per instance |
-| `NUM_MESHES_MIN` | 1024 | Initial mesh buffer capacity |
-| `NUM_MESHES_MAX` | 16,384 | Max meshes |
-| `NUM_INSTANCES_MAX` | 262,144 | Max instances |
-| `NUM_MATERIALS_MIN/STEP/THRESHOLD` | 1024/512/256 | Material buffer sizing |
-| `NUM_TEXTURES_MIN/MAX` | 512/8192 | Texture capacity |
-| `NUM_CUBEMAPS_MAX` | 256 | Cube map capacity |
-| `TLAS_INSTANCES_MIN/STEP` | 2048/512 | TLAS sizing |
-| `MAX_BLAS_UPDATES_BEFORE_MAINTENANCE` | 256 | Force rebuild threshold |
-| `MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME` | 8 | Per-frame rebuild cap |
-| `PT_DISPATCH_THREADS` | 8 | PT thread group size |
-| `GI_DISPATCH_THREADS` | 16 | GI thread group size |
+### Key Constants
+
+See `src/Constants.h`.
 
 ## Render Graph Architecture
 
@@ -286,17 +320,17 @@ RootRenderNode  (RenderGraph)
 
 **PathTracing mode** (`Scene::GetPathTracing()`):
 ```
-Skinning → LandLODOccluder → SceneTLAS → SHaRC → PathTracing → ReSTIRGI → NRD Reblur → PTComposite → Accumulation
+Skinning → LandLODOccluder → TransformComposition → SceneTLAS → SHaRC → PathTracing → ReSTIRGI → NRD Reblur → PTComposite → Accumulation
 ```
 
 **GlobalIllumination mode** (`Scene::GetGlobalIllumination()`):
 ```
-Skinning → LandLODOccluder → SceneTLAS → FaceNormals → SHaRCGI → GlobalIllumination → NRD Reblur → GIComposite
+Skinning → LandLODOccluder → TransformComposition → SceneTLAS → FaceNormals → SHaRCGI → GlobalIllumination → NRD Reblur → GIComposite
 ```
 
 **Debug mode** (`Scene::GetDebug()`):
 ```
-Skinning → SceneTLAS → Debug
+Skinning → TransformComposition → SceneTLAS → Debug
 ```
 
 ### Per-Pass Pipeline Files (C++)
@@ -309,6 +343,7 @@ Skinning → SceneTLAS → Debug
 | `Pass::Debug` | `src/Pass/Raytracing/Debug.cpp` | Both | Debug visualization |
 | `Pass::Raytracing::ReSTIRGIPass` | `src/Pass/Raytracing/ReSTIRGIPass.cpp` | Compute only | ReSTIR GI resampling (4 sub-passes) |
 | `Pass::Skinning` | `src/Pass/Raytracing/Common/Skinning.cpp` | N/A | Two-pass GPU skinning (bone compute + vertex skin) |
+| `Pass::TransformComposition` | `src/Pass/Raytracing/Common/TransformComposition.cpp` | N/A | GPU local transform composition |
 | `Pass::SceneTLAS` | `src/Pass/Raytracing/Common/SceneTLAS.cpp` | N/A | Builds TLAS from BLASCluster descs |
 | `Pass::LightTLAS` | `src/Pass/Raytracing/Common/LightTLAS.cpp` | N/A | Per-light TLAS for shadow rays |
 | `Pass::LandLODOccluder` | `src/Pass/Raytracing/Common/LandLODOccluder.cpp` | N/A | Land LOD vertex data for TLAS |
@@ -535,7 +570,7 @@ GetVertices(meshIdx, primIdx, ...) → v0, v1, v2 (from Vertices[] or DynamicPos
 GetMaterial(meshIdx) → Materials[0].Load<ConcreteType>(mesh.GetMaterialOffset())
 ```
 
-`MeshData` includes: `VertexID`, `IndexID`, `DynamicID`, `MaterialOffsetComp`, `Type`, `VertexDesc`, `Properties`.
+`MeshData` includes: `VertexID`, `IndexID`, `DynamicID`, `MaterialOffsetComp`, `Type`, `VertexDesc`, `Properties`, `TransformID` (uint16_t), `InstanceID` (uint16_t).
 Dynamic mesh positions read from `DynamicPositions[mesh.DynamicID]` (float4 stride, RGB32_FLOAT).
 
 ### Ray Dispatch Flow (`shaders/raytracing/include/Rays.hlsli`)
@@ -678,7 +713,7 @@ Returns `false` when hit's attenuation was factored into `transmitanceInOut`. Wa
 2. `GetMesh(payload)` → triple geometry lookup chain
 3. `GetVertices()` → v0/v1/v2 with optional prev-positions
 4. Computes barycentrics, interpolates texcoord
-5. `objectToWorld3x3 = mul(instance.Transform, mesh.Transform)`
+5. `objectToWorld3x3 = mul(instance.Transform, mesh.Transform)` where `mesh.Transform` is read from `Transforms[mesh.TransformID]` (the GPU-composed local transform)
 6. **SIA**: `SIA_SafeSpawnPointSimple()` for precise position/face normal/offset
 7. **Non-SIA**: estimates `PositionError` from vertex magnitudes
 8. Previous world position for motion vectors
@@ -738,6 +773,14 @@ enum LobeType : uint {
 
 - **`getLinearDepth()`** — reconstructs linear depth from clip-space depth using camera projection parameters.
 - **`IsInside(viewDepth, instanceCenter, instanceRadius)`** — conservative frustum culling test: transforms instance bounding sphere center into clip space, then checks whether the view-space Z-range (±radius) overlaps current pixel's depth. Used inside the PathTracing ray-gen to skip NEE for lights whose bounding sphere does not overlap the pixel.
+
+### Bone Compute (`shaders/BoneCompute.hlsl`)
+
+Compute shader that transforms bones for GPU skinning. Reads `BoneWorlds` (NiTransformPacked), `SkinToBones` (NiTransformPacked), and `MeshHeaders` (with packed GeometryInverse). Outputs `RowMajorFloat3x4` bone matrices. Uses manual 3×4 affine multiplication (`MulAffine`).
+
+### Skinning (`shaders/Skinning.hlsl`)
+
+Compute shader for vertex skinning. Input: `RowMajorFloat3x4` bone matrices, bindless `OriginalVertices[]`, `DynamicVertices[]`. Output: bindless `OutputVertices[]`, `PrevPositions[]`, `DynamicVerticesOut[]`. Extracts normalized rotation for normal/tangent/bitangent skinning. Supports inline skinning (4 weights + 4 bone IDs), model-space normals (MSN) with quaternion export, and dynamic mesh motion vectors (prev-position ring buffer).
 
 ## Shader Utility Functions
 
