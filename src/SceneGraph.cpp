@@ -604,7 +604,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// Phase E: Material flush
 	m_MaterialManager->Flush(commandList);
 
-	// Drop clusters whose meshes were all destroyed this frame.
+	// Phase F: Drop clusters whose meshes were all destroyed this frame.
 	auto removeEmptyClusters = [this](auto& clusters) {
 		for (auto it = clusters.begin(); it != clusters.end(); ) {
 			if (it->second->Empty()) {
@@ -619,7 +619,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	removeEmptyClusters(m_OrphanClusters);
 	removeEmptyClusters(m_SubIndexSegmentClusters);
 
-	// Phase F (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
+	// Phase G (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
 	{
 		m_AllClusters.clear();
 		m_AllClusters.reserve(
@@ -766,14 +766,26 @@ BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriS
 
 BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner)
 {
-	auto it = m_SubIndexSegmentClusters.find(segment);
-	if (it != m_SubIndexSegmentClusters.end())
-		return it->second.get();
+	{
+		std::shared_lock lock(m_SegmentClusterMutex);
 
-	auto cluster = eastl::make_unique<BLASCluster>(owner);
-	auto* rawCluster = cluster.get();
-	m_SubIndexSegmentClusters.emplace(segment, eastl::move(cluster));
-	return rawCluster;
+		auto it = m_SubIndexSegmentClusters.find(segment);
+		if (it != m_SubIndexSegmentClusters.end())
+			return it->second.get();
+	}
+
+	BLASCluster* result = nullptr;
+	{
+		std::unique_lock lock(m_SegmentClusterMutex);
+
+		auto [it, inserted] = m_SubIndexSegmentClusters.try_emplace(segment, nullptr);
+		if (inserted)
+			it->second = eastl::make_unique<BLASCluster>(owner);
+
+		result = it->second.get();
+	}
+
+	return result;
 }
 
 void SceneGraph::RemoveSegmentCluster(SubIndexSegmentMesh* segment)

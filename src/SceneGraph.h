@@ -102,6 +102,7 @@ class SceneGraph
 
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
+	std::shared_mutex m_SegmentClusterMutex;
 
 	mutable std::mutex m_ClusterDirtyMutex;
 

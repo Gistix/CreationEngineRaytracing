@@ -187,11 +187,12 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 
 	m_IsValid = !m_MeshData.empty();
 	if (m_IsValid) {
-		// TODO: Move this to the GPU - It doesn't scale well on CPU
 		auto scene = Scene::GetSingleton();
 		const bool skipInstanceLights = scene->m_Settings.ExperimentalSettings.GlobalLights;
 		if (!skipInstanceLights) {
 			auto sceneGraph = scene->GetSceneGraph();
+
+			// TODO: Move this to the GPU - It doesn't scale well on CPU
 			UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
 		}
 	}

@@ -288,7 +288,7 @@ bool BaseMesh::IsTwoSided()
 
 bool BaseMesh::IsHidden() const
 {
-	return m_State.any(State::Hidden) || m_State.any(State::SubIndexHidden);
+	return m_State.any(State::Hidden, State::SubIndexHidden);
 }
 
 void BaseMesh::OnDestroy() {
