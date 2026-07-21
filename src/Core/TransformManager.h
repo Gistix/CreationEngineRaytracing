@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/DirtyRangeTracker.h"
 #include "Core/ResourceSlotManager.h"
 #include "Transform.hlsli"
 
@@ -26,7 +27,7 @@ private:
 
 	// Two CPU mirrors for mesh world transforms
 	ResourceSlotManager m_TransformSlots;       // slot = float3x4 (48 bytes)
-	ResourceSlotManager m_PrevTransformSlots;   // slot = float3x4 (48 bytes)
+	DirtyRangeTracker m_PrevTransformSlots;     // slot = float3x4 (48 bytes)
 
 	// Single combined GPU buffer (TransformData = 2x float3x4 = 96 bytes per slot)
 	nvrhi::BufferHandle m_Buffer;

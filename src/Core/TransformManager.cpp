@@ -4,7 +4,7 @@
 
 TransformManager::TransformManager()
 	: m_TransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX)
-	, m_PrevTransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX)
+	, m_PrevTransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX)
 {
 	CreateBuffer();
 }
@@ -38,16 +38,13 @@ void TransformManager::CreateBuffer()
 
 uint32_t TransformManager::AllocateTransformIndex()
 {
-	// Allocate in all four mirrors (same index)
 	uint64_t offset = m_TransformSlots.Allocate();
-	m_PrevTransformSlots.Allocate();
 	return m_TransformSlots.GetIndexFromOffset(offset);
 }
 
 void TransformManager::ReleaseTransformIndex(uint32_t index)
 {
 	m_TransformSlots.Release(index * sizeof(float3x4));
-	m_PrevTransformSlots.Release(index * sizeof(float3x4));
 }
 
 void TransformManager::WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform)
