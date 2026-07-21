@@ -26,6 +26,8 @@ struct TextureManager
 		CubeMap
 	};
 
+	std::mutex m_ReleaseMutex;
+
 	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
 
 	eastl::unique_ptr<BindlessTableManager> m_TextureDescriptors;

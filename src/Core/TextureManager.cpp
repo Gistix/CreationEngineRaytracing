@@ -58,6 +58,8 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 	if (!texture)
 		return;
 
+	std::scoped_lock lock(m_ReleaseMutex);
+
 	IUnknown* key = nullptr;
 
 #if defined(SKYRIM)
