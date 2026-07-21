@@ -1,5 +1,6 @@
 #pragma once
 
+#include <eastl/sort.h>
 #include <eastl/vector.h>
 #include <mutex>
 
@@ -58,8 +59,33 @@ public:
 	eastl::vector<eastl::pair<OffsetType, OffsetType>> ConsumeDirtyRanges()
 	{
 		std::scoped_lock lock(m_Mutex);
+
+		if (m_DirtyRanges.empty())
+			return {};
+
 		eastl::vector<eastl::pair<OffsetType, OffsetType>> ranges;
 		ranges.swap(m_DirtyRanges);
+
+		// Sort by offset, then merge adjacent/overlapping ranges
+		eastl::sort(ranges.begin(), ranges.end(),
+			[](const auto& a, const auto& b) { return a.first < b.first; });
+
+		size_t dst = 0;
+		for (size_t src = 1; src < ranges.size(); ++src) {
+			auto& last = ranges[dst];
+			const auto& cur = ranges[src];
+			OffsetType lastEnd = last.first + last.second;
+			if (cur.first <= lastEnd) {
+				OffsetType newEnd = cur.first + cur.second > lastEnd ? cur.first + cur.second : lastEnd;
+				last.second = newEnd - last.first;
+			} else {
+				++dst;
+				if (dst != src)
+					ranges[dst] = cur;
+			}
+		}
+		ranges.resize(dst + 1);
+
 		return ranges;
 	}
 

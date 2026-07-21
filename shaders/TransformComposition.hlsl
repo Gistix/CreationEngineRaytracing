@@ -1,6 +1,7 @@
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
+#include "interop/RowMajorFloat3x4.hlsli"
 
 float4x4 ToFloat4x4(float3x4 m)
 {
@@ -36,7 +37,7 @@ float3x3 Inverse3x3(float3x3 m)
 // Inverts a 4x4 affine transform (rotation/scale/shear + translation,
 // bottom row assumed to be (0,0,0,1)) far more cheaply than the general
 // 4x4 cofactor expansion.
-row_major float4x4 InverseAffine(row_major float4x4 m)
+float4x4 InverseAffine(row_major float4x4 m)
 {
     float3x3 R = float3x3(
         m[0].xyz,
@@ -49,7 +50,7 @@ row_major float4x4 InverseAffine(row_major float4x4 m)
     float3 t = float3(m[0].w, m[1].w, m[2].w);
     float3 tInv = -mul(Rinv, t);
 
-    row_major float4x4 result;
+    float4x4 result;
     result[0] = float4(Rinv[0], tInv.x);
     result[1] = float4(Rinv[1], tInv.y);
     result[2] = float4(Rinv[2], tInv.z);
@@ -57,10 +58,11 @@ row_major float4x4 InverseAffine(row_major float4x4 m)
     return result;
 }
 
-StructuredBuffer<Mesh>        Meshes        : register(t0);
-StructuredBuffer<Instance>    Instances     : register(t1);
-StructuredBuffer<Transform>   Transforms    : register(t2);
-RWStructuredBuffer<Transform> TransformsOut : register(u0);
+StructuredBuffer<Mesh>        Meshes          : register(t0);
+StructuredBuffer<Instance>    Instances       : register(t1);
+StructuredBuffer<RowMajorFloat3x4> CurrentTransforms : register(t2);
+StructuredBuffer<RowMajorFloat3x4> PrevTransforms : register(t3);
+RWStructuredBuffer<Transform> TransformsOut    : register(u0);
 
 [numthreads(64, 1, 1)]
 void Main(uint3 DTid : SV_DispatchThreadID)
@@ -69,10 +71,12 @@ void Main(uint3 DTid : SV_DispatchThreadID)
 
     Mesh mesh = Meshes[meshIdx];
     Instance instance = Instances[mesh.InstanceID];
-    Transform world = Transforms[mesh.TransformID];
 
-    float4x4 localMat = mul(InverseAffine(ToFloat4x4(instance.Transform)), ToFloat4x4(world.Transform));
-    float4x4 prevLocalMat = mul(InverseAffine(ToFloat4x4(instance.PrevTransform)), ToFloat4x4(world.PrevTransform));
+    float3x4 transform = CurrentTransforms[mesh.TransformID].Value;
+    float3x4 prevTransform = PrevTransforms[mesh.TransformID].Value;
+
+    float4x4 localMat = mul(InverseAffine(ToFloat4x4(instance.Transform)), ToFloat4x4(transform));
+    float4x4 prevLocalMat = mul(InverseAffine(ToFloat4x4(instance.PrevTransform)), ToFloat4x4(prevTransform));
 
     Transform local;
     local.Transform = float3x4(

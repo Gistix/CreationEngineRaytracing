@@ -20,7 +20,8 @@ namespace Pass
 		desc.bindings = {
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0), // MeshesData
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1), // InstancesData
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2), // MeshWorlds
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2), // CurrentTransforms
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // PrevTransforms
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0)  // TransformsOut
 		};
 
@@ -59,7 +60,8 @@ namespace Pass
 		desc.bindings = {
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, transformManager->GetMeshWorldBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, transformManager->GetCurrentBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, transformManager->GetPrevBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, transformManager->GetBuffer())
 		};
 

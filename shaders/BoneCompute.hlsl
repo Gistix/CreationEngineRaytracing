@@ -1,10 +1,10 @@
-#include "Interop/BoneMatrix.hlsli"
+#include "Interop/RowMajorFloat3x4.hlsli"
 #include "Interop/BoneTransform.hlsli"
 
 StructuredBuffer<NiTransformPacked> BoneWorlds       : register(t0);
 StructuredBuffer<NiTransformPacked> SkinToBones      : register(t1);
 StructuredBuffer<MeshBoneHeader> MeshHeaders         : register(t2);
-RWStructuredBuffer<BoneMatrix> BoneMatricesOut       : register(u0);
+RWStructuredBuffer<RowMajorFloat3x4> BoneMatricesOut       : register(u0);
 
 float3x4 NiToAffine(NiTransformPacked t)
 {
@@ -53,5 +53,5 @@ void Main(uint3 DTid : SV_DispatchThreadID)
 
 	float3x4 m = MulAffine(MulAffine(geomInv, boneWorld), skinToBone);
 
-	BoneMatricesOut[header.BoneWorldOffset + globalBoneIndex].World = m;
+	BoneMatricesOut[header.BoneWorldOffset + globalBoneIndex].Value = m;
 }

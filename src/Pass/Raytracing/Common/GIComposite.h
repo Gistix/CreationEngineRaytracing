@@ -9,7 +9,7 @@
 #include "Util.h"
 
 #include "Interop/VertexUpdate.hlsli"
-#include "Interop/BoneMatrix.hlsli"
+#include "Interop/RowMajorFloat3x4.hlsli"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
 

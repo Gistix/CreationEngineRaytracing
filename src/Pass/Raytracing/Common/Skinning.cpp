@@ -16,7 +16,7 @@ namespace Pass
 		m_MeshBoneHeaderBuffer = Util::CreateStructuredRingBuffer<MeshBoneHeader>(device, MAX_GEOMETRY, "Mesh Bone Header Buffer");
 
 		m_VertexUpdateBuffer = Util::CreateStructuredRingBuffer<VertexUpdateData>(device, MAX_GEOMETRY, "Vertex Update Buffer");
-		m_BoneMatrixBuffer = Util::CreateStructuredRingBuffer<BoneMatrix>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer", true);
+		m_BoneMatrixBuffer = Util::CreateStructuredRingBuffer<RowMajorFloat3x4>(device, MAX_BONE_MATRICES, "Bone Matrix Buffer", true);
 
 		CreateBoneBindingLayout();
 		CreateBindingLayout();

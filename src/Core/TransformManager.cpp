@@ -13,27 +13,23 @@ void TransformManager::CreateBuffer()
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	// Combined buffer: each slot holds a TransformData (Transform + PrevTransform = 2x float3x4)
-	// UAV-capable for TransformComposition compute shader; also used as SRV for BLAS builds.
-	auto bufferDesc = nvrhi::BufferDesc()
+	auto inputDesc = nvrhi::BufferDesc()
+		.setByteSize(Constants::NUM_MESHES_MAX * sizeof(float3x4))
+		.setStructStride(sizeof(float3x4))
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setCanHaveUAVs(false);
+
+	m_CurrentBuffer = device->createBuffer(inputDesc.setDebugName("Current Transform Buffer"));
+	m_PrevBuffer = device->createBuffer(inputDesc.setDebugName("Prev Transform Buffer"));
+
+	auto outDesc = nvrhi::BufferDesc()
 		.setByteSize(Constants::NUM_MESHES_MAX * sizeof(TransformData))
 		.setStructStride(sizeof(TransformData))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setCanHaveUAVs(true)
 		.setDebugName("Transform Buffer");
 
-	m_Buffer = device->createBuffer(bufferDesc);
-
-	// Mesh world buffer: same layout as TransformData (current + prev = 2x float3x4)
-	// SRV-only, read by TransformComposition compute shader.
-	auto meshBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(Constants::NUM_MESHES_MAX * sizeof(TransformData))
-		.setStructStride(sizeof(TransformData))
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
-		.setCanHaveUAVs(false)
-		.setDebugName("Mesh World Buffer");
-
-	m_MeshWorldBuffer = device->createBuffer(meshBufferDesc);
+	m_Buffer = device->createBuffer(outDesc);
 }
 
 uint32_t TransformManager::AllocateTransformIndex()
@@ -55,28 +51,17 @@ void TransformManager::WriteTransformData(uint32_t index, const float3x4& transf
 
 void TransformManager::Flush(nvrhi::ICommandList* commandList)
 {
-	static constexpr uint32_t kTransformSize = sizeof(float3x4);
-	static constexpr uint32_t kSlotSize = sizeof(TransformData); // 2 * float3x4
-
-	// Flush mesh world transforms — map from 48-byte mirror to first half of each GPU slot
 	{
 		auto dirtyRanges = m_TransformSlots.ConsumeDirtyRanges();
 		const uint8_t* mirror = static_cast<const uint8_t*>(m_TransformSlots.GetMirror());
-		for (const auto& [offset, size] : dirtyRanges) {
-			const uint64_t slotIndex = offset / kTransformSize;
-			const uint64_t gpuOffset = slotIndex * kSlotSize;
-			commandList->writeBuffer(m_MeshWorldBuffer, mirror + offset, size, gpuOffset);
-		}
+		for (const auto& [offset, size] : dirtyRanges)
+			commandList->writeBuffer(m_CurrentBuffer, mirror + offset, size, offset);
 	}
 
-	// Flush mesh previous world transforms — map from 48-byte mirror to second half of each GPU slot
 	{
 		auto dirtyRanges = m_PrevTransformSlots.ConsumeDirtyRanges();
 		const uint8_t* mirror = static_cast<const uint8_t*>(m_PrevTransformSlots.GetMirror());
-		for (const auto& [offset, size] : dirtyRanges) {
-			const uint64_t slotIndex = offset / kTransformSize;
-			const uint64_t gpuOffset = slotIndex * kSlotSize + kTransformSize;
-			commandList->writeBuffer(m_MeshWorldBuffer, mirror + offset, size, gpuOffset);
-		}
+		for (const auto& [offset, size] : dirtyRanges)
+			commandList->writeBuffer(m_PrevBuffer, mirror + offset, size, offset);
 	}
 }
