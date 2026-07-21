@@ -295,8 +295,10 @@ namespace Hooks
 	{
 		static void thunk(void* a1, RE::BSGraphics::Texture* a_texture)
 		{
-			if (a_texture->pad24 == NO_DX12RESOURCE)
+			if (!a_texture || a_texture->pad24 == NO_DX12RESOURCE) {
 				func(a1, a_texture);
+				return;
+			}
 
 			if (InterlockedExchangeAdd(&a_texture->refCount, 0xFFFFFFFF) == 1)
 			{
@@ -380,10 +382,14 @@ namespace Hooks
 			texture->format = defaultTexture->format;
 			texture->mips = defaultTexture->mips;
 			texture->unk1E = defaultTexture->unk1E;
-			texture->refCount = defaultTexture->refCount;
+			texture->refCount = 1;
 
-			defaultTexture->texture->AddRef();
-			defaultTexture->resourceView->AddRef();
+			if (defaultTexture->texture)
+				defaultTexture->texture->AddRef();
+			if (defaultTexture->resourceView)
+				defaultTexture->resourceView->AddRef();
+			if (defaultTexture->UAV)
+				defaultTexture->UAV->AddRef();
 
 			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
 			texture->pad24 = NATIVE_DX12RESOURCE;
@@ -1049,7 +1055,7 @@ namespace Hooks
 		// Flowmap and Player FaceGen Tint
 		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
 
-		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
+		stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
