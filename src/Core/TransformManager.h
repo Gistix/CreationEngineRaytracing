@@ -19,7 +19,6 @@ public:
 	nvrhi::IBuffer* GetBuffer() const { return m_Buffer; }
 	nvrhi::IBuffer* GetCurrentBuffer() const { return m_CurrentBuffer; }
 	nvrhi::IBuffer* GetPrevBuffer() const { return m_PrevBuffer; }
-	uint32_t GetTransformCount() const { return static_cast<uint32_t>(m_TransformSlots.GetUsedByteSize() / sizeof(float3x4)); }
 
 private:
 	void CreateBuffer();
