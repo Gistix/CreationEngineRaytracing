@@ -18,6 +18,7 @@ namespace Pass
 		nvrhi::BindingLayoutDesc desc;
 		desc.visibility = nvrhi::ShaderType::Compute;
 		desc.bindings = {
+			nvrhi::BindingLayoutItem::PushConstants(0, sizeof(uint32_t)),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0), // MeshesData
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1), // InstancesData
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2), // CurrentTransforms
@@ -58,6 +59,7 @@ namespace Pass
 
 		nvrhi::BindingSetDesc desc;
 		desc.bindings = {
+			nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, transformManager->GetCurrentBuffer()),
@@ -86,6 +88,9 @@ namespace Pass
 		state.pipeline = m_ComputePipeline;
 		state.bindings = { m_BindingSets[currentSlot] };
 		commandList->setComputeState(state);
+
+		const uint32_t pushConstants = numMeshes;
+		commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
 
 		const uint32_t threadGroups = Util::Math::DivideRoundUp(numMeshes, 64u);
 		commandList->dispatch(threadGroups, 1, 1);

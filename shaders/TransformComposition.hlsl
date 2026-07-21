@@ -62,12 +62,22 @@ StructuredBuffer<Mesh>        Meshes          : register(t0);
 StructuredBuffer<Instance>    Instances       : register(t1);
 StructuredBuffer<RowMajorFloat3x4> CurrentTransforms : register(t2);
 StructuredBuffer<RowMajorFloat3x4> PrevTransforms : register(t3);
+struct PushConstants
+{
+    uint NumMeshes;
+};
+
+ConstantBuffer<PushConstants> PC : register(b0);
+
 RWStructuredBuffer<Transform> TransformsOut    : register(u0);
 
 [numthreads(64, 1, 1)]
 void Main(uint3 DTid : SV_DispatchThreadID)
 {
     uint meshIdx = DTid.x;
+
+    if (meshIdx >= PC.NumMeshes)
+        return;
 
     Mesh mesh = Meshes[meshIdx];
     Instance instance = Instances[mesh.InstanceID];
