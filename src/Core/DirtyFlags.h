@@ -7,7 +7,8 @@ enum class DirtyFlags : uint8_t
 	Skin = 1 << 1,
 	Vertex = 1 << 2,
 	Visibility = 1 << 3,
-	Mesh = 1 << 4
+	Mesh = 1 << 4,
+	Alpha = 1 << 5
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(DirtyFlags);

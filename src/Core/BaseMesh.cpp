@@ -199,24 +199,45 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 
 	m_WorldBound = m_BSTriShape->worldBound;
 
-	float3x4 transform;
-	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
+	// Update Transform
+	{
+		float3x4 transform;
+		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
 
-	if (m_NeedsPrevInit)
-		MarkDirty(DirtyFlags::Transform);
-	else if (!Util::Math::MatrixNearEqual(transform, m_Transform))
-		MarkDirty(DirtyFlags::Transform);
-	else if (!Util::Math::MatrixNearEqual(m_Transform, m_PrevTransform))
-		MarkDirty(DirtyFlags::Transform);
+		if (m_NeedsPrevInit)
+			MarkDirty(DirtyFlags::Transform);
+		else if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+			MarkDirty(DirtyFlags::Transform);
+		else if (!Util::Math::MatrixNearEqual(m_Transform, m_PrevTransform))
+			MarkDirty(DirtyFlags::Transform);
 
-	if (m_NeedsPrevInit) {
-		m_PrevTransform = transform;
-		m_NeedsPrevInit = false;
-	} else {
-		m_PrevTransform = m_Transform;
+		if (m_NeedsPrevInit) {
+			m_PrevTransform = transform;
+			m_NeedsPrevInit = false;
+		}
+		else {
+			m_PrevTransform = m_Transform;
+		}
+
+		m_Transform = transform;
 	}
 
-	m_Transform = transform;
+	// Update Geometry Desc opaque flag
+	{
+		const bool prevAlpha = m_Flags.all(Flags::Alpha);
+		const bool alpha = m_Properties.IsAlpha();
+		if (prevAlpha != alpha)
+		{
+			m_Flags.set(alpha, Flags::Alpha);
+
+			for (auto& desc: m_GeometryDescs)
+			{
+				desc.flags = alpha ? nvrhi::rt::GeometryFlags::None : nvrhi::rt::GeometryFlags::Opaque;
+			}
+
+			MarkDirty(DirtyFlags::Alpha);
+		}
+	}
 
 	UpdateMaterial();
 }
@@ -244,6 +265,8 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	geometryDesc.setTransformBuffer(
 		Scene::GetSingleton()->GetSceneGraph()->GetTransformBuffer(),
 		transformIndex * sizeof(TransformData));
+
+	geometryDesc.flags = nvrhi::rt::GeometryFlags::Opaque;
 
 	return geometryDesc;
 }

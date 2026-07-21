@@ -49,7 +49,8 @@ public:
 		None = 0,
 		LandLOD4 = 1 << 0,
 		DismemberSkinInstance = 1 << 1,
-		Eyes = 1 << 2
+		Eyes = 1 << 2,
+		Alpha = 1 << 3
 	};
 
 	virtual ~BaseMesh();

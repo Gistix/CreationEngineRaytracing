@@ -74,6 +74,8 @@ struct Properties
 
 	Properties(RE::BSTriShape* triShape, bool isEye);
 
+	bool IsAlpha() const { return m_Data.AlphaFlags != AlphaFlags::None; }
+
 	auto& GetData() const { return m_Data; }
 private:
 	static uint32_t MapShaderFlags(RE::BSShaderProperty* shaderProperty);
