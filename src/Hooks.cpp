@@ -40,7 +40,10 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
-			return func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+			if (triShape)
+				triShape->ownsDX12Buffers = true;
+			return triShape;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -183,6 +186,10 @@ namespace Hooks
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
 				if (geomData.rendererData) {
 					auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(geomData.rendererData);
+					if (triShapeDX12->vertexBufferDX12) {
+						triShapeDX12->vertexBufferDX12->Release();
+						triShapeDX12->vertexBufferDX12 = nullptr;
+					}
 					Util::CreateSharedBuffer(triShapeDX12->vertexBuffer, &triShapeDX12->vertexBufferDX12);
 				}
 			}
@@ -242,7 +249,7 @@ namespace Hooks
 				if (a_triShape->rawIndexData)
 					mm->Deallocate(a_triShape->rawIndexData, false);
 
-				if (a_triShape->pad1C == 1) {
+				if (static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->ownsDX12Buffers) {
 					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape);
 
 					if (triShapeDX12->indexBufferDX12)
