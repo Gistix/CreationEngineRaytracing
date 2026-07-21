@@ -161,13 +161,11 @@ public:
 	inline const auto& GetDirtyClusters() { return m_DirtyClusters; }
 	inline const auto& GetAllClusters() { return m_AllClusters; }
 	
-	// Per-segment cluster helpers. Called by SubIndexMesh when it creates/destroys a
-	// SubIndexSegmentMesh child. The segment is the unique key into m_SubIndexSegmentClusters.
+	// Per-segment cluster helper, called by SubIndexMesh when it creates a SubIndexSegmentMesh child
+	// The segment is the unique key into m_SubIndexSegmentClusters
 	BLASCluster* GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner);
-	void RemoveSegmentCluster(SubIndexSegmentMesh* segment);
-	
-	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 
+	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 	void BuildClusters(nvrhi::ICommandList* commandList);
 
 	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }

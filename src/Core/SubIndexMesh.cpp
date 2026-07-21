@@ -60,6 +60,8 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 	m_VertexDescriptor = sceneGraph->GetVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, m_VertexBuffer));
 
 	AllocateTransformIndex();
+
+	CreateMaterial();
 }
 
 void SubIndexMesh::SetHidden(bool hidden)
@@ -90,8 +92,11 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	// segments. Must run before the visibility loop so MarkDirty(Visibility) set by
 	// SetSubIndexHidden survives to Phase E2.
 	for (auto& seg : m_Segments) {
-		seg->SyncFrom(*this);
+		seg->SyncFrom(this);
 	}
+
+	eastl::unordered_set<uint64_t> visitedKeys;
+	visitedKeys.reserve(runtimeData.numSegments);
 
 	for (size_t i = 0; i < runtimeData.numSegments; i++) {
 		const auto& segment = runtimeData.segmentData[i];
@@ -114,6 +119,8 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 		const bool visible = bypassVisibility || (flags != 0u);
 
 		const uint64_t key = MakeSegmentKey(start, numTris);
+		visitedKeys.insert(key);
+
 		auto it = m_SegmentMap.find(key);
 		if (it == m_SegmentMap.end()) {
 			// New segment: create only if currently visible. Hidden segments
@@ -125,6 +132,14 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 			// Existing segment: just toggle its SubIndexHidden flag.
 			it->second->SetSubIndexHidden(!visible);
 		}
+	}
+
+	// Hide orphaned segments whose identity changed in the engine's segment data
+	// (e.g. start index or numTris changed → key differs). They remain in the map
+	// for reuse if the engine flips the key back.
+	for (auto& [key, segMesh] : m_SegmentMap) {
+		if (!visitedKeys.contains(key))
+			segMesh->SetSubIndexHidden(true);
 	}
 }
 
@@ -143,7 +158,7 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 
 	// Copy world state from the manager (SyncSegments already cleared old segments
 	// before the visibility loop; new segments get their world state here).
-	rawSeg->SyncFrom(*this);
+	rawSeg->SyncFrom(this);
 
 	// Create a per-segment cluster in SceneGraph::m_SubIndexSegmentClusters and add
 	// the segment to it. Each segment gets its own BLAS / InstanceData / TLAS entry.
@@ -162,21 +177,11 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 
 void SubIndexMesh::DestroyAllSegments()
 {
-	// Snapshot keys before invalidation.
-	eastl::vector<uint64_t> keys;
-	keys.reserve(m_SegmentMap.size());
-	for (auto& [k, _] : m_SegmentMap)
-		keys.push_back(k);
-
-	auto sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-	for (auto key : keys) {
-		auto it = m_SegmentMap.find(key);
-		if (it == m_SegmentMap.end())
-			continue;
-		auto* segMesh = it->second;
-		sceneGraph->RemoveSegmentCluster(segMesh);
+	for (auto& segmentMesh: m_Segments)
+	{
+		segmentMesh->GetCluster()->RemoveMember(segmentMesh.get());
 	}
+
 	m_SegmentMap.clear();
 	m_Segments.clear();
 }

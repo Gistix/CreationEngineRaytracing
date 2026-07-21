@@ -9,7 +9,7 @@
 
 SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTriShape* parent, uint32_t start, uint32_t numTris)
 {
-	m_BSTriShape = parent;  // so BaseMesh::Update reads parent's world/previousWorld/worldBound
+	m_BSTriShape = nullptr;
 	m_Type = Type::SubIndex;
 	m_Name = std::format("{} [start={} tris={}]", MakeDebugName(parent).c_str(), start, numTris).c_str();
 
@@ -27,7 +27,7 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 		manager->GetVertexBuffer(), vertexStride, triShapeData.vertexCount,
 		manager->GetTransformID()));
 
-	CreateMaterial();
+	m_Material = manager->GetMaterial();
 }
 
 uint16_t SubIndexSegmentMesh::GetIndexID(size_t geometryIndex) const
@@ -50,18 +50,18 @@ void SubIndexSegmentMesh::SetSubIndexHidden(bool subIndexHidden)
 		MarkDirty(DirtyFlags::Visibility);
 }
 
-void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh& manager)
+void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh* manager)
 {
 	m_DirtyFlags.reset();
-	m_Properties = manager.GetProperties();
-	m_WorldBound = manager.GetWorldBound();
+	m_Properties = manager->GetProperties();
+	m_WorldBound = manager->GetWorldBound();
 
-	m_Transform = manager.GetTransform();
-	m_PrevTransform = manager.GetPrevTransform();
+	m_Transform = manager->GetTransform();
+	m_PrevTransform = manager->GetPrevTransform();
 
-	m_TransformIndex = manager.GetTransformID();
+	m_TransformIndex = manager->GetTransformID();
 
-	if (manager.GetDirtyFlags().all(DirtyFlags::Transform))
+	if (manager->GetDirtyFlags().all(DirtyFlags::Transform))
 		MarkDirty(DirtyFlags::Transform);
 
 	m_NeedsPrevInit = false;

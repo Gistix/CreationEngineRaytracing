@@ -459,8 +459,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				}
 			}
 
-			mesh->Update(commandList);
 			mesh->SetHidden(false);
+			mesh->Update(commandList);
 		};
 
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
@@ -786,19 +786,6 @@ BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment,
 	}
 
 	return result;
-}
-
-void SceneGraph::RemoveSegmentCluster(SubIndexSegmentMesh* segment)
-{
-	auto it = m_SubIndexSegmentClusters.find(segment);
-	if (it == m_SubIndexSegmentClusters.end())
-		return;
-
-	auto* cluster = it->second.get();
-	// The segment is the cluster's only member; remove it and drop the cluster.
-	cluster->RemoveMember(segment);
-	m_DirtyClusters.erase(cluster);
-	m_SubIndexSegmentClusters.erase(it);
 }
 
 void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
