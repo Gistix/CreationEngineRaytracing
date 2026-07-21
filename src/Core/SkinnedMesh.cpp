@@ -81,11 +81,6 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	InitDismemberSkin(skinInstance);
 }
 
-void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
-{
-	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform);
-}
-
 void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
 {
 	auto* skinData = skinInstance->skinData.get();

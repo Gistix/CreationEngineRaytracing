@@ -28,7 +28,8 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint16_t DynamicID;
     uint32_t IndexOffset;
     uint MaterialOffsetComp;
-    uint TransformIndex;
+    uint16_t TransformID;
+    uint16_t InstanceID;
     
     uint GetMaterialOffset()
     {

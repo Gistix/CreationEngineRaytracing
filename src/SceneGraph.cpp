@@ -690,6 +690,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 							instanceIndex = m_NumInstances++;
 						}
 
+						// Patch InstanceID into the cluster's mesh data before copying
+						for (auto& md : cluster->m_MeshData)
+							md.InstanceID = static_cast<uint16_t>(instanceIndex);
+
 						// Update Mesh Data
 						std::memcpy(m_MeshData.data() + firstMesh, meshData.data(), meshCount * sizeof(MeshData));
 

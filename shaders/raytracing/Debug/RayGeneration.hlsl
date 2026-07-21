@@ -119,7 +119,7 @@ void Main()
     
     Instance sourceInstance;
     Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
-    Transform sourceTransform = Transforms[NonUniformResourceIndex(sourceMesh.TransformIndex)];
+    Transform sourceTransform = Transforms[NonUniformResourceIndex(sourceMesh.TransformID)];
     
     Vertex v0;
     Vertex v1;

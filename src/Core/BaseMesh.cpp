@@ -12,8 +12,8 @@
 
 BaseMesh::~BaseMesh()
 {
-	if (m_TransformIndex != UINT32_MAX)
-		Scene::GetSingleton()->GetSceneGraph()->GetTransformManager()->ReleaseTransformIndex(m_TransformIndex);
+	if (m_TransformID != UINT16_MAX)
+		Scene::GetSingleton()->GetSceneGraph()->GetTransformManager()->ReleaseTransformIndex(m_TransformID);
 }
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
@@ -50,21 +50,6 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 	return { bsTriShape->name.c_str() };
 }
 
-void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
-{
-	// Nothing to update if transform hasn't updated
-	if (!m_DirtyFlags.all(DirtyFlags::Transform))
-		return;
-
-	XMStoreFloat3x4(&m_LocalTransform,
-		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
-
-	XMStoreFloat3x4(&m_PrevLocalTransform,
-		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
-
-	WriteTransformData();
-}
-
 void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
 {
 	using namespace DirectX;
@@ -86,7 +71,8 @@ void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
 			static_cast<uint16_t>(GetDynamicIndex()),
 			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
 			m_Material->GetOffsetComp(),
-			m_TransformIndex
+			m_TransformID,
+			0 // InstanceID patched by SceneGraph after index allocation
 		);
 	}
 }
@@ -222,6 +208,8 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 		m_Transform = transform;
 	}
 
+	WriteTransform();
+
 	// Update Geometry Desc opaque flag
 	{
 		const bool prevAlpha = m_Flags.all(Flags::Alpha);
@@ -356,10 +344,11 @@ void BaseMesh::UpdateMaterial()
 
 void BaseMesh::AllocateTransformIndex()
 {
-	m_TransformIndex = Scene::GetSingleton()->GetSceneGraph()->AllocateTransformIndex();
+	m_TransformID = static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateTransformIndex());
 }
 
-void BaseMesh::WriteTransformData() const
+void BaseMesh::WriteTransform() const
 {
-	Scene::GetSingleton()->GetSceneGraph()->WriteTransformData(m_TransformIndex, m_LocalTransform, m_PrevLocalTransform);
+	const auto& sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	sceneGraph->WriteTransformData(m_TransformID, m_Transform, m_PrevTransform);
 }

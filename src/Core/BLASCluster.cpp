@@ -152,9 +152,6 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 
 	UpdateTransform();
 
-	const auto invTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_Transform));
-	const auto invPrevTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_PrevTransform));
-
 	m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
 	m_GeometryDescs.clear();
@@ -167,8 +164,6 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 			continue;
 
 		GrowBounds(mesh->GetWorldBound());
-
-		mesh->UpdateLocalTransform(invTransform, invPrevTransform);
 
 		const auto& descs = mesh->GetGeometryDescs();
 		if (descs.empty())

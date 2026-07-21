@@ -46,7 +46,7 @@ struct SurfaceMaker
 
         Mesh mesh = GetMesh(payload, instance);
 
-        Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformIndex)];
+        Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformID)];
 
         // Loads all geometry releated data
         Vertex v0, v1, v2;

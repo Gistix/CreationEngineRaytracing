@@ -59,7 +59,7 @@ void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh* manager)
 	m_Transform = manager->GetTransform();
 	m_PrevTransform = manager->GetPrevTransform();
 
-	m_TransformIndex = manager->GetTransformID();
+	m_TransformID = manager->GetTransformID();
 
 	if (manager->GetDirtyFlags().all(DirtyFlags::Transform))
 		MarkDirty(DirtyFlags::Transform);

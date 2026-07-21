@@ -56,7 +56,7 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     uint meshIndex = instance.FirstGeometryID + InstanceConst.GeometryIndex;
     
     Mesh mesh = Meshes[meshIndex];
-    Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformIndex)];
+    Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformID)];
     
     uint triangleID = vertexID / 3;
     uint vertexInTriangle = vertexID % 3;

@@ -29,6 +29,7 @@
 #include "Pass/Raytracing/Common/Accumulation.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
+#include "Pass/Raytracing/Common/TransformComposition.h"
 #include "Pass/Raytracing/Common/PTComposite.h"
 
 Scene::Scene()
@@ -88,6 +89,12 @@ RenderNode* Scene::GetGlobalIllumination()
 			true,
 			"LandLOD Occluder",
 			eastl::make_unique<Pass::LandLODOccluder>(renderer)
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"Transform Composition",
+			eastl::make_unique<Pass::TransformComposition>(renderer)
 		});
 
 		m_GlobalIllumination->AddNode({
@@ -158,6 +165,12 @@ RenderNode* Scene::GetPathTracing()
 
 		m_PathTracing->AddNode({
 			true,
+			"Transform Composition",
+			eastl::make_unique<Pass::TransformComposition>(renderer)
+		});
+
+		m_PathTracing->AddNode({
+			true,
 			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});
@@ -223,6 +236,12 @@ RenderNode* Scene::GetDebug()
 			true,
 			"Skinning",
 			eastl::make_unique<Pass::Skinning>(renderer)
+		});
+
+		m_Debug->AddNode({
+			true,
+			"Transform Composition",
+			eastl::make_unique<Pass::TransformComposition>(renderer)
 		});
 
 		m_Debug->AddNode({

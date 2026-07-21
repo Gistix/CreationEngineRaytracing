@@ -95,7 +95,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 {
     Instance instance;
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
-    Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformIndex)];
+    Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformID)];
     
     Vertex v0, v1, v2;
     GetVertices(mesh, primitiveIndex, v0, v1, v2);

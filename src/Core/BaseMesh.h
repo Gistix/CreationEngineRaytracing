@@ -110,7 +110,7 @@ public:
 
 	const float3x4& GetPrevTransform() const { return m_PrevTransform; }
 
-	uint32_t GetTransformID() const { return m_TransformIndex; }
+	uint16_t GetTransformID() const { return m_TransformID; }
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
 	
@@ -118,8 +118,6 @@ public:
 	const eastl::shared_ptr<MaterialBase>& GetMaterial() const { return m_Material; }
 	
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
-
-	virtual void UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform);
 
 	// Writes one MeshData per geometry
 	void WriteMeshData(eastl::vector<MeshData>& meshData) const;
@@ -159,7 +157,7 @@ protected:
 
 	void AllocateTransformIndex();
 
-	void WriteTransformData() const;
+	void WriteTransform() const;
 
 	eastl::string m_Name;
 
@@ -179,11 +177,7 @@ protected:
 	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 	bool m_NeedsPrevInit = true;
 
-	// Local to the BLASCluster
-	float3x4 m_LocalTransform = Constants::kIdentityTransform;
-	float3x4 m_PrevLocalTransform = Constants::kIdentityTransform;
-
-	uint32_t m_TransformIndex = UINT32_MAX;
+	uint16_t m_TransformID = UINT16_MAX;
 
 	RE::NiBound m_WorldBound;
 
