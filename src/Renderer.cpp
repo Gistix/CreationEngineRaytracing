@@ -584,6 +584,11 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 	m_PassTimings.clear();
 
 	if (timings) {
+		if (auto* sg = scene->GetSceneGraph()) {
+			for (auto& pt : sg->GetUpdateTimings())
+				m_PassTimings.push_back(pt);
+		}
+
 		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
 			rootNode->ForEach([&](RenderNode* node) {
 				if (node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))

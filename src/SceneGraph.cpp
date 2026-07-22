@@ -374,7 +374,19 @@ void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 
 void SceneGraph::Update(nvrhi::ICommandList* commandList)
 {
+	const auto updateStart = std::chrono::high_resolution_clock::now();
+	auto phaseStart = updateStart;
+
 	UpdateLights(commandList);
+
+	const auto timings = Scene::GetSingleton()->m_Settings.DebugSettings.Timings;
+	if (timings) {
+		m_UpdateTimings.clear();
+
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::UpdateLights", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
 
 	eastl::vector<RE::BSTriShape*> destroyedMeshes; 
 	{
@@ -401,6 +413,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
 		m_DirectMeshes.erase(it);
+	}
+
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::DestroyMeshes", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
 	}
 
 	m_NumMeshes = 0;
@@ -431,6 +449,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			}
 			return CESEAdapter::RE::BSVisitControl::kContinue;
 		});
+	}
+
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseA-Traversal", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
 	}
 
 	// Phase B + C1 (parallel): Update known meshes AND filter new meshes via thread pool
@@ -564,6 +588,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			m_CreateCandidates.insert(m_CreateCandidates.end(), wc.begin(), wc.end());
 	}
 
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseB-Parallel", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
+
 	// Phase C2 (serial): GPU resource creation for validated candidates
 	for (auto& [bsTriShape, refr] : m_CreateCandidates) {
 		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
@@ -587,6 +617,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 	}
 
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseC2-Create", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
+
 	// Phase D: Hide meshes whose trishapes were not visited by the traversal this frame
 	for (auto& mesh : m_PreviousVisible) {
 		if (mesh->GetLastVisitedFrame() != frameIndex) {
@@ -601,8 +637,20 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	m_PreviousVisible.swap(m_CurrentVisible);
 
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseD-Hide", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
+
 	// Phase E: Material flush
 	m_MaterialManager->Flush(commandList);
+
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseE-MaterialFlush", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
 
 	// Phase F: Drop clusters whose meshes were all destroyed this frame.
 	auto removeEmptyClusters = [this](auto& clusters) {
@@ -618,6 +666,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	removeEmptyClusters(m_OwnerClusters);
 	removeEmptyClusters(m_OrphanClusters);
 	removeEmptyClusters(m_SubIndexSegmentClusters);
+
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseF-DropClusters", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
 
 	// Phase G (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
 	{
@@ -710,6 +764,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 	}
 
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseG-ClusterUpdate", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
+
 	if (m_NumMeshes > 0)
 		commandList->writeBuffer(GetMeshBuffer(), m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
 
@@ -717,6 +777,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 
 	m_TransformManager->Flush(commandList);
+
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::BufferWrites", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+
+		const auto totalEnd = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::Total", 0.0f, std::chrono::duration<float, std::milli>(totalEnd - updateStart).count()});
+	}
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)

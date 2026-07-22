@@ -26,6 +26,8 @@
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
 
+#include "Types/PassTiming.h"
+
 #include <shared_mutex>
 
 class LandLODMesh;
@@ -181,6 +183,8 @@ public:
 	inline auto& GetTextureManager() { return m_TextureManager; }
 
 	inline auto& GetCamera() const  { return m_Camera; }
+
+	inline const auto& GetUpdateTimings() const { return m_UpdateTimings; }
 	
 	void OnDestroy(RE::BSTriShape* bsTriShape);
 
@@ -203,6 +207,8 @@ public:
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
 
 private:
+	eastl::vector<PassTiming> m_UpdateTimings;
+
 	struct PendingDestroy
 	{
 		eastl::unique_ptr<BaseMesh> mesh;
