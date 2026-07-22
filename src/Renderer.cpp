@@ -56,7 +56,7 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	return true;
 }
 
-bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
+bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
 {
 	const char* deviceExtensions[] = {
 		"VK_KHR_acceleration_structure",
@@ -67,6 +67,7 @@ bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQu
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
+	deviceDesc.instance = instance;
 	deviceDesc.physicalDevice = physicalDevice;
 	deviceDesc.device = device;
 	deviceDesc.graphicsQueue = graphicsQueue;
@@ -82,6 +83,8 @@ bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQu
 
 	if (!m_NVRHIDevice)
 		return false;
+
+	m_IsVulkan = true;
 
 	PostInitialize();
 

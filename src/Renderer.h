@@ -44,6 +44,8 @@ struct MessageCallback : public nvrhi::IMessageCallback
 
 class Renderer
 {
+	bool m_IsVulkan = false;
+
 	ID3D12Device5* m_NativeD3D12Device;
 	ID3D11Device5* m_NativeD3D11Device;
 	winrt::com_ptr<ID3D12CompatibilityDevice> m_CompatDevice;
@@ -174,7 +176,9 @@ public:
 
 	bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 
-	bool Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
+	bool Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
+
+	bool IsVulkan() const { return m_IsVulkan; }
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 

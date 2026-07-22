@@ -42,9 +42,8 @@ Scene::Scene()
 void Scene::Load()
 {
 	m_IsDXVK = Util::DXVK::IsRunning();
-	if (m_IsDXVK) {
+	if (m_IsDXVK)
 		logger::info("DXVK detected via d3d11.dll/dxgi.dll proxy - Switching to Vulkan mode.");
-	}
 }
 
 void Scene::PostPostLoad()
