@@ -767,6 +767,9 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
+        const uint sampleIndex = Camera.FrameIndex * MAX_SAMPLES + i;
+        randomSeed = InitRandomSeed(idx, size, sampleIndex);
+
 #if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif
@@ -793,6 +796,7 @@ void Main()
         bool arrivedViaDelta = false;
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
+        uint diffuseBounceCount = 0;
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if defined(RESTIR_GI)
@@ -847,14 +851,21 @@ void Main()
 #endif
 
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
-            direction = surface.Mul(SampleCosineHemisphere(randomSeed));
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            direction = surface.Mul(SampleCosineHemisphere(scatterSamples.xy));
+            diffuseBounceCount++;
 
             throughput *= surface.AO;
             throughput *= surface.Albedo;
             
             const bool hasTransmission = false;
 #else            
-            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed);
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples);
             
             if (isValid)
                 direction = bsdfSample.wo;
@@ -863,6 +874,8 @@ void Main()
             
             bool isDelta = bsdfSample.isLobe(LobeType::Delta);
             isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
+            if (bsdfSample.isLobe(LobeType::Diffuse))
+                diffuseBounceCount++;
             
             if (j == 0)
                 isSpecularSample = isSpecular;         

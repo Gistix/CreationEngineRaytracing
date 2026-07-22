@@ -25,4 +25,5 @@ extern "C" {
 	CERT_API void UpdateJitter(float2 jitter);
 	CERT_API uint32_t GetAccumulatedFrameCount();
 	CERT_API uint64_t GetFakeDoubledVRAMUsage();
+	CERT_API void LogTextureMemoryStats();
 }
