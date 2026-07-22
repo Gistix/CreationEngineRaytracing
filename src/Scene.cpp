@@ -295,8 +295,9 @@ void Scene::UpdateMode(Mode mode, Mode previousMode)
 	if (IsModeInitialized(previousMode))
 		rootNode->DetachRenderNode(GetModeNode(previousMode));
 
-	// Attach new mode node
-	rootNode->AttachRenderNode(GetModeNode(mode));
+	// Attach new mode node (skip for None - no render work needed)
+	if (mode != Mode::None)
+		rootNode->AttachRenderNode(GetModeNode(mode));
 }
 
 void Scene::Initialize() 
@@ -321,7 +322,7 @@ void Scene::Initialize()
 
 void Scene::Execute()
 {
-	if (!m_Settings.Enabled)
+	if (!m_Settings.Enabled || m_Settings.GeneralSettings.Mode == Mode::None)
 		return;
 
 	auto* sceneGraph = GetSceneGraph();
