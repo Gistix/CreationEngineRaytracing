@@ -279,11 +279,11 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 
 			// Determine light type: Spot, Point, or Directional
 			// NiSpotLight extends NiPointLight; both have BSLight::pointLight = true.
-			// We distinguish spots via NiRTTI name check.
+			// We distinguish spots via NiRTTI pointer compare.
 			bool isSpot = false;
 			if (bsLight->pointLight) {
 				auto* rtti = niLight->GetRTTI();
-				if (rtti && rtti->name && std::strcmp(rtti->name, "NiSpotLight") == 0)
+				if (rtti == Constants::rtti::NiSpotLight.get())
 					isSpot = true;
 			}
 
@@ -485,6 +485,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 			mesh->SetHidden(false);
 			mesh->Update(commandList);
+			mesh->PostUpdate();
 		};
 
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
@@ -612,6 +613,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				mesh->SetLastVisitedFrame(frameIndex);
 				mesh->Update(commandList);
+				mesh->PostUpdate();
 				m_CurrentVisible.push_back(mesh);
 			}
 		}
