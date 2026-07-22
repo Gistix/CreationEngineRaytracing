@@ -86,6 +86,18 @@ bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, 
 
 	m_IsVulkan = true;
 
+	// Map DXGI_FORMAT to NVRHI formats
+	if (m_FormatMapping.empty())
+		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+		{
+			auto format = (nvrhi::Format)i;
+
+			// This gets the SRV format, but I guess it should work
+			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
+
+			m_FormatMapping.emplace(nativeFormat, format);
+		}
+
 	PostInitialize();
 
 	return true;
