@@ -181,7 +181,7 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 { 
 	ClearDirtyFlags();
 
-	m_Properties = { m_BSTriShape, m_Flags.all(Flags::Eyes)};
+	m_Properties.Update(m_BSTriShape, m_Flags.all(Flags::Eyes));
 
 	m_WorldBound = m_BSTriShape->worldBound;
 
@@ -228,6 +228,13 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	}
 
 	UpdateMaterial();
+}
+
+void BaseMesh::PostUpdate()
+{
+	// SubIndexMesh has no cluster
+	if (m_Cluster)
+		m_Cluster->UpdateDirtyFlags(m_DirtyFlags.get());
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)

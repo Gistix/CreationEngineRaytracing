@@ -70,9 +70,9 @@ struct Properties
 
 	PropertiesData m_Data;
 
-	Properties() = default;
+	Properties();
 
-	Properties(RE::BSTriShape* triShape, bool isEye);
+	void Update(RE::BSTriShape* triShape, bool isEye);
 
 	bool IsAlpha() const { return m_Data.AlphaFlags != AlphaFlags::None; }
 

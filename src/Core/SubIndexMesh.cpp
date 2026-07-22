@@ -131,6 +131,7 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 		} else {
 			// Existing segment: just toggle its SubIndexHidden flag.
 			it->second->SetSubIndexHidden(!visible);
+			it->second->PostUpdate();
 		}
 	}
 
@@ -156,10 +157,6 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 
 	auto* rawSeg = segMesh.get();
 
-	// Copy world state from the manager (SyncSegments already cleared old segments
-	// before the visibility loop; new segments get their world state here).
-	rawSeg->SyncFrom(this);
-
 	// Create a per-segment cluster in SceneGraph::m_SubIndexSegmentClusters and add
 	// the segment to it. Each segment gets its own BLAS / InstanceData / TLAS entry.
 	// The cluster lives in m_SubIndexSegmentClusters for the lifetime of the segment
@@ -169,6 +166,11 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 	auto* cluster = sceneGraph->GetOrCreateSegmentCluster(rawSeg, m_Owner);
 	cluster->AddMember(rawSeg);
 	sceneGraph->MarkClusterDirty(cluster);
+
+	// Copy world state from the manager (SyncSegments already cleared old segments
+	// before the visibility loop; new segments get their world state here).
+	rawSeg->SyncFrom(this);
+	rawSeg->PostUpdate();
 
 	const uint64_t key = MakeSegmentKey(start, numTris);
 	m_Segments.push_back(eastl::move(segMesh));

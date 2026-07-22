@@ -71,6 +71,7 @@ class BLASCluster
 	CESEAdapter::REX::EnumSet<Flags> m_Flags = Flags::None;
 
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
+	mutable std::mutex m_DirtyMutex;
 
 	InstanceLightData m_InstanceLightData;
 
@@ -93,6 +94,8 @@ public:
 	void RemoveMember(BaseMesh* mesh);
 
 	const auto& GetMembers() const { return m_Members; }
+
+	void UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags);
 
 	// Grow the world-space bounding sphere to include the given bound (center + radius in world space).
 	void GrowBounds(const RE::NiBound& bound);

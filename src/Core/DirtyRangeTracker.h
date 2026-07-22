@@ -19,8 +19,6 @@ public:
 
 	void Write(OffsetType offset, const void* data, size_t size)
 	{
-		std::scoped_lock lock(m_Mutex);
-
 		if (size > m_SlotSize) {
 			logger::critical("DirtyRangeTracker::Write - Data size ({}) exceeds slot size ({})", size, m_SlotSize);
 			return;
@@ -36,7 +34,11 @@ public:
 			return;
 
 		std::memcpy(m_Data.data() + offset, data, size);
-		m_DirtyRanges.push_back({ offset, size });
+
+		{
+			std::scoped_lock lock(m_Mutex);
+			m_DirtyRanges.push_back({ offset, size });
+		}
 	}
 
 	void* GetMirror() { return m_Data.data(); }

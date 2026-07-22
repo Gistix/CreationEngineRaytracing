@@ -79,6 +79,8 @@ public:
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
 	virtual void Update(nvrhi::ICommandList* commandList);
 
+	void PostUpdate();
+
 	// True for meshes whose vertex data changes per frame, so their cluster BLAS must be refit.
 	virtual bool IsUpdatable() const { return false; }
 

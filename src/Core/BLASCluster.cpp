@@ -97,6 +97,7 @@ void BLASCluster::UpdateTransform() {
 	}
 
 	m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
+	m_ClusterRadius = 0.0f;
 }
 
 bool BLASCluster::Empty() const
@@ -146,50 +147,55 @@ void BLASCluster::UpdateInstanceLightData(
 	m_InstanceLightData = InstanceLightData(lightIds, numLights);
 }
 
+void BLASCluster::UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags)
+{
+	std::scoped_lock lock(m_DirtyMutex);
+	m_DirtyFlags.set(meshDirtyFlags);
+}
+
 const eastl::vector<MeshData>& BLASCluster::Update()
 {
-	m_ClusterRadius = 0.0f;
-
 	UpdateTransform();
 
-	m_Flags.reset(Flags::Updatable, Flags::TwoSided);
+	auto scene = Scene::GetSingleton();
+	const bool skipInstanceLights = scene->m_Settings.ExperimentalSettings.GlobalLights;
 
-	m_GeometryDescs.clear();
-	m_MeshData.clear();
+	// Only those who affect geometry count or its flags
+	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh, DirtyFlags::Alpha)) {
+		m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
-	for (const auto& mesh : m_Members) {
-		m_DirtyFlags |= mesh->GetDirtyFlags();
+		m_GeometryDescs.clear();
+		m_MeshData.clear();
 
-		if (mesh->IsHidden())
-			continue;
+		for (const auto& mesh : m_Members) {
+			if (mesh->IsHidden())
+				continue;
 
-		GrowBounds(mesh->GetWorldBound());
+			if (!skipInstanceLights)
+				GrowBounds(mesh->GetWorldBound());
 
-		const auto& descs = mesh->GetGeometryDescs();
-		if (descs.empty())
-			continue;
+			const auto& descs = mesh->GetGeometryDescs();
+			if (descs.empty())
+				continue;
 
-		m_GeometryDescs.insert(m_GeometryDescs.end(), descs.begin(), descs.end());
+			m_GeometryDescs.insert(m_GeometryDescs.end(), descs.begin(), descs.end());
 
-		if (mesh->IsUpdatable())
-			m_Flags.set(Flags::Updatable);
+			if (mesh->IsUpdatable())
+				m_Flags.set(Flags::Updatable);
 
-		if (mesh->IsTwoSided())
-			m_Flags.set(Flags::TwoSided);
+			if (mesh->IsTwoSided())
+				m_Flags.set(Flags::TwoSided);
 
-		mesh->WriteMeshData(m_MeshData);
+			mesh->WriteMeshData(m_MeshData);
+		}
 	}
 
 	m_IsValid = !m_MeshData.empty();
-	if (m_IsValid) {
-		auto scene = Scene::GetSingleton();
-		const bool skipInstanceLights = scene->m_Settings.ExperimentalSettings.GlobalLights;
-		if (!skipInstanceLights) {
-			auto sceneGraph = scene->GetSceneGraph();
+	if (m_IsValid && !skipInstanceLights) {
+		auto sceneGraph = scene->GetSceneGraph();
 
-			// TODO: Move this to the GPU - It doesn't scale well on CPU
-			UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
-		}
+		// TODO: Move this to the GPU - It doesn't scale well on CPU
+		UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
 	}
 
 	return m_MeshData;
