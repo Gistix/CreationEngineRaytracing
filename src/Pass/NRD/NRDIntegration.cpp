@@ -98,6 +98,7 @@ namespace Pass::NRD
 		nvrhi::BindingLayoutDesc globalLayoutDesc;
 		globalLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		globalLayoutDesc.registerSpace = instanceDesc.constantBufferAndSamplersSpaceIndex;
+		globalLayoutDesc.registerSpaceIsDescriptorSet = true;
 		globalLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::ConstantBuffer(instanceDesc.constantBufferRegisterIndex),
 		};
@@ -113,6 +114,7 @@ namespace Pass::NRD
 		nvrhi::BindingLayoutDesc resourceLayoutDesc;
 		resourceLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		resourceLayoutDesc.registerSpace = instanceDesc.resourcesSpaceIndex;
+		resourceLayoutDesc.registerSpaceIsDescriptorSet = true;
 
 		const uint32_t maxTextures = GetMaxResourceCount(nrd::DescriptorType::TEXTURE);
 		const uint32_t maxStorageTextures = GetMaxResourceCount(nrd::DescriptorType::STORAGE_TEXTURE);
