@@ -170,7 +170,3 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 	sharedTexture.shared = renderTarget.d3d11Texture.get();
 	return sharedTexture;
 }
-
-SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
-	return GetSharedTexture(texture, Renderer::GetSingleton()->GetCompletedSlot());
-}
