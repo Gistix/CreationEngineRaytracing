@@ -16,8 +16,6 @@ class BLASCluster;
 
 class BaseMesh
 {
-	void ClearDirtyFlags() { m_DirtyFlags.reset(); }
-
 	void UpdateMaterial();
 public:
 	struct BufferDescriptor {
@@ -99,6 +97,8 @@ public:
 
 	const eastl::string& GetName() const { return m_Name; }
 
+	Type GetType() const { return m_Type; }
+
 	RE::TESObjectREFR* GetOwner() const { return m_Owner; }
 
 	RE::TESObjectREFR* GetPrevOwner() const { return m_PrevOwner; }
@@ -171,6 +171,8 @@ protected:
 	uint16_t AllocateGeometryIndex();
 
 	void WriteTransform() const;
+
+	void ClearDirtyFlags() { m_DirtyFlags.reset(); }
 
 	eastl::string m_Name;
 

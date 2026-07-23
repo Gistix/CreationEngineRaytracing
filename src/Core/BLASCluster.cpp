@@ -295,8 +295,14 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		return;
 	}
 	if (buildMode == BuildMode::Skip) {
-		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set.",
-			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size());
+		eastl::string membersInfo;
+		for (const auto* member : m_Members) {
+			if (!membersInfo.empty())
+				membersInfo += ", ";
+			membersInfo += std::format("{} ({})", member->GetName().c_str(), magic_enum::enum_name(member->GetType())).c_str();
+		}
+		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set. Members: [{}]",
+			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size(), membersInfo);
 		return;
 	}
 

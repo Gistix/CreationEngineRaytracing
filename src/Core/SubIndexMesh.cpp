@@ -88,9 +88,6 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();
 
-	// Clear stale dirty flags and copy fresh world state from the manager to existing
-	// segments. Must run before the visibility loop so MarkDirty(Visibility) set by
-	// SetSubIndexHidden survives to Phase E2.
 	for (auto& seg : m_Segments) {
 		seg->SyncFrom(this);
 	}
@@ -131,7 +128,6 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 		} else {
 			// Existing segment: just toggle its SubIndexHidden flag.
 			it->second->SetSubIndexHidden(!visible);
-			it->second->PostUpdate();
 		}
 	}
 
@@ -141,6 +137,11 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	for (auto& [key, segMesh] : m_SegmentMap) {
 		if (!visitedKeys.contains(key))
 			segMesh->SetSubIndexHidden(true);
+	}
+
+	// Propagates dirty flags to the cluster and clears them
+	for (auto& segMesh : m_Segments) {
+		segMesh->PostUpdate();
 	}
 }
 
@@ -170,7 +171,6 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 	// Copy world state from the manager (SyncSegments already cleared old segments
 	// before the visibility loop; new segments get their world state here).
 	rawSeg->SyncFrom(this);
-	rawSeg->PostUpdate();
 
 	const uint64_t key = MakeSegmentKey(start, numTris);
 	m_Segments.push_back(eastl::move(segMesh));

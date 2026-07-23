@@ -53,7 +53,6 @@ void SubIndexSegmentMesh::SetSubIndexHidden(bool subIndexHidden)
 
 void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh* manager)
 {
-	m_DirtyFlags.reset();
 	m_Properties = manager->GetProperties();
 	m_WorldBound = manager->GetWorldBound();
 
@@ -62,8 +61,8 @@ void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh* manager)
 
 	m_MeshIndex = manager->GetMeshIndex();
 
-	if (manager->GetDirtyFlags().all(DirtyFlags::Transform))
-		MarkDirty(DirtyFlags::Transform);
+	// Inherit flags set in the parent
+	MarkDirty(manager->GetDirtyFlags().get());
 
 	m_NeedsPrevInit = false;
 }

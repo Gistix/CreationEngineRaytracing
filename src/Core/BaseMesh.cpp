@@ -81,6 +81,9 @@ void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
 }
 
 void BaseMesh::MarkDirty(DirtyFlags flag) {
+	if (flag == DirtyFlags::None)
+		return;
+
 	m_DirtyFlags.set(flag);
 	Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }
@@ -182,8 +185,6 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 
 void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 { 
-	ClearDirtyFlags();
-
 	m_Properties.Update(m_BSTriShape, m_Flags.all(Flags::Eyes));
 	WriteProperties();
 
@@ -239,6 +240,9 @@ void BaseMesh::PostUpdate()
 	// SubIndexMesh has no cluster
 	if (m_Cluster)
 		m_Cluster->UpdateDirtyFlags(m_DirtyFlags.get());
+
+	// Clear dirty flags after they've been "consumed" by the cluster
+	ClearDirtyFlags();
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)

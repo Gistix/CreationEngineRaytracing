@@ -495,8 +495,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				}
 			}
 
-			mesh->SetHidden(false);
 			mesh->Update(commandList);
+			mesh->SetHidden(false);
 			mesh->PostUpdate();
 		};
 
