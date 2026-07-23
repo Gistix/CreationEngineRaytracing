@@ -166,6 +166,8 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 
 		m_GeometryDescs.clear();
 		m_MeshData.clear();
+		m_MeshSlots.clear();
+		m_GeometrySlots.clear();
 
 		for (const auto& mesh : m_Members) {
 			if (mesh->IsHidden())
@@ -186,8 +188,18 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 			if (mesh->IsTwoSided())
 				m_Flags.set(Flags::TwoSided);
 
+			const size_t before = m_MeshData.size();
 			mesh->WriteMeshData(m_MeshData);
+			for (size_t i = before; i < m_MeshData.size(); i++) {
+				m_MeshSlots.push_back(mesh->GetMeshIndex());
+				m_GeometrySlots.push_back(mesh->GetGeometryIndex(i - before));
+			}
 		}
+
+		// Push each geometry's MeshData to its own geometry-indexed slot
+		auto* meshManager = scene->GetSceneGraph()->GetMeshManager().get();
+		for (size_t i = 0; i < m_GeometrySlots.size(); i++)
+			meshManager->WriteMeshData(m_GeometrySlots[i], m_MeshData[i]);
 	}
 
 	m_IsValid = !m_MeshData.empty();

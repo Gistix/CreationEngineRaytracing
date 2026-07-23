@@ -59,7 +59,7 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 
 	m_VertexDescriptor = sceneGraph->GetVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, m_VertexBuffer));
 
-	AllocateTransformIndex();
+	AllocateMeshIndex();
 
 	CreateMaterial();
 }

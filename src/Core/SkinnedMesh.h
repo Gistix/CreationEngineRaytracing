@@ -58,6 +58,17 @@ public:
 	}
 
 	uint16_t GetVertexID() const override { return static_cast<uint16_t>(m_VertexBuffer.m_Descriptor.Get()); }
+
+	uint16_t GetGeometryIndex(size_t i) const override {
+		if (m_Flags.none(Flags::DismemberSkinInstance))
+			return i < m_GeometryIndex.size() ? m_GeometryIndex[i] : UINT16_MAX;
+
+		if (i >= m_VisibleGeometrySourceIndices.size())
+			return UINT16_MAX;
+
+		const size_t sourceIdx = m_VisibleGeometrySourceIndices[i];
+		return sourceIdx < m_GeometryIndex.size() ? m_GeometryIndex[sourceIdx] : UINT16_MAX;
+	}
 protected:
 	// Non-building constructor for derived meshes that supply their own vertex buffer (e.g. DynamicMesh).
 	SkinnedMesh() = default;

@@ -62,7 +62,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateTransformIndex();
+	AllocateMeshIndex();
 
 	m_VertexCount = vertexCount;
 
@@ -184,6 +184,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 
 	m_IndexBuffers.reserve(skinPartition->numPartitions);
 	m_GeometryDescs.reserve(skinPartition->numPartitions);
+	m_GeometryIndex.reserve(skinPartition->numPartitions);
 	m_GeometryPartitionIndices.reserve(skinPartition->numPartitions);
 
 	for (size_t i = 0; i < skinPartition->numPartitions; i++)
@@ -206,6 +207,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 			logger::warn("SkinnedMesh::BuildSkinned - Partition {} vertex buffer differs from partition 0 for {}, skipping mesh.", i, m_Name);
 			m_IndexBuffers.clear();
 			m_GeometryDescs.clear();
+			m_GeometryIndex.clear();
 			m_VertexBuffer = {};
 			return;
 		}
@@ -219,7 +221,8 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetTransformID()));
+		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetMeshIndex()));
+		m_GeometryIndex.push_back(AllocateGeometryIndex());
 		m_GeometryPartitionIndices.push_back(i);
 	}
 }

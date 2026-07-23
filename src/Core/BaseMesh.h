@@ -90,6 +90,8 @@ public:
 	// DirectMesh holds a single desc; SkinnedMesh/DynamicMesh hold one per partition.
 	virtual const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const { return m_GeometryDescs; }
 
+	const eastl::vector<uint16_t>& GetGeometryIndex() const { return m_GeometryIndex; }
+
 	RE::BSTriShape* GetTriShape() const { return m_BSTriShape; }
 
 	BLASCluster* GetCluster() const { return m_Cluster; }
@@ -112,7 +114,7 @@ public:
 
 	const float3x4& GetPrevTransform() const { return m_PrevTransform; }
 
-	uint16_t GetTransformID() const { return m_TransformID; }
+	uint16_t GetMeshIndex() const { return m_MeshIndex; }
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
 	
@@ -122,6 +124,8 @@ public:
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
 
 	// Writes one MeshData per geometry
+	void WriteProperties() const;
+
 	void WriteMeshData(eastl::vector<MeshData>& meshData) const;
 
 	void MarkDirty(DirtyFlags flag);
@@ -140,6 +144,11 @@ public:
 	// Vertex buffer descriptor index (into the Vertices bindless table); shared across the mesh's geometries.
 	virtual uint16_t GetVertexID() const = 0;
 
+	// Allocated geometry index for the i-th geometry entry (accounts for SkinnedMesh visibility filtering).
+	virtual uint16_t GetGeometryIndex(size_t i) const {
+		return i < m_GeometryIndex.size() ? m_GeometryIndex[i] : UINT16_MAX;
+	}
+
 protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
@@ -157,7 +166,9 @@ protected:
 
 	void CreateMaterial();
 
-	void AllocateTransformIndex();
+	void AllocateMeshIndex();
+
+	uint16_t AllocateGeometryIndex();
 
 	void WriteTransform() const;
 
@@ -171,6 +182,8 @@ protected:
 
 	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
+	eastl::vector<uint16_t> m_GeometryIndex;
+
 	// Back-pointer to the BLAS cluster this mesh belongs to; set by AddMember, used for fast removal.
 	BLASCluster* m_Cluster = nullptr;
 
@@ -179,7 +192,7 @@ protected:
 	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 	bool m_NeedsPrevInit = true;
 
-	uint16_t m_TransformID = UINT16_MAX;
+	uint16_t m_MeshIndex = UINT16_MAX;
 
 	RE::NiBound m_WorldBound;
 

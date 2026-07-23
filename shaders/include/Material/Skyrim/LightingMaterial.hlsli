@@ -23,20 +23,20 @@
 
 #include "include/Material/Skyrim/Common.hlsli"
 
-void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, float4 boneRotation, float3 viewDir, float dist)
+void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, Properties props, float4 boneRotation, float3 viewDir, float dist)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     float mipLevel = surface.MipLevel;
 
     const Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
 
-    const bool clampSampler = mesh.Properties.ShaderFlags & ShaderFlags::kLODLandscape;
+    const bool clampSampler = props.ShaderFlags & ShaderFlags::kLODLandscape;
 
     const Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
     
     const bool skinEnabled = (material.Type == Type::Lighting) &&
         (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint) &&
-        !(mesh.Properties.AlphaFlags & AlphaFlags::Additive) &&
+        !(props.AlphaFlags & AlphaFlags::Additive) &&
         SKINSETTINGS.skinParams.w > 0.0f;
     
     const bool isTruePBR = material.Type == Type::TruePBR;
@@ -111,7 +111,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     }
 #endif
 
-    if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+    if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
     {
         // Swizzle matches vanilla shaders        
         normal = normalize(normal.xzy * 2.0f - 1.0f);
@@ -141,7 +141,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
 
     vertexColor.rgb = saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
     
-    const bool isWindows = material.Feature == Feature::kGlowMap && mesh.Properties.ShaderFlags & ShaderFlags::kAssumeShadowmask;
+    const bool isWindows = material.Feature == Feature::kGlowMap && props.ShaderFlags & ShaderFlags::kAssumeShadowmask;
     float3 windowAlpha = float3(0.0f, 0.0f, 0.0f);
 
     float alpha = 1.0f;
@@ -165,7 +165,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
 
         surface.Albedo = albedo.rgb * vertexColor.rgb;
-        surface.Emissive = emissive * EmitColorToLinear(mesh.Properties.EmissiveColor.rgb) * mesh.Properties.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+        surface.Emissive = emissive * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         surface.Roughness = saturate(rmaos.x * pbr.RoughnessScale);
         surface.Metallic = saturate(rmaos.y);
         surface.AO = rmaos.z;
@@ -180,7 +180,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.TransmissionColor = surface.Albedo;
             surface.DiffTrans = 0.5f;
 
-            if (!(mesh.Properties.ShaderFlags & ShaderFlags::kTwoSided))
+            if (!(props.ShaderFlags & ShaderFlags::kTwoSided))
             {
                 surface.SubsurfaceData.ScatteringColor = subsurfaceColor.rgb * pbr.FeatureColor.rgb;
                 surface.SubsurfaceData.TransmissionColor = surface.Albedo;
@@ -274,12 +274,12 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         float3 albedo = diffuse.rgb * vertexColor.rgb;
         
         [branch]
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kLODLandscape)
+        if (props.ShaderFlags & ShaderFlags::kLODLandscape)
         {
             albedo = pow(albedo, Features.LODBlending.LODTerrainGamma) * Features.LODBlending.LODTerrainBrightness;
 
         }
-        else if ((mesh.Properties.ShaderFlags & ShaderFlags::kLODObjects) || (mesh.Properties.ShaderFlags & ShaderFlags::kHDLODObjects))
+        else if ((props.ShaderFlags & ShaderFlags::kLODObjects) || (props.ShaderFlags & ShaderFlags::kHDLODObjects))
         {
             albedo = pow(albedo, Features.LODBlending.LODObjectGamma) * Features.LODBlending.LODObjectBrightness;
         }
@@ -294,13 +294,13 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
     
         [branch]
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kSpecular)
+        if (props.ShaderFlags & ShaderFlags::kSpecular)
         {
             float3 specularColor = material.SpecularColor;
             float specularStrength = 0;
             
             [branch]
-            if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+            if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
             {
                 Texture2D specularTexture = Textures[NonUniformResourceIndex(material.SpecularBackLightingTexture)];
                 specularStrength = specularTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).r;
@@ -320,7 +320,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
          
         [branch]
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kEnvMap || mesh.Properties.ShaderFlags & ShaderFlags::kEyeReflect)
+        if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
         {
             uint16_t envMaskTexIndex;
             uint16_t envTexIndex;
@@ -403,11 +403,11 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             {
                 windowAlpha = glow;
             }
-            surface.Emissive = GlowToLinear(glow) * EmitColorToLinear(mesh.Properties.EmissiveColor.rgb) * mesh.Properties.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+            surface.Emissive = GlowToLinear(glow) * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         }
         else
         {
-            surface.Emissive = surface.Albedo * EmitColorToLinear(mesh.Properties.EmissiveColor.rgb) * mesh.Properties.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+            surface.Emissive = surface.Albedo * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         }
 
         [branch]
@@ -498,12 +498,12 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.CoatRoughness = 0.0f;
             surface.CoatF0 = 0.026f;
         }
-        else if (mesh.Properties.ShaderFlags & ShaderFlags::kSoftLighting || mesh.Properties.ShaderFlags & ShaderFlags::kBackLighting)
+        else if (props.ShaderFlags & ShaderFlags::kSoftLighting || props.ShaderFlags & ShaderFlags::kBackLighting)
         {
             surface.TransmissionColor = surface.Albedo;
             surface.DiffTrans = 0.5f;
             
-            if (!(mesh.Properties.ShaderFlags & ShaderFlags::kTwoSided) && (mesh.Properties.ShaderFlags & ShaderFlags::kSoftLighting))
+            if (!(props.ShaderFlags & ShaderFlags::kTwoSided) && (props.ShaderFlags & ShaderFlags::kSoftLighting))
             {
                 surface.SubsurfaceData.HasSubsurface = 1;
                 surface.SubsurfaceData.Anisotropy = -0.5f;
@@ -516,7 +516,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
 
         [branch]
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kRefraction) // As glass
+        if (props.ShaderFlags & ShaderFlags::kRefraction) // As glass
         {
             surface.Albedo = float3(0.0f, 0.0f, 0.0f);
             surface.Roughness = 0.0f;
@@ -535,26 +535,26 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     }
 
     [branch]
-    if (mesh.Properties.ShaderFlags & ShaderFlags::kProjectedUV)
+    if (props.ShaderFlags & ShaderFlags::kProjectedUV)
     {
-        const float4 projectedUVParams = mesh.Properties.ProjectedUVParams;
-        const float4 projectedUVParams2 = mesh.Properties.ProjectedUVParams2;
-        const float4 projectedUVParams3 = mesh.Properties.ProjectedUVParams3;
+        const float4 projectedUVParams = props.ProjectedUVParams;
+        const float4 projectedUVParams2 = props.ProjectedUVParams2;
+        const float4 projectedUVParams3 = props.ProjectedUVParams3;
             
         float3 triWeights = Triplanar::GetWeights(surface.GeomNormal, surface.FaceNormal);
         float projNoise = Triplanar::Sample(ProjNoiseMap, DefaultSampler, mipLevel, surface.Position, triWeights, projectedUVParams.z).x;
 
-        float3 texProj = mesh.Properties.TextureProj.xyz;
+        float3 texProj = props.TextureProj.xyz;
              
         float vertexAlpha;
-        if ((mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim) || (mesh.Properties.ShaderFlags & ShaderFlags::kHDLODObjects))
+        if ((props.ShaderFlags & ShaderFlags::kTreeAnim) || (props.ShaderFlags & ShaderFlags::kHDLODObjects))
             vertexAlpha = 1;
         else
             vertexAlpha = vertexColor.a;
             
         float projWeight = -projectedUVParams.x * projNoise + (dot(surface.Normal.xyz, texProj) * vertexAlpha - projectedUVParams.w);
             
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kHDLODObjects)
+        if (props.ShaderFlags & ShaderFlags::kHDLODObjects)
             projWeight += (-0.5 + vertexColor.a) * 2.5;
 
         if (projectedUVParams3.w > 0.5)
@@ -565,7 +565,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         {
             float3 projBaseColor = VanillaDiffuseColor(projectedUVParams2.xyz);
             
-            if ((mesh.Properties.ShaderFlags & ShaderFlags::kLODObjects) || (mesh.Properties.ShaderFlags & ShaderFlags::kHDLODObjects))
+            if ((props.ShaderFlags & ShaderFlags::kLODObjects) || (props.ShaderFlags & ShaderFlags::kHDLODObjects))
             {
                 projBaseColor = pow(projBaseColor, Features.LODBlending.LODObjectSnowGamma) * Features.LODBlending.LODObjectSnowBrightness;
             }
@@ -575,22 +575,22 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     }
     
     [branch]
-    if (mesh.Properties.AlphaFlags != AlphaFlags::None)
+    if (props.AlphaFlags != AlphaFlags::None)
     {
-        alpha *= material.MaterialAlpha * mesh.Properties.Alpha;
+        alpha *= material.MaterialAlpha * props.Alpha;
         
         [branch]
-        if ((mesh.Properties.ShaderFlags & ShaderFlags::kVertexAlpha) && !(mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim))
+        if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
             alpha *= vertexColor.a;
 
         [branch]
-        if (mesh.Properties.AlphaFlags & AlphaFlags::Transmission)
+        if (props.AlphaFlags & AlphaFlags::Transmission)
         {
             surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);
             surface.Albedo *= alpha;
             surface.Metallic *= alpha;
             surface.SpecTrans = 1.0f;
-            surface.IsThinSurface |= (mesh.Properties.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+            surface.IsThinSurface |= (props.ShaderFlags & ShaderFlags::kTwoSided) != 0;
             if (material.Type != Type::TruePBR)
             {
                 surface.Roughness = 0.0f;
@@ -598,7 +598,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
 
         [branch]
-        if (mesh.Properties.AlphaFlags & AlphaFlags::Additive)
+        if (props.AlphaFlags & AlphaFlags::Additive)
         {
             surface.Albedo = 0.0f;
             surface.Metallic = 0.0f;
@@ -636,7 +636,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         surface.Roughness = 1.0f - saturate(HAIRSETTINGS.HairGlossiness * 0.01f);
         surface.Albedo = saturate(surface.Albedo * HAIRSETTINGS.BaseColorMult);
         [branch]
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kBackLighting) {
+        if (props.ShaderFlags & ShaderFlags::kBackLighting) {
             Texture2D hairFlowMapTexture = Textures[NonUniformResourceIndex(material.SpecularBackLightingTexture)];
             uint2 hairFlowDimensions;
             hairFlowMapTexture.GetDimensions(hairFlowDimensions.x, hairFlowDimensions.y);

@@ -23,6 +23,7 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1), // InstancesData
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2), // CurrentTransforms
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // PrevTransforms
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(4),        // MeshSlotRemap (ByteAddress)
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0)  // TransformsOut
 		};
 
@@ -55,16 +56,17 @@ namespace Pass
 
 		auto* scene = Scene::GetSingleton();
 		auto* sceneGraph = scene->GetSceneGraph();
-		auto& transformManager = sceneGraph->GetTransformManager();
+		auto& meshManager = sceneGraph->GetMeshManager();
 
 		nvrhi::BindingSetDesc desc;
 		desc.bindings = {
 			nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, transformManager->GetCurrentBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, transformManager->GetPrevBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, transformManager->GetBuffer())
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, meshManager->GetCurrentTransformBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, meshManager->GetPrevTransformBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(4, sceneGraph->GetMeshSlotRemapBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, meshManager->GetTransformBuffer())
 		};
 
 		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(desc, m_BindingLayout);

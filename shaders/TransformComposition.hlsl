@@ -2,6 +2,7 @@
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
 #include "interop/RowMajorFloat3x4.hlsli"
+#include "interop/MeshSlotRemap.hlsli"
 
 float4x4 ToFloat4x4(float3x4 m)
 {
@@ -62,6 +63,7 @@ StructuredBuffer<Mesh>        Meshes          : register(t0);
 StructuredBuffer<Instance>    Instances       : register(t1);
 StructuredBuffer<RowMajorFloat3x4> CurrentTransforms : register(t2);
 StructuredBuffer<RowMajorFloat3x4> PrevTransforms : register(t3);
+ByteAddressBuffer             MeshSlotRemap   : register(t4);
 struct PushConstants
 {
     uint NumMeshes;
@@ -74,16 +76,23 @@ RWStructuredBuffer<Transform> TransformsOut    : register(u0);
 [numthreads(64, 1, 1)]
 void Main(uint3 DTid : SV_DispatchThreadID)
 {
-    uint meshIdx = DTid.x;
+    uint remapIdx = DTid.x;
 
-    if (meshIdx >= PC.NumMeshes)
+    if (remapIdx >= PC.NumMeshes)
         return;
 
-    Mesh mesh = Meshes[meshIdx];
-    Instance instance = Instances[mesh.InstanceID];
+    // Read remap entry: {geometrySlot, instanceID}
+    uint2 entry = MeshSlotRemap.Load2(remapIdx * MESH_SLOT_REMAP_STRIDE);
+    uint geometrySlot = entry.x;
+    uint instanceID = entry.y;
 
-    float3x4 transform = CurrentTransforms[mesh.TransformID].Value;
-    float3x4 prevTransform = PrevTransforms[mesh.TransformID].Value;
+    Mesh mesh = Meshes[geometrySlot];
+    uint meshSlot = mesh.MeshSlot;
+    Instance instance = Instances[instanceID];
+
+    // meshSlot == transform index
+    float3x4 transform = CurrentTransforms[meshSlot].Value;
+    float3x4 prevTransform = PrevTransforms[meshSlot].Value;
 
     float4x4 localMat = mul(InverseAffine(ToFloat4x4(instance.Transform)), ToFloat4x4(transform));
     float4x4 prevLocalMat = mul(InverseAffine(ToFloat4x4(instance.PrevTransform)), ToFloat4x4(prevTransform));
@@ -99,5 +108,5 @@ void Main(uint3 DTid : SV_DispatchThreadID)
         prevLocalMat[1], 
         prevLocalMat[2]
     ); 
-    TransformsOut[mesh.TransformID] = local;
+    TransformsOut[meshSlot] = local;
 }

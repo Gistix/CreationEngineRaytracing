@@ -53,7 +53,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateTransformIndex();
+	AllocateMeshIndex();
 
 	m_VertexCount = vertexCount;
 

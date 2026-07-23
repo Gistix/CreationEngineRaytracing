@@ -9,7 +9,7 @@
 
 #include "include/Material/Skyrim/Common.hlsli"
 
-void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in Mesh mesh)
+void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in Mesh mesh, Properties props)
 {
     EffectMaterialData effect = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
     const float mipLevel = surface.MipLevel;
@@ -23,7 +23,7 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
     baseColorMul.xyz = baseColorMul.xyz;
     
     [branch]
-    if ((mesh.Properties.ShaderFlags & ShaderFlags::kVertexColors) && !(mesh.Properties.ShaderFlags & ShaderFlags::kProjectedUV))
+    if ((props.ShaderFlags & ShaderFlags::kVertexColors) && !(props.ShaderFlags & ShaderFlags::kProjectedUV))
     {
         baseColorMul *= float4(vertexColor.xyz, vertexColor.w);
     }
@@ -32,7 +32,7 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
     float baseColorScale = effect.BaseColorScale;
 
     [branch]
-    if (mesh.Properties.ShaderFlags & ShaderFlags::kGrayscaleToPaletteColor)
+    if (props.ShaderFlags & ShaderFlags::kGrayscaleToPaletteColor)
     {
         Texture2D effectTexture = Textures[NonUniformResourceIndex(effect.EffectTexture)];
 

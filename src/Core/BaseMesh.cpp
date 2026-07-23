@@ -12,8 +12,13 @@
 
 BaseMesh::~BaseMesh()
 {
-	if (m_TransformID != UINT16_MAX)
-		Scene::GetSingleton()->GetSceneGraph()->GetTransformManager()->ReleaseTransformIndex(m_TransformID);
+	auto* meshManager = Scene::GetSingleton()->GetSceneGraph()->GetMeshManager();
+
+	for (const auto geoIdx : m_GeometryIndex)
+		meshManager->ReleaseGeometryIndex(geoIdx);
+
+	if (m_MeshIndex != UINT16_MAX)
+		meshManager->ReleaseMeshIndex(m_MeshIndex);
 }
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
@@ -66,13 +71,12 @@ void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
 			VertexDesc(GetVertexDescRaw()),
 			static_cast<uint16_t>(geomTris.vertexCount),
 			static_cast<uint16_t>(geomTris.indexCount / 3),
-			m_Properties.GetData(),
 			static_cast<uint16_t>(m_Type),
 			static_cast<uint16_t>(GetDynamicIndex()),
+			GetGeometryIndex(i),
+			m_MeshIndex,
 			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
-			m_Material->GetOffsetComp(),
-			m_TransformID,
-			0 // InstanceID patched by SceneGraph after index allocation
+			m_Material->GetOffsetComp()
 		);
 	}
 }
@@ -182,6 +186,7 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	ClearDirtyFlags();
 
 	m_Properties.Update(m_BSTriShape, m_Flags.all(Flags::Eyes));
+	WriteProperties();
 
 	m_WorldBound = m_BSTriShape->worldBound;
 
@@ -349,13 +354,25 @@ void BaseMesh::UpdateMaterial()
 	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
 }
 
-void BaseMesh::AllocateTransformIndex()
+void BaseMesh::AllocateMeshIndex()
 {
-	m_TransformID = static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateTransformIndex());
+	m_MeshIndex = static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateMeshIndex());
+}
+
+uint16_t BaseMesh::AllocateGeometryIndex()
+{
+	return static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateGeometryIndex());
+}
+
+
+void BaseMesh::WriteProperties() const
+{
+	const auto& sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	sceneGraph->GetMeshManager()->WritePropertiesData(m_MeshIndex, m_Properties.GetData());
 }
 
 void BaseMesh::WriteTransform() const
 {
 	const auto& sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-	sceneGraph->WriteTransformData(m_TransformID, m_Transform, m_PrevTransform);
+	sceneGraph->WriteTransformData(m_MeshIndex, m_Transform, m_PrevTransform);
 }

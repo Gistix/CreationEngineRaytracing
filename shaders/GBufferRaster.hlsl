@@ -5,8 +5,10 @@
 #include "interop/Vertex.hlsli"
 #include "interop/Triangle.hlsli"
 #include "interop/Mesh.hlsli"
+#include "interop/Properties.hlsli"
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
+#include "interop/MeshSlotRemap.hlsli"
 
 struct InstanceConstants
 {
@@ -22,7 +24,9 @@ ConstantBuffer<InstanceConstants> InstanceConst  : register(b3);
 StructuredBuffer<Instance>        Instances      : register(t0);
 StructuredBuffer<Mesh>            Meshes         : register(t1);
 StructuredBuffer<Transform>   Transforms     : register(t2);
-
+ByteAddressBuffer             PropertiesBuffer : register(t3);
+ByteAddressBuffer             MeshSlotRemap  : register(t4);
+ 
 StructuredBuffer<uint16_t3>       Triangles[]    : register(t0, space1);
 StructuredBuffer<Vertex>          Vertices[]     : register(t0, space2);
 Texture2D<float4>                 Textures[]     : register(t0, space3);
@@ -53,18 +57,21 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     
     Instance instance = Instances[InstanceConst.InstanceIndex];
 
-    uint meshIndex = instance.FirstGeometryID + InstanceConst.GeometryIndex;
+    uint remapIdx = instance.FirstGeometryID + InstanceConst.GeometryIndex;
+    uint2 remapEntry = MeshSlotRemap.Load2(remapIdx * MESH_SLOT_REMAP_STRIDE);
+    uint geometrySlot = remapEntry.x;
     
-    Mesh mesh = Meshes[meshIndex];
-    Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformID)];
+    Mesh mesh = Meshes[geometrySlot];
+    uint meshSlot = mesh.MeshSlot;
+    Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
     
     uint triangleID = vertexID / 3;
     uint vertexInTriangle = vertexID % 3;
     
-    uint16_t3 tri = Triangles[mesh.GeometryIdx][triangleID];
+    uint16_t3 tri = Triangles[mesh.IndexID][triangleID];
     uint16_t triVertex = tri[vertexInTriangle];
     
-    Vertex vertex = Vertices[mesh.GeometryIdx][triVertex];
+    Vertex vertex = Vertices[mesh.VertexID][triVertex];
 
     float3 rootSpacePosition = mul(meshTransform.Transform, float4(vertex.Position, 1.0f));
     float3 worldSpacePosition = mul(instance.Transform, float4(rootSpacePosition, 1.0f));
@@ -82,7 +89,7 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     o.Color = vertex.Color.unpack();
     o.LandBlend0 = vertex.LandBlend0.unpack();
     o.LandBlend1 = vertex.LandBlend1.unpack();    
-    o.MeshIndex = meshIndex;
+    o.MeshIndex = meshSlot;
     
     return o;
 }
@@ -99,12 +106,11 @@ PixelOut MainPS(in VertexOut i)
     PixelOut o;
     
     Mesh mesh = Meshes[i.MeshIndex];
+    Properties props = PropertiesBuffer.Load<Properties>(i.MeshIndex * sizeof(Properties));
  
-    Surface surface = SurfaceMaker::make(i.WorldPosition, i.TexCoord, i.Normal, i.Tangent, i.Bitangent, i.Color, i.LandBlend0, i.LandBlend1, mesh);
+    Surface surface = SurfaceMaker::make(i.WorldPosition, i.TexCoord, i.Normal, i.Tangent, i.Bitangent, i.Color, i.LandBlend0, i.LandBlend1, mesh, props);
     
-    Material material = mesh.Material;
-    
-    if (material.AlphaFlags & AlphaFlags::Test && surface.Alpha < material.AlphaThreshold)
+    if (props.AlphaFlags & AlphaFlags::Test && surface.Alpha < props.AlphaThreshold)
         discard;
     
     o.Albedo = float4(surface.Albedo, 1.0f);

@@ -46,7 +46,9 @@ struct SurfaceMaker
 
         Mesh mesh = GetMesh(payload, instance);
 
-        Transform meshTransform = Transforms[NonUniformResourceIndex(mesh.TransformID)];
+        uint meshSlot = GetMeshSlot(payload);
+        Properties props = GetMeshProperties(meshSlot);
+        Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
 
         // Loads all geometry releated data
         Vertex v0, v1, v2;
@@ -55,10 +57,10 @@ struct SurfaceMaker
         float3 prevPos0, prevPos1, prevPos2;
         
         if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
-            GetVertices(mesh, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
+            GetVertices(mesh, props, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
         else
 #endif        
-        GetVertices(mesh, payload.primitiveIndex, v0, v1, v2);
+        GetVertices(mesh, props, payload.primitiveIndex, v0, v1, v2);
 
         float3 uvw = GetBary(payload.Barycentrics());
         float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
@@ -173,7 +175,7 @@ struct SurfaceMaker
         }
  
         float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+        if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
         {
             // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
             boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
@@ -181,7 +183,7 @@ struct SurfaceMaker
         }
         
             float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kVertexColors)
+        if (props.ShaderFlags & ShaderFlags::kVertexColors)
             vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
        
             
@@ -234,23 +236,23 @@ struct SurfaceMaker
         }
         else if (material.Type == Type::Effect)
         {
-            EffectMaterial(surface, texCoord0, vertexColor, mesh);
+            EffectMaterial(surface, texCoord0, vertexColor, mesh, props);
         }
         else if (material.Type == Type::Water)
         {
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh);
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh, props);
         }
         else if (material.Type == Type::DistantTree)
         {
-            DistantTreeMaterial(surface, texCoord0, mesh);
+            DistantTreeMaterial(surface, texCoord0, mesh, props);
         }
         else if (material.Type == Type::Grass)
         {
-            GrassMaterial(surface, texCoord0, mesh);
+            GrassMaterial(surface, texCoord0, mesh, props);
         }
         else
         {
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, -rayDir, payload.hitDistance);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, -rayDir, payload.hitDistance);
         }
 #   else   
 #   endif
@@ -267,7 +269,7 @@ struct SurfaceMaker
     }  
 #endif
   
-    static Surface make(float3 position, float2 texCoord, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 vertexColor, float4 landBlend0, float4 landBlend1, Mesh mesh)
+    static Surface make(float3 position, float2 texCoord, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 vertexColor, float4 landBlend0, float4 landBlend1, Mesh mesh, Properties props)
     { 
         Surface surface;         
 
@@ -324,19 +326,19 @@ struct SurfaceMaker
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, viewDir, dist);
         }
         else if (material.Type == Type::Effect)
-            EffectMaterial(surface, texCoord0, vertexColor, mesh);
+            EffectMaterial(surface, texCoord0, vertexColor, mesh, props);
         else if (material.Type == Type::Water)
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh);
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh, props);
         else if (material.Type == Type::DistantTree)
-            DistantTreeMaterial(surface, texCoord0, mesh);
+            DistantTreeMaterial(surface, texCoord0, mesh, props);
         else if (material.Type == Type::Grass)
-            GrassMaterial(surface, texCoord0, mesh);
+            GrassMaterial(surface, texCoord0, mesh, props);
         else
         {
             float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
             float dist = length(surface.CameraRelativePosition);
             float3 viewDir = -(surface.CameraRelativePosition / dist);
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, viewDir, dist);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, viewDir, dist);
         }
 #   else   
 #   endif

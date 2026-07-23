@@ -7,6 +7,8 @@
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
+#include "interop/Properties.hlsli"
+#include "interop/MeshSlotRemap.hlsli"
 
 #include "interop/Vertex.hlsli"
 
@@ -79,22 +81,58 @@ uint GetSafeMeshIndex(in Instance instance, uint geometryIndex)
     return min(instance.FirstGeometryID + safeGeometryIndex, Raytracing.NumMeshes);
 }
 
+// Reads the geometry slot from the indirection buffer: entry.x = geometrySlot, entry.y = instanceID
+// Meshes[geometrySlot] has the per-geometry MeshData, access .MeshSlot for transforms/properties.
+uint2 GetMeshRemapEntry(in Instance instance, uint geometryIndex)
+{
+    uint remapIdx = GetSafeMeshIndex(instance, geometryIndex);
+    return MeshSlotRemap.Load2(remapIdx * MESH_SLOT_REMAP_STRIDE);
+}
+
+uint GetMeshSlot(in Instance instance, uint geometryIndex)
+{
+    uint2 entry = GetMeshRemapEntry(instance, geometryIndex);
+    return Meshes[NonUniformResourceIndex(entry.x)].MeshSlot;
+}
+
+Properties GetMeshProperties(uint meshSlot)
+{
+    return PropertiesBuffer.Load<Properties>(meshSlot * sizeof(Properties));
+}
+
 Mesh GetMesh(in uint instanceIndex, in uint geometryIndex)
 {
     Instance instance = GetInstance(instanceIndex);
-    return Meshes[NonUniformResourceIndex(GetSafeMeshIndex(instance, geometryIndex))];
+    uint2 entry = GetMeshRemapEntry(instance, geometryIndex);
+    return Meshes[NonUniformResourceIndex(entry.x)];
 }
 
 Mesh GetMesh(in uint instanceIndex, in uint geometryIndex, out Instance instance)
 {
     instance = GetInstance(instanceIndex);
-    return Meshes[NonUniformResourceIndex(GetSafeMeshIndex(instance, geometryIndex))];
+    uint2 entry = GetMeshRemapEntry(instance, geometryIndex);
+    return Meshes[NonUniformResourceIndex(entry.x)];
 }
 
 Mesh GetMesh(in Payload payload, out Instance instance)
 {
     instance = GetInstance(payload.GetInstanceIndex());
-    return Meshes[NonUniformResourceIndex(GetSafeMeshIndex(instance, payload.GetGeometryIndex()))];
+    uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
+    return Meshes[NonUniformResourceIndex(entry.x)];
+}
+
+Properties GetMeshProperties(in Payload payload)
+{
+    Instance instance = GetInstance(payload.GetInstanceIndex());
+    uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
+    return GetMeshProperties(Meshes[NonUniformResourceIndex(entry.x)].MeshSlot);
+}
+
+uint GetMeshSlot(in Payload payload)
+{
+    Instance instance = GetInstance(payload.GetInstanceIndex());
+    uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
+    return Meshes[NonUniformResourceIndex(entry.x)].MeshSlot;
 }
 
 Transform GetTransform(in uint meshIndex)
@@ -220,13 +258,13 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     return vertex;
 }
 
-void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
+void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
 {
     const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
     
     const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset + safePrimitiveIndex);
 
-    const bool isMSN = mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
     
     const ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
     v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x, isMSN, mesh.NumVertices);
@@ -245,13 +283,13 @@ void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex
 }
 
 #if defined(HAS_PREV_POSITIONS)
-void GetVertices(in Mesh mesh, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)
+void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)
 {
     const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
 
     Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset + safePrimitiveIndex);
 
-    const bool isMSN = mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
 
     ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
     v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x, isMSN, mesh.NumVertices);

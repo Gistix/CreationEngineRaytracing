@@ -23,9 +23,11 @@
 #include <chrono>
 
 nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshBuffer.current(); }
+nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshManager->GetMeshBuffer(); }
 nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetTransformBuffer() const { return m_TransformManager->GetBuffer(); }
+nvrhi::IBuffer* SceneGraph::GetTransformBuffer() const { return m_MeshManager->GetTransformBuffer(); }
+nvrhi::IBuffer* SceneGraph::GetMeshSlotRemapBuffer() const { return m_MeshSlotRemapBuffer.current(); }
+nvrhi::IBuffer* SceneGraph::GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }
 
 void SceneGraph::Initialize()
 {
@@ -36,11 +38,21 @@ void SceneGraph::Initialize()
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	m_MeshBuffer = Util::CreateStructuredRingBuffer<MeshData>(device, Constants::NUM_MESHES_MAX, "Mesh Buffer");
+	// Mesh slot remap buffer: one uint2 per mesh (ByteAddress), ring-buffered
+	{
+		auto remapDesc = nvrhi::BufferDesc()
+			.setByteSize(Constants::NUM_MESHES_MAX * 8)
+			.setCanHaveRawViews(true)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+			.setDebugName("Mesh Slot Remap Buffer");
+		m_MeshSlotRemapBuffer = RingBuffer(device, remapDesc, "Mesh Slot Remap Buffer");
+	}
+	m_MeshSlotRemapData.resize(Constants::NUM_MESHES_MAX);
+
 	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
 
-	m_TransformManager = eastl::make_unique<TransformManager>();
+	m_MeshManager = eastl::make_unique<MeshManager>();
 
 	m_MaterialManager = eastl::make_shared<MaterialManager>();
 
@@ -746,12 +758,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 							instanceIndex = m_NumInstances++;
 						}
 
-						// Patch InstanceID into the cluster's mesh data before copying
-						for (auto& md : cluster->m_MeshData)
-							md.InstanceID = static_cast<uint16_t>(instanceIndex);
-
-						// Update Mesh Data
-						std::memcpy(m_MeshData.data() + firstMesh, meshData.data(), meshCount * sizeof(MeshData));
+						// Write remap entries: {geometrySlot, instanceID} into the ByteAddress remap buffer
+						const auto& geometrySlots = cluster->GetGeometrySlots();
+						for (uint32_t j = 0; j < meshCount; j++) {
+							const uint32_t remapIdx = firstMesh + j;
+							m_MeshSlotRemapData[remapIdx].first = geometrySlots[j];
+							m_MeshSlotRemapData[remapIdx].second = static_cast<uint16_t>(instanceIndex);
+						}
 
 						// Set Instance Index
 						cluster->SetInstanceIndex(instanceIndex);
@@ -772,13 +785,15 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	if (m_NumMeshes > 0)
-		commandList->writeBuffer(GetMeshBuffer(), m_MeshData.data(), m_NumMeshes * sizeof(MeshData));
+	if (m_NumMeshes > 0) {
+		// Write remap data: contiguous uint2 entries at the start of the remap buffer
+		commandList->writeBuffer(m_MeshSlotRemapBuffer.current(), m_MeshSlotRemapData.data(), m_NumMeshes * 8ull, 0);
+	}
 
 	if (m_NumInstances > 0)
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
 
-	m_TransformManager->Flush(commandList);
+	m_MeshManager->Flush(commandList);
 
 	if (timings) {
 		const auto nowTp = std::chrono::high_resolution_clock::now();
@@ -893,12 +908,17 @@ void SceneGraph::ProcessPendingMeshDestroys(uint64_t completedFence)
 		m_PendingMeshDestroy.end());
 }
 
-uint32_t SceneGraph::AllocateTransformIndex()
+uint32_t SceneGraph::AllocateMeshIndex()
 {
-	return m_TransformManager->AllocateTransformIndex();
+	return m_MeshManager->AllocateMeshIndex();
+}
+
+uint32_t SceneGraph::AllocateGeometryIndex()
+{
+	return m_MeshManager->AllocateGeometryIndex();
 }
 
 void SceneGraph::WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform)
 {
-	m_TransformManager->WriteTransformData(index, transform, prevTransform);
+	m_MeshManager->WriteTransformData(index, transform, prevTransform);
 }

@@ -102,6 +102,8 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_SRV(13),
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
 			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
@@ -232,6 +234,8 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_ResolveBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),

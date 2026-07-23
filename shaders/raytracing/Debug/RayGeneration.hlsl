@@ -119,12 +119,14 @@ void Main()
     
     Instance sourceInstance;
     Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
-    Transform sourceTransform = Transforms[NonUniformResourceIndex(sourceMesh.TransformID)];
+    uint sourceMeshSlot = GetMeshSlot(sourcePayload);
+    Transform sourceTransform = Transforms[NonUniformResourceIndex(sourceMeshSlot)];
+    Properties sourceProps = GetMeshProperties(sourceMeshSlot);
     
     Vertex v0;
     Vertex v1;
     Vertex v2;
-    GetVertices(sourceMesh, sourcePayload.primitiveIndex, v0, v1, v2);
+    GetVertices(sourceMesh, sourceProps, sourcePayload.primitiveIndex, v0, v1, v2);
 
     float3x3 objectToWorld3x3 = mul((float3x3) sourceInstance.Transform, (float3x3) sourceTransform.Transform);
     
