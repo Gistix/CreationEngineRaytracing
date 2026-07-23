@@ -83,16 +83,16 @@ void Main(uint3 DTid : SV_DispatchThreadID)
 
     // Read remap entry: {geometrySlot, instanceID}
     uint2 entry = MeshSlotRemap.Load2(remapIdx * MESH_SLOT_REMAP_STRIDE);
-    uint geometrySlot = entry.x;
-    uint instanceID = entry.y;
+    const uint geometryID = entry.x;
+    const uint instanceID = entry.y;
 
-    Mesh mesh = Meshes[geometrySlot];
-    uint meshSlot = mesh.MeshID;
+    Mesh mesh = Meshes[geometryID];
+    const uint meshID = mesh.MeshID;
     Instance instance = Instances[instanceID];
 
     // meshSlot == transform index
-    float3x4 transform = CurrentTransforms[meshSlot].Value;
-    float3x4 prevTransform = PrevTransforms[meshSlot].Value;
+    float3x4 transform = CurrentTransforms[meshID].Value;
+    float3x4 prevTransform = PrevTransforms[meshID].Value;
 
     float4x4 localMat = mul(InverseAffine(ToFloat4x4(instance.Transform)), ToFloat4x4(transform));
     float4x4 prevLocalMat = mul(InverseAffine(ToFloat4x4(instance.PrevTransform)), ToFloat4x4(prevTransform));
@@ -108,5 +108,5 @@ void Main(uint3 DTid : SV_DispatchThreadID)
         prevLocalMat[1], 
         prevLocalMat[2]
     ); 
-    TransformsOut[meshSlot] = local;
+    TransformsOut[meshID] = local;
 }

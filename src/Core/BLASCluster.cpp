@@ -166,7 +166,6 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 
 		m_GeometryDescs.clear();
 		m_MeshData.clear();
-		m_MeshSlots.clear();
 		m_GeometrySlots.clear();
 
 		for (const auto& mesh : m_Members) {
@@ -176,11 +175,14 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 			if (!skipInstanceLights)
 				GrowBounds(mesh->GetWorldBound());
 
-			const auto& descs = mesh->GetGeometryDescs();
-			if (descs.empty())
+			const auto& entries = mesh->GetGeometryEntries();
+			if (entries.empty())
 				continue;
 
-			m_GeometryDescs.insert(m_GeometryDescs.end(), descs.begin(), descs.end());
+			for (const auto& entry : entries) {
+				m_GeometryDescs.push_back(entry.desc);
+				m_GeometrySlots.push_back(entry.geometryIndex);
+			}
 
 			if (mesh->IsUpdatable())
 				m_Flags.set(Flags::Updatable);
@@ -188,12 +190,7 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 			if (mesh->IsTwoSided())
 				m_Flags.set(Flags::TwoSided);
 
-			const size_t before = m_MeshData.size();
 			mesh->WriteMeshData(m_MeshData);
-			for (size_t i = before; i < m_MeshData.size(); i++) {
-				m_MeshSlots.push_back(mesh->GetMeshIndex());
-				m_GeometrySlots.push_back(mesh->GetGeometryIndex(i - before));
-			}
 		}
 
 		// Push each geometry's MeshData to its own geometry-indexed slot
@@ -287,11 +284,14 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	}
 
 	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
-	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags.any(DirtyFlags::Visibility)) {
+	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags == DirtyFlags::Visibility) {
 		// Orphan clusters contain one mesh and are excluded from the TLAS while hidden.
 		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
 		m_DirtyFlags.reset();
 		m_LastBuildFrame = frameIndex;
+
+		logger::info("BLASCluster::BuildUpdate - {}: {} - Skipping and consuming visibility flag.", fmt::ptr(this), m_Name);
+
 		return;
 	}
 	if (buildMode == BuildMode::Skip) {

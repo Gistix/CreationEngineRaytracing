@@ -45,7 +45,6 @@ class BLASCluster
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
 	eastl::vector<MeshData> m_MeshData;
-	eastl::vector<uint16_t> m_MeshSlots;
 	eastl::vector<uint16_t> m_GeometrySlots;
 
 	nvrhi::rt::AccelStructHandle m_BLAS;
@@ -118,7 +117,6 @@ public:
 	// Updates the cluster and returns its visible MeshData entries.
 	const eastl::vector<MeshData>& Update();
 
-	const auto& GetMeshSlots() const { return m_MeshSlots; }
 	const auto& GetGeometrySlots() const { return m_GeometrySlots; }
 
 	void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const;

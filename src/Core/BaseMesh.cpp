@@ -14,9 +14,10 @@ BaseMesh::~BaseMesh()
 {
 	auto& meshManager = Scene::GetSingleton()->GetSceneGraph()->GetMeshManager();
 
-	for (const auto geoIdx : m_GeometryIndex)
-		meshManager->ReleaseGeometryIndex(geoIdx);
+	for (const auto& entry : m_GeometryEntries)
+		meshManager->ReleaseGeometryIndex(entry.geometryIndex);
 
+	if (m_MeshIndex != UINT16_MAX)
 	if (m_MeshIndex != UINT16_MAX)
 		meshManager->ReleaseMeshIndex(m_MeshIndex);
 }
@@ -61,9 +62,9 @@ void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
 
 	const uint16_t vertexID = GetVertexID();
 
-	const auto& descs = GetGeometryDescs();
-	for (size_t i = 0; i < descs.size(); i++) {
-		auto& geomTris = descs[i].geometryData.triangles;
+	const auto& entries = GetGeometryEntries();
+	for (size_t i = 0; i < entries.size(); i++) {
+		auto& geomTris = entries[i].desc.geometryData.triangles;
 
 		meshData.emplace_back(
 			GetIndexID(i),
@@ -211,9 +212,9 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 		}
 
 		m_Transform = transform;
-	}
 
-	WriteTransform();
+		WriteTransform();
+	}
 
 	// Update Geometry Desc opaque flag
 	{
@@ -223,9 +224,9 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 		{
 			m_Flags.set(alpha, Flags::Alpha);
 
-			for (auto& desc: m_GeometryDescs)
+			for (auto& entry: m_GeometryEntries)
 			{
-				desc.flags = alpha ? nvrhi::rt::GeometryFlags::None : nvrhi::rt::GeometryFlags::Opaque;
+				entry.desc.flags = alpha ? nvrhi::rt::GeometryFlags::None : nvrhi::rt::GeometryFlags::Opaque;
 			}
 
 			MarkDirty(DirtyFlags::Alpha);

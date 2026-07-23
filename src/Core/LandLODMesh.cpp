@@ -35,8 +35,8 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, 0, byteSize);
 
 	// Repoint the geometry desc to the live buffer for BLAS reads
-	for (auto& desc : m_GeometryDescs)
-		desc.geometryData.triangles.vertexBuffer = m_LiveVertexBuffer;
+	for (auto& entry : m_GeometryEntries)
+		entry.desc.geometryData.triangles.vertexBuffer = m_LiveVertexBuffer;
 
 	// RT shaders read from here
 	device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
@@ -86,12 +86,12 @@ void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 
 void LandLODMesh::UpdateOcclusion()
 {
-	if (m_GeometryDescs.empty()) {
+	if (m_GeometryEntries.empty()) {
 		logger::info("LandLODMesh::UpdateOcclusion - No geometry");
 		return;
 	}
 
-	const auto& firstDesc = m_GeometryDescs[0];
+	const auto& firstDesc = m_GeometryEntries[0].desc;
 
 	LandLODUpdate update(
 		GetVertexID(),

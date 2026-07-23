@@ -14,11 +14,11 @@ public:
 
 	bool IsUpdatable() const override { return true; }
 
-	const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const override {
+	const eastl::vector<GeometryEntry>& GetGeometryEntries() const override {
 		if (m_Flags.none(Flags::DismemberSkinInstance))
-			return BaseMesh::GetGeometryDescs();
+			return BaseMesh::GetGeometryEntries();
 
-		return m_VisibleGeometryDescs;
+		return m_VisibleGeometryEntries;
 	}
 
 	// Copies raw boneWorld transforms from the game skin instance (no matrix math — that moves to GPU).
@@ -60,14 +60,10 @@ public:
 	uint16_t GetVertexID() const override { return static_cast<uint16_t>(m_VertexBuffer.m_Descriptor.Get()); }
 
 	uint16_t GetGeometryIndex(size_t i) const override {
-		if (m_Flags.none(Flags::DismemberSkinInstance))
-			return i < m_GeometryIndex.size() ? m_GeometryIndex[i] : UINT16_MAX;
-
-		if (i >= m_VisibleGeometrySourceIndices.size())
-			return UINT16_MAX;
-
-		const size_t sourceIdx = m_VisibleGeometrySourceIndices[i];
-		return sourceIdx < m_GeometryIndex.size() ? m_GeometryIndex[sourceIdx] : UINT16_MAX;
+		const auto& entries = m_Flags.all(Flags::DismemberSkinInstance)
+			? static_cast<const eastl::vector<GeometryEntry>&>(m_VisibleGeometryEntries)
+			: m_GeometryEntries;
+		return i < entries.size() ? entries[i].geometryIndex : UINT16_MAX;
 	}
 protected:
 	// Non-building constructor for derived meshes that supply their own vertex buffer (e.g. DynamicMesh).
@@ -94,7 +90,7 @@ protected:
 	// One entry per skin partition.
 	eastl::vector<bool> m_PartitionVisibility;
 
-	mutable eastl::vector<nvrhi::rt::GeometryDesc> m_VisibleGeometryDescs;
+	mutable eastl::vector<GeometryEntry> m_VisibleGeometryEntries;
 	mutable eastl::vector<size_t> m_VisibleGeometrySourceIndices;
 
 	// Native (rest-pose) byte-address vertex buffer; the original source consumed by the skinning pass.

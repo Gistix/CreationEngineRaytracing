@@ -14,6 +14,11 @@ class SkinnedMesh;
 class DynamicMesh;
 class BLASCluster;
 
+struct GeometryEntry {
+	nvrhi::rt::GeometryDesc desc;
+	uint16_t geometryIndex;
+};
+
 class BaseMesh
 {
 	void UpdateMaterial();
@@ -84,11 +89,9 @@ public:
 
 	bool IsTwoSided();
 
-	// Returns the mesh's geometry descs (identity transform with the local-to-owner transform baked in).
-	// DirectMesh holds a single desc; SkinnedMesh/DynamicMesh hold one per partition.
-	virtual const eastl::vector<nvrhi::rt::GeometryDesc>& GetGeometryDescs() const { return m_GeometryDescs; }
-
-	const eastl::vector<uint16_t>& GetGeometryIndex() const { return m_GeometryIndex; }
+	// Returns the mesh's geometry entries (desc + geometry slot index).
+	// DirectMesh holds a single entry; SkinnedMesh/DynamicMesh hold one per partition.
+	virtual const eastl::vector<GeometryEntry>& GetGeometryEntries() const { return m_GeometryEntries; }
 
 	RE::BSTriShape* GetTriShape() const { return m_BSTriShape; }
 
@@ -146,7 +149,7 @@ public:
 
 	// Allocated geometry index for the i-th geometry entry (accounts for SkinnedMesh visibility filtering).
 	virtual uint16_t GetGeometryIndex(size_t i) const {
-		return i < m_GeometryIndex.size() ? m_GeometryIndex[i] : UINT16_MAX;
+		return i < m_GeometryEntries.size() ? m_GeometryEntries[i].geometryIndex : UINT16_MAX;
 	}
 
 protected:
@@ -182,9 +185,7 @@ protected:
 
 	RE::TESObjectREFR* m_PrevOwner = nullptr;
 
-	eastl::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
-
-	eastl::vector<uint16_t> m_GeometryIndex;
+	eastl::vector<GeometryEntry> m_GeometryEntries;
 
 	// Back-pointer to the BLAS cluster this mesh belongs to; set by AddMember, used for fast removal.
 	BLASCluster* m_Cluster = nullptr;
