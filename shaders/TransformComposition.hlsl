@@ -87,7 +87,7 @@ void Main(uint3 DTid : SV_DispatchThreadID)
     uint instanceID = entry.y;
 
     Mesh mesh = Meshes[geometrySlot];
-    uint meshSlot = mesh.MeshSlot;
+    uint meshSlot = mesh.MeshID;
     Instance instance = Instances[instanceID];
 
     // meshSlot == transform index

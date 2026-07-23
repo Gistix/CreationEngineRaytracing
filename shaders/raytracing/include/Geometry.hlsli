@@ -82,7 +82,7 @@ uint GetSafeMeshIndex(in Instance instance, uint geometryIndex)
 }
 
 // Reads the geometry slot from the indirection buffer: entry.x = geometrySlot, entry.y = instanceID
-// Meshes[geometrySlot] has the per-geometry MeshData, access .MeshSlot for transforms/properties.
+// Meshes[geometrySlot] has the per-geometry MeshData, access .MeshID for transforms/properties.
 uint2 GetMeshRemapEntry(in Instance instance, uint geometryIndex)
 {
     uint remapIdx = GetSafeMeshIndex(instance, geometryIndex);
@@ -92,7 +92,7 @@ uint2 GetMeshRemapEntry(in Instance instance, uint geometryIndex)
 uint GetMeshSlot(in Instance instance, uint geometryIndex)
 {
     uint2 entry = GetMeshRemapEntry(instance, geometryIndex);
-    return Meshes[NonUniformResourceIndex(entry.x)].MeshSlot;
+    return Meshes[NonUniformResourceIndex(entry.x)].MeshID;
 }
 
 Properties GetMeshProperties(uint meshSlot)
@@ -125,14 +125,14 @@ Properties GetMeshProperties(in Payload payload)
 {
     Instance instance = GetInstance(payload.GetInstanceIndex());
     uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
-    return GetMeshProperties(Meshes[NonUniformResourceIndex(entry.x)].MeshSlot);
+    return GetMeshProperties(Meshes[NonUniformResourceIndex(entry.x)].MeshID);
 }
 
 uint GetMeshSlot(in Payload payload)
 {
     Instance instance = GetInstance(payload.GetInstanceIndex());
     uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
-    return Meshes[NonUniformResourceIndex(entry.x)].MeshSlot;
+    return Meshes[NonUniformResourceIndex(entry.x)].MeshID;
 }
 
 Transform GetTransform(in uint meshIndex)
@@ -262,7 +262,7 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
 {
     const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
     
-    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset + safePrimitiveIndex);
+    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.TriangleOffset + safePrimitiveIndex);
 
     const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
     
@@ -287,7 +287,7 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
 {
     const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
 
-    Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset + safePrimitiveIndex);
+    Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.TriangleOffset + safePrimitiveIndex);
 
     const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
 

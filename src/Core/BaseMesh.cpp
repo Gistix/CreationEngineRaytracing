@@ -12,7 +12,7 @@
 
 BaseMesh::~BaseMesh()
 {
-	auto* meshManager = Scene::GetSingleton()->GetSceneGraph()->GetMeshManager();
+	auto& meshManager = Scene::GetSingleton()->GetSceneGraph()->GetMeshManager();
 
 	for (const auto geoIdx : m_GeometryIndex)
 		meshManager->ReleaseGeometryIndex(geoIdx);
@@ -73,9 +73,8 @@ void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
 			static_cast<uint16_t>(geomTris.indexCount / 3),
 			static_cast<uint16_t>(m_Type),
 			static_cast<uint16_t>(GetDynamicIndex()),
-			GetGeometryIndex(i),
 			m_MeshIndex,
-			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
+			static_cast<uint16_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
 			m_Material->GetOffsetComp()
 		);
 	}

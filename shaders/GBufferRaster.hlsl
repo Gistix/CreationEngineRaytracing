@@ -62,7 +62,7 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     uint geometrySlot = remapEntry.x;
     
     Mesh mesh = Meshes[geometrySlot];
-    uint meshSlot = mesh.MeshSlot;
+    uint meshSlot = mesh.MeshID;
     Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
     
     uint triangleID = vertexID / 3;

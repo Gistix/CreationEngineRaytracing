@@ -5,7 +5,7 @@
 // Stored as two uint32_t values in a ByteAddressBuffer.
 // x = geometrySlot (per-geometry index from AllocateGeometryIndex, index into Meshes)
 // y = instanceID (TLAS instance index for this cluster)
-// Transforms/Properties are indexed by mesh slot from Meshes[geometrySlot].MeshSlot.
+// Transforms/Properties are indexed by mesh ID from Meshes[geometrySlot].MeshID.
 #define MESH_SLOT_REMAP_STRIDE 8
 
 #endif // INTEROP_MESH_SLOT_REMAP_HLSLI
