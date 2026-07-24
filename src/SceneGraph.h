@@ -113,6 +113,13 @@ class SceneGraph
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
 	eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>> m_CreateList;
 
+	// Per-worker output buffers used by the parallel Phase A traversal. Each worker accumulates into its
+	// own vector; SceneGraph::Update concatenates them serially after WaitAll() (mirrors the existing
+	// m_PerWorkerCreateCandidates pattern used by Phase B).
+	eastl::vector<eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>>> m_PerWorkerUpdateList;
+	eastl::vector<eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>>> m_PerWorkerCreateList;
+	eastl::vector<eastl::vector<BaseMesh*>> m_PerWorkerCurrentVisible;
+
 	struct MeshCreateCandidate {
 		RE::BSTriShape* bsTriShape;
 		RE::TESObjectREFR* refr;

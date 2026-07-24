@@ -48,6 +48,10 @@ namespace Constants
 
 	static constexpr uint32_t MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME = 8;
 
+	// Minimum child count for a NiNode to fan-out its children into the thread pool during SceneGraph::Update's
+	// Phase A traversal. Below this count, recursion stays serial to avoid scheduler overhead.
+	static constexpr size_t ParallelTraversalFanoutThreshold = 32;
+
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
 
 	static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;

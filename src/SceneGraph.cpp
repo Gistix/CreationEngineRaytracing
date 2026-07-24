@@ -448,20 +448,226 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 
-	// Phase A: Fast traversal — collect into update/create lists, skip heavy processing
+	// Phase A: Parallel recursive traversal — collect into update/create lists, skip heavy processing.
+	//
+	// Replaces the previous serial walk + the (now-removed) Phase 0 FadeNode collection. Strategy:
+	//
+	//   1. Serial descent (ParallelTriShapeWalker::walk) walks the tree top-down. Below any wide NiNode
+	//      (children.size() >= Constants::ParallelTraversalFanoutThreshold) we do NOT recurse into its
+	//      children; instead each child (with its propagated parentRefr) is appended to a flat
+	//      `forkedChildren` accumulator. We continue descending through other sub-threshold subtrees to
+	//      discover more wide fan-outs.
+	//      - Leaves reached during this serial descent are routed directly into per-worker slot 0 (no
+	//        concurrent writers since the worker tasks haven't been dispatched yet).
+	//   2. After walk returns, forkedChildren is chunked into exactly `numWorkers` partitions and each
+	//      chunk is dispatched as one thread pool task. Each task iterates its chunk calling serialWalk
+	//      (which invokes Util::Traversal::ScenegraphTriShapes) on each child, pushing results into its
+	//      exclusive per-worker slot indexed by chunkIdx+1.
+	//   3. WaitAll, then serial concat into the final flat lists.
+	//
+	// Why chunked instead of per-child fork: the wide NiNode in a typical Skyrim frame has ~1,254 BSFadeNode
+	// children; each child subtree contains ~2 leaves (the typical fade-pair). Forking 1,254 tasks swamps
+	// the pool with mutex-protected Enqueue/TryPop churn and net regresses vs serial. Chunking to exactly
+	// numWorkers coarse tasks (~157 subtrees each) makes the per-pool-task cost negligible relative to
+	// per-subtree work, and sidesteps the slot-collision race that fine-grained forking caused.
+	//
+	// Safety: m_DirectMeshes.find() is concurrent-read only (the map is mutated before A by DestroyMeshes
+	// and after A by Phase C2). All NiAVObject virtual calls performed by the visitor are read-only on
+	// stable per-frame tree nodes; no NiPointer<> smart-pointer copies occur inside the visitor (it passes
+	// child.get() raw pointers), so no atomic refcount churn. The ShadowSceneNode portalGraph read is stable
+	// by the time Update() runs. Each forked chunk writes to an exclusive per-worker slot, so per-worker
+	// vectors have exactly one writer — no push_back race.
 	{
+		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
+		// One slot per forked chunk task (slots 1..numWorkers) plus slot 0 reserved for the main-thread
+		// serial descent. Total slots = numWorkers + 1.
+		const size_t numSlots = numWorkers + 1;
+
+		m_PerWorkerUpdateList.assign(numSlots, {});
+		m_PerWorkerCreateList.assign(numSlots, {});
+		m_PerWorkerCurrentVisible.assign(numSlots, {});
+
+		for (auto& v : m_PerWorkerUpdateList) v.reserve(256);
+		for (auto& v : m_PerWorkerCreateList) v.reserve(64);
+		for (auto& v : m_PerWorkerCurrentVisible) v.reserve(256);
+
 		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
-		Util::Traversal::ScenegraphTriShapes(worldRootNode, [this, frameIndex](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
-			auto it = m_DirectMeshes.find(bsTriShape);
-			if (it != m_DirectMeshes.end()) {
-				auto mesh = it->second.get();
-				m_UpdateList.push_back({ mesh, refr });
-				m_CurrentVisible.push_back(mesh);
-			} else {
-				m_CreateList.push_back({ bsTriShape, refr });
+
+		// Flat accumulator of wide-NiNode children to be chunked across workers post-descent.
+		// Each entry is a (child object, propagated parentRefr) ready to be handed to serialWalk.
+		eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> forkedChildren;
+
+		struct ParallelTriShapeWalker
+		{
+			SceneGraph* self;
+			eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>>* forkedChildren;
+
+			// Routes a leaf into the per-worker buffer [workerIdx].
+			void visitLeaf(RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr, size_t workerIdx)
+			{
+				if (!bsTriShape) {
+					logger::critical("[PhaseA-DBG] visitLeaf[{0}] was passed a NULL bsTriShape (refr={1:p})", workerIdx, static_cast<const void*>(refr));
+					return;
+				}
+
+				auto it = self->m_DirectMeshes.find(bsTriShape);
+				if (it != self->m_DirectMeshes.end()) {
+					auto mesh = it->second.get();
+					self->m_PerWorkerUpdateList[workerIdx].push_back({ mesh, refr });
+					self->m_PerWorkerCurrentVisible[workerIdx].push_back(mesh);
+				} else {
+					self->m_PerWorkerCreateList[workerIdx].push_back({ bsTriShape, refr });
+				}
 			}
-			return CESEAdapter::RE::BSVisitControl::kContinue;
-		});
+
+			// Walks a single subtree serially via the existing Util::Traversal::ScenegraphTriShapes,
+			// routing leaves into per-worker buffer [workerIdx].
+			void serialWalk(RE::NiAVObject* object, RE::TESObjectREFR* parentRefr, size_t workerIdx)
+			{
+				Util::Traversal::ScenegraphTriShapes(object, [this, workerIdx](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
+					if (!bsTriShape) {
+						logger::critical("[PhaseA-DBG] serialWalk[{0} visitor] received NULL bsTriShape from AsTriShape (object ptr inside ScenegraphTriShapes passed us null); refr={1:p}",
+						                 workerIdx, static_cast<const void*>(refr));
+						return CESEAdapter::RE::BSVisitControl::kContinue;
+					}
+					visitLeaf(bsTriShape, refr, workerIdx);
+					return CESEAdapter::RE::BSVisitControl::kContinue;
+				}, parentRefr);
+			}
+
+			// Recursive serial descent. parentRefr is propagated to children exactly as in
+			// Util::Traversal::ScenegraphTriShapes so that BSFadeNode ownership resolves identically.
+			// When we hit a wide NiNode we record its children in forkedChildren instead of recursing.
+			void walk(RE::NiAVObject* object, RE::TESObjectREFR* parentRefr = nullptr)
+			{
+				if (!object)
+					return;
+
+				if (Util::Adapter::IsNiAVObjectHidden(object))
+					return;
+
+				if (auto geom = Util::Adapter::AsTriShape(object)) {
+					// Leaves reached during the serial descent route to slot 0 (no concurrent writers;
+					// the worker tasks haven't been dispatched yet).
+					visitLeaf(geom, parentRefr, 0);
+					return;
+				}
+
+				auto rtti = object->GetRTTI();
+				if (rtti == Constants::rtti::NiBillboardNode.get() || rtti == Constants::rtti::BSOrderedNode.get())
+					return;
+
+				auto node = Util::Adapter::AsNode(object);
+				if (!node)
+					return;
+
+				auto& children = Util::Adapter::GetChildren(node);
+
+				if (auto switchNode = node->AsSwitchNode()) {
+					auto index = static_cast<uint16_t>(switchNode->index);
+					if (index < children.size())
+						walk(children[index].get(), parentRefr);
+					return;
+				}
+
+				// Resolve refr for this node, mirroring ScenegraphTriShapes.
+				auto refr = parentRefr;
+				if (rtti == Constants::rtti::BSFadeNode.get()) {
+					if (auto owner = Util::Adapter::GetOwner(object))
+						refr = owner;
+				}
+
+				// ShadowSceneNode: collect portalGraph->alwaysRenderChildren (nodes outside the regular
+				// scene graph that are nonetheless rendered this frame). We visit them in addition to the
+				// regular children, matching ScenegraphTriShapes behavior.
+				eastl::vector<RE::NiAVObject*> portalChildren;
+				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
+					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
+					if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+						for (auto& child : portalGraph->alwaysRenderChildren) {
+							if (child->parent)
+								continue;
+							portalChildren.push_back(child.get());
+						}
+					}
+				}
+
+				if (children.size() >= Constants::ParallelTraversalFanoutThreshold) {
+					// Wide fan-out: record children for post-descent chunked parallel processing instead
+					// of recursing. This is the deliberate granularity decision: forking 1:1 per child
+					// (1,254 tasks in a typical frame) swamps the pool with mutex overhead; chunking here
+					// keeps total pool tasks at exactly numWorkers, matching the existing Phase B pattern.
+					for (auto& child : children)
+						if (child)
+							forkedChildren->push_back({ child.get(), refr });
+					for (auto* child : portalChildren)
+						forkedChildren->push_back({ child, refr });
+				} else {
+					for (auto& child : children) {
+						if (child)
+							walk(child.get(), refr);
+					}
+					for (auto* child : portalChildren)
+						walk(child, refr);
+				}
+			}
+		} walker{ this, &forkedChildren };
+
+		walker.walk(worldRootNode);
+
+		// Dispatch the accumulated wide-fan-out children as exactly numWorkers chunked tasks. Each task
+		// iterates its chunk calling serialWalk on each subtree; per-worker output slot is chunkIdx+1
+		// (slot 0 is reserved for the main-thread walk above).
+		const size_t totalForked = forkedChildren.size();
+		if (totalForked > 0) {
+			const size_t chunkSize = (totalForked + numWorkers - 1) / numWorkers;
+			for (size_t chunkIdx = 0; chunkIdx < numWorkers; ++chunkIdx) {
+				const size_t start = chunkIdx * chunkSize;
+				const size_t end = std::min(start + chunkSize, totalForked);
+				if (start >= end)
+					continue;
+
+				const size_t workerIdx = chunkIdx + 1; // slots 1..numWorkers
+
+				m_ThreadPool->Enqueue([&, start, end, workerIdx]() {
+					for (size_t i = start; i < end; ++i) {
+						auto& [child, refr] = forkedChildren[i];
+						walker.serialWalk(child, refr, workerIdx);
+					}
+				});
+			}
+
+			// Drain all chunked tasks before concatenating per-worker output.
+			m_ThreadPool->WaitAll();
+		}
+
+		// [PhaseA-DBG] Inspect per-worker output for null bsTriShape entries that somehow landed in the
+		// create list. We log the slot, the index within the slot, and the paired refr so we can later
+		// match the source in the visitor log above.
+		for (size_t slot = 0; slot < m_PerWorkerCreateList.size(); ++slot) {
+			const auto& w = m_PerWorkerCreateList[slot];
+			for (size_t i = 0; i < w.size(); ++i) {
+				if (!w[i].first) {
+					logger::critical("[PhaseA-DBG] concat: m_PerWorkerCreateList[{0}][{1}] has NULL bsTriShape; refr={2:p}",
+					                 slot, i, static_cast<const void*>(w[i].second));
+				}
+			}
+		}
+
+		// Serial concat into the final flat lists, preserving within-worker DFS order. Phase B/D/G are all
+		// order-independent so worker concatenation order does not affect correctness.
+		for (auto& w : m_PerWorkerUpdateList) {
+			m_UpdateList.insert(m_UpdateList.end(), w.begin(), w.end());
+			w.clear();
+		}
+		for (auto& w : m_PerWorkerCreateList) {
+			m_CreateList.insert(m_CreateList.end(), w.begin(), w.end());
+			w.clear();
+		}
+		for (auto& w : m_PerWorkerCurrentVisible) {
+			m_CurrentVisible.insert(m_CurrentVisible.end(), w.begin(), w.end());
+			w.clear();
+		}
 	}
 
 	if (timings) {
@@ -504,6 +710,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
 			for (size_t i = start; i < end; ++i) {
 				auto& [bsTriShape, refr] = m_CreateList[i];
+
+				if (!bsTriShape) {
+					logger::critical("[PhaseB-DBG] doFilter[{0},{1}) at i={2} found NULL bsTriShape; refr={3:p}; m_CreateList.size()={4}",
+					                 start, end, i, static_cast<const void*>(refr), m_CreateList.size());
+					continue;
+				}
 
 				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
 					continue;
