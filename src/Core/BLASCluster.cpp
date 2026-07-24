@@ -153,7 +153,7 @@ void BLASCluster::UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags)
 	m_DirtyFlags.set(meshDirtyFlags);
 }
 
-const eastl::vector<MeshData>& BLASCluster::Update()
+uint32_t BLASCluster::Update()
 {
 	UpdateTransform();
 
@@ -165,8 +165,9 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 		m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
 		m_GeometryDescs.clear();
-		m_MeshData.clear();
 		m_GeometrySlots.clear();
+
+		auto* meshManager = scene->GetSceneGraph()->GetMeshManager().get();
 
 		for (const auto& mesh : m_Members) {
 			if (mesh->IsHidden())
@@ -179,27 +180,45 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 			if (entries.empty())
 				continue;
 
-			for (const auto& entry : entries) {
-				m_GeometryDescs.push_back(entry.desc);
-				m_GeometrySlots.push_back(entry.geometryIndex);
-			}
-
 			if (mesh->IsUpdatable())
 				m_Flags.set(Flags::Updatable);
 
 			if (mesh->IsTwoSided())
 				m_Flags.set(Flags::TwoSided);
 
-			mesh->WriteMeshData(m_MeshData);
-		}
+			const uint16_t vertexID = mesh->GetVertexID();
+			const auto vertexDesc = VertexDesc(mesh->GetVertexDescRaw());
+			const auto meshType = static_cast<uint16_t>(mesh->GetType());
+			const auto dynamicIndex = static_cast<uint16_t>(mesh->GetDynamicIndex());
+			const auto meshIndex = mesh->GetMeshIndex();
+			const auto materialIndex = mesh->GetMaterial()->GetOffsetComp();
 
-		// Push each geometry's MeshData to its own geometry-indexed slot
-		auto* meshManager = scene->GetSceneGraph()->GetMeshManager().get();
-		for (size_t i = 0; i < m_GeometrySlots.size(); i++)
-			meshManager->WriteMeshData(m_GeometrySlots[i], m_MeshData[i]);
+			for (size_t i = 0; i < entries.size(); i++) {
+				const auto& entry = entries[i];
+				m_GeometryDescs.push_back(entry.desc);
+				m_GeometrySlots.push_back(entry.geometryIndex);
+
+				auto& geomTris = entry.desc.geometryData.triangles;
+				MeshData md(
+					mesh->GetIndexID(i),
+					vertexID,
+					vertexDesc,
+					static_cast<uint16_t>(geomTris.vertexCount),
+					static_cast<uint16_t>(geomTris.indexCount / 3),
+					meshType,
+					dynamicIndex,
+					meshIndex,
+					static_cast<uint16_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
+					materialIndex
+				);
+				meshManager->WriteMeshData(entry.geometryIndex, md);
+			}
+		}
 	}
 
-	m_IsValid = !m_MeshData.empty();
+	const uint32_t meshCount = static_cast<uint32_t>(m_GeometrySlots.size());
+
+	m_IsValid = meshCount > 0;
 	if (m_IsValid && !skipInstanceLights) {
 		auto sceneGraph = scene->GetSceneGraph();
 
@@ -207,7 +226,7 @@ const eastl::vector<MeshData>& BLASCluster::Update()
 		UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
 	}
 
-	return m_MeshData;
+	return meshCount;
 }
 
 void BLASCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const

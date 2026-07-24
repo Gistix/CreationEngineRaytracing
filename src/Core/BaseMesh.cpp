@@ -55,31 +55,6 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 	return { bsTriShape->name.c_str() };
 }
 
-void BaseMesh::WriteMeshData(eastl::vector<MeshData>& meshData) const
-{
-	using namespace DirectX;
-
-	const uint16_t vertexID = GetVertexID();
-
-	const auto& entries = GetGeometryEntries();
-	for (size_t i = 0; i < entries.size(); i++) {
-		auto& geomTris = entries[i].desc.geometryData.triangles;
-
-		meshData.emplace_back(
-			GetIndexID(i),
-			vertexID,
-			VertexDesc(GetVertexDescRaw()),
-			static_cast<uint16_t>(geomTris.vertexCount),
-			static_cast<uint16_t>(geomTris.indexCount / 3),
-			static_cast<uint16_t>(m_Type),
-			static_cast<uint16_t>(GetDynamicIndex()),
-			m_MeshIndex,
-			static_cast<uint16_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
-			m_Material->GetOffsetComp()
-		);
-	}
-}
-
 void BaseMesh::MarkDirty(DirtyFlags flag) {
 	if (flag == DirtyFlags::None)
 		return;

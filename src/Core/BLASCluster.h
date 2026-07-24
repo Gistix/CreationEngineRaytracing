@@ -44,7 +44,6 @@ class BLASCluster
 
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
-	eastl::vector<MeshData> m_MeshData;
 	eastl::vector<uint16_t> m_GeometrySlots;
 
 	nvrhi::rt::AccelStructHandle m_BLAS;
@@ -114,8 +113,8 @@ public:
 
 	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
 
-	// Updates the cluster and returns its visible MeshData entries.
-	const eastl::vector<MeshData>& Update();
+	// Updates the cluster and returns the number of visible geometry entries.
+	uint32_t Update();
 
 	const auto& GetGeometrySlots() const { return m_GeometrySlots; }
 

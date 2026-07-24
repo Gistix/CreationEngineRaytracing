@@ -722,8 +722,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					for (size_t i = start; i < end; ++i) {
 						auto& cluster = m_AllClusters[i];
 
-						const auto& meshData = cluster->Update();
-						const uint32_t meshCount = static_cast<uint32_t>(meshData.size());
+						const uint32_t meshCount = cluster->Update();
 
 						if (meshCount == 0)
 							continue;

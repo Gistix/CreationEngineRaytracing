@@ -126,10 +126,7 @@ public:
 	
 	CESEAdapter::REX::EnumSet<DirtyFlags> GetDirtyFlags() const { return m_DirtyFlags; }
 
-	// Writes one MeshData per geometry
 	void WriteProperties() const;
-
-	void WriteMeshData(eastl::vector<MeshData>& meshData) const;
 
 	void MarkDirty(DirtyFlags flag);
 
