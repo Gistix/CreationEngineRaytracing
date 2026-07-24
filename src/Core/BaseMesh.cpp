@@ -18,7 +18,6 @@ BaseMesh::~BaseMesh()
 		meshManager->ReleaseGeometryIndex(entry.geometryIndex);
 
 	if (m_MeshIndex != UINT16_MAX)
-	if (m_MeshIndex != UINT16_MAX)
 		meshManager->ReleaseMeshIndex(m_MeshIndex);
 }
 

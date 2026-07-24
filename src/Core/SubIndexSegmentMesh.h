@@ -27,6 +27,8 @@ class SubIndexSegmentMesh : public BaseMesh
 public:
 	SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTriShape* parent, uint32_t start, uint32_t numTris);
 
+	virtual ~SubIndexSegmentMesh() override;
+
 	virtual uint16_t GetIndexID(size_t geometryIndex) const override;
 	virtual uint16_t GetVertexID() const override;
 	virtual void SetSubIndexHidden(bool subIndexHidden);

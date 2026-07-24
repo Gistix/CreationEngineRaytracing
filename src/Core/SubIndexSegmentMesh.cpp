@@ -30,6 +30,13 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 	m_Material = manager->GetMaterial();
 }
 
+SubIndexSegmentMesh::~SubIndexSegmentMesh()
+{
+	// Prevents the original mesh index from being released by the segments
+	m_MeshIndex = UINT16_MAX;
+}
+
+
 uint16_t SubIndexSegmentMesh::GetIndexID(size_t geometryIndex) const
 {
 	return m_Manager->GetIndexID(geometryIndex);
