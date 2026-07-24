@@ -70,8 +70,8 @@ class SceneGraph
 	eastl::array<LightData, Constants::LIGHTS_MAX> m_LightData;
 	RingBuffer m_LightBuffer;
 
-	// Mesh slot → InstanceID remap (ByteAddressBuffer, one uint2 per entry)
-	eastl::vector<eastl::pair<uint32_t, uint32_t>> m_MeshSlotRemapData; // {slot, instanceID}
+	// Mesh slot → InstanceID remap (ByteAddressBuffer, one packed uint32_t per entry: (instanceID << 16) | geometrySlot)
+	eastl::array<uint32_t, Constants::NUM_MESHES_MAX> m_MeshSlotRemapData;
 	RingBuffer m_MeshSlotRemapBuffer;
 
 	// Instance

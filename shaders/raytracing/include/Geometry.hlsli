@@ -8,8 +8,6 @@
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
 #include "interop/Properties.hlsli"
-#include "interop/MeshSlotRemap.hlsli"
-
 #include "interop/Vertex.hlsli"
 
 float3 GetBary(float2 barycentrics)
@@ -83,16 +81,15 @@ uint GetSafeMeshIndex(in Instance instance, uint geometryIndex)
 
 // Reads the geometry slot from the indirection buffer: entry.x = geometrySlot, entry.y = instanceID
 // Meshes[geometrySlot] has the per-geometry MeshData, access .MeshID for transforms/properties.
-uint2 GetMeshRemapEntry(in Instance instance, uint geometryIndex)
+uint GetMeshSlotFromRemap(in Instance instance, uint geometryIndex)
 {
     uint remapIdx = GetSafeMeshIndex(instance, geometryIndex);
-    return MeshSlotRemap.Load2(remapIdx * MESH_SLOT_REMAP_STRIDE);
+    return MeshSlotRemap.Load(remapIdx * 4) & 0xFFFF;
 }
 
 uint GetMeshSlot(in Instance instance, uint geometryIndex)
 {
-    uint2 entry = GetMeshRemapEntry(instance, geometryIndex);
-    return Meshes[NonUniformResourceIndex(entry.x)].MeshID;
+    return Meshes[NonUniformResourceIndex(GetMeshSlotFromRemap(instance, geometryIndex))].MeshID;
 }
 
 Properties GetMeshProperties(uint meshSlot)
@@ -103,36 +100,31 @@ Properties GetMeshProperties(uint meshSlot)
 Mesh GetMesh(in uint instanceIndex, in uint geometryIndex)
 {
     Instance instance = GetInstance(instanceIndex);
-    uint2 entry = GetMeshRemapEntry(instance, geometryIndex);
-    return Meshes[NonUniformResourceIndex(entry.x)];
+    return Meshes[NonUniformResourceIndex(GetMeshSlotFromRemap(instance, geometryIndex))];
 }
 
 Mesh GetMesh(in uint instanceIndex, in uint geometryIndex, out Instance instance)
 {
     instance = GetInstance(instanceIndex);
-    uint2 entry = GetMeshRemapEntry(instance, geometryIndex);
-    return Meshes[NonUniformResourceIndex(entry.x)];
+    return Meshes[NonUniformResourceIndex(GetMeshSlotFromRemap(instance, geometryIndex))];
 }
 
 Mesh GetMesh(in Payload payload, out Instance instance)
 {
     instance = GetInstance(payload.GetInstanceIndex());
-    uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
-    return Meshes[NonUniformResourceIndex(entry.x)];
+    return Meshes[NonUniformResourceIndex(GetMeshSlotFromRemap(instance, payload.GetGeometryIndex()))];
 }
 
 Properties GetMeshProperties(in Payload payload)
 {
     Instance instance = GetInstance(payload.GetInstanceIndex());
-    uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
-    return GetMeshProperties(Meshes[NonUniformResourceIndex(entry.x)].MeshID);
+    return GetMeshProperties(Meshes[NonUniformResourceIndex(GetMeshSlotFromRemap(instance, payload.GetGeometryIndex()))].MeshID);
 }
 
 uint GetMeshSlot(in Payload payload)
 {
     Instance instance = GetInstance(payload.GetInstanceIndex());
-    uint2 entry = GetMeshRemapEntry(instance, payload.GetGeometryIndex());
-    return Meshes[NonUniformResourceIndex(entry.x)].MeshID;
+    return Meshes[NonUniformResourceIndex(GetMeshSlotFromRemap(instance, payload.GetGeometryIndex()))].MeshID;
 }
 
 Transform GetTransform(in uint meshIndex)

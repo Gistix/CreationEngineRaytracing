@@ -2,8 +2,6 @@
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
 #include "interop/RowMajorFloat3x4.hlsli"
-#include "interop/MeshSlotRemap.hlsli"
-
 float4x4 ToFloat4x4(float3x4 m)
 {
     return float4x4(
@@ -81,10 +79,10 @@ void Main(uint3 DTid : SV_DispatchThreadID)
     if (remapIdx >= PC.NumMeshes)
         return;
 
-    // Read remap entry: {geometrySlot, instanceID}
-    uint2 entry = MeshSlotRemap.Load2(remapIdx * MESH_SLOT_REMAP_STRIDE);
-    const uint geometryID = entry.x;
-    const uint instanceID = entry.y;
+    // Read remap entry: packed (instanceID << 16) | geometrySlot
+    uint packed = MeshSlotRemap.Load(remapIdx * 4);
+    const uint geometryID = packed & 0xFFFF;
+    const uint instanceID = packed >> 16;
 
     Mesh mesh = Meshes[geometryID];
     const uint meshID = mesh.MeshID;

@@ -41,13 +41,13 @@ void SceneGraph::Initialize()
 	// Mesh slot remap buffer: one uint2 per mesh (ByteAddress), ring-buffered
 	{
 		auto remapDesc = nvrhi::BufferDesc()
-			.setByteSize(Constants::NUM_MESHES_MAX * 8)
+			.setByteSize(Constants::NUM_MESHES_MAX * 4)
 			.setCanHaveRawViews(true)
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 			.setDebugName("Mesh Slot Remap Buffer");
 		m_MeshSlotRemapBuffer = RingBuffer(device, remapDesc, "Mesh Slot Remap Buffer");
 	}
-	m_MeshSlotRemapData.resize(Constants::NUM_MESHES_MAX);
+
 
 	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
@@ -757,12 +757,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 							instanceIndex = m_NumInstances++;
 						}
 
-						// Write remap entries: {geometrySlot, instanceID} into the ByteAddress remap buffer
+						// Write remap entries: packed (instanceID << 16) | geometrySlot into the ByteAddress remap buffer
 						const auto& geometrySlots = cluster->GetGeometrySlots();
 						for (uint32_t j = 0; j < meshCount; j++) {
 							const uint32_t remapIdx = firstMesh + j;
-							m_MeshSlotRemapData[remapIdx].first = geometrySlots[j];
-							m_MeshSlotRemapData[remapIdx].second = static_cast<uint16_t>(instanceIndex);
+							m_MeshSlotRemapData[remapIdx] = static_cast<uint32_t>(geometrySlots[j]) | (instanceIndex << 16);
 						}
 
 						// Set Instance Index
@@ -786,7 +785,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	if (m_NumMeshes > 0) {
 		// Write remap data: contiguous uint2 entries at the start of the remap buffer
-		commandList->writeBuffer(m_MeshSlotRemapBuffer.current(), m_MeshSlotRemapData.data(), m_NumMeshes * 8ull, 0);
+		commandList->writeBuffer(m_MeshSlotRemapBuffer.current(), m_MeshSlotRemapData.data(), m_NumMeshes * 4ull, 0);
 	}
 
 	if (m_NumInstances > 0)

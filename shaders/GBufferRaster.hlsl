@@ -8,7 +8,7 @@
 #include "interop/Properties.hlsli"
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
-#include "interop/MeshSlotRemap.hlsli"
+
 
 struct InstanceConstants
 {
@@ -58,8 +58,7 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     Instance instance = Instances[InstanceConst.InstanceIndex];
 
     uint remapIdx = instance.FirstGeometryID + InstanceConst.GeometryIndex;
-    uint2 remapEntry = MeshSlotRemap.Load2(remapIdx * MESH_SLOT_REMAP_STRIDE);
-    uint geometrySlot = remapEntry.x;
+    uint geometrySlot = MeshSlotRemap.Load(remapIdx * 4) & 0xFFFF;
     
     Mesh mesh = Meshes[geometrySlot];
     uint meshSlot = mesh.MeshID;
