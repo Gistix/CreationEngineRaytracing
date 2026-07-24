@@ -92,8 +92,9 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 		seg->SyncFrom(this);
 	}
 
-	eastl::unordered_set<uint64_t> visitedKeys;
-	visitedKeys.reserve(runtimeData.numSegments);
+	m_VisitedKeys.clear();
+	if (m_VisitedKeys.bucket_count() < runtimeData.numSegments)
+		m_VisitedKeys.reserve(runtimeData.numSegments);
 
 	for (size_t i = 0; i < runtimeData.numSegments; i++) {
 		const auto& segment = runtimeData.segmentData[i];
@@ -116,7 +117,7 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 		const bool visible = bypassVisibility || (flags != 0u);
 
 		const uint64_t key = MakeSegmentKey(start, numTris);
-		visitedKeys.insert(key);
+		m_VisitedKeys.insert(key);
 
 		auto it = m_SegmentMap.find(key);
 		if (it == m_SegmentMap.end()) {
@@ -135,7 +136,7 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	// (e.g. start index or numTris changed → key differs). They remain in the map
 	// for reuse if the engine flips the key back.
 	for (auto& [key, segMesh] : m_SegmentMap) {
-		if (!visitedKeys.contains(key))
+		if (!m_VisitedKeys.contains(key))
 			segMesh->SetSubIndexHidden(true);
 	}
 

@@ -56,6 +56,7 @@ class SceneGraph
 	std::mutex m_BLASClusterUpdateMutex;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
+	eastl::vector<RE::BSTriShape*> m_DestroyedMeshesSwap;
 	mutable std::mutex m_MeshDestroyMutex;
 
 	// Material manager

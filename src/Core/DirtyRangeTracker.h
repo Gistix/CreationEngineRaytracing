@@ -62,20 +62,23 @@ public:
 	{
 		std::scoped_lock lock(m_Mutex);
 
+		m_ConsumedRanges.clear();
+
 		if (m_DirtyRanges.empty())
 			return {};
 
-		eastl::vector<eastl::pair<OffsetType, OffsetType>> ranges;
-		ranges.swap(m_DirtyRanges);
+		// Swap (not move-construct) so m_DirtyRanges retains its capacity for next frame's
+		// Write() push_backs — avoids re-growing from zero every frame.
+		m_ConsumedRanges.swap(m_DirtyRanges);
 
 		// Sort by offset, then merge adjacent/overlapping ranges
-		eastl::sort(ranges.begin(), ranges.end(),
+		eastl::sort(m_ConsumedRanges.begin(), m_ConsumedRanges.end(),
 			[](const auto& a, const auto& b) { return a.first < b.first; });
 
 		size_t dst = 0;
-		for (size_t src = 1; src < ranges.size(); ++src) {
-			auto& last = ranges[dst];
-			const auto& cur = ranges[src];
+		for (size_t src = 1; src < m_ConsumedRanges.size(); ++src) {
+			auto& last = m_ConsumedRanges[dst];
+			const auto& cur = m_ConsumedRanges[src];
 			OffsetType lastEnd = last.first + last.second;
 			if (cur.first <= lastEnd) {
 				OffsetType newEnd = cur.first + cur.second > lastEnd ? cur.first + cur.second : lastEnd;
@@ -83,12 +86,12 @@ public:
 			} else {
 				++dst;
 				if (dst != src)
-					ranges[dst] = cur;
+					m_ConsumedRanges[dst] = cur;
 			}
 		}
-		ranges.resize(dst + 1);
+		m_ConsumedRanges.resize(dst + 1);
 
-		return ranges;
+		return m_ConsumedRanges;
 	}
 
 protected:
@@ -96,5 +99,6 @@ protected:
 	size_t m_Size;
 	eastl::vector<uint8_t> m_Data;
 	eastl::vector<eastl::pair<OffsetType, OffsetType>> m_DirtyRanges;
+	eastl::vector<eastl::pair<OffsetType, OffsetType>> m_ConsumedRanges;
 	mutable std::mutex m_Mutex;
 };

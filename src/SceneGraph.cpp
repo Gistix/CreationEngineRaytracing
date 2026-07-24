@@ -400,17 +400,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	eastl::vector<RE::BSTriShape*> destroyedMeshes; 
 	{
 		std::scoped_lock lock(m_MeshDestroyMutex);
-		destroyedMeshes = eastl::move(m_DestroyedMeshes);
+		m_DestroyedMeshesSwap.swap(m_DestroyedMeshes);
 	}
 
 	const uint64_t fence = Renderer::GetSingleton()->GetLastSubmittedFence();
 
 	// Defer release until the owning slot's GPU work completes; ProcessPendingMeshDestroys
 	// is called from StartExecution() after the per-slot fence resolves.
-	for (auto destroyedMesh: destroyedMeshes)
+	for (auto destroyedMesh: m_DestroyedMeshesSwap)
 	{
 		auto it = m_DirectMeshes.find(destroyedMesh);
 		if (it == m_DirectMeshes.end())
@@ -426,6 +425,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
 		m_DirectMeshes.erase(it);
 	}
+
+	m_DestroyedMeshesSwap.clear();
 
 	if (timings) {
 		const auto nowTp = std::chrono::high_resolution_clock::now();
