@@ -12,6 +12,8 @@
 #include <thread>
 #include <vector>
 
+#include <intrin.h>  // _mm_pause (Windows/MSVC)
+
 // Work-stealing thread pool.
 //
 // Each worker owns a private deque of tasks. A worker pushes/pops its own
@@ -151,6 +153,13 @@ private:
 	{
 		t_WorkerIndex = static_cast<int>(a_myIndex);
 
+		// Tuned spin count: ~256 cycles at modern CPU frequencies is ~50-100 ns.
+		// Enough to bridge typical inter-frame gaps (mat math, hook dispatch)
+		// without parking, but small enough to not waste cycles when genuinely idle.
+		// Without this spin, each Enqueue after a quiet period incurs ~1-3 us of
+		// kernel-wake latency per worker × numWorkers, dominating small-task dispatch.
+		constexpr uint32_t kSpinBeforePark = 256;
+
 		while (true)
 		{
 			std::function<void()> task;
@@ -161,10 +170,29 @@ private:
 			}
 			else
 			{
-				std::unique_lock lock(m_WakeMutex);
-				m_WakeCV.wait(lock, [this, &a_stopToken] {
-					return a_stopToken.stop_requested() || m_QueuedTasks.load(std::memory_order_acquire) > 0;
-					});
+				// Bounded spin before parking on the CV. Lets workers absorb
+				// back-to-back Enqueue bursts (common for the render thread's
+				// parallel-for patterns) without crossing the kernel boundary.
+				for (uint32_t spin = 0; spin < kSpinBeforePark; ++spin)
+				{
+					if (a_stopToken.stop_requested())
+						return;
+					if (m_QueuedTasks.load(std::memory_order_acquire) > 0)
+						break;
+					// _mm_pause yields the CPU to a hyperthreaded sibling and hints
+					// the pipeline to wait on a memory dependency without speculative exec.
+					_mm_pause();
+				}
+
+				if (m_QueuedTasks.load(std::memory_order_acquire) == 0
+					&& !a_stopToken.stop_requested())
+				{
+					std::unique_lock lock(m_WakeMutex);
+					m_WakeCV.wait(lock, [this, &a_stopToken] {
+						return a_stopToken.stop_requested() || m_QueuedTasks.load(std::memory_order_acquire) > 0;
+						});
+				}
+
 				if (a_stopToken.stop_requested() && m_QueuedTasks.load(std::memory_order_acquire) == 0)
 					return;
 				continue; // re-check queues (own + steal) now that we might have work
