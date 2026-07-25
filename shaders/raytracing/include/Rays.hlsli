@@ -14,6 +14,8 @@
 #   define RAY_FLAGS (RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_CULL_BACK_FACING_TRIANGLES)
 #endif
 
+#define FRUSTUM_CULLED_MASK (1 << 2)
+
 #ifndef INSTANCE_MASK
 #   define INSTANCE_MASK (0xFF)
 #endif
@@ -61,14 +63,17 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
     return payload;
 }
 
-Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
+Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed, bool primaryRay = false)
 {
     Payload payload;
     payload.Init(randomSeed);
 
+    // We will only trace primary rays against instances in the camera frustum
+    const uint instanceInclusionMask = primaryRay ? INSTANCE_MASK & ~FRUSTUM_CULLED_MASK : INSTANCE_MASK;
+    
 #if USE_RAY_QUERY
     RayQuery<RAY_FLAGS> rayQuery;
-    rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
+    rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, instanceInclusionMask, ray);
 
     while (rayQuery.Proceed())
     {
@@ -96,7 +101,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
             rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(Scene, RAY_FLAGS, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    TraceRay(Scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
  #endif
     
     randomSeed = payload.randomSeed;

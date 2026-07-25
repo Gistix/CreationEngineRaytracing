@@ -97,7 +97,6 @@ void BLASCluster::UpdateTransform() {
 	}
 
 	m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
-	m_ClusterRadius = 0.0f;
 }
 
 bool BLASCluster::Empty() const
@@ -158,23 +157,27 @@ uint32_t BLASCluster::Update()
 	UpdateTransform();
 
 	auto scene = Scene::GetSingleton();
+	auto sceneGraph = scene->GetSceneGraph();
+
 	const bool skipInstanceLights = scene->m_Settings.ExperimentalSettings.GlobalLights;
 
 	// Only those who affect geometry count or its flags
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh, DirtyFlags::Alpha)) {
+		m_ClusterRadius = 0.0f;
+
 		m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
 		m_GeometryDescs.clear();
 		m_GeometrySlots.clear();
 
-		auto* meshManager = scene->GetSceneGraph()->GetMeshManager().get();
+		auto* meshManager = sceneGraph->GetMeshManager().get();
 
 		for (const auto& mesh : m_Members) {
 			if (mesh->IsHidden())
 				continue;
 
-			if (!skipInstanceLights)
-				GrowBounds(mesh->GetWorldBound());
+			// In theory also needs to be triggered when DirtyFlags::Transform
+			GrowBounds(mesh->GetWorldBound());
 
 			const auto& entries = mesh->GetGeometryEntries();
 			if (entries.empty())
@@ -211,6 +214,7 @@ uint32_t BLASCluster::Update()
 					static_cast<uint16_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
 					materialIndex
 				);
+
 				meshManager->WriteMeshData(entry.geometryIndex, md);
 			}
 		}
@@ -219,11 +223,16 @@ uint32_t BLASCluster::Update()
 	const uint32_t meshCount = static_cast<uint32_t>(m_GeometrySlots.size());
 
 	m_IsValid = meshCount > 0;
-	if (m_IsValid && !skipInstanceLights) {
-		auto sceneGraph = scene->GetSceneGraph();
 
-		// TODO: Move this to the GPU - It doesn't scale well on CPU
-		UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
+	if (m_IsValid) {
+		auto* camera = sceneGraph->GetCamera();
+		const bool inFrustum = camera->PointInFrustum(*reinterpret_cast<RE::NiPoint3*>(&m_ClusterPosition), m_ClusterRadius);
+		m_Flags.set(!inFrustum, Flags::FrustumCulled);
+
+		if (!skipInstanceLights) {
+			// TODO: Move this to the GPU - It doesn't scale well on CPU
+			UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
+		}
 	}
 
 	return meshCount;
@@ -283,7 +292,7 @@ nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 {
 	auto instanceDesc = nvrhi::rt::InstanceDesc()
 		.setInstanceID(m_InstanceIndex)
-		.setInstanceMask(InstanceMask::Default)
+		.setInstanceMask(m_Flags.all(Flags::FrustumCulled) ? InstanceMask::FrustumCulled : InstanceMask::Default)
 		.setTransform(m_Transform.f)
 		.setFlags(m_Flags.all(Flags::TwoSided) ? nvrhi::rt::InstanceFlags::TriangleCullDisable : nvrhi::rt::InstanceFlags::None)
 		.setBLAS(m_BLAS);
