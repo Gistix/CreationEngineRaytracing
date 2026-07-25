@@ -1017,17 +1017,20 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
 {
-	if (frameIndex != m_LastMaintenanceFrame) {
-		m_LastMaintenanceFrame = frameIndex;
-		m_MaintenanceRebuildsThisFrame = 0;
+	// Reset the per-frame counter once per frameIndex. compare_exchange ensures exactly one worker
+	// performs the reset on a frame transition; concurrent callers observe the post-reset value.
+	uint64_t expectedFrame = m_LastMaintenanceFrame.load(std::memory_order_relaxed);
+	if (expectedFrame != frameIndex) {
+		if (m_LastMaintenanceFrame.compare_exchange_strong(
+				expectedFrame, frameIndex,
+				std::memory_order_acq_rel, std::memory_order_relaxed)) {
+			m_MaintenanceRebuildsThisFrame.store(0, std::memory_order_release);
+		}
 	}
 
-	if (m_MaintenanceRebuildsThisFrame < Constants::MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME) {
-		m_MaintenanceRebuildsThisFrame++;
-		return true;
-	}
-
-	return false;
+	// fetch_add returns the pre-increment value; the first caller to compare below the cap wins.
+	const uint32_t cur = m_MaintenanceRebuildsThisFrame.fetch_add(1, std::memory_order_acq_rel);
+	return cur < Constants::MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME;
 }
 
 template <typename Key, typename Map>
@@ -1097,13 +1100,87 @@ void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
 	m_DirtyClusters.emplace(cluster);
 }
 
-void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
+void SceneGraph::BuildClusters([[maybe_unused]] nvrhi::ICommandList* commandList)
 {
-	// Process only clusters that were marked dirty.
-	for (auto* cluster : m_DirtyClusters)
-		cluster->BuildUpdate(commandList, this);
-	
-	m_DirtyClusters.clear();
+	// Snapshot the dirty set under the mutex so record workers can iterate the snapshot lock-free.
+	eastl::vector<BLASCluster*> dirty;
+	{
+		std::scoped_lock lock(m_ClusterDirtyMutex);
+		if (m_DirtyClusters.empty())
+			return;
+
+		dirty.reserve(m_DirtyClusters.size());
+		for (auto* cluster : m_DirtyClusters)
+			dirty.push_back(cluster);
+		m_DirtyClusters.clear();
+	}
+
+	const bool timings = Scene::GetSingleton()->m_Settings.DebugSettings.Timings;
+	const auto t0 = timings ? std::chrono::high_resolution_clock::now() : std::chrono::high_resolution_clock::time_point{};
+
+	// Phase 1 — serial prepare + allocate on the render thread. Prepare runs the CPU decision tree
+	// (DetermineBuildMode, MakeDesc, getAccelStructPreBuildInfo) which is ~1-2 µs/cluster.
+	// Parallelizing it across workers doesn't pay the dispatch overhead at typical dirty-set
+	// sizes (~45 clusters), so it runs serially. AllocateBLAS handles device->createAccelStruct
+	// (not thread-safe).
+	eastl::vector<BLASCluster::PrepareBuildResult> preps(dirty.size());
+	for (size_t i = 0; i < dirty.size(); ++i) {
+		preps[i] = dirty[i]->PrepareBuildUpdate(this);
+		dirty[i]->AllocateBLAS(preps[i]);
+	}
+
+	const auto t1 = timings ? std::chrono::high_resolution_clock::now() : std::chrono::high_resolution_clock::time_point{};
+
+	// Phase 2 — parallel record: each worker opens its own deferred command list and records the
+	// BLAS build commands for a chunk of clusters. NVRHI's per-command-list scratch pool and the
+	// D3D12 command allocator are unique per list, so concurrent recording is safe.
+	auto* renderer = Renderer::GetSingleton();
+	const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
+	const size_t numRecorders = std::min(numWorkers, dirty.size());
+
+	if (numRecorders > 0) {
+		eastl::vector<nvrhi::ICommandList*> workerCLs(numRecorders);
+		for (size_t w = 0; w < numRecorders; ++w)
+			workerCLs[w] = renderer->OpenWorkerCommandList(static_cast<uint32_t>(w));
+
+		const size_t recordChunk = (dirty.size() + numRecorders - 1) / numRecorders;
+
+		for (size_t start = 0; start < dirty.size(); start += recordChunk) {
+			const size_t end = std::min(start + recordChunk, dirty.size());
+			const size_t workerIdx = start / recordChunk;
+
+			m_ThreadPool->Enqueue([&, start, end, workerIdx]() {
+				auto* cl = workerCLs[workerIdx];
+				for (size_t i = start; i < end; ++i)
+					dirty[i]->RecordBuildUpdate(cl, preps[i]);
+			});
+		}
+
+		m_ThreadPool->WaitAll();
+
+		for (size_t w = 0; w < numRecorders; ++w)
+			workerCLs[w]->close();
+
+		const auto t2 = timings ? std::chrono::high_resolution_clock::now() : std::chrono::high_resolution_clock::time_point{};
+
+		// Phase 3 — submit worker batch. D3D12 FIFO ordering on the graphics queue ensures this
+		// batch executes before the primary command list that EndExecution submits later.
+		renderer->SubmitWorkerCommandLists(workerCLs.data(), workerCLs.size());
+
+		if (timings) {
+			const auto t3 = std::chrono::high_resolution_clock::now();
+			const float msPrepAlloc = std::chrono::duration<float, std::milli>(t1 - t0).count();
+			const float msRecord    = std::chrono::duration<float, std::milli>(t2 - t1).count();
+			const float msSubmit    = std::chrono::duration<float, std::milli>(t3 - t2).count();
+			logger::info("BuildClusters: dirty={} prep+alloc={:.4f}ms record={:.4f}ms submit={:.4f}ms",
+				dirty.size(), msPrepAlloc, msRecord, msSubmit);
+		}
+	}
+	else if (timings) {
+		const auto tEnd = std::chrono::high_resolution_clock::now();
+		logger::info("BuildClusters: dirty={} prep+alloc={:.4f}ms (no record phase)",
+			dirty.size(), std::chrono::duration<float, std::milli>(tEnd - t0).count());
+	}
 }
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)

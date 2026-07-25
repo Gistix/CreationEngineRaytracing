@@ -537,6 +537,43 @@ nvrhi::ICommandList* Renderer::StartExecution()
 	return m_CommandList;
 }
 
+nvrhi::ICommandList* Renderer::OpenWorkerCommandList(uint32_t workerIdx)
+{
+	auto device = GetDevice();
+
+	if (workerIdx >= m_WorkerCommandLists.size())
+		m_WorkerCommandLists.resize(workerIdx + 1);
+
+	if (!m_WorkerCommandLists[workerIdx]) {
+		m_WorkerCommandLists[workerIdx] = device->createCommandList(
+			nvrhi::CommandListParameters()
+			.setQueueType(nvrhi::CommandQueue::Graphics)
+			.setEnableImmediateExecution(false)
+			.setScratchChunkSize(16 * 1024 * 1024)
+		);
+	}
+
+	auto* cl = m_WorkerCommandLists[workerIdx].Get();
+	cl->open();
+	return cl;
+}
+
+uint64_t Renderer::SubmitWorkerCommandLists(nvrhi::ICommandList* const* cls, size_t count)
+{
+	if (count == 0)
+		return m_LastSubmittedInstance;
+
+	auto device = GetDevice();
+	uint64_t fenceValue;
+	{
+		std::scoped_lock lock(m_ExecutionMutex);
+		fenceValue = device->executeCommandLists(cls, count, nvrhi::CommandQueue::Graphics);
+		// m_LastSubmittedInstance is intentionally not advanced here — EndExecution sets it for the
+		// primary submission. They're separate submissions on the same queue, D3D12 FIFO-ordered.
+	}
+	return fenceValue;
+}
+
 void Renderer::EndExecution()
 {
 	m_CommandList->close();
@@ -546,6 +583,11 @@ void Renderer::EndExecution()
 	uint64_t fenceValue;
 	{
 		std::scoped_lock lock(m_ExecutionMutex);
+		// The primary command list depends on outputs (e.g. TLAS data) of any worker command lists
+		// submitted during SceneGraph::BuildClusters this frame. D3D12 guarantees FIFO ordering of
+		// separate ExecuteCommandLists calls on the same queue, so by submitting the worker batch
+		// first (in SubmitWorkerCommandLists) and the primary batch here, ordering is guaranteed
+		// without an explicit queue-wait.
 		fenceValue = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
 		m_LastSubmittedInstance = fenceValue;
 	}

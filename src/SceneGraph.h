@@ -28,6 +28,7 @@
 
 #include "Types/PassTiming.h"
 
+#include <atomic>
 #include <shared_mutex>
 
 class LandLODMesh;
@@ -96,8 +97,10 @@ class SceneGraph
 	uint32_t m_NumMeshes = 0;
 	uint32_t m_NumInstances = 0;
 
-	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
-	uint32_t m_MaintenanceRebuildsThisFrame = 0;
+	// Maintenance-rebuild budgeting — read by parallel workers via TryMaintenanceRebuild
+	// (called from BLASCluster::PrepareBuildUpdate), so atomics are required.
+	std::atomic<uint64_t> m_LastMaintenanceFrame{ Constants::INVALID_FRAME_INDEX };
+	std::atomic<uint32_t> m_MaintenanceRebuildsThisFrame{ 0 };
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
 	// Mesh/transform/properties buffer managed by MeshManager

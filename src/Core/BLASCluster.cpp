@@ -291,69 +291,80 @@ nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 	return instanceDesc;
 }
 
-void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph)
+BLASCluster::PrepareBuildResult BLASCluster::PrepareBuildUpdate(SceneGraph* sceneGraph)
 {
+	PrepareBuildResult prep;
+
 	auto* renderer = Renderer::GetSingleton();
 	auto* device = renderer->GetDevice();
 	const auto frameIndex = renderer->GetFrameIndex();
 
-	if (frameIndex == m_LastBuildFrame) {
-		logger::info("BLASCluster::BuildUpdate - {} already built this frame, skipping", m_Name);
-		return;
-	}
+	if (frameIndex == m_LastBuildFrame)
+		return prep;
 
-	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
-	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags == DirtyFlags::Visibility) {
-		// Orphan clusters contain one mesh and are excluded from the TLAS while hidden.
-		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
+	prep.mode = DetermineBuildMode(sceneGraph, frameIndex);
+
+	// Orphan clusters excluded from the TLAS while hidden: their BLAS remains valid and can be
+	// reused when the mesh becomes visible again. Consume the visibility flag here so Issue can
+	// remain a no-op for this path.
+	if (prep.mode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags == DirtyFlags::Visibility)
+	{
 		m_DirtyFlags.reset();
 		m_LastBuildFrame = frameIndex;
-
-		logger::info("BLASCluster::BuildUpdate - {}: {} - Skipping and consuming visibility flag.", fmt::ptr(this), m_Name);
-
-		return;
-	}
-	if (buildMode == BuildMode::Skip) {
-		eastl::string membersInfo;
-		for (const auto* member : m_Members) {
-			if (!membersInfo.empty())
-				membersInfo += ", ";
-			membersInfo += std::format("{} ({})", member->GetName().c_str(), magic_enum::enum_name(member->GetType())).c_str();
-		}
-		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set. Members: [{}]",
-			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size(), membersInfo);
-		return;
+		prep.mode = BuildMode::Skip;
+		return prep;
 	}
 
-	if (buildMode == BuildMode::Rebuild)
+	if (prep.mode == BuildMode::Skip)
+		return prep;
+
+	if (prep.mode == BuildMode::Rebuild)
 		m_UpdateCount = 0;
 	else
 		m_UpdateCount++;
 
-	if (m_GeometryDescs.empty()) {
+	if (m_GeometryDescs.empty())
+	{
 		m_BLAS = nullptr;
 		m_LastBuildFrame = frameIndex;
 		m_DirtyFlags.reset();
-		return;
+		prep.mode = BuildMode::Skip;
+		return prep;
 	}
+
+	prep.desc = MakeDesc(prep.mode);
+	prep.desc.bottomLevelGeometries = m_GeometryDescs;
 
 	// Allocate a new accel struct on first build or when the required size grows.
-	const bool allocate = !m_BLAS;
-
-	auto blasDesc = MakeDesc(buildMode);
-	blasDesc.bottomLevelGeometries = m_GeometryDescs;
-
-	bool needsAllocation = allocate;
-	if (!needsAllocation && buildMode == BuildMode::Rebuild) {
-		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);
-		needsAllocation = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
+	prep.needsAllocation = !m_BLAS;
+	if (!prep.needsAllocation && prep.mode == BuildMode::Rebuild)
+	{
+		// getAccelStructPreBuildInfo is a pure device query (no AddRef/mutation) and is safe to
+		// call from worker threads; it computes worst-case BLAS size from the desc's geometry list.
+		auto prebuildInfo = device->getAccelStructPreBuildInfo(prep.desc);
+		prep.needsAllocation = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
 	}
 
-	if (needsAllocation)
-		m_BLAS = device->createAccelStruct(blasDesc);
+	return prep;
+}
 
-	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
+void BLASCluster::AllocateBLAS(const PrepareBuildResult& prep)
+{
+	if (prep.mode == BuildMode::Skip)
+		return;
 
+	if (prep.needsAllocation)
+		m_BLAS = Renderer::GetSingleton()->GetDevice()->createAccelStruct(prep.desc);
+}
+
+void BLASCluster::RecordBuildUpdate(nvrhi::ICommandList* commandList, const PrepareBuildResult& prep)
+{
+	if (prep.mode == BuildMode::Skip)
+		return;
+
+	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, prep.desc);
+
+	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
 	m_DirtyFlags.reset();
 	m_LastBuildFrame = frameIndex;
 }

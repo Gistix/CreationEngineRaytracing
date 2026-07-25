@@ -87,7 +87,17 @@ class BLASCluster
 		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 
 	void SetValid(bool valid) { m_IsValid = valid; }
+
 public:
+	// Outcome of PrepareBuildUpdate — fully describes the work IssueBuildUpdate must perform,
+	// computed without touching the device or the command list so it can run on a worker thread.
+	struct PrepareBuildResult
+	{
+		BuildMode mode = BuildMode::Skip;
+		nvrhi::rt::AccelStructDesc desc{};
+		bool needsAllocation = false;
+	};
+
 	explicit BLASCluster(RE::TESObjectREFR* owner);
 
 	void AddMember(BaseMesh* mesh);
@@ -106,8 +116,20 @@ public:
 	// Has visible meshes — valid only after Update() has been called this frame.
 	bool Valid() const;
 
-	// Rebuilds or refits the BLAS as needed (once per frame), pulling dirty state from its members.
-	void BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph);
+	// Worker-thread-safe first phase of BuildUpdate: decides the build mode, builds the BLAS desc,
+	// queries the prebuild info, and resolves the allocation flag. Mutates only cluster-private
+	// state (m_DirtyFlags, m_LastBuildFrame, m_UpdateCount) — those are not touched by other
+	// clusters' prepare. Does NOT touch the NVRHI command list.
+	PrepareBuildResult PrepareBuildUpdate(SceneGraph* sceneGraph);
+
+	// Render-thread-only: allocates or re-sizes the BLAS handle if prep.needsAllocation. Must run
+	// before RecordBuildUpdate because createAccelStruct is not thread-safe.
+	void AllocateBLAS(const PrepareBuildResult& prep);
+
+	// Worker-thread-safe: records the BLAS build command into a deferred NVRHI command list. The
+	// command list must be open and unique per worker. Mutates only cluster-private state
+	// (m_DirtyFlags, m_LastBuildFrame) — those are only written here, not by other clusters.
+	void RecordBuildUpdate(nvrhi::ICommandList* commandList, const PrepareBuildResult& prep);
 
 	nvrhi::rt::InstanceDesc MakeInstanceDesc() const;
 

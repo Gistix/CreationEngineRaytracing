@@ -54,6 +54,10 @@ class Renderer
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
 
+	// Pool of deferred command lists used to record BLAS builds in parallel from SceneGraph::BuildClusters.
+	// Each cached object is opened/closed per frame and submitted as a batch before the primary command list.
+	eastl::vector<nvrhi::CommandListHandle> m_WorkerCommandLists;
+
 	eastl::array<bool, magic_enum::enum_count<nvrhi::Feature>()> m_SupportedFeatures;
 
 	// Fence used to synchronize 'executeCommandList' since it is not thread safe and we need the returned fence value to synchronize GPU resources
@@ -215,6 +219,16 @@ public:
 			.setScratchChunkSize(16 * 1024 * 1024)
 		);
 	}
+
+	// Acquires (or lazily creates) a deferred Graphics command list indexed by worker index, opens it,
+	// and returns it for recording. Multiple workers can record into their own list concurrently.
+	// The caller must close() the list before passing it to SubmitWorkerCommandLists.
+	nvrhi::ICommandList* OpenWorkerCommandList(uint32_t workerIdx);
+
+	// Submits a batch of closed worker command lists to the graphics queue. Returns the fence value
+	// of the submission. EndExecution will rely on FIFO ordering on the same D3D12 queue to make the
+	// subsequently-submitted primary command list observe the worker batch's effects.
+	uint64_t SubmitWorkerCommandLists(nvrhi::ICommandList* const* cls, size_t count);
 
 	RenderGraph* GetRenderGraph() { return m_RenderGraph.get(); }
 
