@@ -2,6 +2,7 @@
 
 #include "ShaderUtils.h"
 #include "Util.h"
+#include "Renderer.h"
 #include <shlwapi.h>
 
 #include "ShaderCache.h"
@@ -33,6 +34,14 @@ namespace ShaderUtils
 			L"-I", L"extern/RTXDI-Library/Include",
 			L"-O3"
 		};
+
+		if (Renderer::GetSingleton()->IsVulkan()) {
+			args.insert(args.end(), {
+				L"-spirv",
+				L"-fspv-target-env=vulkan1.2",
+				L"-fvk-use-dx-layout"
+			});
+		}
 
 #ifndef NDEBUG
 		// Embedded source/debug information substantially increases DXC work and

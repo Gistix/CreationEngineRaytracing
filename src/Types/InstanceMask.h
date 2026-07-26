@@ -5,6 +5,7 @@ enum InstanceMask : uint8_t
 	None = 0,
 	Default = 1 << 0,
 	Water = 1 << 1,
+	FrustumCulled = 1 << 2,
 	All = 0xFF
 };
 

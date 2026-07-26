@@ -3,7 +3,6 @@
 
 #include "Interop.h"
 #include "interop/VertexDesc.hlsli"
-#include "interop/Properties.hlsli"
 
 #ifndef __cplusplus
 namespace MeshType
@@ -23,17 +22,18 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     VertexDesc VertexDesc;
     uint16_t NumVertices;
     uint16_t NumTriangles;
-    INTEROP_DATA_TYPE(Properties) Properties;
     uint16_t Type;
     uint16_t DynamicID;
-    uint32_t IndexOffset;
+    uint16_t MeshID;
+    uint16_t TriangleOffset;
     uint MaterialOffsetComp;
-    uint TransformIndex;
-    
+
     uint GetMaterialOffset()
     {
         return MaterialOffsetComp * 4;
     }
 };
+VALIDATE_TRIVIAL(MeshData);
 VALIDATE_ALIGNMENT(MeshData, 4);
+
 #endif

@@ -40,7 +40,10 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
-			return func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+			if (triShape)
+				triShape->ownsDX12Buffers = true;
+			return triShape;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -183,6 +186,10 @@ namespace Hooks
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
 				if (geomData.rendererData) {
 					auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(geomData.rendererData);
+					if (triShapeDX12->vertexBufferDX12) {
+						triShapeDX12->vertexBufferDX12->Release();
+						triShapeDX12->vertexBufferDX12 = nullptr;
+					}
 					Util::CreateSharedBuffer(triShapeDX12->vertexBuffer, &triShapeDX12->vertexBufferDX12);
 				}
 			}
@@ -242,7 +249,7 @@ namespace Hooks
 				if (a_triShape->rawIndexData)
 					mm->Deallocate(a_triShape->rawIndexData, false);
 
-				if (a_triShape->pad1C == 1) {
+				if (static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->ownsDX12Buffers) {
 					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape);
 
 					if (triShapeDX12->indexBufferDX12)
@@ -286,10 +293,12 @@ namespace Hooks
 #if defined(SKYRIM)
 	struct BSGraphicsTexture_Dtor
 	{
-		static void thunk(void* a1, RE::BSGraphics::Texture* a_texture)
+		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::BSGraphics::Texture* a_texture)
 		{
-			if (a_texture->pad24 == NO_DX12RESOURCE)
-				func(a1, a_texture);
+			if (a_texture->pad24 == NO_DX12RESOURCE) {
+				func(a_renderer, a_texture);
+				return;
+			}
 
 			if (InterlockedExchangeAdd(&a_texture->refCount, 0xFFFFFFFF) == 1)
 			{
@@ -373,10 +382,14 @@ namespace Hooks
 			texture->format = defaultTexture->format;
 			texture->mips = defaultTexture->mips;
 			texture->unk1E = defaultTexture->unk1E;
-			texture->refCount = defaultTexture->refCount;
+			texture->refCount = 1;
 
-			defaultTexture->texture->AddRef();
-			defaultTexture->resourceView->AddRef();
+			if (defaultTexture->texture)
+				defaultTexture->texture->AddRef();
+			if (defaultTexture->resourceView)
+				defaultTexture->resourceView->AddRef();
+			if (defaultTexture->UAV)
+				defaultTexture->UAV->AddRef();
 
 			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
 			texture->pad24 = NATIVE_DX12RESOURCE;
@@ -1042,7 +1055,7 @@ namespace Hooks
 		// Flowmap and Player FaceGen Tint
 		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
 
-		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
+		stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));

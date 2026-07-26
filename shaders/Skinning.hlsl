@@ -1,11 +1,11 @@
 #include "Interop/Vertex.hlsli"
 #include "Interop/VertexUpdate.hlsli"
-#include "Interop/BoneMatrix.hlsli"
+#include "Interop/RowMajorFloat3x4.hlsli"
 #include "Interop/Mesh.hlsli"
 #include "Interop/VertexDesc.hlsli"
 
 StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
-StructuredBuffer<BoneMatrix> BoneMatrices               : register(t1);
+StructuredBuffer<RowMajorFloat3x4> BoneMatrices               : register(t1);
 
 // Dynamic float4 positions (input). Lives in DynamicMesh, addressed by updateData.dynamicIndex.
 StructuredBuffer<float4> DynamicVertices[]             : register(t0, space1);
@@ -40,10 +40,10 @@ uint PackByte4SNorm(float4 v)
 
 float3x4 GetBoneTransformMatrix(uint4 bones, float4 weights, uint boneOffset)
 {
-	float3x4 m = BoneMatrices[boneOffset + bones.x].World * weights.x;
-	m += BoneMatrices[boneOffset + bones.y].World * weights.y;
-	m += BoneMatrices[boneOffset + bones.z].World * weights.z;
-	m += BoneMatrices[boneOffset + bones.w].World * weights.w;
+	float3x4 m = BoneMatrices[boneOffset + bones.x].Value * weights.x;
+	m += BoneMatrices[boneOffset + bones.y].Value * weights.y;
+	m += BoneMatrices[boneOffset + bones.z].Value * weights.z;
+	m += BoneMatrices[boneOffset + bones.w].Value * weights.w;
 	return m;
 }
 

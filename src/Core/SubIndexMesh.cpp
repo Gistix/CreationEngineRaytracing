@@ -59,7 +59,9 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 
 	m_VertexDescriptor = sceneGraph->GetVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, m_VertexBuffer));
 
-	AllocateTransformIndex();
+	AllocateMeshIndex();
+
+	CreateMaterial();
 }
 
 void SubIndexMesh::SetHidden(bool hidden)
@@ -86,12 +88,13 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();
 
-	// Clear stale dirty flags and copy fresh world state from the manager to existing
-	// segments. Must run before the visibility loop so MarkDirty(Visibility) set by
-	// SetSubIndexHidden survives to Phase E2.
 	for (auto& seg : m_Segments) {
-		seg->SyncFrom(*this);
+		seg->SyncFrom(this);
 	}
+
+	m_VisitedKeys.clear();
+	if (m_VisitedKeys.bucket_count() < runtimeData.numSegments)
+		m_VisitedKeys.reserve(runtimeData.numSegments);
 
 	for (size_t i = 0; i < runtimeData.numSegments; i++) {
 		const auto& segment = runtimeData.segmentData[i];
@@ -114,6 +117,8 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 		const bool visible = bypassVisibility || (flags != 0u);
 
 		const uint64_t key = MakeSegmentKey(start, numTris);
+		m_VisitedKeys.insert(key);
+
 		auto it = m_SegmentMap.find(key);
 		if (it == m_SegmentMap.end()) {
 			// New segment: create only if currently visible. Hidden segments
@@ -125,6 +130,19 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 			// Existing segment: just toggle its SubIndexHidden flag.
 			it->second->SetSubIndexHidden(!visible);
 		}
+	}
+
+	// Hide orphaned segments whose identity changed in the engine's segment data
+	// (e.g. start index or numTris changed → key differs). They remain in the map
+	// for reuse if the engine flips the key back.
+	for (auto& [key, segMesh] : m_SegmentMap) {
+		if (!m_VisitedKeys.contains(key))
+			segMesh->SetSubIndexHidden(true);
+	}
+
+	// Propagates dirty flags to the cluster and clears them
+	for (auto& segMesh : m_Segments) {
+		segMesh->PostUpdate();
 	}
 }
 
@@ -141,10 +159,6 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 
 	auto* rawSeg = segMesh.get();
 
-	// Copy world state from the manager (SyncSegments already cleared old segments
-	// before the visibility loop; new segments get their world state here).
-	rawSeg->SyncFrom(*this);
-
 	// Create a per-segment cluster in SceneGraph::m_SubIndexSegmentClusters and add
 	// the segment to it. Each segment gets its own BLAS / InstanceData / TLAS entry.
 	// The cluster lives in m_SubIndexSegmentClusters for the lifetime of the segment
@@ -155,6 +169,10 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 	cluster->AddMember(rawSeg);
 	sceneGraph->MarkClusterDirty(cluster);
 
+	// Copy world state from the manager (SyncSegments already cleared old segments
+	// before the visibility loop; new segments get their world state here).
+	rawSeg->SyncFrom(this);
+
 	const uint64_t key = MakeSegmentKey(start, numTris);
 	m_Segments.push_back(eastl::move(segMesh));
 	m_SegmentMap[key] = rawSeg;
@@ -162,21 +180,11 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 
 void SubIndexMesh::DestroyAllSegments()
 {
-	// Snapshot keys before invalidation.
-	eastl::vector<uint64_t> keys;
-	keys.reserve(m_SegmentMap.size());
-	for (auto& [k, _] : m_SegmentMap)
-		keys.push_back(k);
-
-	auto sceneGraph = Scene::GetSingleton()->GetSceneGraph();
-
-	for (auto key : keys) {
-		auto it = m_SegmentMap.find(key);
-		if (it == m_SegmentMap.end())
-			continue;
-		auto* segMesh = it->second;
-		sceneGraph->RemoveSegmentCluster(segMesh);
+	for (auto& segmentMesh: m_Segments)
+	{
+		segmentMesh->GetCluster()->RemoveMember(segmentMesh.get());
 	}
+
 	m_SegmentMap.clear();
 	m_Segments.clear();
 }

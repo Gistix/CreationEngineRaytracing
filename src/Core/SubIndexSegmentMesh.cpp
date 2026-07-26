@@ -9,7 +9,7 @@
 
 SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTriShape* parent, uint32_t start, uint32_t numTris)
 {
-	m_BSTriShape = parent;  // so BaseMesh::Update reads parent's world/previousWorld/worldBound
+	m_BSTriShape = nullptr;
 	m_Type = Type::SubIndex;
 	m_Name = std::format("{} [start={} tris={}]", MakeDebugName(parent).c_str(), start, numTris).c_str();
 
@@ -22,13 +22,20 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(m_VertexDesc);
 	const auto& triShapeData = parent->GetTrishapeRuntimeData();
 
-	m_GeometryDescs.push_back(MakeGeometryDesc(
+	m_GeometryEntries.push_back({ MakeGeometryDesc(
 		manager->GetIndexBuffer(), start, numTris * 3u,
 		manager->GetVertexBuffer(), vertexStride, triShapeData.vertexCount,
-		manager->GetTransformID()));
+		manager->GetMeshIndex()), AllocateGeometryIndex() });
 
-	CreateMaterial();
+	m_Material = manager->GetMaterial();
 }
+
+SubIndexSegmentMesh::~SubIndexSegmentMesh()
+{
+	// Prevents the original mesh index from being released by the segments
+	m_MeshIndex = UINT16_MAX;
+}
+
 
 uint16_t SubIndexSegmentMesh::GetIndexID(size_t geometryIndex) const
 {
@@ -50,19 +57,18 @@ void SubIndexSegmentMesh::SetSubIndexHidden(bool subIndexHidden)
 		MarkDirty(DirtyFlags::Visibility);
 }
 
-void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh& manager)
+void SubIndexSegmentMesh::SyncFrom(const SubIndexMesh* manager)
 {
-	m_DirtyFlags.reset();
-	m_Properties = manager.GetProperties();
-	m_WorldBound = manager.GetWorldBound();
+	m_Properties = manager->GetProperties();
+	m_WorldBound = manager->GetWorldBound();
 
-	m_Transform = manager.GetTransform();
-	m_PrevTransform = manager.GetPrevTransform();
+	m_Transform = manager->GetTransform();
+	m_PrevTransform = manager->GetPrevTransform();
 
-	m_TransformIndex = manager.GetTransformID();
+	m_MeshIndex = manager->GetMeshIndex();
 
-	if (manager.GetDirtyFlags().all(DirtyFlags::Transform))
-		MarkDirty(DirtyFlags::Transform);
+	// Inherit flags set in the parent
+	MarkDirty(manager->GetDirtyFlags().get());
 
 	m_NeedsPrevInit = false;
 }

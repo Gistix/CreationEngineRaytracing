@@ -57,6 +57,8 @@ struct Scene
 
 	Settings m_Settings;
 
+	bool m_IsDXVK = false;
+
 	INISettings m_INISettings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
@@ -71,6 +73,8 @@ struct Scene
 
 	void SetLogLevel(spdlog::level::level_enum a_level = spdlog::level::info);
 	spdlog::level::level_enum GetLogLevel();
+
+	bool IsDXVK() const { return m_IsDXVK; }
 
 	static Scene* GetSingleton()
 	{
