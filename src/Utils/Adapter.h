@@ -25,6 +25,7 @@ namespace Util
 		RE::NiNode* AsNode(RE::NiAVObject* a_object);
 		RE::BSFadeNode* AsFadeNode(RE::NiAVObject* a_object);
 		RE::BSSubIndexTriShape* AsSubIndexTriShape(RE::BSGeometry* a_geometry);
+		RE::NiSwitchNode* AsSwitchNode(RE::NiAVObject* a_object);
 
 		// This version mimics direct pointer retrieval rather than CommonLib's implementation, which iterates up the parent hierarchy to find a valid owner
 		RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object);
@@ -68,5 +69,7 @@ namespace Util
 		bool IsNiAVObjectHidden(const RE::NiAVObject* a_object);
 
 		bool IsMultiBoundNodeAllFail(const RE::BSMultiBoundNode* a_node);
+
+		bool IsMenuOpen(const RE::UI* ui, const RE::BSFixedString& name);
 	}
 }

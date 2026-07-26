@@ -99,11 +99,14 @@ struct Scene
 
 			const auto ui = RE::UI::GetSingleton();
 
-			m_MenuState.set(ui->IsMenuOpen(RE::MainMenu::MENU_NAME), MenuState::MainMenu);
-			m_MenuState.set(ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
-			m_MenuState.set(ui->IsMenuOpen(RE::MapMenu::MENU_NAME), MenuState::MapMenu);
+			m_MenuState.set(Util::Adapter::IsMenuOpen(ui, RE::MainMenu::MENU_NAME), MenuState::MainMenu);
+			m_MenuState.set(Util::Adapter::IsMenuOpen(ui, RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
 
-			m_MenuState.set(ui->IsShowingMenus(), MenuState::Any);
+#if defined(SKYRIM)
+			m_MenuState.set(Util::Adapter::IsMenuOpen(ui, RE::MapMenu::MENU_NAME), MenuState::MapMenu);
+#endif
+
+			m_MenuState.set(ui->menuSystemVisible || m_MenuState != MenuState::None, MenuState::Any);
 
 			m_MenuStateUpdateFrame = frameCount;
 		}

@@ -118,7 +118,7 @@ namespace Util
 			if (auto node = Util::Adapter::AsNode(a_object))
 			{
 				auto& children = Util::Adapter::GetChildren(node);
-				if (auto switchNode = node->AsSwitchNode()) {
+				if (auto switchNode = Util::Adapter::AsSwitchNode(node)) {
 					auto index = static_cast<uint16_t>(switchNode->index);
 					result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr);
 				}

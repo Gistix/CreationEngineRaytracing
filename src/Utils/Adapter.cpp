@@ -30,7 +30,7 @@ namespace Util
 #if defined(SKYRIM)
 			return a_form->GetName();
 #elif defined(FALLOUT4)
-			return a_form->GetFullName();
+			return a_form->GetName();
 #endif		
 		}
 
@@ -73,6 +73,14 @@ namespace Util
 			return a_object->AsFadeNode();
 #elif defined(FALLOUT4)
 			return a_object->IsFadeNode();
+#endif		
+		}
+
+		RE::NiSwitchNode* AsSwitchNode(RE::NiAVObject* a_object) {
+#if defined(SKYRIM)
+			return a_object->AsSwitchNode();
+#elif defined(FALLOUT4)
+			return a_object->IsSwitchNode();
 #endif		
 		}
 
@@ -274,8 +282,7 @@ namespace Util
 #if defined(SKYRIM)
 			return RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData().cameraData.getEye();
 #elif defined(FALLOUT4)
-			static REL::Relocation<RE::BSGraphics::State*> singleton{ RE::ID::BSGraphics::State::Singleton };
-			return singleton->cameraState.camViewData;
+			return RE::BSGraphics::State::GetSingleton().cameraState.camViewData;
 #endif
 		}
 
@@ -295,6 +302,15 @@ namespace Util
 #elif defined(FALLOUT4)
 			return a_node->cullingMode.all(RE::BSCullingProcess::CullingType::kAllFail);
 #endif
+		}
+
+		bool IsMenuOpen(const RE::UI* ui, const RE::BSFixedString& name)
+		{
+#if defined(SKYRIM)
+			return ui->IsMenuOpen(name);
+#elif defined(FALLOUT4)
+			return ui->GetMenuOpen(name);
+#endif		
 		}
 	}
 }
