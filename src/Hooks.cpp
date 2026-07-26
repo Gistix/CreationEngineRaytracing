@@ -293,10 +293,10 @@ namespace Hooks
 #if defined(SKYRIM)
 	struct BSGraphicsTexture_Dtor
 	{
-		static void thunk(void* a1, RE::BSGraphics::Texture* a_texture)
+		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::BSGraphics::Texture* a_texture)
 		{
-			if (!a_texture || a_texture->pad24 == NO_DX12RESOURCE) {
-				func(a1, a_texture);
+			if (a_texture->pad24 == NO_DX12RESOURCE) {
+				func(a_renderer, a_texture);
 				return;
 			}
 
