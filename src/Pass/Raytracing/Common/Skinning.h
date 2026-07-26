@@ -9,7 +9,7 @@
 #include "Util.h"
 
 #include "Interop/VertexUpdate.hlsli"
-#include "Interop/BoneMatrix.hlsli"
+#include "Interop/RowMajorFloat3x4.hlsli"
 #include "Interop/BoneTransform.hlsli"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
@@ -57,7 +57,7 @@ namespace Pass
 		RingBuffer m_BoneMatrixBuffer;
 
 		eastl::array<VertexUpdateData, MAX_GEOMETRY> m_VertexUpdateData;
-		eastl::array<BoneMatrix, MAX_BONE_MATRICES> m_BoneMatrixData;
+		eastl::array<RowMajorFloat3x4, MAX_BONE_MATRICES> m_BoneMatrixData;
 
 		struct QueuedMesh
 		{

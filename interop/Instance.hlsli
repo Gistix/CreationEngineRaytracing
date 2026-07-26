@@ -57,6 +57,7 @@ INTEROP_DATA_STRUCT(Instance, 4)
     uint NumGeometry;
     float Alpha;
 };
+VALIDATE_TRIVIAL(InstanceData);
 VALIDATE_ALIGNMENT(InstanceData, 4);
 
 #endif

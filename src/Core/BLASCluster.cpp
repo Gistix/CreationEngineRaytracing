@@ -1,4 +1,5 @@
 #include "Core/BLASCluster.h"
+#include "Scene.h"
 #include "SceneGraph.h"
 #include "Renderer.h"
 #include "Util.h"
@@ -44,47 +45,45 @@ void BLASCluster::RemoveMember(BaseMesh* mesh)
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
-void BLASCluster::GrowBounds(const RE::NiBound& bound)
-{
-	float3 boundCenter = Util::Math::Float3(bound.center);
-
-	float margin = m_ClusterRadius - bound.radius;
-	if (margin > 0.0f) {
-		float distSq = (boundCenter - m_ClusterPosition).LengthSquared();
-		if (distSq <= margin * margin)
-			return;
-	}
-
-	float distToBound = (boundCenter - m_ClusterPosition).Length();
-	m_ClusterRadius = std::max(m_ClusterRadius, distToBound + bound.radius);
-}
-
 void BLASCluster::UpdateTransform() {
 
 	if (m_Owner) {
 		const RE::NiAVObject* object = m_Owner->Get3D();
-		XMStoreFloat3x4(&m_Transform, Util::Math::GetXMFromNiTransform(object->world));
-		XMStoreFloat3x4(&m_PrevTransform, Util::Math::GetXMFromNiTransform(object->previousWorld));
+
+		float3x4 transform;
+		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(object->world));
+
+		if (m_NeedsPrevInit) {
+			m_PrevTransform = transform;
+			m_NeedsPrevInit = false;
+		} else {
+			m_PrevTransform = m_Transform;
+		}
+
+		m_Transform = transform;
+
+		m_WorldBound = object->worldBound;
 	}
 	else {
 		if (m_Members.empty()) {
 			m_Transform = Constants::kIdentityTransform;
 			m_PrevTransform = Constants::kIdentityTransform;
+			m_NeedsPrevInit = false;
 		}
 		else {
 			const auto& mesh = m_Members.front();
 			m_Transform = mesh->GetTransform();
-			m_PrevTransform = mesh->GetPrevTransform();
+
+			if (m_NeedsPrevInit) {
+				m_PrevTransform = m_Transform;
+				m_NeedsPrevInit = false;
+			} else {
+				m_PrevTransform = mesh->GetPrevTransform();
+			}
+
+			m_WorldBound = mesh->GetWorldBound();
 		}
 	}
-
-	m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
-}
-
-void BLASCluster::CollectMemberDirtyFlags()
-{
-	for (const auto* mesh : m_Members)
-		m_DirtyFlags |= mesh->GetDirtyFlags();
 }
 
 bool BLASCluster::Empty() const
@@ -94,10 +93,10 @@ bool BLASCluster::Empty() const
 
 bool BLASCluster::Valid() const
 {
-	return GetMeshEntryCount() != 0;
+	return m_IsValid;
 }
 
-InstanceLightData BLASCluster::GetInstanceLightData(
+void BLASCluster::UpdateInstanceLightData(
     const eastl::map<RE::BSLight*, Light>& lights,
     const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
 {
@@ -123,94 +122,112 @@ InstanceLightData BLASCluster::GetInstanceLightData(
 			lightIds[numLights] = light.m_Index;
 			numLights++;
 		} else {
-			float dist = float3::Distance(m_ClusterPosition, ld.Vector);
-			if (dist - m_ClusterRadius <= ld.Radius) {
+			float dist = float3::Distance(*reinterpret_cast<float3*>(&m_WorldBound.center), ld.Vector);
+			if (dist - m_WorldBound.radius <= ld.Radius) {
 				lightIds[numLights] = light.m_Index;
 				numLights++;
 			}
 		}
 	}
 
-	return InstanceLightData(lightIds, numLights);
+	m_InstanceLightData = InstanceLightData(lightIds, numLights);
 }
 
-uint32_t BLASCluster::GetMeshEntryCount() const
+void BLASCluster::UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags)
 {
-	uint32_t count = 0;
-	for (const auto* mesh : m_Members) {
-		if (mesh->IsHidden())
-			continue;
-		count += static_cast<uint32_t>(mesh->GetGeometryDescs().size());
-	}
-	return count;
+	std::scoped_lock lock(m_DirtyMutex);
+	m_DirtyFlags.set(meshDirtyFlags);
 }
 
-void BLASCluster::Update(MeshData* meshData, InstanceData* instanceData,
-	uint32_t meshStart, uint32_t instanceIndex,
-    const eastl::map<RE::BSLight*, Light>& lights,
-     const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
+uint32_t BLASCluster::Update()
 {
-	m_ClusterRadius = 0.0f;
-
 	UpdateTransform();
 
-	const auto invTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_Transform));
-	const auto invPrevTransform = XMMatrixInverse(nullptr, DirectX::XMLoadFloat3x4(&m_PrevTransform));
+	auto scene = Scene::GetSingleton();
+	auto sceneGraph = scene->GetSceneGraph();
 
-	uint32_t meshCount = meshStart;
+	const bool skipInstanceLights = scene->m_Settings.ExperimentalSettings.GlobalLights;
 
-	m_GeometryDescs.clear();
-	size_t geometryCount = 0;
-	for (const auto* mesh : m_Members) {
-		if (!mesh->IsHidden())
-			geometryCount += mesh->GetGeometryDescs().size();
+	// Only those who affect geometry count or its flags
+	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh, DirtyFlags::Alpha)) {
+		m_Flags.reset(Flags::Updatable, Flags::TwoSided);
+
+		m_GeometryDescs.clear();
+		m_GeometrySlots.clear();
+
+		auto* meshManager = sceneGraph->GetMeshManager().get();
+
+		for (const auto& mesh : m_Members) {
+			if (mesh->IsHidden())
+				continue;
+
+			const auto& entries = mesh->GetGeometryEntries();
+			if (entries.empty())
+				continue;
+
+			if (mesh->IsUpdatable())
+				m_Flags.set(Flags::Updatable);
+
+			if (mesh->IsTwoSided())
+				m_Flags.set(Flags::TwoSided);
+
+			const uint16_t vertexID = mesh->GetVertexID();
+			const auto vertexDesc = VertexDesc(mesh->GetVertexDescRaw());
+			const auto meshType = static_cast<uint16_t>(mesh->GetType());
+			const auto dynamicIndex = static_cast<uint16_t>(mesh->GetDynamicIndex());
+			const auto meshIndex = mesh->GetMeshIndex();
+			const auto materialIndex = mesh->GetMaterial()->GetOffsetComp();
+
+			for (size_t i = 0; i < entries.size(); i++) {
+				const auto& entry = entries[i];
+				m_GeometryDescs.push_back(entry.desc);
+				m_GeometrySlots.push_back(entry.geometryIndex);
+
+				auto& geomTris = entry.desc.geometryData.triangles;
+				MeshData md(
+					mesh->GetIndexID(i),
+					vertexID,
+					vertexDesc,
+					static_cast<uint16_t>(geomTris.vertexCount),
+					static_cast<uint16_t>(geomTris.indexCount / 3),
+					meshType,
+					dynamicIndex,
+					meshIndex,
+					static_cast<uint16_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
+					materialIndex
+				);
+
+				meshManager->WriteMeshData(entry.geometryIndex, md);
+			}
+		}
 	}
-	m_GeometryDescs.reserve(geometryCount);
 
-	m_Flags.reset(Flags::Updatable, Flags::TwoSided);
+	const uint32_t meshCount = static_cast<uint32_t>(m_GeometrySlots.size());
 
-	for (const auto& mesh : m_Members) {
-		if (mesh->IsHidden())
-			continue;
+	m_IsValid = meshCount > 0;
 
-		GrowBounds(mesh->GetWorldBound());
+	if (m_IsValid) {
+		auto* camera = sceneGraph->GetCamera();
+		const bool inFrustum = camera->PointInFrustum(m_WorldBound.center, m_WorldBound.radius);
+		m_Flags.set(!inFrustum, Flags::FrustumCulled);
 
-		mesh->UpdateLocalTransform(invTransform, invPrevTransform);
-
-		const auto& descs = mesh->GetGeometryDescs();
-		if (descs.empty())
-			continue;
-
-		for (const auto& desc : descs)
-			m_GeometryDescs.push_back(desc);
-
-		if (mesh->IsUpdatable())
-			m_Flags.set(Flags::Updatable);
-
-		if (mesh->IsTwoSided())
-			m_Flags.set(Flags::TwoSided);
-
-		meshCount += mesh->WriteMeshData(&meshData[meshCount]);
+		if (!skipInstanceLights) {
+			// TODO: Move this to the GPU - It doesn't scale well on CPU
+			UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
+		}
 	}
 
-	const uint32_t numGeometry = meshCount - meshStart;
+	return meshCount;
+}
 
-	if (numGeometry == 0) {
-		logger::warn("BLASCluster::GetData - BLASCluster {} has no geometry", fmt::ptr(this));
-		return;
-	}
-
-	InstanceData& outInstance = instanceData[instanceIndex];
-	outInstance.Transform = m_Transform;
-	outInstance.PrevTransform = m_PrevTransform;
-
-	outInstance.LightData = GetInstanceLightData(lights, lightData);
-
-	outInstance.FirstGeometryID = meshStart;
-	outInstance.NumGeometry = numGeometry;
-	outInstance.Alpha = 1.0f;
-
-	return;
+void BLASCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const
+{
+	instanceData.Transform = m_Transform;
+	instanceData.PrevTransform = m_PrevTransform;
+	instanceData.LightData = m_InstanceLightData;
+	instanceData.FirstGeometryID = firstMesh;
+	instanceData.NumGeometry = meshCount;
+	instanceData.Alpha = 1.0f;
 }
 
 nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(BuildMode mode) const
@@ -236,7 +253,7 @@ BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, u
 	const bool firstBuild = (m_LastBuildFrame == Constants::INVALID_FRAME_INDEX);
 	const bool hasMesh = m_DirtyFlags.any(DirtyFlags::Mesh);
 	const bool hasVisibility = m_DirtyFlags.any(DirtyFlags::Visibility);
-	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
+	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform, DirtyFlags::Alpha);
 	const bool isOrphan = (m_Owner == nullptr);
 
 	if (firstBuild || !m_BLAS || hasMesh || (!isOrphan && hasVisibility))
@@ -257,7 +274,7 @@ nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 {
 	auto instanceDesc = nvrhi::rt::InstanceDesc()
 		.setInstanceID(m_InstanceIndex)
-		.setInstanceMask(InstanceMask::Default)
+		.setInstanceMask(m_Flags.all(Flags::FrustumCulled) ? InstanceMask::FrustumCulled : InstanceMask::Default)
 		.setTransform(m_Transform.f)
 		.setFlags(m_Flags.all(Flags::TwoSided) ? nvrhi::rt::InstanceFlags::TriangleCullDisable : nvrhi::rt::InstanceFlags::None)
 		.setBLAS(m_BLAS);
@@ -276,22 +293,26 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		return;
 	}
 
-	// Update() normally collects these flags, but clusters with no visible mesh are not
-	// included in SceneGraph's update work list. Keep the build decision correct for those
-	// clusters as well (notably sub-index segments toggling visibility).
-	CollectMemberDirtyFlags();
-
 	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
-	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags.any(DirtyFlags::Visibility)) {
+	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags == DirtyFlags::Visibility) {
 		// Orphan clusters contain one mesh and are excluded from the TLAS while hidden.
 		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
 		m_DirtyFlags.reset();
 		m_LastBuildFrame = frameIndex;
+
+		logger::info("BLASCluster::BuildUpdate - {}: {} - Skipping and consuming visibility flag.", fmt::ptr(this), m_Name);
+
 		return;
 	}
 	if (buildMode == BuildMode::Skip) {
-		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set.",
-			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size());
+		eastl::string membersInfo;
+		for (const auto* member : m_Members) {
+			if (!membersInfo.empty())
+				membersInfo += ", ";
+			membersInfo += std::format("{} ({})", member->GetName().c_str(), magic_enum::enum_name(member->GetType())).c_str();
+		}
+		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set. Members: [{}]",
+			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size(), membersInfo);
 		return;
 	}
 

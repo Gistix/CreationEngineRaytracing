@@ -46,6 +46,10 @@ struct SurfaceMaker
 
         Mesh mesh = GetMesh(payload, instance);
 
+        uint meshSlot = GetMeshSlot(payload);
+        Properties props = GetMeshProperties(meshSlot);
+        Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
+
         // Loads all geometry releated data
         Vertex v0, v1, v2;
         
@@ -53,10 +57,10 @@ struct SurfaceMaker
         float3 prevPos0, prevPos1, prevPos2;
         
         if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
-            GetVertices(mesh, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
+            GetVertices(mesh, props, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
         else
 #endif        
-        GetVertices(mesh, payload.primitiveIndex, v0, v1, v2);
+        GetVertices(mesh, props, payload.primitiveIndex, v0, v1, v2);
 
         float3 uvw = GetBary(payload.Barycentrics());
         float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
@@ -65,18 +69,18 @@ struct SurfaceMaker
 
         float2 texCoord0 = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
 
-        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
 
 #if USE_SIA_INTERPOLATION
         // NVIDIA Self-Intersection Avoidance: precise interpolation + tight error bound.
-        // Compose the full object-to-world transform: o2w = instance.Transform * mesh.Transform
+        // Compose the full object-to-world transform: o2w = instance.Transform * meshTransform.Transform
         // We build a combined float3x4 for the SIA function.
         {
             // Compose mesh-local to world: o2w = Instance.Transform * Mesh.Transform
             // Both are row-major float3x4 (3 rows, 4 cols: rotation|translation).
             float3x4 o2w;
             float3x3 rot = objectToWorld3x3;
-            float3 meshTranslation = float3(mesh.Transform._m03, mesh.Transform._m13, mesh.Transform._m23);
+            float3 meshTranslation = float3(meshTransform.Transform._m03, meshTransform.Transform._m13, meshTransform.Transform._m23);
             float3 instanceTranslation = float3(instance.Transform._m03, instance.Transform._m13, instance.Transform._m23);
             float3 translation = mul((float3x3) instance.Transform, meshTranslation) + instanceTranslation;
             o2w._m00 = rot._m00; o2w._m01 = rot._m01; o2w._m02 = rot._m02; o2w._m03 = translation.x;
@@ -114,7 +118,7 @@ struct SurfaceMaker
 #endif // USE_SIA_INTERPOLATION
 
         surface.CameraRelativePosition = TransformMeshInstancePointCameraRelative(
-            currentObjectSpacePos, mesh.Transform, instance.Transform, Camera.Position);
+            currentObjectSpacePos, meshTransform.Transform, instance.Transform, Camera.Position);
 
         // Previous-frame positions for motion vectors.
 #if defined(HAS_PREV_POSITIONS)
@@ -132,16 +136,16 @@ struct SurfaceMaker
             // but for skinned/dynamic geometry it avoids catastrophic cancellation between
             // two large, nearly-equal world-space coordinates.
             float3 currentWorldRelPos = TransformMeshInstancePointCameraRelative(
-                currentObjectSpacePos, mesh.Transform, instance.Transform, Camera.Position);
+                currentObjectSpacePos, meshTransform.Transform, instance.Transform, Camera.Position);
 
             float3 prevWorldRelPos = TransformMeshInstancePointCameraRelative(
-                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.Position); // NOTE: Camera.Position (current), not PositionPrev — keeps both terms in the same reference frame
+                prevObjectSpacePos, meshTransform.PrevTransform, instance.PrevTransform, Camera.Position); // NOTE: Camera.Position (current), not PositionPrev — keeps both terms in the same reference frame
 
             // Apply object motion after current/previous reconstruction cancel, so
             // static geometry does not inherit world-coordinate cancellation error.
             // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.
             surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
-                prevObjectSpacePos, mesh.PrevTransform, instance.PrevTransform, Camera.PositionPrev);        
+                prevObjectSpacePos, meshTransform.PrevTransform, instance.PrevTransform, Camera.PositionPrev);
         }
 #else
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
@@ -171,7 +175,7 @@ struct SurfaceMaker
         }
  
         float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+        if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
         {
             // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
             boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
@@ -179,7 +183,7 @@ struct SurfaceMaker
         }
         
             float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
-        if (mesh.Properties.ShaderFlags & ShaderFlags::kVertexColors)
+        if (props.ShaderFlags & ShaderFlags::kVertexColors)
             vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
        
             
@@ -232,23 +236,23 @@ struct SurfaceMaker
         }
         else if (material.Type == Type::Effect)
         {
-            EffectMaterial(surface, texCoord0, vertexColor, mesh);
+            EffectMaterial(surface, texCoord0, vertexColor, mesh, props);
         }
         else if (material.Type == Type::Water)
         {
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh);
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh, props);
         }
         else if (material.Type == Type::DistantTree)
         {
-            DistantTreeMaterial(surface, texCoord0, mesh);
+            DistantTreeMaterial(surface, texCoord0, mesh, props);
         }
         else if (material.Type == Type::Grass)
         {
-            GrassMaterial(surface, texCoord0, mesh);
+            GrassMaterial(surface, texCoord0, mesh, props);
         }
         else
         {
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, -rayDir, payload.hitDistance);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, -rayDir, payload.hitDistance);
         }
 #   else   
 #   endif
@@ -265,7 +269,7 @@ struct SurfaceMaker
     }  
 #endif
   
-    static Surface make(float3 position, float2 texCoord, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 vertexColor, float4 landBlend0, float4 landBlend1, Mesh mesh)
+    static Surface make(float3 position, float2 texCoord, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 vertexColor, float4 landBlend0, float4 landBlend1, Mesh mesh, Properties props)
     { 
         Surface surface;         
 
@@ -322,19 +326,19 @@ struct SurfaceMaker
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, viewDir, dist);
         }
         else if (material.Type == Type::Effect)
-            EffectMaterial(surface, texCoord0, vertexColor, mesh);
+            EffectMaterial(surface, texCoord0, vertexColor, mesh, props);
         else if (material.Type == Type::Water)
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh);
+            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh, props);
         else if (material.Type == Type::DistantTree)
-            DistantTreeMaterial(surface, texCoord0, mesh);
+            DistantTreeMaterial(surface, texCoord0, mesh, props);
         else if (material.Type == Type::Grass)
-            GrassMaterial(surface, texCoord0, mesh);
+            GrassMaterial(surface, texCoord0, mesh, props);
         else
         {
             float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
             float dist = length(surface.CameraRelativePosition);
             float3 viewDir = -(surface.CameraRelativePosition / dist);
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, boneRotation, viewDir, dist);
+            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, viewDir, dist);
         }
 #   else   
 #   endif

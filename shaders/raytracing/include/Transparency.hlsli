@@ -23,9 +23,11 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
 {
     Instance instance;
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
+    uint meshSlot = GetMeshSlot(instance, geometryIndex);
+    Properties props = GetMeshProperties(meshSlot);
     
     Vertex v0, v1, v2;
-    GetVertices(mesh, primitiveIndex, v0, v1, v2);
+    GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
     
     float3 uvw = GetBary(barycentrics);
 
@@ -39,22 +41,22 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     
     float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
     
-    alpha *= mesh.Properties.Alpha * instance.Alpha;
+    alpha *= props.Alpha * instance.Alpha;
     
-    if ((mesh.Properties.ShaderFlags & ShaderFlags::kVertexAlpha) && !(mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim))
+    if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
         alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
 
     [branch]
-    if (mesh.Properties.AlphaFlags & AlphaFlags::Test)
+    if (props.AlphaFlags & AlphaFlags::Test)
     {
-        if (alpha < mesh.Properties.AlphaThreshold)
+        if (alpha < props.AlphaThreshold)
             return false;
     }
 
-	if (mesh.Properties.AlphaFlags & AlphaFlags::Additive)
+	if (props.AlphaFlags & AlphaFlags::Additive)
 		alpha = 0.0f;
     
-    if (mesh.Properties.AlphaFlags & AlphaFlags::Blend)
+    if (props.AlphaFlags & AlphaFlags::Blend)
     {
         float rnd = Random(randomSeed);
         if (alpha < rnd)
@@ -65,11 +67,11 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
 }
 
 float3 ComputeShadowNormal(
-    Instance instance, Mesh mesh,
+    Instance instance, Mesh mesh, Transform meshTransform,
     Vertex v0, Vertex v1, Vertex v2, float3 uvw,
     LightingMaterialData material, float2 texCoord)
 {
-    float3x3 objectToWorld3x3 = mul((float3x3)instance.Transform, (float3x3)mesh.Transform);
+    float3x3 objectToWorld3x3 = mul((float3x3)instance.Transform, (float3x3)meshTransform.Transform);
     float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
     float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
     float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
@@ -95,9 +97,12 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 {
     Instance instance;
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
+    uint meshSlot = GetMeshSlot(instance, geometryIndex);
+    Properties props = GetMeshProperties(meshSlot);
+    Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
     
     Vertex v0, v1, v2;
-    GetVertices(mesh, primitiveIndex, v0, v1, v2);
+    GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
     
     float3 uvw = GetBary(barycentrics);
 
@@ -112,14 +117,14 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
     if (material.Type == Type::Water)
     {
-        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) mesh.Transform);
+        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
 
         float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));        
         float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
         float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));    
         
         Surface surface = (Surface)0;
-        WaterMaterial(surface, texCoord, tangentWS, bitangentWS, mesh);
+        WaterMaterial(surface, texCoord, tangentWS, bitangentWS, mesh, props);
         
         float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
         ApplyFresnelTransmittance(surface.Normal, surface.F0, direction, transmittance, transmitanceInOut);
@@ -128,33 +133,33 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     {   
         float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
     
-        alpha *= mesh.Properties.Alpha * instance.Alpha;
+        alpha *= props.Alpha * instance.Alpha;
     
-        if ((mesh.Properties.ShaderFlags & ShaderFlags::kVertexAlpha) && !(mesh.Properties.ShaderFlags & ShaderFlags::kTreeAnim))
+        if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
             alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
         
         [branch]
-        if (mesh.Properties.AlphaFlags & AlphaFlags::Test)
+        if (props.AlphaFlags & AlphaFlags::Test)
         {
-            if (alpha < mesh.Properties.AlphaThreshold)
+            if (alpha < props.AlphaThreshold)
                 return false;
         }
 
-        if (mesh.Properties.AlphaFlags & AlphaFlags::Additive)
+        if (props.AlphaFlags & AlphaFlags::Additive)
             alpha = 0.0f;
     
-        if (mesh.Properties.AlphaFlags & AlphaFlags::Blend)
+        if (props.AlphaFlags & AlphaFlags::Blend)
         {
             float rnd = Random(randomSeed);
             if (rnd > alpha)
                 return false;
         }
         
-        if (((mesh.Properties.AlphaFlags & AlphaFlags::Transmission)) || (mesh.Properties.ShaderFlags & ShaderFlags::kRefraction))
+        if (((props.AlphaFlags & AlphaFlags::Transmission)) || (props.ShaderFlags & ShaderFlags::kRefraction))
         {
             float3 transmittance = 1.0f;
             [branch]
-            if (mesh.Properties.ShaderFlags & ShaderFlags::kRefraction)
+            if (props.ShaderFlags & ShaderFlags::kRefraction)
             {
                 transmittance = 1.0f; // fully transparent glass
             }
@@ -164,12 +169,12 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 transmittance = lerp(float3(1.0f, 1.0f, 1.0f), baseColor, alpha);
             }
 
-            float3 Normal = ComputeShadowNormal(instance, mesh, v0, v1, v2, uvw, material, texCoord);
+            float3 Normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, material, texCoord);
             ApplyFresnelTransmittance(Normal, 0.04f, direction, transmittance, transmitanceInOut);
             return false;
         }
     
-        if ((material.Feature == Feature::kGlowMap || material.Type == Type::TruePBR) && mesh.Properties.ShaderFlags & ShaderFlags::kAssumeShadowmask)
+        if ((material.Feature == Feature::kGlowMap || material.Type == Type::TruePBR) && props.ShaderFlags & ShaderFlags::kAssumeShadowmask)
         {
             float3 transmittance = 0.0f;
             float3 F0 = 0.04f;
@@ -179,11 +184,11 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 GlowmapMaterialDataExtra glow = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
                 transmittance = Textures[NonUniformResourceIndex(glow.GlowTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
                 [branch]
-                if (mesh.Properties.ShaderFlags & ShaderFlags::kSpecular) {
+                if (props.ShaderFlags & ShaderFlags::kSpecular) {
                     float3 specularColor = 0.0f;
 
                     [branch]
-                    if (mesh.Properties.ShaderFlags & ShaderFlags::kModelSpaceNormals) {
+                    if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals) {
                         Texture2D specularTexture = Textures[NonUniformResourceIndex(material.SpecularBackLightingTexture)];
                         specularColor = specularTexture.SampleLevel(DefaultSampler, texCoord, 0).r * material.SpecularColor * material.SpecularColorScale;
                     } else {
@@ -204,7 +209,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 F0 = pbr.SpecularLevel * specular;
             }
 
-            float3 Normal = ComputeShadowNormal(instance, mesh, v0, v1, v2, uvw, material, texCoord);
+            float3 Normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, material, texCoord);
             ApplyFresnelTransmittance(Normal, F0, direction, transmittance, transmitanceInOut);
             return false;
         }        

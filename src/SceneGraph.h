@@ -4,6 +4,7 @@
 #include "Core/BLASCluster.h"
 #include "Core/ThreadPool.h"
 
+#include "Core/MeshManager.h"
 #include "core/Light.h"
 #include "core/MaterialManager.h"
 #include "Core/TextureManager.h"
@@ -11,6 +12,7 @@
 #include "Light.hlsli"
 #include "Mesh.hlsli"
 #include "Instance.hlsli"
+#include "Transform.hlsli"
 #include "Interop/LandLODUpdate.hlsli"
 
 #include "Constants.h"
@@ -20,8 +22,11 @@
 #include "Types/RE/RE.h"
 #include "Types/RingBuffer.h"
 
+#include <eastl/array.h>
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
+
+#include "Types/PassTiming.h"
 
 #include <shared_mutex>
 
@@ -36,16 +41,22 @@ class SceneGraph
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
-	// One BLAS/TLAS instance per owner reference; meshes without an owner get a degenerate per-mesh cluster.
+	// One BLAS instance per owner reference
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
+
+	// Meshes without an owner get a degenerate per-mesh cluster
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
 
-	// One BLAS / TLAS instance per SubIndexMesh segment. Each SubIndexSegmentMesh lives
-	// in its own cluster so it gets its own BLAS, InstanceData slot, and TLAS entry —
-	// independent of the parent BSSubIndexTriShape and independent of any siblings.
+	// One BLAS instance per SubIndexMesh segment
+	// Each SubIndexSegmentMesh lives in its own cluster so it gets its own BLAS
 	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
 
+	eastl::vector<BLASCluster*> m_AllClusters;
+
+	std::mutex m_BLASClusterUpdateMutex;
+
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
+	eastl::vector<RE::BSTriShape*> m_DestroyedMeshesSwap;
 	mutable std::mutex m_MeshDestroyMutex;
 
 	// Material manager
@@ -60,9 +71,9 @@ class SceneGraph
 	eastl::array<LightData, Constants::LIGHTS_MAX> m_LightData;
 	RingBuffer m_LightBuffer;
 
-	// Mesh
-	eastl::array<MeshData, Constants::NUM_MESHES_MAX> m_MeshData;
-	RingBuffer m_MeshBuffer;
+	// Mesh slot → InstanceID remap (ByteAddressBuffer, one packed uint32_t per entry: (instanceID << 16) | geometrySlot)
+	eastl::array<uint32_t, Constants::NUM_MESHES_MAX> m_MeshSlotRemapData;
+	RingBuffer m_MeshSlotRemapBuffer;
 
 	// Instance
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
@@ -89,14 +100,25 @@ class SceneGraph
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
+	// Mesh/transform/properties buffer managed by MeshManager
+	eastl::unique_ptr<MeshManager> m_MeshManager;
+
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
+	std::shared_mutex m_SegmentClusterMutex;
 
 	mutable std::mutex m_ClusterDirtyMutex;
 
-	ThreadPool m_ThreadPool;
+	eastl::unique_ptr<ThreadPool> m_ThreadPool;
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
 	eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>> m_CreateList;
+
+	// Per-worker output buffers used by the parallel Phase A traversal. Each worker accumulates into its
+	// own vector; SceneGraph::Update concatenates them serially after WaitAll() (mirrors the existing
+	// m_PerWorkerCreateCandidates pattern used by Phase B).
+	eastl::vector<eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>>> m_PerWorkerUpdateList;
+	eastl::vector<eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>>> m_PerWorkerCreateList;
+	eastl::vector<eastl::vector<BaseMesh*>> m_PerWorkerCurrentVisible;
 
 	struct MeshCreateCandidate {
 		RE::BSTriShape* bsTriShape;
@@ -119,7 +141,6 @@ class SceneGraph
 		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
 	};
 public:
-	SceneGraph();
 	void Initialize();
 
 	inline auto& GetTriangleDescriptors() const { return m_TriangleDescriptors; }
@@ -138,22 +159,25 @@ public:
 	nvrhi::IBuffer* GetLightBuffer() const;
 	nvrhi::IBuffer* GetMeshBuffer() const;
 	nvrhi::IBuffer* GetInstanceBuffer() const;
+	nvrhi::IBuffer* GetTransformBuffer() const;
+	nvrhi::IBuffer* GetMeshSlotRemapBuffer() const;
+	nvrhi::IBuffer* GetPropertiesBuffer() const;
+	inline auto& GetMeshManager() const { return m_MeshManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
-	inline auto& GetDirectMeshes() { return m_DirectMeshes; }
+	inline const auto& GetDirectMeshes() { return m_DirectMeshes; }
 
-	inline auto& GetOwnerClusters() { return m_OwnerClusters; }
-	inline auto& GetOrphanClusters() { return m_OrphanClusters; }
-	inline auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
-	inline auto& GetDirtyClusters() { return m_DirtyClusters; }
-
-	// Per-segment cluster helpers. Called by SubIndexMesh when it creates/destroys a
-	// SubIndexSegmentMesh child. The segment is the unique key into m_SubIndexSegmentClusters.
-	BLASCluster* GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner);
-	void RemoveSegmentCluster(SubIndexSegmentMesh* segment);
+	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
+	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }
+	inline const auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
+	inline const auto& GetDirtyClusters() { return m_DirtyClusters; }
+	inline const auto& GetAllClusters() { return m_AllClusters; }
 	
-	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
+	// Per-segment cluster helper, called by SubIndexMesh when it creates a SubIndexSegmentMesh child
+	// The segment is the unique key into m_SubIndexSegmentClusters
+	BLASCluster* GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner);
 
+	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 	void BuildClusters(nvrhi::ICommandList* commandList);
 
 	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
@@ -161,6 +185,7 @@ public:
 	inline auto& GetLandLODMeshUpdates() { return m_LandLODMeshUpdates; }
 
 	inline auto& GetLights() { return m_Lights; }
+	inline auto& GetLightData() { return m_LightData; }
 
 	inline auto& GetNumMeshesFrame() const { return m_NumMeshes; }
 	inline auto& GetNumInstancesFrame() const { return m_NumInstances; }
@@ -168,6 +193,8 @@ public:
 	inline auto& GetTextureManager() { return m_TextureManager; }
 
 	inline auto& GetCamera() const  { return m_Camera; }
+
+	inline const auto& GetUpdateTimings() const { return m_UpdateTimings; }
 	
 	void OnDestroy(RE::BSTriShape* bsTriShape);
 
@@ -183,10 +210,17 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 	void MarkClusterDirty(BLASCluster* cluster);
+
+	uint32_t AllocateMeshIndex();
+	uint32_t AllocateGeometryIndex();
+
+	void WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform);
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
 
 private:
+	eastl::vector<PassTiming> m_UpdateTimings;
+
 	struct PendingDestroy
 	{
 		eastl::unique_ptr<BaseMesh> mesh;

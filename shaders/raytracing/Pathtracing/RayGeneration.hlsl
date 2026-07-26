@@ -111,7 +111,7 @@ void Main()
     uint startTime = NvGetSpecial( NV_SPECIALOP_GLOBAL_TIMER_LO );
 #endif
     
-    Payload sourcePayload = TraceRayStandard(Scene, sourceRay, randomSeed);
+    Payload sourcePayload = TraceRayStandard(Scene, sourceRay, randomSeed, true);
 
 #if !(defined(SHARC) && SHARC_UPDATE) && DEBUG_TRACE_HEATMAP       
     uint endTime = NvGetSpecial( NV_SPECIALOP_GLOBAL_TIMER_LO );

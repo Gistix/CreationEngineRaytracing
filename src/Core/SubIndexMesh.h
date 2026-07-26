@@ -39,6 +39,9 @@ class SubIndexMesh : public BaseMesh
 	// Non-owning lookup into m_Segments.
 	eastl::hash_map<uint64_t, SubIndexSegmentMesh*> m_SegmentMap;
 
+	// Reused across Update() calls to preserve bucket capacity; cleared at the top of each Update().
+	eastl::hash_set<uint64_t> m_VisitedKeys;
+
 	void CreateSegment(uint32_t start, uint32_t numTris);
 
 public:

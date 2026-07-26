@@ -8,6 +8,7 @@
 #include "interop/Light.hlsli"
 #include "interop/Instance.hlsli"
 #include "interop/Mesh.hlsli"
+#include "interop/Transform.hlsli"
 #include "interop/Triangle.hlsli"
 
 SamplerState DefaultSampler : register(s0);
@@ -23,6 +24,9 @@ Texture2D<float4> SkyHemisphere : register(t1);
 StructuredBuffer<Light> Lights : register(t2);
 StructuredBuffer<Instance> Instances : register(t4);
 StructuredBuffer<Mesh> Meshes : register(t5);
+StructuredBuffer<Transform> Transforms : register(t6);
+ByteAddressBuffer MeshSlotRemap : register(t19);
+ByteAddressBuffer PropertiesBuffer : register(t20);
 
 StructuredBuffer<Triangle> Triangles[] : register(t0, space1);
 ByteAddressBuffer Vertices[] : register(t0, space2);

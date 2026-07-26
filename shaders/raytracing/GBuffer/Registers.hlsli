@@ -9,6 +9,7 @@
 #include "interop/Triangle.hlsli"
 #include "interop/Mesh.hlsli"
 #include "interop/Instance.hlsli"
+#include "interop/Transform.hlsli"
 
 ConstantBuffer<CameraData>                  Camera                      : register(b0);
 ConstantBuffer<RaytracingData>              Raytracing                  : register(b1);
@@ -18,6 +19,7 @@ ConstantBuffer<FeatureData>                 Features                    : regist
 RaytracingAccelerationStructure             Scene                       : register(t0);
 StructuredBuffer<Instance>                  Instances                   : register(t1);
 StructuredBuffer<Mesh>                      Meshes                      : register(t2);
+StructuredBuffer<Transform>             Transforms                  : register(t3);
 
 StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);

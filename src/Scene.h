@@ -1,7 +1,6 @@
 #pragma once
 
 #include "SceneGraph.h"
-#include "Types/RendererParams.h"
 
 #include "Renderer/RenderNode.h"
 
@@ -58,6 +57,8 @@ struct Scene
 
 	Settings m_Settings;
 
+	bool m_IsDXVK = false;
+
 	INISettings m_INISettings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
@@ -72,6 +73,8 @@ struct Scene
 
 	void SetLogLevel(spdlog::level::level_enum a_level = spdlog::level::info);
 	spdlog::level::level_enum GetLogLevel();
+
+	bool IsDXVK() const { return m_IsDXVK; }
 
 	static Scene* GetSingleton()
 	{
@@ -100,6 +103,8 @@ struct Scene
 			m_MenuState.set(ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
 			m_MenuState.set(ui->IsMenuOpen(RE::MapMenu::MENU_NAME), MenuState::MapMenu);
 
+			m_MenuState.set(ui->IsShowingMenus(), MenuState::Any);
+
 			m_MenuStateUpdateFrame = frameCount;
 		}
 
@@ -112,7 +117,7 @@ struct Scene
 	{ 
 		return IsPathTracingActive() &&
 			m_Settings.ExperimentalSettings.PathTracingCull && 
-			GetMenuState().none(MenuState::MainMenu, MenuState::LoadingMenu);
+			GetMenuState() != MenuState::None;
 	}
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }

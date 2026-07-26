@@ -94,6 +94,11 @@ namespace Util
 
 	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
 	{
+		if (!d3d11Buffer) {
+			logger::error("CreateSharedBuffer - D3D11 buffer is nullptr");
+			return;
+		}
+
 		// Get underlying resource
 		winrt::com_ptr<IDXGIResource1> dxgiResource;
 		auto hr = d3d11Buffer->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
