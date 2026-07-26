@@ -114,10 +114,13 @@ namespace Pass
 		state.bindings = bindings;
 		commandList->setComputeState(state);
 
+		auto& shaderManagerState = Util::Adapter::GetShaderManagerState();
+
+		float4 loadedRange;
 #if defined(SKYRIM)
-		float4 loadedRange = *reinterpret_cast<float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
-#else
-		float4 loadedRange = { 0, 0, 0, 0 };
+		loadedRange = *reinterpret_cast<float4*>(&shaderManagerState.loadedRange);
+#elif defined(FALLOUT4)
+		loadedRange = *reinterpret_cast<float4*>(reinterpret_cast<char*>(&shaderManagerState) + 0x44);
 #endif
 
 		// The original code subtracts posAdjust.x/y but the world matrix used in the original shader does not contain translation (posAdjust)

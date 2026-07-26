@@ -540,12 +540,10 @@ nvrhi::ITexture* Scene::GetProjNoiseTexture() const
 	if (m_ProjNoiseTexture)
 		return m_ProjNoiseTexture;
 
-	auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
-
 	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(
-		reinterpret_cast<ID3D11Texture2D*>(projNoiseMap->rendererTexture->texture), 
-		"Projection Noise Map", 
-		nvrhi::Format::UNKNOWN, 
+		Util::Adapter::GetProjNoiseTexture(),
+		"Projection Noise Map",
+		nvrhi::Format::UNKNOWN,
 		nvrhi::ResourceStates::ShaderResource);
 
 	return m_ProjNoiseTexture;

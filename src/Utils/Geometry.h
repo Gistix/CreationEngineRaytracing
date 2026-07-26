@@ -12,9 +12,9 @@ namespace Util
 
 		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc desc);
 
-		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance);
+		bool IsDismemberSkinInstance(void* skinInstance);
 
-		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility);
+		void GetDismemberPartitionVisibility(void* skinInstance, eastl::vector<bool>& outVisibility);
 
 		bool HasDoubleSidedGeom(Mesh* mesh);
 

@@ -1,5 +1,7 @@
 #include "Adapter.h"
 
+#include "Constants.h"
+
 namespace Util
 {
 	namespace Adapter
@@ -23,6 +25,22 @@ namespace Util
 #endif		
 
 			return runtimeData;
+		}
+
+		DynamicTrishapeRuntimeData GetDynamicTrishapeRuntimeData(RE::BSDynamicTriShape* a_triShape)
+		{
+			DynamicTrishapeRuntimeData data{};
+#if defined(SKYRIM)
+			auto& rd = a_triShape->GetDynamicTrishapeRuntimeData();
+			data.dynamicData = rd.dynamicData;
+			data.dataSize = rd.dataSize;
+			data.lock = &rd.lock;
+#elif defined(FALLOUT4)
+			data.dynamicData = a_triShape->dynamicData;
+			data.dataSize = a_triShape->dynamicDataSize;
+			data.lock = &a_triShape->lock;
+#endif
+			return data;
 		}
 
 		const char* GetName(RE::TESForm* a_form)
@@ -282,7 +300,7 @@ namespace Util
 #if defined(SKYRIM)
 			return RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData().cameraData.getEye();
 #elif defined(FALLOUT4)
-			return RE::BSGraphics::State::GetSingleton().cameraState.camViewData;
+			return RE::BSGraphics::State::GetSingleton()->cameraState.camViewData;
 #endif
 		}
 
@@ -311,6 +329,204 @@ namespace Util
 #elif defined(FALLOUT4)
 			return ui->GetMenuOpen(name);
 #endif		
+		}
+
+		bool GetAlphaBlending(const RE::NiAlphaProperty* prop)
+		{
+#if defined(SKYRIM)
+			return prop->GetAlphaBlending();
+#elif defined(FALLOUT4)
+			return (prop->flags.flags & 1) != 0;
+#endif
+		}
+
+		bool GetAlphaTesting(const RE::NiAlphaProperty* prop)
+		{
+#if defined(SKYRIM)
+			return prop->GetAlphaTesting();
+#elif defined(FALLOUT4)
+			return (prop->flags.flags & 0x200) != 0;
+#endif
+		}
+
+		RE::NiAlphaProperty::AlphaFunction GetDestBlendMode(const RE::NiAlphaProperty* prop)
+		{
+#if defined(SKYRIM)
+			return prop->GetDestBlendMode();
+#elif defined(FALLOUT4)
+			int32_t dest = (prop->flags.flags >> 5) & 7;
+			return static_cast<RE::NiAlphaProperty::AlphaFunction>(dest);
+#endif
+		}
+
+		std::uint8_t GetAlphaTestRef(const RE::NiAlphaProperty* prop)
+		{
+#if defined(SKYRIM)
+			return prop->alphaThreshold;
+#elif defined(FALLOUT4)
+			return static_cast<std::uint8_t>(prop->alphaTestRef);
+#endif
+		}
+
+		std::uint32_t GetSkinBoneCount(const void* skinInstance)
+		{
+			if (!skinInstance)
+				return 0;
+#if defined(SKYRIM)
+			auto* si = static_cast<const RE::NiSkinInstance*>(skinInstance);
+			if (!si->skinData)
+				return 0;
+			return si->skinData->bones;
+#elif defined(FALLOUT4)
+			auto* si = static_cast<const RE::BSSkin::Instance*>(skinInstance);
+			if (!si->boneData)
+				return 0;
+			return static_cast<std::uint32_t>(si->boneData->transforms.size());
+#endif
+		}
+
+		std::uint32_t GetSkinFrameID(const void* skinInstance)
+		{
+			if (!skinInstance)
+				return Constants::INVALID_FRAME_ID;
+#if defined(SKYRIM)
+			return static_cast<const RE::NiSkinInstance*>(skinInstance)->frameID;
+#elif defined(FALLOUT4)
+			return static_cast<const RE::BSSkin::Instance*>(skinInstance)->frameID;
+#endif
+		}
+
+		void GetBoneWorlds(const void* skinInstance, eastl::vector<NiTransformPacked>& outBoneWorlds)
+		{
+			outBoneWorlds.clear();
+			if (!skinInstance)
+				return;
+
+#if defined(SKYRIM)
+			auto* si = static_cast<const RE::NiSkinInstance*>(skinInstance);
+			if (!si->skinData || si->skinData->bones == 0)
+				return;
+
+			outBoneWorlds.resize(si->skinData->bones);
+			for (uint32_t i = 0; i < si->skinData->bones; i++)
+				outBoneWorlds[i] = PackTransform(*si->boneWorldTransforms[i]);
+#elif defined(FALLOUT4)
+			auto* si = static_cast<const RE::BSSkin::Instance*>(skinInstance);
+			auto count = si->worldTransforms.size();
+			if (count == 0)
+				return;
+
+			outBoneWorlds.resize(count);
+			for (uint32_t i = 0; i < count; i++)
+				outBoneWorlds[i] = PackTransform(*si->worldTransforms[i]);
+#endif
+		}
+
+		void GetSkinToBones(const void* skinInstance, eastl::vector<NiTransformPacked>& outSkinToBones)
+		{
+			outSkinToBones.clear();
+			if (!skinInstance)
+				return;
+
+#if defined(SKYRIM)
+			auto* si = static_cast<const RE::NiSkinInstance*>(skinInstance);
+			if (!si->skinData || si->skinData->bones == 0)
+				return;
+
+			outSkinToBones.resize(si->skinData->bones);
+			for (uint32_t i = 0; i < si->skinData->bones; i++)
+				outSkinToBones[i] = PackTransform(si->skinData->boneData[i].skinToBone);
+#elif defined(FALLOUT4)
+			(void)skinInstance;
+#endif
+		}
+
+		NiTransformPacked PackTransform(const RE::NiTransform& src)
+		{
+			NiTransformPacked dst;
+			dst.Rot0_Scale = float4(src.rotate.entry[0][0], src.rotate.entry[0][1], src.rotate.entry[0][2], src.scale);
+			dst.Rot1       = float4(src.rotate.entry[1][0], src.rotate.entry[1][1], src.rotate.entry[1][2], 0.0f);
+			dst.Rot2       = float4(src.rotate.entry[2][0], src.rotate.entry[2][1], src.rotate.entry[2][2], 0.0f);
+			dst.Translate  = float4(src.translate.x, src.translate.y, src.translate.z, 0.0f);
+			return dst;
+		}
+
+		std::uint32_t GetTriangleCount(RE::BSTriShape* triShape)
+		{
+#if defined(SKYRIM)
+			return triShape->GetTrishapeRuntimeData().triangleCount;
+#elif defined(FALLOUT4)
+			return triShape->numTriangles;
+#endif
+		}
+
+		std::uint16_t GetVertexCount(RE::BSTriShape* triShape)
+		{
+#if defined(SKYRIM)
+			return static_cast<std::uint16_t>(triShape->GetTrishapeRuntimeData().vertexCount);
+#elif defined(FALLOUT4)
+			return triShape->numVertices;
+#endif
+		}
+
+		std::uint32_t GetFrameCount()
+		{
+#if defined(SKYRIM)
+			return RE::BSGraphics::State::GetSingleton()->frameCount;
+#elif defined(FALLOUT4)
+			return RE::BSGraphics::State::GetSingleton()->frameCount;
+#endif
+		}
+
+		ID3D11Texture2D* GetProjNoiseTexture()
+		{
+			auto* state = RE::BSGraphics::State::GetSingleton();
+#if defined(SKYRIM)
+			return reinterpret_cast<ID3D11Texture2D*>(state->defaultTextureProjNoiseMap->rendererTexture->texture);
+#elif defined(FALLOUT4)
+			return reinterpret_cast<ID3D11Texture2D*>(state->defaultTextureWhiteNoiseMap->rendererTexture->texture);
+#endif
+		}
+
+		bool GetINISettingBool(const char* a_name)
+		{
+			auto* setting = RE::GetINISetting(a_name);
+			if (!setting)
+				return false;
+#if defined(SKYRIM)
+			return setting->GetBool();
+#elif defined(FALLOUT4)
+			return setting->GetUChar() == 1u;
+#endif
+		}
+
+		RE::BSPortalGraph* GetPortalGraph(RE::ShadowSceneNode* ssn)
+		{
+			if (!ssn)
+				return nullptr;
+#if defined(SKYRIM)
+			return ssn->GetRuntimeData().portalGraph;
+#elif defined(FALLOUT4)
+			return reinterpret_cast<RE::BSPortalGraph*>(*reinterpret_cast<std::uintptr_t*>(reinterpret_cast<std::uintptr_t>(ssn) + 0x238));
+#endif
+		}
+
+		float GetBoundRadius(const RE::NiBound& bound)
+		{
+#if defined(SKYRIM)
+			return bound.radius;
+#elif defined(FALLOUT4)
+			return bound.fRadius;
+#endif
+		}
+
+		std::uint32_t GetTriShapeRefCount(RE::BSGraphics::TriShape* triShape)
+		{
+#if defined(SKYRIM)
+			return triShape->refCount;
+#elif defined(FALLOUT4)
+			return triShape->uiRefCount;
+#endif
 		}
 	}
 }

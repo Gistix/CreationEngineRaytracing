@@ -51,6 +51,8 @@ class MaterialManager : public eastl::enable_shared_from_this<MaterialManager>
 	nvrhi::BufferHandle m_Buffer;
 	eastl::unique_ptr<BindlessTable> m_Descriptors;
 
+	static eastl::shared_ptr<MaterialBase>& MakeMaterial(RE::BSShaderMaterial* shaderMaterial, ResourceSlotManager::OffsetType offset);
+
 	void CreateBuffer();
 	void BindBuffer();
 	void Grow();

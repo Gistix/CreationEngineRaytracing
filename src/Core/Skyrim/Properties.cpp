@@ -30,18 +30,18 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 
 	auto alphaProperty = runtimeData.alphaProperty;
 	if (alphaProperty) {
-		if (alphaProperty->GetAlphaBlending()) {
+		if (Util::Adapter::GetAlphaBlending(alphaProperty)) {
 			using AlphaFunction = RE::NiAlphaProperty::AlphaFunction;
 
-			if (alphaProperty->GetDestBlendMode() == AlphaFunction::kOne)
+			if (Util::Adapter::GetDestBlendMode(alphaProperty) == AlphaFunction::kOne)
 				alphaFlags |= AlphaFlags::Additive | AlphaFlags::Transmission;
 			else
 				alphaFlags |= AlphaFlags::Blend;
 		}
 
-		if (alphaProperty->GetAlphaTesting()) {
+		if (Util::Adapter::GetAlphaTesting(alphaProperty)) {
 			alphaFlags |= AlphaFlags::Test;
-			m_Data.AlphaThreshold = alphaProperty->alphaThreshold / 255.0f;
+			m_Data.AlphaThreshold = Util::Adapter::GetAlphaTestRef(alphaProperty) / 255.0f;
 		}
 	}
 
@@ -50,6 +50,7 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 		m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
 		m_Data.Alpha = shaderProperty->alpha;
 
+#if defined(SKYRIM)
 		const auto materialType = shaderProperty->GetMaterialType();
 		if (materialType == RE::BSShaderMaterial::Type::kWater) {
 			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
@@ -69,25 +70,41 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 
 			isWater = true;
 		}
+#elif defined(FALLOUT4)
+		const auto materialType = shaderProperty->GetMaterialType();
+		if (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kWater)) {
+			isWater = true;
+		}
+#endif
 		else {
-			if (materialType == RE::BSShaderMaterial::Type::kLighting) {
+			if (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kLighting)) {
 				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 
 				if (auto shaderMaterial = lightingShaderProp->material) {
 					feature = shaderMaterial->GetFeature();
 
+#if defined(SKYRIM)
 					if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR)) {
 						const auto pbrFlags = Util::Material::Skyrim::GetPBRShaderFlags(static_cast<BSLightingShaderMaterialPBR*>(shaderMaterial));
 						hasPbrEmissive = pbrFlags.any(PBRShaderFlags::HasEmissive);
 					}
+#endif
 				}
+#if defined(SKYRIM)
 				if (lightingShaderProp->emissiveColor) {
 					m_Data.EmissiveColor.x = lightingShaderProp->emissiveColor->red;
 					m_Data.EmissiveColor.y = lightingShaderProp->emissiveColor->green;
 					m_Data.EmissiveColor.z = lightingShaderProp->emissiveColor->blue;
 				}
-
 				m_Data.EmissiveColor.w = lightingShaderProp->emissiveMult;
+#elif defined(FALLOUT4)
+				if (lightingShaderProp->emitColor) {
+					m_Data.EmissiveColor.x = lightingShaderProp->emitColor->r;
+					m_Data.EmissiveColor.y = lightingShaderProp->emitColor->g;
+					m_Data.EmissiveColor.z = lightingShaderProp->emitColor->b;
+				}
+				m_Data.EmissiveColor.w = lightingShaderProp->emitColorScale;
+#endif
 
 				if (lightingShaderProp->flags.all(EShaderPropertyFlag::kProjectedUV)) {
 					auto params = Util::Math::Float4(lightingShaderProp->projectedUVParams);
@@ -170,14 +187,16 @@ uint32_t Properties::MapShaderFlags(RE::BSShaderProperty* shaderProperty)
 	if (flags.any(EShaderPropertyFlag::kEyeReflect)) result |= kEyeReflect;
 	if (flags.any(EShaderPropertyFlag::kHairTint)) result |= kHairTint;
 	if (flags.any(EShaderPropertyFlag::kTwoSided)) result |= kTwoSided;
+#if defined(SKYRIM)
 	if (flags.any(EShaderPropertyFlag::kAssumeShadowmask)) result |= kAssumeShadowmask;
 	if (flags.any(EShaderPropertyFlag::kBackLighting)) result |= kBackLighting;
-	if (flags.any(EShaderPropertyFlag::kTreeAnim)) result |= kTreeAnim;
 	if (flags.any(EShaderPropertyFlag::kSoftLighting)) result |= kSoftLighting;
-	if (flags.any(EShaderPropertyFlag::kLODLandscape)) result |= kLODLandscape;
-	if (flags.any(EShaderPropertyFlag::kLODObjects)) result |= kLODObjects;
 	if (flags.any(EShaderPropertyFlag::kHDLODObjects)) result |= kHDLODObjects;
 	if (flags.any(EShaderPropertyFlag::kSnow)) result |= kSnow;
+#endif
+	if (flags.any(EShaderPropertyFlag::kTreeAnim)) result |= kTreeAnim;
+	if (flags.any(EShaderPropertyFlag::kLODLandscape)) result |= kLODLandscape;
+	if (flags.any(EShaderPropertyFlag::kLODObjects)) result |= kLODObjects;
 
 	return result;
 }

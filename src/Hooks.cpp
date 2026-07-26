@@ -53,7 +53,7 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
-			RE::BSStream* a_bsStream,
+			void* a_bsStream,
 			RE::BSGraphics::VertexDesc a_vertexDesc,
 			uint16_t a_vertexCount, 
 			uint32_t a_indexCount)
@@ -268,7 +268,13 @@ namespace Hooks
 
 	struct BSTextureSet_SetTexture
 	{
-		static void thunk(RE::BSTextureSet* a_bsTextureSet, RE::BSTextureSet::Texture a_texture, RE::NiSourceTexturePtr& a_srcTexture)
+#if defined(SKYRIM)
+		using TextureType = RE::BSTextureSet::Texture;
+#elif defined(FALLOUT4)
+		using TextureType = RE::BSShaderProperty::TextureTypeEnum;
+#endif
+
+		static void thunk(RE::BSTextureSet* a_bsTextureSet, TextureType a_texture, RE::NiPointer<RE::NiSourceTexture>& a_srcTexture)
 		{
 			func(a_bsTextureSet, a_texture, a_srcTexture);
 		}
@@ -279,13 +285,11 @@ namespace Hooks
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
-#if defined(SKYRIM)
 		if (oThis && oThis->rendererTexture) {
 			auto scene = Scene::GetSingleton();
 			auto sceneGraph = scene->GetSceneGraph();
 			sceneGraph->ReleaseTexture(oThis->rendererTexture);
 		}
-#endif
 
 		func(oThis);
 	}

@@ -13,17 +13,18 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 	m_Name = MakeDebugName(triShape);
 	m_Type = Type::SubIndex;
 
-	const auto& geometryData = triShape->GetGeometryRuntimeData();
+	auto geometryData = Util::Adapter::GetGeometryRuntimeData(triShape);
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
 		logger::warn("SubIndexMesh::SubIndexMesh - No renderer data for {}", m_Name);
 		return;
 	}
 
-	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
-	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount)) {
+	const auto triangleCount = Util::Adapter::GetTriangleCount(triShape);
+	const auto vertexCount = Util::Adapter::GetVertexCount(triShape);
+	if (!ValidateCounts(triangleCount, vertexCount)) {
 		logger::error("SubIndexMesh::SubIndexMesh - Failed to validate Triangle Count: {}, Vertex Count: {}",
-			triShapeData.triangleCount, triShapeData.vertexCount);
+			triangleCount, vertexCount);
 		return;
 	}
 
@@ -85,7 +86,7 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 
 	const bool bypassVisibility = *Scene::GetSingleton()->g_BypassSubIndexVisibility;
 
-	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
+	const auto triangleCount = Util::Adapter::GetTriangleCount(triShape);
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();
 
 	for (auto& seg : m_Segments) {
@@ -109,8 +110,8 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 			continue;
 
 		const uint32_t end = start + numTris * 3u;
-		if (end > triShapeData.triangleCount * 3u) {
-			logger::warn("SubIndexMesh::Update - Segment {} index {} exceeds the maximum of {}", i, end, triShapeData.triangleCount * 3u);
+		if (end > triangleCount * 3u) {
+			logger::warn("SubIndexMesh::Update - Segment {} index {} exceeds the maximum of {}", i, end, triangleCount * 3u);
 			continue;
 		}
 

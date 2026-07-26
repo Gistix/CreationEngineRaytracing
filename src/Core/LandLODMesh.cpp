@@ -15,9 +15,9 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	auto device = Renderer::GetSingleton()->GetDevice();
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-	const auto& triShapeData = bsTriShape->GetTrishapeRuntimeData();
+	const auto vertexCount = Util::Adapter::GetVertexCount(bsTriShape);
 	const auto vertexStride = Util::Geometry::GetStoredVertexSize(m_VertexDesc);
-	const auto byteSize = static_cast<size_t>(triShapeData.vertexCount) * vertexStride;
+	const auto byteSize = static_cast<size_t>(vertexCount) * vertexStride;
 
 	auto liveBufDesc = nvrhi::BufferDesc()
 		.setByteSize(byteSize)
@@ -57,22 +57,42 @@ void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 
 	for (auto* node = static_cast<RE::NiAVObject*>(m_BSTriShape->parent); node; node = node->parent) {
 		if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(node)) {
+#if defined(SKYRIM)
 			auto& runtimeData = multiBoundNode->GetRuntimeData();
 			auto* multiBound = runtimeData.multiBound.get();
 			if (!multiBound || !multiBound->data)
 				break;
 
 			auto* aabb = netimmerse_cast<RE::BSMultiBoundAABB*>(multiBound->data.get());
+#elif defined(FALLOUT4)
+			auto* multiBound = multiBoundNode->multiBound.get();
+			if (!multiBound || !multiBound->shape)
+				break;
+
+			auto* aabb = netimmerse_cast<RE::BSMultiBoundAABB*>(multiBound->shape.get());
+#endif
 			if (!aabb)
 				break;
 
 			m_AABBCenter = { aabb->center.x, aabb->center.y };
+#if defined(SKYRIM)
 			m_AABBSize = { aabb->size.x, aabb->size.y };
+#elif defined(FALLOUT4)
+			m_AABBSize = { aabb->halfExtents.x, aabb->halfExtents.y };
+#endif
 			break;
 		}
 	}
 
-	float4 loadedRange = *reinterpret_cast<const float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
+	float4 loadedRange;
+#if defined(SKYRIM)
+	loadedRange = *reinterpret_cast<const float4*>(&Util::Adapter::GetShaderManagerState().loadedRange);
+#elif defined(FALLOUT4)
+	{
+		auto& state = Util::Adapter::GetShaderManagerState();
+		loadedRange = *reinterpret_cast<const float4*>(reinterpret_cast<const char*>(&state) + 0x44);
+	}
+#endif
 
 	const float2 loadedPosition = { loadedRange.x , loadedRange.y };
 	const float2 loadedSize = { loadedRange.z * 2.0f , loadedRange.w * 2.0f };

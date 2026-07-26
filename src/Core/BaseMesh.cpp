@@ -23,13 +23,15 @@ BaseMesh::~BaseMesh()
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
-	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+	auto geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 	if (geometryData.rendererData) {
+#if defined(SKYRIM)
 		if (auto* extra = bsTriShape->GetExtraData<RE::NiIntegersExtraData>(Constants::ExtraData::LandLOD)) {
 			if (extra->size > 0 && extra->value[0] == 4)
 				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
 		}
+#endif
 
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
@@ -37,10 +39,12 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
 	}
 
+#if defined(SKYRIM)
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
 		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
+#endif
 
-	if (geometryData.skinInstance.get())
+	if (geometryData.skinInstance)
 		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
 
 	logger::warn("BaseMesh::Create - No renderer data or skin instance for {}", MakeDebugName(bsTriShape));
@@ -63,7 +67,7 @@ void BaseMesh::MarkDirty(DirtyFlags flag) {
 	Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }
 
-bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices)
+bool BaseMesh::ValidateCounts(uint32_t numTriangles, uint32_t numVertices)
 {
 	if (numTriangles == 0) {
 		logger::warn("BaseMesh::ValidateCounts - Num triangles equals 0, skipping.");
@@ -285,11 +289,14 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
 	MarkDirty(DirtyFlags::Visibility);
 	
+#if defined(SKYRIM)
 	SetEyeFlag();
+#endif
 
 	return true;
 }
 
+#if defined(SKYRIM)
 void BaseMesh::SetEyeFlag()
 {
 	if (!m_Owner)
@@ -314,10 +321,11 @@ void BaseMesh::SetEyeFlag()
 	const bool isEye = (strcmp(eyePart->formEditorID.c_str(), m_Name.c_str()) == 0);
 	m_Flags.set(isEye, Flags::Eyes);
 }
+#endif
 
 void BaseMesh::CreateMaterial()
 {
-	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->material);
 }
 
 void BaseMesh::UpdateMaterial()
@@ -329,7 +337,7 @@ void BaseMesh::UpdateMaterial()
 	if (m_Material->GetData()->Type != MaterialBase::Type::Water)
 		return;
 
-	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+	m_Material->Update(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->material);
 }
 
 void BaseMesh::AllocateMeshIndex()

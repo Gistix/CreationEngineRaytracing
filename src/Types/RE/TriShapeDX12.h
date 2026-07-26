@@ -11,5 +11,6 @@ namespace RE::BSGraphics
 		ID3D12Resource* indexBufferDX12;
 		bool ownsDX12Buffers = false;
 	};
-	static_assert(sizeof(TriShapeDX12) == 0x48);
+	static_assert(sizeof(TriShapeDX12) == sizeof(TriShape) + 0x18,
+		"TriShapeDX12: expected TriShape base + 2 pointers + bool");
 }

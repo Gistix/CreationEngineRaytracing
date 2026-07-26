@@ -1,0 +1,18 @@
+#pragma once
+
+#include "Core/Material/Skyrim/LightingMaterial.h"
+#include "Core/Material/Skyrim/EnvmapMaterial.h"
+#include "Core/Material/Skyrim/GlowmapMaterial.h"
+#include "Core/Material/Skyrim/ParallaxMaterial.h"
+#include "Core/Material/Skyrim/FacegenMaterial.h"
+#include "Core/Material/Skyrim/FacegenTintMaterial.h"
+#include "Core/Material/Skyrim/HairTintMaterial.h"
+#include "Core/Material/Skyrim/ParallaxOccMaterial.h"
+#include "Core/Material/Skyrim/EyeMaterial.h"
+#include "Core/Material/Skyrim/MultiLayerParallaxMaterial.h"
+#include "Core/Material/Skyrim/LandscapeMaterial.h"
+#include "Core/Material/Skyrim/LODLandscapeMaterial.h"
+#include "Core/Material/Skyrim/PBRMaterial.h"
+#include "Core/Material/Skyrim/PBRLandscapeMaterial.h"
+#include "Core/Material/Skyrim/EffectMaterial.h"
+#include "Core/Material/Skyrim/WaterMaterial.h"

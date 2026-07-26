@@ -123,7 +123,7 @@ void BLASCluster::UpdateInstanceLightData(
 			numLights++;
 		} else {
 			float dist = float3::Distance(*reinterpret_cast<float3*>(&m_WorldBound.center), ld.Vector);
-			if (dist - m_WorldBound.radius <= ld.Radius) {
+			if (dist - Util::Adapter::GetBoundRadius(m_WorldBound) <= ld.Radius) {
 				lightIds[numLights] = light.m_Index;
 				numLights++;
 			}
@@ -208,7 +208,8 @@ uint32_t BLASCluster::Update()
 
 	if (m_IsValid) {
 		auto* camera = sceneGraph->GetCamera();
-		const bool inFrustum = camera->PointInFrustum(m_WorldBound.center, m_WorldBound.radius);
+		const bool inFrustum = camera->PointInFrustum(m_WorldBound.center,
+			Util::Adapter::GetBoundRadius(m_WorldBound));
 		m_Flags.set(!inFrustum, Flags::FrustumCulled);
 
 		if (!skipInstanceLights) {

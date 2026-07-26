@@ -1,21 +1,11 @@
 #include "Core/MaterialManager.h"
 
-#include "Core/Material/Skyrim/LightingMaterial.h"
-#include "Core/Material/Skyrim/EnvmapMaterial.h"
-#include "Core/Material/Skyrim/GlowmapMaterial.h"
-#include "Core/Material/Skyrim/ParallaxMaterial.h"
-#include "Core/Material/Skyrim/FacegenMaterial.h"
-#include "Core/Material/Skyrim/FacegenTintMaterial.h"
-#include "Core/Material/Skyrim/HairTintMaterial.h"
-#include "Core/Material/Skyrim/ParallaxOccMaterial.h"
-#include "Core/Material/Skyrim/EyeMaterial.h"
-#include "Core/Material/Skyrim/MultiLayerParallaxMaterial.h"
-#include "Core/Material/Skyrim/LandscapeMaterial.h"
-#include "Core/Material/Skyrim/LODLandscapeMaterial.h"
-#include "Core/Material/Skyrim/PBRMaterial.h"
-#include "Core/Material/Skyrim/PBRLandscapeMaterial.h"
-#include "Core/Material/Skyrim/EffectMaterial.h"
-#include "Core/Material/Skyrim/WaterMaterial.h"
+#if defined(SKYRIM)
+#include "Core/Material/Skyrim.h"
+#elif defined(FALLOUT4)
+#include "Core/Material/Fallout4.h"
+#endif	
+
 #include "Renderer.h"
 #include "Scene.h"
 
@@ -75,11 +65,88 @@ void MaterialManager::Release(uint64_t offset)
 	m_Slots.Release(offset);
 }
 
-eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shaderMaterial)
+eastl::shared_ptr<MaterialBase>& MaterialManager::MakeMaterial(RE::BSShaderMaterial* shaderMaterial, ResourceSlotManager::OffsetType offset)
 {
+#if defined(SKYRIM)
 	using Feature = RE::BSShaderMaterial::Feature;
+#elif defined(FALLOUT4)
+	using Feature = Util::Adapter::Material::Feature;
+#endif
 	using Type = RE::BSShaderMaterial::Type;
 
+	eastl::shared_ptr<MaterialBase> material = nullptr;
+
+	auto type = shaderMaterial->GetType();
+	if (type == Type::kLighting)
+	{
+#if defined(SKYRIM)
+		if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape))
+			material = eastl::make_shared<PBRLandscapeMaterial>(shaderMaterial, offset);
+		else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR))
+			material = eastl::make_shared<PBRMaterial>(shaderMaterial, offset);
+		else
+#endif
+			switch (static_cast<Feature>(shaderMaterial->GetFeature()))
+			{
+			case Feature::kEnvironmentMap:
+				material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kGlowMap:
+				material = eastl::make_shared<GlowmapMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kParallax:
+				material = eastl::make_shared<ParallaxMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kFaceGen:
+				material = eastl::make_shared<FacegenMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kSkinTint:
+				material = eastl::make_shared<FacegenTintMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kHairTint:
+				material = eastl::make_shared<HairTintMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kParallaxOcc:
+				material = eastl::make_shared<ParallaxOccMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kMultilayerParallax:
+				material = eastl::make_shared<MultiLayerParallaxMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kEye:
+				material = eastl::make_shared<EyeMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kMultiTexLand:
+			case Feature::kMultiTexLandLODBlend:
+				material = eastl::make_shared<LandscapeMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kLODLand:
+			case Feature::kLODLandNoise:
+				material = eastl::make_shared<LODLandscapeMaterial>(shaderMaterial, offset);
+				break;
+			case Feature::kDefault:
+			case Feature::kTreeAnim:
+			case Feature::kMultiIndexTriShapeSnow:
+			case Feature::kLODObjectsHD:
+			default:
+				material = eastl::make_shared<LightingMaterial>(shaderMaterial, offset);
+				break;
+			}
+	}
+	else if (type == Type::kEffect) {
+		material = eastl::make_shared<EffectMaterial>(shaderMaterial, offset);
+	}
+	else if (type == Type::kWater) {
+		material = eastl::make_shared<WaterMaterial>(shaderMaterial, offset);
+	}
+	else {
+		material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
+	}
+
+	return material;
+}
+
+eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shaderMaterial)
+{
 	std::scoped_lock lock(m_MaterialMutex);
 
 	eastl::shared_ptr<MaterialBase> material = nullptr;
@@ -101,70 +168,7 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 		}
 	}
 
-	auto offset = m_Slots.Allocate();
-
-	auto type = shaderMaterial->GetType();
-	if (type == Type::kLighting) 
-	{
-		if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape))
-			material = eastl::make_shared<PBRLandscapeMaterial>(shaderMaterial, offset);
-		else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR))
-			material = eastl::make_shared<PBRMaterial>(shaderMaterial, offset);
-		else switch (shaderMaterial->GetFeature())
-		{
-		case RE::BSShaderMaterial::Feature::kEnvironmentMap:
-			material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kGlowMap:
-			material = eastl::make_shared<GlowmapMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kParallax:
-			material = eastl::make_shared<ParallaxMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kFaceGen:
-			material = eastl::make_shared<FacegenMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kFaceGenRGBTint:
-			material = eastl::make_shared<FacegenTintMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kHairTint:
-			material = eastl::make_shared<HairTintMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kParallaxOcc:
-			material = eastl::make_shared<ParallaxOccMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kMultilayerParallax:
-			material = eastl::make_shared<MultiLayerParallaxMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kEye:
-			material = eastl::make_shared<EyeMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kMultiTexLand:
-		case RE::BSShaderMaterial::Feature::kMultiTexLandLODBlend:
-			material = eastl::make_shared<LandscapeMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kLODLand:
-		case RE::BSShaderMaterial::Feature::kLODLandNoise:
-			material = eastl::make_shared<LODLandscapeMaterial>(shaderMaterial, offset);
-			break;
-		case RE::BSShaderMaterial::Feature::kDefault:
-		case RE::BSShaderMaterial::Feature::kTreeAnim:
-		case RE::BSShaderMaterial::Feature::kMultiIndexTriShapeSnow:
-		case RE::BSShaderMaterial::Feature::kLODObjectsHD:
-		default:
-			material = eastl::make_shared<LightingMaterial>(shaderMaterial, offset);
-			break;
-		}
-	}
-	else if (type == Type::kEffect) {
-		material = eastl::make_shared<EffectMaterial>(shaderMaterial, offset);
-	}
-	else if (type == Type::kWater) {
-		material = eastl::make_shared<WaterMaterial>(shaderMaterial, offset);
-	}
-	else {
-		material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
-	}
+	material = MakeMaterial(shaderMaterial, m_Slots.Allocate());
 
 	material->SetManager(shared_from_this());
 

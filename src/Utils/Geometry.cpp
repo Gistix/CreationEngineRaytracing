@@ -127,20 +127,20 @@ namespace Util
 			return ((vertexDescUInt & 0xF) << 2);
 		}
 
-		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance)
+		bool IsDismemberSkinInstance(void* skinInstance)
 		{
 #if defined(SKYRIM)
 			if (!skinInstance)
 				return false;
 
-			return skinInstance->GetRTTI() == Constants::rtti::BSDismemberSkinInstance.get();
+			return static_cast<RE::NiSkinInstance*>(skinInstance)->GetRTTI() == Constants::rtti::BSDismemberSkinInstance.get();
 #else
 			(void)skinInstance;
 			return false;
 #endif
 		}
 
-		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility)
+		void GetDismemberPartitionVisibility(void* skinInstance, eastl::vector<bool>& outVisibility)
 		{
 			outVisibility.clear();
 

@@ -13,11 +13,7 @@ void Light::UpdateInstances()
 
 	sceneGraph->GetInstances().Read([&](const auto& instance) {
 		auto& center = instance->m_Node->worldBound.center;
-#if defined(SKYRIM)
-		float radius = instance->m_Node->worldBound.radius;
-#elif defined(FALLOUT4)
-		float radius = instance->m_Node->worldBound.fRadius;
-#endif
+		float radius = Util::Adapter::GetBoundRadius(instance->m_Node->worldBound);
 
 		if ((center - position).Length() > radius + runtimeData.radius.x)
 			return Iterator::Continue;

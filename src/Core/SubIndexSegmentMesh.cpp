@@ -20,11 +20,11 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 	m_VertexDesc = manager->GetVertexDesc();
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(m_VertexDesc);
-	const auto& triShapeData = parent->GetTrishapeRuntimeData();
+	const auto vertexCount = Util::Adapter::GetVertexCount(parent);
 
 	m_GeometryEntries.push_back({ MakeGeometryDesc(
 		manager->GetIndexBuffer(), start, numTris * 3u,
-		manager->GetVertexBuffer(), vertexStride, triShapeData.vertexCount,
+		manager->GetVertexBuffer(), vertexStride, vertexCount,
 		manager->GetMeshIndex()), AllocateGeometryIndex() });
 
 	m_Material = manager->GetMaterial();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RE/B/BSTriShape.h"
+#include "RE/B/BSSpinLock.h"
 #include "REX/W32/BASE.h"
 
 namespace RE
@@ -45,7 +46,7 @@ namespace RE
 		// members
 		std::uint32_t                        dynamicDataSize;                 // 170
 		std::uint32_t                        unk174;                          // 174
-		std::uint64_t                        lock;                            // 178
+		RE::BSSpinLock                       lock;                            // 178
 		void*                                dynamicData;                     // 180
 		NiPointer<BSGeometrySegmentData>     segmentData;                     // 188
 		void*                                unk190;                          // 190

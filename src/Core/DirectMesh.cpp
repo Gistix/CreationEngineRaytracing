@@ -11,7 +11,7 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 	m_BSTriShape = bsTriShape;
 	m_Type = Type::Default;
 
-	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+	auto geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
@@ -19,9 +19,10 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 		return;
 	}
 
-	const auto& triShapeData = bsTriShape->GetTrishapeRuntimeData();
+	const auto triangleCount = Util::Adapter::GetTriangleCount(bsTriShape);
+	const auto vertexCount = Util::Adapter::GetVertexCount(bsTriShape);
 
-	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount))
+	if (!ValidateCounts(triangleCount, vertexCount))
 		return;
 
 	m_VertexDesc = rendererData->vertexDesc;
@@ -36,10 +37,10 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 
 	AllocateMeshIndex();
 
-	const uint32_t indexCount = static_cast<uint32_t>(triShapeData.triangleCount) * 3;
+	const uint32_t indexCount = static_cast<uint32_t>(triangleCount) * 3;
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
-	m_GeometryEntries.push_back({ MakeGeometryDesc(m_IndexBuffer.m_Buffer, 0, indexCount, m_VertexBuffer.m_Buffer, vertexStride, triShapeData.vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
+	m_GeometryEntries.push_back({ MakeGeometryDesc(m_IndexBuffer.m_Buffer, 0, indexCount, m_VertexBuffer.m_Buffer, vertexStride, vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
 
 	CreateMaterial();
 }

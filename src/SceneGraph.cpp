@@ -376,7 +376,7 @@ void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 		return;
 
 	if (auto dynamicMesh = it->second->AsDynamicMesh()) {
-		auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
+		auto runtimeData = Util::Adapter::GetDynamicTrishapeRuntimeData(bsDynamicTriShape);
 
 		// Function is called through a hook thats already between lock
 		// Acessing without locking here is safe and correct
@@ -563,7 +563,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				auto& children = Util::Adapter::GetChildren(node);
 
-				if (auto switchNode = node->AsSwitchNode()) {
+				if (auto switchNode = Util::Adapter::AsSwitchNode(node)) {
 					auto index = static_cast<uint16_t>(switchNode->index);
 					if (index < children.size())
 						walk(children[index].get(), parentRefr);
@@ -583,7 +583,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				eastl::vector<RE::NiAVObject*> portalChildren;
 				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
 					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
-					if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+					if (auto portalGraph = Util::Adapter::GetPortalGraph(ssn)) {
 						for (auto& child : portalGraph->alwaysRenderChildren) {
 							if (child->parent)
 								continue;
@@ -717,8 +717,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					continue;
 				}
 
+#if defined(SKYRIM)
 				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
 					continue;
+#endif
 
 				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 				auto* shaderProperty = geometryData.shaderProperty;
@@ -726,21 +728,34 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					continue;
 
 				const auto materialType = shaderProperty->GetMaterialType();
+#if defined(SKYRIM)
 				const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
 				const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
 				const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+#elif defined(FALLOUT4)
+				const bool isLightingShader = (materialType == 0);
+				const bool isEffectShader = (materialType == 2);
+				const bool isWaterShader = (materialType == 12);
+#endif
 
 				auto* alphaProperty = geometryData.alphaProperty;
-				const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+				const bool isAlphaBlend = alphaProperty ? Util::Adapter::GetAlphaBlending(alphaProperty) : false;
 				const bool validEffect = isEffectShader && !isAlphaBlend;
 
 				// Exclude procedural and displacement water
 				if (isWaterShader) {
 					auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
+#if defined(SKYRIM)
 					const auto waterFlags = waterShaderProperty->waterFlags.underlying();
 
 					if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
 						continue;
+#elif defined(FALLOUT4)
+					const auto waterFlags = waterShaderProperty->waterFlags;
+
+					if (waterFlags & 1 || waterFlags & 2)
+						continue;
+#endif
 				}
 
 				if (!isLightingShader && !validEffect && !isWaterShader)
@@ -755,6 +770,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
 					continue;
 
+#if defined(SKYRIM)
 				const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
 				if (!skinned) {
 					const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
@@ -763,6 +779,15 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				}
 
 				const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+#elif defined(FALLOUT4)
+				const bool skinned = !geometryData.rendererData && geometryData.skinInstance;
+				if (!skinned) {
+					if (Util::Adapter::GetVertexCount(bsTriShape) == 0 || Util::Adapter::GetTriangleCount(bsTriShape) == 0)
+						continue;
+				}
+
+				const auto rendererData = geometryData.rendererData;
+#endif
 				if (!rendererData)
 					continue;
 

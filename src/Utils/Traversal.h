@@ -131,10 +131,14 @@ namespace Util
 					}
 					else if (rtti == Constants::rtti::ShadowSceneNode.get()) {
 						auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
-						if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+						if (auto portalGraph = Util::Adapter::GetPortalGraph(ssn)) {
 							// Iterate over PortalGraph always render children
 							// This list contains rendered nodes that are outside of the normal SceneGraph
+#if defined(SKYRIM)
 							for (auto& child : portalGraph->alwaysRenderChildren)
+#elif defined(FALLOUT4)
+							for (auto& child : portalGraph->alwayRenderChildren)
+#endif
 							{
 								// Only those who are outside the Scenegraph
 								if (child->parent)

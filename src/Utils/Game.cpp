@@ -79,14 +79,14 @@ namespace Util
 
 		RE::NiCamera* FindNiCamera(RE::NiAVObject* object)
 		{
-			if (auto* camera = skyrim_cast<RE::NiCamera*>(object))
+			if (auto* camera = ce_cast<RE::NiCamera*>(object))
 				return camera;
 
-			auto* node = object->AsNode();
+			auto* node = Util::Adapter::AsNode(object);
 			if (!node)
 				return nullptr;
 
-			for (auto& child : node->GetChildren()) {
+			for (auto& child : Util::Adapter::GetChildren(node)) {
 				if (child) {
 					if (auto* res = FindNiCamera(child.get()))
 						return res;

@@ -86,5 +86,7 @@ namespace Util
 
 #if defined(SKYRIM)
 	void CreateSharedBuffer(RE::ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer);
+#elif defined(FALLOUT4)
+	void CreateSharedBuffer(RE::BSGraphics::Buffer* buffer, ID3D12Resource** d3d12Buffer);
 #endif
 }

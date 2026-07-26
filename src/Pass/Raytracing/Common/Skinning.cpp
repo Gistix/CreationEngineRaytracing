@@ -134,9 +134,14 @@ namespace Pass
 				break;
 			}
 
+#if defined(SKYRIM)
 			auto* dynamicMesh = mesh->AsDynamicMesh();
 			const uint32_t dynamicIndex = dynamicMesh ? dynamicMesh->GetDynamicIndex() : 0u;
 			uint32_t meshFlags = dynamicMesh ? ::Skinning::MeshFlags::Dynamic : 0u;
+#elif defined(FALLOUT4)
+			const uint32_t dynamicIndex = 0u;
+			uint32_t meshFlags = 0u;
+#endif
 
 			if (mesh->GetModelSpaceNormal())
 				meshFlags |= ::Skinning::MeshFlags::ModelSpaceNormal;

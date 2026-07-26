@@ -24,9 +24,9 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	// Byte-address buffers (normals/tangents/skinning) are inherited from the SkinnedMesh setup. The
 	// skin partition's native buffer has the same vertex count as the dynamic morph data; it carries
 	// everything except position (dynamic trishapes have no vertex position - it lives in the morph data).
-	const auto& geometryData = bsDynamicTriShape->GetGeometryRuntimeData();
+	auto geometryData = Util::Adapter::GetGeometryRuntimeData(bsDynamicTriShape);
 
-	auto* skinInstance = geometryData.skinInstance.get();
+	auto* skinInstance = geometryData.skinInstance;
 	if (!skinInstance) {
 		logger::warn("DynamicMesh::DynamicMesh - No skin instance for {}", m_Name);
 		return;
