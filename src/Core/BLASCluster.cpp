@@ -45,21 +45,6 @@ void BLASCluster::RemoveMember(BaseMesh* mesh)
 	m_DirtyFlags.set(DirtyFlags::Mesh);
 }
 
-void BLASCluster::GrowBounds(const RE::NiBound& bound)
-{
-	float3 boundCenter = Util::Math::Float3(bound.center);
-
-	float margin = m_ClusterRadius - bound.radius;
-	if (margin > 0.0f) {
-		float distSq = (boundCenter - m_ClusterPosition).LengthSquared();
-		if (distSq <= margin * margin)
-			return;
-	}
-
-	float distToBound = (boundCenter - m_ClusterPosition).Length();
-	m_ClusterRadius = std::max(m_ClusterRadius, distToBound + bound.radius);
-}
-
 void BLASCluster::UpdateTransform() {
 
 	if (m_Owner) {
@@ -76,6 +61,8 @@ void BLASCluster::UpdateTransform() {
 		}
 
 		m_Transform = transform;
+
+		m_WorldBound = object->worldBound;
 	}
 	else {
 		if (m_Members.empty()) {
@@ -93,10 +80,10 @@ void BLASCluster::UpdateTransform() {
 			} else {
 				m_PrevTransform = mesh->GetPrevTransform();
 			}
+
+			m_WorldBound = mesh->GetWorldBound();
 		}
 	}
-
-	m_ClusterPosition = float3(m_Transform._14, m_Transform._24, m_Transform._34);
 }
 
 bool BLASCluster::Empty() const
@@ -135,8 +122,8 @@ void BLASCluster::UpdateInstanceLightData(
 			lightIds[numLights] = light.m_Index;
 			numLights++;
 		} else {
-			float dist = float3::Distance(m_ClusterPosition, ld.Vector);
-			if (dist - m_ClusterRadius <= ld.Radius) {
+			float dist = float3::Distance(*reinterpret_cast<float3*>(&m_WorldBound.center), ld.Vector);
+			if (dist - m_WorldBound.radius <= ld.Radius) {
 				lightIds[numLights] = light.m_Index;
 				numLights++;
 			}
@@ -163,8 +150,6 @@ uint32_t BLASCluster::Update()
 
 	// Only those who affect geometry count or its flags
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh, DirtyFlags::Alpha)) {
-		m_ClusterRadius = 0.0f;
-
 		m_Flags.reset(Flags::Updatable, Flags::TwoSided);
 
 		m_GeometryDescs.clear();
@@ -175,9 +160,6 @@ uint32_t BLASCluster::Update()
 		for (const auto& mesh : m_Members) {
 			if (mesh->IsHidden())
 				continue;
-
-			// In theory also needs to be triggered when DirtyFlags::Transform
-			GrowBounds(mesh->GetWorldBound());
 
 			const auto& entries = mesh->GetGeometryEntries();
 			if (entries.empty())
@@ -226,7 +208,7 @@ uint32_t BLASCluster::Update()
 
 	if (m_IsValid) {
 		auto* camera = sceneGraph->GetCamera();
-		const bool inFrustum = camera->PointInFrustum(*reinterpret_cast<RE::NiPoint3*>(&m_ClusterPosition), m_ClusterRadius);
+		const bool inFrustum = camera->PointInFrustum(m_WorldBound.center, m_WorldBound.radius);
 		m_Flags.set(!inFrustum, Flags::FrustumCulled);
 
 		if (!skipInstanceLights) {

@@ -55,11 +55,8 @@ class BLASCluster
 	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 	bool m_NeedsPrevInit = true;
 
-	// cached translation of m_InstanceTransform, invalid when transform changes
-	float3 m_ClusterPosition;
-
-	// world-space bounding sphere radius, accumulated from member bounds
-	float m_ClusterRadius = 0.0f; 
+	// Used to calculate instance light data
+	RE::NiBound m_WorldBound;
 
 	friend class SceneGraph;
 
@@ -97,9 +94,6 @@ public:
 	const auto& GetMembers() const { return m_Members; }
 
 	void UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags);
-
-	// Grow the world-space bounding sphere to include the given bound (center + radius in world space).
-	void GrowBounds(const RE::NiBound& bound);
 
 	// No live members remain.
 	bool Empty() const;
