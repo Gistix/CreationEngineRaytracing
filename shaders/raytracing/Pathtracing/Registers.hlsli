@@ -112,6 +112,8 @@ Texture2D<float4>                           WaterDisplacementMap        : regist
 Texture2D<float4>                           ProjNoiseMap                : register(t10);
 StructuredBuffer<Transform>                 Transforms                  : register(t11);
 Texture2D<float4>                           PhysicalSkyTrLUT            : register(t12);
+ByteAddressBuffer                           MeshSlotRemap               : register(t19);
+ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);

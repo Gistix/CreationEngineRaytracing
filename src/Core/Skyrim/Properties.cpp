@@ -6,7 +6,7 @@
 
 #include "Types/WaterFlags.h"
 
-Properties::Properties(RE::BSTriShape* triShape, bool isEye)
+Properties::Properties()
 {
 	m_Data.ShaderFlags = 0;
 	m_Data.AlphaFlags = AlphaFlags::None;
@@ -17,10 +17,10 @@ Properties::Properties(RE::BSTriShape* triShape, bool isEye)
 	m_Data.ProjectedUVParams2 = half4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.ProjectedUVParams3 = half4(0.0f, 0.0f, 0.0f, 0.0f);
 	m_Data.TextureProj = half4(0.0f, 0.0f, 0.0f, 0.0f);
+}
 
-	if (!triShape)
-		return;
-
+void Properties::Update(RE::BSTriShape* triShape, bool isEye)
+{
 	auto runtimeData = Util::Adapter::GetGeometryRuntimeData(triShape);
 
 	AlphaFlags alphaFlags = AlphaFlags::None;

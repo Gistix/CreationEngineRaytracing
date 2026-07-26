@@ -56,7 +56,7 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	return true;
 }
 
-bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
+bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
 {
 	const char* deviceExtensions[] = {
 		"VK_KHR_acceleration_structure",
@@ -67,6 +67,7 @@ bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQu
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
+	deviceDesc.instance = instance;
 	deviceDesc.physicalDevice = physicalDevice;
 	deviceDesc.device = device;
 	deviceDesc.graphicsQueue = graphicsQueue;
@@ -82,6 +83,20 @@ bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQu
 
 	if (!m_NVRHIDevice)
 		return false;
+
+	m_IsVulkan = true;
+
+	// Map DXGI_FORMAT to NVRHI formats
+	if (m_FormatMapping.empty())
+		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+		{
+			auto format = (nvrhi::Format)i;
+
+			// This gets the SRV format, but I guess it should work
+			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
+
+			m_FormatMapping.emplace(nativeFormat, format);
+		}
 
 	PostInitialize();
 
@@ -654,6 +669,11 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 	m_PassTimings.clear();
 
 	if (timings) {
+		if (auto* sg = scene->GetSceneGraph()) {
+			for (auto& pt : sg->GetUpdateTimings())
+				m_PassTimings.push_back(pt);
+		}
+
 		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
 			rootNode->ForEach([&](RenderNode* node) {
 				if (node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))

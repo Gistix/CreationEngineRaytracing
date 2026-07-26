@@ -2,6 +2,8 @@
 #include "Util.h"
 #include "SceneGraph.h"
 
+#include "Utils/DXVKDetection.h"
+
 #include "Hooks.h"
 
 #include "framework/DescriptorTableManager.h"
@@ -30,6 +32,7 @@
 #include "Pass/Raytracing/Common/Accumulation.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
+#include "Pass/Raytracing/Common/TransformComposition.h"
 #include "Pass/Raytracing/Common/PTComposite.h"
 
 Scene::Scene()
@@ -39,7 +42,9 @@ Scene::Scene()
 
 void Scene::Load()
 {
-
+	m_IsDXVK = Util::DXVK::IsRunning();
+	if (m_IsDXVK)
+		logger::info("DXVK detected via d3d11.dll/dxgi.dll proxy - Switching to Vulkan mode.");
 }
 
 void Scene::PostPostLoad()
@@ -89,6 +94,12 @@ RenderNode* Scene::GetGlobalIllumination()
 			true,
 			"LandLOD Occluder",
 			eastl::make_unique<Pass::LandLODOccluder>(renderer)
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
+			"Transform Composition",
+			eastl::make_unique<Pass::TransformComposition>(renderer)
 		});
 
 		m_GlobalIllumination->AddNode({
@@ -155,6 +166,12 @@ RenderNode* Scene::GetPathTracing()
 			true,
 			"LandLOD Occluder",
 			eastl::make_unique<Pass::LandLODOccluder>(renderer)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"Transform Composition",
+			eastl::make_unique<Pass::TransformComposition>(renderer)
 		});
 
 		m_PathTracing->AddNode({
@@ -237,6 +254,12 @@ RenderNode* Scene::GetDebug()
 
 		m_Debug->AddNode({
 			true,
+			"Transform Composition",
+			eastl::make_unique<Pass::TransformComposition>(renderer)
+		});
+
+		m_Debug->AddNode({
+			true,
 			"Scene TLAS",
 			eastl::make_unique<Pass::SceneTLAS>(renderer)
 		});
@@ -286,8 +309,9 @@ void Scene::UpdateMode(Mode mode, Mode previousMode)
 	if (IsModeInitialized(previousMode))
 		rootNode->DetachRenderNode(GetModeNode(previousMode));
 
-	// Attach new mode node
-	rootNode->AttachRenderNode(GetModeNode(mode));
+	// Attach new mode node (skip for None - no render work needed)
+	if (mode != Mode::None)
+		rootNode->AttachRenderNode(GetModeNode(mode));
 }
 
 void Scene::Initialize() 
@@ -312,7 +336,7 @@ void Scene::Initialize()
 
 void Scene::Execute()
 {
-	if (!m_Settings.Enabled)
+	if (!m_Settings.Enabled || m_Settings.GeneralSettings.Mode == Mode::None)
 		return;
 
 	auto* sceneGraph = GetSceneGraph();

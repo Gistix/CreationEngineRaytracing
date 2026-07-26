@@ -9,7 +9,7 @@
 #include "include/FlowMap.hlsli"
 #include "include/Wetness.hlsli"
 
-void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh)
+void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, in Properties props)
 {
     WaterMaterialData water = Materials[0].Load<WaterMaterialData>(mesh.GetMaterialOffset());
     const float mipLevel = surface.MipLevel;
@@ -20,9 +20,9 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     surface.F0 = 0.02f;
     surface.IOR = 1.33f;
 
-    const bool hasFlowMap = (mesh.Properties.WaterFlags & WaterFlags::kEnableFlowmap) != 0;
+    const bool hasFlowMap = (props.WaterFlags & WaterFlags::kEnableFlowmap) != 0;
     const bool hasBlendNormals = true;
-    const bool hasNormalTexcoord = (mesh.Properties.WaterFlags & WaterFlags::kVertexUV) != 0;
+    const bool hasNormalTexcoord = (props.WaterFlags & WaterFlags::kVertexUV) != 0;
 
     const bool hasVertexColor = false;
 
@@ -36,7 +36,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
     float3 objectUV = Raytracing.WaterObjectUV;
 
-    float4 cellTexCoordOffset = mesh.Properties.ProjectedUVParams;
+    float4 cellTexCoordOffset = props.ProjectedUVParams;
 
     float2 scrollAdjust1;
     float2 scrollAdjust2;

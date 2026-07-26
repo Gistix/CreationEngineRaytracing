@@ -74,6 +74,8 @@ Texture2D<float4>                           WaterDisplacementMap        : regist
 Texture2D<float4>                           SkinDetailNormal            : register(t14);
 Texture2D<float4>                           ProjNoiseMap                : register(t15);
 StructuredBuffer<Transform>                 Transforms                  : register(t16);
+ByteAddressBuffer                           MeshSlotRemap               : register(t19);
+ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 
 Texture2D<float4>                           PhysicalSkyTrLUT            : register(t17);
 

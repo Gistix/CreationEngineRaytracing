@@ -39,6 +39,9 @@ class SubIndexMesh : public BaseMesh
 	// Non-owning lookup into m_Segments.
 	eastl::hash_map<uint64_t, SubIndexSegmentMesh*> m_SegmentMap;
 
+	// Reused across Update() calls to preserve bucket capacity; cleared at the top of each Update().
+	eastl::hash_set<uint64_t> m_VisitedKeys;
+
 	void CreateSegment(uint32_t start, uint32_t numTris);
 
 public:
@@ -68,8 +71,6 @@ public:
 	{
 		return static_cast<uint16_t>(m_VertexDescriptor.Get());
 	}
-
-	auto GetTransformID() const { return m_TransformIndex; }
 
 	// Sync the K SubIndexSegmentMesh children with the parent's current segment
 	// visibility. Segments are identified by (start, numTris); new segments are

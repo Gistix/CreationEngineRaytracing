@@ -3,21 +3,11 @@
 #include <PCH.h>
 
 #include "Pass/RenderPass.h"
-#include "CameraData.hlsli"
 #include "ShaderUtils.h"
-#include "framework/DescriptorTableManager.h"
-#include "Util.h"
 
-#include "Interop/VertexUpdate.hlsli"
-#include "Interop/RowMajorFloat3x4.hlsli"
-#include "Pass/Raytracing/Common/LightTLAS.h"
-#include "Pass/Raytracing/Common/SHaRC.h"
-
-#include "Types/ShaderDefine.h"
-
-namespace Pass::Common
+namespace Pass
 {
-	class GIComposite : public RenderPass
+	class TransformComposition : public RenderPass
 	{
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::ShaderHandle m_ComputeShader;
@@ -25,18 +15,14 @@ namespace Pass::Common
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
-
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 	public:
-		GIComposite(Renderer* renderer);
+		TransformComposition(Renderer* renderer);
 
 		void CreateBindingLayout();
-
 		virtual void CreatePipeline() override;
-
 		void CheckBindings();
-
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};
 }

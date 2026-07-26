@@ -9,6 +9,7 @@ namespace RE::BSGraphics
 	{
 		ID3D12Resource* vertexBufferDX12;
 		ID3D12Resource* indexBufferDX12;
+		bool ownsDX12Buffers = false;
 	};
-	static_assert(sizeof(TriShapeDX12) == 0x40);
+	static_assert(sizeof(TriShapeDX12) == 0x48);
 }
