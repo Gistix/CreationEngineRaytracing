@@ -210,7 +210,7 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 	UpdateMaterial();
 }
 
-void BaseMesh::PostUpdate()
+void BaseMesh::CommitDirtyFlags()
 {
 	// SubIndexMesh has no cluster
 	if (m_Cluster)
