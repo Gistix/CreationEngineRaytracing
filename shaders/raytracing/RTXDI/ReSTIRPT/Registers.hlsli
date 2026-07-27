@@ -11,6 +11,7 @@
 #include "interop/Mesh.hlsli"
 #include "interop/Light.hlsli"
 #include "interop/Instance.hlsli"
+#include "interop/Transform.hlsli"
 #include "interop/Material/Skyrim/LightingMaterialData.hlsli"
 
 // Constant buffers
@@ -29,6 +30,8 @@ Texture2D<float4> WaterFlowMap             : register(t2);
 StructuredBuffer<Light> Lights             : register(t3);
 StructuredBuffer<Instance> Instances       : register(t4);
 StructuredBuffer<Mesh> Meshes              : register(t5);
+Texture2D<float4> WaterDisplacementMap     : register(t6);
+Texture2D<float4> ProjNoiseMap             : register(t7);
 Texture2D<float4> PhysicalSkyTrLUT          : register(t8);
 Texture2D<float4> SkinDetailNormal         : register(t9);
 
@@ -52,6 +55,10 @@ StructuredBuffer<PackedSurfaceData> SurfaceDataBuffer : register(t16);
 // Primary surface material data (for denoiser guide buffers)
 Texture2D<float3> PrimaryDiffuseAlbedo     : register(t17);
 Texture2D<float3> PrimarySpecularAlbedo    : register(t18);
+
+ByteAddressBuffer MeshSlotRemap            : register(t19);
+ByteAddressBuffer PropertiesBuffer         : register(t20);
+StructuredBuffer<Transform> Transforms     : register(t21);
 
 StructuredBuffer<Triangle> Triangles[]     : register(t0, space1);
 ByteAddressBuffer Vertices[]              : register(t0, space2);
