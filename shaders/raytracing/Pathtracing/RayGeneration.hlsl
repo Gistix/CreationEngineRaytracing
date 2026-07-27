@@ -1059,9 +1059,11 @@ void Main()
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += skyIrradiance * relTp;
                 }
+#       if !defined(RESTIR_PT)
                 else
+#       endif
 #   endif
-#   elif !defined(RESTIR_PT)
+#   if !defined(RESTIR_PT)
                 if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(skyIrradiance * throughput) : 0;
@@ -1138,9 +1140,11 @@ void Main()
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += skyIrradiance * relTp;
                 }
+#       if !defined(RESTIR_PT)
                 else
+#       endif
 #   endif
-#   elif !defined(RESTIR_PT)
+#   if !defined(RESTIR_PT)
                 if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(skyIrradiance * throughput) : 0;
@@ -1221,9 +1225,11 @@ void Main()
                     float3 relTp = throughput / max(giSecThroughput, 1e-10);
                     giSecRadiance += sharcRadiance * relTp;
                 }
+#       if !defined(RESTIR_PT)
                 else
+#       endif
 #   endif
-#   elif !defined(RESTIR_PT)
+#   if !defined(RESTIR_PT)
                 if (!fillState.hasFlag(kStablePlaneFlag_OnBranch))
                 {
                     float specAvg = isSpecular ? Color::RGBToLuminance(sharcRadiance * throughput) : 0;
@@ -1287,9 +1293,11 @@ void Main()
                 float3 relTp = throughput / max(giSecThroughput, 1e-10);
                 giSecRadiance += (directRadiance + surface.Emissive) * relTp;
             }
-#   if !defined(RESTIR_PT)
+#       if !defined(RESTIR_PT)
             else
+#       endif
 #   endif
+#   if !defined(RESTIR_PT)
             {
                 // NEE/direct radiance: always accumulated (not captured in BUILD)
                 if (any(directRadiance > 0))

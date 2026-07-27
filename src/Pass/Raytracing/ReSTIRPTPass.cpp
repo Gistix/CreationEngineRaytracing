@@ -61,6 +61,8 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),      // t3: Lights
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),      // t4: Instances
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),      // t5: Meshes
+			nvrhi::BindingLayoutItem::Texture_SRV(6),               // t6: WaterDisplacementMap
+			nvrhi::BindingLayoutItem::Texture_SRV(7),               // t7: ProjNoiseMap
 			nvrhi::BindingLayoutItem::Texture_SRV(9),               // t9: SkinDetailNormal
 			nvrhi::BindingLayoutItem::Texture_SRV(10),              // t10: CurrentDepth
 			nvrhi::BindingLayoutItem::Texture_SRV(11),              // t11: CurrentNormals
@@ -71,6 +73,9 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16),     // t16: SurfaceDataBuffer
 			nvrhi::BindingLayoutItem::Texture_SRV(17),              // t17: PrimaryDiffuseAlbedo
 			nvrhi::BindingLayoutItem::Texture_SRV(18),              // t18: PrimarySpecularAlbedo
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),            // t19: MeshSlotRemap
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),            // t20: PropertiesBuffer
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(21),     // t21: Transforms
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),      // u0: PTReservoirs
 			nvrhi::BindingLayoutItem::Texture_UAV(1),               // u1: OutputRadiance
 			nvrhi::BindingLayoutItem::Sampler(0),                   // s0
@@ -251,6 +256,8 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(6, renderer->GetWaterDisplacementTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(7, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(9, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::ClipDepth)),
 			nvrhi::BindingSetItem::Texture_SRV(11, renderTargets->normalRoughness),
@@ -261,6 +268,9 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, ptRes->surfaceDataBuffer),
 			nvrhi::BindingSetItem::Texture_SRV(17, diffuseAlbedoTex),
 			nvrhi::BindingSetItem::Texture_SRV(18, specularAlbedoTex),
+			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(21, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, ptRes->reservoirBuffer),
 			nvrhi::BindingSetItem::Texture_UAV(1, renderer->GetMainTexture()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),

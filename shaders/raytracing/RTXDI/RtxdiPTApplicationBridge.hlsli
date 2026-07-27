@@ -74,7 +74,6 @@ Surface PSD_UnpackToSurfacePT(PackedSurfaceData d)
     Surface s = (Surface)0;
     s.Primary      = true;
     s.Position     = d.posW;
-    s.PrevPosition = d.posW;
     s.CameraRelativePosition = d.posW - Camera.Position.xyz;
     s.PrevCameraRelativePosition = s.CameraRelativePosition + (Camera.Position.xyz - Camera.PositionPrev.xyz);
     s.Normal       = PSD_UnpackOct(d.packedNormal);
@@ -88,7 +87,9 @@ Surface PSD_UnpackToSurfacePT(PackedSurfaceData d)
     s.Roughness    = f16tof32(d.roughMetallic & 0xFFFF);
     s.Metallic     = f16tof32(d.roughMetallic >> 16);
     s.Albedo       = s.Metallic > 0.5 ? s.F0 : s.DiffuseAlbedo;
+#if defined(RASTER)
     s.Alpha        = 1.0;
+#endif
 
     float maxF0 = max(max(s.F0.r, s.F0.g), s.F0.b);
     s.IOR = (1.0 + sqrt(maxF0)) / max(1.0 - sqrt(maxF0), 1e-5);

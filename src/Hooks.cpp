@@ -41,8 +41,11 @@ namespace Hooks
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
 			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
-			if (triShape)
+			if (triShape) {
+				triShape->vertexBufferDX12 = nullptr;
+				triShape->indexBufferDX12 = nullptr;
 				triShape->ownsDX12Buffers = true;
+			}
 			return triShape;
 		}
 
@@ -295,7 +298,7 @@ namespace Hooks
 	{
 		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::BSGraphics::Texture* a_texture)
 		{
-			if (a_texture->pad24 == NO_DX12RESOURCE) {
+			if (!a_texture || a_texture->pad24 != NATIVE_DX12RESOURCE) {
 				func(a_renderer, a_texture);
 				return;
 			}
