@@ -564,9 +564,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				auto& children = Util::Adapter::GetChildren(node);
 
 				if (auto switchNode = node->AsSwitchNode()) {
-					auto index = static_cast<uint16_t>(switchNode->index);
-					if (index < children.size())
-						walk(children[index].get(), parentRefr);
+					const auto index = static_cast<uint32_t>(switchNode->index);
+					if (index < children.capacity())
+						walk(children[static_cast<uint16_t>(index)].get(), parentRefr);
 					return;
 				}
 
