@@ -119,8 +119,9 @@ namespace Util
 			{
 				auto& children = Util::Adapter::GetChildren(node);
 				if (auto switchNode = node->AsSwitchNode()) {
-					auto index = static_cast<uint16_t>(switchNode->index);
-					result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr);
+					const auto index = static_cast<uint16_t>(switchNode->index);
+					if (index < children.capacity())
+						result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr);
 				}
 				else {
 					// Propagate owner refr through FadeNodes
