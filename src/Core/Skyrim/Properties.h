@@ -3,7 +3,7 @@
 #include <PCH.h>
 
 #include "Types.h"
-
+#include "Types/RE/RE.h"
 #include "interop/Properties.hlsli"
 
 // Per-mesh data derived from the BSShaderProperty + NiAlphaProperty (which the per-type

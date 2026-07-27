@@ -9,8 +9,10 @@
 #include "Renderer.h"
 #include "Scene.h"
 
+#if defined(SKYRIM)
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
+#endif
 
 #include <typeinfo>
 

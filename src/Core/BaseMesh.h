@@ -111,9 +111,7 @@ public:
 
 	// Some eye meshes use EnvironmentMap shader instead of Eye shader
 	// Detect them by comparing geometry name to headpart name
-#if defined(SKYRIM)
 	void SetEyeFlag();
-#endif
 
 	const float3x4& GetTransform() const { return m_Transform; }
 

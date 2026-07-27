@@ -431,6 +431,7 @@ void Scene::UpdateCameraData() const
 	}
 
 	// Populate per-cell water data (5x5 grid centered on camera)
+#if defined(SKYRIM)
 	{
 		auto* tes = RE::TES::GetSingleton();
 		auto* sky = RE::Sky::GetSingleton();
@@ -478,13 +479,41 @@ void Scene::UpdateCameraData() const
 		}
 	}
 #elif defined(FALLOUT4)
+	// FO4: cell water data extraction not yet implemented
+#endif
+#elif defined(FALLOUT4)
+	auto cameraData = Util::Adapter::GetCameraEyeViewData();
+
 	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
-	m_CameraData->ViewInverse = float4x4();
-	m_CameraData->ProjInverse = float4x4();
-	m_CameraData->FrameIndex = 0;
-	m_CameraData->ScreenSize = uint2(1920, 1080);
-	m_CameraData->RenderSize = uint2(1920, 1080);
-	m_CameraData->Jitter = float2(0, 0);
+
+	m_CameraData->ViewInverse = cameraData.viewMat.Invert();
+	m_CameraData->ProjInverse = cameraData.projMat.Invert();
+
+	m_CameraData->CameraData = Util::Game::GetClippingData();
+
+	float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
+	float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
+
+	m_CameraData->NDCToView = float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y);
+
+	auto& cameraState = RE::BSGraphics::State::GetSingleton()->cameraState;
+	m_CameraData->Position = Util::Math::Float3(cameraState.posAdjust);
+
+	auto* renderer = Renderer::GetSingleton();
+
+	m_CameraData->FrameIndex = renderer->GetFrameIndex() % UINT_MAX;
+	m_CameraData->ScreenSize = renderer->GetResolution();
+	m_CameraData->RenderSize = renderer->GetDynamicResolution();
+
+	m_CameraData->PositionPrev = Util::Math::Float3(cameraState.previousPosAdjust);
+
+	if (g_Time)
+		m_CameraData->Time = *g_Time;
+
+	m_CameraData->ViewProj = cameraData.viewProjMatrixUnjittered;
+	m_CameraData->PrevViewProj = cameraData.previousViewProjMatrixUnjittered;
+
+	m_CameraData->Jitter = renderer->GetJitter();
 #endif
 }
 

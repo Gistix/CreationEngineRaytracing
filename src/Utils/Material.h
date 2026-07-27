@@ -19,5 +19,9 @@ namespace Util
 		stl::enumeration<PBRShaderFlags, uint32_t> GetPBRShaderFlags(const BSLightingShaderMaterialPBRLandscape* pbrMaterial);
 	}
 #elif defined(FALLOUT4)
+	namespace Material::Fallout4
+	{
+		float ShininessToRoughness(float shininess);
+	}
 #endif
 }

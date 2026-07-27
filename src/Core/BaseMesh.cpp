@@ -39,10 +39,8 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
 	}
 
-#if defined(SKYRIM)
-	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
+	if (auto bsDynamicTriShape = Util::Adapter::AsDynamicTriShape(bsTriShape))
 		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
-#endif
 
 	if (geometryData.skinInstance)
 		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
@@ -288,17 +286,15 @@ bool BaseMesh::SetOwner(RE::TESObjectREFR* owner)
 	
 	// Owner change re-buckets the mesh into another cluster -> both clusters rebuild.
 	MarkDirty(DirtyFlags::Visibility);
-	
-#if defined(SKYRIM)
+
 	SetEyeFlag();
-#endif
 
 	return true;
 }
 
-#if defined(SKYRIM)
 void BaseMesh::SetEyeFlag()
 {
+#if defined(SKYRIM)	
 	if (!m_Owner)
 		return;
 
@@ -306,7 +302,7 @@ void BaseMesh::SetEyeFlag()
 	if (!m_Flags.none(Flags::Eyes))
 		return;
 
-	auto baseObj = m_Owner->GetBaseObject();
+	auto baseObj = Util::Adapter::GetBaseObject(m_Owner);
 	if (!baseObj)
 		return;
 
@@ -320,8 +316,8 @@ void BaseMesh::SetEyeFlag()
 
 	const bool isEye = (strcmp(eyePart->formEditorID.c_str(), m_Name.c_str()) == 0);
 	m_Flags.set(isEye, Flags::Eyes);
-}
 #endif
+}
 
 void BaseMesh::CreateMaterial()
 {

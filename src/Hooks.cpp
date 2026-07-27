@@ -1,4 +1,4 @@
-#include "Hooks.h"
+﻿#include "Hooks.h"
 #include "Renderer.h"
 #include "Util.h"
 
@@ -322,13 +322,14 @@ namespace Hooks
 
 				auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
 
-				// Doesn't take size to be freed?
 				scrapHeap->Deallocate(d3d12Texture);
 			}
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+#endif
 
+#if defined(SKYRIM)
 	HRESULT CreateTextureAndSRV::thunk(
 		ID3D11Device* a_device,
 		D3D11_RESOURCE_DIMENSION a_dimension,
@@ -347,7 +348,6 @@ namespace Hooks
 		if (!shareTexture) {
 			auto result = func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
 
-			// Enforce flag
 			if (SUCCEEDED(result))
 				(*a_outTexture)->pad24 = NO_DX12RESOURCE;
 
@@ -395,7 +395,6 @@ namespace Hooks
 			if (defaultTexture->UAV)
 				defaultTexture->UAV->AddRef();
 
-			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
 			texture->pad24 = NATIVE_DX12RESOURCE;
 
 			auto renderer = Renderer::GetSingleton();
@@ -450,7 +449,6 @@ namespace Hooks
 
 			auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(texture->d3d12Texture), textureDesc);
 
-			// Upload Texture Data
 			{
 				auto commandList = renderer->GetGraphicsCommandList();
 
@@ -526,7 +524,25 @@ namespace Hooks
 			return result;
 		}
 	}
+#elif defined(FALLOUT4)
+	HRESULT CreateTextureAndSRV::thunk(
+		ID3D11Device* a_device,
+		D3D11_RESOURCE_DIMENSION a_dimension,
+		uint32_t a_width,
+		uint32_t a_height,
+		uint32_t a_depth,
+		uint32_t a_mipLevels,
+		uint32_t a_arraySize,
+		DXGI_FORMAT a_format,
+		bool a_cubemap,
+		const D3D11_SUBRESOURCE_DATA* a_data,
+		RE::BSGraphics::Texture** a_outTexture
+	) {
+		return func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
+	}
+#endif
 
+#if defined(SKYRIM)
 	struct CreateTexture2DAndSRV
 	{
 		static uint32_t GetBitsPerPixel(DXGI_FORMAT a_format)
@@ -626,7 +642,26 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+#elif defined(FALLOUT4)
+	struct CreateTexture2DAndSRV
+	{
+		static RE::BSGraphics::Texture* thunk(
+			RE::BSGraphics::Renderer* a_renderer,
+			uint32_t a_width,
+			uint32_t a_height,
+			void* a_pixelData,
+			D3D11_USAGE a_usage,
+			DXGI_FORMAT a_format,
+			bool a_unorderedAccess)
+		{
+			return func(a_renderer, a_width, a_height, a_pixelData, a_usage, a_format, a_unorderedAccess);
+		}
 
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+#endif
+
+#if defined(SKYRIM)
 	void CreateRenderTarget::thunk(
 		RE::BSGraphics::Renderer* a_renderer,
 		RE::RENDER_TARGETS::RENDER_TARGET a_target,
@@ -656,7 +691,6 @@ namespace Hooks
 		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 		desc.CPUAccessFlags = 0;
 
-		// Yes, we created this entire function just to set the texture as shared
 		desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
 		if (a_properties->supportUnorderedAccess)
@@ -688,7 +722,18 @@ namespace Hooks
 			device->CreateUnorderedAccessView(renderTexture.texture, &uavDesc, &renderTexture.UAV);
 		}
 	}
+#elif defined(FALLOUT4)
+	void CreateRenderTarget::thunk(
+		RE::BSGraphics::Renderer* a_renderer,
+		RE::RENDER_TARGETS::RENDER_TARGET a_target,
+		const char* a_RenderTarget,
+		RE::BSGraphics::RenderTargetProperties* a_properties)
+	{
+		func(a_renderer, a_target, a_RenderTarget, a_properties);
+	}
+#endif
 
+#if defined(SKYRIM)
 	void CreateDepthStencil::thunk(
 		RE::BSGraphics::Renderer* a_renderer,
 		RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target,
@@ -730,7 +775,6 @@ namespace Hooks
 		texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 		texDesc.CPUAccessFlags = 0;
 
-		// Yes, we created this entire function just to set the texture as shared (2)
 		texDesc.MiscFlags = a_target == RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN ? D3D11_RESOURCE_MISC_SHARED : 0;
 
 		auto& depthStencil = a_renderer->GetDepthStencilData().depthStencils[a_target];
@@ -799,6 +843,16 @@ namespace Hooks
 			device->CreateShaderResourceView(depthStencil.texture, &srvDesc, &depthStencil.stencilSRV);
 		}
 	}
+#elif defined(FALLOUT4)
+	void CreateDepthStencil::thunk(
+		RE::BSGraphics::Renderer* a_renderer,
+		RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target,
+		const char* a_depthStencilTarget,
+		RE::BSGraphics::DepthStencilTargetProperties* a_properties)
+	{
+		func(a_renderer, a_target, a_depthStencilTarget, a_properties);
+	}
+#endif
 
 	template <std::derived_from<RE::NiCullingProcess> T>
 	struct NiCullingProcess_AppendVirtual
@@ -815,6 +869,7 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+#if defined(SKYRIM)
 	void BSBatchRenderer_RenderPassImmediately::thunk(RE::BSRenderPass* pass, uint32_t technique, bool alphaTest, uint32_t renderFlags)
 	{
 		if (!pass->shader) {
@@ -827,7 +882,6 @@ namespace Hooks
 
 		const bool pathTracingActive = scene->IsPathTracingActive();
 
-		// Water rendering toggle during path tracing
 		if (pathTracingActive && shaderType == RE::BSShader::Type::Water)
 			return;
 
@@ -838,21 +892,18 @@ namespace Hooks
 		}
 
 		if (pathTracingActive) {
-			// Cull non-effect refractive geometry during path tracing
 			if (shaderType != RE::BSShader::Type::Effect && shaderProperty->flags.any(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
 				return;
 
 			auto feature = shaderProperty->material->GetFeature();
 
-			// Cull eyes since they are transparent and draw after PT is composited
 			switch (feature) {
-			case RE::BSShaderMaterial::Feature::kEnvironmentMap: // Some mods use this flag for eyes,
+			case RE::BSShaderMaterial::Feature::kEnvironmentMap:
 			case RE::BSShaderMaterial::Feature::kEye:
 				return;
 			}
 		}
 
-		// Path tracing occlusion-based culling
 		if (scene->ApplyPathTracingCull() && pass->shader && pass->geometry)
 		{
 			switch (shaderType) {
@@ -862,7 +913,6 @@ namespace Hooks
 			case RE::BSShader::Type::Particle:
 				break;
 			default:
-				// Utility, Lighting, DistantTree, BloodSplatter, etc.
 				return;
 			}
 		}
@@ -996,7 +1046,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 	
-	// 1401B6AF0 SE/140203810 AE
 	struct GrassManager_CreateInstances
 	{
 		static uint32_t thunk(RE::BGSGrassManager* a_grassManager, RE::CreateGrassParams* a_createGrassParams)
@@ -1011,9 +1060,6 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
-
-#elif defined(FALLOUT4)
-
 #endif
 
 	void Install()
@@ -1121,6 +1167,12 @@ namespace Hooks
 		scene->g_BypassSubIndexVisibility = g_BypassSubIndexVisibility.get();
 
 #elif defined(FALLOUT4)
+		// TODO: Add FO4 REL IDs for texture/render target hooks
+		//stl::detour_thunk<CreateTextureAndSRV>(REL::ID(...));
+		//stl::detour_thunk<CreateTexture2DAndSRV>(REL::ID(...));
+		//stl::detour_thunk<CreateRenderTarget>(REL::ID(...));
+		//stl::detour_thunk<CreateDepthStencil>(REL::ID(...));
+
 #	if defined(FALLOUT_POST_NG)
 		stl::detour_thunk<TES_AttachModel>(REL::ID(2192085));
 #	endif

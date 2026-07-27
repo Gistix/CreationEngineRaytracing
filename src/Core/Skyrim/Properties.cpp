@@ -1,3 +1,5 @@
+#if defined(SKYRIM)
+
 #include "Core/Skyrim/Properties.h"
 
 #include "Util.h"
@@ -218,3 +220,5 @@ uint16_t Properties::MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderP
 
 	return result;
 }
+
+#endif

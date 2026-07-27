@@ -104,6 +104,8 @@ struct Scene
 
 #if defined(SKYRIM)
 			m_MenuState.set(Util::Adapter::IsMenuOpen(ui, RE::MapMenu::MENU_NAME), MenuState::MapMenu);
+#elif defined(FALLOUT4)
+			m_MenuState.set(Util::Adapter::IsMenuOpen(ui, RE::PipboyMenu::MENU_NAME), MenuState::MapMenu);
 #endif
 
 			m_MenuState.set(ui->menuSystemVisible || m_MenuState != MenuState::None, MenuState::Any);

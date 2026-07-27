@@ -78,6 +78,15 @@ namespace Util
 #endif
 		}
 
+		RE::BSDynamicTriShape* AsDynamicTriShape(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->AsDynamicTriShape();
+#elif defined(FALLOUT4)
+			return a_object->IsDynamicTriShape();
+#endif
+		}
+
 		RE::NiNode* AsNode(RE::NiAVObject* a_object) {
 #if defined(SKYRIM)
 			return a_object->AsNode();
@@ -437,7 +446,14 @@ namespace Util
 			for (uint32_t i = 0; i < si->skinData->bones; i++)
 				outSkinToBones[i] = PackTransform(si->skinData->boneData[i].skinToBone);
 #elif defined(FALLOUT4)
-			(void)skinInstance;
+			auto* si = static_cast<const RE::BSSkin::Instance*>(skinInstance);
+			if (!si->boneData)
+				return;
+
+			auto count = si->boneData->transforms.size();
+			outSkinToBones.resize(count);
+			for (uint32_t i = 0; i < count; i++)
+				outSkinToBones[i] = PackTransform(si->boneData->transforms[i].transform);
 #endif
 		}
 

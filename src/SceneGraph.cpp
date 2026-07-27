@@ -197,8 +197,8 @@ void SceneGraph::UpdateCamera()
 
 void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 {
-#if defined(SKYRIM)
-	auto& mainSSNRuntimeData = Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData();
+	auto& shadowSceneNode = Util::Adapter::GetShaderManagerState().shadowSceneNode[0];
+	auto& mainSSNRuntimeData = shadowSceneNode->GetRuntimeData();
 
 	// Update Light Vector
 	{
@@ -352,7 +352,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 	}
 
 	commandList->writeBuffer(GetLightBuffer(), m_LightData.data(), numLights * sizeof(LightData));
-#endif
 }
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
@@ -581,6 +580,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				// scene graph that are nonetheless rendered this frame). We visit them in addition to the
 				// regular children, matching ScenegraphTriShapes behavior.
 				eastl::vector<RE::NiAVObject*> portalChildren;
+#if defined(SKYRIM)
 				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
 					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
 					if (auto portalGraph = Util::Adapter::GetPortalGraph(ssn)) {
@@ -591,6 +591,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						}
 					}
 				}
+#endif
 
 				if (children.size() >= Constants::ParallelTraversalFanoutThreshold) {
 					// Wide fan-out: record children for post-descent chunked parallel processing instead

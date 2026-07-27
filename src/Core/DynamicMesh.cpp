@@ -14,16 +14,13 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
+	auto runtimeData = Util::Adapter::GetDynamicTrishapeRuntimeData(bsDynamicTriShape);
 
 	if (runtimeData.dataSize == 0) {
 		logger::warn("DynamicMesh::DynamicMesh - No dynamic data for {}", m_Name);
 		return;
 	}
 
-	// Byte-address buffers (normals/tangents/skinning) are inherited from the SkinnedMesh setup. The
-	// skin partition's native buffer has the same vertex count as the dynamic morph data; it carries
-	// everything except position (dynamic trishapes have no vertex position - it lives in the morph data).
 	auto geometryData = Util::Adapter::GetGeometryRuntimeData(bsDynamicTriShape);
 
 	auto* skinInstance = geometryData.skinInstance;
@@ -32,7 +29,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		return;
 	}
 
-	const auto& skinPartition = skinInstance->skinPartition;
+#if defined(SKYRIM)
+	const auto& skinPartition = static_cast<RE::NiSkinInstance*>(skinInstance)->skinPartition;
 	if (!skinPartition || skinPartition->numPartitions == 0) {
 		logger::warn("DynamicMesh::DynamicMesh - No skin partitions for {}", m_Name);
 		return;
@@ -54,24 +52,41 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		return;
 
 	AllocateMeshIndex();
-
 	m_VertexCount = vertexCount;
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
 
-	// Byte-address live + prev-position buffers at the shared slot (skinning normals/tangents target).
 	CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
+#elif defined(FALLOUT4)
+	auto* rendererData = geometryData.rendererData;
+	if (!rendererData) {
+		logger::warn("DynamicMesh::DynamicMesh - No renderer data for {}", m_Name);
+		return;
+	}
 
-	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
-	// stride so the trailing w component is skipped.
+	const uint32_t vertexCount = Util::Adapter::GetVertexCount(bsDynamicTriShape);
+	const uint32_t triangleCount = Util::Adapter::GetTriangleCount(bsDynamicTriShape);
+	if (!ValidateCounts(triangleCount, vertexCount))
+		return;
+
+	m_VertexBuffer = CreateVertexBuffer(rendererData);
+	if (!m_VertexBuffer.m_Buffer)
+		return;
+
+	AllocateMeshIndex();
+	m_VertexCount = vertexCount;
+
+	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(geometryData.vertexDesc);
+
+	CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride);
+#endif
+
 	m_DynamicData.resize(runtimeData.dataSize, 0u);
 
-	runtimeData.lock.Lock();
+	runtimeData.lock->Lock();
 	UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
-	runtimeData.lock.Unlock();
+	runtimeData.lock->Unlock();
 
-	// Live (skinning output) positions; BLAS source. Sized for two vertex sets:
-	// current positions in [0, vertexCount), previous-frame positions in [vertexCount, 2 * vertexCount).
 	auto liveBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(2ull * runtimeData.dataSize)
 		.setStructStride(sizeof(float4))
@@ -82,7 +97,6 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	m_DynamicBuffer = device->createBuffer(liveBufferDesc);
 
-	// Original (rest/morph) positions copied from the game each frame; skinning input.
 	auto originalBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(runtimeData.dataSize)
 		.setStructStride(sizeof(float4))
@@ -91,7 +105,6 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	m_OriginalDynamicBuffer = device->createBuffer(originalBufferDesc);
 
-	// Register at a shared dynamic slot: original -> SRV (input), live -> UAV (output).
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	m_DynamicDescriptor = sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->CreateDescriptorHandle(
@@ -101,12 +114,28 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
-	// Live (skinned) dynamic positions exposed as SRV so the RT shading path can reconstruct Vertex::Position.
 	device->writeDescriptorTable(
 		sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
-	// The BLAS reads the live dynamic positions (skinning output).
+#if defined(FALLOUT4)
+	// Single index buffer + geometry entry for FO4 dynamic meshes (no skin partitions).
+	auto* rendererData = geometryData.rendererData;
+	auto indexBuffer = CreateIndexBuffer(rendererData);
+	if (indexBuffer.m_Buffer) {
+		const uint32_t vertexCount = Util::Adapter::GetVertexCount(bsDynamicTriShape);
+		const uint32_t triangleCount = Util::Adapter::GetTriangleCount(bsDynamicTriShape);
+		m_IndexBuffers.push_back(std::move(indexBuffer));
+		m_GeometryEntries.push_back({
+			MakeGeometryDesc(m_IndexBuffers[0].m_Buffer, 0, triangleCount * 3,
+				m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), vertexCount, GetMeshIndex()),
+			AllocateGeometryIndex()
+		});
+		m_GeometryPartitionIndices.push_back(0);
+		RefreshVisibleGeometryCache();
+	}
+#endif
+
 	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
 
 	CreateMaterial();

@@ -92,5 +92,12 @@ namespace Util
 		}
 	}
 #elif defined(FALLOUT4)
+	namespace Material::Fallout4
+	{
+		float ShininessToRoughness(float shininess)
+		{
+			return std::pow(2.0f / (std::min(std::abs(shininess), 1024.0f) + 2.0f), 0.25f);
+		}
+	}
 #endif
 }

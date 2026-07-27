@@ -31,15 +31,16 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	m_BSTriShape = bsTriShape;
 	m_Type = Type::Skinned;
 
-	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
-	auto* skinInstance = geometryData.skinInstance.get();
+	auto* skinInstance = geometryData.skinInstance;
 	if (!skinInstance) {
 		logger::warn("SkinnedMesh::SkinnedMesh - No skin instance for {}", m_Name);
 		return;
 	}
 
-	const auto& skinPartition = skinInstance->skinPartition;
+#if defined(SKYRIM)
+	const auto& skinPartition = static_cast<RE::NiSkinInstance*>(skinInstance)->skinPartition;
 	if (!skinPartition || skinPartition->numPartitions == 0) {
 		logger::warn("SkinnedMesh::SkinnedMesh - No skin partitions for {}", m_Name);
 		return;
@@ -73,6 +74,43 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
 
 	BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true);
+#elif defined(FALLOUT4)
+	auto* rendererData = geometryData.rendererData;
+	if (!rendererData) {
+		logger::warn("SkinnedMesh::SkinnedMesh - No renderer data for {}", m_Name);
+		return;
+	}
+
+	const uint32_t vertexCount = Util::Adapter::GetVertexCount(bsTriShape);
+	const uint32_t triangleCount = Util::Adapter::GetTriangleCount(bsTriShape);
+	if (!ValidateCounts(triangleCount, vertexCount))
+		return;
+
+	m_VertexBuffer = CreateVertexBuffer(rendererData);
+	if (!m_VertexBuffer.m_Buffer)
+		return;
+
+	AllocateMeshIndex();
+	m_VertexCount = vertexCount;
+
+	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(geometryData.vertexDesc);
+
+	CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride);
+
+	// Single index buffer + geometry entry for FO4 skinned meshes (no skin partitions).
+	auto indexBuffer = CreateIndexBuffer(rendererData);
+	if (!indexBuffer.m_Buffer)
+		return;
+
+	m_IndexBuffers.push_back(std::move(indexBuffer));
+	m_GeometryEntries.push_back({
+		MakeGeometryDesc(m_IndexBuffers[0].m_Buffer, 0, triangleCount * 3,
+			m_LiveVertexBuffer, vertexStride, vertexCount, GetMeshIndex()),
+		AllocateGeometryIndex()
+	});
+	m_GeometryPartitionIndices.push_back(0);
+	RefreshVisibleGeometryCache();
+#endif
 
 	CreateMaterial();
 
@@ -81,26 +119,30 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	InitDismemberSkin(skinInstance);
 }
 
-void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
+void SkinnedMesh::InitSkinToBones(void* skinInstance)
 {
-	auto* skinData = skinInstance->skinData.get();
-	if (!skinData || skinData->bones == 0)
+	auto count = Util::Adapter::GetSkinBoneCount(skinInstance);
+	if (count == 0)
 		return;
 
-	m_SkinToBones.resize(skinData->bones);
-	for (uint32_t i = 0; i < skinData->bones; i++)
-		PackNiTransform(skinData->boneData[i].skinToBone, m_SkinToBones[i]);
+	m_SkinToBones.resize(count);
+	Util::Adapter::GetSkinToBones(skinInstance, m_SkinToBones);
 }
 
-void SkinnedMesh::InitDismemberSkin(RE::NiSkinInstance* skinInstance)
+void SkinnedMesh::InitDismemberSkin(void* skinInstance)
 {
-	const bool isDismemberSkinInstance = netimmerse_cast<RE::BSDismemberSkinInstance*>(skinInstance) != nullptr;
+#if defined(SKYRIM)
+	auto* niSkinInstance = static_cast<RE::NiSkinInstance*>(skinInstance);
+	const bool isDismemberSkinInstance = netimmerse_cast<RE::BSDismemberSkinInstance*>(niSkinInstance) != nullptr;
 	if (!isDismemberSkinInstance)
 		return;
 
 	m_Flags.set(Flags::DismemberSkinInstance);
 	Util::Geometry::GetDismemberPartitionVisibility(skinInstance, m_PartitionVisibility);
 	RefreshVisibleGeometryCache();
+#else
+	(void)skinInstance;
+#endif
 }
 
 void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
@@ -112,7 +154,7 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 	size_t vertexBufferSize = m_VertexBuffer.m_Buffer->getDesc().byteSize;
 
 	// Model space normal maps require that we store the skinning TBN so they are transformed properly into world space
-	if (m_BSTriShape->GetGeometryRuntimeData().shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals)) {
+	if (Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals)) {
 		m_ModelSpaceNormal = true;
 
 		// Rotation stored as a quaternion
@@ -166,13 +208,14 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 
 void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
 {
-	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
-	auto* skinInstance = geometryData.skinInstance.get();
+	auto* skinInstance = geometryData.skinInstance;
 	if (!skinInstance)
 		return;
 
-	const auto& skinPartition = skinInstance->skinPartition;
+#if defined(SKYRIM)
+	const auto& skinPartition = static_cast<RE::NiSkinInstance*>(skinInstance)->skinPartition;
 	if (!skinPartition || skinPartition->numPartitions == 0)
 		return;
 
@@ -222,15 +265,23 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
 		m_GeometryPartitionIndices.push_back(i);
 	}
+#elif defined(FALLOUT4)
+	// FO4 has no skin partitions; BuildSkinned is only called from DynamicMesh after the
+	// constructor already sets up the single index buffer + geometry entry via the FO4 path.
+	// Nothing more to do here for FO4.
+	(void)bsTriShape;
+	(void)vertexStride;
+	(void)requireSharedNativeVertexBuffer;
+#endif
 }
 
 void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 {
 	BaseMesh::Update(commandList);
 
-	const auto& geometryData = m_BSTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(m_BSTriShape);
 
-	if (auto* skinInstance = geometryData.skinInstance.get()) {
+	if (auto* skinInstance = geometryData.skinInstance) {
 		auto* scene = Scene::GetSingleton();
 		const bool isPathTracing = scene->IsPathTracingActive();
 		const bool isForceCulled = isPathTracing; // Should also check for kEye and kEnvMap materials
@@ -239,19 +290,17 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 		if (isForceCulled)
 			isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
 
-		// Only recompute when the game advanced the animation this frame.
-		const auto frameID = skinInstance->frameID;
+		const auto frameID = Util::Adapter::GetSkinFrameID(skinInstance);
 
 		if (isVisible || m_SkinFrameID != frameID) {
 			m_SkinFrameID = frameID;
 
-			auto* skinData = skinInstance->skinData.get();
-			if (skinData && skinData->bones != 0) {
-				if (m_BoneWorlds.size() != skinData->bones)
-					m_BoneWorlds.resize(skinData->bones);
+			const auto boneCount = Util::Adapter::GetSkinBoneCount(skinInstance);
+			if (boneCount > 0) {
+				if (m_BoneWorlds.size() != boneCount)
+					m_BoneWorlds.resize(boneCount);
 
-				for (uint32_t i = 0; i < skinData->bones; i++)
-					PackNiTransform(*skinInstance->boneWorldTransforms[i], m_BoneWorlds[i]);
+				Util::Adapter::GetBoneWorlds(skinInstance, m_BoneWorlds);
 
 				PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
 
@@ -259,6 +308,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 			}
 		}
 
+#if defined(SKYRIM)
 		// Dismember update.
 		if (m_Flags.all(Flags::DismemberSkinInstance)) {
 			const auto previousVisibility = m_PartitionVisibility;
@@ -269,6 +319,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 			RefreshVisibleGeometryCache();
 		}
+#endif
 	}
 
 	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.

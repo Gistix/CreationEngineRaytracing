@@ -1,11 +1,14 @@
 #pragma once
 
-#include "Types/RE/FO4/BSLight.h"
-#include "Types/RE/FO4/NiPointLight.h"
-#include "Types/RE/FO4/NiSpotLight.h"
-#include "Types/RE/FO4/BSGraphics.h"
+#include "BSLight.h"
+#include "NiPointLight.h"
+#include "NiSpotLight.h"
+#include "BSGraphics.h"
 #include "BSWaterShaderProperty.h"
 #include "BGSTerrainBlock.h"
 #include "BSSubIndexTriShape.h"
 #include "NiSwitchNode.h"
 #include "BSDynamicTriShape.h"
+#include "BSGeometrySegmentData.h"
+#include "BSSkin.h"
+#include "ShadowSceneNode.h"
