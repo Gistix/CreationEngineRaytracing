@@ -82,7 +82,9 @@ public:
 	// Returns true if changed (so the owning cluster is flagged for refit). No-op for static meshes.
 	virtual void Update(nvrhi::ICommandList* commandList);
 
-	void PostUpdate();
+	// Propagates dirty flags to the owning cluster and clears them.
+	// Must be called after Update() each frame.
+	virtual void CommitDirtyFlags();
 
 	// True for meshes whose vertex data changes per frame, so their cluster BLAS must be refit.
 	virtual bool IsUpdatable() const { return false; }

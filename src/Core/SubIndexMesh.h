@@ -79,6 +79,8 @@ public:
 	// them) are marked SubIndexHidden.
 	void Update(nvrhi::ICommandList* commandList) override;
 
+	void CommitDirtyFlags() override;
+
 	// Destroy all K SubIndexSegmentMesh children. Used when the manager is hidden
 	// (parent not visited this frame) and when OnDestroy is called.
 	void DestroyAllSegments();

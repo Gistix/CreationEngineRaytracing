@@ -299,9 +299,6 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
 		m_DirtyFlags.reset();
 		m_LastBuildFrame = frameIndex;
-
-		logger::info("BLASCluster::BuildUpdate - {}: {} - Skipping and consuming visibility flag.", fmt::ptr(this), m_Name);
-
 		return;
 	}
 	if (buildMode == BuildMode::Skip) {

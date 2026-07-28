@@ -704,7 +704,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 			mesh->Update(commandList);
 			mesh->SetHidden(false);
-			mesh->PostUpdate();
+			mesh->CommitDirtyFlags();
 		};
 
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
@@ -838,7 +838,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				mesh->SetLastVisitedFrame(frameIndex);
 				mesh->Update(commandList);
-				mesh->PostUpdate();
+				mesh->CommitDirtyFlags();
 				m_CurrentVisible.push_back(mesh);
 			}
 		}
@@ -859,6 +859,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				cluster->RemoveMember(mesh);
 				MarkClusterDirty(cluster);
 			}
+
+			mesh->CommitDirtyFlags();
 		}
 	}
 
