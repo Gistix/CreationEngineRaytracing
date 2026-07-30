@@ -36,7 +36,6 @@ static const uint   cStablePlaneInvalidBranchID      = 0xFFFFFFFF;   // empty/in
 static const uint   cStablePlaneEnqueuedBranchID     = 0xFFFFFFFE;   // enqueued for exploration
 static const uint   cStablePlaneJustStartedID        = 0;            // currently being explored
 static const float  kMaxRayTravel                    = 1e15f;
-static const float  kEnvironmentMapSceneDistance      = 50000.0f;
 static const float  kSpecHeuristicBoost              = 1.0f;
 
 // ============================================================================

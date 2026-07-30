@@ -201,7 +201,7 @@ void StablePlanesHandleMiss(
     const bool isDominant)
 {
     float3 skyMV; float skyDepth;
-    computePSRMotionVectorsAndDepth(pixelPos, kEnvironmentMapSceneDistance, imageXform,
+    computePSRMotionVectorsAndDepth(pixelPos, SKY_DISTANCE, imageXform,
         float3(0,0,0), Camera.Position - Camera.PositionPrev, skyMV, skyDepth);
 
     float3 planeNormal = -rayDir;
@@ -210,7 +210,7 @@ void StablePlanesHandleMiss(
         pixelPos, planeIndex, vertexIndex,
         rayOrigin, rayDir, stableBranchID,
         1.0 / 0.0,
-        kEnvironmentMapSceneDistance,
+        SKY_DISTANCE,
         throughput, skyMV,
         1.0,
         planeNormal,

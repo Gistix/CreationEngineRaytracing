@@ -382,10 +382,10 @@ void Main()
             
 #if defined(NRD)
             if (j == 0)
-                accumulatedHitDist = payload.hitDistance;
+                accumulatedHitDist = payload.Hit() ? payload.hitDistance : SKY_DISTANCE;
 #else
             if (j == 0 && isSpecular)
-                specHitDist = min(specHitDist, payload.hitDistance);
+                specHitDist = min(specHitDist, payload.Hit() ? payload.hitDistance : SKY_DISTANCE);
 #endif                      
             
             float3 localPosition = ray.Origin + direction * payload.hitDistance;

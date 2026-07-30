@@ -138,11 +138,11 @@ void Main()
         // Attenuate sky by water absorption when camera is underwater
         float3 buildMissThp = float3(1,1,1);
         if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
-            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
+            buildMissThp *= exp(-Camera.UnderwaterAbsorption * SKY_DISTANCE);
         StablePlanesHandleMiss(spCtx, idx, 0, 1, 1 /* sentinel branchID */,
             Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
             identityMat, skyRad, true);
-        spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, kEnvironmentMapSceneDistance);
+        spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, SKY_DISTANCE);
         return;
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
         // FILL: primary ray missed — output transparent like REFERENCE mode
@@ -184,7 +184,7 @@ void Main()
         
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-        float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
+        float3 skyVirtualPos = sourceDirection * SKY_DISTANCE;
         MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
             skyVirtualPos,
             skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
@@ -243,11 +243,11 @@ void Main()
         float3x3 identityMat = float3x3(1,0,0, 0,1,0, 0,0,1);
         float3 buildMissThp = float3(1,1,1);
         if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
-            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
+            buildMissThp *= exp(-Camera.UnderwaterAbsorption * SKY_DISTANCE);
         StablePlanesHandleMiss(spCtx, idx, 0, 1, 1,
             Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
             identityMat, skyRadiance, true);
-        spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, kEnvironmentMapSceneDistance);
+        spCtx.StoreFirstHitRayLengthAndClearDominantToZero(idx, SKY_DISTANCE);
         return;
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
         Output[idx] = float4(LLTrueLinearToGamma(spCtx.GetAllRadiance(idx, true)), 1.0f);
@@ -257,7 +257,7 @@ void Main()
         Output[idx] = float4(LLTrueLinearToGamma(skyRadiance), 1.0f);
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
         
-        float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
+        float3 skyVirtualPos = sourceDirection * SKY_DISTANCE;
         MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
             skyVirtualPos,
             skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
@@ -975,10 +975,10 @@ void Main()
             
 #if defined(NRD)
             if (j == 0)
-                accumulatedHitDist = payload.hitDistance;
+                accumulatedHitDist = payload.Hit() ? payload.hitDistance : SKY_DISTANCE;
 #else
             if (isSpecularSample)
-                specHitDist = min(specHitDist, payload.hitDistance);
+                specHitDist = min(specHitDist, payload.Hit() ? payload.hitDistance : SKY_DISTANCE);
 #endif               
             
             if (!payload.Hit())
