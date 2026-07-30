@@ -35,7 +35,6 @@ namespace Pass
 		m_RaytracingData->TexLODBias = settings.AdvancedSettings.TexLODBias;
 
 		m_RaytracingData->NumLights = static_cast<uint32_t>(sceneGraph->GetLights().size());
-		m_RaytracingData->RussianRoulette = settings.RaytracingSettings.RussianRoulette;
 		m_RaytracingData->Roughness = settings.MaterialSettings.Roughness;
 		m_RaytracingData->Metalness = settings.MaterialSettings.Metalness;
 

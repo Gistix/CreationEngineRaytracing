@@ -292,7 +292,16 @@ void Main()
 #if defined(SHARC) && SHARC_UPDATE
             SharcSetThroughput(sharcState, throughput);
 #else
-            if (Raytracing.RussianRoulette == 1)
+#if RUSSIAN_ROULETTE == 1
+            {
+                const float rrProb = 1.0f - min(1.0f, Color::RGBToLuminance(throughput));
+
+                if (Random(randomSeed) < rrProb)
+                    break;
+
+                throughput /= (1.0f - rrProb);
+            }
+#elif RUSSIAN_ROULETTE == 2
             {
                 float3 throughputColor;
 
@@ -319,6 +328,7 @@ void Main()
                     originalThroughput /= (1.0f - rrProb);
 #   endif                
             }
+#endif
 #endif
             
 #if defined(SHARC)

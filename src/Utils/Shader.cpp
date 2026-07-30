@@ -14,6 +14,7 @@ namespace Util
 			eastl::vector<ShaderDefine> defines = {
 				{ L"MAX_BOUNCES", settings.RaytracingSettings.Bounces },
 				{ L"MAX_SAMPLES", settings.RaytracingSettings.SamplesPerPixel },
+				{ L"RUSSIAN_ROULETTE", static_cast<uint32_t>(settings.RaytracingSettings.RussianRoulette) },
 				{ L"SHARC_UPDATE", sharcUpdate ? L"1" : L"0" },
 				{ L"SHARC_RESOLVE", L"0" },
 				{ L"SHARC_DEBUG", L"0" },

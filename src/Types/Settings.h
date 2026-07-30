@@ -23,11 +23,18 @@ struct GeneralSettings
 	bool RaytracedShadows = false;
 };
 
+enum class RussianRoulette
+{
+	Disabled,
+	Standard,
+	Enhanced
+};
+
 struct RaytracingSettings
 {
 	int Bounces = 2;
 	int SamplesPerPixel = 1;
-	bool RussianRoulette = true;
+	RussianRoulette RussianRoulette = RussianRoulette::Enhanced;
 };
 
 struct ReblurSettings
