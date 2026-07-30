@@ -391,7 +391,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	UpdateLights(commandList);
 
-	const auto timings = Scene::GetSingleton()->m_Settings.DebugSettings.Timings;
+	const auto timings = Scene::GetSingleton()->m_Settings.DebugSettings.Timings == TimingMode::Extended;
 	if (timings) {
 		m_UpdateTimings.clear();
 

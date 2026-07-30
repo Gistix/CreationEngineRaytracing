@@ -250,10 +250,17 @@ struct ExperimentalSettings
 	bool GlobalLights = false;
 };
 
+enum struct TimingMode
+{
+	Disabled,
+	Standard,
+	Extended
+};
+
 struct DebugSettings
 {
 	bool Markers = false;
-	bool Timings = false;
+	TimingMode Timings = TimingMode::Disabled;
 };
 
 struct Settings

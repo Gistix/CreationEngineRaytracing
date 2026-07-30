@@ -50,7 +50,7 @@ void RenderNode::Execute(nvrhi::ICommandList* commandList)
 
 		auto currentSlot = Renderer::GetSingleton()->GetCurrentSlot();
 
-		if (debugSettings.Timings) {
+		if (debugSettings.Timings != TimingMode::Disabled) {
 			if (!m_TimerQueries[currentSlot])
 				m_TimerQueries[currentSlot] = Renderer::GetSingleton()->GetDevice()->createTimerQuery();
 

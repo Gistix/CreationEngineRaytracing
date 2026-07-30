@@ -353,7 +353,7 @@ void Scene::Execute()
 	const auto currentSlot = renderer->GetCurrentSlot();
 	const auto& timings = m_Settings.DebugSettings.Timings;
 
-	if (timings) {
+	if (timings != TimingMode::Disabled) {
 		auto cpuStart = std::chrono::high_resolution_clock::now();
 
 		if (!renderer->GetFrameTimerQuery(currentSlot))

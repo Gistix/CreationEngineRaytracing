@@ -583,10 +583,12 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 
 	m_PassTimings.clear();
 
-	if (timings) {
-		if (auto* sg = scene->GetSceneGraph()) {
-			for (auto& pt : sg->GetUpdateTimings())
-				m_PassTimings.push_back(pt);
+	if (timings != TimingMode::Disabled) {
+		if (timings == TimingMode::Extended) {
+			if (auto* sg = scene->GetSceneGraph()) {
+				for (auto& pt : sg->GetUpdateTimings())
+					m_PassTimings.push_back(pt);
+			}
 		}
 
 		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
