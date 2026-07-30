@@ -1,0 +1,33 @@
+#pragma once
+
+#include <PCH.h>
+
+#include "Pass/RenderPass.h"
+#include "CameraData.hlsli"
+#include "RaytracingData.hlsli"
+#include "ShaderUtils.h"
+#include "framework/DescriptorTableManager.h"
+#include "Util.h"
+
+namespace Pass::Utility
+{
+	class SpecularPostProcess : public RenderPass
+	{
+		nvrhi::ShaderHandle m_ComputeShader;
+		nvrhi::ComputePipelineHandle m_ComputePipeline;
+
+		nvrhi::BindingLayoutHandle m_BindingLayout;
+		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty = {};
+		bool m_Enabled = true;
+
+	public:
+		SpecularPostProcess(Renderer* renderer);
+
+		virtual void CreatePipeline() override;
+		virtual void CheckBindings();
+		virtual void SettingsChanged(const Settings& settings) override;
+		virtual void ResolutionChanged(uint2 resolution) override;
+		virtual void Execute(nvrhi::ICommandList* commandList) override;
+	};
+}

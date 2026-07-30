@@ -21,6 +21,7 @@
 #include "Pass/Raytracing/Common/SHaRCGI.h"
 
 #include "Pass/Utility/FaceNormals.h"
+#include "Pass/Utility/SpecularPostProcess.h"
 #include "Pass/Raytracing/GlobalIllumination.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
@@ -134,6 +135,12 @@ RenderNode* Scene::GetGlobalIllumination()
 
 		m_GlobalIllumination->AddNode({
 			true,
+			"Specular Post Process",
+			eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer)
+		});
+
+		m_GlobalIllumination->AddNode({
+			true,
 			"NRD Reblur Radiance",
 			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination)
 		});
@@ -205,6 +212,12 @@ RenderNode* Scene::GetPathTracing()
 				renderer,
 				m_PathTracing->GetPass<Pass::SceneTLAS>()
 			)
+		});
+
+		m_PathTracing->AddNode({
+			true,
+			"Specular Post Process",
+			eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer)
 		});
 
 		m_PathTracing->AddNode({
