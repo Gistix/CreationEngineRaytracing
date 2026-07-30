@@ -34,7 +34,7 @@ struct RaytracingSettings
 {
 	int Bounces = 2;
 	int SamplesPerPixel = 1;
-	RussianRoulette RussianRoulette = RussianRoulette::Enhanced;
+	RussianRoulette RussianRoulette = RussianRoulette::Standard;
 };
 
 struct ReblurSettings
@@ -159,7 +159,7 @@ enum struct HairBSDF : int32_t
 
 struct SSSSettings
 {
-	bool Enabled = true;
+	bool Enabled = false;
 	int SampleCount = 1;
 	float MaxSampleRadius = 1.0f;
 	bool EnableTransmission = true;
@@ -244,7 +244,7 @@ enum struct TextureMode : uint32_t
 
 struct ExperimentalSettings
 {
-	bool PathTracingCull = false;
+	bool PathTracingCull = true;
 	TextureMode TextureMode = TextureMode::Share;
 	uint32_t TextureCutOff = 0;
 	bool GlobalLights = false;
