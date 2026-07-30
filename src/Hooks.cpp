@@ -276,7 +276,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 #if defined(SKYRIM)
@@ -386,13 +385,18 @@ namespace Hooks
 
 			if (defaultTexture->texture)
 				defaultTexture->texture->AddRef();
+
 			if (defaultTexture->resourceView)
 				defaultTexture->resourceView->AddRef();
+
 			if (defaultTexture->UAV)
 				defaultTexture->UAV->AddRef();
 
 			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
 			texture->pad24 = NATIVE_DX12RESOURCE;
+
+			// Initialize to null to prevent Destructor from releasing a unitialized pointer
+			texture->d3d12Texture = nullptr;
 
 			auto renderer = Renderer::GetSingleton();
 			auto device = renderer->GetDevice();
@@ -618,6 +622,22 @@ namespace Hooks
 			}
 
 			return texture;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct CreateTextureFromFile
+	{
+		static RE::BSGraphics::Texture* thunk(
+			std::uintptr_t a_context,
+			const char* a_path,
+			std::int32_t a_type)
+		{
+			auto* result = func(a_context, a_path, a_type);
+			if (result)
+				result->pad24 = NO_DX12RESOURCE;
+			return result;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1054,6 +1074,9 @@ namespace Hooks
 
 		// Flowmap and Player FaceGen Tint
 		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
+
+		// Texture load from file (sub_140D6E110)
+		stl::detour_thunk<CreateTextureFromFile>(REL::RelocationID(75512, 77304));
 
 		stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
