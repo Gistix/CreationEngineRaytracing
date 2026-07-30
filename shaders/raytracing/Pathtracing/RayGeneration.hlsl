@@ -1276,6 +1276,10 @@ void Main()
 #endif
     }
 
+#if defined(NRD)
+    NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+#endif    
+    
     radiance /= MAX_SAMPLES;        
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
