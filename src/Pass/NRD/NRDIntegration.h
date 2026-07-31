@@ -17,6 +17,12 @@ namespace Pass::NRD
 			eastl::string debugName;
 		};
 
+		struct DispatchBindingCache
+		{
+			eastl::vector<nvrhi::ITexture*> textures;
+			nvrhi::BindingSetHandle bindingSet;
+		};
+
 		Mode m_Mode;
 
 		nrd::Denoiser kDenoiser;
@@ -42,6 +48,8 @@ namespace Pass::NRD
 		nrd::ReblurSettings m_ReblurSettings = {};
 
 		nrd::CommonSettings m_CommonSettings = {};
+
+		eastl::vector<DispatchBindingCache> m_DispatchBindingCaches;
 
 		bool m_ResourcesDirty = true;
 		bool m_SettingsDirty = true;

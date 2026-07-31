@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "Scene.h"
 #include "ShaderUtils.h"
+#include "Utils/Game.h"
 
 namespace Pass::NRD
 {
@@ -29,6 +30,10 @@ namespace Pass::NRD
 		// Required when using probabilistic sampling
 		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
 
+		m_ReblurSettings.hitDistanceParameters.A = 3.0f * Util::Units::M_TO_GAME_UNIT;
+		m_ReblurSettings.hitDistanceParameters.B = 0.1f * Util::Units::M_TO_GAME_UNIT;
+		m_ReblurSettings.hitDistanceParameters.C = 20.0f;
+
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
 		Setup();
 	}
@@ -48,6 +53,7 @@ namespace Pass::NRD
 		m_Pipelines.clear();
 		m_PermanentPool.clear();
 		m_TransientPool.clear();
+		m_DispatchBindingCaches.clear();
 		m_GlobalBindingSet = nullptr;
 		m_GlobalBindingLayout = nullptr;
 		m_ResourceBindingLayout = nullptr;
@@ -246,6 +252,8 @@ namespace Pass::NRD
 		const uint2 resolution = GetRenderer()->GetResolution();
 		auto device = GetRenderer()->GetDevice();
 
+		m_DispatchBindingCaches.clear();
+
 		m_PermanentPool.clear();
 		m_PermanentPool.resize(instanceDesc.permanentPoolSize);
 
@@ -437,6 +445,11 @@ namespace Pass::NRD
 		m_CommonSettings.cameraJitterPrev[0] = prevJitter.x;
 		m_CommonSettings.cameraJitterPrev[1] = prevJitter.y;
 
+		m_CommonSettings.motionVectorScale[0] = 1.0f;
+		m_CommonSettings.motionVectorScale[1] = 1.0f;
+		m_CommonSettings.motionVectorScale[2] = 0.0f;
+		m_CommonSettings.isMotionVectorInWorldSpace = false;
+
 		m_CommonSettings.resourceSizePrev[0] = m_CommonSettings.resourceSize[0];
 		m_CommonSettings.resourceSizePrev[1] = m_CommonSettings.resourceSize[1];
 
@@ -562,6 +575,11 @@ namespace Pass::NRD
 			return;
 		}
 
+		if (m_DispatchBindingCaches.size() != dispatchCount) {
+			m_DispatchBindingCaches.clear();
+			m_DispatchBindingCaches.resize(dispatchCount);
+		}
+
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
 		const uint32_t maxTextures = GetMaxResourceCount(nrd::DescriptorType::TEXTURE);
 		const uint32_t maxStorageTextures = GetMaxResourceCount(nrd::DescriptorType::STORAGE_TEXTURE);
@@ -582,7 +600,6 @@ namespace Pass::NRD
 			if (dispatchDesc.constantBufferData && dispatchDesc.constantBufferDataSize > 0)
 				commandList->writeBuffer(m_ConstantBuffer, dispatchDesc.constantBufferData, dispatchDesc.constantBufferDataSize);
 
-			nvrhi::BindingSetDesc resourceBindingDesc;
 			eastl::vector<nvrhi::ITexture*> srvTextures(maxTextures, m_FallbackSrvTexture);
 			eastl::vector<nvrhi::ITexture*> uavTextures(maxStorageTextures, m_FallbackUavTexture);
 			uint32_t resourceCursor = 0;
@@ -629,24 +646,47 @@ namespace Pass::NRD
 					uavBase += rangeDesc.descriptorsNum;
 			}
 
-			for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
-				item.arrayElement = textureIndex;
-				resourceBindingDesc.bindings.push_back(item);
+			auto& cache = m_DispatchBindingCaches[dispatchIndex];
+
+			bool cacheValid = cache.bindingSet.Get() != nullptr &&
+			                  cache.textures.size() == (srvTextures.size() + uavTextures.size());
+
+			if (cacheValid) {
+				size_t idx = 0;
+				for (auto* tex : srvTextures) {
+					if (cache.textures[idx++] != tex) { cacheValid = false; break; }
+				}
+				if (cacheValid) {
+					for (auto* tex : uavTextures) {
+						if (cache.textures[idx++] != tex) { cacheValid = false; break; }
+					}
+				}
 			}
 
-			for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
-				item.arrayElement = storageTextureIndex;
-				resourceBindingDesc.bindings.push_back(item);
-			}
+			if (!cacheValid) {
+				nvrhi::BindingSetDesc resourceBindingDesc;
 
-			nvrhi::BindingSetHandle resourceBindingSet =
-				renderer->GetDevice()->createBindingSet(resourceBindingDesc, m_ResourceBindingLayout);
+				for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
+					auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
+					item.arrayElement = textureIndex;
+					resourceBindingDesc.bindings.push_back(item);
+				}
+
+				for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
+					auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
+					item.arrayElement = storageTextureIndex;
+					resourceBindingDesc.bindings.push_back(item);
+				}
+
+				cache.bindingSet = renderer->GetDevice()->createBindingSet(resourceBindingDesc, m_ResourceBindingLayout);
+				cache.textures.clear();
+				cache.textures.insert(cache.textures.end(), srvTextures.begin(), srvTextures.end());
+				cache.textures.insert(cache.textures.end(), uavTextures.begin(), uavTextures.end());
+			}
 
 			nvrhi::ComputeState state;
 			state.pipeline = pipeline.pipeline;
-			state.bindings = { m_GlobalBindingSet, resourceBindingSet };
+			state.bindings = { m_GlobalBindingSet, cache.bindingSet };
 			commandList->setComputeState(state);
 			commandList->dispatch(dispatchDesc.gridWidth, dispatchDesc.gridHeight);
 
