@@ -35,6 +35,7 @@ struct RaytracingSettings
 	int Bounces = 2;
 	int SamplesPerPixel = 1;
 	RussianRoulette RussianRoulette = RussianRoulette::Standard;
+	float ResolutionScale = 1.0f;
 };
 
 struct ReblurSettings
