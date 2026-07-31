@@ -496,6 +496,16 @@ uint2 Renderer::GetDynamicResolution()
 	};
 }
 
+uint2 Renderer::GetScaledDynamicResolution()
+{
+	const float scale = Scene::GetSingleton()->GetResolutionScale();
+
+	return {
+		static_cast<uint32_t>(m_RenderSize.x * m_DynamicResolutionRatio.x * scale),
+		static_cast<uint32_t>(m_RenderSize.y * m_DynamicResolutionRatio.y * scale)
+	};
+}
+
 void Renderer::SettingsChanged(const Settings& settings)
 {
 	m_RenderGraph->SettingsChanged(settings);

@@ -3,45 +3,31 @@
 #include <PCH.h>
 
 #include "Pass/RenderPass.h"
-#include "CameraData.hlsli"
-#include "ShaderUtils.h"
-#include "framework/DescriptorTableManager.h"
-#include "Util.h"
-
-#include "Interop/VertexUpdate.hlsli"
-#include "Interop/RowMajorFloat3x4.hlsli"
-#include "Pass/Raytracing/Common/LightTLAS.h"
-#include "Pass/Raytracing/Common/SHaRC.h"
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 
-#include "Types/ShaderDefine.h"
-
-namespace Pass::Common
+namespace Pass::Utility
 {
-	class GIComposite : public RenderPass
+	class Upscale : public RenderPass
 	{
 		Pass::SceneTLAS* m_SceneTLAS = nullptr;
 		nvrhi::SamplerHandle m_LinearClampSampler;
-		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
-
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 	public:
-		GIComposite(Renderer* renderer, Pass::SceneTLAS* sceneTLAS);
+		Upscale(Renderer* renderer, Pass::SceneTLAS* sceneTLAS);
 
 		virtual void Initialize() override;
 		void CreateBindingLayout();
-
 		virtual void CreatePipeline() override;
-
 		void CheckBindings();
 
 		virtual void SettingsChanged(const Settings& settings) override;
+		virtual void ResolutionChanged(uint2 resolution) override;
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};
 }

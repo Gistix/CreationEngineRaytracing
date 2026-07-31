@@ -4,9 +4,13 @@
 
 namespace Pass::Common
 {
-	GIComposite::GIComposite(Renderer* renderer)
-		: RenderPass(renderer)
+	GIComposite::GIComposite(Renderer* renderer, Pass::SceneTLAS* sceneTLAS)
+		: RenderPass(renderer), m_SceneTLAS(sceneTLAS)
 	{
+		m_LinearClampSampler = renderer->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(true));
 	}
 
 	void GIComposite::Initialize()
@@ -20,8 +24,10 @@ namespace Pass::Common
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		globalBindingLayoutDesc.bindings = {
+			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
+			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
 			nvrhi::BindingLayoutItem::Texture_SRV(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
@@ -64,11 +70,8 @@ namespace Pass::Common
 			return;
 
 		auto* scene = Scene::GetSingleton();
-
 		auto* renderer = GetRenderer();
-
 		auto* renderTargets = renderer->GetRenderTargets();
-
 		auto& textureManager = renderer->RenderTargetManager();
 
 		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
@@ -78,8 +81,10 @@ namespace Pass::Common
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
+			nvrhi::BindingSetItem::Sampler(0, m_LinearClampSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, scene->GetFeatureBuffer()),
+			nvrhi::BindingSetItem::ConstantBuffer(2, m_SceneTLAS->GetRaytracingBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(0, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(1, renderTargets->gnmao),
 			nvrhi::BindingSetItem::Texture_SRV(2, diffuseTexture),
@@ -90,17 +95,18 @@ namespace Pass::Common
 		};
 
 		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
-
 		m_BindingSetDirty[currentSlot] = false;
 	}
 
 	void GIComposite::Execute(nvrhi::ICommandList* commandList)
 	{
+		if (!m_Enabled)
+			return;
+
 		CheckBindings();
 
 		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
-
-		auto resolution = Renderer::GetSingleton()->GetResolution();
+		auto resolution = GetRenderer()->GetResolution();
 
 		nvrhi::ComputeState state;
 		state.pipeline = m_ComputePipeline;

@@ -313,7 +313,7 @@ namespace Pass::Raytracing
 			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 		};
 
-		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
+		const auto resolution = Renderer::GetSingleton()->GetScaledDynamicResolution();
 
 		if (m_RayPipeline)
 		{

@@ -3,31 +3,30 @@
 #include <PCH.h>
 
 #include "Pass/RenderPass.h"
-#include "CameraData.hlsli"
-#include "RaytracingData.hlsli"
+#include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "ShaderUtils.h"
-#include "framework/DescriptorTableManager.h"
-#include "Util.h"
 
 namespace Pass::Utility
 {
-	class SpecularPostProcess : public RenderPass
+	class PostProcess : public RenderPass
 	{
+		Mode m_Mode;
+		Pass::SceneTLAS* m_SceneTLAS = nullptr;
+		nvrhi::SamplerHandle m_PointClampSampler;
 		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
-		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty = {};
-		bool m_Enabled = true;
-		Mode m_Mode = Mode::PathTracing;
+		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 	public:
-		SpecularPostProcess(Renderer* renderer, Mode mode = Mode::PathTracing);
+		PostProcess(Renderer* renderer, Mode mode, Pass::SceneTLAS* sceneTLAS);
 
 		virtual void Initialize() override;
-		virtual void CreatePipeline() override;
-		virtual void CheckBindings();
+		void CreatePipeline();
+		void CheckBindings();
+
 		virtual void SettingsChanged(const Settings& settings) override;
 		virtual void ResolutionChanged(uint2 resolution) override;
 		virtual void Execute(nvrhi::ICommandList* commandList) override;

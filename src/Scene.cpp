@@ -21,7 +21,7 @@
 #include "Pass/Raytracing/Common/SHaRCGI.h"
 
 #include "Pass/Utility/FaceNormals.h"
-#include "Pass/Utility/SpecularPostProcess.h"
+#include "Pass/Utility/PostProcess.h"
 #include "Pass/Raytracing/GlobalIllumination.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
@@ -100,9 +100,9 @@ void Scene::UpdateMode(Mode mode)
 		auto* sharcGIPtr = sharcGI.get();
 
 		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharcGIPtr);
-		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer, Mode::GlobalIllumination);
+		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
 		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
-		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer);
+		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
 
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
@@ -111,7 +111,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharcGI) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
-		renderGraph->AddNode({ true, "Specular Post Process", eastl::move(specularPP) });
+		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdPass) });
 		renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
 	}
@@ -127,7 +127,7 @@ void Scene::UpdateMode(Mode mode)
 
 		auto ptPass = eastl::make_unique<Pass::PathTracing>(renderer, tlasPtr, sharcPtr);
 		auto restirGI = eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(renderer, tlasPtr);
-		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer, Mode::PathTracing);
+		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::PathTracing, tlasPtr);
 		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
 		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);
@@ -139,7 +139,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "PathTracing", eastl::move(ptPass) });
 		renderGraph->AddNode({ true, "ReSTIRGI", eastl::move(restirGI) });
-		renderGraph->AddNode({ true, "Specular Post Process", eastl::move(specularPP) });
+		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdPass) });
 		renderGraph->AddNode({ true, "PT Composite", eastl::move(ptComposite) });
 		renderGraph->AddNode({ false, "Accumulation", eastl::move(accumulation) });
@@ -478,7 +478,6 @@ void Scene::UpdateSettings(Settings settings)
 	
 	if (currentMode == Mode::GlobalIllumination) {
 		renderGraph->SetEnabled<Pass::NRD::NRDIntegration>(nrdReblur);
-		renderGraph->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
 	}
 	else if (currentMode == Mode::PathTracing) {
 		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
@@ -488,4 +487,14 @@ void Scene::UpdateSettings(Settings settings)
 	}
 
 	renderGraph->SettingsChanged(settings); 
+}
+
+float Scene::GetResolutionScale() const
+{
+	if (m_Settings.GeneralSettings.Mode != Mode::GlobalIllumination)
+		return 1.0f;
+
+	return (m_Settings.GeneralSettings.Denoiser == Denoiser::NRD)
+		? m_Settings.RaytracingSettings.ResolutionScale
+		: 1.0f;
 }

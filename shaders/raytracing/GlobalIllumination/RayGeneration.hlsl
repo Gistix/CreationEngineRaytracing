@@ -41,7 +41,7 @@ void Main()
 #endif
 {
 #if USE_RAY_QUERY
-    uint2 size = Camera.RenderSize;  
+    uint2 size = (uint2)max(uint2(1, 1), (uint2)ceil(float2(Camera.RenderSize) * Raytracing.ResolutionScale));  
 #   if defined(GROUP_TILING)    
     uint2 idx = ThreadGroupTilingX((uint2)ceil(size / THREAD_GROUP_SIZE), THREAD_GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
 #   endif
@@ -75,7 +75,8 @@ void Main()
     const float2 uv = float2(idx + 0.5f) / size;
 
     // If the game has dynamic resolution enabled the textures will not cover the entire extent
-    const float2 dynamicUV = float2(idx + 0.5f) / Camera.ScreenSize;   
+    // This has to map to the original engine resolution (which may have its own resolution scale applied)
+    const float2 dynamicUV = (float2(idx + 0.5f) / Camera.ScreenSize) / Raytracing.ResolutionScale;
     
     const float2 dynamicUVUnjittered = dynamicUV - (Camera.Jitter / Camera.ScreenSize);
 

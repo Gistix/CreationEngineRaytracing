@@ -66,6 +66,8 @@ namespace Pass::NRD
 		nvrhi::ITexture* GetDispatchResource(const nrd::ResourceDesc& resource) const;
 		nvrhi::Format GetFormat(nrd::Format format) const;
 
+		bool IsDownscaled() const;
+
 		uint32_t GetMaxResourceCount(nrd::DescriptorType type) const;
 
 	public:

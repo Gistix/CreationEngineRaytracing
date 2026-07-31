@@ -39,7 +39,8 @@ INTEROP_STRUCT(RaytracingData, 16)
     float3 WaterObjectUV;
     uint NumInstances;
     float2 WaterDisplacementPosition;
-    float2 Pad2;
+    float ResolutionScale;
+    float Pad2;
 };
 VALIDATE_CBUFFER(RaytracingData, 16);
 

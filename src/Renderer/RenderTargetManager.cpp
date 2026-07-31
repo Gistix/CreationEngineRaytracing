@@ -55,7 +55,11 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 			desc.format = nvrhi::Format::RGBA32_FLOAT;
 			break;
 		case RenderTarget::RRSpecularMotionVectors:
+		case RenderTarget::DownscaledMotionVectors:
 			desc.format = nvrhi::Format::RG16_FLOAT;
+			break;
+		case RenderTarget::DownscaledNormalRoughness:
+			desc.format = nvrhi::Format::RGBA16_SNORM;
 			break;
 		default:
 			break;

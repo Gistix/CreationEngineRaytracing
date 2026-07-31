@@ -45,6 +45,7 @@ namespace Pass
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
 		m_RaytracingData->WaterAbsorptionScale = settings.WaterSettings.AbsorptionScale;
 		m_RaytracingData->EnableReSTIRGI = settings.ReSTIRGI.Enabled ? 1 : 0;
+		m_RaytracingData->ResolutionScale = scene->GetResolutionScale();
 
 		m_RaytracingData->NumMeshes = sceneGraph->GetNumMeshesFrame();
 		m_RaytracingData->NumInstances = sceneGraph->GetNumInstancesFrame();

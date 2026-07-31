@@ -137,5 +137,7 @@ struct Scene
 
 	void SetWaterFlowMap(ID3D12Resource* skyHemi);
 
+	float GetResolutionScale() const;
+
 	void UpdateSettings(Settings settings);
 };

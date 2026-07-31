@@ -433,7 +433,7 @@ namespace Pass::NRD
 		std::memcpy(m_CommonSettings.viewToClipMatrix, &cameraData.projMat, sizeof(float4x4));
 
 		const auto resolution = renderer->GetResolution();
-		const auto dynamicResolution = renderer->GetDynamicResolution();
+		auto dynamicResolution = renderer->GetScaledDynamicResolution();
 
 		m_CommonSettings.frameIndex = static_cast<uint32_t>(renderer->GetFrameIndex() % UINT32_MAX);
 
@@ -466,22 +466,29 @@ namespace Pass::NRD
 #endif
 	}
 
-	nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
-	{
-		auto* renderer = Renderer::GetSingleton();
-		auto* renderTargets = renderer->GetRenderTargets();
-		
-		auto& textureManager = renderer->RenderTargetManager();
+		bool NRDIntegration::IsDownscaled() const
+		{
+			return Scene::GetSingleton()->GetResolutionScale() != 1.0f;
+		}
 
-		auto* viewDepth = textureManager.GetTexture(RenderTarget::ViewDepth);
-		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
-		auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
+		nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
+		{
+			auto* renderer = Renderer::GetSingleton();
+			auto* renderTargets = renderer->GetRenderTargets();
+			
+			auto& textureManager = renderer->RenderTargetManager();
+
+			auto* viewDepth = textureManager.GetTexture(RenderTarget::ViewDepth);
+			auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
+			auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
+
+			const bool downscaled = IsDownscaled();
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:
-			return m_MotionVectorsScratch;
+			return downscaled ? textureManager.GetTexture(RenderTarget::DownscaledMotionVectors) : m_MotionVectorsScratch.Get();
 		case nrd::ResourceType::IN_NORMAL_ROUGHNESS:
-			return renderTargets ? renderTargets->normalRoughness : nullptr;
+			return downscaled ? textureManager.GetTexture(RenderTarget::DownscaledNormalRoughness) : renderTargets->normalRoughness.Get();
 		case nrd::ResourceType::IN_VIEWZ:
 			return viewDepth;
 		case nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST:
@@ -540,16 +547,21 @@ namespace Pass::NRD
 
 		auto* renderer = GetRenderer();
 
-		nvrhi::ITexture* sourceMotionVectors = nullptr;
-		if (m_Mode == Mode::GlobalIllumination)
-			sourceMotionVectors = renderer->GetMotionVectorTexture();
-		else
-			sourceMotionVectors = renderer->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D);
+		// When resolution scaling is active, PostProcess already wrote downscaled MVs to DownscaledMotionVectors
+		const bool downscaled = IsDownscaled();
 
-		if (sourceMotionVectors && m_MotionVectorsScratch) {
-			const nvrhi::TextureDesc& mvDesc = sourceMotionVectors->getDesc();
-			auto mvRegion = nvrhi::TextureSlice{ 0, 0, 0, mvDesc.width, mvDesc.height, 1 };
-			commandList->copyTexture(m_MotionVectorsScratch, mvRegion, sourceMotionVectors, mvRegion);
+		if (!downscaled) {
+			nvrhi::ITexture* sourceMotionVectors = nullptr;
+			if (m_Mode == Mode::GlobalIllumination)
+				sourceMotionVectors = renderer->GetMotionVectorTexture();
+			else
+				sourceMotionVectors = renderer->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D);
+
+			if (sourceMotionVectors && m_MotionVectorsScratch) {
+				const nvrhi::TextureDesc& mvDesc = sourceMotionVectors->getDesc();
+				auto mvRegion = nvrhi::TextureSlice{ 0, 0, 0, mvDesc.width, mvDesc.height, 1 };
+				commandList->copyTexture(m_MotionVectorsScratch, mvRegion, sourceMotionVectors, mvRegion);
+			}
 		}
 
 		if (m_SettingsDirty) {
