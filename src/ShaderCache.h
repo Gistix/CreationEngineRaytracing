@@ -11,9 +11,10 @@ namespace ShaderCache
 		eastl::vector<ShaderDefine> defines; 
 		eastl::wstring target;
 		eastl::wstring entryPoint;
+		bool isVulkan = false;
 
-		ShaderKey(const wchar_t* a_filePath, eastl::vector<DxcDefine> a_defines, const wchar_t* a_target, const wchar_t* a_entryPoint) 
-			: filePath(a_filePath), target(a_target), entryPoint(a_entryPoint)
+		ShaderKey(const wchar_t* a_filePath, eastl::vector<DxcDefine> a_defines, const wchar_t* a_target, const wchar_t* a_entryPoint, bool a_isVulkan = false) 
+			: filePath(a_filePath), target(a_target), entryPoint(a_entryPoint), isVulkan(a_isVulkan)
 		{
 			defines.reserve(a_defines.size());
 
@@ -28,6 +29,7 @@ namespace ShaderCache
 			return filePath == other.filePath &&
 				target == other.target &&
 				entryPoint == other.entryPoint &&
+				isVulkan == other.isVulkan &&
 				defines == other.defines;
 		}
 	};
@@ -45,6 +47,7 @@ namespace ShaderCache
 
 			HashCombine(h, eastl::hash<eastl::wstring>{}(key.target));
 			HashCombine(h, eastl::hash<eastl::wstring>{}(key.entryPoint));
+			HashCombine(h, static_cast<size_t>(key.isVulkan ? 1 : 0));
 
 			for (auto& d : key.defines)
 			{

@@ -53,7 +53,13 @@ namespace ShaderUtils
 		}
 	};
 
+	bool PreprocessShader(winrt::com_ptr<IDxcBlobUtf8>& outPreprocessedText, const wchar_t* FilePath, eastl::vector<DxcDefine> defines = {}, const wchar_t* Target = L"lib_6_5", const wchar_t* EntryPoint = L"Main");
+
 	void CompileShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines = {}, const wchar_t* Target = L"lib_6_5", const wchar_t* EntryPoint = L"Main");
+
+	void CompileRawShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines = {}, const wchar_t* Target = L"lib_6_5", const wchar_t* EntryPoint = L"Main");
+
+	void CompilePreprocessedShader(winrt::com_ptr<IDxcBlob>& shader, const char* sourceData, size_t sourceSize, const wchar_t* FilePath, const wchar_t* Target = L"lib_6_5", const wchar_t* EntryPoint = L"Main");
 	
 	nvrhi::ShaderLibraryHandle CompileShaderLibrary(nvrhi::IDevice* device, const wchar_t* filePath, const eastl::vector<ShaderDefine>& defines);
 
