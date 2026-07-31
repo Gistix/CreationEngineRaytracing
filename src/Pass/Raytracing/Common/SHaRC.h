@@ -51,7 +51,8 @@ namespace Pass
 
 		eastl::vector<ShaderDefine> m_Defines;
 
-		bool m_Enabled = false;
+		virtual void Initialize() override;
+
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 		bool m_ResetCache = true;
 		uint32_t m_FrameCounter = 0;

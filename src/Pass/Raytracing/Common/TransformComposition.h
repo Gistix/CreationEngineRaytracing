@@ -20,6 +20,7 @@ namespace Pass
 	public:
 		TransformComposition(Renderer* renderer);
 
+		virtual void Initialize() override;
 		void CreateBindingLayout();
 		virtual void CreatePipeline() override;
 		void CheckBindings();

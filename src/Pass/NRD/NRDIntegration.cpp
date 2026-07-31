@@ -84,7 +84,10 @@ namespace Pass::NRD
 			.setDebugName("NRD Reblur Constants");
 
 		m_ConstantBuffer = GetRenderer()->GetDevice()->createBuffer(bufferDesc);
+	}
 
+	void NRDIntegration::Initialize()
+	{
 		CreateBindingLayouts();
 		CreatePipelines();
 		CreateResources();
@@ -350,6 +353,8 @@ namespace Pass::NRD
 
 	void NRDIntegration::SettingsChanged([[maybe_unused]] const Settings& settings)
 	{
+		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
+
 		auto& reblurSettings = settings.ReblurSettings;
 
 		m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(reblurSettings.maxAccumulatedFrameNum, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);

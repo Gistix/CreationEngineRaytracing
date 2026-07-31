@@ -64,6 +64,8 @@ namespace Pass::NRD
 		NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode);
 		~NRDIntegration() override;
 
+		virtual void Initialize() override;
+
 		void SettingsChanged(const Settings& settings) override;
 		void ResolutionChanged(uint2 resolution) override;
 		void Execute(nvrhi::ICommandList* commandList) override;

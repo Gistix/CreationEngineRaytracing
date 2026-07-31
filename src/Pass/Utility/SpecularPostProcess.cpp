@@ -7,6 +7,10 @@ namespace Pass::Utility
 	SpecularPostProcess::SpecularPostProcess(Renderer* renderer)
 		: RenderPass(renderer)
 	{
+	}
+
+	void SpecularPostProcess::Initialize()
+	{
 		CreatePipeline();
 	}
 

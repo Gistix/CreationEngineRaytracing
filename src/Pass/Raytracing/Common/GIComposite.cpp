@@ -7,6 +7,10 @@ namespace Pass::Common
 	GIComposite::GIComposite(Renderer* renderer)
 		: RenderPass(renderer)
 	{
+	}
+
+	void GIComposite::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}
@@ -46,6 +50,11 @@ namespace Pass::Common
 			.addBindingLayout(m_BindingLayout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+	}
+
+	void GIComposite::SettingsChanged(const Settings& settings)
+	{
+		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
 	}
 
 	void GIComposite::CheckBindings()

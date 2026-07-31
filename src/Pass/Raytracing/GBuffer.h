@@ -40,6 +40,8 @@ namespace Pass::Raytracing
 	public:
 		GBuffer(Renderer* renderer, SceneTLAS* m_SceneTLAS);
 
+		virtual void Initialize() override;
+
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{
 			m_BindingSetDirty.fill(true);

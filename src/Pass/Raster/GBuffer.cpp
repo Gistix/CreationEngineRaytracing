@@ -21,7 +21,10 @@ namespace Pass::Raster
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
+	}
 
+	void GBuffer::Initialize()
+	{
 		CreatePipeline();
 	}
 

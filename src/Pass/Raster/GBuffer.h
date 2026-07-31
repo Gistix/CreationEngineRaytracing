@@ -32,6 +32,7 @@ namespace Pass::Raster
 	public:
 		GBuffer(Renderer* renderer);
 
+		virtual void Initialize() override;
 		virtual void CreatePipeline() override;
 
 		virtual void ResolutionChanged(uint2 resolution) override;

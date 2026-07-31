@@ -33,7 +33,10 @@ namespace Pass
 		m_UseRestirGI = settings.ReSTIRGI.Enabled;
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+	}
 
+	void PathTracing::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}

@@ -7,6 +7,10 @@ namespace Pass::Common
 	PTComposite::PTComposite(Renderer* renderer)
 		: RenderPass(renderer)
 	{
+	}
+
+	void PTComposite::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}
@@ -45,6 +49,11 @@ namespace Pass::Common
 			.addBindingLayout(m_BindingLayout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+	}
+
+	void PTComposite::SettingsChanged(const Settings& settings)
+	{
+		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
 	}
 
 	void PTComposite::CheckBindings()

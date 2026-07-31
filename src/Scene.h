@@ -16,11 +16,6 @@ struct Scene
 {
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
-	eastl::unique_ptr<RenderNode> m_GlobalIllumination;
-	eastl::unique_ptr<RenderNode> m_PathTracing;
-	eastl::unique_ptr<RenderNode> m_GBuffer;
-	eastl::unique_ptr<RenderNode> m_Debug;
-
 	eastl::unique_ptr<CameraData> m_CameraData;
 	nvrhi::BufferHandle m_CameraBuffer;
 
@@ -127,17 +122,7 @@ struct Scene
 
 	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 
-	RenderNode* GetGlobalIllumination();
-
-	RenderNode* GetPathTracing();
-
-	RenderNode* GetDebug();
-
-	RenderNode* GetModeNode(Mode mode);
-
-	bool IsModeInitialized(Mode mode);
-
-	void UpdateMode(Mode mode, Mode previousMode);
+	void UpdateMode(Mode mode);
 
 	void Initialize();
 

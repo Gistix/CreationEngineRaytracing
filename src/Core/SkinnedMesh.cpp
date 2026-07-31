@@ -273,7 +273,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.
 	if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
-		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
+		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetPass<Pass::Skinning>())
 			skinningPass->QueueUpdate(m_DirtyFlags.get(), this);
 	}
 }

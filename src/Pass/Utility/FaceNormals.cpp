@@ -11,7 +11,10 @@ namespace Pass::Utility
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(true));
+	}
 
+	void FaceNormals::Initialize()
+	{
 		CreatePipeline();
 	}
 

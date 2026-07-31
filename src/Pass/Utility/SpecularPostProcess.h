@@ -19,11 +19,11 @@ namespace Pass::Utility
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty = {};
-		bool m_Enabled = true;
 
 	public:
 		SpecularPostProcess(Renderer* renderer);
 
+		virtual void Initialize() override;
 		virtual void CreatePipeline() override;
 		virtual void CheckBindings();
 		virtual void SettingsChanged(const Settings& settings) override;

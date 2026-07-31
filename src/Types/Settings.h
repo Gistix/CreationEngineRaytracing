@@ -19,7 +19,7 @@ enum class Denoiser
 struct GeneralSettings
 {
 	Denoiser Denoiser = Denoiser::None;
-	Mode Mode = Mode::GlobalIllumination;
+	Mode Mode = Mode::None;
 	bool RaytracedShadows = false;
 };
 

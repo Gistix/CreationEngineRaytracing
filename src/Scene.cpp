@@ -77,244 +77,86 @@ SceneGraph* Scene::GetSceneGraph() const
 	return m_SceneGraph.get();
 }
 
-RenderNode* Scene::GetGlobalIllumination()
+void Scene::UpdateMode(Mode mode)
 {
-	if (!m_GlobalIllumination) {
-		auto* renderer = Renderer::GetSingleton();
+	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
+	renderGraph->ClearNodes();
 
-		m_GlobalIllumination = eastl::make_unique<RenderNode>(true, "Global Illumination");
+	if (mode == Mode::None)
+		return;
 
-		m_GlobalIllumination->AddNode({
-			true,
-			"Skinning",
-			eastl::make_unique<Pass::Skinning>(renderer)
-		});
+	auto* renderer = Renderer::GetSingleton();
 
-		m_GlobalIllumination->AddNode({
-			true,
-			"LandLOD Occluder",
-			eastl::make_unique<Pass::LandLODOccluder>(renderer)
-		});
+	if (mode == Mode::GlobalIllumination) {
+		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
+		auto landLod = eastl::make_unique<Pass::LandLODOccluder>(renderer);
+		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
+		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
+		auto* tlasPtr = sceneTLAS.get();
 
-		m_GlobalIllumination->AddNode({
-			true,
-			"Transform Composition",
-			eastl::make_unique<Pass::TransformComposition>(renderer)
-		});
+		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
-		m_GlobalIllumination->AddNode({
-			true,
-			"Scene TLAS",
-			eastl::make_unique<Pass::SceneTLAS>(renderer)
-		});
+		auto sharcGI = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
+		auto* sharcGIPtr = sharcGI.get();
 
-		m_GlobalIllumination->AddNode({
-			true,
-			"Face Normals",
-			eastl::make_unique<Pass::Utility::FaceNormals>(renderer)
-		});
+		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharcGIPtr);
+		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer);
+		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
+		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer);
 
-		m_GlobalIllumination->AddNode({
-			true,
-			"SHaRC",
-			eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(
-				renderer,
-				m_GlobalIllumination->GetPass<Pass::SceneTLAS>()
-			)
-		});
-
-		m_GlobalIllumination->AddNode({
-			true,
-			"Global Illumination",
-			eastl::make_unique<Pass::Raytracing::GlobalIllumination>(
-				renderer,
-				m_GlobalIllumination->GetPass<Pass::SceneTLAS>(),
-				m_GlobalIllumination->GetPass<Pass::Raytracing::Common::SHaRCGI>()
-			)			
-		});
-
-		m_GlobalIllumination->AddNode({
-			true,
-			"Specular Post Process",
-			eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer)
-		});
-
-		m_GlobalIllumination->AddNode({
-			true,
-			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination)
-		});
-
-		m_GlobalIllumination->AddNode({
-			true,
-			"GI Composite",
-			eastl::make_unique<Pass::Common::GIComposite>(renderer)
-		});
+		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
+		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
+		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
+		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
+		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharcGI) });
+		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
+		renderGraph->AddNode({ true, "Specular Post Process", eastl::move(specularPP) });
+		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdPass) });
+		renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
 	}
+	else if (mode == Mode::PathTracing) {
+		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
+		auto landLod = eastl::make_unique<Pass::LandLODOccluder>(renderer);
+		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
+		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
+		auto* tlasPtr = sceneTLAS.get();
 
-	return m_GlobalIllumination.get();
-}
+		auto sharc = eastl::make_unique<Pass::SHaRC>(renderer, tlasPtr);
+		auto* sharcPtr = sharc.get();
 
-RenderNode* Scene::GetPathTracing()
-{
-	if (!m_PathTracing) {
-		auto* renderer = Renderer::GetSingleton();
+		auto ptPass = eastl::make_unique<Pass::PathTracing>(renderer, tlasPtr, sharcPtr);
+		auto restirGI = eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(renderer, tlasPtr);
+		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer);
+		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
+		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
+		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);
 
-		m_PathTracing = eastl::make_unique<RenderNode>(true, "Path Tracing");
-
-		m_PathTracing->AddNode({
-			true,
-			"Skinning",
-			eastl::make_unique<Pass::Skinning>(renderer)
-			});
-
-		m_PathTracing->AddNode({
-			true,
-			"LandLOD Occluder",
-			eastl::make_unique<Pass::LandLODOccluder>(renderer)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"Transform Composition",
-			eastl::make_unique<Pass::TransformComposition>(renderer)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"Scene TLAS",
-			eastl::make_unique<Pass::SceneTLAS>(renderer)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"SHaRC",
-			eastl::make_unique<Pass::SHaRC>(
-				renderer,
-				m_PathTracing->GetPass<Pass::SceneTLAS>()
-			)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"PathTracing",
-			eastl::make_unique<Pass::PathTracing>(
-				renderer,
-				m_PathTracing->GetPass<Pass::SceneTLAS>(),
-				m_PathTracing->GetPass<Pass::SHaRC>()
-			)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"ReSTIRGI",
-			eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(
-				renderer,
-				m_PathTracing->GetPass<Pass::SceneTLAS>()
-			)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"Specular Post Process",
-			eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"NRD Reblur Radiance",
-			eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing)
-		});
-
-		m_PathTracing->AddNode({
-			true,
-			"PT Composite",
-			eastl::make_unique<Pass::Common::PTComposite>(renderer)
-		});
-
-		m_PathTracing->AddNode({
-			false,
-			"Accumulation",
-			eastl::make_unique<Pass::Common::Accumulation>(renderer)
-		});
+		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
+		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
+		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
+		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
+		renderGraph->AddNode({ true, "PathTracing", eastl::move(ptPass) });
+		renderGraph->AddNode({ true, "ReSTIRGI", eastl::move(restirGI) });
+		renderGraph->AddNode({ true, "Specular Post Process", eastl::move(specularPP) });
+		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdPass) });
+		renderGraph->AddNode({ true, "PT Composite", eastl::move(ptComposite) });
+		renderGraph->AddNode({ false, "Accumulation", eastl::move(accumulation) });
 	}
+	else if (mode == Mode::Debug) {
+		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
+		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
+		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
+		auto* tlasPtr = sceneTLAS.get();
 
-	return m_PathTracing.get();
-}
+		auto debugPass = eastl::make_unique<Pass::Debug>(renderer, tlasPtr);
 
-RenderNode* Scene::GetDebug()
-{
-	if (!m_Debug) {
-		auto* renderer = Renderer::GetSingleton();
-
-		m_Debug = eastl::make_unique<RenderNode>(true, "Debug");
-
-		m_Debug->AddNode({
-			true,
-			"Skinning",
-			eastl::make_unique<Pass::Skinning>(renderer)
-		});
-
-		m_Debug->AddNode({
-			true,
-			"Transform Composition",
-			eastl::make_unique<Pass::TransformComposition>(renderer)
-		});
-
-		m_Debug->AddNode({
-			true,
-			"Scene TLAS",
-			eastl::make_unique<Pass::SceneTLAS>(renderer)
-		});
-
-		m_Debug->AddNode({
-			true,
-			"Debug",
-			eastl::make_unique<Pass::Debug>(
-				renderer,
-				m_Debug->GetPass<Pass::SceneTLAS>()
-			)
-		});
+		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
+		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
+		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+		renderGraph->AddNode({ true, "Debug", eastl::move(debugPass) });
 	}
-
-	return m_Debug.get();
-}
-
-RenderNode* Scene::GetModeNode([[ maybe_unused ]] Mode mode)
-{
-	if (mode == Mode::GlobalIllumination)
-		return GetGlobalIllumination();
-	else if (mode == Mode::PathTracing)
-		return GetPathTracing();
-	else if (mode == Mode::Debug)
-		return GetDebug();
-
-	return nullptr;
-}
-
-bool Scene::IsModeInitialized([[ maybe_unused ]] Mode mode)
-{
-	if (mode == Mode::GlobalIllumination)
-		return m_GlobalIllumination != nullptr;
-	else if (mode == Mode::PathTracing)
-		return m_PathTracing != nullptr;
-	else if (mode == Mode::Debug)
-		return m_Debug != nullptr;
-
-	return false;
-}
-
-void Scene::UpdateMode(Mode mode, Mode previousMode)
-{
-	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
-
-	// Detach previous mode node
-	if (IsModeInitialized(previousMode))
-		rootNode->DetachRenderNode(GetModeNode(previousMode));
-
-	// Attach new mode node (skip for None - no render work needed)
-	if (mode != Mode::None)
-		rootNode->AttachRenderNode(GetModeNode(mode));
 }
 
 void Scene::Initialize() 
@@ -627,23 +469,23 @@ void Scene::UpdateSettings(Settings settings)
 
 	auto currentMode = settings.GeneralSettings.Mode;
 
-	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
+	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
 
-	if (currentMode != previousMode || !rootNode->HasRenderNode())
-		UpdateMode(currentMode, previousMode);
+	if (currentMode != previousMode || renderGraph->GetNodes().empty())
+		UpdateMode(currentMode);
 
 	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD;
 	
 	if (currentMode == Mode::GlobalIllumination) {
-		rootNode->SetEnabled<Pass::NRD::NRDIntegration>(nrdReblur);
-		rootNode->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
+		renderGraph->SetEnabled<Pass::NRD::NRDIntegration>(nrdReblur);
+		renderGraph->SetEnabled<Pass::Common::GIComposite>(nrdReblur);
 	}
 	else if (currentMode == Mode::PathTracing) {
 		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
 		const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
-		rootNode->SetEnabled<Pass::Common::Accumulation>(accumulation);
-		rootNode->SetEnabled<Pass::Common::PTComposite>(nrdReblur);
+		renderGraph->SetEnabled<Pass::Common::Accumulation>(accumulation);
+		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrdReblur);
 	}
 
-	rootNode->SettingsChanged(settings); 
+	renderGraph->SettingsChanged(settings); 
 }

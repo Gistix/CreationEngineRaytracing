@@ -591,9 +591,9 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 			}
 		}
 
-		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
-			rootNode->ForEach([&](RenderNode* node) {
-				if (node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))
+		if (m_RenderGraph) {
+			m_RenderGraph->ForEach([&](RenderNode* node) {
+				if (node->m_ExecutedThisFrame[slot] && node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))
 					m_PassTimings.push_back(PassTiming{ node->m_Name.c_str(), device->getTimerQueryTime(node->m_TimerQueries[slot]) * 1000.0f, node->m_CpuTimes[slot] });
 			});
 		}

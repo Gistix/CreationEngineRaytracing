@@ -130,8 +130,8 @@ void UpdateJitter(float2 jitter)
 
 uint32_t GetAccumulatedFrameCount()
 {
-	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
-	auto* accumulationPass = rootNode->GetPass<Pass::Common::Accumulation>();
+	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
+	auto* accumulationPass = renderGraph ? renderGraph->GetPass<Pass::Common::Accumulation>() : nullptr;
 	if (accumulationPass)
 		return accumulationPass->GetAccumulatedFrames();
 	return 0;

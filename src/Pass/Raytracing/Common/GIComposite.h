@@ -31,12 +31,14 @@ namespace Pass::Common
 	public:
 		GIComposite(Renderer* renderer);
 
+		virtual void Initialize() override;
 		void CreateBindingLayout();
 
 		virtual void CreatePipeline() override;
 
 		void CheckBindings();
 
+		virtual void SettingsChanged(const Settings& settings) override;
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};
 }

@@ -9,7 +9,10 @@ namespace Pass
 		: RenderPass(renderer)
 	{
 		m_Buffer = Util::CreateStructuredRingBuffer<LandLODUpdate>(renderer->GetDevice(), MAX_MESHES, "Land LOD Update Buffer");
+	}
 
+	void LandLODOccluder::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}

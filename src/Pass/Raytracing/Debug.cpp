@@ -30,7 +30,10 @@ namespace Pass
 		m_Defines = Util::Shader::GetPathTracingDefines(settings, false, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+	}
 
+	void Debug::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}

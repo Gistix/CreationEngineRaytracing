@@ -25,7 +25,10 @@ namespace Pass::Raytracing
 			.setAllFilters(false));
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+	}
 
+	void GBuffer::Initialize()
+	{
 		CreatePipeline();
 	}
 

@@ -38,6 +38,14 @@ namespace Pass::Raytracing::Common
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
+		SettingsChanged(Scene::GetSingleton()->m_Settings);
+	}
+
+	void SHaRCGI::Initialize()
+	{
+		SetupUpdate();
+		SetupResolve();
 	}
 
 	void SHaRCGI::SettingsChanged(const Settings& settings)

@@ -28,7 +28,10 @@ namespace Pass::Raytracing
 		m_Defines = Util::Shader::GetGlobalIlluminationDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+	}
 
+	void GlobalIllumination::Initialize()
+	{
 		CreatePipeline();
 	}
 
