@@ -4,8 +4,8 @@
 
 namespace Pass::Utility
 {
-	SpecularPostProcess::SpecularPostProcess(Renderer* renderer)
-		: RenderPass(renderer)
+	SpecularPostProcess::SpecularPostProcess(Renderer* renderer, Mode mode)
+		: RenderPass(renderer), m_Mode(mode)
 	{
 	}
 
@@ -31,9 +31,9 @@ namespace Pass::Utility
 				nvrhi::BindingLayoutItem::VolatileConstantBuffer(0), // Camera
 				nvrhi::BindingLayoutItem::Texture_SRV(0), // ClipDepth
 				nvrhi::BindingLayoutItem::Texture_SRV(1), // NormalRoughness
-				nvrhi::BindingLayoutItem::Texture_SRV(2), // MotionVectors3D
+				nvrhi::BindingLayoutItem::Texture_SRV(2), // MotionVectors
 				nvrhi::BindingLayoutItem::Texture_SRV(3), // RRSpecularHitDist
-				nvrhi::BindingLayoutItem::Texture_UAV(0)  // OutSpecularMotionVectors / RRSpecularMotionVectors
+				nvrhi::BindingLayoutItem::Texture_UAV(0)  // RRSpecularMotionVectors
 			};
 
 			m_BindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -70,12 +70,23 @@ namespace Pass::Utility
 
 		auto* renderTargets = renderer->GetRenderTargets();
 
+		nvrhi::ITexture* sourceDepth = nullptr;
+		nvrhi::ITexture* sourceMotionVectors = nullptr;
+
+		if (m_Mode == Mode::GlobalIllumination) {
+			sourceDepth = renderer->GetDepthTexture();
+			sourceMotionVectors = renderer->GetMotionVectorTexture();
+		} else {
+			sourceDepth = textureManager.GetTexture(RenderTarget::ClipDepth);
+			sourceMotionVectors = textureManager.GetTexture(RenderTarget::MotionVectors3D);
+		}
+
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(0, textureManager.GetTexture(RenderTarget::ClipDepth)),
+			nvrhi::BindingSetItem::Texture_SRV(0, sourceDepth),
 			nvrhi::BindingSetItem::Texture_SRV(1, renderTargets->normalRoughness),
-			nvrhi::BindingSetItem::Texture_SRV(2, textureManager.GetTexture(RenderTarget::MotionVectors3D)),
+			nvrhi::BindingSetItem::Texture_SRV(2, sourceMotionVectors),
 			nvrhi::BindingSetItem::Texture_SRV(3, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)),
 			nvrhi::BindingSetItem::Texture_UAV(0, textureManager.GetTexture(RenderTarget::RRSpecularMotionVectors))
 		};

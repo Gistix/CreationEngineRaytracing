@@ -100,7 +100,7 @@ void Scene::UpdateMode(Mode mode)
 		auto* sharcGIPtr = sharcGI.get();
 
 		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharcGIPtr);
-		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer);
+		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer, Mode::GlobalIllumination);
 		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer);
 
@@ -127,7 +127,7 @@ void Scene::UpdateMode(Mode mode)
 
 		auto ptPass = eastl::make_unique<Pass::PathTracing>(renderer, tlasPtr, sharcPtr);
 		auto restirGI = eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(renderer, tlasPtr);
-		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer);
+		auto specularPP = eastl::make_unique<Pass::Utility::SpecularPostProcess>(renderer, Mode::PathTracing);
 		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
 		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);

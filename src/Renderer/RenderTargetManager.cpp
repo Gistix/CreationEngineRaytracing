@@ -56,7 +56,6 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 			break;
 		case RenderTarget::RRSpecularMotionVectors:
 			desc.format = nvrhi::Format::RG16_FLOAT;
-			desc.sharedResourceFlags = nvrhi::SharedResourceFlags::Shared;
 			break;
 		default:
 			break;

@@ -19,9 +19,11 @@ namespace Pass::Utility
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty = {};
+		bool m_Enabled = true;
+		Mode m_Mode = Mode::PathTracing;
 
 	public:
-		SpecularPostProcess(Renderer* renderer);
+		SpecularPostProcess(Renderer* renderer, Mode mode = Mode::PathTracing);
 
 		virtual void Initialize() override;
 		virtual void CreatePipeline() override;
