@@ -49,7 +49,7 @@ RWTexture2D<float3>                         DiffuseFactor               : regist
 RWTexture2D<float3>                         SpecularFactor              : register(u9);
 #       else
 RWTexture2D<float3>                         SpecularAlbedo              : register(u5);
-RWTexture2D<float>                          SpecularHitDistance         : register(u6);
+RWTexture2D<float4>                         SpecularHitDistance         : register(u6);
 #       endif
 
 #   endif

@@ -42,7 +42,7 @@ RWTexture2D<float4>                         Output                      : regist
 
 #       if defined(DLSS_RR)
 RWTexture2D<float3>                         SpecularAlbedo              : register(u1);
-RWTexture2D<float>                          SpecularHitDistance         : register(u2);
+RWTexture2D<float4>                         SpecularHitDistance         : register(u2);
 #       endif // DLSS_RR
 
 #   endif // RAW_RADIANCE

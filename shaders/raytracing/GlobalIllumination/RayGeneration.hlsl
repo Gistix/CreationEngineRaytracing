@@ -106,7 +106,7 @@ void Main()
         
 #       if defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-        SpecularHitDistance[idx] = RAY_TMAX;
+        SpecularHitDistance[idx] = 0;
 #       endif // DLSS_RR
 #   endif // !RAW_RADIANCE
         
@@ -193,7 +193,8 @@ void Main()
      float diffHitDist = 0;     
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #else
-    float specHitDist = RAY_TMAX;
+    float specHitDist = 0.0f;
+    float3 specDir = 0.0f;
 #endif
     
     [loop]
@@ -385,7 +386,10 @@ void Main()
                 accumulatedHitDist = payload.hitDistance;
 #else
             if (j == 0 && isSpecular)
+            {
                 specHitDist = min(specHitDist, payload.hitDistance);
+                specDir = direction;
+            }
 #endif                      
             
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
@@ -541,7 +545,7 @@ void Main()
     Output[idx] = float4(radiance, 1.0f);
     
 #       if defined(DLSS_RR) 
-    SpecularHitDistance[idx] = specHitDist;
+    SpecularHitDistance[idx] = float4(specHitDist, specDir);
 #       endif // DLSS_RR
     
 #   endif // RAW_RADIANCE
