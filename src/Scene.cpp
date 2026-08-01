@@ -494,7 +494,8 @@ float Scene::GetResolutionScale() const
 	if (m_Settings.GeneralSettings.Mode != Mode::GlobalIllumination)
 		return 1.0f;
 
-	return (m_Settings.GeneralSettings.Denoiser == Denoiser::NRD)
-		? m_Settings.RaytracingSettings.ResolutionScale
-		: 1.0f;
+	if (m_Settings.GeneralSettings.Denoiser != Denoiser::NRD)
+		return 1.0f;
+
+	return m_Settings.RaytracingSettings.ResolutionScale;
 }

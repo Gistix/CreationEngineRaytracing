@@ -499,10 +499,11 @@ uint2 Renderer::GetDynamicResolution()
 uint2 Renderer::GetScaledDynamicResolution()
 {
 	const float scale = Scene::GetSingleton()->GetResolutionScale();
+	const uint2 dynamicResolution = GetDynamicResolution();
 
 	return {
-		static_cast<uint32_t>(m_RenderSize.x * m_DynamicResolutionRatio.x * scale),
-		static_cast<uint32_t>(m_RenderSize.y * m_DynamicResolutionRatio.y * scale)
+		eastl::max(1u, static_cast<uint32_t>(std::ceil(dynamicResolution.x * scale))),
+		eastl::max(1u, static_cast<uint32_t>(std::ceil(dynamicResolution.y * scale)))
 	};
 }
 

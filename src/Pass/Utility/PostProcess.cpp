@@ -20,15 +20,18 @@ namespace Pass::Utility
 
 	void PostProcess::SettingsChanged(const Settings& settings)
 	{
-		m_GenerateSpecularMotionVectors = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
-		m_WriteDownscaledInputs = (settings.GeneralSettings.Denoiser == Denoiser::NRD &&
+		auto generateSpecMV = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+
+		auto writeDownscaled = (settings.GeneralSettings.Denoiser == Denoiser::NRD &&
 		                          settings.GeneralSettings.Mode == Mode::GlobalIllumination &&
 		                          settings.RaytracingSettings.ResolutionScale != 1.0f);
 
-		m_Enabled = m_GenerateSpecularMotionVectors || m_WriteDownscaledInputs;
+		m_Enabled = generateSpecMV || writeDownscaled;
 
-		if (m_GenerateSpecularMotionVectors != m_CompiledSpecularMotionVectors ||
-		    m_WriteDownscaledInputs != m_CompiledDownscaledInputs) {
+		if (generateSpecMV != m_GenerateSpecularMotionVectors || writeDownscaled != m_WriteDownscaledInputs) {
+			m_GenerateSpecularMotionVectors = generateSpecMV;
+			m_WriteDownscaledInputs = writeDownscaled;
+
 			CreatePipeline();
 			m_BindingSetDirty.fill(true);
 		}
@@ -58,6 +61,7 @@ namespace Pass::Utility
 		eastl::vector<DxcDefine> defines;
 		if (m_GenerateSpecularMotionVectors)
 			defines.push_back({ L"GENERATE_SPECULAR_MOTION_VECTORS", L"1" });
+
 		if (m_WriteDownscaledInputs)
 			defines.push_back({ L"WRITE_DOWNSCALED_NRD_INPUTS", L"1" });
 
@@ -70,9 +74,6 @@ namespace Pass::Utility
 			.addBindingLayout(m_BindingLayout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
-
-		m_CompiledSpecularMotionVectors = m_GenerateSpecularMotionVectors;
-		m_CompiledDownscaledInputs = m_WriteDownscaledInputs;
 	}
 
 	void PostProcess::ResolutionChanged([[maybe_unused]] uint2 resolution)

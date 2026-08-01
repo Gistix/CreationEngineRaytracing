@@ -112,7 +112,7 @@ namespace Pass::Common
 		CheckBindings();
 
 		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
-		auto resolution = GetRenderer()->GetResolution();
+		auto resolution = GetRenderer()->GetDynamicResolution();
 
 		nvrhi::ComputeState state;
 		state.pipeline = m_ComputePipeline;

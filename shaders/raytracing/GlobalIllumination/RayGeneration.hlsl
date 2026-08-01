@@ -388,8 +388,11 @@ void Main()
 #else
             if (j == 0 && isSpecular)
             {
-                specHitDist = min(specHitDist, payload.hitDistance);
-                specDir = direction;
+                if (specHitDist == 0.0f || payload.hitDistance < specHitDist || i == 0)
+                {
+                    specHitDist = payload.hitDistance;               
+                    specDir = direction;
+                }
             }
 #endif                      
             

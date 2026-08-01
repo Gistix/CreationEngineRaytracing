@@ -47,24 +47,30 @@ float4 SampleJBUTexel4(
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {
-    const uint2 size = Camera.ScreenSize;
+    const uint2 size = Camera.RenderSize;
     
     if (any(idx >= size))
         return;
     
-    const float2 uv = (float2(idx) + 0.5f) / float2(Camera.ScreenSize);
-    const float2 giUV = uv * (float2(Camera.RenderSize) / float2(Camera.ScreenSize)) * Raytracing.ResolutionScale;
+    // Every texture is allocated at ScreenSize. The engine populates the G-buffer
+    // only in its top-left RenderSize region, so keep all G-buffer UVs in the
+    // screen-sized backing-texture coordinate space.
+    const float2 screenUV = (float2(idx) + 0.5f) / float2(Camera.ScreenSize);
+
+    // GI occupies the top-left ceil(RenderSize * ResolutionScale) region of its
+    // screen-sized textures. Scaling screenUV maps each render pixel to that
+    // populated GI region without changing the RenderSize output coverage.
+    const float2 giUV = screenUV * Raytracing.ResolutionScale;
 
     float4 diffuseIndirect = DiffuseIndirect.SampleLevel(LinearClampSampler, giUV, 0);
     float4 specularIndirect = SpecularIndirect.SampleLevel(LinearClampSampler, giUV, 0);
 
     if (Raytracing.ResolutionScale < 1.0f) {
         // Joint bilateral upsampling: blend the 4 surrounding gi texels weighted by
-        // depth (and optionally normal) similarity with the full-res surface.
-        const float2 fullResSize = float2(Camera.RenderSize);
-        const int2 maxTexel = int2(ceil(fullResSize * Raytracing.ResolutionScale)) - 1;
+        // depth (and optionally normal) similarity with the render-resolution surface.
+        const int2 maxTexel = int2(ceil(float2(Camera.RenderSize) * Raytracing.ResolutionScale)) - 1;
         
-        const float2 samplePos = giUV * fullResSize - 0.5f;
+        const float2 samplePos = giUV * float2(Camera.ScreenSize) - 0.5f;
         const int2 base = int2(floor(samplePos));
 
         const float2 f = frac(samplePos);
@@ -105,20 +111,20 @@ void Main(uint2 idx : SV_DispatchThreadID)
     diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
     specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);
 
-    // Full-res material factors, mirroring NRD_MaterialFactors with the same gbuffer
-    // inputs the GI pass used for the low-res demodulation (albedo, metalness from
-    // GNMAO.y, roughness, shading normal, view direction).
-    const float depth = FullResDepth.SampleLevel(PointClampSampler, uv, 0);
+    // Reconstruct material factors at render resolution, using the same G-buffer
+    // inputs as NRD_MaterialFactors (albedo, metalness from GNMAO.y, roughness,
+    // shading normal, and view direction).
+    const float depth = FullResDepth.SampleLevel(PointClampSampler, screenUV, 0);
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
-    const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
+    const float3 positionVS = ScreenToViewPosition(screenUV, depthVS, Camera.NDCToView);
     const float3 viewDirection = normalize(-ViewToWorldPosition(positionVS, Camera.ViewInverse));
 
-    const float4 normalRoughness = FullResNormalRoughness.SampleLevel(PointClampSampler, uv, 0);
+    const float4 normalRoughness = FullResNormalRoughness.SampleLevel(PointClampSampler, screenUV, 0);
     const float3 normal = normalRoughness.xyz;
     const float roughness = PBR::Roughness(saturate(normalRoughness.w), Raytracing.Roughness.x, Raytracing.Roughness.y);
 
-    const float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(PointClampSampler, uv, 0).rgb);
-    const float metalness = Remap(saturate(GNMAO.SampleLevel(PointClampSampler, uv, 0).y), Raytracing.Metalness.x, Raytracing.Metalness.y);
+    const float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(PointClampSampler, screenUV, 0).rgb);
+    const float metalness = Remap(saturate(GNMAO.SampleLevel(PointClampSampler, screenUV, 0).y), Raytracing.Metalness.x, Raytracing.Metalness.y);
 
     const float3 diffuseAlbedo = albedo * (1.0f - metalness);
     const float3 F0 = PBR::F0(albedo, metalness);
