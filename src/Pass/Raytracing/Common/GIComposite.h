@@ -22,6 +22,7 @@ namespace Pass::Common
 	{
 		Pass::SceneTLAS* m_SceneTLAS = nullptr;
 		nvrhi::SamplerHandle m_LinearClampSampler;
+		nvrhi::SamplerHandle m_PointClampSampler;
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
 		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;

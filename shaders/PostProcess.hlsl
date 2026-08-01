@@ -31,25 +31,25 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
         return;
 
     const float2 uv = (float2(pixelPos) + 0.5f) / scaledSize;
-    const float depth = DepthTexture.SampleLevel(PointClampSampler, uv, 0);
 
+    const float2 primaryMV = PrimaryMotionVectors.SampleLevel(PointClampSampler, uv, 0).xy;
+    
+#if WRITE_DOWNSCALED_NRD_INPUTS
     // Point-sample NormalRoughness and MotionVectors for NRD at giResolution
     const float4 normRough = NormalRoughnessTexture.SampleLevel(PointClampSampler, uv, 0);
-    const float2 primaryMV = PrimaryMotionVectors.SampleLevel(PointClampSampler, uv, 0).xy;
 
-    if (Raytracing.ResolutionScale != 1.0f)
-    {
-        OutNormalRoughness[pixelPos] = normRough;
-        OutMotionVectors[pixelPos] = float4(primaryMV, 0, 0);
-    }
+    OutNormalRoughness[pixelPos] = normRough;
+    OutMotionVectors[pixelPos] = float4(primaryMV, 0, 0);
+#endif
 
+#if GENERATE_SPECULAR_MOTION_VECTORS
     // Specular motion vectors for DLSS RR
-    float4 specHitTDir = SpecularHitDistanceTexture.SampleLevel(PointClampSampler, uv, 0);
+    const float depth = DepthTexture.SampleLevel(PointClampSampler, uv, 0);
 
-    float specHitT = specHitTDir.x;
+    float4 specHitTDir = SpecularHitDistanceTexture.SampleLevel(PointClampSampler, uv, 0);
+    const float specHitT = specHitTDir.x;
 
     float2 specMotionVector = primaryMV;
-
     if (depth < 1.0f && specHitT > 1e-3f)
     {
         const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
@@ -63,4 +63,5 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     }
 
     OutSpecularMotionVectors[pixelPos] = specMotionVector;
+#endif
 }

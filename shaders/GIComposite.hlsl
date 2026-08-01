@@ -6,25 +6,43 @@ ConstantBuffer<CameraData> Camera       : register(b0);
 ConstantBuffer<FeatureData> Features    : register(b1);
 ConstantBuffer<RaytracingData> Raytracing : register(b2);
 
-Texture2D<float4> Albedo                : register(t0);
-Texture2D<unorm float4> GNMAO           : register(t1);
-Texture2D<float4> DiffuseIndirect       : register(t2);
-Texture2D<float4> SpecularIndirect      : register(t3);
-
-#if defined(NRD)
-Texture2D<float3> DiffuseFactor         : register(t4);
-Texture2D<float3> SpecularFactor        : register(t5);
-#endif
+Texture2D<float4> DiffuseIndirect       : register(t0);
+Texture2D<float4> SpecularIndirect      : register(t1);
+Texture2D<float> LowResDepth            : register(t2);
+Texture2D<float> FullResDepth           : register(t3);
+Texture2D<float3> Albedo                : register(t4);
+Texture2D<float4> FullResNormalRoughness : register(t5);
+Texture2D<float3> GNMAO                 : register(t6);
 
 RWTexture2D<float4> Output              : register(u0);
 
 SamplerState LinearClampSampler         : register(s0);
+SamplerState PointClampSampler          : register(s1);
 
 #include "include/ColorConversions.hlsli"
-
-#if defined(NRD_REBLUR)
+#include "include/Common.hlsli"
+#include "include/PBR.hlsli"
 #include "include/NRD.hlsli"
-#endif
+
+static const float kJBU_DepthSigma = 0.01f;
+
+float4 SampleJBUTexel4(
+    Texture2D<float4> texture,
+    int2 base,
+    float4 weights,
+    int2 maxTexel)
+{
+    float4 result = 0;
+
+    [unroll]
+    for (uint i = 0; i < 4; i++)
+    {
+        int2 texel = clamp(base + int2(i & 1, i >> 1), 0, maxTexel);
+        result += texture.Load(int3(texel, 0)) * weights[i];
+    }
+
+    return result;
+}
 
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
@@ -40,23 +58,77 @@ void Main(uint2 idx : SV_DispatchThreadID)
     float4 diffuseIndirect = DiffuseIndirect.SampleLevel(LinearClampSampler, giUV, 0);
     float4 specularIndirect = SpecularIndirect.SampleLevel(LinearClampSampler, giUV, 0);
 
-#if defined(NRD)
-    
-#   if defined(NRD_REBLUR)
+    if (Raytracing.ResolutionScale < 1.0f) {
+        // Joint bilateral upsampling: blend the 4 surrounding gi texels weighted by
+        // depth (and optionally normal) similarity with the full-res surface.
+        const float2 fullResSize = float2(Camera.RenderSize);
+        const int2 maxTexel = int2(ceil(fullResSize * Raytracing.ResolutionScale)) - 1;
+        
+        const float2 samplePos = giUV * fullResSize - 0.5f;
+        const int2 base = int2(floor(samplePos));
+
+        const float2 f = frac(samplePos);
+
+        float4 bilinearWeights =
+        {
+            (1.0f - f.x) * (1.0f - f.y),
+            (       f.x) * (1.0f - f.y),
+            (1.0f - f.x) * (       f.y),
+            (       f.x) * (       f.y)
+        };        
+
+        const float depth0 = ScreenToViewDepth(FullResDepth[idx], Camera.CameraData);
+
+        const float sigma = max(kJBU_DepthSigma * depth0, 1e-6f);
+        
+        float4 weights;
+        float weightSum = 0.0f;
+        
+        [unroll]
+        for (uint i = 0; i < 4; ++i) {
+            const int2 texel = clamp(base + int2(i & 1, i >> 1), int2(0, 0), maxTexel);
+            const float depth1 = LowResDepth[texel];
+            
+            float depthWeight = exp(-abs(depth0 - depth1) / sigma);
+            
+            weights[i] = depthWeight * bilinearWeights[i];
+
+            weightSum += weights[i];
+        }
+        
+        weights /= max(weightSum, 1e-6f);
+
+        diffuseIndirect = SampleJBUTexel4(DiffuseIndirect, base, weights, maxTexel);
+        specularIndirect = SampleJBUTexel4(SpecularIndirect, base, weights, maxTexel);
+    }
+
     diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
-    specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect); 
-#   endif
-    
-    diffuseIndirect *= float4(DiffuseFactor.SampleLevel(LinearClampSampler, giUV, 0), 1.0f);
-    specularIndirect *= float4(SpecularFactor.SampleLevel(LinearClampSampler, giUV, 0), 1.0f);
-#else   
-    const float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(LinearClampSampler, uv, 0).rgb);
-    const float metalness = GNMAO.SampleLevel(LinearClampSampler, uv, 0).z;
-    
+    specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);
+
+    // Full-res material factors, mirroring NRD_MaterialFactors with the same gbuffer
+    // inputs the GI pass used for the low-res demodulation (albedo, metalness from
+    // GNMAO.y, roughness, shading normal, view direction).
+    const float depth = FullResDepth.SampleLevel(PointClampSampler, uv, 0);
+    const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
+    const float3 positionVS = ScreenToViewPosition(uv, depthVS, Camera.NDCToView);
+    const float3 viewDirection = normalize(-ViewToWorldPosition(positionVS, Camera.ViewInverse));
+
+    const float4 normalRoughness = FullResNormalRoughness.SampleLevel(PointClampSampler, uv, 0);
+    const float3 normal = normalRoughness.xyz;
+    const float roughness = PBR::Roughness(saturate(normalRoughness.w), Raytracing.Roughness.x, Raytracing.Roughness.y);
+
+    const float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(PointClampSampler, uv, 0).rgb);
+    const float metalness = Remap(saturate(GNMAO.SampleLevel(PointClampSampler, uv, 0).y), Raytracing.Metalness.x, Raytracing.Metalness.y);
+
     const float3 diffuseAlbedo = albedo * (1.0f - metalness);
-    
-    diffuseIndirect *= float4(diffuseAlbedo, 1.0f);
-#endif
+    const float3 F0 = PBR::F0(albedo, metalness);
+
+    const float3 Fenv = _NRD_EnvironmentTerm_Rtg(F0, abs(dot(normal, viewDirection)), roughness);
+    const float3 diffFactor = lerp(NRD_MATERIAL_FACTOR_MIN_SCALE.xxx, float3(1.0f, 1.0f, 1.0f), (1.0f - Fenv) * diffuseAlbedo);
+    const float3 specFactor = lerp(NRD_MATERIAL_FACTOR_MIN_SCALE.xxx, float3(1.0f, 1.0f, 1.0f), Fenv * lerp(NRD_ROUGHNESS_FACTOR_MIN_SCALE.xxx, float3(1.0f, 1.0f, 1.0f), roughness));
+
+    diffuseIndirect.rgb *= diffFactor;
+    specularIndirect.rgb *= specFactor;
     
     Output[idx] = float4(diffuseIndirect.rgb + specularIndirect.rgb, 1.0f);
 }

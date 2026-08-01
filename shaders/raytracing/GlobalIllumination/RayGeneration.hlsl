@@ -191,7 +191,7 @@ void Main()
 #endif    
     
 #if defined(NRD)
-     float diffHitDist = 0;     
+     float diffHitDist = 0.0f;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #else
     float specHitDist = 0.0f;
@@ -495,12 +495,12 @@ void Main()
 
 #if defined(NRD)
         float normHitDist = accumulatedHitDist;
-        normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecular ? sourceSurface.Roughness : 1.0);
+        normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, sourceSurface.Roughness);
         
         if (isSpecular) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
         } else {
-            diffHitDist += normHitDist;
+            diffHitDist = diffHitDist == 0.0f ? normHitDist : min(diffHitDist, normHitDist);
         }
 #endif
         

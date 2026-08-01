@@ -20,10 +20,18 @@ namespace Pass::Utility
 
 	void PostProcess::SettingsChanged(const Settings& settings)
 	{
-		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) ||
-		            (settings.GeneralSettings.Denoiser == Denoiser::NRD &&
-		             settings.GeneralSettings.Mode == Mode::GlobalIllumination &&
-		             settings.RaytracingSettings.ResolutionScale != 1.0f);
+		m_GenerateSpecularMotionVectors = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		m_WriteDownscaledInputs = (settings.GeneralSettings.Denoiser == Denoiser::NRD &&
+		                          settings.GeneralSettings.Mode == Mode::GlobalIllumination &&
+		                          settings.RaytracingSettings.ResolutionScale != 1.0f);
+
+		m_Enabled = m_GenerateSpecularMotionVectors || m_WriteDownscaledInputs;
+
+		if (m_GenerateSpecularMotionVectors != m_CompiledSpecularMotionVectors ||
+		    m_WriteDownscaledInputs != m_CompiledDownscaledInputs) {
+			CreatePipeline();
+			m_BindingSetDirty.fill(true);
+		}
 	}
 
 	void PostProcess::CreatePipeline()
@@ -47,8 +55,14 @@ namespace Pass::Utility
 
 		m_BindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
+		eastl::vector<DxcDefine> defines;
+		if (m_GenerateSpecularMotionVectors)
+			defines.push_back({ L"GENERATE_SPECULAR_MOTION_VECTORS", L"1" });
+		if (m_WriteDownscaledInputs)
+			defines.push_back({ L"WRITE_DOWNSCALED_NRD_INPUTS", L"1" });
+
 		winrt::com_ptr<IDxcBlob> blob;
-		ShaderUtils::CompileShader(blob, L"data/shaders/PostProcess.hlsl", {}, L"cs_6_5", L"main");
+		ShaderUtils::CompileShader(blob, L"data/shaders/PostProcess.hlsl", defines, L"cs_6_5", L"main");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
@@ -56,6 +70,9 @@ namespace Pass::Utility
 			.addBindingLayout(m_BindingLayout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+
+		m_CompiledSpecularMotionVectors = m_GenerateSpecularMotionVectors;
+		m_CompiledDownscaledInputs = m_WriteDownscaledInputs;
 	}
 
 	void PostProcess::ResolutionChanged([[maybe_unused]] uint2 resolution)

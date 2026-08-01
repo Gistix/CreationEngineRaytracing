@@ -52,7 +52,7 @@ struct ReblurSettings
 	// [0; maxAccumulatedFrameNum] - maximum number of linearly accumulated frames for stabilized radiance
 	// "0" disables the stabilization pass
 	// Values ">= maxAccumulatedFrameNum" get clamped to "maxAccumulatedFrameNum"
-	uint32_t maxStabilizedFrameNum = 63;
+	uint32_t maxStabilizedFrameNum = 30;
 
 	// [0; maxFastAccumulatedFrameNum) - number of reconstructed frames after history reset
 	uint32_t historyFixFrameNum = 3;

@@ -11,6 +11,11 @@ namespace Pass::Common
 			nvrhi::SamplerDesc()
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
 			.setAllFilters(true));
+
+		m_PointClampSampler = renderer->GetDevice()->createSampler(
+			nvrhi::SamplerDesc()
+			.setAllAddressModes(nvrhi::SamplerAddressMode::Clamp)
+			.setAllFilters(false));
 	}
 
 	void GIComposite::Initialize()
@@ -25,6 +30,7 @@ namespace Pass::Common
 		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
+			nvrhi::BindingLayoutItem::Sampler(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
@@ -34,8 +40,8 @@ namespace Pass::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(3),
 			nvrhi::BindingLayoutItem::Texture_SRV(4),
 			nvrhi::BindingLayoutItem::Texture_SRV(5),
-			nvrhi::BindingLayoutItem::Texture_UAV(0)
-		};
+			nvrhi::BindingLayoutItem::Texture_SRV(6),
+			nvrhi::BindingLayoutItem::Texture_UAV(0)		};
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
@@ -45,7 +51,7 @@ namespace Pass::Common
 		auto device = GetRenderer()->GetDevice();
 
 		winrt::com_ptr<IDxcBlob> shaderBlob;
-		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/GIComposite.hlsl", { { L"NRD", L"1" }, { L"NRD_REBLUR", L"1" } }, L"cs_6_5");
+		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/GIComposite.hlsl", {}, L"cs_6_5");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
@@ -76,21 +82,21 @@ namespace Pass::Common
 
 		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
 		auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
-		auto* diffuseFactor = textureManager.GetTexture(RenderTarget::DiffuseFactor);
-		auto* specularFactor = textureManager.GetTexture(RenderTarget::SpecularFactor);
 
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings = {
 			nvrhi::BindingSetItem::Sampler(0, m_LinearClampSampler),
+			nvrhi::BindingSetItem::Sampler(1, m_PointClampSampler),
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(2, m_SceneTLAS->GetRaytracingBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(0, renderTargets->albedo),
-			nvrhi::BindingSetItem::Texture_SRV(1, renderTargets->gnmao),
-			nvrhi::BindingSetItem::Texture_SRV(2, diffuseTexture),
-			nvrhi::BindingSetItem::Texture_SRV(3, specularTexture),
-			nvrhi::BindingSetItem::Texture_SRV(4, diffuseFactor),
-			nvrhi::BindingSetItem::Texture_SRV(5, specularFactor),
+			nvrhi::BindingSetItem::Texture_SRV(0, diffuseTexture),
+			nvrhi::BindingSetItem::Texture_SRV(1, specularTexture),
+			nvrhi::BindingSetItem::Texture_SRV(2, textureManager.GetTexture(RenderTarget::ViewDepth)),
+			nvrhi::BindingSetItem::Texture_SRV(3, renderer->GetDepthTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(4, renderTargets->albedo),
+			nvrhi::BindingSetItem::Texture_SRV(5, renderTargets->normalRoughness),
+			nvrhi::BindingSetItem::Texture_SRV(6, renderTargets->gnmao),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 
