@@ -111,7 +111,14 @@ struct Scene
 	inline bool ApplyPathTracingCull() 
 	{ 
 		return IsPathTracingActive() &&
-			m_Settings.ExperimentalSettings.PathTracingCull && 
+			m_Settings.ExperimentalSettings.PathTracingCull != PTCullMode::Disabled && 
+			GetMenuState() != MenuState::None;
+	}
+
+	inline bool ApplyFullPathTracingCull()
+	{
+		return IsPathTracingActive() &&
+			m_Settings.ExperimentalSettings.PathTracingCull == PTCullMode::Full &&
 			GetMenuState() != MenuState::None;
 	}
 

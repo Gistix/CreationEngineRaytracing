@@ -888,8 +888,9 @@ namespace Hooks
 
 	void* DrawWorld_BuildSceneLists::thunk()
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull())
+		if (Scene::GetSingleton()->ApplyFullPathTracingCull())
 			return nullptr;
+
 		return func();
 	}
 
@@ -1123,7 +1124,7 @@ namespace Hooks
 
 		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100854, 107644));
 
-		//stl::detour_thunk<DrawWorld_BuildSceneLists>(REL::RelocationID(35630, 36643));
+		stl::detour_thunk<DrawWorld_BuildSceneLists>(REL::RelocationID(35630, 36643));
 
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());

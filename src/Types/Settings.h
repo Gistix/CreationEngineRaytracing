@@ -237,6 +237,13 @@ struct ReSTIRGISettings
 	bool EnableFinalMIS = false;
 };
 
+enum struct PTCullMode : uint32_t
+{
+	Disabled = 0,
+	Enabled = 1,
+	Full = 2
+};
+
 enum struct TextureMode : uint32_t
 {
 	Share = 0,
@@ -245,7 +252,7 @@ enum struct TextureMode : uint32_t
 
 struct ExperimentalSettings
 {
-	bool PathTracingCull = true;
+	PTCullMode PathTracingCull = PTCullMode::Enabled;
 	TextureMode TextureMode = TextureMode::Share;
 	uint32_t TextureCutOff = 0;
 	bool GlobalLights = false;
