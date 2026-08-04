@@ -91,15 +91,11 @@ namespace Pass::Raytracing
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // ViewZ
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(3)); // Diffuse Factor
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Specular Factor
 		}
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1));
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // Diffuse Hit Distance
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(3)); // Specular Hit Distance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Diffuse Hit Distance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // Specular Hit Distance
 		}
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
@@ -283,13 +279,9 @@ namespace Pass::Raytracing
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::SpecularFactor)));
 		} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRDiffuseRayDirHitDist)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::RRSpecularRayDirHitDist)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::RRDiffuseRayDirHitDist)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRSpecularRayDirHitDist)));
 		}
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);

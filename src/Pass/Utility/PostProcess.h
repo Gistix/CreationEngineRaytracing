@@ -11,6 +11,7 @@ namespace Pass::Utility
 	class PostProcess : public RenderPass
 	{
 		Mode m_Mode;
+		Denoiser m_Denoiser = Denoiser::None;
 		Pass::SceneTLAS* m_SceneTLAS = nullptr;
 		nvrhi::SamplerHandle m_PointClampSampler;
 		nvrhi::ShaderHandle m_ComputeShader;

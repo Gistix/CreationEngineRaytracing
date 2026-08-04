@@ -84,10 +84,7 @@ void Main()
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
-#if defined(RAW_RADIANCE) && defined(NRD)
-    const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0);   
-    ViewDepth[idx] = ScreenToViewDepth(depthJittered, Camera.CameraData);
-#endif 
+
     
     [branch]
     if (depthVS < FP_VIEW_Z || depth >= SKY_Z)
@@ -106,7 +103,6 @@ void Main()
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         
 #       if defined(DLSS_RR)
-        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         DiffuseHitDistance[idx] = 0;
         SpecularHitDistance[idx] = 0;
 #       endif // DLSS_RR
@@ -152,12 +148,7 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);     
 
-#if !(defined(SHARC) && SHARC_UPDATE)
-#   if defined(DLSS_RR)
-    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-    SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
-#   endif    
-#endif   
+
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
@@ -560,8 +551,7 @@ void Main()
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
     
-    DiffuseFactor[idx] = diffFactor;
-    SpecularFactor[idx] = specFactor;  
+
     
 #       else // !NRD
     DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);
