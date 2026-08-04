@@ -161,7 +161,6 @@ void Main()
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
-        DiffuseHitDistance[idx] = 0;
         SpecularHitDistance[idx] = 0;
 #       endif
 #   endif
@@ -179,7 +178,6 @@ void Main()
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-        DiffuseHitDistance[idx] = 0;
         SpecularHitDistance[idx] = 0;                
 #       endif              
 #   endif       
@@ -271,7 +269,6 @@ void Main()
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
 #           else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-        DiffuseHitDistance[idx] = 0;
         SpecularHitDistance[idx] = 0;
 #           endif  
 #       endif
@@ -750,10 +747,7 @@ void Main()
      float diffHitDist = 0;     
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #elif defined(DLSS_RR)
-    float diffHitDist = 0.0f;
-    float3 diffDir = 0.0f;
     float specHitDist = 0.0f;
-    float3 specDir = 0.0f;
 #endif
 
     RayDesc ray;
@@ -988,19 +982,8 @@ void Main()
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
 #elif defined(DLSS_RR)
-            if (j == 0)
-            {
-                if (isSpecularSample)
-                {
-                    specHitDist = payload.hitDistance;
-                    specDir = direction;
-                }
-                else
-                {
-                    diffHitDist = payload.hitDistance;
-                    diffDir = direction;
-                }
-            }
+            if (isSpecularSample)
+                specHitDist = payload.hitDistance;
 #endif               
             
             if (!payload.Hit())
@@ -1319,8 +1302,7 @@ void Main()
         float3 totalRadiance = spCtx.GetAllRadiance(idx, true);
         Output[idx] = float4(LLTrueLinearToGamma(totalRadiance), 1.0f);
 #   if defined(DLSS_RR)    
-        DiffuseHitDistance[idx] = float4(diffDir, diffHitDist);
-        SpecularHitDistance[idx] = float4(specDir, specHitDist);
+        SpecularHitDistance[idx] = specHitDist;
 #   endif
     }
 #elif !(defined(SHARC) && SHARC_UPDATE)
@@ -1355,8 +1337,7 @@ void Main()
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
 
 #   if defined(DLSS_RR)
-    DiffuseHitDistance[idx] = float4(diffDir, diffHitDist);
-    SpecularHitDistance[idx] = float4(specDir, specHitDist);     
+    SpecularHitDistance[idx] = specHitDist;     
 #   endif    
 #endif
         

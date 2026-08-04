@@ -98,12 +98,11 @@ void UpdateSettings(Settings settings)
 	scene->UpdateSettings(settings);
 }
 
-void GetRRInput(ID3D12Resource*& specularAlbedo, ID3D12Resource*& diffuseMotionVectors, ID3D12Resource*& specularMotionVectors)
+void GetRRInput(ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
 	specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
-	diffuseMotionVectors = textureManager.GetTexture(RenderTarget::RRDiffuseRayDirHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
-	specularMotionVectors = textureManager.GetTexture(RenderTarget::RRSpecularRayDirHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+	specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
 }
 
 void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)

@@ -51,11 +51,8 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 		case RenderTarget::SpecularFactor: // RRSpecularAlbedo
 			desc.format = nvrhi::Format::R11G11B10_FLOAT;
 			break;
-		case RenderTarget::RRDiffuseRayDirHitDist:
-			desc.format = nvrhi::Format::RGBA32_FLOAT;
-			break;
-		case RenderTarget::RRSpecularRayDirHitDist:
-			desc.format = nvrhi::Format::RGBA32_FLOAT;
+		case RenderTarget::RRSpecularHitDist:
+			desc.format = nvrhi::Format::R32_FLOAT;
 			break;
 		case RenderTarget::DownscaledMotionVectors:
 			desc.format = nvrhi::Format::RG16_FLOAT;
