@@ -20,21 +20,11 @@ namespace Pass::Utility
 
 	void PostProcess::SettingsChanged(const Settings& settings)
 	{
-		auto generateSpecMV = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
-
-		auto writeDownscaled = (settings.GeneralSettings.Denoiser == Denoiser::NRD &&
-		                          settings.GeneralSettings.Mode == Mode::GlobalIllumination &&
-		                          settings.RaytracingSettings.ResolutionScale != 1.0f);
-
-		m_Enabled = generateSpecMV || writeDownscaled;
-
-		if (generateSpecMV != m_GenerateSpecularMotionVectors || writeDownscaled != m_WriteDownscaledInputs) {
-			m_GenerateSpecularMotionVectors = generateSpecMV;
-			m_WriteDownscaledInputs = writeDownscaled;
-
-			CreatePipeline();
-			m_BindingSetDirty.fill(true);
-		}
+		m_Enabled = (
+			settings.GeneralSettings.Mode == Mode::GlobalIllumination && 
+			settings.GeneralSettings.Denoiser == Denoiser::NRD && 
+			settings.RaytracingSettings.ResolutionScale != 1.0f
+		);
 	}
 
 	void PostProcess::CreatePipeline()
@@ -50,23 +40,15 @@ namespace Pass::Utility
 			nvrhi::BindingLayoutItem::Texture_SRV(0),            // DepthTexture
 			nvrhi::BindingLayoutItem::Texture_SRV(1),            // NormalRoughnessTexture
 			nvrhi::BindingLayoutItem::Texture_SRV(2),            // PrimaryMotionVectors
-			nvrhi::BindingLayoutItem::Texture_SRV(3),            // SpecularHitDistanceTexture
-			nvrhi::BindingLayoutItem::Texture_UAV(0),            // OutSpecularMotionVectors
-			nvrhi::BindingLayoutItem::Texture_UAV(1),            // OutNormalRoughness
-			nvrhi::BindingLayoutItem::Texture_UAV(2)             // OutMotionVectors
+			nvrhi::BindingLayoutItem::Texture_UAV(0),            // OutNormalRoughness
+			nvrhi::BindingLayoutItem::Texture_UAV(1)             // OutMotionVectors
 		};
 
 		m_BindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
-		eastl::vector<DxcDefine> defines;
-		if (m_GenerateSpecularMotionVectors)
-			defines.push_back({ L"GENERATE_SPECULAR_MOTION_VECTORS", L"1" });
-
-		if (m_WriteDownscaledInputs)
-			defines.push_back({ L"WRITE_DOWNSCALED_NRD_INPUTS", L"1" });
 
 		winrt::com_ptr<IDxcBlob> blob;
-		ShaderUtils::CompileShader(blob, L"data/shaders/PostProcess.hlsl", defines, L"cs_6_5", L"main");
+		ShaderUtils::CompileShader(blob, L"data/shaders/PostProcess.hlsl", {}, L"cs_6_5", L"main");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
@@ -111,10 +93,8 @@ namespace Pass::Utility
 			nvrhi::BindingSetItem::Texture_SRV(0, sourceDepth),
 			nvrhi::BindingSetItem::Texture_SRV(1, renderTargets ? renderTargets->normalRoughness.Get() : nullptr),
 			nvrhi::BindingSetItem::Texture_SRV(2, sourceMotionVectors),
-			nvrhi::BindingSetItem::Texture_SRV(3, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)),
-			nvrhi::BindingSetItem::Texture_UAV(0, textureManager.GetTexture(RenderTarget::RRSpecularMotionVectors)),
-			nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::DownscaledNormalRoughness)),
-			nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::DownscaledMotionVectors))
+			nvrhi::BindingSetItem::Texture_UAV(0, textureManager.GetTexture(RenderTarget::DownscaledNormalRoughness)),
+			nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::DownscaledMotionVectors))
 		};
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);

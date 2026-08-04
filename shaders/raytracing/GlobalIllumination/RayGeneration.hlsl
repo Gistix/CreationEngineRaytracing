@@ -107,6 +107,7 @@ void Main()
         
 #       if defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
+        DiffuseHitDistance[idx] = 0;
         SpecularHitDistance[idx] = 0;
 #       endif // DLSS_RR
 #   endif // !RAW_RADIANCE
@@ -194,6 +195,8 @@ void Main()
      float diffHitDist = 0.0f;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #else
+    float diffHitDist = 0.0f;
+    float3 diffDir = 0.0f;
     float specHitDist = 0.0f;
     float3 specDir = 0.0f;
 #endif
@@ -386,12 +389,23 @@ void Main()
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
 #else
-            if (j == 0 && isSpecular)
+            if (j == 0)
             {
-                if (specHitDist == 0.0f || payload.hitDistance < specHitDist || i == 0)
+                if (isSpecular)
                 {
-                    specHitDist = payload.hitDistance;               
-                    specDir = direction;
+                    if (specHitDist == 0.0f || payload.hitDistance < specHitDist || i == 0)
+                    {
+                        specHitDist = payload.hitDistance;
+                        specDir = direction;
+                    }
+                }
+                else if (!isSpecular)
+                {
+                    if (diffHitDist == 0.0f || payload.hitDistance < diffHitDist || i == 0)
+                    {
+                        diffHitDist = payload.hitDistance;
+                        diffDir = direction;
+                    }
                 }
             }
 #endif                      
@@ -549,8 +563,9 @@ void Main()
     Output[idx] = float4(radiance, 1.0f);
     
 #       if defined(DLSS_RR) 
-    SpecularHitDistance[idx] = float4(specHitDist, specDir);
-#       endif // DLSS_RR
+    DiffuseHitDistance[idx] = float4(diffDir, diffHitDist);
+    SpecularHitDistance[idx] = float4(specDir, specHitDist);
+#endif // DLSS_RR
     
 #   endif // RAW_RADIANCE
 #endif    

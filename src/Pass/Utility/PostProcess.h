@@ -19,10 +19,6 @@ namespace Pass::Utility
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
-
-		bool m_GenerateSpecularMotionVectors = false;
-		bool m_WriteDownscaledInputs = false;
-
 	public:
 		PostProcess(Renderer* renderer, Mode mode, Pass::SceneTLAS* sceneTLAS);
 

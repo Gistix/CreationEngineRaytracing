@@ -114,7 +114,8 @@ namespace Pass
 			}
 			else {
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // Specular Albedo (EnvBRDF)
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Specular Hit Distance
+				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Diffuse Hit Distance
+				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(7)); // Specular Hit Distance
 			}
 		}
 
@@ -351,7 +352,8 @@ namespace Pass
 			}
 			else {
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
+				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::RRDiffuseRayDirHitDist)));
+				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, textureManager.GetTexture(RenderTarget::RRSpecularRayDirHitDist)));
 			}
 		}
 
