@@ -84,7 +84,12 @@ namespace ShaderCache
 
 		CacheHeader header{};
 		file.read(reinterpret_cast<char*>(&header), sizeof(CacheHeader));
-		if (!file || header.magic != kCacheFileMagic || header.version != kCacheVersion) {
+		if (!file) {
+			logger::warn("ShaderCache - Failed to read cache header from {}", cacheFilePath.string());
+			return nullptr;
+		}
+		if (header.magic != kCacheFileMagic || header.version != kCacheVersion) {
+			logger::warn("ShaderCache - Invalid cache header (magic {:08x}, version {}) in {}", header.magic, header.version, cacheFilePath.string());
 			return nullptr;
 		}
 
@@ -134,6 +139,9 @@ namespace ShaderCache
 
 		std::error_code ec;
 		std::filesystem::create_directories(cacheFilePath.parent_path(), ec);
+		if (ec) {
+			logger::warn("ShaderCache - Failed to create cache directory {}: {}", cacheFilePath.parent_path().string(), ec.message());
+		}
 
 		// Write to a temporary file first, then rename atomically to prevent
 		// partially-written cache files from persisting after a crash.
@@ -197,9 +205,12 @@ namespace ShaderCache
 #endif
 
 		std::filesystem::path hlslPath(filePath);
-		std::string shaderBaseName = hlslPath.stem().string();
+		// Build the cache filename entirely in wide characters. Narrowing the
+		// stem via path::string() would use the active code page, mangling
+		// non-ASCII shader paths into '?' characters (invalid in Windows
+		// filenames) and varying per locale.
 		uint64_t keyHash = ComputeDiskCacheKeyHash(shaderKey);
-		std::filesystem::path cacheFilePath = cacheDir / std::format("{}_{:016x}.bin", shaderBaseName, keyHash);
+		std::filesystem::path cacheFilePath = cacheDir / std::format(L"{}_{:016x}.bin", hlslPath.stem().wstring(), keyHash);
 		uint64_t configHash = ComputeConfigHash();
 
 		// Preprocess shader with DXC -P to obtain preprocessed text and compute hash.
@@ -219,6 +230,9 @@ namespace ShaderCache
 				auto [it, emplaced] = m_Shaders.try_emplace(shaderKey, std::move(diskBlob));
 				return it->second.get();
 			}
+			logger::debug("ShaderCache::GetShader - Disk cache miss for {}", cacheFilePath.string());
+		} else {
+			logger::warn("ShaderCache::GetShader - Preprocessing failed for {}, falling back to raw compilation (no disk caching)", Util::WStringToString(filePath));
 		}
 
 		// Disk cache miss: compile shader
