@@ -35,12 +35,6 @@ RWTexture2D<float4>                         SpecularOutput              : regist
 
 #   else
 RWTexture2D<float4>                         Output                      : register(u0);
-
-#       if defined(DLSS_RR)
-RWTexture2D<float4>                         DiffuseHitDistance          : register(u1);
-RWTexture2D<float4>                         SpecularHitDistance         : register(u2);
-#       endif // DLSS_RR
-
 #   endif // RAW_RADIANCE
 
 #endif
