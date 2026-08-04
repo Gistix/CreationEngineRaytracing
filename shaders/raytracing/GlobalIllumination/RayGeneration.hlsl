@@ -297,43 +297,40 @@ void Main()
 #if defined(SHARC) && SHARC_UPDATE
             SharcSetThroughput(sharcState, throughput);
 #else
-#if RUSSIAN_ROULETTE == 1
-            {
-                const float rrProb = 1.0f - min(1.0f, Color::RGBToLuminance(throughput));
-
-                if (Random(randomSeed) < rrProb)
-                    break;
-
-                throughput /= (1.0f - rrProb);
-            }
-#elif RUSSIAN_ROULETTE == 2
-            {
-                float3 throughputColor;
-
-#   if defined(RAW_RADIANCE) && !defined(NRD)
-                // Apply russian roulette based on the original throughput
-                throughputColor = demodulatedThroughput ? originalThroughput : throughput;
-#   else
-                throughputColor = throughput;
+#   if RUSSIAN_ROULETTE != 0          
+#       if defined(RAW_RADIANCE) && !defined(NRD)
+        // Apply russian roulette based on the original throughput
+        float3 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
+#       else
+        float3 throughputColor = throughput;
+#       endif            
 #   endif
+            
+#   if RUSSIAN_ROULETTE == 1
+        const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
+        const float rrProb = min(rrVal, 0.95f);
+
+            if (Random(randomSeed) < rrProb)
+                break;
+
+            throughput /= (1.0f - rrProb);
+#   elif RUSSIAN_ROULETTE == 2
+            const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
+            float rrProb = saturate(0.85 - rrVal);
+            rrProb *= rrProb;
+
+            rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
+
+            if (Random(randomSeed) < rrProb)
+                break;
+
+            throughput /= (1.0f - rrProb);
                 
-                const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
-                float rrProb = saturate(0.85 - rrVal);
-                rrProb *= rrProb;
-
-                rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
-
-                if (Random(randomSeed) < rrProb)
-                    break;
-
-                throughput /= (1.0f - rrProb);
-                
-#   if defined(RAW_RADIANCE) && !defined(NRD)
-                if (demodulatedThroughput)
-                    originalThroughput /= (1.0f - rrProb);
-#   endif                
-            }
-#endif
+#       if defined(RAW_RADIANCE) && !defined(NRD)
+            if (demodulatedThroughput)
+                originalThroughput /= (1.0f - rrProb);
+#       endif                
+#   endif
 #endif
             
 #if defined(SHARC)
