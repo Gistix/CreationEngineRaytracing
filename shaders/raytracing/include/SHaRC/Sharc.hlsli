@@ -19,6 +19,10 @@
 
 #       define SHARC_SEPARATE_EMISSIVE 1
 
+#       define SHARC_ENABLE_SH_ENCODING 0
+
+#       define SHARC_USE_FP16 1
+
 #       include "Raytracing/Include/SHARC/SharcCommon.h"
 
 #   endif // SHARC_DEPENDENCY_HLSLI
