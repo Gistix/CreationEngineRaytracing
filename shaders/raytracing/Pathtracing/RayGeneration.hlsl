@@ -773,6 +773,8 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
+        AdvanceSamplerSample(randomSeed, i);
+
 #if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif

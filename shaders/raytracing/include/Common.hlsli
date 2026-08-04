@@ -7,6 +7,7 @@
 #include "raytracing/include/Materials/TexLODHelpers.hlsli"
 
 #include "include/Common.hlsli"
+#include "raytracing/include/Sobol.hlsli"
 
 #ifndef MAX_BOUNCES
 #   define MAX_BOUNCES (2)
@@ -72,20 +73,38 @@ RayDesc SetupPrimaryRay(uint2 idx, uint2 size, CameraData camera)
 
 uint InitRandomSeed(uint2 coord, uint2 size, uint frameCount)
 {
-    return coord.x + coord.y * size.x + frameCount * 719393;
-}
+    uint pixelIdx = coord.y * size.x + coord.x;
+    // Spatial hash to derive unique per-pixel scramble key
+    uint spatialKey = pixelIdx * 0x9E3779B1u;
+    spatialKey ^= spatialKey >> 13;
+    spatialKey *= 0x5BD1E995u;
+    spatialKey ^= spatialKey >> 15;
 
-uint PCGHash(uint seed)
-{
-    uint state = seed * 747796405u + 2891336453u;
-    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
+    // Base temporal sample index progression across frames
+    uint baseSampleIdx = (frameCount * 1u) & 0xFFu;
+
+    return SobolPackSeed(spatialKey, baseSampleIdx, 0u);
 }
 
 float Random(inout uint seed)
 {
-    seed = PCGHash(seed);
-    return float(seed) / 4294967296.0; // Divide by 2^32
+    uint key = SobolUnpackKey(seed);
+    uint sampleIdx = SobolUnpackSample(seed);
+    uint dim = SobolUnpackDim(seed);
+
+    float result = SobolSample(sampleIdx, dim, key);
+
+    seed = SobolPackSeed(key, sampleIdx, dim + 1u);
+    return result;
+}
+
+// Reset dimension counter and advance sample index for outer sample iterations.
+void AdvanceSamplerSample(inout uint seed, uint sampleIndex)
+{
+    uint key = SobolUnpackKey(seed);
+    uint baseSampleIdx = SobolUnpackSample(seed);
+    uint currentSampleIdx = (baseSampleIdx + sampleIndex) & 0xFFu;
+    seed = SobolPackSeed(key, currentSampleIdx, 0u);
 }
 
 float ComputeRayConeTriangleLODValue(in Vertex v0, in Vertex v1, in Vertex v2, float3x3 world)
