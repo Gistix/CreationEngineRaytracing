@@ -170,8 +170,12 @@ void Main()
     MonteCarlo::BRDFWeight brdfWeight;
 #endif
 
-    float3 radiance = 0;
-    bool isSpecular = false;
+#if defined(RAW_RADIANCE)
+    float3 diffuseRadiance = float3(0.0f, 0.0f, 0.0f);
+    float3 specularRadiance = float3(0.0f, 0.0f, 0.0f);
+#else
+    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+#endif
 
     RayDesc ray;
     Payload payload;
@@ -194,7 +198,7 @@ void Main()
 #if defined(NRD)
      float diffHitDist = 0.0f;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
-#else
+#elif defined(DLSS_RR) || defined(RAW_RADIANCE)
     float diffHitDist = 0.0f;
     float3 diffDir = 0.0f;
     float specHitDist = 0.0f;
@@ -223,6 +227,7 @@ void Main()
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
         float materialRoughnessPrev = 0.0f;
         bool isEnter = true;
+        bool isSpecularSample = false;
 
         // Water volume tracking for Beer-Lambert absorption
         bool insideWaterVolume = false;
@@ -254,10 +259,10 @@ void Main()
                 break;            
  
             if (j == 0)
-                isSpecular = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
+                isSpecularSample = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
             
 #if defined(RAW_RADIANCE) && !defined(NRD)
-            const bool demodulatedThroughput = (j == 0 && !isSpecular);
+            const bool demodulatedThroughput = (j == 0 && !isSpecularSample);
 #endif
             
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
@@ -385,10 +390,10 @@ void Main()
 #if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
-#else
+#elif defined(DLSS_RR) || defined(RAW_RADIANCE)
             if (j == 0)
             {
-                if (isSpecular)
+                if (isSpecularSample)
                 {
                     if (specHitDist == 0.0f || payload.hitDistance < specHitDist || i == 0)
                     {
@@ -396,7 +401,7 @@ void Main()
                         specDir = direction;
                     }
                 }
-                else if (!isSpecular)
+                else
                 {
                     if (diffHitDist == 0.0f || payload.hitDistance < diffHitDist || i == 0)
                     {
@@ -511,14 +516,21 @@ void Main()
         float normHitDist = accumulatedHitDist;
         normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, sourceSurface.Roughness);
         
-        if (isSpecular) {
+        if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
         } else {
             diffHitDist = diffHitDist == 0.0f ? normHitDist : min(diffHitDist, normHitDist);
         }
 #endif
         
+#if defined(RAW_RADIANCE)
+        if (isSpecularSample)
+            specularRadiance += sampleRadiance;
+        else
+            diffuseRadiance += sampleRadiance;
+#else
         radiance += sampleRadiance;
+#endif
 
 #if defined(SHARC) && SHARC_UPDATE
         return;
@@ -529,13 +541,15 @@ void Main()
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
 #endif
     
+#if defined(RAW_RADIANCE)
+    diffuseRadiance /= MAX_SAMPLES;
+    specularRadiance /= MAX_SAMPLES;
+#else
     radiance /= MAX_SAMPLES;
+#endif
        
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
-    float3 diffuseRadiance = isSpecular ? 0.0.xxx : radiance;
-    float3 specularRadiance = isSpecular ? radiance : 0.0.xxx;
- 
 #       if defined(NRD)
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
@@ -543,10 +557,8 @@ void Main()
     diffuseRadiance /= diffFactor;
     specularRadiance /= specFactor;
     
-#           if defined(NRD)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
-#           endif // NRD 
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;  
@@ -556,13 +568,13 @@ void Main()
     SpecularOutput[idx] = float4(specularRadiance, specHitDist);    
 #       endif // NRD
     
-#   else // ! RAW_RADIANCE
+#   else // !RAW_RADIANCE
     Output[idx] = float4(radiance, 1.0f);
     
 #       if defined(DLSS_RR) 
     DiffuseHitDistance[idx] = float4(diffDir, diffHitDist);
     SpecularHitDistance[idx] = float4(specDir, specHitDist);
-#endif // DLSS_RR
+#       endif // DLSS_RR
     
 #   endif // RAW_RADIANCE
 #endif    

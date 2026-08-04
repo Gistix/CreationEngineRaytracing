@@ -738,14 +738,18 @@ void Main()
     MonteCarlo::BRDFWeight brdfWeight;
 #endif
 
-    float3 radiance = 0;
+#if defined(NRD)
+    float3 diffuseRadiance = float3(0.0f, 0.0f, 0.0f);
+    float3 specularRadiance = float3(0.0f, 0.0f, 0.0f);
+#else
+    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+#endif
     bool isSpecular = false;
-    bool isSpecularSample = false;
     
 #if defined(NRD)
      float diffHitDist = 0;     
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
-#else
+#elif defined(DLSS_RR)
     float diffHitDist = 0.0f;
     float3 diffDir = 0.0f;
     float specHitDist = 0.0f;
@@ -799,6 +803,7 @@ void Main()
         bool arrivedViaDelta = false;
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
+        bool isSpecularSample = false;
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if defined(RESTIR_GI)
@@ -982,10 +987,10 @@ void Main()
 #if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
-#else
+#elif defined(DLSS_RR)
             if (j == 0)
             {
-                if (isSpecular)
+                if (isSpecularSample)
                 {
                     specHitDist = payload.hitDistance;
                     specDir = direction;
@@ -1286,7 +1291,14 @@ void Main()
 #   endif
 #endif        
         
+#if defined(NRD)
+        if (isSpecularSample)
+            specularRadiance += sampleRadiance;
+        else
+            diffuseRadiance += sampleRadiance;
+#else
         radiance += sampleRadiance;
+#endif
 
 #if defined(SHARC) && SHARC_UPDATE
         return;
@@ -1295,9 +1307,11 @@ void Main()
 
 #if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
-#endif    
-    
-    radiance /= MAX_SAMPLES;        
+    diffuseRadiance /= MAX_SAMPLES;
+    specularRadiance /= MAX_SAMPLES;
+#else
+    radiance /= MAX_SAMPLES;
+#endif        
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     // FILL mode output: combine stable radiance (noise-free) with all planes' noisy radiance
@@ -1316,13 +1330,15 @@ void Main()
     {
         float3 primaryWaterAttenuation = exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
         direct *= primaryWaterAttenuation;
+#   if defined(NRD)
+        diffuseRadiance *= primaryWaterAttenuation;
+        specularRadiance *= primaryWaterAttenuation;
+#   else
         radiance *= primaryWaterAttenuation;
+#   endif
     }
     
 #if defined(NRD)
-    float3 diffuseRadiance = isSpecularSample ? 0.0.xxx : radiance;
-    float3 specularRadiance = isSpecularSample ? radiance : 0.0.xxx;
-    
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
 
