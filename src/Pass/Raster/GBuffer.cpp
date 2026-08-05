@@ -27,13 +27,13 @@ namespace Pass::Raster
 			.setAllAddressModes(nvrhi::SamplerAddressMode::Wrap)
 			.setAllFilters(false));
 
-		m_IndirectArgsBuffer = renderer->GetDevice()->createBuffer(nvrhi::BufferDesc()
-			.setByteSize(Constants::NUM_MESHES_MAX * sizeof(nvrhi::DrawIndirectArguments))
-			.setStructStride(sizeof(nvrhi::DrawIndirectArguments))
+		m_IndirectArgsBuffer = RingBuffer(renderer->GetDevice(), nvrhi::BufferDesc()
+			.setByteSize(Constants::NUM_MESHES_MAX * 20)
+			.setStructStride(20)
 			.setCanHaveUAVs(true)
 			.setIsDrawIndirectArgs(true)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::IndirectArgument)
-			.setDebugName("GBuffer Indirect Args"));
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::IndirectArgument),
+			"GBuffer Indirect Args");
 	}
 
 	void GBuffer::ResolutionChanged([[maybe_unused]] uint2 resolution)
@@ -57,6 +57,7 @@ namespace Pass::Raster
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(0),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(1),
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
+			nvrhi::BindingLayoutItem::PushConstants(3, sizeof(uint32_t)),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
@@ -120,6 +121,7 @@ namespace Pass::Raster
 			nvrhi::BindingSetItem::ConstantBuffer(0, scene->GetCameraBuffer()),
 			nvrhi::BindingSetItem::ConstantBuffer(1, m_RaytracingBuffer),
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
+			nvrhi::BindingSetItem::PushConstants(3, sizeof(uint32_t)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(0, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetTransformBuffer()),
@@ -152,7 +154,7 @@ namespace Pass::Raster
 			nvrhi::BindingSetItem::PushConstants(0, sizeof(uint32_t)),
 			nvrhi::BindingSetItem::RawBuffer_SRV(0, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_IndirectArgsBuffer)
+			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_IndirectArgsBuffer.current())
 		};
 
 		m_ArgsBindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_ArgsBindingLayout);
@@ -208,6 +210,7 @@ namespace Pass::Raster
 			pipelineDesc.renderState.depthStencilState.depthFunc = nvrhi::ComparisonFunc::LessOrEqual;
 			pipelineDesc.renderState.rasterState.frontCounterClockwise = true;
 			pipelineDesc.renderState.rasterState.setCullBack();
+			pipelineDesc.setUseIndirectPushConstant(true);
 
 			m_GraphicsPipeline = GetRenderer()->GetDevice()->createGraphicsPipeline(pipelineDesc, fbinfo);
 		}
@@ -264,7 +267,7 @@ namespace Pass::Raster
 				sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 			};
 
-			state.setIndirectParams(m_IndirectArgsBuffer);
+			state.setIndirectParams(m_IndirectArgsBuffer.current());
 
 			state.viewport.addViewportAndScissorRect(fbinfo.getViewport());
 

@@ -182,7 +182,7 @@ struct SurfaceMaker
             boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
         }
         
-            float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+        float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
         if (props.ShaderFlags & ShaderFlags::kVertexColors)
             vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
        

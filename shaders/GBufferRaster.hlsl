@@ -13,6 +13,12 @@ ConstantBuffer<CameraData>        Camera           : register(b0);
 ConstantBuffer<RaytracingData>    Raytracing       : register(b1);
 ConstantBuffer<FeatureData>       Features         : register(b2);
 
+struct DrawConstants
+{
+    uint DrawIndex;
+};
+ConstantBuffer<DrawConstants>     Draw             : register(b3);
+
 StructuredBuffer<Instance>        Instances        : register(t0);
 StructuredBuffer<Mesh>            Meshes           : register(t1);
 StructuredBuffer<Transform>       Transforms       : register(t2);
@@ -162,27 +168,28 @@ struct VertexOut
     float4 Color         : COLOR0;
     float4 LandBlend0    : COLOR1;
     float4 LandBlend1    : COLOR2;  
+    nointerpolation uint GeometrySlot : GEOMETRYSLOT;
     nointerpolation uint MeshIndex : MESHINDEX;
 };
 
-VertexOut MainVS(in uint vertexID : SV_VertexID, in uint instanceID : SV_InstanceID)
+VertexOut MainVS(in uint vertexID : SV_VertexID)
 {
     VertexOut o;
 
-    const uint packed = MeshSlotRemap.Load(instanceID * 4u);
+    const uint packed = MeshSlotRemap.Load(Draw.DrawIndex * 4u);
     const uint geometrySlot = packed & 0xFFFFu;
     const uint instanceIndex = packed >> 16;
 
     Instance instance = Instances[NonUniformResourceIndex(instanceIndex)];
 
     Mesh mesh = Meshes[NonUniformResourceIndex(geometrySlot)];
-    uint meshSlot = mesh.MeshID;
+    const uint meshSlot = mesh.MeshID;
     Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
 
     Properties props = PropertiesBuffer.Load<Properties>(meshSlot * sizeof(Properties));
     
-    uint triangleID = vertexID / 3;
-    uint vertexInTriangle = vertexID % 3;
+    const uint triangleID = vertexID / 3;
+    const uint vertexInTriangle = vertexID % 3;
 
     const uint safePrimitiveIndex = min(triangleID, (uint)mesh.NumTriangles);
     Triangle tri = Triangles[NonUniformResourceIndex(mesh.IndexID)][mesh.TriangleOffset + safePrimitiveIndex];
@@ -210,12 +217,38 @@ VertexOut MainVS(in uint vertexID : SV_VertexID, in uint instanceID : SV_Instanc
     o.Position = clipSpacePosition;
     o.WorldPosition = worldSpacePosition;
     o.TexCoord = vertex.Texcoord0;
-    o.Normal = normalize(mul(objectToWorld3x3, vertex.Normal));
-    o.Bitangent = normalize(mul(objectToWorld3x3, vertex.Bitangent));
-    o.Tangent = normalize(mul(objectToWorld3x3, vertex.Tangent));
-    o.Color = vertex.Color.unpack();
-    o.LandBlend0 = vertex.LandBlend0.unpack();
-    o.LandBlend1 = vertex.LandBlend1.unpack();    
+    
+    const VertexDesc vertexDesc = mesh.VertexDesc;
+    if (vertexDesc.HasFlag(VertexFlags::Normal))
+    {
+        o.Normal = normalize(mul(objectToWorld3x3, vertex.Normal));
+        o.Tangent = normalize(mul(objectToWorld3x3, vertex.Tangent));
+        o.Bitangent = normalize(mul(objectToWorld3x3, vertex.Bitangent));
+    }
+    else
+    {
+        o.Normal = float3(0.0f, 0.0f, 1.0f);
+        o.Tangent = float3(0.0f, 1.0f, 0.0f);
+        o.Bitangent = float3(1.0f, 0.0f, 0.0f);
+    }
+    
+    if (vertexDesc.HasFlag(VertexFlags::Colors))
+        o.Color = vertex.Color.unpack();
+    else
+        o.Color = float4(1.0f, 1.0f, 1.0f, 1.0f);
+    
+    if (vertexDesc.HasFlag(VertexFlags::LandData))
+    {
+        o.LandBlend0 = vertex.LandBlend0.unpack();
+        o.LandBlend1 = vertex.LandBlend1.unpack();
+    }
+    else
+    {
+        o.LandBlend0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        o.LandBlend1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    
+    o.GeometrySlot = geometrySlot;
     o.MeshIndex = meshSlot;
     
     return o;
@@ -232,7 +265,7 @@ PixelOut MainPS(in VertexOut i)
 {
     PixelOut o;
     
-    Mesh mesh = Meshes[i.MeshIndex];
+    Mesh mesh = Meshes[NonUniformResourceIndex(i.GeometrySlot)];
     Properties props = PropertiesBuffer.Load<Properties>(i.MeshIndex * sizeof(Properties));
  
     Surface surface = SurfaceMaker::make(i.WorldPosition, i.TexCoord, i.Normal, i.Tangent, i.Bitangent, i.Color, i.LandBlend0, i.LandBlend1, mesh, props);
@@ -241,7 +274,7 @@ PixelOut MainPS(in VertexOut i)
         discard;
     
     o.Albedo = float4(surface.Albedo, 1.0f);
-    o.NormalRoughness = float4(surface.Normal * 0.5f + 0.5f, surface.Roughness);
+    o.NormalRoughness = float4(surface.Normal, surface.Roughness);
     o.EmissiveMetallic = float4(surface.Emissive, surface.Metallic);
     
     return o;

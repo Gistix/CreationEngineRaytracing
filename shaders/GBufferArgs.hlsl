@@ -8,7 +8,16 @@ cbuffer ArgsConstants : register(b0)
 ByteAddressBuffer MeshSlotRemap : register(t0);
 StructuredBuffer<Mesh> Meshes : register(t1);
 
-RWStructuredBuffer<uint4> IndirectArgs : register(u0);
+struct IndirectCommand
+{
+	uint DrawIndex;
+	uint VertexCount;
+	uint InstanceCount;
+	uint StartVertexLocation;
+	uint StartInstanceLocation;
+};
+
+RWStructuredBuffer<IndirectCommand> IndirectArgs : register(u0);
 
 [numthreads(64, 1, 1)]
 void Main(uint3 dispatchThreadID : SV_DispatchThreadID)
@@ -24,6 +33,12 @@ void Main(uint3 dispatchThreadID : SV_DispatchThreadID)
 
 	const Mesh mesh = Meshes[NonUniformResourceIndex(geometrySlot)];
 
-	// DrawIndirectArguments { vertexCount, instanceCount, startVertexLocation, startInstanceLocation }
-	IndirectArgs[i] = uint4((uint)mesh.NumTriangles * 3u, 1u, 0u, i);
+	IndirectCommand cmd;
+	cmd.DrawIndex = i;
+	cmd.VertexCount = (uint)mesh.NumTriangles * 3u;
+	cmd.InstanceCount = 1u;
+	cmd.StartVertexLocation = 0u;
+	cmd.StartInstanceLocation = 0u;
+
+	IndirectArgs[i] = cmd;
 }

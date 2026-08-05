@@ -233,7 +233,7 @@ void Renderer::InitGBufferOutput()
 	desc.isUAV = true;
 	desc.mipLevels = 1;
 
-	desc.format = nvrhi::Format::R11G11B10_FLOAT;
+	desc.format = nvrhi::Format::RG16_FLOAT;
 	desc.debugName = "GBuffer Motion Vectors";
 	m_GBufferOutput->motionVectors = device->createTexture(desc);
 
@@ -241,7 +241,7 @@ void Renderer::InitGBufferOutput()
 	desc.debugName = "GBuffer Albedo";
 	m_GBufferOutput->albedo = device->createTexture(desc);
 
-	desc.format = nvrhi::Format::R10G10B10A2_UNORM;
+	desc.format = nvrhi::Format::RGBA16_FLOAT;
 	desc.debugName = "GBuffer Normal/Roughness";
 	m_GBufferOutput->normalRoughness = device->createTexture(desc);
 
@@ -264,7 +264,7 @@ void Renderer::InitGBufferOutput()
 	desc.isUAV = false;
 	desc.isTypeless = true;
 	desc.initialState = nvrhi::ResourceStates::DepthWrite;
-	desc.clearValue = nvrhi::Color(1.f);
+	desc.clearValue = nvrhi::Color(1.f, 0.f, 0.f, 0.f);
 	desc.debugName = "GBuffer Depth Texture";
 	m_GBufferOutput->depth = device->createTexture(desc);
 }

@@ -7,6 +7,7 @@
 #include "RaytracingData.hlsli"
 #include "ShaderUtils.h"
 #include "framework/DescriptorTableManager.h"
+#include "Types/RingBuffer.h"
 #include "Util.h"
 
 namespace Pass::Raster
@@ -20,7 +21,7 @@ namespace Pass::Raster
 		nvrhi::GraphicsPipelineHandle m_GraphicsPipeline;
 		nvrhi::ComputePipelineHandle m_ArgsPipeline;
 
-		nvrhi::BufferHandle m_IndirectArgsBuffer;
+		RingBuffer m_IndirectArgsBuffer;
 
 		nvrhi::BindingLayoutHandle m_GraphicsBindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_GraphicsBindingSets;
