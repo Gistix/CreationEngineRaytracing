@@ -36,6 +36,7 @@ ByteAddressBuffer                 Materials[]      : register(t0, space3);
 Texture2D<float4>                 Textures[]       : register(t0, space4);
 TextureCube<float4>               CubeTextures[]   : register(t0, space7);
 StructuredBuffer<float4>          DynamicPositions[] : register(t0, space8);
+StructuredBuffer<float3>          PrevPositions[]    : register(t0, space6);
 
 SamplerState                      DefaultSampler   : register(s0);
 SamplerState                      ClampSampler     : register(s1);
@@ -170,6 +171,8 @@ struct VertexOut
     float4 LandBlend1    : COLOR2;  
     nointerpolation uint GeometrySlot : GEOMETRYSLOT;
     nointerpolation uint MeshIndex : MESHINDEX;
+    float4 CurrentClip  : CURRCLIP;
+    float4 PreviousClip : PREVCLIP;
 };
 
 VertexOut MainVS(in uint vertexID : SV_VertexID)
@@ -201,16 +204,31 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     Vertex vertex = GetVertex(vertices, mesh.VertexDesc, triVertex, isMSN, mesh.NumVertices);
 
     // Position-less dynamic meshes (BSDynamicTriShape) keep positions in a live float4 buffer.
+    StructuredBuffer<float4> dynPos = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];
     if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
     {
-        StructuredBuffer<float4> dynPos = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];
         vertex.Position = dynPos[NonUniformResourceIndex(triVertex)].xyz;
     }
+
+    // Previous-frame vertex position (mesh-local space) for motion vectors.
+    // Mirrors Geometry.hlsli: skinned meshes and position-full dynamics read the prev-position
+    // buffer (written by the skinning pass); position-less dynamics keep the previous set
+    // immediately after the current one; static meshes reuse the current position (PrevTransforms
+    // capture object motion).
+    float3 prevVertexPosition = vertex.Position;
+    if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
+        prevVertexPosition = dynPos[NonUniformResourceIndex(triVertex + mesh.NumVertices)].xyz;
+    else if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
+        prevVertexPosition = PrevPositions[NonUniformResourceIndex(mesh.VertexID)][triVertex];
 
     float3 rootSpacePosition = mul(meshTransform.Transform, float4(vertex.Position, 1.0f));
     float3 worldSpacePosition = mul(instance.Transform, float4(rootSpacePosition, 1.0f));
 
     float4 clipSpacePosition = mul(Camera.ViewProj, float4(worldSpacePosition - Camera.Position, 1.0));
+
+    float3 prevRootSpacePosition = mul(meshTransform.PrevTransform, float4(prevVertexPosition, 1.0f));
+    float3 prevWorldSpacePosition = mul(instance.PrevTransform, float4(prevRootSpacePosition, 1.0f));
+    float4 prevClipSpacePosition = mul(Camera.PrevViewProj, float4(prevWorldSpacePosition - Camera.PositionPrev, 1.0));
 
     float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
     
@@ -250,15 +268,19 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     
     o.GeometrySlot = geometrySlot;
     o.MeshIndex = meshSlot;
+
+    o.CurrentClip = clipSpacePosition;
+    o.PreviousClip = prevClipSpacePosition;
     
     return o;
 }
 
 struct PixelOut
 {
-	float4 Albedo           : SV_TARGET0;
- 	float4 NormalRoughness  : SV_TARGET1;
- 	float4 EmissiveMetallic : SV_TARGET2;
+ 	float2 MotionVectors    : SV_TARGET0;   
+	float4 Albedo           : SV_TARGET1;
+ 	float4 NormalRoughness  : SV_TARGET2;
+ 	float4 EmissiveMetallic : SV_TARGET3;
 };
 
 PixelOut MainPS(in VertexOut i)
@@ -272,7 +294,11 @@ PixelOut MainPS(in VertexOut i)
     
     if (props.AlphaFlags & AlphaFlags::Test && surface.Alpha < props.AlphaThreshold)
         discard;
-    
+
+    const float2 currNDC = i.CurrentClip.xy / i.CurrentClip.w;
+    const float2 prevNDC = i.PreviousClip.xy / i.PreviousClip.w;
+ 
+    o.MotionVectors = (prevNDC - currNDC) * float2(0.5f, -0.5f);
     o.Albedo = float4(surface.Albedo, 1.0f);
     o.NormalRoughness = float4(surface.Normal, surface.Roughness);
     o.EmissiveMetallic = float4(surface.Emissive, surface.Metallic);

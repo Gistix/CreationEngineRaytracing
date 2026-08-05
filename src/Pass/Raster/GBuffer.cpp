@@ -173,13 +173,12 @@ namespace Pass::Raster
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-		auto resolution = renderer->GetResolution();
-
 		if (!m_FrameBuffer)
 		{
 			auto* gBufferOutput = renderer->GetGBufferOutput();
 
 			auto frameBufferDesc = nvrhi::FramebufferDesc()
+				.addColorAttachment(gBufferOutput->motionVectors)
 				.addColorAttachment(gBufferOutput->albedo)
 				.addColorAttachment(gBufferOutput->normalRoughness)
 				.addColorAttachment(gBufferOutput->emissiveMetallic)
@@ -202,6 +201,7 @@ namespace Pass::Raster
 				sceneGraph->GetVertexDescriptors()->m_Layout,
 				sceneGraph->GetMaterialDescriptors()->m_Layout,
 				sceneGraph->GetTextureDescriptors()->m_Layout,
+				sceneGraph->GetPrevPositionDescriptors()->m_Layout,
 				sceneGraph->GetCubemapDescriptors()->m_Layout,
 				sceneGraph->GetDynamicVertexDescriptors()->m_Layout
 			};
@@ -263,13 +263,20 @@ namespace Pass::Raster
 				sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+				sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
 				sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 			};
 
 			state.setIndirectParams(m_IndirectArgsBuffer.current());
 
-			state.viewport.addViewportAndScissorRect(fbinfo.getViewport());
+			auto viewport = fbinfo.getViewport();
+
+			const auto dynamicResolution = Renderer::GetSingleton()->GetDynamicResolution();
+			viewport.maxX = static_cast<float>(dynamicResolution.x);
+			viewport.maxY = static_cast<float>(dynamicResolution.y);
+
+			state.viewport.addViewportAndScissorRect(viewport);
 
 			commandList->setGraphicsState(state);
 
@@ -278,8 +285,14 @@ namespace Pass::Raster
 			// Debug copy
 			{
 				auto* gBufferOutput = renderer->GetGBufferOutput();
-				auto region = nvrhi::TextureSlice{ 0, 0, 0, resolution.x, resolution.y, 1 };
-				commandList->copyTexture(GetRenderer()->GetMainTexture(), region, gBufferOutput->albedo, region);
+				auto* renderTargets = renderer->GetRenderTargets();
+
+				auto region = nvrhi::TextureSlice{ 0, 0, 0, dynamicResolution.x, dynamicResolution.y, 1 };
+
+				commandList->copyTexture(renderer->GetDepthTexture(), region, gBufferOutput->depth, region);
+				commandList->copyTexture(renderer->GetMotionVectorTexture(), region, gBufferOutput->motionVectors, region);
+				commandList->copyTexture(renderTargets->albedo, region, gBufferOutput->albedo, region);
+				commandList->copyTexture(renderTargets->normalRoughness, region, gBufferOutput->normalRoughness, region);
 			}
 		}
 	}

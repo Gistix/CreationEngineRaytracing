@@ -237,7 +237,7 @@ void Renderer::InitGBufferOutput()
 	desc.debugName = "GBuffer Motion Vectors";
 	m_GBufferOutput->motionVectors = device->createTexture(desc);
 
-	desc.format = nvrhi::Format::RGBA16_FLOAT;
+	desc.format = nvrhi::Format::R10G10B10A2_UNORM;
 	desc.debugName = "GBuffer Albedo";
 	m_GBufferOutput->albedo = device->createTexture(desc);
 

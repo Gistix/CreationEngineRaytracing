@@ -91,15 +91,15 @@ void Scene::UpdateMode(Mode mode)
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
 		auto landLod = eastl::make_unique<Pass::LandLODOccluder>(renderer);
 		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
+
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
 		auto* tlasPtr = sceneTLAS.get();
 
 		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
-		auto sharcGI = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
-		auto* sharcGIPtr = sharcGI.get();
+		auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
 
-		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharcGIPtr);
+		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
 		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
@@ -107,9 +107,10 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
+
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
-		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharcGI) });
+		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdPass) });
