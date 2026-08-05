@@ -146,16 +146,14 @@ void Scene::UpdateMode(Mode mode)
 	}
 	else if (mode == Mode::Debug) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
+		auto landLod = eastl::make_unique<Pass::LandLODOccluder>(renderer);
 		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
-		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
-		auto* tlasPtr = sceneTLAS.get();
-
-		auto debugPass = eastl::make_unique<Pass::Debug>(renderer, tlasPtr);
+		auto gbuffer = eastl::make_unique<Pass::Raster::GBuffer>(renderer);
 
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
+		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
-		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
-		renderGraph->AddNode({ true, "Debug", eastl::move(debugPass) });
+		renderGraph->AddNode({ true, "GBuffer", eastl::move(gbuffer) });
 	}
 }
 
