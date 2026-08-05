@@ -316,12 +316,19 @@ void Main()
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
     }
 #   endif
-    
-    NormalRoughness[idx] = float4(
+#if defined(NRD)
+    NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(
         useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal, 
-        useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness
+        useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness, 
+        0.0f
     );
-    
+#else
+    NormalRoughness[idx] = float4(
+        normalize(useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal), 
+        saturate(useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness)
+    );
+#endif
+
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
     MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
@@ -653,14 +660,22 @@ void Main()
 #   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
 #   endif
-            NormalRoughness[idx] = float4(sourceSurface.CoatNormal, sourceSurface.CoatRoughness);
+#   if defined(NRD)
+            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.CoatNormal, sourceSurface.CoatRoughness, 0.0f);
+#   else
+            NormalRoughness[idx] = float4(normalize(sourceSurface.CoatNormal), saturate(sourceSurface.CoatRoughness));
+#   endif
         }
         else
         {
 #   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
 #   endif
-            NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
+#   if defined(NRD)
+            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.Normal, sourceSurface.Roughness, 0.0f);
+#   else
+            NormalRoughness[idx] = float4(normalize(sourceSurface.Normal), saturate(sourceSurface.Roughness));
+#   endif
         }
     }
 
@@ -745,6 +760,7 @@ void Main()
     
 #if defined(NRD)
      float diffHitDist = 0;     
+     uint diffPathNum = 0;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #elif defined(DLSS_RR)
     float specHitDist = 0.0f;
@@ -1270,6 +1286,7 @@ void Main()
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
         } else {
             diffHitDist += normHitDist;
+            diffPathNum++;
         }
 #   endif
 #endif        
@@ -1290,6 +1307,7 @@ void Main()
 
 #if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+    diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
     diffuseRadiance /= MAX_SAMPLES;
     specularRadiance /= MAX_SAMPLES;
 #else

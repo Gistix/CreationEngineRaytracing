@@ -187,6 +187,7 @@ void Main()
     
 #if defined(NRD)
      float diffHitDist = 0.0f;
+     uint diffPathNum = 0;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
 #endif
     
@@ -479,7 +480,8 @@ void Main()
         if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
         } else {
-            diffHitDist = diffHitDist == 0.0f ? normHitDist : min(diffHitDist, normHitDist);
+            diffHitDist += normHitDist;
+            diffPathNum++;
         }
 #endif
         
@@ -499,6 +501,7 @@ void Main()
 
 #if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+    diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
 #endif
     
 #if defined(RAW_RADIANCE)
