@@ -281,19 +281,6 @@ namespace Pass::Raster
 			commandList->setGraphicsState(state);
 
 			commandList->drawIndirect(0, numMeshes);
-
-			// Debug copy
-			{
-				auto* gBufferOutput = renderer->GetGBufferOutput();
-				auto* renderTargets = renderer->GetRenderTargets();
-
-				auto region = nvrhi::TextureSlice{ 0, 0, 0, dynamicResolution.x, dynamicResolution.y, 1 };
-
-				commandList->copyTexture(renderer->GetDepthTexture(), region, gBufferOutput->depth, region);
-				commandList->copyTexture(renderer->GetMotionVectorTexture(), region, gBufferOutput->motionVectors, region);
-				commandList->copyTexture(renderTargets->albedo, region, gBufferOutput->albedo, region);
-				commandList->copyTexture(renderTargets->normalRoughness, region, gBufferOutput->normalRoughness, region);
-			}
 		}
 	}
 }
