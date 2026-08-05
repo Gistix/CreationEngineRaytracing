@@ -177,15 +177,13 @@ namespace Pass
 
 		m_ResolvePass.m_BindingLayout = device->createBindingLayout(globalBindingLayoutDesc);
 
-
 		const auto linearBlockSizeWStr = std::to_wstring(RESOLVE_LINEAR_BLOCK_SIZE);
 
 		eastl::vector<DxcDefine> defines = {
 			{ L"LINEAR_BLOCK_SIZE", linearBlockSizeWStr.c_str() },
 			{ L"SHARC", L"" },
 			{ L"SHARC_UPDATE", L"0" },
-			{ L"SHARC_RESOLVE", L"1" },
-			{ L"SHARC_ENABLE_FADE_ACCELERATION", L"1" }
+			{ L"SHARC_RESOLVE", L"1" }
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
