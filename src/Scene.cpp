@@ -101,7 +101,8 @@ void Scene::UpdateMode(Mode mode)
 
 		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
-		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
+		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
+		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
 
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
@@ -113,7 +114,8 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
-		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdPass) });
+		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
+		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
 		renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
 	}
 	else if (mode == Mode::PathTracing) {
@@ -129,7 +131,8 @@ void Scene::UpdateMode(Mode mode)
 		auto ptPass = eastl::make_unique<Pass::PathTracing>(renderer, tlasPtr, sharcPtr);
 		auto restirGI = eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(renderer, tlasPtr);
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::PathTracing, tlasPtr);
-		auto nrdPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
+		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
+		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::PathTracing);
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
 		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);
 
@@ -141,7 +144,8 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "PathTracing", eastl::move(ptPass) });
 		renderGraph->AddNode({ true, "ReSTIRGI", eastl::move(restirGI) });
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
-		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdPass) });
+		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
+		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
 		renderGraph->AddNode({ true, "PT Composite", eastl::move(ptComposite) });
 		renderGraph->AddNode({ false, "Accumulation", eastl::move(accumulation) });
 	}
@@ -473,16 +477,17 @@ void Scene::UpdateSettings(Settings settings)
 	if (currentMode != previousMode || renderGraph->GetNodes().empty())
 		UpdateMode(currentMode);
 
-	const bool nrdReblur = settings.GeneralSettings.Denoiser == Denoiser::NRD;
-	
+	const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+		settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+
 	if (currentMode == Mode::GlobalIllumination) {
-		renderGraph->SetEnabled<Pass::NRD::NRDIntegration>(nrdReblur);
+		// NRDIntegration nodes gate themselves per denoiser variant in SettingsChanged
 	}
 	else if (currentMode == Mode::PathTracing) {
 		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
 		const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
 		renderGraph->SetEnabled<Pass::Common::Accumulation>(accumulation);
-		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrdReblur);
+		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd);
 	}
 
 	renderGraph->SettingsChanged(settings); 
@@ -493,7 +498,8 @@ float Scene::GetResolutionScale() const
 	if (m_Settings.GeneralSettings.Mode != Mode::GlobalIllumination)
 		return 1.0f;
 
-	if (m_Settings.GeneralSettings.Denoiser != Denoiser::NRD)
+	if (m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Reblur &&
+		m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Relax)
 		return 1.0f;
 
 	return m_Settings.RaytracingSettings.ResolutionScale;

@@ -46,8 +46,11 @@ namespace Pass::NRD
 
 		nrd::Instance* m_NRD = nullptr;
 		nrd::ReblurSettings m_ReblurSettings = {};
+		nrd::RelaxSettings m_RelaxSettings = {};
 
 		nrd::CommonSettings m_CommonSettings = {};
+
+		bool IsRelax() const { return kDenoiser == nrd::Denoiser::RELAX_DIFFUSE_SPECULAR; }
 
 		eastl::vector<DispatchBindingCache> m_DispatchBindingCaches;
 
@@ -62,6 +65,7 @@ namespace Pass::NRD
 		void CreateGlobalBindingSet();
 
 		void UpdateCommonSettings();
+		void UpdateSettings(const Settings& settings);
 
 		nvrhi::ITexture* GetDispatchResource(const nrd::ResourceDesc& resource) const;
 		nvrhi::Format GetFormat(nrd::Format format) const;

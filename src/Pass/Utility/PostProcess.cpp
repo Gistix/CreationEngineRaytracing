@@ -23,7 +23,8 @@ namespace Pass::Utility
 	{
 		m_Enabled = (
 			settings.GeneralSettings.Mode == Mode::GlobalIllumination && 
-			(settings.GeneralSettings.Denoiser == Denoiser::NRD ||
+			(settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax ||
 			 settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR ||
 			 settings.RaytracingSettings.ResolutionScale != 1.0f)
 		);
@@ -55,7 +56,7 @@ namespace Pass::Utility
 
 		eastl::vector<DxcDefine> defines;
 
-		if (m_Denoiser == Denoiser::NRD) {
+		if (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax) {
 			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // OutViewDepth
 			defines.push_back({ L"NRD", L"1" });
 		}
@@ -120,7 +121,7 @@ namespace Pass::Utility
 			nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::DownscaledMotionVectors))
 		};
 
-		if (m_Denoiser == Denoiser::NRD) {
+		if (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
 		}
 

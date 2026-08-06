@@ -96,8 +96,13 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
 #       if defined(NRD)
+#           if defined(NRD_REBLUR)
         DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#           else
+        DiffuseOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+        SpecularOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);          
+#           endif
 #       else
         DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
@@ -475,7 +480,11 @@ void Main()
         }
 
 #if defined(NRD)
+#   if defined(NRD_REBLUR)
         float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, sourceSurface.Roughness);
+#   else
+        float normHitDist = accumulatedHitDist;
+#   endif
         
         if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
@@ -520,8 +529,13 @@ void Main()
     diffuseRadiance /= diffFactor;
     specularRadiance /= specFactor;
     
+#   if defined(NRD_REBLUR)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
+#   else
+    DiffuseOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
+    SpecularOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+#   endif  
     
 
     

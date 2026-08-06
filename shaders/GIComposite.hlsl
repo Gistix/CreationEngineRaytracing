@@ -108,8 +108,10 @@ void Main(uint2 idx : SV_DispatchThreadID)
         specularIndirect = SampleJBUTexel4(SpecularIndirect, base, weights, maxTexel);
     }
 
+#if defined(NRD_REBLUR)
     diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
     specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);
+#endif
 
     // Reconstruct material factors at render resolution, using the same G-buffer
     // inputs as NRD_MaterialFactors (albedo, metalness from GNMAO.y, roughness,
@@ -129,9 +131,8 @@ void Main(uint2 idx : SV_DispatchThreadID)
     const float3 diffuseAlbedo = albedo * (1.0f - metalness);
     const float3 F0 = PBR::F0(albedo, metalness);
 
-    const float3 Fenv = _NRD_EnvironmentTerm_Rtg(F0, abs(dot(normal, viewDirection)), roughness);
-    const float3 diffFactor = lerp(NRD_MATERIAL_FACTOR_MIN_SCALE.xxx, float3(1.0f, 1.0f, 1.0f), (1.0f - Fenv) * diffuseAlbedo);
-    const float3 specFactor = lerp(NRD_MATERIAL_FACTOR_MIN_SCALE.xxx, float3(1.0f, 1.0f, 1.0f), Fenv * lerp(NRD_ROUGHNESS_FACTOR_MIN_SCALE.xxx, float3(1.0f, 1.0f, 1.0f), roughness));
+    float3 diffFactor, specFactor;
+    NRD_MaterialFactors(normal, viewDirection, diffuseAlbedo, F0, roughness, diffFactor, specFactor);
 
     diffuseIndirect.rgb *= diffFactor;
     specularIndirect.rgb *= specFactor;

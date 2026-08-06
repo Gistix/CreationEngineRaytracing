@@ -97,7 +97,8 @@ namespace Pass
 		if (settings.SHaRCSettings.Enabled)
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
 
-		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
+		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
 
 		if (nrd || dlssrr) {
@@ -336,7 +337,8 @@ namespace Pass
 		if (settings.SHaRCSettings.Enabled)
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
 
-		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
+		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
 
 		if (nrd || dlssrr) {

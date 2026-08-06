@@ -34,6 +34,12 @@ namespace Pass::NRD
 		m_ReblurSettings.hitDistanceParameters.B = 0.1f * Util::Units::M_TO_GAME_UNIT;
 		m_ReblurSettings.hitDistanceParameters.C = 20.0f;
 
+		m_RelaxSettings = {};
+		m_RelaxSettings.checkerboardMode = nrd::CheckerboardMode::OFF;
+
+		// Required when using probabilistic sampling
+		m_RelaxSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
+
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
 		Setup();
 	}
@@ -359,41 +365,79 @@ namespace Pass::NRD
 		m_GlobalBindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_GlobalBindingLayout);
 	}
 
-	void NRDIntegration::SettingsChanged([[maybe_unused]] const Settings& settings)
+	void NRDIntegration::SettingsChanged(const Settings& settings)
 	{
-		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD);
+		if (IsRelax())
+			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+		else
+			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur);
 
-		auto& reblurSettings = settings.ReblurSettings;
+		UpdateSettings(settings);
+	}
 
-		m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(reblurSettings.maxAccumulatedFrameNum, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
-		m_ReblurSettings.maxFastAccumulatedFrameNum = eastl::min(reblurSettings.maxFastAccumulatedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
-		m_ReblurSettings.maxStabilizedFrameNum = eastl::min(reblurSettings.maxStabilizedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
-		m_ReblurSettings.historyFixFrameNum = m_ReblurSettings.maxFastAccumulatedFrameNum > 0
-			? eastl::min(reblurSettings.historyFixFrameNum, m_ReblurSettings.maxFastAccumulatedFrameNum - 1)
-			: 0;
+	void NRDIntegration::UpdateSettings(const Settings& settings)
+	{
+		auto& commonSettings = settings.NRDSettings;
 
-		m_ReblurSettings.historyFixBasePixelStride = eastl::max(reblurSettings.historyFixBasePixelStride, 1u);
-		m_ReblurSettings.historyFixAlternatePixelStride = eastl::max(reblurSettings.historyFixAlternatePixelStride, 1u);
+		if (IsRelax()) {
+			auto& relaxSettings = settings.NRDRelaxSettings;
 
-		m_ReblurSettings.fastHistoryClampingSigmaScale = eastl::clamp(reblurSettings.fastHistoryClampingSigmaScale, 1.0f, 3.0f);
-		m_ReblurSettings.diffusePrepassBlurRadius = eastl::max(reblurSettings.diffusePrepassBlurRadius, 0.0f);
-		m_ReblurSettings.specularPrepassBlurRadius = eastl::max(reblurSettings.specularPrepassBlurRadius, 0.0f);
-		m_ReblurSettings.minHitDistanceWeight = eastl::clamp(reblurSettings.minHitDistanceWeight, 0.0001f, 0.2f);
-		m_ReblurSettings.minBlurRadius = eastl::max(reblurSettings.minBlurRadius, 0.0f);
-		m_ReblurSettings.maxBlurRadius = eastl::max(reblurSettings.maxBlurRadius, m_ReblurSettings.minBlurRadius);
-		m_ReblurSettings.lobeAngleFraction = eastl::clamp(reblurSettings.lobeAngleFraction, 0.0f, 1.0f);
-		m_ReblurSettings.roughnessFraction = eastl::clamp(reblurSettings.roughnessFraction, 0.0f, 1.0f);
-		m_ReblurSettings.planeDistanceSensitivity = eastl::max(reblurSettings.planeDistanceSensitivity, 0.0f);
-		m_ReblurSettings.specularProbabilityThresholdsForMvModification[0] =
-			eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[0], 0.0f, 1.0f);
-		m_ReblurSettings.specularProbabilityThresholdsForMvModification[1] =
-			eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[1],
-				m_ReblurSettings.specularProbabilityThresholdsForMvModification[0], 1.0f);
-		m_ReblurSettings.fireflySuppressorMinRelativeScale =
-			eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
-		m_ReblurSettings.enableAntiFirefly = reblurSettings.enableAntiFirefly;
-		m_ReblurSettings.usePrepassOnlyForSpecularMotionEstimation = reblurSettings.usePrepassOnlyForSpecularMotionEstimation;
-		m_ReblurSettings.returnHistoryLengthInsteadOfOcclusion = reblurSettings.returnHistoryLengthInsteadOfOcclusion;
+			m_RelaxSettings.diffuseMaxAccumulatedFrameNum = eastl::min(relaxSettings.diffuseMaxAccumulatedFrameNum, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+			m_RelaxSettings.specularMaxAccumulatedFrameNum = eastl::min(relaxSettings.specularMaxAccumulatedFrameNum, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+			m_RelaxSettings.diffuseMaxFastAccumulatedFrameNum =
+				eastl::min(relaxSettings.diffuseMaxFastAccumulatedFrameNum, m_RelaxSettings.diffuseMaxAccumulatedFrameNum);
+			m_RelaxSettings.specularMaxFastAccumulatedFrameNum =
+				eastl::min(relaxSettings.specularMaxFastAccumulatedFrameNum, m_RelaxSettings.specularMaxAccumulatedFrameNum);
+			m_RelaxSettings.historyFixFrameNum = eastl::min(commonSettings.historyFixFrameNum, 3u);
+			m_RelaxSettings.historyFixBasePixelStride = eastl::max(commonSettings.historyFixBasePixelStride, 1u);
+			m_RelaxSettings.historyFixAlternatePixelStride = eastl::max(commonSettings.historyFixAlternatePixelStride, 1u);
+			m_RelaxSettings.fastHistoryClampingSigmaScale = eastl::clamp(commonSettings.fastHistoryClampingSigmaScale, 1.0f, 3.0f);
+			m_RelaxSettings.diffusePrepassBlurRadius = eastl::max(commonSettings.diffusePrepassBlurRadius, 0.0f);
+			m_RelaxSettings.specularPrepassBlurRadius = eastl::max(commonSettings.specularPrepassBlurRadius, 0.0f);
+			m_RelaxSettings.minHitDistanceWeight = eastl::clamp(commonSettings.minHitDistanceWeight, 0.0001f, 0.2f);
+			m_RelaxSettings.diffusePhiLuminance = eastl::max(relaxSettings.diffusePhiLuminance, 0.0f);
+			m_RelaxSettings.specularPhiLuminance = eastl::max(relaxSettings.specularPhiLuminance, 0.0f);
+			m_RelaxSettings.lobeAngleFraction = eastl::clamp(commonSettings.lobeAngleFraction, 0.0f, 1.0f);
+			m_RelaxSettings.roughnessFraction = eastl::clamp(commonSettings.roughnessFraction, 0.0f, 1.0f);
+			m_RelaxSettings.specularVarianceBoost = eastl::max(relaxSettings.specularVarianceBoost, 0.0f);
+			m_RelaxSettings.specularLobeAngleSlack = eastl::max(relaxSettings.specularLobeAngleSlack, 0.0f);
+			m_RelaxSettings.atrousIterationNum = eastl::clamp(relaxSettings.atrousIterationNum, 2u, 8u);
+			m_RelaxSettings.depthThreshold = eastl::max(relaxSettings.depthThreshold, 0.0f);
+			m_RelaxSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
+			m_RelaxSettings.enableRoughnessEdgeStopping = relaxSettings.enableRoughnessEdgeStopping;
+		} else {
+			auto& reblurSettings = settings.NRDReblurSettings;
+
+			m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(reblurSettings.maxAccumulatedFrameNum, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
+			m_ReblurSettings.maxFastAccumulatedFrameNum = eastl::min(reblurSettings.maxFastAccumulatedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
+			m_ReblurSettings.maxStabilizedFrameNum = eastl::min(reblurSettings.maxStabilizedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
+			m_ReblurSettings.historyFixFrameNum = m_ReblurSettings.maxFastAccumulatedFrameNum > 0
+				? eastl::min(commonSettings.historyFixFrameNum, m_ReblurSettings.maxFastAccumulatedFrameNum - 1)
+				: 0;
+
+			m_ReblurSettings.historyFixBasePixelStride = eastl::max(commonSettings.historyFixBasePixelStride, 1u);
+			m_ReblurSettings.historyFixAlternatePixelStride = eastl::max(commonSettings.historyFixAlternatePixelStride, 1u);
+
+			m_ReblurSettings.fastHistoryClampingSigmaScale = eastl::clamp(commonSettings.fastHistoryClampingSigmaScale, 1.0f, 3.0f);
+			m_ReblurSettings.diffusePrepassBlurRadius = eastl::max(commonSettings.diffusePrepassBlurRadius, 0.0f);
+			m_ReblurSettings.specularPrepassBlurRadius = eastl::max(commonSettings.specularPrepassBlurRadius, 0.0f);
+			m_ReblurSettings.minHitDistanceWeight = eastl::clamp(commonSettings.minHitDistanceWeight, 0.0001f, 0.2f);
+			m_ReblurSettings.minBlurRadius = eastl::max(reblurSettings.minBlurRadius, 0.0f);
+			m_ReblurSettings.maxBlurRadius = eastl::max(reblurSettings.maxBlurRadius, m_ReblurSettings.minBlurRadius);
+			m_ReblurSettings.lobeAngleFraction = eastl::clamp(commonSettings.lobeAngleFraction, 0.0f, 1.0f);
+			m_ReblurSettings.roughnessFraction = eastl::clamp(commonSettings.roughnessFraction, 0.0f, 1.0f);
+			m_ReblurSettings.planeDistanceSensitivity = eastl::max(reblurSettings.planeDistanceSensitivity, 0.0f);
+			m_ReblurSettings.specularProbabilityThresholdsForMvModification[0] =
+				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[0], 0.0f, 1.0f);
+			m_ReblurSettings.specularProbabilityThresholdsForMvModification[1] =
+				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[1],
+					m_ReblurSettings.specularProbabilityThresholdsForMvModification[0], 1.0f);
+			m_ReblurSettings.fireflySuppressorMinRelativeScale =
+				eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
+			m_ReblurSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
+			m_ReblurSettings.usePrepassOnlyForSpecularMotionEstimation = reblurSettings.usePrepassOnlyForSpecularMotionEstimation;
+			m_ReblurSettings.returnHistoryLengthInsteadOfOcclusion = reblurSettings.returnHistoryLengthInsteadOfOcclusion;
+		}
 
 		m_SettingsDirty = true;
 	}
@@ -537,7 +581,8 @@ namespace Pass::NRD
 		if (!m_NRD)
 			return;
 
-		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD)
+		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser !=
+			(IsRelax() ? Denoiser::NRD_Relax : Denoiser::NRD_Reblur))
 			return;
 
 		if (m_ResourcesDirty) {
@@ -565,7 +610,10 @@ namespace Pass::NRD
 		}
 
 		if (m_SettingsDirty) {
-			nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_ReblurSettings);
+			if (IsRelax())
+				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_RelaxSettings);
+			else
+				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_ReblurSettings);
 			m_SettingsDirty = false;
 		}
 

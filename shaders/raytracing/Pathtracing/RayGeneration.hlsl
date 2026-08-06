@@ -1280,7 +1280,11 @@ void Main()
         
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE        
 #   if defined(NRD)
+#       if defined(NRD_REBLUR)
         float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
+#       else
+        float normHitDist = accumulatedHitDist;
+#       endif
         
         if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
@@ -1346,8 +1350,13 @@ void Main()
     specularRadiance /= specFactor;    
     
     Output[idx] = float4(direct, 1.0f);
+#   if defined(NRD_REBLUR)
     DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
+#   else
+    DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
+    SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+#   endif  
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;    

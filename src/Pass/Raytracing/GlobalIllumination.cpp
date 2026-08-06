@@ -89,7 +89,8 @@ namespace Pass::Raytracing
 		if (settings.SHaRCSettings.Enabled)
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
+if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
 		}
 
@@ -234,7 +235,8 @@ namespace Pass::Raytracing
 
 		auto& textureManager = renderer->RenderTargetManager();
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD)
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax)
 			diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
 		else
 			diffuseTexture = renderer->GetMainTexture();
@@ -272,7 +274,8 @@ namespace Pass::Raytracing
 		if (settings.SHaRCSettings.Enabled)
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
 		}
 

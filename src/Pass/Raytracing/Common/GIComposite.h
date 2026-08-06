@@ -24,8 +24,8 @@ namespace Pass::Common
 		nvrhi::SamplerHandle m_LinearClampSampler;
 		nvrhi::SamplerHandle m_PointClampSampler;
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
-		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
+		eastl::vector<ShaderDefine> m_Defines;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
