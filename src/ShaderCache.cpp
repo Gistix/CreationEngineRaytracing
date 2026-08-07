@@ -9,9 +9,12 @@
 #include <format>
 #include <vector>
 
+#include <mutex>
+
 namespace ShaderCache
 {
 	eastl::unordered_map<ShaderKey, winrt::com_ptr<IDxcBlob>, ShaderKeyHash> m_Shaders;
+	std::mutex m_ShadersMutex;
 
 	static constexpr uint32_t kCacheFileMagic = 0x44485343;  // 'DHSC'
 	static constexpr uint32_t kCacheVersion = 2;
@@ -41,14 +44,20 @@ namespace ShaderCache
 			}
 		};
 
-		hashBytes(key.filePath.data(), key.filePath.size() * sizeof(wchar_t));
-		hashBytes(key.target.data(), key.target.size() * sizeof(wchar_t));
-		hashBytes(key.entryPoint.data(), key.entryPoint.size() * sizeof(wchar_t));
+		auto hashString = [&hash, &hashBytes](const wchar_t* str, size_t len) {
+			hashBytes(str, len * sizeof(wchar_t));
+			wchar_t nullChar = 0;
+			hashBytes(&nullChar, sizeof(wchar_t));
+		};
+
+		hashString(key.filePath.data(), key.filePath.size());
+		hashString(key.target.data(), key.target.size());
+		hashString(key.entryPoint.data(), key.entryPoint.size());
 		uint8_t vulkan = key.isVulkan ? 1 : 0;
 		hashBytes(&vulkan, 1);
 		for (const auto& d : key.defines) {
-			hashBytes(d.name.data(), d.name.size() * sizeof(wchar_t));
-			hashBytes(d.value.data(), d.value.size() * sizeof(wchar_t));
+			hashString(d.name.data(), d.name.size());
+			hashString(d.value.data(), d.value.size());
 		}
 		return hash;
 	}
@@ -141,6 +150,7 @@ namespace ShaderCache
 		std::filesystem::create_directories(cacheFilePath.parent_path(), ec);
 		if (ec) {
 			logger::warn("ShaderCache - Failed to create cache directory {}: {}", cacheFilePath.parent_path().string(), ec.message());
+			return;
 		}
 
 		// Write to a temporary file first, then rename atomically to prevent
@@ -168,6 +178,9 @@ namespace ShaderCache
 
 			if (!file) {
 				logger::error("ShaderCache - Failed to write shader data to {}", tempPath.string());
+				file.close();
+				std::error_code ignore;
+				std::filesystem::remove(tempPath, ignore);
 				return;
 			}
 		}  // ofstream closes here before rename
@@ -182,15 +195,18 @@ namespace ShaderCache
 		logger::debug("ShaderCache - Saved shader binary to disk cache: {}", cacheFilePath.string());
 	}
 
-	IDxcBlob* GetShader(const wchar_t* filePath, eastl::vector<DxcDefine> defines, const wchar_t* target, const wchar_t* entryPoint)
+	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* filePath, eastl::vector<DxcDefine> defines, const wchar_t* target, const wchar_t* entryPoint)
 	{
 		bool isVulkan = Renderer::GetSingleton()->IsVulkan();
 		ShaderKey shaderKey(filePath, defines, target, entryPoint, isVulkan);
 
 		// Return in-memory cached shader
-		if (auto it = m_Shaders.find(shaderKey); it != m_Shaders.end()) {
-			logger::debug("ShaderCache::GetShader - Returning in-memory cached shader");
-			return it->second.get();
+		{
+			std::lock_guard lock(m_ShadersMutex);
+			if (auto it = m_Shaders.find(shaderKey); it != m_Shaders.end()) {
+				logger::debug("ShaderCache::GetShader - Returning in-memory cached shader");
+				return it->second;
+			}
 		}
 
 		// TODO: Consider adding cache eviction or periodic cleanup of stale entries
@@ -227,8 +243,9 @@ namespace ShaderCache
 			winrt::com_ptr<IDxcBlob> diskBlob = LoadFromDiskCache(cacheFilePath, preprocessedHash, configHash);
 			if (diskBlob) {
 				logger::debug("ShaderCache::GetShader - Returning disk-cached shader: {}", cacheFilePath.string());
-				auto [it, emplaced] = m_Shaders.try_emplace(shaderKey, std::move(diskBlob));
-				return it->second.get();
+				std::lock_guard lock(m_ShadersMutex);
+				auto [it, emplaced] = m_Shaders.try_emplace(shaderKey, diskBlob);
+				return it->second;
 			}
 			logger::debug("ShaderCache::GetShader - Disk cache miss for {}", cacheFilePath.string());
 		} else {
@@ -257,7 +274,8 @@ namespace ShaderCache
 		}
 
 		// Save shader to in-memory cache
-		auto [it, emplaced] = m_Shaders.try_emplace(shaderKey, std::move(blob));
+		std::lock_guard lock(m_ShadersMutex);
+		auto [it, emplaced] = m_Shaders.try_emplace(shaderKey, blob);
 
 		if (!emplaced) {
 			logger::error("ShaderCache::GetShader - Emplace failed.");
@@ -265,6 +283,6 @@ namespace ShaderCache
 		}
 
 		logger::debug("ShaderCache::GetShader - Returning newly compiled shader");
-		return it->second.get();
+		return it->second;
 	}
 };

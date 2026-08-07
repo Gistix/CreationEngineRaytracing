@@ -91,9 +91,9 @@ namespace ShaderUtils
 
 	void CompileShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
 	{
-		IDxcBlob* blob = ShaderCache::GetShader(FilePath, std::move(defines), Target, EntryPoint);
+		winrt::com_ptr<IDxcBlob> blob = ShaderCache::GetShader(FilePath, std::move(defines), Target, EntryPoint);
 		if (blob) {
-			shader.copy_from(blob);
+			shader.copy_from(blob.get());
 		} else {
 			shader = nullptr;
 		}
@@ -237,8 +237,7 @@ namespace ShaderUtils
 
 	nvrhi::ShaderLibraryHandle CompileShaderLibrary(nvrhi::IDevice* device, const wchar_t* filePath, const eastl::vector<DxcDefine>& defines)
 	{
-		IDxcBlob* blob = ShaderCache::GetShader(filePath, defines);
-
+		winrt::com_ptr<IDxcBlob> blob = ShaderCache::GetShader(filePath, defines);
 		if (!blob)
 			return nullptr;
 

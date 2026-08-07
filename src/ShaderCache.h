@@ -22,6 +22,10 @@ namespace ShaderCache
 			{
 				defines.emplace_back(define.Name, define.Value);
 			}
+
+			eastl::sort(defines.begin(), defines.end(), [](const auto& a, const auto& b) {
+				return a.name < b.name;
+			});
 		}
 
 		bool operator==(const ShaderKey& other) const
@@ -59,5 +63,5 @@ namespace ShaderCache
 		}
 	};
 
-	IDxcBlob* GetShader(const wchar_t* FilePath, eastl::vector<DxcDefine> defines = {}, const wchar_t* Target = L"lib_6_5", const wchar_t* EntryPoint = L"Main");
+	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* FilePath, eastl::vector<DxcDefine> defines = {}, const wchar_t* Target = L"lib_6_5", const wchar_t* EntryPoint = L"Main");
 };

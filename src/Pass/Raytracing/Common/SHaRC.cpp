@@ -125,7 +125,7 @@ namespace Pass
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
-		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
 		if (!rayGenBlob) {
 			logger::error("SHaRC::SetupUpdate - Failed to compile update shader.");
 			return;
