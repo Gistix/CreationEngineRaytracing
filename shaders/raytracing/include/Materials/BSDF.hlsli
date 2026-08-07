@@ -236,7 +236,7 @@ struct FuzzReflection
         }
 #endif
 
-        weight = pdf > 0.0f ? Eval(wi, wo) / pdf : float3(0.0f, 0.0f, 0.0f);
+        weight = pdf > 0.0f ? Eval(wi, wo) / max(pdf, BSDF_MIN_PDF) : float3(0.0f, 0.0f, 0.0f);
         lobeP = 1.0f;
         return true;
     }
@@ -357,7 +357,7 @@ struct SpecularReflectionMicrofacet // : IBxDF
 #endif
         
         pdf = EvalPdf(wi, wo); // We used to have pdf returned as part of the sampleGGX_XXX functions but this made it easier to add bugs when changing due to code duplication in refraction cases
-        weight = Eval(wi, wo) / pdf;
+        weight = Eval(wi, wo) / max(pdf, BSDF_MIN_PDF);
         lobe = (uint)LobeType::SpecularReflection;
         return true;
     }
@@ -527,7 +527,7 @@ struct SpecularReflectionTransmissionMicrofacet
         lobe = isReflection ? (uint)LobeType::SpecularReflection : (uint)LobeType::SpecularTransmission;
 
         pdf = EvalPdf(wi, wo);  // <- this will have the correct Jacobian applied (for correct refraction pdf); We used to have pdf returned as part of the sampleGGX_XXX functions but this made it easier to add bugs when changing due to code duplication in refraction cases
-        weight = pdf > 0.f ? Eval(wi, wo) / pdf : float3(0, 0, 0);
+        weight = pdf > 0.f ? Eval(wi, wo) / max(pdf, BSDF_MIN_PDF) : float3(0, 0, 0);
         return true;
     }
 
