@@ -357,8 +357,8 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
-	auto it = m_DirectMeshes.find(bsTriShape);
-	if (it == m_DirectMeshes.end())
+	auto it = m_Meshes.find(bsTriShape);
+	if (it == m_Meshes.end())
 		return;
 
 	it->second->OnDestroy();
@@ -371,8 +371,8 @@ void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 {
-	auto it = m_DirectMeshes.find(bsDynamicTriShape);
-	if (it == m_DirectMeshes.end())
+	auto it = m_Meshes.find(bsDynamicTriShape);
+	if (it == m_Meshes.end())
 		return;
 
 	if (auto dynamicMesh = it->second->AsDynamicMesh()) {
@@ -411,8 +411,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// is called from StartExecution() after the per-slot fence resolves.
 	for (auto destroyedMesh: m_DestroyedMeshesSwap)
 	{
-		auto it = m_DirectMeshes.find(destroyedMesh);
-		if (it == m_DirectMeshes.end())
+		auto it = m_Meshes.find(destroyedMesh);
+		if (it == m_Meshes.end())
 			continue;
 
 		auto* mesh = it->second.get();
@@ -423,7 +423,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 
 		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
-		m_DirectMeshes.erase(it);
+		m_Meshes.erase(it);
 	}
 
 	m_DestroyedMeshesSwap.clear();
@@ -438,10 +438,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_NumInstances = 0;
 
 	m_CurrentVisible.clear();
-	m_CurrentVisible.reserve(m_DirectMeshes.size());
+	m_CurrentVisible.reserve(m_Meshes.size());
 
 	m_UpdateList.clear();
-	m_UpdateList.reserve(m_DirectMeshes.size());
+	m_UpdateList.reserve(m_Meshes.size());
 
 	m_CreateList.clear();
 	m_CreateCandidates.clear();
@@ -471,7 +471,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// numWorkers coarse tasks (~157 subtrees each) makes the per-pool-task cost negligible relative to
 	// per-subtree work, and sidesteps the slot-collision race that fine-grained forking caused.
 	//
-	// Safety: m_DirectMeshes.find() is concurrent-read only (the map is mutated before A by DestroyMeshes
+	// Safety: m_Meshes.find() is concurrent-read only (the map is mutated before A by DestroyMeshes
 	// and after A by Phase C2). All NiAVObject virtual calls performed by the visitor are read-only on
 	// stable per-frame tree nodes; no NiPointer<> smart-pointer copies occur inside the visitor (it passes
 	// child.get() raw pointers), so no atomic refcount churn. The ShadowSceneNode portalGraph read is stable
@@ -510,8 +510,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					return;
 				}
 
-				auto it = self->m_DirectMeshes.find(bsTriShape);
-				if (it != self->m_DirectMeshes.end()) {
+				auto it = self->m_Meshes.find(bsTriShape);
+				if (it != self->m_Meshes.end()) {
 					auto mesh = it->second.get();
 					self->m_PerWorkerUpdateList[workerIdx].push_back({ mesh, refr });
 					self->m_PerWorkerCurrentVisible[workerIdx].push_back(mesh);
@@ -824,7 +824,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto& [bsTriShape, refr] : m_CreateCandidates) {
 		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 			created->SetOwner(refr);
-			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
+			auto [it2, inserted] = m_Meshes.emplace(bsTriShape, eastl::move(created));
 			if (inserted) {
 				auto mesh = it2->second.get();
 

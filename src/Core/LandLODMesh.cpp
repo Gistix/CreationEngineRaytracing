@@ -4,7 +4,7 @@
 #include "Util.h"
 
 LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
-	: DirectMesh(bsTriShape, commandList)
+	: Mesh(bsTriShape, commandList)
 {
 	if (!m_VertexBuffer.m_Buffer)
 		return;
@@ -53,7 +53,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 {
-	DirectMesh::Update(commandList);
+	Mesh::Update(commandList);
 
 	for (auto* node = static_cast<RE::NiAVObject*>(m_BSTriShape->parent); node; node = node->parent) {
 		if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(node)) {

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Core/DirectMesh.h"
+#include "Core/Mesh.h"
 #include "Interop/LandLODUpdate.hlsli"
 
-class LandLODMesh : public DirectMesh
+class LandLODMesh : public Mesh
 {
 	nvrhi::BufferHandle m_LiveVertexBuffer;
 	bool m_Intersecting = false;

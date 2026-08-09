@@ -1,5 +1,5 @@
 #include "Core/BaseMesh.h"
-#include "Core/DirectMesh.h"
+#include "Core/Mesh.h"
 #include "Core/LandLODMesh.h"
 #include "Core/SkinnedMesh.h"
 #include "Core/DynamicMesh.h"
@@ -34,7 +34,7 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
-		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
+		return eastl::make_unique<Mesh>(bsTriShape, commandList);
 	}
 
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())

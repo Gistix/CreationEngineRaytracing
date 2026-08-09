@@ -37,7 +37,7 @@ class SceneGraph
 {
 	RE::NiCamera* m_Camera = nullptr;
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_DirectMeshes;
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_Meshes;
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
@@ -165,7 +165,7 @@ public:
 	inline auto& GetMeshManager() const { return m_MeshManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
-	inline const auto& GetDirectMeshes() { return m_DirectMeshes; }
+	inline const auto& GetDirectMeshes() { return m_Meshes; }
 
 	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }

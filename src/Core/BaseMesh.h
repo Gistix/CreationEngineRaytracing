@@ -58,7 +58,7 @@ public:
 
 	virtual ~BaseMesh();
 
-	// Constructs the appropriate mesh type (DirectMesh, SkinnedMesh, DismemberMesh or DynamicMesh) for the given geometry.
+	// Constructs the appropriate mesh type (Mesh, SkinnedMesh, DismemberMesh or DynamicMesh) for the given geometry.
 	static eastl::unique_ptr<BaseMesh> Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
 	// Returns true if the hidden state changed (which flags the mesh structurally dirty).
@@ -92,7 +92,7 @@ public:
 	bool IsTwoSided();
 
 	// Returns the mesh's geometry entries (desc + geometry slot index).
-	// DirectMesh holds a single entry; SkinnedMesh/DynamicMesh hold one per partition.
+	// Mesh holds a single entry; SkinnedMesh/DynamicMesh hold one per partition.
 	virtual const eastl::vector<GeometryEntry>& GetGeometryEntries() const { return m_GeometryEntries; }
 
 	RE::BSTriShape* GetTriShape() const { return m_BSTriShape; }
