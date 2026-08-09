@@ -93,6 +93,8 @@ public:
 
 	const auto& GetMembers() const { return m_Members; }
 
+	inline bool IsPlayer() const { return m_Flags.all(Flags::Player); }
+
 	void UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags);
 
 	// No live members remain.

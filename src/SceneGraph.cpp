@@ -22,13 +22,6 @@
 
 #include <chrono>
 
-nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshManager->GetMeshBuffer(); }
-nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetTransformBuffer() const { return m_MeshManager->GetTransformBuffer(); }
-nvrhi::IBuffer* SceneGraph::GetMeshSlotRemapBuffer() const { return m_MeshSlotRemapBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }
-
 void SceneGraph::Initialize()
 {
 	const auto maxThreads = std::thread::hardware_concurrency() - 1u;
@@ -191,7 +184,18 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateCamera()
 {
-	const auto* tesCamera = RE::PlayerCamera::GetSingleton()->currentState->camera;
+	auto* playerCamera = RE::PlayerCamera::GetSingleton();
+
+	// Mimics the logic of Main::Draw (kind of)
+	m_DrawFirstPerson = playerCamera->IsInFirstPerson()
+		&& Scene::GetSingleton()->GetMenuState().none(MenuState::MainMenu) 
+		&& !playerCamera->IsInFreeCameraMode();
+
+	// Might not be exactly how the game does it, but the first person node is always at origin, except during first person view rendering
+	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
+	m_FirstPersonPosition = m_DrawFirstPerson ? runtimeData.posAdjust.getEye() - Util::Adapter::GetFirstPersonNodePosition(playerCamera) : RE::NiPoint3::Zero();
+
+	const auto* tesCamera = playerCamera->currentState->camera;
 	m_Camera = tesCamera ? Util::Game::FindNiCamera(tesCamera->cameraRoot.get()) : nullptr;
 }
 
@@ -493,6 +497,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
 
+		// First person view
+		// Why? The first person node is always hidden, except during first person view rendering where it is unhid for culling + rendering
+		RE::NiAVObject* firstPersonRoot = m_DrawFirstPerson ? Util::Adapter::GetFirstPerson3D(RE::PlayerCharacter::GetSingleton()) : nullptr;
+
 		// Flat accumulator of wide-NiNode children to be chunked across workers post-descent.
 		// Each entry is a (child object, propagated parentRefr) ready to be handed to serialWalk.
 		eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> forkedChildren;
@@ -501,6 +509,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		{
 			SceneGraph* self;
 			eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>>* forkedChildren;
+			RE::NiAVObject* firstPersonRoot;
 
 			// Routes a leaf into the per-worker buffer [workerIdx].
 			void visitLeaf(RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr, size_t workerIdx)
@@ -532,7 +541,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					}
 					visitLeaf(bsTriShape, refr, workerIdx);
 					return CESEAdapter::RE::BSVisitControl::kContinue;
-				}, parentRefr);
+				}, parentRefr, firstPersonRoot);
 			}
 
 			// Recursive serial descent. parentRefr is propagated to children exactly as in
@@ -543,7 +552,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!object)
 					return;
 
-				if (Util::Adapter::IsNiAVObjectHidden(object))
+				const bool isVisibleFP = (object == firstPersonRoot);
+				if (!isVisibleFP && Util::Adapter::IsNiAVObjectHidden(object))
 					return;
 
 				if (auto geom = Util::Adapter::AsTriShape(object)) {
@@ -611,7 +621,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						walk(child, refr);
 				}
 			}
-		} walker{ this, &forkedChildren };
+		} walker{ this, &forkedChildren, firstPersonRoot };
 
 		walker.walk(worldRootNode);
 

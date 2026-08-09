@@ -29,6 +29,12 @@ namespace Util
 		// This version mimics direct pointer retrieval rather than CommonLib's implementation, which iterates up the parent hierarchy to find a valid owner
 		RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object);
 
+		// Returns the first-person skeleton root (RE::PlayerCharacter::firstPerson3D), or nullptr
+		RE::NiNode* GetFirstPerson3D(RE::PlayerCharacter* a_player);
+
+		// Returns the first-person node position (eye position) via PlayerCamera::GetFirstPersonNodePosition (Skyrim only)
+		RE::NiPoint3 GetFirstPersonNodePosition(RE::PlayerCamera* a_camera);
+
 		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node);
 
 		uint8_t* GetVertexData(RE::BSGraphics::TriShape* rendererData);

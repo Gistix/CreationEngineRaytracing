@@ -53,7 +53,8 @@ public:
 		LandLOD4 = 1 << 0,
 		DismemberSkinInstance = 1 << 1,
 		Eyes = 1 << 2,
-		Alpha = 1 << 3
+		Alpha = 1 << 3,
+		FirstPerson = 1 << 4,
 	};
 
 	virtual ~BaseMesh();
@@ -190,6 +191,7 @@ protected:
 	BLASCluster* m_Cluster = nullptr;
 
 	// Cached world transform from BSTriShape, refreshed in Update().
+	RE::NiTransform m_World = RE::NiTransform();
 	float3x4 m_Transform = Constants::kIdentityTransform;
 	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 	bool m_NeedsPrevInit = true;

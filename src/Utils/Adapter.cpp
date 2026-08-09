@@ -93,6 +93,32 @@ namespace Util
 			return;
 #endif	
 		}
+
+		RE::NiNode* GetFirstPerson3D(RE::PlayerCharacter* a_player)
+		{
+			if (!a_player)
+				return nullptr;
+
+#if defined(SKYRIM)
+			return a_player->GetInfoRuntimeData().firstPerson3D.get();
+#elif defined(FALLOUT4)
+			return a_player->firstPerson3D.get();
+#endif	
+		}
+
+		RE::NiPoint3 GetFirstPersonNodePosition(RE::PlayerCamera* a_camera)
+		{
+#if defined(SKYRIM)
+			using Fn = void (*)(RE::PlayerCamera*, RE::NiPoint3*);
+			static REL::Relocation<Fn> func{ REL::RelocationID(49854, 50786) };
+
+			RE::NiPoint3 result;
+			func(a_camera, &result);
+			return result;
+#elif defined(FALLOUT4)
+			return { 0.0f, 0.0f, 0.0f };
+#endif	
+		}
 		
 		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node) {
 #if defined(SKYRIM)

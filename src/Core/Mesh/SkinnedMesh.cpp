@@ -237,7 +237,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 		bool isVisible = false;
 		if (isForceCulled)
-			isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
+			isVisible = m_Flags.all(Flags::FirstPerson) || scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
 
 		// Only recompute when the game advanced the animation this frame.
 		const auto frameID = skinInstance->frameID;

@@ -167,8 +167,20 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 
 	// Update Transform
 	{
+		m_World = m_BSTriShape->world;
+
+		const bool isPlayer = m_Cluster ? m_Cluster->IsPlayer() : false;
+		bool drawFirstPerson = false;
+		if (isPlayer) {
+			const auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+			if ((drawFirstPerson = sceneGraph->GetDrawFirstPerson()))
+				m_World.translate += sceneGraph->GetFirstPersonPosition();
+		}
+
+		m_Flags.set(drawFirstPerson, Flags::FirstPerson);
+
 		float3x4 transform;
-		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
+		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_World));
 
 		if (m_NeedsPrevInit)
 			MarkDirty(DirtyFlags::Transform);
