@@ -3,7 +3,7 @@
 #include "Util.h"
 
 #include "Core/D3D12Texture.h"
-#include "Core/DynamicMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
 
 namespace Hooks
 {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 
 class SceneGraph;
 class SubIndexSegmentMesh;

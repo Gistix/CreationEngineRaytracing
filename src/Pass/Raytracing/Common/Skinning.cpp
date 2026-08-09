@@ -1,8 +1,8 @@
 #include "Skinning.h"
 #include "Renderer.h"
 #include "Scene.h"
-#include "Core/SkinnedMesh.h"
-#include "Core/DynamicMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
 
 namespace Pass
 {

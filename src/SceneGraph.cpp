@@ -15,10 +15,10 @@
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
-#include "Core/SkinnedMesh.h"
-#include "Core/DynamicMesh.h"
-#include "Core/SubIndexMesh.h"
-#include "Core/SubIndexSegmentMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
+#include "Core/Mesh/SubIndexMesh.h"
+#include "Core/Mesh/SubIndexSegmentMesh.h"
 
 #include <chrono>
 

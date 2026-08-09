@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Renderer.h"
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 #include "Core/BLASCluster.h"
-#include "Core/SubIndexSegmentMesh.h"
+#include "Core/Mesh/SubIndexSegmentMesh.h"
 #include "Scene.h"
 #include "Events/ITLASUpdateListener.h"
 

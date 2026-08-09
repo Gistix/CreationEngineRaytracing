@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/Mesh.h"
+#include "Core/Mesh/Mesh.h"
 #include "Interop/LandLODUpdate.hlsli"
 
 class LandLODMesh : public Mesh

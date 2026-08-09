@@ -94,7 +94,7 @@ Avoid:
 
 - Scene management: `src/SceneGraph.*`
 - BLAS: `src/Core/BLASCluster.*`
-- Meshes: `src/Core/`
+- Meshes: `src/Core/Mesh/`
 - Materials: `src/Core/Material*/`
 - Transform system: `src/Core/TransformManager.*`
 - Shader compilation: `src/Utils/Shader.cpp`

@@ -1,5 +1,5 @@
-#include "Core/SubIndexMesh.h"
-#include "Core/SubIndexSegmentMesh.h"
+#include "Core/Mesh/SubIndexMesh.h"
+#include "Core/Mesh/SubIndexSegmentMesh.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"

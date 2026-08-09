@@ -1,4 +1,4 @@
-#include "Core/SkinnedMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Constants.h"
