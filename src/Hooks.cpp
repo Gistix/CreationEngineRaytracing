@@ -173,7 +173,23 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	// Blends vertex data between two BSTriShapes (body morphs).
+	// Re-shares the D3D11 vertex buffer of a TriShapeDX12 to D3D12 after the engine replaced it.
+	void ReShareVertexBuffer(RE::BSGraphics::TriShape* triShape)
+	{
+		if (!triShape)
+			return;
+
+		auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
+
+		if (triShapeDX12->vertexBufferDX12) {
+			triShapeDX12->vertexBufferDX12->Release();
+			triShapeDX12->vertexBufferDX12 = nullptr;
+		}
+
+		Util::CreateSharedBuffer(triShapeDX12->vertexBuffer, &triShapeDX12->vertexBufferDX12);
+	}
+
+	// Blends vertex data between two non-skinned BSTriShapes (body morphs).
 	// Calls CopyTriShapeVertices internally, which replaces src's vertexBuffer.
 	// We must re-share the new D3D11 vertex buffer to D3D12 after the blend.
 	struct BSTriShape_ApplyBodyMorph
@@ -184,13 +200,36 @@ namespace Hooks
 
 			if (src) {
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
-				if (geomData.rendererData) {
-					auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(geomData.rendererData);
-					if (triShapeDX12->vertexBufferDX12) {
-						triShapeDX12->vertexBufferDX12->Release();
-						triShapeDX12->vertexBufferDX12 = nullptr;
+				if (geomData.rendererData)
+					ReShareVertexBuffer(geomData.rendererData);
+			}
+
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// Blends vertex data between two skinned BSTriShapes (body morphs) by replacing the
+	// vertex buffer of every skin partition with the same new D3D11 buffer.
+	// We must re-share the new D3D11 vertex buffer to D3D12 after the blend, so meshes
+	// created afterwards wrap the morphed data.
+	struct BSTriShape_ApplyBodyMorphSkinned
+	{
+		// a_partitionMask (r9d): bitmask of skin partitions to blend; the engine always passes 0xFFFFFFFF.
+		static bool thunk(RE::BSTriShape* src, RE::BSTriShape* tgt, float weight, uint32_t partitionMask)
+		{
+			auto result = func(src, tgt, weight, partitionMask);
+
+			if (src) {
+				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
+				if (auto* skinInstance = geomData.skinInstance) {
+					const auto& skinPartition = skinInstance->skinPartition;
+					if (skinPartition && skinPartition->numPartitions > 0) {
+						// The renderer wraps only the first partition's buffer; all partitions
+						// share the same new D3D11 buffer after the blend.
+						ReShareVertexBuffer(skinPartition->partitions[0].buffData);
 					}
-					Util::CreateSharedBuffer(triShapeDX12->vertexBuffer, &triShapeDX12->vertexBufferDX12);
 				}
 			}
 
@@ -1057,6 +1096,7 @@ namespace Hooks
 		//stl::detour_thunk<BSGraphics_CopyTriShapeVertices>(REL::RelocationID(74735, 76477));
 
 		stl::detour_thunk<BSTriShape_ApplyBodyMorph>(REL::RelocationID(74720, 76460));
+		stl::detour_thunk<BSTriShape_ApplyBodyMorphSkinned>(REL::RelocationID(74721, 76462));
 
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSTriShape>>(RE::VTABLE_BSTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSDynamicTriShape>>(RE::VTABLE_BSDynamicTriShape[0]);
