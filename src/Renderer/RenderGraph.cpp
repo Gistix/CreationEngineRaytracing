@@ -4,24 +4,32 @@
 RenderGraph::RenderGraph(Renderer* renderer)
 {
 	m_Renderer = renderer;
-
-	m_RootNode = eastl::make_unique<RootRenderNode>();
 }
 
 void RenderGraph::ResolutionChanged(uint2 resolution)
 {
-	if (m_RootNode)
-		m_RootNode->ResolutionChanged(resolution);
+	for (auto& node : m_Nodes)
+	{
+		node.ResolutionChanged(resolution);
+	}
 }
 
 void RenderGraph::SettingsChanged(const Settings& settings)
 {
-	if (m_RootNode)
-		m_RootNode->SettingsChanged(settings);
+	for (auto& node : m_Nodes)
+	{
+		node.SettingsChanged(settings);
+		if (node.IsActive() && node.m_RenderPass)
+		{
+			node.m_RenderPass->EnsureInitialized();
+		}
+	}
 }
 
 void RenderGraph::Execute(nvrhi::ICommandList* commandList)
 {
-	if (m_RootNode)
-		m_RootNode->Execute(commandList);
+	for (auto& node : m_Nodes)
+	{
+		node.Execute(commandList);
+	}
 }

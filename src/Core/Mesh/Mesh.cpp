@@ -1,11 +1,11 @@
-#include "Core/DirectMesh.h"
+#include "Core/Mesh/Mesh.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
 #include "Util.h"
 #include "Types/RE/RE.h"
 
-DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList)
+Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
 	m_BSTriShape = bsTriShape;
@@ -15,7 +15,7 @@ DirectMesh::DirectMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::IComm
 
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
-		logger::warn("DirectMesh::DirectMesh - No renderer data for {}", m_Name);
+		logger::warn("Mesh::Mesh - No renderer data for {}", m_Name);
 		return;
 	}
 

@@ -325,6 +325,8 @@ public:
 
 	uint2 GetDynamicResolution();
 
+	uint2 GetScaledDynamicResolution();
+
 	nvrhi::ICommandList* StartExecution();
 
 	void EndExecution();

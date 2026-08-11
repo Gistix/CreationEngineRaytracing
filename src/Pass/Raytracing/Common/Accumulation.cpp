@@ -8,6 +8,10 @@ namespace Pass::Common
 	Accumulation::Accumulation(Renderer* renderer)
 		: RenderPass(renderer)
 	{
+	}
+
+	void Accumulation::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}

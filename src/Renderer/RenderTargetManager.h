@@ -23,6 +23,8 @@ struct RenderTargetManager
 		SpecularFactor,
 		RRSpecularAlbedo = SpecularFactor,
 		RRSpecularHitDist,
+		DownscaledMotionVectors,
+		DownscaledNormalRoughness,
 		Accumulation,
 		Total
 	};

@@ -38,6 +38,14 @@ namespace Pass::Raytracing::Common
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
+		SettingsChanged(Scene::GetSingleton()->m_Settings);
+	}
+
+	void SHaRCGI::Initialize()
+	{
+		SetupUpdate();
+		SetupResolve();
 	}
 
 	void SHaRCGI::SettingsChanged(const Settings& settings)
@@ -119,9 +127,8 @@ namespace Pass::Raytracing::Common
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
-		defines.emplace_back(L"SHARC_ENABLE_SH_ENCODING", L"1");
 
-		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
 		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		auto* sceneGraph = scene->GetSceneGraph();
@@ -165,9 +172,7 @@ namespace Pass::Raytracing::Common
 			{ L"LINEAR_BLOCK_SIZE", linearBlockSizeWStr.c_str() },
 			{ L"SHARC", L"" },
 			{ L"SHARC_UPDATE", L"0" },
-			{ L"SHARC_RESOLVE", L"1" },
-			{ L"SHARC_ENABLE_SH_ENCODING", L"1" },
-			{ L"SHARC_ENABLE_FADE_ACCELERATION", L"1" }
+			{ L"SHARC_RESOLVE", L"1" }
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;

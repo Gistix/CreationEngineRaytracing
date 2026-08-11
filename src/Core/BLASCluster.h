@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 #include "Constants.h"
 
 #include "Instance.hlsli"
@@ -92,6 +92,8 @@ public:
 	void RemoveMember(BaseMesh* mesh);
 
 	const auto& GetMembers() const { return m_Members; }
+
+	inline bool IsPlayer() const { return m_Flags.all(Flags::Player); }
 
 	void UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags);
 

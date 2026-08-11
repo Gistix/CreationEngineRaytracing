@@ -34,6 +34,7 @@ namespace Pass::Common
 	public:
 		Accumulation(Renderer* renderer);
 
+		virtual void Initialize() override;
 		void CreateBindingLayout();
 
 		virtual void CreatePipeline() override;

@@ -9,6 +9,10 @@ namespace Pass
 	TransformComposition::TransformComposition(Renderer* renderer)
 		: RenderPass(renderer)
 	{
+	}
+
+	void TransformComposition::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}

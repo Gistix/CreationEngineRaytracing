@@ -48,10 +48,21 @@ void BLASCluster::RemoveMember(BaseMesh* mesh)
 void BLASCluster::UpdateTransform() {
 
 	if (m_Owner) {
-		const RE::NiAVObject* object = m_Owner->Get3D();
+		auto* object = m_Owner->Get3D(false);
+		auto world = object->world;
+
+		// Mental gymnastics here because the first person node is placed at origin and only properly translated during first person view rendering
+		if (IsPlayer()) {
+			const auto sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+			if (sceneGraph->GetDrawFirstPerson()) {
+				object = Util::Adapter::GetFirstPerson3D(RE::PlayerCharacter::GetSingleton());
+				world = object->world;
+				world.translate += sceneGraph->GetFirstPersonPosition();
+			}
+		}
 
 		float3x4 transform;
-		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(object->world));
+		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(world));
 
 		if (m_NeedsPrevInit) {
 			m_PrevTransform = transform;
@@ -205,10 +216,12 @@ uint32_t BLASCluster::Update()
 	const uint32_t meshCount = static_cast<uint32_t>(m_GeometrySlots.size());
 
 	m_IsValid = meshCount > 0;
-
 	if (m_IsValid) {
 		auto* camera = sceneGraph->GetCamera();
-		const bool inFrustum = camera->PointInFrustum(m_WorldBound.center, m_WorldBound.radius);
+
+		const bool bypassFrustumCulling = m_Flags.all(Flags::Player) && sceneGraph->GetDrawFirstPerson();
+
+		const bool inFrustum = bypassFrustumCulling || camera->PointInFrustum(m_WorldBound.center, m_WorldBound.radius);
 		m_Flags.set(!inFrustum, Flags::FrustumCulled);
 
 		if (!skipInstanceLights) {

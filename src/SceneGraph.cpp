@@ -15,19 +15,12 @@
 
 #include "Pass/Raytracing/Common/Skinning.h"
 
-#include "Core/SkinnedMesh.h"
-#include "Core/DynamicMesh.h"
-#include "Core/SubIndexMesh.h"
-#include "Core/SubIndexSegmentMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
+#include "Core/Mesh/SubIndexMesh.h"
+#include "Core/Mesh/SubIndexSegmentMesh.h"
 
 #include <chrono>
-
-nvrhi::IBuffer* SceneGraph::GetLightBuffer() const { return m_LightBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetMeshBuffer() const { return m_MeshManager->GetMeshBuffer(); }
-nvrhi::IBuffer* SceneGraph::GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetTransformBuffer() const { return m_MeshManager->GetTransformBuffer(); }
-nvrhi::IBuffer* SceneGraph::GetMeshSlotRemapBuffer() const { return m_MeshSlotRemapBuffer.current(); }
-nvrhi::IBuffer* SceneGraph::GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }
 
 void SceneGraph::Initialize()
 {
@@ -191,7 +184,18 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateCamera()
 {
-	const auto* tesCamera = RE::PlayerCamera::GetSingleton()->currentState->camera;
+	auto* playerCamera = RE::PlayerCamera::GetSingleton();
+
+	// Mimics the logic of Main::Draw (kind of)
+	m_DrawFirstPerson = playerCamera->IsInFirstPerson()
+		&& Scene::GetSingleton()->GetMenuState().none(MenuState::MainMenu) 
+		&& !playerCamera->IsInFreeCameraMode();
+
+	// Might not be exactly how the game does it, but the first person node is always at origin, except during first person view rendering
+	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
+	m_FirstPersonPosition = m_DrawFirstPerson ? runtimeData.posAdjust.getEye() - Util::Adapter::GetFirstPersonNodePosition(playerCamera) : RE::NiPoint3::Zero();
+
+	const auto* tesCamera = playerCamera->currentState->camera;
 	m_Camera = tesCamera ? Util::Game::FindNiCamera(tesCamera->cameraRoot.get()) : nullptr;
 }
 
@@ -357,8 +361,8 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
-	auto it = m_DirectMeshes.find(bsTriShape);
-	if (it == m_DirectMeshes.end())
+	auto it = m_Meshes.find(bsTriShape);
+	if (it == m_Meshes.end())
 		return;
 
 	it->second->OnDestroy();
@@ -371,8 +375,8 @@ void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 {
-	auto it = m_DirectMeshes.find(bsDynamicTriShape);
-	if (it == m_DirectMeshes.end())
+	auto it = m_Meshes.find(bsDynamicTriShape);
+	if (it == m_Meshes.end())
 		return;
 
 	if (auto dynamicMesh = it->second->AsDynamicMesh()) {
@@ -391,7 +395,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	UpdateLights(commandList);
 
-	const auto timings = Scene::GetSingleton()->m_Settings.DebugSettings.Timings;
+	const auto timings = Scene::GetSingleton()->m_Settings.DebugSettings.Timings == TimingMode::Extended;
 	if (timings) {
 		m_UpdateTimings.clear();
 
@@ -411,8 +415,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// is called from StartExecution() after the per-slot fence resolves.
 	for (auto destroyedMesh: m_DestroyedMeshesSwap)
 	{
-		auto it = m_DirectMeshes.find(destroyedMesh);
-		if (it == m_DirectMeshes.end())
+		auto it = m_Meshes.find(destroyedMesh);
+		if (it == m_Meshes.end())
 			continue;
 
 		auto* mesh = it->second.get();
@@ -423,7 +427,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 
 		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
-		m_DirectMeshes.erase(it);
+		m_Meshes.erase(it);
 	}
 
 	m_DestroyedMeshesSwap.clear();
@@ -438,10 +442,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	m_NumInstances = 0;
 
 	m_CurrentVisible.clear();
-	m_CurrentVisible.reserve(m_DirectMeshes.size());
+	m_CurrentVisible.reserve(m_Meshes.size());
 
 	m_UpdateList.clear();
-	m_UpdateList.reserve(m_DirectMeshes.size());
+	m_UpdateList.reserve(m_Meshes.size());
 
 	m_CreateList.clear();
 	m_CreateCandidates.clear();
@@ -471,7 +475,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// numWorkers coarse tasks (~157 subtrees each) makes the per-pool-task cost negligible relative to
 	// per-subtree work, and sidesteps the slot-collision race that fine-grained forking caused.
 	//
-	// Safety: m_DirectMeshes.find() is concurrent-read only (the map is mutated before A by DestroyMeshes
+	// Safety: m_Meshes.find() is concurrent-read only (the map is mutated before A by DestroyMeshes
 	// and after A by Phase C2). All NiAVObject virtual calls performed by the visitor are read-only on
 	// stable per-frame tree nodes; no NiPointer<> smart-pointer copies occur inside the visitor (it passes
 	// child.get() raw pointers), so no atomic refcount churn. The ShadowSceneNode portalGraph read is stable
@@ -493,6 +497,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
 
+		// First person view
+		// Why? The first person node is always hidden, except during first person view rendering where it is unhid for culling + rendering
+		RE::NiAVObject* firstPersonRoot = m_DrawFirstPerson ? Util::Adapter::GetFirstPerson3D(RE::PlayerCharacter::GetSingleton()) : nullptr;
+
 		// Flat accumulator of wide-NiNode children to be chunked across workers post-descent.
 		// Each entry is a (child object, propagated parentRefr) ready to be handed to serialWalk.
 		eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> forkedChildren;
@@ -501,6 +509,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		{
 			SceneGraph* self;
 			eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>>* forkedChildren;
+			RE::NiAVObject* firstPersonRoot;
 
 			// Routes a leaf into the per-worker buffer [workerIdx].
 			void visitLeaf(RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr, size_t workerIdx)
@@ -510,8 +519,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					return;
 				}
 
-				auto it = self->m_DirectMeshes.find(bsTriShape);
-				if (it != self->m_DirectMeshes.end()) {
+				auto it = self->m_Meshes.find(bsTriShape);
+				if (it != self->m_Meshes.end()) {
 					auto mesh = it->second.get();
 					self->m_PerWorkerUpdateList[workerIdx].push_back({ mesh, refr });
 					self->m_PerWorkerCurrentVisible[workerIdx].push_back(mesh);
@@ -532,7 +541,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					}
 					visitLeaf(bsTriShape, refr, workerIdx);
 					return CESEAdapter::RE::BSVisitControl::kContinue;
-				}, parentRefr);
+				}, parentRefr, firstPersonRoot);
 			}
 
 			// Recursive serial descent. parentRefr is propagated to children exactly as in
@@ -543,7 +552,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!object)
 					return;
 
-				if (Util::Adapter::IsNiAVObjectHidden(object))
+				const bool isVisibleFP = (object == firstPersonRoot);
+				if (!isVisibleFP && Util::Adapter::IsNiAVObjectHidden(object))
 					return;
 
 				if (auto geom = Util::Adapter::AsTriShape(object)) {
@@ -611,7 +621,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						walk(child, refr);
 				}
 			}
-		} walker{ this, &forkedChildren };
+		} walker{ this, &forkedChildren, firstPersonRoot };
 
 		walker.walk(worldRootNode);
 
@@ -824,7 +834,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto& [bsTriShape, refr] : m_CreateCandidates) {
 		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 			created->SetOwner(refr);
-			auto [it2, inserted] = m_DirectMeshes.emplace(bsTriShape, eastl::move(created));
+			auto [it2, inserted] = m_Meshes.emplace(bsTriShape, eastl::move(created));
 			if (inserted) {
 				auto mesh = it2->second.get();
 

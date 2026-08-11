@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/SkinnedMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
 #include "Framework/DescriptorTableManager.h"
 
 class DynamicMesh : public SkinnedMesh

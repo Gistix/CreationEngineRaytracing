@@ -1,4 +1,4 @@
-#include "Core/SkinnedMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Constants.h"
@@ -237,7 +237,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 		bool isVisible = false;
 		if (isForceCulled)
-			isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
+			isVisible = m_Flags.all(Flags::FirstPerson) || scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
 
 		// Only recompute when the game advanced the animation this frame.
 		const auto frameID = skinInstance->frameID;
@@ -273,7 +273,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.
 	if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
-		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
+		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetPass<Pass::Skinning>())
 			skinningPass->QueueUpdate(m_DirtyFlags.get(), this);
 	}
 }

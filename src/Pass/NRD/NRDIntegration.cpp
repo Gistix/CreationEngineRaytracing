@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "Scene.h"
 #include "ShaderUtils.h"
+#include "Utils/Game.h"
 
 namespace Pass::NRD
 {
@@ -29,6 +30,16 @@ namespace Pass::NRD
 		// Required when using probabilistic sampling
 		m_ReblurSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
 
+		m_ReblurSettings.hitDistanceParameters.A = 3.0f * Util::Units::M_TO_GAME_UNIT;
+		m_ReblurSettings.hitDistanceParameters.B = 0.1f * Util::Units::M_TO_GAME_UNIT;
+		m_ReblurSettings.hitDistanceParameters.C = 20.0f;
+
+		m_RelaxSettings = {};
+		m_RelaxSettings.checkerboardMode = nrd::CheckerboardMode::OFF;
+
+		// Required when using probabilistic sampling
+		m_RelaxSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
+
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
 		Setup();
 	}
@@ -48,6 +59,7 @@ namespace Pass::NRD
 		m_Pipelines.clear();
 		m_PermanentPool.clear();
 		m_TransientPool.clear();
+		m_DispatchBindingCaches.clear();
 		m_GlobalBindingSet = nullptr;
 		m_GlobalBindingLayout = nullptr;
 		m_ResourceBindingLayout = nullptr;
@@ -84,7 +96,10 @@ namespace Pass::NRD
 			.setDebugName("NRD Reblur Constants");
 
 		m_ConstantBuffer = GetRenderer()->GetDevice()->createBuffer(bufferDesc);
+	}
 
+	void NRDIntegration::Initialize()
+	{
 		CreateBindingLayouts();
 		CreatePipelines();
 		CreateResources();
@@ -243,6 +258,8 @@ namespace Pass::NRD
 		const uint2 resolution = GetRenderer()->GetResolution();
 		auto device = GetRenderer()->GetDevice();
 
+		m_DispatchBindingCaches.clear();
+
 		m_PermanentPool.clear();
 		m_PermanentPool.resize(instanceDesc.permanentPoolSize);
 
@@ -348,39 +365,79 @@ namespace Pass::NRD
 		m_GlobalBindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_GlobalBindingLayout);
 	}
 
-	void NRDIntegration::SettingsChanged([[maybe_unused]] const Settings& settings)
+	void NRDIntegration::SettingsChanged(const Settings& settings)
 	{
-		auto& reblurSettings = settings.ReblurSettings;
+		if (IsRelax())
+			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+		else
+			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur);
 
-		m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(reblurSettings.maxAccumulatedFrameNum, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
-		m_ReblurSettings.maxFastAccumulatedFrameNum = eastl::min(reblurSettings.maxFastAccumulatedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
-		m_ReblurSettings.maxStabilizedFrameNum = eastl::min(reblurSettings.maxStabilizedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
-		m_ReblurSettings.historyFixFrameNum = m_ReblurSettings.maxFastAccumulatedFrameNum > 0
-			? eastl::min(reblurSettings.historyFixFrameNum, m_ReblurSettings.maxFastAccumulatedFrameNum - 1)
-			: 0;
+		UpdateSettings(settings);
+	}
 
-		m_ReblurSettings.historyFixBasePixelStride = eastl::max(reblurSettings.historyFixBasePixelStride, 1u);
-		m_ReblurSettings.historyFixAlternatePixelStride = eastl::max(reblurSettings.historyFixAlternatePixelStride, 1u);
+	void NRDIntegration::UpdateSettings(const Settings& settings)
+	{
+		auto& commonSettings = settings.NRDSettings;
 
-		m_ReblurSettings.fastHistoryClampingSigmaScale = eastl::clamp(reblurSettings.fastHistoryClampingSigmaScale, 1.0f, 3.0f);
-		m_ReblurSettings.diffusePrepassBlurRadius = eastl::max(reblurSettings.diffusePrepassBlurRadius, 0.0f);
-		m_ReblurSettings.specularPrepassBlurRadius = eastl::max(reblurSettings.specularPrepassBlurRadius, 0.0f);
-		m_ReblurSettings.minHitDistanceWeight = eastl::clamp(reblurSettings.minHitDistanceWeight, 0.0001f, 0.2f);
-		m_ReblurSettings.minBlurRadius = eastl::max(reblurSettings.minBlurRadius, 0.0f);
-		m_ReblurSettings.maxBlurRadius = eastl::max(reblurSettings.maxBlurRadius, m_ReblurSettings.minBlurRadius);
-		m_ReblurSettings.lobeAngleFraction = eastl::clamp(reblurSettings.lobeAngleFraction, 0.0f, 1.0f);
-		m_ReblurSettings.roughnessFraction = eastl::clamp(reblurSettings.roughnessFraction, 0.0f, 1.0f);
-		m_ReblurSettings.planeDistanceSensitivity = eastl::max(reblurSettings.planeDistanceSensitivity, 0.0f);
-		m_ReblurSettings.specularProbabilityThresholdsForMvModification[0] =
-			eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[0], 0.0f, 1.0f);
-		m_ReblurSettings.specularProbabilityThresholdsForMvModification[1] =
-			eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[1],
-				m_ReblurSettings.specularProbabilityThresholdsForMvModification[0], 1.0f);
-		m_ReblurSettings.fireflySuppressorMinRelativeScale =
-			eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
-		m_ReblurSettings.enableAntiFirefly = reblurSettings.enableAntiFirefly;
-		m_ReblurSettings.usePrepassOnlyForSpecularMotionEstimation = reblurSettings.usePrepassOnlyForSpecularMotionEstimation;
-		m_ReblurSettings.returnHistoryLengthInsteadOfOcclusion = reblurSettings.returnHistoryLengthInsteadOfOcclusion;
+		if (IsRelax()) {
+			auto& relaxSettings = settings.NRDRelaxSettings;
+
+			m_RelaxSettings.diffuseMaxAccumulatedFrameNum = eastl::min(relaxSettings.diffuseMaxAccumulatedFrameNum, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+			m_RelaxSettings.specularMaxAccumulatedFrameNum = eastl::min(relaxSettings.specularMaxAccumulatedFrameNum, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+			m_RelaxSettings.diffuseMaxFastAccumulatedFrameNum =
+				eastl::min(relaxSettings.diffuseMaxFastAccumulatedFrameNum, m_RelaxSettings.diffuseMaxAccumulatedFrameNum);
+			m_RelaxSettings.specularMaxFastAccumulatedFrameNum =
+				eastl::min(relaxSettings.specularMaxFastAccumulatedFrameNum, m_RelaxSettings.specularMaxAccumulatedFrameNum);
+			m_RelaxSettings.historyFixFrameNum = eastl::min(commonSettings.historyFixFrameNum, 3u);
+			m_RelaxSettings.historyFixBasePixelStride = eastl::max(commonSettings.historyFixBasePixelStride, 1u);
+			m_RelaxSettings.historyFixAlternatePixelStride = eastl::max(commonSettings.historyFixAlternatePixelStride, 1u);
+			m_RelaxSettings.fastHistoryClampingSigmaScale = eastl::clamp(commonSettings.fastHistoryClampingSigmaScale, 1.0f, 3.0f);
+			m_RelaxSettings.diffusePrepassBlurRadius = eastl::max(commonSettings.diffusePrepassBlurRadius, 0.0f);
+			m_RelaxSettings.specularPrepassBlurRadius = eastl::max(commonSettings.specularPrepassBlurRadius, 0.0f);
+			m_RelaxSettings.minHitDistanceWeight = eastl::clamp(commonSettings.minHitDistanceWeight, 0.0001f, 0.2f);
+			m_RelaxSettings.diffusePhiLuminance = eastl::max(relaxSettings.diffusePhiLuminance, 0.0f);
+			m_RelaxSettings.specularPhiLuminance = eastl::max(relaxSettings.specularPhiLuminance, 0.0f);
+			m_RelaxSettings.lobeAngleFraction = eastl::clamp(commonSettings.lobeAngleFraction, 0.0f, 1.0f);
+			m_RelaxSettings.roughnessFraction = eastl::clamp(commonSettings.roughnessFraction, 0.0f, 1.0f);
+			m_RelaxSettings.specularVarianceBoost = eastl::max(relaxSettings.specularVarianceBoost, 0.0f);
+			m_RelaxSettings.specularLobeAngleSlack = eastl::max(relaxSettings.specularLobeAngleSlack, 0.0f);
+			m_RelaxSettings.atrousIterationNum = eastl::clamp(relaxSettings.atrousIterationNum, 2u, 8u);
+			m_RelaxSettings.depthThreshold = eastl::max(relaxSettings.depthThreshold, 0.0f);
+			m_RelaxSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
+			m_RelaxSettings.enableRoughnessEdgeStopping = relaxSettings.enableRoughnessEdgeStopping;
+		} else {
+			auto& reblurSettings = settings.NRDReblurSettings;
+
+			m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(reblurSettings.maxAccumulatedFrameNum, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
+			m_ReblurSettings.maxFastAccumulatedFrameNum = eastl::min(reblurSettings.maxFastAccumulatedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
+			m_ReblurSettings.maxStabilizedFrameNum = eastl::min(reblurSettings.maxStabilizedFrameNum, m_ReblurSettings.maxAccumulatedFrameNum);
+			m_ReblurSettings.historyFixFrameNum = m_ReblurSettings.maxFastAccumulatedFrameNum > 0
+				? eastl::min(commonSettings.historyFixFrameNum, m_ReblurSettings.maxFastAccumulatedFrameNum - 1)
+				: 0;
+
+			m_ReblurSettings.historyFixBasePixelStride = eastl::max(commonSettings.historyFixBasePixelStride, 1u);
+			m_ReblurSettings.historyFixAlternatePixelStride = eastl::max(commonSettings.historyFixAlternatePixelStride, 1u);
+
+			m_ReblurSettings.fastHistoryClampingSigmaScale = eastl::clamp(commonSettings.fastHistoryClampingSigmaScale, 1.0f, 3.0f);
+			m_ReblurSettings.diffusePrepassBlurRadius = eastl::max(commonSettings.diffusePrepassBlurRadius, 0.0f);
+			m_ReblurSettings.specularPrepassBlurRadius = eastl::max(commonSettings.specularPrepassBlurRadius, 0.0f);
+			m_ReblurSettings.minHitDistanceWeight = eastl::clamp(commonSettings.minHitDistanceWeight, 0.0001f, 0.2f);
+			m_ReblurSettings.minBlurRadius = eastl::max(reblurSettings.minBlurRadius, 0.0f);
+			m_ReblurSettings.maxBlurRadius = eastl::max(reblurSettings.maxBlurRadius, m_ReblurSettings.minBlurRadius);
+			m_ReblurSettings.lobeAngleFraction = eastl::clamp(commonSettings.lobeAngleFraction, 0.0f, 1.0f);
+			m_ReblurSettings.roughnessFraction = eastl::clamp(commonSettings.roughnessFraction, 0.0f, 1.0f);
+			m_ReblurSettings.planeDistanceSensitivity = eastl::max(reblurSettings.planeDistanceSensitivity, 0.0f);
+			m_ReblurSettings.specularProbabilityThresholdsForMvModification[0] =
+				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[0], 0.0f, 1.0f);
+			m_ReblurSettings.specularProbabilityThresholdsForMvModification[1] =
+				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[1],
+					m_ReblurSettings.specularProbabilityThresholdsForMvModification[0], 1.0f);
+			m_ReblurSettings.fireflySuppressorMinRelativeScale =
+				eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
+			m_ReblurSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
+			m_ReblurSettings.usePrepassOnlyForSpecularMotionEstimation = reblurSettings.usePrepassOnlyForSpecularMotionEstimation;
+			m_ReblurSettings.returnHistoryLengthInsteadOfOcclusion = reblurSettings.returnHistoryLengthInsteadOfOcclusion;
+		}
 
 		m_SettingsDirty = true;
 	}
@@ -420,7 +477,7 @@ namespace Pass::NRD
 		std::memcpy(m_CommonSettings.viewToClipMatrix, &cameraData.projMat, sizeof(float4x4));
 
 		const auto resolution = renderer->GetResolution();
-		const auto dynamicResolution = renderer->GetDynamicResolution();
+		auto dynamicResolution = renderer->GetScaledDynamicResolution();
 
 		m_CommonSettings.frameIndex = static_cast<uint32_t>(renderer->GetFrameIndex() % UINT32_MAX);
 
@@ -431,6 +488,11 @@ namespace Pass::NRD
 		auto prevJitter = renderer->GetPrevJitter();
 		m_CommonSettings.cameraJitterPrev[0] = prevJitter.x;
 		m_CommonSettings.cameraJitterPrev[1] = prevJitter.y;
+
+		m_CommonSettings.motionVectorScale[0] = 1.0f;
+		m_CommonSettings.motionVectorScale[1] = 1.0f;
+		m_CommonSettings.motionVectorScale[2] = 0.0f;
+		m_CommonSettings.isMotionVectorInWorldSpace = false;
 
 		m_CommonSettings.resourceSizePrev[0] = m_CommonSettings.resourceSize[0];
 		m_CommonSettings.resourceSizePrev[1] = m_CommonSettings.resourceSize[1];
@@ -448,22 +510,29 @@ namespace Pass::NRD
 #endif
 	}
 
-	nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
-	{
-		auto* renderer = Renderer::GetSingleton();
-		auto* renderTargets = renderer->GetRenderTargets();
-		
-		auto& textureManager = renderer->RenderTargetManager();
+		bool NRDIntegration::IsDownscaled() const
+		{
+			return Scene::GetSingleton()->GetResolutionScale() != 1.0f;
+		}
 
-		auto* viewDepth = textureManager.GetTexture(RenderTarget::ViewDepth);
-		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
-		auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
+		nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
+		{
+			auto* renderer = Renderer::GetSingleton();
+			auto* renderTargets = renderer->GetRenderTargets();
+			
+			auto& textureManager = renderer->RenderTargetManager();
+
+			auto* viewDepth = textureManager.GetTexture(RenderTarget::ViewDepth);
+			auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
+			auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
+
+			const bool downscaled = IsDownscaled();
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:
-			return m_MotionVectorsScratch;
+			return downscaled ? textureManager.GetTexture(RenderTarget::DownscaledMotionVectors) : m_MotionVectorsScratch.Get();
 		case nrd::ResourceType::IN_NORMAL_ROUGHNESS:
-			return renderTargets ? renderTargets->normalRoughness : nullptr;
+			return downscaled ? textureManager.GetTexture(RenderTarget::DownscaledNormalRoughness) : renderTargets->normalRoughness.Get();
 		case nrd::ResourceType::IN_VIEWZ:
 			return viewDepth;
 		case nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST:
@@ -512,7 +581,8 @@ namespace Pass::NRD
 		if (!m_NRD)
 			return;
 
-		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser != Denoiser::NRD)
+		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser !=
+			(IsRelax() ? Denoiser::NRD_Relax : Denoiser::NRD_Reblur))
 			return;
 
 		if (m_ResourcesDirty) {
@@ -522,20 +592,28 @@ namespace Pass::NRD
 
 		auto* renderer = GetRenderer();
 
-		nvrhi::ITexture* sourceMotionVectors = nullptr;
-		if (m_Mode == Mode::GlobalIllumination)
-			sourceMotionVectors = renderer->GetMotionVectorTexture();
-		else
-			sourceMotionVectors = renderer->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D);
+		// When resolution scaling is active, PostProcess already wrote downscaled MVs to DownscaledMotionVectors
+		const bool downscaled = IsDownscaled();
 
-		if (sourceMotionVectors && m_MotionVectorsScratch) {
-			const nvrhi::TextureDesc& mvDesc = sourceMotionVectors->getDesc();
-			auto mvRegion = nvrhi::TextureSlice{ 0, 0, 0, mvDesc.width, mvDesc.height, 1 };
-			commandList->copyTexture(m_MotionVectorsScratch, mvRegion, sourceMotionVectors, mvRegion);
+		if (!downscaled) {
+			nvrhi::ITexture* sourceMotionVectors = nullptr;
+			if (m_Mode == Mode::GlobalIllumination)
+				sourceMotionVectors = renderer->GetMotionVectorTexture();
+			else
+				sourceMotionVectors = renderer->RenderTargetManager().GetTexture(RenderTarget::MotionVectors3D);
+
+			if (sourceMotionVectors && m_MotionVectorsScratch) {
+				const nvrhi::TextureDesc& mvDesc = sourceMotionVectors->getDesc();
+				auto mvRegion = nvrhi::TextureSlice{ 0, 0, 0, mvDesc.width, mvDesc.height, 1 };
+				commandList->copyTexture(m_MotionVectorsScratch, mvRegion, sourceMotionVectors, mvRegion);
+			}
 		}
 
 		if (m_SettingsDirty) {
-			nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_ReblurSettings);
+			if (IsRelax())
+				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_RelaxSettings);
+			else
+				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_ReblurSettings);
 			m_SettingsDirty = false;
 		}
 
@@ -555,6 +633,11 @@ namespace Pass::NRD
 		if (computeDispatchesResult != nrd::Result::SUCCESS) {
 			logger::error("NRDIntegration: failed to get NRD dispatches {}", magic_enum::enum_name(computeDispatchesResult));
 			return;
+		}
+
+		if (m_DispatchBindingCaches.size() != dispatchCount) {
+			m_DispatchBindingCaches.clear();
+			m_DispatchBindingCaches.resize(dispatchCount);
 		}
 
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
@@ -577,7 +660,6 @@ namespace Pass::NRD
 			if (dispatchDesc.constantBufferData && dispatchDesc.constantBufferDataSize > 0)
 				commandList->writeBuffer(m_ConstantBuffer, dispatchDesc.constantBufferData, dispatchDesc.constantBufferDataSize);
 
-			nvrhi::BindingSetDesc resourceBindingDesc;
 			eastl::vector<nvrhi::ITexture*> srvTextures(maxTextures, m_FallbackSrvTexture);
 			eastl::vector<nvrhi::ITexture*> uavTextures(maxStorageTextures, m_FallbackUavTexture);
 			uint32_t resourceCursor = 0;
@@ -624,24 +706,47 @@ namespace Pass::NRD
 					uavBase += rangeDesc.descriptorsNum;
 			}
 
-			for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
-				item.arrayElement = textureIndex;
-				resourceBindingDesc.bindings.push_back(item);
+			auto& cache = m_DispatchBindingCaches[dispatchIndex];
+
+			bool cacheValid = cache.bindingSet.Get() != nullptr &&
+			                  cache.textures.size() == (srvTextures.size() + uavTextures.size());
+
+			if (cacheValid) {
+				size_t idx = 0;
+				for (auto* tex : srvTextures) {
+					if (cache.textures[idx++] != tex) { cacheValid = false; break; }
+				}
+				if (cacheValid) {
+					for (auto* tex : uavTextures) {
+						if (cache.textures[idx++] != tex) { cacheValid = false; break; }
+					}
+				}
 			}
 
-			for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
-				auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
-				item.arrayElement = storageTextureIndex;
-				resourceBindingDesc.bindings.push_back(item);
-			}
+			if (!cacheValid) {
+				nvrhi::BindingSetDesc resourceBindingDesc;
 
-			nvrhi::BindingSetHandle resourceBindingSet =
-				renderer->GetDevice()->createBindingSet(resourceBindingDesc, m_ResourceBindingLayout);
+				for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
+					auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
+					item.arrayElement = textureIndex;
+					resourceBindingDesc.bindings.push_back(item);
+				}
+
+				for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
+					auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
+					item.arrayElement = storageTextureIndex;
+					resourceBindingDesc.bindings.push_back(item);
+				}
+
+				cache.bindingSet = renderer->GetDevice()->createBindingSet(resourceBindingDesc, m_ResourceBindingLayout);
+				cache.textures.clear();
+				cache.textures.insert(cache.textures.end(), srvTextures.begin(), srvTextures.end());
+				cache.textures.insert(cache.textures.end(), uavTextures.begin(), uavTextures.end());
+			}
 
 			nvrhi::ComputeState state;
 			state.pipeline = pipeline.pipeline;
-			state.bindings = { m_GlobalBindingSet, resourceBindingSet };
+			state.bindings = { m_GlobalBindingSet, cache.bindingSet };
 			commandList->setComputeState(state);
 			commandList->dispatch(dispatchDesc.gridWidth, dispatchDesc.gridHeight);
 

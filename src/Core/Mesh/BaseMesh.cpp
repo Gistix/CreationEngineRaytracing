@@ -1,9 +1,9 @@
-#include "Core/BaseMesh.h"
-#include "Core/DirectMesh.h"
-#include "Core/LandLODMesh.h"
-#include "Core/SkinnedMesh.h"
-#include "Core/DynamicMesh.h"
-#include "Core/SubIndexMesh.h"
+#include "Core/Mesh/BaseMesh.h"
+#include "Core/Mesh/Mesh.h"
+#include "Core/Mesh/LandLODMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
+#include "Core/Mesh/SubIndexMesh.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
@@ -34,7 +34,7 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
-		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
+		return eastl::make_unique<Mesh>(bsTriShape, commandList);
 	}
 
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
@@ -167,8 +167,20 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 
 	// Update Transform
 	{
+		m_World = m_BSTriShape->world;
+
+		const bool isPlayer = m_Cluster ? m_Cluster->IsPlayer() : false;
+		bool drawFirstPerson = false;
+		if (isPlayer) {
+			const auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+			if ((drawFirstPerson = sceneGraph->GetDrawFirstPerson()))
+				m_World.translate += sceneGraph->GetFirstPersonPosition();
+		}
+
+		m_Flags.set(drawFirstPerson, Flags::FirstPerson);
+
 		float3x4 transform;
-		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
+		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_World));
 
 		if (m_NeedsPrevInit)
 			MarkDirty(DirtyFlags::Transform);

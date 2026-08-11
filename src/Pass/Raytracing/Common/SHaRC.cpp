@@ -38,6 +38,14 @@ namespace Pass
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
+		SettingsChanged(Scene::GetSingleton()->m_Settings);
+	}
+
+	void SHaRC::Initialize()
+	{
+		SetupUpdate();
+		SetupResolve();
 	}
 
 	void SHaRC::SettingsChanged(const Settings& settings)
@@ -117,7 +125,7 @@ namespace Pass
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
-		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
 		if (!rayGenBlob) {
 			logger::error("SHaRC::SetupUpdate - Failed to compile update shader.");
 			return;
@@ -169,15 +177,13 @@ namespace Pass
 
 		m_ResolvePass.m_BindingLayout = device->createBindingLayout(globalBindingLayoutDesc);
 
-
 		const auto linearBlockSizeWStr = std::to_wstring(RESOLVE_LINEAR_BLOCK_SIZE);
 
 		eastl::vector<DxcDefine> defines = {
 			{ L"LINEAR_BLOCK_SIZE", linearBlockSizeWStr.c_str() },
 			{ L"SHARC", L"" },
 			{ L"SHARC_UPDATE", L"0" },
-			{ L"SHARC_RESOLVE", L"1" },
-			{ L"SHARC_ENABLE_FADE_ACCELERATION", L"1" }
+			{ L"SHARC_RESOLVE", L"1" }
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;

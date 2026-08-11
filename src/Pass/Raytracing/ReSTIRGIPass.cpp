@@ -32,6 +32,11 @@ namespace Pass::Raytracing
 			nvrhi::utils::CreateVolatileConstantBufferDesc(
 				sizeof(ReSTIRGIData), "ReSTIR GI Data", Constants::MAX_CB_VERSIONS));
 
+		SettingsChanged(Scene::GetSingleton()->m_Settings);
+	}
+
+	void ReSTIRGIPass::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}
@@ -67,6 +72,9 @@ namespace Pass::Raytracing
 
 	void ReSTIRGIPass::CreatePipeline()
 	{
+		if (!m_BindingLayout)
+			CreateBindingLayout();
+
 		auto device = GetRenderer()->GetDevice();
 
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);

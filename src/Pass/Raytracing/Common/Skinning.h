@@ -71,6 +71,7 @@ namespace Pass
 	public:
 		Skinning(Renderer* renderer);
 
+		virtual void Initialize() override;
 		void CreateBoneBindingLayout();
 		void CreateBindingLayout();
 

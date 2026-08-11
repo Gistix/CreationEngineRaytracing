@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 #include "Core/BLASCluster.h"
 #include "Core/ThreadPool.h"
 
@@ -36,8 +36,10 @@ class SubIndexSegmentMesh;
 class SceneGraph
 {
 	RE::NiCamera* m_Camera = nullptr;
+	bool m_DrawFirstPerson = false;
+	RE::NiPoint3 m_FirstPersonPosition = RE::NiPoint3::Zero();
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_DirectMeshes;
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_Meshes;
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
@@ -156,16 +158,17 @@ public:
 	inline auto& GetPrevPositionDescriptors() const { return m_PrevPositionDescriptors; }
 	inline auto& GetPrevPositionWriteDescriptors() const { return m_PrevPositionWriteDescriptors; }
 
-	nvrhi::IBuffer* GetLightBuffer() const;
-	nvrhi::IBuffer* GetMeshBuffer() const;
-	nvrhi::IBuffer* GetInstanceBuffer() const;
-	nvrhi::IBuffer* GetTransformBuffer() const;
-	nvrhi::IBuffer* GetMeshSlotRemapBuffer() const;
-	nvrhi::IBuffer* GetPropertiesBuffer() const;
+	nvrhi::IBuffer* GetLightBuffer() const { return m_LightBuffer.current(); }
+	nvrhi::IBuffer* GetMeshBuffer() const { return m_MeshManager->GetMeshBuffer(); }
+	nvrhi::IBuffer* GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
+	nvrhi::IBuffer* GetTransformBuffer() const { return m_MeshManager->GetTransformBuffer(); }
+	nvrhi::IBuffer* GetMeshSlotRemapBuffer() const { return m_MeshSlotRemapBuffer.current(); }
+	nvrhi::IBuffer* GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }
+
 	inline auto& GetMeshManager() const { return m_MeshManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
-	inline const auto& GetDirectMeshes() { return m_DirectMeshes; }
+	inline const auto& GetDirectMeshes() { return m_Meshes; }
 
 	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }
@@ -193,6 +196,9 @@ public:
 	inline auto& GetTextureManager() { return m_TextureManager; }
 
 	inline auto& GetCamera() const  { return m_Camera; }
+
+	inline const auto& GetDrawFirstPerson() const { return m_DrawFirstPerson; }
+	inline const auto& GetFirstPersonPosition() const { return m_FirstPersonPosition; }
 
 	inline const auto& GetUpdateTimings() const { return m_UpdateTimings; }
 	

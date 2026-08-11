@@ -18,15 +18,19 @@
 
 #include "raytracing/include/Transparency.hlsli"
 
-#include "Raytracing/Include/SHARC/Sharc.hlsli"
-#include "Raytracing/Include/SHARC/SHaRCHelper.hlsli"
+#if defined(SHARC)
+#   include "Raytracing/Include/SHARC/Sharc.hlsli"
+#   include "Raytracing/Include/SHARC/SHaRCHelper.hlsli"
+#endif
 
 #if defined(GROUP_TILING)
 #   define DXC_STATIC_DISPATCH_GRID_DIM 1
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
-#include "include/NRD.hlsli"
+#if defined(NRD)
+#   include "include/NRD.hlsli"
+#endif
 
 #if USE_RAY_QUERY
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
@@ -41,7 +45,7 @@ void Main()
 #endif
 {
 #if USE_RAY_QUERY
-    uint2 size = Camera.RenderSize;  
+    uint2 size = (uint2)max(uint2(1, 1), (uint2)ceil(float2(Camera.RenderSize) * Raytracing.ResolutionScale));  
 #   if defined(GROUP_TILING)    
     uint2 idx = ThreadGroupTilingX((uint2)ceil(size / THREAD_GROUP_SIZE), THREAD_GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
 #   endif
@@ -56,7 +60,7 @@ void Main()
     SharcParameters sharcParameters = GetSharcParameters();
 
 #    if SHARC_UPDATE
-        uint startIndex = Hash(idx) % 25;
+        uint startIndex = Hash(idx);
 
         uint2 blockOrigin = idx * 5;
 
@@ -75,7 +79,8 @@ void Main()
     const float2 uv = float2(idx + 0.5f) / size;
 
     // If the game has dynamic resolution enabled the textures will not cover the entire extent
-    const float2 dynamicUV = float2(idx + 0.5f) / Camera.ScreenSize;   
+    // This has to map to the original engine resolution (which may have its own resolution scale applied)
+    const float2 dynamicUV = (float2(idx + 0.5f) / Camera.ScreenSize) / Raytracing.ResolutionScale;
     
     const float2 dynamicUVUnjittered = dynamicUV - (Camera.Jitter / Camera.ScreenSize);
 
@@ -83,10 +88,7 @@ void Main()
     
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
-#if defined(RAW_RADIANCE) && defined(NRD)
-    const float depthJittered = Depth.SampleLevel(DefaultSampler, dynamicUV, 0);   
-    ViewDepth[idx] = ScreenToViewDepth(depthJittered, Camera.CameraData);
-#endif 
+
     
     [branch]
     if (depthVS < FP_VIEW_Z || depth >= SKY_Z)
@@ -94,8 +96,13 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
 #       if defined(NRD)
+#           if defined(NRD_REBLUR)
         DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#           else
+        DiffuseOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+        SpecularOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);          
+#           endif
 #       else
         DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
@@ -103,11 +110,6 @@ void Main()
         
 #   else // RAW_RADIANCE
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        
-#       if defined(DLSS_RR)
-        SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-        SpecularHitDistance[idx] = RAY_TMAX;
-#       endif // DLSS_RR
 #   endif // !RAW_RADIANCE
         
 #endif
@@ -150,12 +152,7 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);     
 
-#if !(defined(SHARC) && SHARC_UPDATE)
-#   if defined(DLSS_RR)
-    const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-    SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
-#   endif    
-#endif   
+
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
@@ -168,8 +165,12 @@ void Main()
     MonteCarlo::BRDFWeight brdfWeight;
 #endif
 
-    float3 radiance = 0;
-    bool isSpecular = false;
+#if defined(RAW_RADIANCE)
+    float3 diffuseRadiance = float3(0.0f, 0.0f, 0.0f);
+    float3 specularRadiance = float3(0.0f, 0.0f, 0.0f);
+#else
+    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+#endif
 
     RayDesc ray;
     Payload payload;
@@ -190,10 +191,9 @@ void Main()
 #endif    
     
 #if defined(NRD)
-     float diffHitDist = 0;     
+     float diffHitDist = 0.0f;
+     uint diffPathNum = 0;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
-#else
-    float specHitDist = RAY_TMAX;
 #endif
     
     [loop]
@@ -219,8 +219,11 @@ void Main()
         
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
+#if defined(SHARC)
         float materialRoughnessPrev = 0.0f;
+#endif
         bool isEnter = true;
+        bool isSpecularSample = false;
         uint diffuseBounceCount = 0;
 
         // Water volume tracking for Beer-Lambert absorption
@@ -239,18 +242,6 @@ void Main()
                               
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
        
-#if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
-            float4 scatterSamples;
-            float2 scatterExtraSamples;
-            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
-            direction = surface.Mul(SampleCosineHemisphere(scatterSamples.xy));
-            diffuseBounceCount++;
-
-            throughput *= surface.AO;
-            throughput *= surface.Albedo;
-            
-            const bool hasTransmission = false;
-#else
             float4 scatterSamples;
             float2 scatterExtraSamples;
             GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
@@ -259,13 +250,15 @@ void Main()
             else
                 break;            
  
+#if defined(RAW_RADIANCE)
             if (j == 0)
-                isSpecular = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
+                isSpecularSample = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
+#endif
             if (bsdfSample.isLobe(LobeType::Diffuse))
                 diffuseBounceCount++;
             
 #if defined(RAW_RADIANCE) && !defined(NRD)
-            const bool demodulatedThroughput = (j == 0 && !isSpecular);
+            const bool demodulatedThroughput = (j == 0 && !isSpecularSample);
 #endif
             
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
@@ -280,7 +273,7 @@ void Main()
                 waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
-#   if defined(RAW_RADIANCE) && !defined(NRD)
+#if defined(RAW_RADIANCE) && !defined(NRD)
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
@@ -291,50 +284,55 @@ void Main()
                 float3 diffuseWeightDemodulated = all(surface.DiffuseAlbedo > 0.f)
                     ? brdfWeight.diffuse / max(surface.DiffuseAlbedo, 1e-4f)
                     : brdfWeight.diffuse;            
-            
+        
                 throughput *= diffuseWeightDemodulated + brdfWeight.specular + brdfWeight.transmission;                      
             } else {
                 throughput *= bsdfSample.weight;
             }         
-#   else    // RAW_RADIANCE
+#else    // RAW_RADIANCE
             throughput *= bsdfSample.weight;
-#   endif   // !RAW_RADIANCE
-            
-#endif  // LIGHTING_MODE
+#endif   // !RAW_RADIANCE
             
 #if defined(SHARC) && SHARC_UPDATE
             SharcSetThroughput(sharcState, throughput);
 #else
-            if (Raytracing.RussianRoulette == 1)
-            {
-                float3 throughputColor;
-
-#   if defined(RAW_RADIANCE) && !defined(NRD)
-                // Apply russian roulette based on the original throughput
-                throughputColor = demodulatedThroughput ? originalThroughput : throughput;
-#   else
-                throughputColor = throughput;
+#   if RUSSIAN_ROULETTE != 0          
+#       if defined(RAW_RADIANCE) && !defined(NRD)
+        // Apply russian roulette based on the original throughput
+        float3 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
+#       else
+        float3 throughputColor = throughput;
+#       endif            
 #   endif
+            
+#   if RUSSIAN_ROULETTE == 1
+        const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
+        const float rrProb = min(rrVal, 0.95f);
+
+            if (Random(randomSeed) < rrProb)
+                break;
+
+            throughput /= (1.0f - rrProb);
+#   elif RUSSIAN_ROULETTE == 2
+            const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
+            float rrProb = saturate(0.85 - rrVal);
+            rrProb *= rrProb;
+
+            rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
+
+            if (Random(randomSeed) < rrProb)
+                break;
+
+            throughput /= (1.0f - rrProb);
                 
-                const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
-                float rrProb = saturate(0.85 - rrVal);
-                rrProb *= rrProb;
-
-                rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
-
-                if (Random(randomSeed) < rrProb)
-                    break;
-
-                throughput /= (1.0f - rrProb);
-                
-#   if defined(RAW_RADIANCE) && !defined(NRD)
-                if (demodulatedThroughput)
-                    originalThroughput /= (1.0f - rrProb);
-#   endif                
-            }
+#       if defined(RAW_RADIANCE) && !defined(NRD)
+            if (demodulatedThroughput)
+                originalThroughput /= (1.0f - rrProb);
+#       endif                
+#   endif
 #endif
             
-#if defined(SHARC)
+#if defined(SHARC) && (SHARC_ENABLE_SH_ENCODING || !SHARC_UPDATE)
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
             // First bounce comes from GBuffer
@@ -386,9 +384,6 @@ void Main()
 #if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
-#else
-            if (j == 0 && isSpecular)
-                specHitDist = min(specHitDist, payload.hitDistance);
 #endif                      
             
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
@@ -470,7 +465,9 @@ void Main()
                 directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
             }
             
+#if !(defined(SHARC) && SHARC_UPDATE)
             sampleRadiance += directRadiance * throughput;
+#endif
 
 #if defined(SHARC) && SHARC_UPDATE
             if (!SharcUpdateHit(sharcParameters, sharcState, sharcHitData, directRadiance, Random(randomSeed)))
@@ -492,17 +489,28 @@ void Main()
         }
 
 #if defined(NRD)
+#   if defined(NRD_REBLUR)
+        float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, sourceSurface.Roughness);
+#   else
         float normHitDist = accumulatedHitDist;
-        normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecular ? sourceSurface.Roughness : 1.0);
+#   endif
         
-        if (isSpecular) {
+        if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
         } else {
             diffHitDist += normHitDist;
+            diffPathNum++;
         }
 #endif
         
+#if defined(RAW_RADIANCE)
+        if (isSpecularSample)
+            specularRadiance += sampleRadiance;
+        else
+            diffuseRadiance += sampleRadiance;
+#else
         radiance += sampleRadiance;
+#endif
 
 #if defined(SHARC) && SHARC_UPDATE
         return;
@@ -511,15 +519,18 @@ void Main()
 
 #if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+    diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
 #endif
     
+#if defined(RAW_RADIANCE)
+    diffuseRadiance /= MAX_SAMPLES;
+    specularRadiance /= MAX_SAMPLES;
+#else
     radiance /= MAX_SAMPLES;
+#endif
        
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
-    float3 diffuseRadiance = isSpecular ? 0.0.xxx : radiance;
-    float3 specularRadiance = isSpecular ? radiance : 0.0.xxx;
- 
 #       if defined(NRD)
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
@@ -527,26 +538,23 @@ void Main()
     diffuseRadiance /= diffFactor;
     specularRadiance /= specFactor;
     
-#           if defined(NRD)
+#   if defined(NRD_REBLUR)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
-#           endif // NRD 
+#   else
+    DiffuseOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
+    SpecularOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+#   endif  
     
-    DiffuseFactor[idx] = diffFactor;
-    SpecularFactor[idx] = specFactor;  
+
     
 #       else // !NRD
     DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);
     SpecularOutput[idx] = float4(specularRadiance, specHitDist);    
 #       endif // NRD
     
-#   else // ! RAW_RADIANCE
+#   else // !RAW_RADIANCE
     Output[idx] = float4(radiance, 1.0f);
-    
-#       if defined(DLSS_RR) 
-    SpecularHitDistance[idx] = specHitDist;
-#       endif // DLSS_RR
-    
 #   endif // RAW_RADIANCE
 #endif    
 }

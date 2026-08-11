@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Constants.h"
+#include <eastl/unordered_set.h>
 
 namespace Util
 {
@@ -87,19 +88,20 @@ namespace Util
 			return result;
 		}
 
-		// A custom visit controller built to propagate down the "owning" TESObjectREFR
 		template <typename Func>
 		static CESEAdapter::RE::BSVisitControl ScenegraphTriShapes(
 			RE::NiAVObject* a_object, 
 			Func&& a_func,
-			RE::TESObjectREFR* parentRefr = nullptr)
+			RE::TESObjectREFR* parentRefr = nullptr,
+			RE::NiAVObject* firstPersonRoot = nullptr)
 		{
 			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
 			if (!a_object)
 				return result;
 
-			if (Util::Adapter::IsNiAVObjectHidden(a_object))
+			const bool isVisibleFP = (a_object == firstPersonRoot);
+			if (!isVisibleFP && Util::Adapter::IsNiAVObjectHidden(a_object))
 				return result;
 
 			// Early return for TriShapes — most common actionable leaf
@@ -119,9 +121,9 @@ namespace Util
 			{
 				auto& children = Util::Adapter::GetChildren(node);
 				if (auto switchNode = node->AsSwitchNode()) {
-					const auto index = static_cast<uint32_t>(switchNode->index);
-					if (index < children.capacity())
-						result = ScenegraphTriShapes(children[static_cast<uint16_t>(index)].get(), a_func, parentRefr);
+					auto index = static_cast<uint16_t>(switchNode->index);
+					if (index < children.size())
+						result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr, firstPersonRoot);
 				}
 				else {
 					// Propagate owner refr through FadeNodes
@@ -141,7 +143,7 @@ namespace Util
 								if (child->parent)
 									continue;
 
-								result = ScenegraphTriShapes(child.get(), a_func, refr);
+								result = ScenegraphTriShapes(child.get(), a_func, refr, firstPersonRoot);
 								if (result == CESEAdapter::RE::BSVisitControl::kStop)
 									break;
 							}
@@ -149,7 +151,7 @@ namespace Util
 					}
 
 					for (auto& child : children) {
-						result = ScenegraphTriShapes(child.get(), a_func, refr);
+						result = ScenegraphTriShapes(child.get(), a_func, refr, firstPersonRoot);
 						if (result == CESEAdapter::RE::BSVisitControl::kStop)
 							break;
 					}

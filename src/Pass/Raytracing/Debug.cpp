@@ -30,7 +30,10 @@ namespace Pass
 		m_Defines = Util::Shader::GetPathTracingDefines(settings, false, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+	}
 
+	void Debug::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}
@@ -170,7 +173,7 @@ namespace Pass
 
 		auto device = GetRenderer()->GetDevice();
 
-		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, L"cs_6_5");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)

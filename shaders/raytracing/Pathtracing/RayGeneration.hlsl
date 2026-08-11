@@ -161,7 +161,7 @@ void Main()
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
-        SpecularHitDistance[idx] = RAY_TMAX;        
+        SpecularHitDistance[idx] = 0;
 #       endif
 #   endif
         return;
@@ -178,7 +178,7 @@ void Main()
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-        SpecularHitDistance[idx] = RAY_TMAX;                
+        SpecularHitDistance[idx] = 0;                
 #       endif              
 #   endif       
         
@@ -269,7 +269,7 @@ void Main()
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
 #           else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
-        SpecularHitDistance[idx] = RAY_TMAX;
+        SpecularHitDistance[idx] = 0;
 #           endif  
 #       endif
     
@@ -316,12 +316,19 @@ void Main()
         SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
     }
 #   endif
-    
-    NormalRoughness[idx] = float4(
+#if defined(NRD)
+    NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(
         useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal, 
-        useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness
+        useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness, 
+        0.0f
     );
-    
+#else
+    NormalRoughness[idx] = float4(
+        normalize(useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal), 
+        saturate(useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness)
+    );
+#endif
+
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
     MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
@@ -653,14 +660,22 @@ void Main()
 #   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
 #   endif
-            NormalRoughness[idx] = float4(sourceSurface.CoatNormal, sourceSurface.CoatRoughness);
+#   if defined(NRD)
+            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.CoatNormal, sourceSurface.CoatRoughness, 0.0f);
+#   else
+            NormalRoughness[idx] = float4(normalize(sourceSurface.CoatNormal), saturate(sourceSurface.CoatRoughness));
+#   endif
         }
         else
         {
 #   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
 #   endif
-            NormalRoughness[idx] = float4(sourceSurface.Normal, sourceSurface.Roughness);
+#   if defined(NRD)
+            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.Normal, sourceSurface.Roughness, 0.0f);
+#   else
+            NormalRoughness[idx] = float4(normalize(sourceSurface.Normal), saturate(sourceSurface.Roughness));
+#   endif
         }
     }
 
@@ -735,15 +750,20 @@ void Main()
     MonteCarlo::BRDFWeight brdfWeight;
 #endif
 
-    float3 radiance = 0;
+#if defined(NRD)
+    float3 diffuseRadiance = float3(0.0f, 0.0f, 0.0f);
+    float3 specularRadiance = float3(0.0f, 0.0f, 0.0f);
+#else
+    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+#endif
     bool isSpecular = false;
-    bool isSpecularSample = false;
     
 #if defined(NRD)
      float diffHitDist = 0;     
+     uint diffPathNum = 0;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
-#else
-    float specHitDist = RAY_TMAX;
+#elif defined(DLSS_RR)
+    float specHitDist = 0.0f;
 #endif
 
     RayDesc ray;
@@ -796,6 +816,7 @@ void Main()
         bool arrivedViaDelta = false;
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
+        bool isSpecularSample = false;
         uint diffuseBounceCount = 0;
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
@@ -923,26 +944,36 @@ void Main()
 #if defined(SHARC) && SHARC_UPDATE
             SharcSetThroughput(sharcState, throughput);
 #else
-            if (Raytracing.RussianRoulette == 1)
-            {
-                float3 throughputColor;
 
-#   if defined(RAW_RADIANCE)
-                throughputColor = throughput * throughputDelta;
-#   else
-                throughputColor = throughput;
+#   if RUSSIAN_ROULETTE != 0          
+#       if defined(RAW_RADIANCE)
+        // Apply russian roulette based on the original throughput
+        float3 throughputColor = throughput * throughputDelta;
+#       else
+        float3 throughputColor = throughput;
+#       endif            
 #   endif
-                const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
-                float rrProb = saturate(0.85 - rrVal);
-                rrProb *= rrProb;
+            
+#   if RUSSIAN_ROULETTE == 1
+            const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
+            const float rrProb = min(rrVal, 0.95f);
 
-                rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
+            if (Random(randomSeed) < rrProb)
+                break;
 
-                if (Random(randomSeed) < rrProb)
-                    break;
+            throughput /= (1.0f - rrProb); 
+#   elif RUSSIAN_ROULETTE == 2
+            const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));            
+            float rrProb = saturate(0.85 - rrVal);
+            rrProb *= rrProb;
 
-                throughput /= (1.0f - rrProb);
-            }
+            rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
+
+            if (Random(randomSeed) < rrProb)
+                break;
+
+            throughput /= (1.0f - rrProb);
+#   endif
 #endif
             
 #if defined(SHARC)
@@ -979,9 +1010,9 @@ void Main()
 #if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
-#else
+#elif defined(DLSS_RR)
             if (isSpecularSample)
-                specHitDist = min(specHitDist, payload.hitDistance);
+                specHitDist = payload.hitDistance;
 #endif               
             
             if (!payload.Hit())
@@ -1262,24 +1293,43 @@ void Main()
         
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE        
 #   if defined(NRD)
+#       if defined(NRD_REBLUR)
         float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
+#       else
+        float normHitDist = accumulatedHitDist;
+#       endif
         
         if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
         } else {
             diffHitDist += normHitDist;
+            diffPathNum++;
         }
 #   endif
 #endif        
         
+#if defined(NRD)
+        if (isSpecularSample)
+            specularRadiance += sampleRadiance;
+        else
+            diffuseRadiance += sampleRadiance;
+#else
         radiance += sampleRadiance;
+#endif
 
 #if defined(SHARC) && SHARC_UPDATE
         return;
 #endif
     }
 
-    radiance /= MAX_SAMPLES;        
+#if defined(NRD)
+    NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+    diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
+    diffuseRadiance /= MAX_SAMPLES;
+    specularRadiance /= MAX_SAMPLES;
+#else
+    radiance /= MAX_SAMPLES;
+#endif        
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     // FILL mode output: combine stable radiance (noise-free) with all planes' noisy radiance
@@ -1297,13 +1347,15 @@ void Main()
     {
         float3 primaryWaterAttenuation = exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
         direct *= primaryWaterAttenuation;
+#   if defined(NRD)
+        diffuseRadiance *= primaryWaterAttenuation;
+        specularRadiance *= primaryWaterAttenuation;
+#   else
         radiance *= primaryWaterAttenuation;
+#   endif
     }
     
 #if defined(NRD)
-    float3 diffuseRadiance = isSpecularSample ? 0.0.xxx : radiance;
-    float3 specularRadiance = isSpecularSample ? radiance : 0.0.xxx;
-    
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
 
@@ -1311,8 +1363,13 @@ void Main()
     specularRadiance /= specFactor;    
     
     Output[idx] = float4(direct, 1.0f);
+#   if defined(NRD_REBLUR)
     DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
+#   else
+    DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
+    SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+#   endif  
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;    

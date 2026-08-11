@@ -40,13 +40,13 @@ namespace Pass::Raytracing
 		SceneTLAS* m_SceneTLAS;
 
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
-		bool m_Enabled = false;
 		rtxdi::ReSTIRGI_ResamplingMode m_ResamplingMode = rtxdi::ReSTIRGI_ResamplingMode::TemporalAndSpatial;
 		eastl::vector<ShaderDefine> m_Defines;
 
 	public:
 		ReSTIRGIPass(Renderer* renderer, SceneTLAS* sceneTLAS);
 
+		virtual void Initialize() override;
 		virtual void CreatePipeline() override;
 
 		virtual void ResolutionChanged(uint2 resolution) override;

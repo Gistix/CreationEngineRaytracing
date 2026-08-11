@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 
 class SceneGraph;
 class SubIndexSegmentMesh;
@@ -11,7 +11,7 @@ class SubIndexSegmentMesh;
 // own BLASCluster (in SceneGraph::m_SubIndexSegmentClusters) so it gets its own BLAS,
 // InstanceData, and TLAS entry.
 //
-// SubIndexMesh itself is a BaseMesh in SceneGraph::m_DirectMeshes (for lifecycle
+// SubIndexMesh itself is a BaseMesh in SceneGraph::m_Meshes (for lifecycle
 // tracking via the existing OnDestroy / deferred-destroy flow) but is NOT a member
 // of any BLASCluster; its m_GeometryDescs is empty.
 //

@@ -1,4 +1,4 @@
-#include "Core/DynamicMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Scene.h"

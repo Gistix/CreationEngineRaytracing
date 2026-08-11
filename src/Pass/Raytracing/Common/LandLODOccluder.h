@@ -36,6 +36,7 @@ namespace Pass
 	public:
 		LandLODOccluder(Renderer* renderer);
 
+		virtual void Initialize() override;
 		void CreateBindingLayout();
 
 		virtual void CreatePipeline() override;
