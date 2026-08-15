@@ -247,8 +247,10 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 			auto* skinData = skinInstance->skinData.get();
 			if (skinData && skinData->bones != 0) {
-				if (m_BoneWorlds.size() != skinData->bones)
+				if (m_BoneWorlds.size() != skinData->bones) {
 					m_BoneWorlds.resize(skinData->bones);
+					InitSkinToBones(skinInstance);
+				}
 
 				for (uint32_t i = 0; i < skinData->bones; i++)
 					PackNiTransform(*skinInstance->boneWorldTransforms[i], m_BoneWorlds[i]);
