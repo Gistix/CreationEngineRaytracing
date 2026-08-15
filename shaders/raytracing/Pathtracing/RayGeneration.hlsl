@@ -1151,8 +1151,8 @@ void Main()
 #   endif // SHARC_SEPARATE_EMISSIVE
 
 #   if !SHARC_UPDATE
-            uint gridLevel = HashGridGetLevel(surface.Position, sharcParameters.gridParameters);
-            float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.gridParameters);
+            uint gridLevel = HashGridGetLevel(surface.Position, sharcParameters.hashGridParameters);
+            float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.hashGridParameters);
             bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
             
             if (isValidHit) {

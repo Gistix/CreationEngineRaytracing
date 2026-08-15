@@ -3,7 +3,7 @@
 #   ifndef SHARC_DEPENDENCY_HLSLI
 #       define SHARC_DEPENDENCY_HLSLI
 
-#       define SHARC_ENABLE_64_BIT_ATOMICS 0
+#       define HASH_GRID_ENABLE_64_BIT_ATOMICS 0
 
 #       ifndef SHARC_UPDATE
 #           define SHARC_UPDATE 0
