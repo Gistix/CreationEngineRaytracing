@@ -98,12 +98,15 @@ struct Scene
 			m_MenuState.set(ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
 			m_MenuState.set(ui->IsMenuOpen(RE::MapMenu::MENU_NAME), MenuState::MapMenu);
 
-			m_MenuState.set(ui->IsShowingMenus(), MenuState::Any);
-
 			m_MenuStateUpdateFrame = frameCount;
 		}
 
 		return m_MenuState;
+	}
+
+	bool CanCull()
+	{
+		return GetMenuState().none(MenuState::MainMenu, MenuState::LoadingMenu);
 	}
 
 	inline bool IsPathTracingActive() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing; };
@@ -111,15 +114,13 @@ struct Scene
 	inline bool ApplyPathTracingCull() 
 	{ 
 		return IsPathTracingActive() &&
-			m_Settings.ExperimentalSettings.PathTracingCull != PTCullMode::Disabled && 
-			GetMenuState() != MenuState::None;
+			m_Settings.ExperimentalSettings.PathTracingCull != PTCullMode::Disabled && CanCull();
 	}
 
 	inline bool ApplyFullPathTracingCull()
 	{
 		return IsPathTracingActive() &&
-			m_Settings.ExperimentalSettings.PathTracingCull == PTCullMode::Full &&
-			GetMenuState() != MenuState::None;
+			m_Settings.ExperimentalSettings.PathTracingCull == PTCullMode::Full && CanCull();
 	}
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
