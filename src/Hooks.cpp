@@ -2,9 +2,6 @@
 #include "Renderer.h"
 #include "Util.h"
 
-#include "Core/D3D12Texture.h"
-#include "Core/Mesh/DynamicMesh.h"
-
 namespace Hooks
 {
 	struct ID3D11Device_CreateBuffer
@@ -329,40 +326,6 @@ namespace Hooks
 	}
 
 #if defined(SKYRIM)
-	struct BSGraphicsTexture_Dtor
-	{
-		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::BSGraphics::Texture* a_texture)
-		{
-			if (a_texture->pad24 == NO_DX12RESOURCE) {
-				func(a_renderer, a_texture);
-				return;
-			}
-
-			if (InterlockedExchangeAdd(&a_texture->refCount, 0xFFFFFFFF) == 1)
-			{
-				auto* d3d12Texture = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(a_texture);
-
-				if (d3d12Texture->d3d12Texture)
-					d3d12Texture->d3d12Texture->Release();
-
-				if (d3d12Texture->resourceView)
-					d3d12Texture->resourceView->Release();
-
-				if (d3d12Texture->texture)
-					d3d12Texture->texture->Release();
-
-				if (d3d12Texture->UAV)
-					d3d12Texture->UAV->Release();
-
-				auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
-
-				// Doesn't take size to be freed?
-				scrapHeap->Deallocate(d3d12Texture);
-			}
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	HRESULT CreateTextureAndSRV::thunk(
 		ID3D11Device* a_device,
 		D3D11_RESOURCE_DIMENSION a_dimension,
@@ -376,194 +339,53 @@ namespace Hooks
 		const D3D11_SUBRESOURCE_DATA* a_data,
 		RE::BSGraphics::Texture** a_outTexture
 	) {
-		bool shareTexture = a_dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D && !a_cubemap;
-
-		if (!shareTexture) {
-			auto result = func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
-
-			// Enforce flag
-			if (SUCCEEDED(result))
-				(*a_outTexture)->pad24 = NO_DX12RESOURCE;
-
-			return result;
-		}
-
-		auto& expSettings = Scene::GetSingleton()->m_Settings.ExperimentalSettings;
-
-		bool exclusiveMode = expSettings.TextureMode == TextureMode::Exclusive;
-		bool cutOff = expSettings.TextureCutOff != 0;
-
-		if (cutOff) {
-			uint32_t cutOffSize = 1 << (expSettings.TextureCutOff + 7);
-			cutOff = (a_width * a_height) < (cutOffSize * cutOffSize);
-		}
+		const bool shareTexture = a_dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D && !a_cubemap;
+		if (!shareTexture)
+			return func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
 
 		auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+	
+		auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
+		if (!texture)
+			return E_OUTOFMEMORY;
 
-		if (exclusiveMode && !cutOff) {
-			auto& stateRuntimeData = RE::BSGraphics::State::GetSingleton()->GetRuntimeData();
+		std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
 
-			auto* texture = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::D3D12Texture), 8));
+		auto desc = D3D11_TEXTURE2D_DESC{};
+		desc.Width = a_width;
+		desc.Height = a_height;
+		desc.MipLevels = a_mipLevels;
+		desc.ArraySize = a_arraySize;
+		desc.Format = a_format;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
-			if (!texture)
-				return E_OUTOFMEMORY;
+		auto result = a_device->CreateTexture2D(&desc, a_data, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
 
-			std::memset(texture, 0, sizeof(RE::BSGraphics::D3D12Texture));
-
-			auto defaultTexture = stateRuntimeData.defaultTextureGrey->rendererTexture;
-
-			texture->texture = defaultTexture->texture;
-			texture->UAV = defaultTexture->UAV;
-			texture->resourceView = defaultTexture->resourceView;
-			texture->width = defaultTexture->width;
-			texture->height = defaultTexture->height;
-			texture->format = defaultTexture->format;
-			texture->mips = defaultTexture->mips;
-			texture->unk1E = defaultTexture->unk1E;
-			texture->refCount = 1;
-
-			if (defaultTexture->texture)
-				defaultTexture->texture->AddRef();
-
-			if (defaultTexture->resourceView)
-				defaultTexture->resourceView->AddRef();
-
-			if (defaultTexture->UAV)
-				defaultTexture->UAV->AddRef();
-
-			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
-			texture->pad24 = NATIVE_DX12RESOURCE;
-
-			// Initialize to null to prevent Destructor from releasing a unitialized pointer
-			texture->d3d12Texture = nullptr;
-
-			auto renderer = Renderer::GetSingleton();
-			auto device = renderer->GetDevice();
-			auto nativeDevice = renderer->GetNativeD3D12Device();
-
-			D3D12_RESOURCE_DESC nativeDesc = {};
-			nativeDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-			nativeDesc.Width = a_width;
-			nativeDesc.Height = a_height;
-			nativeDesc.DepthOrArraySize = 1;
-			nativeDesc.MipLevels = static_cast<UINT16>(a_mipLevels);
-			nativeDesc.Format = a_format;
-			nativeDesc.SampleDesc.Count = 1;
-			nativeDesc.SampleDesc.Quality = 0;
-			nativeDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-
-			D3D12_HEAP_PROPERTIES heapProps = {};
-			heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-			HRESULT hr = nativeDevice->CreateCommittedResource(
-				&heapProps,
-				D3D12_HEAP_FLAG_NONE,
-				&nativeDesc,
-				D3D12_RESOURCE_STATE_COPY_DEST,
-				nullptr,
-				IID_PPV_ARGS(&texture->d3d12Texture)
-			);
-
-			if (FAILED(hr)) {
-				if (texture->d3d12Texture)
-					texture->d3d12Texture->Release();
-
-				return hr;
-			}
-
-			auto format = Renderer::GetFormat(a_format);
-			if (format == nvrhi::Format::UNKNOWN) {
-				if (texture->d3d12Texture)
-					texture->d3d12Texture->Release();
-
-				return E_FAIL;
-			}
-
-			auto& textureDesc = nvrhi::TextureDesc()
-				.setWidth(a_width)
-				.setHeight(a_height)
-				.setMipLevels(a_mipLevels)
-				.setFormat(format)
-				.setInitialState(nvrhi::ResourceStates::CopyDest)
-				.setDebugName("Shared Texture [?]");
-
-			auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(texture->d3d12Texture), textureDesc);
-
-			// Upload Texture Data
-			{
-				auto commandList = renderer->GetGraphicsCommandList();
-
-				commandList->open();
-
-				commandList->beginTrackingTextureState(textureHandle, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
-
-				for (uint32_t i = 0; i < a_mipLevels; i++)
-				{
-					const auto& mipData = a_data[i];
-					commandList->writeTexture(textureHandle, 0, i, mipData.pSysMem, mipData.SysMemPitch, mipData.SysMemSlicePitch);
-				}
-
-				commandList->setPermanentTextureState(textureHandle, nvrhi::ResourceStates::ShaderResource);
-
-				commandList->commitBarriers();
-
-				commandList->close();
-
-				device->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
-
-				device->waitForIdle();
-			}
-
-			*a_outTexture = texture;
-
-			return hr;
-		}
-		else {
-			auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
-
-			if (!texture)
-				return E_OUTOFMEMORY;
-
-			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
-
-			auto desc = D3D11_TEXTURE2D_DESC{};
-			desc.Width = a_width;
-			desc.Height = a_height;
-			desc.MipLevels = a_mipLevels;
-			desc.ArraySize = a_arraySize;
-			desc.Format = a_format;
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-			auto result = a_device->CreateTexture2D(&desc, a_data, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
-
-			if (FAILED(result) || !texture->texture) {
-				return result;
-			}
-
-			auto srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC{};
-			srvDesc.Format = a_format;
-			srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MostDetailedMip = 0;
-			srvDesc.Texture2D.MipLevels = a_mipLevels;
-
-			auto srvResult = a_device->CreateShaderResourceView(texture->texture, &srvDesc, &texture->resourceView);
-
-			if (FAILED(srvResult)) {
-				texture->texture->Release();
-				return srvResult;
-			}
-
-			texture->pad24 = NO_DX12RESOURCE;
-
-			*a_outTexture = texture;
-
+		if (FAILED(result) || !texture->texture) {
 			return result;
 		}
+
+		auto srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC{};
+		srvDesc.Format = a_format;
+		srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.MipLevels = a_mipLevels;
+
+		auto srvResult = a_device->CreateShaderResourceView(texture->texture, &srvDesc, &texture->resourceView);
+
+		if (FAILED(srvResult)) {
+			texture->texture->Release();
+			return srvResult;
+		}
+
+		*a_outTexture = texture;
+
+		return result;
 	}
 
 	struct CreateTexture2DAndSRV
@@ -648,7 +470,6 @@ namespace Hooks
 			texture->mips = 1;
 			texture->unk1E = 0;
 			texture->refCount = 1;
-			texture->pad24 = NO_DX12RESOURCE;
 
 			if (a_usage != D3D11_USAGE_STAGING) {
 				D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -661,22 +482,6 @@ namespace Hooks
 			}
 
 			return texture;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct CreateTextureFromFile
-	{
-		static RE::BSGraphics::Texture* thunk(
-			std::uintptr_t a_context,
-			const char* a_path,
-			std::int32_t a_type)
-		{
-			auto* result = func(a_context, a_path, a_type);
-			if (result)
-				result->pad24 = NO_DX12RESOURCE;
-			return result;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1115,11 +920,6 @@ namespace Hooks
 
 		// Flowmap and Player FaceGen Tint
 		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
-
-		// Texture load from file (sub_140D6E110)
-		stl::detour_thunk<CreateTextureFromFile>(REL::RelocationID(75512, 77304));
-
-		stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
