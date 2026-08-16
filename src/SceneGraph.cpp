@@ -184,10 +184,11 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateCamera()
 {
+	auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
 	auto* playerCamera = RE::PlayerCamera::GetSingleton();
 
 	// Mimics the logic of Main::Draw (kind of)
-	m_DrawFirstPerson = playerCamera->IsInFirstPerson()
+	m_DrawFirstPerson = !playerCharacter->GetPlayerRuntimeData().playerFlags.isInThirdPersonMode
 		&& Scene::GetSingleton()->GetMenuState().none(MenuState::MainMenu) 
 		&& !playerCamera->IsInFreeCameraMode();
 
