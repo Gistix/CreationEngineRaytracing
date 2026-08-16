@@ -16,9 +16,9 @@ struct CPMSettings
     BOOL EnableTerrainParallax;
     BOOL EnableHeightBlending;
     BOOL EnableShadows;
-    BOOL ExtendShadows;
     BOOL EnableParallaxWarpingFix;
     BOOL pad0;
+    BOOL pad1;
 };
 #ifdef __cplusplus
 static_assert(sizeof(CPMSettings) % 16 == 0);
@@ -123,6 +123,7 @@ static_assert(sizeof(ExtendedTranslucencySettings) % 16 == 0);
 struct LinearLightingSettings
 {
 	uint enableLinearLighting;
+    uint enableACEScg;
 	uint isDirLightLinear;
 	float dirLightMult;
 	float lightGamma;
@@ -149,7 +150,6 @@ struct LinearLightingSettings
 	float projectedEffectMult;
 	float deferredEffectMult;
 	float otherEffectMult;
-	uint pad0;
 };
 #ifdef __cplusplus
 static_assert(sizeof(LinearLightingSettings) % 16 == 0);
