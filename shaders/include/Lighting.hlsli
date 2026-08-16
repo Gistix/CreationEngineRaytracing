@@ -92,12 +92,11 @@ float3 EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface 
 
 void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout uint randomSeed)
 {
-    irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Vector, Features.CloudShadows.Opacity);
-    lr = DIRECTIONAL_LIGHT.Vector;
+    irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Direction, Features.CloudShadows.Opacity);
 
     // Sun angular radius is ~0.00465 radians (~0.266 degrees)
     float cosSunDisk = cos(0.00465f);
-    lr = TangentToWorld(lr, SampleConeUniform(randomSeed, cosSunDisk));
+    lr = TangentToWorld(DIRECTIONAL_LIGHT.Direction, SampleConeUniform(randomSeed, cosSunDisk));
 
     // Correct MC weight for uniform cone sampling of a finite-size disk light.
     // Factor = 2/(1+cosα) → 1 for small angles (sun), matters for large celestial bodies.
@@ -123,13 +122,29 @@ float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface su
     return direct;
 }
 
+float GetPointAttenuation(Light light, float dist, inout float lightSourceAngle)
+{
+    if ((light.Flags & LightFlags::ISL) != 0)
+    {
+        float size = sqrt((light.SizeBias * 2.0f) * RCP_ISL_SCALED_UNITS_SQ);
+        lightSourceAngle = atan2(size, dist);
+        
+        float invSq = ISL_SCALED_UNITS_SQ * rcp(dist * dist + light.SizeBias);
+        float t = saturate((light.Radius - dist) * light.FadeZone);
+        float fastSmoothstep = t * t * (3.0f - 2.0f * t);
+        return invSq * fastSmoothstep;
+    }
+    else
+    {
+        float intensityFactor = saturate(dist * light.InvRadius);
+        return 1.0f - intensityFactor * intensityFactor;
+    }
+}
+
 float GetSpotAttenuation(Light light, float3 surfaceToLight)
 {
-    if (light.Type != LightType::Spot)
-        return 1.0f;
-
-    float cosOuter = f16tof32(light.CosOuterAngleHalf);
-    float cosInner = f16tof32(light.CosInnerAngleHalf);
+    float cosOuter = light.CosOuterAngle;
+    float cosInner = light.CosInnerAngle;
 
     // light.Direction points from light toward where it aims
     // surfaceToLight points from surface toward light, so negate it
@@ -137,23 +152,16 @@ float GetSpotAttenuation(Light light, float3 surfaceToLight)
     return smoothstep(cosOuter, cosInner, cosTheta);
 }
 
-float GetAttenuation(Light light, float dist, inout float lightSourceAngle)
+float GetAttenuation(Light light, float3 lr, float dist, inout float lightSourceAngle)
 {
-    float atten = 0.0f;
-    if ((light.Flags & LightFlags::ISL) != 0)
-	{
-		float invSq = ISL_SCALED_UNITS_SQ * rcp(dist * dist + light.SizeBias);
-		float t = saturate((light.Radius - dist) * light.FadeZone);
-		float fastSmoothstep = t * t * (3.0f - 2.0f * t);
-		atten = invSq * fastSmoothstep;
-        float size = sqrt((light.SizeBias * 2.0f) * RCP_ISL_SCALED_UNITS_SQ);
-        lightSourceAngle = atan2(size, dist);
-	}
-	else
-	{
-		float intensityFactor = saturate(dist * light.InvRadius);
-		atten = 1.0f - intensityFactor * intensityFactor;
-	}
+    if (light.Type == LightType::Directional)
+        return 1.0f;
+    
+    float atten = GetPointAttenuation(light, dist, lightSourceAngle);
+    
+    if (light.Type == LightType::Spot)
+        atten *= GetSpotAttenuation(light, lr);
+        
     return atten;
 }
 
@@ -169,11 +177,11 @@ float GetLightAngle(Light light, float dist)
 
 float GetLightSampleWeight(Surface surface, Light light)
 {
-    float3 l = (light.Vector - surface.Position);
+    float3 l = (light.Position - surface.Position);
     float dist = length(l) * GAME_UNIT_TO_M;
+    float3 lr = l / dist;
     float lightSourceAngle = 0.0f;
-    float atten = GetAttenuation(light, dist, lightSourceAngle);
-    atten *= GetSpotAttenuation(light, l);
+    float atten = GetAttenuation(light, lr, dist, lightSourceAngle);
     float intensity = max(light.Color.r, max(light.Color.g, light.Color.b)) * light.Fade;
     return atten * intensity;
 }
@@ -221,7 +229,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
         Light testLight = Lights[lightID];
     
         const bool isTestLinear = (testLight.Flags & LightFlags::LinearLight) != 0;
-        testLight.Color = PointLightToLinear(testLight.Color, isTestLinear);
+        testLight.Color = (half3)PointLightToLinear(testLight.Color, isTestLinear);
         float weight = GetLightSampleWeight(surface, testLight);
         totalWeight += weight;
 
@@ -259,17 +267,15 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #endif
 
     const bool isLinear = (light.Flags & LightFlags::LinearLight) != 0;
-    light.Color = PointLightToLinear(light.Color, isLinear);
+    light.Color = (half3)PointLightToLinear(light.Color, isLinear);
 
-    lr = (light.Vector - surface.Position);
+    lr = (light.Position - surface.Position);
     dist = length(lr);
     lr /= dist;
 
     float lightSourceAngle = 0.005f;
 
-    float atten = GetAttenuation(light, dist, lightSourceAngle);
-    atten *= GetSpotAttenuation(light, lr);
-
+    float atten = GetAttenuation(light, lr, dist, lightSourceAngle);
     irradiance = light.Color * light.Fade * atten * lightWeight;
     lr = TangentToWorld(lr, SampleCosineHemisphereScaled(randomSeed, lightSourceAngle));
     
@@ -339,8 +345,8 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
 
         // --- Directional Light (Sun) ---
         {
-            float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Vector, Features.CloudShadows.Opacity);
-            float3 sunDir = DIRECTIONAL_LIGHT.Vector;
+            const float3 sunDir = DIRECTIONAL_LIGHT.Direction;            
+            float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, sunDir, Features.CloudShadows.Opacity);
 
             // Sun angular radius ~0.00465 radians. Check if delta direction is within the sun disk.
             float cosSunDisk = cos(0.00465f);
@@ -377,7 +383,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
                 float lightSourceAngle = GetLightAngle(light, dist * GAME_UNIT_TO_M);
                 
                 // Check if delta direction is within the light's angular extent
-                float3 dirToLight = normalize(light.Vector - surface.Position);
+                float3 dirToLight = normalize(light.Position - surface.Position);
                 float cosAngle = cos(lightSourceAngle);
                 float cosDelta = dot(deltaDir, dirToLight);
                 

@@ -230,9 +230,6 @@ namespace Util
 			data.constAttenuation = rd->constAttenuation;
 			data.linearAttenuation = rd->linearAttenuation;
 			data.quadraticAttenuation = rd->quadraticAttenuation;
-			auto* raw = reinterpret_cast<const float*>(rd);
-			data.spotOuterAngle = raw[3];
-			data.spotInnerAngle = raw[4];
 #elif defined(FALLOUT4)
 			auto* pointLight = static_cast<RE::NiPointLight*>(a_light);
 			data.constAttenuation = pointLight->constantAttenuation;

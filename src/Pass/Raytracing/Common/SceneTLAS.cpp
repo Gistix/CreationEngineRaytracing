@@ -73,14 +73,10 @@ namespace Pass
 #if defined(SKYRIM)
 		{
 			auto dirLight = ce_cast<RE::NiDirectionalLight*>(Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData().sunLight->light.get());
-
-			auto direction = Util::Math::Float3(dirLight->GetWorldDirection());
-			direction.Normalize();
-
-			auto& diffuse = dirLight->GetLightRuntimeData().diffuse;
-
-			m_RaytracingData->DirectionalLight.Vector = -direction;
-			m_RaytracingData->DirectionalLight.Color = float3(diffuse.red, diffuse.green, diffuse.blue);
+			auto& lightRuntimeData = dirLight->GetLightRuntimeData();
+			m_RaytracingData->DirectionalLight.Direction = -Util::Math::Normalize(Util::Math::Float3(dirLight->GetWorldDirection()));
+			m_RaytracingData->DirectionalLight.Color = Util::Math::Float3(lightRuntimeData.diffuse);
+			m_RaytracingData->DirectionalLight.Fade = lightRuntimeData.fade;
 		}
 #endif
 

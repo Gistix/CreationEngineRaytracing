@@ -120,8 +120,8 @@ void BLASCluster::UpdateInstanceLightData(
 
 		if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
 			logger::error("BLASCluster::GetInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}, for light {} of {}",
-				numLights, 
-				Constants::INSTANCE_LIGHTS_MAX, 
+				numLights,
+				Constants::INSTANCE_LIGHTS_MAX,
 				light.m_Index,
 				Constants::LIGHTS_MAX);
 			break;
@@ -132,12 +132,39 @@ void BLASCluster::UpdateInstanceLightData(
 		if (ld.Type == LightType::Directional) {
 			lightIds[numLights] = light.m_Index;
 			numLights++;
-		} else {
-			float dist = float3::Distance(*reinterpret_cast<float3*>(&m_WorldBound.center), ld.Vector);
-			if (dist - m_WorldBound.radius <= ld.Radius) {
-				lightIds[numLights] = light.m_Index;
-				numLights++;
+		}
+		else {
+			const auto& center = Util::Math::Float3(m_WorldBound.center);
+			const float boundRadius = m_WorldBound.radius;
+
+			const float3 toCenter = center - ld.Position;
+			const float dist = toCenter.Length();
+
+			// Sphere vs light radius
+			if (dist - boundRadius > ld.Radius)
+				continue;
+
+			// Sphere vs spot cone (conservative): the bound must reach the cone frustum.
+			// CosOuterAngle is the half-angle cosine, matching the shader's smoothstep.
+			if (ld.Type == LightType::Spot) {
+				const float distAlong = toCenter.Dot(ld.Direction);
+
+				// Entirely behind the light's apex plane
+				if (distAlong < -boundRadius)
+					continue;
+
+				// cosOuter <= 0 means the cone is a hemisphere or wider — nothing to cull
+				const float cosOuter = std::clamp(float(ld.CosOuterAngle), -1.0f, 1.0f);
+				if (cosOuter > 0.0f) {
+					const float perpDist = (toCenter - ld.Direction * distAlong).Length();
+					const float coneRadius = std::max(distAlong, 0.0f) * std::tan(std::acos(cosOuter));
+					if (perpDist - boundRadius > coneRadius)
+						continue;
+				}
 			}
+
+			lightIds[numLights] = light.m_Index;
+			numLights++;
 		}
 	}
 

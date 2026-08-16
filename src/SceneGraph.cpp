@@ -240,6 +240,26 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 		light.m_Index = static_cast<uint8_t>(numLights);
 
 		auto niLight = bsLight->light.get();
+		if (!niLight)
+			continue;
+
+		bool isSpotLight = false;
+		RE::TESObjectLIGH* ligh = nullptr;
+
+		const auto refr = niLight->GetUserData();
+		if (refr) {
+			if (refr->IsDisabled())
+				light.m_Active = false;
+
+			if (auto* objRef = refr->GetObjectReference()) {
+				if (objRef->GetFormType() == RE::FormType::Light) {
+					ligh = objRef->As<RE::TESObjectLIGH>();
+
+					if (ligh)
+						isSpotLight = ligh->data.flags.any(RE::TES_LIGHT_FLAGS::kSpotlight, RE::TES_LIGHT_FLAGS::kSpotShadow);
+				}
+			}
+		}
 
 #if defined(SKYRIM)
 		if (niLight->GetFlags().any(RE::NiAVObject::Flag::kHidden))
@@ -271,7 +291,7 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 		{
 			auto& lightData = m_LightData[numLights];
 
-			lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue);
+			lightData.Color = Util::Math::Float3(runtimeData.diffuse);
 
 			lightData.Radius = runtimeData.radius.x;
 
@@ -284,7 +304,7 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 			if (light.m_Active)
 				light.UpdateInstances();
 
-			lightData.Vector = Util::Math::Float3(niLight->world.translate);
+			lightData.Position = Util::Math::Float3(niLight->world.translate);
 
 			lightData.InvRadius = 1.0f / runtimeData.radius.x;
 
@@ -293,40 +313,16 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 			if (lightingSettings.LodDimmer)
 				lightData.Fade *= bsLight->lodDimmer;
 
-			// Determine light type: Spot, Point, or Directional
-			// NiSpotLight extends NiPointLight; both have BSLight::pointLight = true.
-			// We distinguish spots via NiRTTI pointer compare.
-			bool isSpot = false;
-			if (bsLight->pointLight) {
-				auto* rtti = niLight->GetRTTI();
-				if (rtti == Constants::rtti::NiSpotLight.get())
-					isSpot = true;
-			}
-
-			if (isSpot) {
+			if (isSpotLight) {
 				lightData.Type = LightType::Spot;
-
-				// Spot direction from world rotation matrix, first column = model direction (1,0,0) transformed
-				auto& rot = niLight->world.rotate;
-				float3 dir(rot.entry[0][0], rot.entry[1][0], rot.entry[2][0]);
-				dir = Util::Math::Normalize(dir);
-				lightData.Direction = dir;
-
-				auto pointLightData = Util::Adapter::GetPointLightRuntimeData(niLight);
-				float outerAngleDeg = pointLightData.spotOuterAngle;
-				float innerAngleDeg = pointLightData.spotInnerAngle;
-
-				// Clamp to valid range
-				outerAngleDeg = std::clamp(outerAngleDeg, 1.0f, 89.0f);
-				innerAngleDeg = std::clamp(innerAngleDeg, 0.0f, outerAngleDeg);
-
-				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(outerAngleDeg * (3.14159265f / 180.0f)));
-				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(innerAngleDeg * (3.14159265f / 180.0f)));
+				lightData.Direction = Util::Math::Normalize(Util::Math::Float3(niLight->world.rotate.GetVectorX()));
+				lightData.CosOuterAngle = std::cosf(ligh->data.fov * std::numbers::pi_v<float> / 180.0f);
+				lightData.CosInnerAngle = 1.0f;
 			} else {
-				lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
+				lightData.Type = LightType::Point;
 				lightData.Direction = float3(0.0f, 0.0f, 0.0f);
-				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
-				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
+				lightData.CosOuterAngle = -1.0f;
+				lightData.CosInnerAngle = -1.0f;
 			}
 
 			lightData.Flags = 0;
