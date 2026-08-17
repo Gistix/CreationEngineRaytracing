@@ -6,6 +6,11 @@
 
 #include "interop/Properties.hlsli"
 
+namespace RE
+{
+	class BSWaterShaderProperty;
+}
+
 // Per-mesh data derived from the BSShaderProperty + NiAlphaProperty (which the per-type
 // material wrappers don't have access to). Written into MeshData so the surface shader can
 // branch on the shader flags / alpha state and read the emissive color.
@@ -79,5 +84,5 @@ struct Properties
 	auto& GetData() const { return m_Data; }
 private:
 	static uint32_t MapShaderFlags(RE::BSShaderProperty* shaderProperty);
-	static uint16_t MapWaterShaderFlags(RE::NiObject* waterShaderProp);
+	static uint16_t MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp);
 };

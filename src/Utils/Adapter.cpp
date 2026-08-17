@@ -10,6 +10,12 @@ namespace Util
 {
 	namespace Adapter
 	{
+		template <class T>
+		T readAt(const void* a_object, std::size_t a_offset)
+		{
+			return *reinterpret_cast<const T*>(static_cast<const std::uint8_t*>(a_object) + a_offset);
+		}
+
 		GeometryRuntimeData GetGeometryRuntimeData(RE::BSGeometry* a_geometry)
 		{
 			GeometryRuntimeData runtimeData{};
@@ -37,8 +43,7 @@ namespace Util
 			auto skinInstance = static_cast<RE::NiSkinInstance*>(geometryData.skinInstance);
 			return !geometryData.rendererData && skinInstance && skinInstance->skinPartition && skinInstance->skinPartition->numPartitions > 0;
 #elif defined(FALLOUT4)
-			(void)geometryData;
-			return false; // FO4 skinning is handled differently, disable for now
+			return geometryData.skinInstance != nullptr;
 #endif
 		}
 
@@ -94,8 +99,10 @@ namespace Util
 			a_dynamicTriShape->GetDynamicTrishapeRuntimeData().lock.Lock();
 			return a_dynamicTriShape->GetDynamicTrishapeRuntimeData().dynamicData;
 #elif defined(FALLOUT4)
-			return a_dynamicTriShape->LockDynamicData();
-#endif
+			using Fn = void* (*)(RE::BSDynamicTriShape*);
+			static REL::Relocation<Fn> func{ REL::ID(2270749) };
+			return func(a_dynamicTriShape);
+		#endif
 		}
 
 		void UnlockDynamicData(RE::BSDynamicTriShape* a_dynamicTriShape)
@@ -103,8 +110,10 @@ namespace Util
 #if defined(SKYRIM)
 			a_dynamicTriShape->GetDynamicTrishapeRuntimeData().lock.Unlock();
 #elif defined(FALLOUT4)
-			a_dynamicTriShape->UnlockDynamicData();
-#endif
+			using Fn = void (*)(RE::BSDynamicTriShape*);
+			static REL::Relocation<Fn> func{ REL::ID(2270751) };
+			func(a_dynamicTriShape);
+		#endif
 		}
 
 		void UpdateDynamicData(DynamicMesh* dynamicMesh, RE::BSDynamicTriShape* bsDynamicTriShape)
@@ -113,10 +122,10 @@ namespace Util
 			auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
 			dynamicMesh->UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
 #elif defined(FALLOUT4)
-			void* data = bsDynamicTriShape->LockDynamicData();
+			void* data = LockDynamicData(bsDynamicTriShape);
 			dynamicMesh->UpdateDynamicData(data, bsDynamicTriShape->dynamicDataSize);
-			bsDynamicTriShape->UnlockDynamicData();
-#endif
+			UnlockDynamicData(bsDynamicTriShape);
+		#endif
 		}
 
 		void GetAlwaysRenderChildren(RE::NiNode* shadowSceneNode, eastl::vector<RE::NiAVObject*>& outChildren)
@@ -131,8 +140,14 @@ namespace Util
 				}
 			}
 #elif defined(FALLOUT4)
-			(void)shadowSceneNode;
-			(void)outChildren;
+			if (auto portalGraph = GetPortalGraph(shadowSceneNode)) {
+				for (auto& child : portalGraph->alwayRenderChildren) {
+					if (child && child->parent)
+						continue;
+					if (child)
+						outChildren.push_back(child.get());
+				}
+			}
 #endif
 		}
 
@@ -151,7 +166,7 @@ namespace Util
 		{
 			if (!a_form) return nullptr;
 #if defined(SKYRIM)
-			return a_form->GetFullName();
+			return a_form->GetName();
 #elif defined(FALLOUT4)
 			return a_form->GetFormEditorID();
 #endif		
@@ -222,8 +237,7 @@ namespace Util
 #if defined(SKYRIM)
 			return REL::RelocateMember<RE::TESObjectREFR*>(a_object, 0x0F8, 0x110);
 #elif defined(FALLOUT4)
-			(void)a_object;
-			return nullptr;
+			return a_object ? reinterpret_cast<RE::TESObjectREFR*>(a_object->userData) : nullptr;
 #endif	
 		}
 
@@ -251,9 +265,9 @@ namespace Util
 		RE::NiTexture* GetDefaultTextureProjNoiseMap()
 		{
 #if defined(SKYRIM)
-			return RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
+			return RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap.get();
 #elif defined(FALLOUT4)
-			return nullptr;
+			return GetGraphicsState().defaultTextureWhiteNoiseMap.get();
 #endif
 		}
 
@@ -263,7 +277,9 @@ namespace Util
 			auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
 			return runtimeData.posAdjust.getEye();
 #elif defined(FALLOUT4)
-			return { 0.0f, 0.0f, 0.0f }; // FO4 doesn't have RendererShadowState like this, maybe PlayerCamera::cameraRoot? 
+			static REL::Relocation<RE::BSGraphics::State*> singleton{ RE::ID::BSGraphics::State::Singleton };
+			const auto* state = reinterpret_cast<const std::uint8_t*>(singleton.address());
+			return *reinterpret_cast<const RE::NiPoint3*>(state + 0x37C); // CameraStateData::currentPosAdjust
 #endif
 		}
 
@@ -272,9 +288,11 @@ namespace Util
 #if defined(SKYRIM)
 			return !a_player->GetPlayerRuntimeData().playerFlags.isInThirdPersonMode && !a_camera->IsInFreeCameraMode();
 #elif defined(FALLOUT4)
-			(void)a_player;
-			(void)a_camera;
-			return false; // Implement properly later
+			if (!a_player || !a_camera)
+				return false;
+
+			auto currentState = a_camera->GetCameraCurrentState();
+			return currentState && currentState->id == RE::CameraStates::kFirstPerson;
 #endif
 		}
 
@@ -289,7 +307,9 @@ namespace Util
 			return result;
 #elif defined(FALLOUT4)
 			(void)a_camera;
-			return { 0.0f, 0.0f, 0.0f };
+			if (auto* player = RE::PlayerCharacter::GetSingleton(); player && player->firstPersonEye)
+				return player->firstPersonEye->world.translate;
+			return GetZeroNiPoint3();
 #endif	
 		}
 		
@@ -400,13 +420,221 @@ namespace Util
 			auto* skinInstance = geometry->skinInstance.get();
 			if (skinInstance) {
 				result.hasSkin = true;
-				result.numBones = *reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(skinInstance) + 0x38);
-				result.boneWorldTransforms = *reinterpret_cast<const RE::NiTransform***>(reinterpret_cast<uintptr_t>(skinInstance) + 0x28);
-				// TODO: properly reverse frameID location in FO4
-				result.frameID = 0; 
+				result.numBones = skinInstance->bones.size();
+				result.boneWorldTransforms = reinterpret_cast<const RE::NiTransform**>(reinterpret_cast<std::uintptr_t>(skinInstance->worldTransforms.data()));
+				result.frameID = skinInstance->frameID;
 			}
 #endif
 			return result;
+		}
+
+		const RE::NiTransform* GetSkinToBoneTransform(RE::BSGeometry* geometry, uint32_t a_boneIndex)
+		{
+			if (!geometry)
+				return nullptr;
+
+#if defined(SKYRIM)
+			auto* skinInstance = geometry->GetGeometryRuntimeData().skinInstance.get();
+			if (!skinInstance || !skinInstance->skinData || a_boneIndex >= skinInstance->skinData->bones)
+				return nullptr;
+			return &skinInstance->skinData->boneData[a_boneIndex].skinToBone;
+#elif defined(FALLOUT4)
+			auto* skinInstance = geometry->skinInstance.get();
+			if (!skinInstance || !skinInstance->boneData || a_boneIndex >= skinInstance->boneData->transforms.size())
+				return nullptr;
+			return &skinInstance->boneData->transforms[a_boneIndex].transform;
+#endif
+		}
+
+		ID3D11Texture2D* GetTextureResource(RE::NiTexture* a_texture)
+		{
+			auto* rendererTexture = GetRendererTexture(a_texture);
+			return rendererTexture ? reinterpret_cast<ID3D11Texture2D*>(rendererTexture->texture) : nullptr;
+		}
+
+		RE::BSGraphics::Texture* GetRendererTexture(RE::NiTexture* a_texture)
+		{
+			if (!a_texture)
+				return nullptr;
+
+#if defined(SKYRIM)
+			auto* sourceTexture = netimmerse_cast<RE::NiSourceTexture*>(a_texture);
+			return sourceTexture ? sourceTexture->rendererTexture : nullptr;
+#elif defined(FALLOUT4)
+			return a_texture->rendererTexture;
+#endif
+		}
+
+		MaterialRuntimeData GetMaterialRuntimeData(RE::BSShaderMaterial* a_material)
+		{
+			MaterialRuntimeData result;
+			if (!a_material)
+				return result;
+
+#if defined(SKYRIM)
+			return result;
+#elif defined(FALLOUT4)
+			auto readTexture = [a_material](std::size_t a_offset) {
+				return *reinterpret_cast<RE::NiTexture* const*>(reinterpret_cast<const std::uint8_t*>(a_material) + a_offset);
+			};
+			auto readFloat = [a_material](std::size_t a_offset) {
+				return *reinterpret_cast<const float*>(reinterpret_cast<const std::uint8_t*>(a_material) + a_offset);
+			};
+
+			using Type = RE::BSShaderMaterial::Type;
+			if (a_material->GetType() == Type::kLighting) {
+				auto* lighting = static_cast<RE::BSLightingShaderMaterialBase*>(a_material);
+				result.diffuseTexture = lighting->diffuseTexture.get();
+				result.normalTexture = lighting->normalTexture.get();
+				result.rimSoftLightingTexture = lighting->rimSoftLightingTexture.get();
+				result.specularBackLightingTexture = lighting->smoothnessSpecMaskTexture.get();
+				result.specularColor = { lighting->specularColor.r, lighting->specularColor.g, lighting->specularColor.b };
+				result.specularPower = lighting->smoothness;
+				result.specularColorScale = lighting->specularColorScale;
+				result.materialAlpha = lighting->materialAlpha;
+
+				switch (a_material->GetFeature()) {
+				case RE::BSShaderMaterial::Feature::kEnvmap:
+					result.environmentTexture = readTexture(0xC0);
+					result.environmentMaskTexture = readTexture(0xC8);
+					result.environmentScale = readFloat(0xD0);
+					break;
+				case RE::BSShaderMaterial::Feature::kGlowmap:
+					result.glowTexture = readTexture(0xC0);
+					break;
+				case RE::BSShaderMaterial::Feature::kParallax:
+				case RE::BSShaderMaterial::Feature::kParallaxOcc:
+					result.heightTexture = readTexture(0xC0);
+					break;
+				case RE::BSShaderMaterial::Feature::kFace:
+					result.faceTexture = readTexture(0xC0);
+					break;
+				case RE::BSShaderMaterial::Feature::kSkinTint:
+				case RE::BSShaderMaterial::Feature::kHairTint: {
+					const auto* tint = reinterpret_cast<const RE::NiColor*>(reinterpret_cast<const std::uint8_t*>(a_material) + 0xC0);
+					result.tintColor[0] = tint->r;
+					result.tintColor[1] = tint->g;
+					result.tintColor[2] = tint->b;
+					break;
+				}
+				case RE::BSShaderMaterial::Feature::kEye:
+					result.environmentTexture = readTexture(0xC0);
+					result.environmentMaskTexture = readTexture(0xC8);
+					result.environmentScale = readFloat(0xE8);
+					break;
+				case RE::BSShaderMaterial::Feature::kMultiLayerParallax:
+					result.layerTexture = readTexture(0xC0);
+					result.environmentTexture = readTexture(0xC8);
+					result.environmentMaskTexture = readTexture(0xD0);
+					result.layerThickness = readFloat(0xD8);
+					result.refractionScale = readFloat(0xDC);
+					result.innerLayerUScale = readFloat(0xE0);
+					result.innerLayerVScale = readFloat(0xE4);
+					result.environmentScale = readFloat(0xE8);
+					break;
+				case RE::BSShaderMaterial::Feature::kLandscape:
+				case RE::BSShaderMaterial::Feature::kLODLandscapeBlend: {
+					result.landscapeTextureCount = std::min(readAt<std::uint32_t>(a_material, 0x10C), 5u);
+					for (uint32_t i = 0; i < std::min(result.landscapeTextureCount, 3u); ++i) {
+						result.landscapeDiffuseTextures[i] = readTexture(0x110 + i * 8);
+						result.landscapeNormalTextures[i] = readTexture(0x128 + i * 8);
+					}
+					result.terrainOverlayTexture = readTexture(0x158);
+					result.terrainNoiseTexture = readTexture(0x160);
+					break;
+				}
+				case RE::BSShaderMaterial::Feature::kLODLandscape:
+				case RE::BSShaderMaterial::Feature::kLODLandscapeNoise:
+					result.parentDiffuseTexture = readTexture(0xC0);
+					result.parentNormalTexture = readTexture(0xC8);
+					result.terrainNoiseTexture = readTexture(0xD0);
+					result.terrainTexOffsetX = readFloat(0xD8);
+					result.terrainTexOffsetY = readFloat(0xDC);
+					result.terrainTexFade = readFloat(0xE0);
+					break;
+				default:
+					break;
+				}
+			}
+			else if (a_material->GetType() == Type::kEffect) {
+				const auto* color = reinterpret_cast<const RE::NiColorA*>(reinterpret_cast<const std::uint8_t*>(a_material) + 0x48);
+				result.baseColor = { color->r, color->g, color->b, color->a };
+				result.sourceTexture = readTexture(0x58);
+				result.effectTexture = readTexture(0x60);
+				result.baseColorScale = readFloat(0x84);
+			}
+			else if (a_material->GetType() == Type::kWater) {
+				auto* water = static_cast<RE::BSWaterShaderMaterial*>(a_material);
+				result.shallowWaterColor = { water->shallowColor.r, water->shallowColor.g, water->shallowColor.b };
+				result.waterNormalTextures[0] = water->normalMap01.get();
+				result.waterNormalTextures[1] = water->normalMap02.get();
+				result.waterNormalTextures[2] = water->normalMap03.get();
+				result.normalScroll[0] = { water->normalsScroll1.r, water->normalsScroll1.g };
+				result.normalScroll[1] = { water->normalsScroll1.b, water->normalsScroll1.a };
+				result.normalScroll[2] = { water->normalsScroll2.r, water->normalsScroll2.g };
+				result.uvScale = { water->normalsScale.r, water->normalsScale.g, water->normalsScale.b };
+				result.amplitude = { water->normalsAmplitude.r, water->normalsAmplitude.g, water->normalsAmplitude.b };
+				result.displacementDampener = water->normalsAmplitude.a;
+			}
+
+			return result;
+#endif
+		}
+
+		ShaderPropertyRuntimeData GetShaderPropertyRuntimeData(RE::BSShaderProperty* a_property)
+		{
+			ShaderPropertyRuntimeData result;
+			if (!a_property)
+				return result;
+
+#if defined(FALLOUT4)
+			result.flags = a_property->flags.underlying();
+			result.alpha = a_property->alpha;
+			result.materialType = a_property->GetMaterialType();
+			result.material = a_property->material;
+
+			if (result.materialType == 2) {
+				auto* lightingProperty = reinterpret_cast<RE::BSLightingShaderProperty*>(a_property);
+				if (lightingProperty->emitColor)
+					result.emissiveColor = { lightingProperty->emitColor->r, lightingProperty->emitColor->g, lightingProperty->emitColor->b };
+				result.emissiveScale = lightingProperty->emitColorScale;
+				result.projectedUVParams = {
+					lightingProperty->projectedUVParams.r,
+					lightingProperty->projectedUVParams.g,
+					lightingProperty->projectedUVParams.b,
+					lightingProperty->projectedUVParams.a
+				};
+				result.projectedUVColor = {
+					lightingProperty->projectedUVColor.r,
+					lightingProperty->projectedUVColor.g,
+					lightingProperty->projectedUVColor.b,
+					lightingProperty->projectedUVColor.a
+				};
+			}
+#else
+			(void)a_property;
+#endif
+			return result;
+		}
+
+		uint16_t GetAlphaPropertyFlags(const RE::NiAlphaProperty* a_property)
+		{
+#if defined(FALLOUT4)
+			return a_property ? a_property->flags.flags : 0;
+#else
+			(void)a_property;
+			return 0;
+#endif
+		}
+
+		uint8_t GetAlphaTestReference(const RE::NiAlphaProperty* a_property)
+		{
+#if defined(FALLOUT4)
+			return a_property ? static_cast<uint8_t>(a_property->alphaTestRef) : 0;
+#else
+			(void)a_property;
+			return 0;
+#endif
 		}
 
 		RE::TESObjectREFR* AsReference(RE::TESForm* a_object)
@@ -633,9 +861,8 @@ namespace Util
 #if defined(SKYRIM)
 			return *reinterpret_cast<const float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
 #elif defined(FALLOUT4)
-			// TODO: Find FO4 BSShaderManager::State loadedRange.
-			// Return a large range so everything intersects for now.
-			return { 0.0f, 0.0f, 1000000.0f, 1000000.0f };
+			const auto& state = GetShaderManagerState();
+			return *reinterpret_cast<const float4*>(reinterpret_cast<const std::uint8_t*>(&state) + 0x44); // State::loadedRange
 #endif
 		}
 	}

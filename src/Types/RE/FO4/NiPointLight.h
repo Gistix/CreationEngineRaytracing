@@ -16,7 +16,7 @@ namespace RE
 		float quadraticAttenuation;  // 178
 		std::uint8_t pad17C[0x14];  // 17C
 	};
-#if defined(SKYRIM)
+#if defined(SKYRIM) || defined(FALLOUT4)
 	static_assert(sizeof(NiPointLight) == 0x190);
 #endif
 }

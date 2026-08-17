@@ -124,14 +124,15 @@ void SkinnedMesh::InitSkinToBones(RE::BSGeometry* geometry)
 	for (uint32_t i = 0; i < skinData.numBones; i++)
 		PackNiTransform(niSkinData->boneData[i].skinToBone, m_SkinToBones[i]);
 #elif defined(FALLOUT4)
-	// TODO: RE BSSkin::BoneData to extract skinToBone transforms for FO4.
-	// For now, we initialize to identity to allow compilation and prevent crashes.
 	RE::NiTransform identity;
 	identity.rotate.MakeIdentity();
 	identity.translate = RE::NiPoint3(0.0f, 0.0f, 0.0f);
 	identity.scale = 1.0f;
 	for (uint32_t i = 0; i < skinData.numBones; i++) {
-		PackNiTransform(identity, m_SkinToBones[i]);
+		if (auto* transform = Util::Adapter::GetSkinToBoneTransform(geometry, i))
+			PackNiTransform(*transform, m_SkinToBones[i]);
+		else
+			PackNiTransform(identity, m_SkinToBones[i]);
 	}
 #endif
 }

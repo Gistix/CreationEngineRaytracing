@@ -32,7 +32,7 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-#if 0
+#if defined(SKYRIM)
 	template <typename = decltype([] {}) >
 	struct MemoryManager_AllocateTriShape
 	{
@@ -297,8 +297,8 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
-#endif
 
+#endif
 #if defined(SKYRIM)
 	struct BSTextureSet_SetTexture
 	{

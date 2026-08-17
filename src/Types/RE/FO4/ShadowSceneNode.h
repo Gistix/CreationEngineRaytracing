@@ -15,12 +15,10 @@ namespace RE
 		inline static constexpr auto VTABLE{ VTABLE::ShadowSceneNode };
 
 		// members
-		// TODO: verify exact offset of portalGraph in Fallout 4
-		// In Skyrim, NiNode size is 0x128, portalGraph is at 0x228 (+0x100)
-		// In FO4, NiNode size is 0x140, so we assume portalGraph might be around 0x240
-		std::uint64_t pad140[(0x240 - 0x140) / 8]; // 140
-		BSPortalGraph* portalGraph;                // 240
+		std::uint8_t  pad140[0xF8];                // 140
+		BSPortalGraph* portalGraph;                // 238
 	};
+	static_assert(offsetof(ShadowSceneNode, portalGraph) == 0x238);
 }
 
 #endif

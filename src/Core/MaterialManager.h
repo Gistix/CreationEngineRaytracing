@@ -67,4 +67,5 @@ public:
 	void Flush(nvrhi::ICommandList* commandList);
 
 	static Texture GetTexture(const RE::NiPointer<RE::NiSourceTexture>& niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType = TextureType::Standard);
+	static Texture GetTexture(RE::NiTexture* a_texture, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType = TextureType::Standard);
 };

@@ -18,6 +18,7 @@
 #include "Core/Material/Skyrim/WaterMaterial.h"
 #include "Renderer.h"
 #include "Scene.h"
+#include "Utils/Adapter.h"
 
 #if defined(SKYRIM)
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
@@ -274,4 +275,24 @@ Texture MaterialManager::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiS
 #endif
 	return Texture(defaultDescHandle, nullptr);
 
+}
+
+Texture MaterialManager::GetTexture(RE::NiTexture* a_texture, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType)
+{
+#if defined(FALLOUT4)
+	if (!a_texture)
+		return Texture(defaultDescHandle, nullptr);
+
+	auto* rendererTexture = Util::Adapter::GetRendererTexture(a_texture);
+	if (!rendererTexture)
+		return Texture(defaultDescHandle, nullptr);
+
+	auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
+	if (auto result = textureManager->GetDescriptor(rendererTexture, textureType))
+		return Texture(result, defaultDescHandle.get());
+#else
+	(void)a_texture;
+	(void)textureType;
+#endif
+	return Texture(defaultDescHandle, nullptr);
 }

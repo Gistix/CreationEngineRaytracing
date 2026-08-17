@@ -14,11 +14,11 @@ namespace RE
 		float outerSpotAngle;    // 190
 		float innerSpotAngle;    // 194
 		float spotExponent;      // 198
-		std::uint64_t unk19C;    // 19C
+		std::uint8_t  unk19C[8]; // 19C
 		float unk1A4;            // 1A4
 		std::uint8_t pad1A8[8];  // 1A8
 	};
-#if defined(SKYRIM)
+#if defined(SKYRIM) || defined(FALLOUT4)
 	static_assert(sizeof(NiSpotLight) == 0x1B0);
 #endif
 }

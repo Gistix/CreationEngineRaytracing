@@ -404,7 +404,7 @@ nvrhi::ITexture* Scene::GetProjNoiseTexture() const
 		return nullptr;
 
 	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(
-		reinterpret_cast<ID3D11Texture2D*>(projNoiseMap->rendererTexture->texture), 
+		Util::Adapter::GetTextureResource(projNoiseMap),
 		"Projection Noise Map", 
 		nvrhi::Format::UNKNOWN, 
 		nvrhi::ResourceStates::ShaderResource);

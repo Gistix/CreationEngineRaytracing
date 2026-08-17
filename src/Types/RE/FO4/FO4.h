@@ -11,3 +11,4 @@
 #include "RE/B/BSMultiBoundAABB.h"
 #include "RE/B/BSMultiBoundNode.h"
 #include "BSSkin.h"
+#include "BSLightingShaderMaterials.h"
