@@ -92,6 +92,13 @@ namespace Util
 		return std::format("{}, {}, {}, {}", matrix.m[0], matrix.m[1], matrix.m[2], matrix.m[3]);
 	}
 
+	static void LogBufferDesc(ID3D11Buffer* d3d11Buffer)
+	{
+		D3D11_BUFFER_DESC desc;
+		d3d11Buffer->GetDesc(&desc);
+		logger::info("Buffer Desc - Usage: {}, BindFlags: 0x{:08X}, CPUAccessFlags: 0x{:08X}, MiscFlags: 0x{:08X}", magic_enum::enum_name(desc.Usage), desc.BindFlags, desc.CPUAccessFlags, desc.MiscFlags);
+	}
+
 	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
 	{
 		if (!d3d11Buffer) {
@@ -103,21 +110,28 @@ namespace Util
 		winrt::com_ptr<IDXGIResource1> dxgiResource;
 		auto hr = d3d11Buffer->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
 
-		if (FAILED(hr))
+		if (FAILED(hr)) {
 			logger::error("CreateSharedBuffer - QueryInterface failed with hr: 0x{:08X}", hr);
+			return;
+		}
 
 		// Get shared handle from D3D11 texture to enable D3D12 access
 		HANDLE sharedHandle = nullptr;
 		hr = dxgiResource->GetSharedHandle(&sharedHandle);
 
-		if (FAILED(hr))
+		if (FAILED(hr)) {
 			logger::error("CreateSharedBuffer - GetSharedHandle failed with hr: 0x{:08X}", hr);
+			LogBufferDesc(d3d11Buffer);
+			return;
+		}
 
 		// Open the shared D3D11 texture as D3D12 resource
 		hr = Renderer::GetNativeD3D12Device()->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Buffer));
 
-		if (FAILED(hr))
+		if (FAILED(hr)) {
 			logger::error("CreateSharedBuffer - OpenSharedHandle failed with hr: 0x{:08X}", hr);
+			LogBufferDesc(d3d11Buffer);
+		}
 	};
 
 	void CreateSharedBuffer(RE::ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
