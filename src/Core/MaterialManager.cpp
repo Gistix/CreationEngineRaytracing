@@ -1,5 +1,6 @@
 #include "Core/MaterialManager.h"
 
+#if defined(SKYRIM)
 #include "Core/Material/Skyrim/LightingMaterial.h"
 #include "Core/Material/Skyrim/EnvmapMaterial.h"
 #include "Core/Material/Skyrim/GlowmapMaterial.h"
@@ -16,11 +17,30 @@
 #include "Core/Material/Skyrim/PBRLandscapeMaterial.h"
 #include "Core/Material/Skyrim/EffectMaterial.h"
 #include "Core/Material/Skyrim/WaterMaterial.h"
+#elif defined(FALLOUT4)
+#include "Core/Material/Fallout4/LightingMaterial.h"
+#include "Core/Material/Fallout4/EnvmapMaterial.h"
+#include "Core/Material/Fallout4/GlowmapMaterial.h"
+#include "Core/Material/Fallout4/ParallaxMaterial.h"
+#include "Core/Material/Fallout4/FacegenMaterial.h"
+#include "Core/Material/Fallout4/FacegenTintMaterial.h"
+#include "Core/Material/Fallout4/HairTintMaterial.h"
+#include "Core/Material/Fallout4/ParallaxOccMaterial.h"
+#include "Core/Material/Fallout4/EyeMaterial.h"
+#include "Core/Material/Fallout4/MultiLayerParallaxMaterial.h"
+#include "Core/Material/Fallout4/LandscapeMaterial.h"
+#include "Core/Material/Fallout4/LODLandscapeMaterial.h"
+#include "Core/Material/Fallout4/EffectMaterial.h"
+#include "Core/Material/Fallout4/WaterMaterial.h"
+#endif
 #include "Renderer.h"
 #include "Scene.h"
+#include "Utils/Adapter.h"
 
+#if defined(SKYRIM)
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
+#endif
 
 #include <typeinfo>
 
@@ -106,12 +126,16 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	auto type = shaderMaterial->GetType();
 	if (type == Type::kLighting) 
 	{
+#if defined(SKYRIM)
 		if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape))
 			material = eastl::make_shared<PBRLandscapeMaterial>(shaderMaterial, offset);
 		else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR))
 			material = eastl::make_shared<PBRMaterial>(shaderMaterial, offset);
-		else switch (shaderMaterial->GetFeature())
+		else
+#endif
+		switch (shaderMaterial->GetFeature())
 		{
+#if defined(SKYRIM)
 		case RE::BSShaderMaterial::Feature::kEnvironmentMap:
 			material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
 			break;
@@ -147,10 +171,53 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 		case RE::BSShaderMaterial::Feature::kLODLandNoise:
 			material = eastl::make_shared<LODLandscapeMaterial>(shaderMaterial, offset);
 			break;
+#elif defined(FALLOUT4)
+		case RE::BSShaderMaterial::Feature::kEnvmap:
+			material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kGlowmap:
+			material = eastl::make_shared<GlowmapMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kParallax:
+			material = eastl::make_shared<ParallaxMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kFace:
+			material = eastl::make_shared<FacegenMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kSkinTint:
+			material = eastl::make_shared<FacegenTintMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kHairTint:
+			material = eastl::make_shared<HairTintMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kParallaxOcc:
+			material = eastl::make_shared<ParallaxOccMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kMultiLayerParallax:
+			material = eastl::make_shared<MultiLayerParallaxMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kEye:
+			material = eastl::make_shared<EyeMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kLandscape:
+		case RE::BSShaderMaterial::Feature::kLODLandscapeBlend:
+			material = eastl::make_shared<LandscapeMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kLODLandscape:
+		case RE::BSShaderMaterial::Feature::kLODLandscapeNoise:
+			material = eastl::make_shared<LODLandscapeMaterial>(shaderMaterial, offset);
+			break;
+#endif
 		case RE::BSShaderMaterial::Feature::kDefault:
 		case RE::BSShaderMaterial::Feature::kTreeAnim:
-		case RE::BSShaderMaterial::Feature::kMultiIndexTriShapeSnow:
 		case RE::BSShaderMaterial::Feature::kLODObjectsHD:
+#if defined(SKYRIM)
+		case RE::BSShaderMaterial::Feature::kMultiIndexTriShapeSnow:
+#elif defined(FALLOUT4)
+		case RE::BSShaderMaterial::Feature::kMultiIndexSnow:
+		case RE::BSShaderMaterial::Feature::kSnow:
+		case RE::BSShaderMaterial::Feature::kLODObjects:
+#endif
 		default:
 			material = eastl::make_shared<LightingMaterial>(shaderMaterial, offset);
 			break;
@@ -225,4 +292,24 @@ Texture MaterialManager::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiS
 #endif
 	return Texture(defaultDescHandle, nullptr);
 
+}
+
+Texture MaterialManager::GetTexture(RE::NiTexture* a_texture, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType)
+{
+#if defined(FALLOUT4)
+	if (!a_texture)
+		return Texture(defaultDescHandle, nullptr);
+
+	auto* rendererTexture = Util::Adapter::GetRendererTexture(a_texture);
+	if (!rendererTexture)
+		return Texture(defaultDescHandle, nullptr);
+
+	auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
+	if (auto result = textureManager->GetDescriptor(rendererTexture, textureType))
+		return Texture(result, defaultDescHandle.get());
+#else
+	(void)a_texture;
+	(void)textureType;
+#endif
+	return Texture(defaultDescHandle, nullptr);
 }

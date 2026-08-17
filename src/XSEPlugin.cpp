@@ -84,9 +84,9 @@ bool Load()
 
 #if defined(SKYRIM)
 	const std::array requiredDLLs = {
-		L"Data/SKSE/Plugins/EngineFixes.dll",
-		L"Data/SKSE/Plugins/CrashLogger.dll",
-		L"Data/SKSE/Plugins/CommunityShaders.dll"
+		PLUGIN_FOLDER_W L"/EngineFixes.dll",
+		PLUGIN_FOLDER_W L"/CrashLogger.dll",
+		PLUGIN_FOLDER_W L"/CommunityShaders.dll"
 	};
 
 	for (const auto dll : requiredDLLs) {
@@ -96,11 +96,11 @@ bool Load()
 			errors.push_back(errorMessage);
 		}
 	}
+#endif
 
 	if (errors.empty()) {
 		scene->Load();
 	}
-#endif
 
 	return true;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Geometry.h"
+#include "interop/VertexDesc.hlsli"
 
 namespace
 {
@@ -127,27 +128,33 @@ namespace Util
 			return ((vertexDescUInt & 0xF) << 2);
 		}
 
-		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance)
+		nvrhi::Format GetVertexPositionFormat([[ maybe_unused ]] RE::BSGraphics::VertexDesc desc)
 		{
 #if defined(SKYRIM)
-			if (!skinInstance)
-				return false;
-
-			return skinInstance->GetRTTI() == Constants::rtti::BSDismemberSkinInstance.get();
+			// Skyrim is always full precision and doesn't use the FullPrec flag at all
+			return nvrhi::Format::RGB32_FLOAT;
 #else
-			(void)skinInstance;
+			const auto vertexDescUInt = *reinterpret_cast<const uint64_t*>(&desc);
+			auto vertexDesc = VertexDesc(vertexDescUInt);
+			return vertexDesc.HasFlag(VertexFlags::FullPrec) ? nvrhi::Format::RGB32_FLOAT : nvrhi::Format::RGBA16_FLOAT;
+#endif
+		}
+
+		bool IsDismemberSkinInstance(RE::NiObject* skinInstance)
+		{
+			if (!skinInstance) return false;
+#if defined(SKYRIM)
+			return skinInstance->GetRTTI() == Constants::rtti::BSDismemberSkinInstance.get();
+#elif defined(FALLOUT4)
 			return false;
 #endif
 		}
 
-		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility)
+		void GetDismemberPartitionVisibility(RE::NiObject* skinInstance, eastl::vector<bool>& outVisibility)
 		{
 			outVisibility.clear();
 
 #if defined(SKYRIM)
-			if (!skinInstance)
-				return;
-
 			auto& runtime = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance)->GetRuntimeData();
 			outVisibility.resize(runtime.numPartitions);
 

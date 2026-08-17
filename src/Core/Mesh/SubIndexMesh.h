@@ -25,11 +25,8 @@ class SubIndexMesh : public BaseMesh
 {
 	// Shared across all K SubIndexSegmentMesh children. Created once in ctor from
 	// the parent's D3D12 resources; released when the manager is destroyed.
-	nvrhi::BufferHandle m_IndexBuffer;
-	nvrhi::BufferHandle m_VertexBuffer;
-
-	DescriptorHandle m_IndexDescriptor;
-	DescriptorHandle m_VertexDescriptor;
+	BufferDescriptor m_IndexBuffer;
+	BufferDescriptor m_VertexBuffer;
 
 	RE::BSGraphics::VertexDesc m_VertexDesc;
 
@@ -58,18 +55,18 @@ public:
 		return (static_cast<uint64_t>(start) << 32) | static_cast<uint64_t>(numTris);
 	}
 
-	nvrhi::BufferHandle GetIndexBuffer() const { return m_IndexBuffer; }
-	nvrhi::BufferHandle GetVertexBuffer() const { return m_VertexBuffer; }
+	const BufferDescriptor& GetIndexBuffer() const { return m_IndexBuffer; }
+	const BufferDescriptor& GetVertexBuffer() const { return m_VertexBuffer; }
 	const RE::BSGraphics::VertexDesc& GetVertexDesc() const { return m_VertexDesc; }
 
 	uint16_t GetIndexID([[maybe_unused]] size_t geometryIndex) const override
 	{
-		return static_cast<uint16_t>(m_IndexDescriptor.Get());
+		return static_cast<uint16_t>(m_IndexBuffer.m_Descriptor.Get());
 	}
 
 	uint16_t GetVertexID() const override
 	{
-		return static_cast<uint16_t>(m_VertexDescriptor.Get());
+		return static_cast<uint16_t>(m_VertexBuffer.m_Descriptor.Get());
 	}
 
 	// Sync the K SubIndexSegmentMesh children with the parent's current segment

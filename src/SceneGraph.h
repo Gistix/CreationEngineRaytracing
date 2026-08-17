@@ -21,6 +21,7 @@
 #include "Types/VectorStorage.h"
 #include "Types/RE/RE.h"
 #include "Types/RingBuffer.h"
+#include "Utils/Adapter.h"
 
 #include <eastl/array.h>
 #include <eastl/vector_set.h>
@@ -37,7 +38,7 @@ class SceneGraph
 {
 	RE::NiCamera* m_Camera = nullptr;
 	bool m_DrawFirstPerson = false;
-	RE::NiPoint3 m_FirstPersonPosition = RE::NiPoint3::Zero();
+	RE::NiPoint3 m_FirstPersonPosition = Util::Adapter::GetNiPoint3Zero();
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_Meshes;
 	eastl::vector<BaseMesh*> m_CurrentVisible;

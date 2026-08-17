@@ -206,12 +206,15 @@ nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
 }
 
 nvrhi::ITexture* Renderer::GetWaterDisplacementTexture() {
-#if defined(SKYRIM)
 	if (!m_WaterDisplacementTexture) {
+#if defined(SKYRIM)
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
 		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::ShaderResource);
-	}
+#elif defined(FALLOUT4)
+		m_WaterDisplacementTexture = m_GrayTexture->texture;
 #endif
+	}
+
 	return m_WaterDisplacementTexture;
 }
 
@@ -611,6 +614,12 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 
 		if (m_FrameTimerQueries[slot] && device->pollTimerQuery(m_FrameTimerQueries[slot]))
 			m_PassTimings.push_back(PassTiming{ "Total", device->getTimerQueryTime(m_FrameTimerQueries[slot]) * 1000.0f, m_FrameCpuTimes[slot] });
+
+#if defined(FALLOUT4)
+		for (auto& passTiming : m_PassTimings) {
+			logger::info("Name: {}, CPU: {}, GPU: {}", passTiming.name.c_str(), passTiming.cpuTiming, passTiming.gpuTiming);
+		}
+#endif
 	}
 
 	m_LastCompletedSlot = slot;

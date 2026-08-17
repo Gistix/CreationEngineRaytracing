@@ -52,6 +52,7 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 
 		const auto materialType = shaderProperty->GetMaterialType();
 		if (materialType == RE::BSShaderMaterial::Type::kWater) {
+#if defined(SKYRIM)
 			auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 			m_Data.WaterFlags = MapWaterShaderFlags(waterShaderProperty);
 
@@ -66,7 +67,7 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 				static_cast<float>(waterShaderProperty->cellX),
 				static_cast<float>(-waterShaderProperty->cellY)
 			};
-
+#endif
 			isWater = true;
 		}
 		else {

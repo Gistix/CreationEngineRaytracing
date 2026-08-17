@@ -63,14 +63,11 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType)
 {
-	if (textureType == TextureType::CubeMap)
-		return nullptr;
-
 	ID3D11Resource* d3d11Resource = texture->texture;
 	if (!d3d11Resource)
 		return nullptr;
 
-	if (textureType == TextureType::Standard) {
+	{
 		std::scoped_lock lock(m_TexturesMutex);
 		if (auto refIt = m_Textures.find(d3d11Resource); refIt != m_Textures.end())
 			return refIt->second->descriptorHandle;
@@ -147,7 +144,11 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 			return nullptr;
 		}
 
-		it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
+		if (textureType == TextureType::Standard)		
+			it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
+		else
+			it->second = eastl::make_unique<TextureReference>(textureHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+
 		return it->second->descriptorHandle;
 	}
 }

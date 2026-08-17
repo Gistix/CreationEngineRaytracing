@@ -132,9 +132,27 @@ Transform GetTransform(in uint meshIndex)
     return Transforms[NonUniformResourceIndex(meshIndex)];
 }
 
-Triangle GetTriangle(in uint meshIndex, in uint primitiveIdx)
+Triangle GetTriangle(in uint meshIndex, in uint indexByteOffset, in uint primitiveIdx)
 {
-    return Triangles[NonUniformResourceIndex(meshIndex)][primitiveIdx];
+    const uint byteAddr = indexByteOffset + primitiveIdx * 6u;
+    const uint alignedAddr = byteAddr & ~3u;
+    const uint d0 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr);
+    const uint d1 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr + 4u);
+
+    Triangle tri;
+    if ((byteAddr & 2u) == 0)
+    {
+        tri.x = (uint16_t)(d0 & 0xFFFF);
+        tri.y = (uint16_t)(d0 >> 16);
+        tri.z = (uint16_t)(d1 & 0xFFFF);
+    }
+    else
+    {
+        tri.x = (uint16_t)(d0 >> 16);
+        tri.y = (uint16_t)(d1 & 0xFFFF);
+        tri.z = (uint16_t)(d1 >> 16);
+    }
+    return tri;
 }
 
 // Decodes a signed-normalized byte4 (ubyte4 * 2 - 1) from a raw uint.
@@ -148,7 +166,8 @@ inline float4 UnpackByte4SNorm(uint packed)
     return v * (1.0f / 255.0f) * 2.0f - 1.0f;
 }
 
-Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
+
+Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexByteOffset, uint index, bool isMSN, uint numVertices)
 {
     Vertex vertex = (Vertex)0;
 
@@ -156,7 +175,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     
     // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t, so a 16-bit
     // multiply would overflow (e.g. stride 32 * index 2048 = 0) and corrupt high-index vertices.
-    const uint vertexOffset = vertexSize * index;
+    const uint vertexOffset = vertexByteOffset + vertexSize * index;
 
     float4 pos = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -166,7 +185,18 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     if (vertexDesc.HasFlag(VertexFlags::Vertex))
     {
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
-        pos = asfloat(vertices.Load4(offset));
+        if (vertexDesc.HasFlag(VertexFlags::FullPrec))
+        {
+            pos = asfloat(vertices.Load4(offset));
+        }
+        else
+        {
+            const uint2 packed = vertices.Load2(offset);
+            pos.x = f16tof32(packed.x & 0xFFFF);
+            pos.y = f16tof32(packed.x >> 16);
+            pos.z = f16tof32(packed.y & 0xFFFF);
+            pos.w = f16tof32(packed.y >> 16);
+        }
         vertex.Position = pos.xyz;
     }
 
@@ -234,7 +264,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
 
     if (isMSN)
     {
-        const uint quatOffset = (vertexSize * numVertices) + index * 8u;
+        const uint quatOffset = vertexByteOffset + (vertexSize * numVertices) + index * 8u;
         const uint2 packed = vertices.Load2(quatOffset);
         
         half4 q;
@@ -250,18 +280,23 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     return vertex;
 }
 
+Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
+{
+    return GetVertex(vertices, vertexDesc, 0u, index, isMSN, numVertices);
+}
+
 void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
 {
-    const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
+    const uint safePrimitiveIndex = min(primitiveIndex, (uint)max(0, (int)mesh.NumTriangles - 1));
     
-    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.TriangleOffset + safePrimitiveIndex);
+    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
 
-    const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = (meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals) != 0;
     
     const ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
-    v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x, isMSN, mesh.NumVertices);
-    v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y, isMSN, mesh.NumVertices);
-    v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z, isMSN, mesh.NumVertices);
+    v0 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.x, isMSN, mesh.NumVertices);
+    v1 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.y, isMSN, mesh.NumVertices);
+    v2 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.z, isMSN, mesh.NumVertices);
 
     // Position-less dynamic meshes (BSDynamicTriShape) keep positions in the live float4 buffer,
     // not in the byte-address vertex buffer. Reconstruct them so flat normals / object-space pos are valid.
@@ -277,16 +312,16 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
 #if defined(HAS_PREV_POSITIONS)
 void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2, out float3 prevPos0, out float3 prevPos1, out float3 prevPos2)
 {
-    const uint safePrimitiveIndex = min(primitiveIndex, mesh.NumTriangles);
+    const uint safePrimitiveIndex = min(primitiveIndex, (uint)max(0, (int)mesh.NumTriangles - 1));
 
-    Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.TriangleOffset + safePrimitiveIndex);
+    Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
 
-    const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = (meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals) != 0;
 
     ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
-    v0 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.x, isMSN, mesh.NumVertices);
-    v1 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.y, isMSN, mesh.NumVertices);
-    v2 = GetVertex(vertices, mesh.VertexDesc, geomTriangle.z, isMSN, mesh.NumVertices);
+    v0 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.x, isMSN, mesh.NumVertices);
+    v1 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.y, isMSN, mesh.NumVertices);
+    v2 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.z, isMSN, mesh.NumVertices);
 
     if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
     {

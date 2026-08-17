@@ -22,7 +22,7 @@ namespace ShaderUtils
 		DxcCreateInstanceFn DxcCreateInstance = nullptr;
 
 		DirectXShaderCompiler() {
-			HMODULE dxcompiler = LoadLibraryW(L"Data/SKSE/Plugins/dxcompiler.dll");
+			HMODULE dxcompiler = LoadLibraryW(PLUGIN_FOLDER_W L"/dxcompiler.dll");
 
 			if (!dxcompiler) {
 				logger::critical("DirectXShaderCompiler - Make sure 'dxcompiler.dll' is placed alongside this plugin's .dll");

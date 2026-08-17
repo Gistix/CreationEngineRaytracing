@@ -23,10 +23,10 @@ BaseMesh::~BaseMesh()
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
-	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 	if (geometryData.rendererData) {
-		if (auto* extra = bsTriShape->GetExtraData<RE::NiIntegersExtraData>(Constants::ExtraData::LandLOD)) {
+		if (auto* extra = Util::Adapter::GetIntegersExtraData(bsTriShape, Constants::ExtraData::LandLOD)) {
 			if (extra->size > 0 && extra->value[0] == 4)
 				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
 		}
@@ -34,13 +34,24 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
+#if defined(FALLOUT4)
+		// Does this mean DynamicMesh has rendererData in Fallout4?
+		// It would also apply for SkinnedMesh
+		if (!geometryData.rendererData->vertexDesc.HasFlag(RE::BSGraphics::Vertex::Flags::VF_VERTEX)) {
+			logger::warn("BaseMesh::Create - Mesh {} has no vertex position.", MakeDebugName(bsTriShape).c_str());
+			return nullptr;
+		}
+#endif
+
 		return eastl::make_unique<Mesh>(bsTriShape, commandList);
 	}
 
-	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
+#if !defined(FALLOUT4)
+	if (auto bsDynamicTriShape = Util::Adapter::AsDynamicTriShape(bsTriShape))
 		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
+#endif
 
-	if (geometryData.skinInstance.get())
+	if (geometryData.skinInstance)
 		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
 
 	logger::warn("BaseMesh::Create - No renderer data or skin instance for {}", MakeDebugName(bsTriShape));
@@ -63,7 +74,7 @@ void BaseMesh::MarkDirty(DirtyFlags flag) {
 	Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }
 
-bool BaseMesh::ValidateCounts(uint16_t numTriangles, uint32_t numVertices)
+bool BaseMesh::ValidateCounts(uint32_t numTriangles, uint32_t numVertices)
 {
 	if (numTriangles == 0) {
 		logger::warn("BaseMesh::ValidateCounts - Num triangles equals 0, skipping.");
@@ -82,12 +93,13 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 {
 	BufferDescriptor indexBuffer{};
 
-	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
+	auto* indexBufferDX12 = Util::Adapter::GetIndexBufferDX12(triShape);
+	auto* indexBuffer11 = Util::Adapter::GetD3D11IndexBuffer(triShape);
 
-	auto indexDesc = triShapeDX12->indexBufferDX12->GetDesc();
+	auto indexDesc = indexBufferDX12->GetDesc();
 
 	D3D11_BUFFER_DESC indexDesc11;
-	reinterpret_cast<ID3D11Buffer*>(triShapeDX12->indexBuffer)->GetDesc(&indexDesc11);
+	indexBuffer11->GetDesc(&indexDesc11);
 
 	if (indexDesc.Width != indexDesc11.ByteWidth) {
 		logger::error("D3D11 ({}) and D3D12 ({}) index buffer size mismatch.", indexDesc11.ByteWidth, indexDesc.Width);
@@ -96,7 +108,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 
 	auto indexBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(indexDesc.Width)
-		.setStructStride(sizeof(Triangle))
+		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("Index Buffer");
@@ -104,16 +116,22 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 	auto device = Renderer::GetSingleton()->GetDevice();
 	indexBuffer.m_Buffer = device->createHandleForNativeBuffer(
 		nvrhi::ObjectTypes::D3D12_Resource, 
-		nvrhi::Object(triShapeDX12->indexBufferDX12), 
+		nvrhi::Object(indexBufferDX12), 
 		indexBufferDesc);
 
 	if (indexBuffer.m_Buffer) {
 		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable;
-		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, indexBuffer.m_Buffer));
+		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, indexBuffer.m_Buffer));
 	}
 	else {
-		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffer;");
 	}
+
+#if defined(FALLOUT4)
+	indexBuffer.m_Offset = triShape->indexBuffer->dataOffset;
+#else
+	indexBuffer.m_Offset = 0;
+#endif
 
 	return indexBuffer;
 }
@@ -122,12 +140,13 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 {
 	BufferDescriptor vertexBuffer{};
 
-	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
+	auto* vertexBufferDX12 = Util::Adapter::GetVertexBufferDX12(triShape);
+	auto* vertexBuffer11 = Util::Adapter::GetD3D11VertexBuffer(triShape);
 
-	auto vertexDesc = triShapeDX12->vertexBufferDX12->GetDesc();
+	auto vertexDesc = vertexBufferDX12->GetDesc();
 
 	D3D11_BUFFER_DESC vertexDesc11;
-	reinterpret_cast<ID3D11Buffer*>(triShapeDX12->vertexBuffer)->GetDesc(&vertexDesc11);
+	vertexBuffer11->GetDesc(&vertexDesc11);
 
 	if (vertexDesc.Width != vertexDesc11.ByteWidth) {
 		logger::error("D3D11 ({}) and D3D12 ({}) vertex buffer size mismatch.", vertexDesc11.ByteWidth, vertexDesc.Width);
@@ -144,7 +163,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	auto device = Renderer::GetSingleton()->GetDevice();
 	vertexBuffer.m_Buffer = device->createHandleForNativeBuffer(
 		nvrhi::ObjectTypes::D3D12_Resource, 
-		nvrhi::Object(triShapeDX12->vertexBufferDX12), 
+		nvrhi::Object(vertexBufferDX12), 
 		vertexBufferDesc);
 
 	if (vertexBuffer.m_Buffer) {
@@ -152,8 +171,14 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 		vertexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, vertexBuffer.m_Buffer));
 	}
 	else {
-		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+		logger::error("BaseMesh::CreateVertexBuffer - Failed to create handle for native buffer;");
 	}
+
+#if defined(FALLOUT4)
+	vertexBuffer.m_Offset = triShape->vertexBuffer->dataOffset;
+#else
+	vertexBuffer.m_Offset = 0;
+#endif
 
 	return vertexBuffer;
 }
@@ -232,20 +257,20 @@ void BaseMesh::CommitDirtyFlags()
 	ClearDirtyFlags();
 }
 
-nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex, nvrhi::Format vertexFormat)
 {
 	nvrhi::rt::GeometryDesc geometryDesc;
 
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
 	geometryTriangles.indexBuffer = indexBuffer;
-	geometryTriangles.indexOffset = indexOffset * sizeof(uint16_t); // Byte offset into index buffer GPU VA
+	geometryTriangles.indexOffset = indexOffset; // Byte offset into index buffer GPU VA
 	geometryTriangles.indexFormat = nvrhi::Format::R16_UINT;
 	geometryTriangles.indexCount = indexCount;
 
 	geometryTriangles.vertexBuffer = vertexBuffer;
-	geometryTriangles.vertexOffset = 0;
-	geometryTriangles.vertexFormat = nvrhi::Format::RGB32_FLOAT;
+	geometryTriangles.vertexOffset = vertexOffset; // Byte offset into vertex buffer GPU VA
+	geometryTriangles.vertexFormat = vertexFormat;
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;
 
@@ -311,7 +336,8 @@ void BaseMesh::SetEyeFlag()
 	if (!m_Flags.none(Flags::Eyes))
 		return;
 
-	auto baseObj = m_Owner->GetBaseObject();
+#if defined(SKYRIM)
+	auto baseObj = Util::Adapter::GetBaseObject(m_Owner);
 	if (!baseObj)
 		return;
 
@@ -325,11 +351,12 @@ void BaseMesh::SetEyeFlag()
 
 	const bool isEye = (strcmp(eyePart->formEditorID.c_str(), m_Name.c_str()) == 0);
 	m_Flags.set(isEye, Flags::Eyes);
+#endif
 }
 
 void BaseMesh::CreateMaterial()
 {
-	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->material);
 }
 
 void BaseMesh::UpdateMaterial()
@@ -341,7 +368,7 @@ void BaseMesh::UpdateMaterial()
 	if (m_Material->GetData()->Type != MaterialBase::Type::Water)
 		return;
 
-	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
+	m_Material->Update(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->material);
 }
 
 void BaseMesh::AllocateMeshIndex()

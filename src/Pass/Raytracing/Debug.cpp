@@ -27,7 +27,7 @@ namespace Pass
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
-		m_Defines = Util::Shader::GetPathTracingDefines(settings, false, false);
+		m_Defines = Util::Shader::GetDebugDefines(settings);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 	}
@@ -45,7 +45,7 @@ namespace Pass
 
 	void Debug::SettingsChanged(const Settings& settings)
 	{
-		auto defines = Util::Shader::GetPathTracingDefines(settings, false, false);
+		auto defines = Util::Shader::GetDebugDefines(settings);
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
@@ -279,7 +279,7 @@ namespace Pass
 			state.bindings = bindings;
 			commandList->setComputeState(state);
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, 32);
+			auto threadGroupSize = Util::Math::GetDispatchCount(resolution, Constants::DEBUG_DISPATCH_THREADS);
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 		}
 	}

@@ -2,6 +2,7 @@
 #include "Util.h"
 #include "SceneGraph.h"
 
+#include "Utils/Adapter.h"
 #include "Utils/DXVKDetection.h"
 
 #include "Hooks.h"
@@ -42,6 +43,8 @@ Scene::Scene()
 
 void Scene::Load()
 {
+	Hooks::InstallEarly();
+
 	m_IsDXVK = Util::DXVK::IsRunning();
 	if (m_IsDXVK)
 		logger::info("DXVK detected via d3d11.dll/dxgi.dll proxy - Switching to Vulkan mode.");
@@ -235,24 +238,22 @@ void Scene::Execute()
 
 void Scene::UpdateCameraData() const
 {
-#if defined(SKYRIM)
-	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
-
-	auto cameraData = runtimeData.cameraData.getEye();
+	m_CameraRuntimeData = Util::Adapter::GetCameraRuntimeData();
 
 	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
 
-	m_CameraData->ViewInverse = cameraData.viewMat.Invert();
-	m_CameraData->ProjInverse = cameraData.projMat.Invert();
+	m_CameraData->ViewInverse = m_CameraRuntimeData.viewMat.Invert();
+	m_CameraData->ProjInverse = m_CameraRuntimeData.projMat.Invert();
 
 	m_CameraData->CameraData = Util::Game::GetClippingData();
 
-	float2 ndcToViewMult = float2(2.0f / cameraData.projMat(0, 0), -2.0f / cameraData.projMat(1, 1));
-	float2 ndcToViewAdd = float2(-1.0f / cameraData.projMat(0, 0), 1.0f / cameraData.projMat(1, 1));
+	float2 ndcToViewMult = float2(2.0f / m_CameraRuntimeData.projMat(0, 0), -2.0f / m_CameraRuntimeData.projMat(1, 1));
+	float2 ndcToViewAdd = float2(-1.0f / m_CameraRuntimeData.projMat(0, 0), 1.0f / m_CameraRuntimeData.projMat(1, 1));
 
 	m_CameraData->NDCToView = float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y);
 
-	m_CameraData->Position = Util::Math::Float3(runtimeData.posAdjust.getEye());
+	m_CameraData->Position = m_CameraRuntimeData.posAdjust;
+	m_CameraData->PositionPrev = m_CameraRuntimeData.previousPosAdjust;
 
 	auto* renderer = Renderer::GetSingleton();
 
@@ -260,18 +261,22 @@ void Scene::UpdateCameraData() const
 	m_CameraData->ScreenSize = renderer->GetResolution();
 	m_CameraData->RenderSize = renderer->GetDynamicResolution();
 
-	m_CameraData->PositionPrev = Util::Math::Float3(runtimeData.previousPosAdjust.getEye());
-
+#if defined(SKYRIM)
 	// Used by water FlowMap
 	if (g_Time)
 		m_CameraData->Time = *g_Time;
+#elif defined(FALLOUT4)
+	const auto& shaderState = Util::Adapter::GetShaderManagerState();
+	m_CameraData->Time = *reinterpret_cast<const float*>(reinterpret_cast<const std::uint8_t*>(&shaderState) + 0x28);
+#endif
 
 	// Used by raster gbuffer
-	m_CameraData->ViewProj = cameraData.viewProjMatrixUnjittered;
-	m_CameraData->PrevViewProj = cameraData.previousViewProjMatrixUnjittered;
+	m_CameraData->ViewProj = m_CameraRuntimeData.viewProjMatrixUnjittered;
+	m_CameraData->PrevViewProj = m_CameraRuntimeData.previousViewProjMatrixUnjittered;
 
 	m_CameraData->Jitter = renderer->GetJitter();
 
+#if defined(SKYRIM)
 	// Actually "cameraUnderwater"?
 	m_CameraData->IsUnderwater = RE::TESWaterSystem::GetSingleton()->playerUnderwater;
 
@@ -292,7 +297,7 @@ void Scene::UpdateCameraData() const
 	{
 		auto* tes = RE::TES::GetSingleton();
 		auto* sky = RE::Sky::GetSingleton();
-		auto eyePos = runtimeData.posAdjust.getEye();
+		auto eyePos = m_CameraRuntimeData.posAdjust;
 
 		for (int ky = -2; ky <= 2; ky++) {
 			for (int kx = -2; kx <= 2; kx++) {
@@ -336,13 +341,8 @@ void Scene::UpdateCameraData() const
 		}
 	}
 #elif defined(FALLOUT4)
-	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
-	m_CameraData->ViewInverse = float4x4();
-	m_CameraData->ProjInverse = float4x4();
-	m_CameraData->FrameIndex = 0;
-	m_CameraData->ScreenSize = uint2(1920, 1080);
-	m_CameraData->RenderSize = uint2(1920, 1080);
-	m_CameraData->Jitter = float2(0, 0);
+	m_CameraData->IsUnderwater = false; // TODO: Fetch from FO4 water system
+	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
 #endif
 }
 
@@ -398,10 +398,12 @@ nvrhi::ITexture* Scene::GetProjNoiseTexture() const
 	if (m_ProjNoiseTexture)
 		return m_ProjNoiseTexture;
 
-	auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
+	auto* projNoiseMap = Util::Adapter::GetDefaultTextureProjNoiseMap();
+	if (!projNoiseMap)
+		return nullptr;
 
 	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(
-		reinterpret_cast<ID3D11Texture2D*>(projNoiseMap->rendererTexture->texture), 
+		Util::Adapter::GetTextureResource(projNoiseMap),
 		"Projection Noise Map", 
 		nvrhi::Format::UNKNOWN, 
 		nvrhi::ResourceStates::ShaderResource);
@@ -504,3 +506,40 @@ float Scene::GetResolutionScale() const
 
 	return m_Settings.RaytracingSettings.ResolutionScale;
 }
+
+#if defined(FALLOUT4)
+void Scene::TryShareBuffer(REX::W32::ID3D11Buffer* a_buffer)
+{
+	auto buffer = reinterpret_cast<ID3D11Buffer*>(a_buffer);
+
+	std::scoped_lock mutex(m_BufferMutex);
+	auto [it, emplaced] = m_Buffers.try_emplace(buffer, nullptr);
+
+	// Already shared and in the map
+	if (!emplaced)
+		return;
+
+	Util::CreateSharedBuffer(buffer, it->second.put());
+}
+
+ID3D12Resource* Scene::GetSharedBuffer(REX::W32::ID3D11Buffer* a_buffer)
+{
+	auto buffer = reinterpret_cast<ID3D11Buffer*>(a_buffer);
+
+	std::scoped_lock mutex(m_BufferMutex);
+
+	auto it = m_Buffers.find(buffer);
+	if (it == m_Buffers.end()) {
+		logger::error("Scene::GetSharedBuffer - Buffer {} not found.", fmt::ptr(buffer));
+		return nullptr;
+	}
+
+	return it->second.get();
+}
+
+void Scene::TryReleaseBuffer(REX::W32::ID3D11Buffer* a_buffer)
+{
+	std::scoped_lock mutex(m_BufferMutex);
+	m_Buffers.erase(reinterpret_cast<ID3D11Buffer*>(a_buffer));
+}
+#endif

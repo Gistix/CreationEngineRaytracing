@@ -26,12 +26,20 @@ float4 PBRColorScale(float4 color)
 
 float3 ColorToGamma(float3 color)
 {
+#if defined(SKYRIM)
     return pow(abs(color), 1.0f / (LLON ? LLSETTINGS.colorGamma : 2.2f));
+#else
+    return color;
+#endif 
 }
 
 float3 ColorToLinear(float3 color)
 {
+#if defined(SKYRIM)    
     return pow(abs(color), (LLON ? LLSETTINGS.colorGamma : 2.2f));
+#else
+    return color;
+#endif    
 }
 
 float3 EffectToLinear(float3 color)
@@ -87,12 +95,20 @@ float3 VanillaDiffuseColorGamma(float3 color)
 
 float3 LLGammaToTrueLinear(float3 color)
 {
+#if defined(SKYRIM)    
     return LLON ? color : pow(abs(color), 2.2f);
+#else
+    return color;
+#endif    
 }
 
 float3 LLTrueLinearToGamma(float3 color)
 {
+#if defined(SKYRIM)     
     return LLON ? color : pow(abs(color), 1.0f / 2.2f);
+#else
+    return color;
+#endif    
 }
 
 float3 EmitColorToLinear(float3 color)

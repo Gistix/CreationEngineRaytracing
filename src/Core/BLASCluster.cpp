@@ -135,7 +135,7 @@ void BLASCluster::UpdateInstanceLightData(
 		}
 		else {
 			const auto& center = Util::Math::Float3(m_WorldBound.center);
-			const float boundRadius = m_WorldBound.radius;
+			const float boundRadius = Util::Adapter::GetNiBoundRadius(m_WorldBound);
 
 			const float3 toCenter = center - ld.Position;
 			const float dist = toCenter.Length();
@@ -214,7 +214,7 @@ uint32_t BLASCluster::Update()
 			const auto meshType = static_cast<uint16_t>(mesh->GetType());
 			const auto dynamicIndex = static_cast<uint16_t>(mesh->GetDynamicIndex());
 			const auto meshIndex = mesh->GetMeshIndex();
-			const auto materialIndex = mesh->GetMaterial()->GetOffsetComp();
+			const auto materialIndex = static_cast<uint32_t>(mesh->GetMaterial()->GetOffset());
 
 			for (size_t i = 0; i < entries.size(); i++) {
 				const auto& entry = entries[i];
@@ -231,7 +231,9 @@ uint32_t BLASCluster::Update()
 					meshType,
 					dynamicIndex,
 					meshIndex,
-					static_cast<uint16_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
+					0,
+					static_cast<uint32_t>(geomTris.indexOffset),
+					static_cast<uint32_t>(geomTris.vertexOffset),
 					materialIndex
 				);
 
@@ -248,7 +250,7 @@ uint32_t BLASCluster::Update()
 
 		const bool bypassFrustumCulling = m_Flags.all(Flags::Player) && sceneGraph->GetDrawFirstPerson();
 
-		const bool inFrustum = bypassFrustumCulling || camera->PointInFrustum(m_WorldBound.center, m_WorldBound.radius);
+		const bool inFrustum = bypassFrustumCulling || camera->PointInFrustum(m_WorldBound.center, Util::Adapter::GetNiBoundRadius(m_WorldBound));
 		m_Flags.set(!inFrustum, Flags::FrustumCulled);
 
 		if (!skipInstanceLights) {
