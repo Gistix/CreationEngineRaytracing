@@ -660,19 +660,27 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	}
 
 	winrt::com_ptr<IDXGIResource1> dxgiResource;
-	d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+	if (FAILED(hr)) {
+		logger::error("Renderer::ShareTexture - QueryInterface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+		return nullptr;
+	}
 
 	HANDLE sharedHandle = nullptr;
 
-	dxgiResource->GetSharedHandle(&sharedHandle);
+	hr = dxgiResource->GetSharedHandle(&sharedHandle);
+	if (FAILED(hr)) {
+		logger::error("Renderer::ShareTexture - GetSharedHandle failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+		return nullptr;
+	}
 
 	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
 
 	winrt::com_ptr<ID3D12Resource> d3d12Resource;
-	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
+	hr = nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
 
-	if (!d3d12Resource) {
-		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}", debugName);
+	if (FAILED(hr) || !d3d12Resource) {
+		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
 		return nullptr;
 	}
 
