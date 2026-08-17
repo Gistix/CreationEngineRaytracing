@@ -11,5 +11,9 @@ namespace RE::BSGraphics
 		ID3D12Resource* indexBufferDX12;
 		bool ownsDX12Buffers = false;
 	};
+#if defined(SKYRIM)
 	static_assert(sizeof(TriShapeDX12) == 0x48);
+#elif defined(FALLOUT4)
+	static_assert(sizeof(TriShapeDX12) == 0x38);
+#endif
 }

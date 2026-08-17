@@ -1,5 +1,11 @@
 #include "Adapter.h"
+#include "Constants.h"
+#if defined(FALLOUT4)
+#include "Types/RE/FO4/ShadowSceneNode.h"
+#include "Types/RE/FO4/NiSwitchNode.h"
+#endif
 
+#include "Core/Mesh/DynamicMesh.h"
 namespace Util
 {
 	namespace Adapter
@@ -25,12 +31,129 @@ namespace Util
 			return runtimeData;
 		}
 
-		const char* GetName(RE::TESForm* a_form)
+		bool IsSkinned(const GeometryRuntimeData& geometryData)
 		{
 #if defined(SKYRIM)
-			return a_form->GetName();
+			auto skinInstance = static_cast<RE::NiSkinInstance*>(geometryData.skinInstance);
+			return !geometryData.rendererData && skinInstance && skinInstance->skinPartition && skinInstance->skinPartition->numPartitions > 0;
 #elif defined(FALLOUT4)
+			(void)geometryData;
+			return false; // FO4 skinning is handled differently, disable for now
+#endif
+		}
+
+		TrishapeRuntimeData GetTrishapeRuntimeData(RE::BSTriShape* a_triShape)
+		{
+			TrishapeRuntimeData data{};
+#if defined(SKYRIM)
+			auto runtime = a_triShape->GetTrishapeRuntimeData();
+			data.vertexCount = runtime.vertexCount;
+			data.triangleCount = runtime.triangleCount;
+#elif defined(FALLOUT4)
+			data.vertexCount = a_triShape->numVertices;
+			data.triangleCount = a_triShape->numTriangles;
+#endif
+			return data;
+		}
+
+		RE::BSGraphics::TriShape* GetRendererData(const GeometryRuntimeData& geometryData)
+		{
+#if defined(SKYRIM)
+			if (IsSkinned(geometryData)) {
+				auto skinInstance = static_cast<RE::NiSkinInstance*>(geometryData.skinInstance);
+				return skinInstance->skinPartition->partitions[0].buffData;
+			}
+			return static_cast<RE::BSGraphics::TriShape*>(geometryData.rendererData);
+#elif defined(FALLOUT4)
+			return static_cast<RE::BSGraphics::TriShape*>(geometryData.rendererData);
+#endif
+		}
+
+		bool GetAlphaBlending(RE::NiAlphaProperty* a_property)
+		{
+			if (!a_property) return false;
+#if defined(SKYRIM)
+			return a_property->GetAlphaBlending();
+#elif defined(FALLOUT4)
+			return (a_property->flags.flags & 1) != 0;
+#endif
+		}
+
+		uint32_t GetDynamicDataSize(RE::BSDynamicTriShape* a_dynamicTriShape)
+		{
+#if defined(SKYRIM)
+			return a_dynamicTriShape->GetDynamicTrishapeRuntimeData().dataSize;
+#elif defined(FALLOUT4)
+			return a_dynamicTriShape->dynamicDataSize;
+#endif
+		}
+
+		void* LockDynamicData(RE::BSDynamicTriShape* a_dynamicTriShape)
+		{
+#if defined(SKYRIM)
+			a_dynamicTriShape->GetDynamicTrishapeRuntimeData().lock.Lock();
+			return a_dynamicTriShape->GetDynamicTrishapeRuntimeData().dynamicData;
+#elif defined(FALLOUT4)
+			return a_dynamicTriShape->LockDynamicData();
+#endif
+		}
+
+		void UnlockDynamicData(RE::BSDynamicTriShape* a_dynamicTriShape)
+		{
+#if defined(SKYRIM)
+			a_dynamicTriShape->GetDynamicTrishapeRuntimeData().lock.Unlock();
+#elif defined(FALLOUT4)
+			a_dynamicTriShape->UnlockDynamicData();
+#endif
+		}
+
+		void UpdateDynamicData(DynamicMesh* dynamicMesh, RE::BSDynamicTriShape* bsDynamicTriShape)
+		{
+#if defined(SKYRIM)
+			auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
+			dynamicMesh->UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
+#elif defined(FALLOUT4)
+			void* data = bsDynamicTriShape->LockDynamicData();
+			dynamicMesh->UpdateDynamicData(data, bsDynamicTriShape->dynamicDataSize);
+			bsDynamicTriShape->UnlockDynamicData();
+#endif
+		}
+
+		void GetAlwaysRenderChildren(RE::NiNode* shadowSceneNode, eastl::vector<RE::NiAVObject*>& outChildren)
+		{
+#if defined(SKYRIM)
+			auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(shadowSceneNode);
+			if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+				for (auto& child : portalGraph->alwaysRenderChildren) {
+					if (child->parent)
+						continue;
+					outChildren.push_back(child.get());
+				}
+			}
+#elif defined(FALLOUT4)
+			(void)shadowSceneNode;
+			(void)outChildren;
+#endif
+		}
+
+		bool IsValidTriShape(RE::BSGeometry* a_geometry)
+		{
+#if defined(SKYRIM)
+			auto type = a_geometry->GetType();
+			return type == RE::BSGeometry::Type::kTriShape || type == RE::BSGeometry::Type::kDynamicTriShape || type == RE::BSGeometry::Type::kSubIndexTriShape;
+#elif defined(FALLOUT4)
+			auto rtti = a_geometry->GetRTTI();
+			return rtti == Constants::rtti::BSTriShape.get() || rtti == Constants::rtti::BSDynamicTriShape.get(); // FO4 uses RTTI check
+#endif
+		}
+
+		const char* GetName(RE::TESForm* a_form)
+		{
+			if (!a_form) return nullptr;
+#if defined(SKYRIM)
 			return a_form->GetFullName();
+#elif defined(FALLOUT4)
+			return a_form->GetFormEditorID();
 #endif		
 		}
 
@@ -85,12 +208,22 @@ namespace Util
 #endif	
 		}
 
+		RE::BSDynamicTriShape* AsDynamicTriShape(RE::BSTriShape* a_geometry)
+		{
+#if defined(SKYRIM)
+			return a_geometry->AsDynamicTriShape();
+#elif defined(FALLOUT4)
+			return a_geometry->IsDynamicTriShape();
+#endif
+		}
+
 		RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object)
 		{
 #if defined(SKYRIM)
 			return REL::RelocateMember<RE::TESObjectREFR*>(a_object, 0x0F8, 0x110);
 #elif defined(FALLOUT4)
-			return;
+			(void)a_object;
+			return nullptr;
 #endif	
 		}
 
@@ -106,6 +239,45 @@ namespace Util
 #endif	
 		}
 
+		RE::NiPoint3 GetZeroNiPoint3()
+		{
+#if defined(SKYRIM)
+			return RE::NiPoint3::Zero();
+#elif defined(FALLOUT4)
+			return { 0.0f, 0.0f, 0.0f };
+#endif
+		}
+
+		RE::NiTexture* GetDefaultTextureProjNoiseMap()
+		{
+#if defined(SKYRIM)
+			return RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
+#elif defined(FALLOUT4)
+			return nullptr;
+#endif
+		}
+
+		RE::NiPoint3 GetCameraEyePosition()
+		{
+#if defined(SKYRIM)
+			auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
+			return runtimeData.posAdjust.getEye();
+#elif defined(FALLOUT4)
+			return { 0.0f, 0.0f, 0.0f }; // FO4 doesn't have RendererShadowState like this, maybe PlayerCamera::cameraRoot? 
+#endif
+		}
+
+		bool IsInFirstPerson(RE::PlayerCharacter* a_player, RE::PlayerCamera* a_camera)
+		{
+#if defined(SKYRIM)
+			return !a_player->GetPlayerRuntimeData().playerFlags.isInThirdPersonMode && !a_camera->IsInFreeCameraMode();
+#elif defined(FALLOUT4)
+			(void)a_player;
+			(void)a_camera;
+			return false; // Implement properly later
+#endif
+		}
+
 		RE::NiPoint3 GetFirstPersonNodePosition(RE::PlayerCamera* a_camera)
 		{
 #if defined(SKYRIM)
@@ -116,8 +288,42 @@ namespace Util
 			func(a_camera, &result);
 			return result;
 #elif defined(FALLOUT4)
+			(void)a_camera;
 			return { 0.0f, 0.0f, 0.0f };
 #endif	
+		}
+		
+		RE::BSMultiBound* GetMultiBound(RE::BSMultiBoundNode* a_node)
+		{
+#if defined(SKYRIM)
+			return a_node->GetRuntimeData().multiBound.get();
+#elif defined(FALLOUT4)
+			return a_node->multiBound.get();
+#endif
+		}
+
+		RE::BSMultiBoundAABB* GetMultiBoundAABB(RE::BSMultiBound* a_multiBound)
+		{
+			if (!a_multiBound)
+				return nullptr;
+#if defined(SKYRIM)
+			if (!a_multiBound->data)
+				return nullptr;
+			return netimmerse_cast<RE::BSMultiBoundAABB*>(a_multiBound->data.get());
+#elif defined(FALLOUT4)
+			if (!a_multiBound->shape)
+				return nullptr;
+			return netimmerse_cast<RE::BSMultiBoundAABB*>(a_multiBound->shape.get());
+#endif
+		}
+
+		float GetNiBoundRadius(const RE::NiBound& a_bound)
+		{
+#if defined(SKYRIM)
+			return a_bound.radius;
+#elif defined(FALLOUT4)
+			return a_bound.fRadius;
+#endif
 		}
 		
 		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node) {
@@ -126,6 +332,22 @@ namespace Util
 #elif defined(FALLOUT4)
 			return a_node->children;
 #endif		
+		}
+
+		RE::NiAVObject* GetChildAt(RE::NiNode* a_node, uint16_t a_index) {
+			if (!a_node) return nullptr;
+#if defined(SKYRIM)
+			auto& children = a_node->GetChildren();
+			if (a_index < children.size()) {
+				return children[a_index].get();
+			}
+#elif defined(FALLOUT4)
+			auto& children = a_node->children;
+			if (a_index < children.size()) {
+				return children.data()[a_index].get();
+			}
+#endif
+			return nullptr;
 		}
 
 		uint8_t* GetVertexData(RE::BSGraphics::TriShape* rendererData)
@@ -146,17 +368,46 @@ namespace Util
 #endif
 		}
 
+		void DeallocateTriShapeData(RE::BSGraphics::TriShape* rendererData)
+		{
 #if defined(SKYRIM)
-		RE::NiSkinInstance* GetSkinInstance(RE::BSGeometry* geometry)
-		{
-			return geometry->GetGeometryRuntimeData().skinInstance.get();
-		}
+			auto* mm = RE::MemoryManager::GetSingleton();
+			if (rendererData->rawVertexData)
+				mm->Deallocate(rendererData->rawVertexData, false);
+			if (rendererData->rawIndexData)
+				mm->Deallocate(rendererData->rawIndexData, false);
 #elif defined(FALLOUT4)
-		RE::BSSkin::Instance* GetSkinInstance(RE::BSGeometry* geometry)
-		{
-			return geometry->skinInstance.get();
-		}
+			(void)rendererData;
+			// FO4 handles memory differently or doesn't have raw vertex/index data here
 #endif
+		}
+
+		SkinData GetSkinData(RE::BSGeometry* geometry)
+		{
+			SkinData result = { false, 0, nullptr, 0 };
+#if defined(SKYRIM)
+			auto* skinInstance = geometry->GetGeometryRuntimeData().skinInstance.get();
+			if (skinInstance) {
+				result.hasSkin = true;
+				auto* skinData = skinInstance->skinData.get();
+				if (skinData) {
+					result.numBones = skinData->bones;
+					result.boneWorldTransforms = skinInstance->boneWorldTransforms;
+				}
+				result.frameID = skinInstance->frameID;
+			}
+#elif defined(FALLOUT4)
+			auto* skinInstance = geometry->skinInstance.get();
+			if (skinInstance) {
+				result.hasSkin = true;
+				result.numBones = *reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(skinInstance) + 0x38);
+				result.boneWorldTransforms = *reinterpret_cast<const RE::NiTransform***>(reinterpret_cast<uintptr_t>(skinInstance) + 0x28);
+				// TODO: properly reverse frameID location in FO4
+				result.frameID = 0; 
+			}
+#endif
+			return result;
+		}
 
 		RE::TESObjectREFR* AsReference(RE::TESForm* a_object)
 		{
@@ -317,6 +568,74 @@ namespace Util
 			return a_node->GetRuntimeData().cullingMode == RE::BSCullingProcess::BSCPCullingType::kAllFail;
 #elif defined(FALLOUT4)
 			return a_node->cullingMode.all(RE::BSCullingProcess::CullingType::kAllFail);
+#endif
+		}
+
+		RE::BSGraphics::State& GetGraphicsState()
+		{
+#if defined(SKYRIM)
+			return *RE::BSGraphics::State::GetSingleton();
+#elif defined(FALLOUT4)
+			// FO4 returns State by value, which is expensive to call repeatedly and makes it non-referenceable.
+			// Re-create the singleton logic to get the pointer instead.
+			static REL::Relocation<RE::BSGraphics::State*> singleton{ RE::ID::BSGraphics::State::Singleton };
+			return *singleton;
+#endif
+		}
+
+		uint32_t GetGraphicsFrameCount()
+		{
+#if defined(SKYRIM)
+			return GetGraphicsState().frameCount;
+#elif defined(FALLOUT4)
+			return GetGraphicsState().currentFrame;
+#endif
+		}
+
+		CESEAdapter::REX::EnumSet<MenuState> GetMenuState()
+		{
+			CESEAdapter::REX::EnumSet<MenuState> state;
+			const auto ui = RE::UI::GetSingleton();
+#if defined(SKYRIM)
+			state.set(ui->IsMenuOpen(RE::MainMenu::MENU_NAME), MenuState::MainMenu);
+			state.set(ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
+			state.set(ui->IsMenuOpen(RE::MapMenu::MENU_NAME), MenuState::MapMenu);
+#elif defined(FALLOUT4)
+			state.set(ui->GetMenuOpen(RE::MainMenu::MENU_NAME), MenuState::MainMenu);
+			state.set(ui->GetMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
+			state.set(ui->GetMenuOpen(RE::PipboyMenu::MENU_NAME), MenuState::MapMenu);
+#endif
+			return state;
+		}
+
+		RE::NiSwitchNode* AsSwitchNode(RE::NiNode* node)
+		{
+#if defined(SKYRIM)
+			return node->AsSwitchNode();
+#elif defined(FALLOUT4)
+			if (node->GetRTTI() == Constants::rtti::NiSwitchNode.get())
+				return static_cast<RE::NiSwitchNode*>(node);
+			return nullptr;
+#endif
+		}
+		RE::BSPortalGraph* GetPortalGraph(RE::NiNode* node)
+		{
+			auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
+#if defined(SKYRIM)
+			return ssn->GetRuntimeData().portalGraph;
+#elif defined(FALLOUT4)
+			return ssn->portalGraph;
+#endif
+		}
+
+		float4 GetShaderManagerLoadedRange()
+		{
+#if defined(SKYRIM)
+			return *reinterpret_cast<const float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
+#elif defined(FALLOUT4)
+			// TODO: Find FO4 BSShaderManager::State loadedRange.
+			// Return a large range so everything intersects for now.
+			return { 0.0f, 0.0f, 1000000.0f, 1000000.0f };
 #endif
 		}
 	}

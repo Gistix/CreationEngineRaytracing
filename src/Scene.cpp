@@ -2,6 +2,7 @@
 #include "Util.h"
 #include "SceneGraph.h"
 
+#include "Utils/Adapter.h"
 #include "Utils/DXVKDetection.h"
 
 #include "Hooks.h"
@@ -398,7 +399,9 @@ nvrhi::ITexture* Scene::GetProjNoiseTexture() const
 	if (m_ProjNoiseTexture)
 		return m_ProjNoiseTexture;
 
-	auto& projNoiseMap = RE::BSGraphics::State::GetSingleton()->defaultTextureProjNoiseMap;
+	auto* projNoiseMap = Util::Adapter::GetDefaultTextureProjNoiseMap();
+	if (!projNoiseMap)
+		return nullptr;
 
 	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(
 		reinterpret_cast<ID3D11Texture2D*>(projNoiseMap->rendererTexture->texture), 

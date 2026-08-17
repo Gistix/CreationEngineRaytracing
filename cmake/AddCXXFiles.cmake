@@ -48,6 +48,18 @@ function(add_cxx_files TARGET)
 		"src/*.cxx"
 	)
 
+	if(BUILD_FALLOUT4)
+		list(FILTER SOURCE_FILES EXCLUDE REGEX ".*/src/Core/Skyrim/.*")
+		list(FILTER SOURCE_FILES EXCLUDE REGEX ".*/src/Core/Material/Skyrim/.*")
+		list(FILTER HEADER_FILES EXCLUDE REGEX ".*/src/Core/Skyrim/.*")
+		list(FILTER HEADER_FILES EXCLUDE REGEX ".*/src/Core/Material/Skyrim/.*")
+	elseif(BUILD_SKYRIM)
+		list(FILTER SOURCE_FILES EXCLUDE REGEX ".*/src/Core/Fallout4/.*")
+		list(FILTER SOURCE_FILES EXCLUDE REGEX ".*/src/Core/Material/Fallout4/.*")
+		list(FILTER HEADER_FILES EXCLUDE REGEX ".*/src/Core/Fallout4/.*")
+		list(FILTER HEADER_FILES EXCLUDE REGEX ".*/src/Core/Material/Fallout4/.*")
+	endif()
+
 	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
 		PREFIX "Source Files"
 		FILES ${SOURCE_FILES})

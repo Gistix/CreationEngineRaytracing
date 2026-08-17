@@ -10,5 +10,5 @@ struct MaterialTexture
 	Texture texture;
 	RE::NiSourceTexture* sourceTexture = nullptr;
 
-	bool Update(const RE::NiSourceTexturePtr& a_sourceTexture, const eastl::shared_ptr<DescriptorHandle> a_defaultDescriptor, TextureType a_type = TextureType::Standard);
+	bool Update(const RE::NiPointer<RE::NiSourceTexture>& a_sourceTexture, const eastl::shared_ptr<DescriptorHandle> a_defaultDescriptor, TextureType a_type = TextureType::Standard);
 };

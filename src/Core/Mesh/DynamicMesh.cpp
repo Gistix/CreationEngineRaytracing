@@ -14,19 +14,17 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 
-	auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
+	const uint32_t dynamicDataSize = Util::Adapter::GetDynamicDataSize(bsDynamicTriShape);
 
-	if (runtimeData.dataSize == 0) {
+	if (dynamicDataSize == 0) {
 		logger::warn("DynamicMesh::DynamicMesh - No dynamic data for {}", m_Name);
 		return;
 	}
 
-	// Byte-address buffers (normals/tangents/skinning) are inherited from the SkinnedMesh setup. The
-	// skin partition's native buffer has the same vertex count as the dynamic morph data; it carries
-	// everything except position (dynamic trishapes have no vertex position - it lives in the morph data).
-	const auto& geometryData = bsDynamicTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsDynamicTriShape);
 
-	auto* skinInstance = geometryData.skinInstance.get();
+#if defined(SKYRIM)
+	auto* skinInstance = geometryData.skinInstance;
 	if (!skinInstance) {
 		logger::warn("DynamicMesh::DynamicMesh - No skin instance for {}", m_Name);
 		return;
@@ -59,21 +57,46 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
 
-	// Byte-address live + prev-position buffers at the shared slot (skinning normals/tangents target).
 	CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
+
+#elif defined(FALLOUT4)
+	auto* rendererData = geometryData.rendererData;
+	if (!rendererData) {
+		logger::warn("DynamicMesh::DynamicMesh - No renderer data for {}", m_Name);
+		return;
+	}
+
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(bsDynamicTriShape);
+	const uint32_t vertexCount = triShapeData.vertexCount;
+
+	if (!ValidateCounts(triShapeData.triangleCount, vertexCount))
+		return;
+
+	auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(rendererData);
+
+	m_VertexBuffer = CreateVertexBuffer(triShapeDX12);
+	if (!m_VertexBuffer.m_Buffer)
+		return;
+
+	AllocateMeshIndex();
+
+	m_VertexCount = vertexCount;
+
+	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(triShapeDX12->vertexDesc);
+
+	CreateSkinningBuffers(commandList, triShapeDX12, vertexCount, vertexStride);
+#endif
 
 	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
 	// stride so the trailing w component is skipped.
-	m_DynamicData.resize(runtimeData.dataSize, 0u);
+	m_DynamicData.resize(dynamicDataSize, 0u);
 
-	runtimeData.lock.Lock();
-	UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
-	runtimeData.lock.Unlock();
+	Util::Adapter::UpdateDynamicData(this, bsDynamicTriShape);
 
 	// Live (skinning output) positions; BLAS source. Sized for two vertex sets:
 	// current positions in [0, vertexCount), previous-frame positions in [vertexCount, 2 * vertexCount).
 	auto liveBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(2ull * runtimeData.dataSize)
+		.setByteSize(2ull * dynamicDataSize)
 		.setStructStride(sizeof(float4))
 		.setCanHaveUAVs(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
@@ -84,7 +107,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	// Original (rest/morph) positions copied from the game each frame; skinning input.
 	auto originalBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(runtimeData.dataSize)
+		.setByteSize(dynamicDataSize)
 		.setStructStride(sizeof(float4))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setDebugName(std::format("{} - Dynamic (Original)", m_Name.c_str()));
@@ -111,9 +134,9 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	CreateMaterial();
 
-	InitSkinToBones(skinInstance);
+	InitSkinToBones(bsDynamicTriShape);
 
-	InitDismemberSkin(skinInstance);
+	InitDismemberSkin(Util::Adapter::GetGeometryRuntimeData(bsDynamicTriShape).skinInstance);
 }
 
 void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)

@@ -47,7 +47,7 @@ namespace RE
 		std::uint32_t                        unk174;                          // 174
 		std::uint64_t                        lock;                            // 178
 		void*                                dynamicData;                     // 180
-		NiPointer<BSGeometrySegmentData>     segmentData;                     // 188
+		BSGeometrySegmentData*               segmentData;                     // 188
 		void*                                unk190;                          // 190
 		std::uint32_t                        unk198;                          // 198
 		std::uint32_t                        pad19C;						  // 19C

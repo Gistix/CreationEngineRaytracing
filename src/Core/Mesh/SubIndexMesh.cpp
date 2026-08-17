@@ -13,14 +13,14 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 	m_Name = MakeDebugName(triShape);
 	m_Type = Type::SubIndex;
 
-	const auto& geometryData = triShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(triShape);
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
 		logger::warn("SubIndexMesh::SubIndexMesh - No renderer data for {}", m_Name);
 		return;
 	}
 
-	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(triShape);
 	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount)) {
 		logger::error("SubIndexMesh::SubIndexMesh - Failed to validate Triangle Count: {}, Vertex Count: {}",
 			triShapeData.triangleCount, triShapeData.vertexCount);
@@ -85,7 +85,7 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 
 	const bool bypassVisibility = *Scene::GetSingleton()->g_BypassSubIndexVisibility;
 
-	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(triShape);
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();
 
 	for (auto& seg : m_Segments) {

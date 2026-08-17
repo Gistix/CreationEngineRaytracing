@@ -79,5 +79,5 @@ struct Properties
 	auto& GetData() const { return m_Data; }
 private:
 	static uint32_t MapShaderFlags(RE::BSShaderProperty* shaderProperty);
-	static uint16_t MapWaterShaderFlags(RE::BSWaterShaderProperty* waterShaderProp);
+	static uint16_t MapWaterShaderFlags(RE::NiObject* waterShaderProp);
 };

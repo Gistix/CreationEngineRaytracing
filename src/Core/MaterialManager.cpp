@@ -19,8 +19,10 @@
 #include "Renderer.h"
 #include "Scene.h"
 
+#if defined(SKYRIM)
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBRLandscape.h"
+#endif
 
 #include <typeinfo>
 
@@ -106,12 +108,16 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	auto type = shaderMaterial->GetType();
 	if (type == Type::kLighting) 
 	{
+#if defined(SKYRIM)
 		if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBRLandscape))
 			material = eastl::make_shared<PBRLandscapeMaterial>(shaderMaterial, offset);
 		else if (typeid(*shaderMaterial) == typeid(BSLightingShaderMaterialPBR))
 			material = eastl::make_shared<PBRMaterial>(shaderMaterial, offset);
-		else switch (shaderMaterial->GetFeature())
+		else
+#endif
+		switch (shaderMaterial->GetFeature())
 		{
+#if defined(SKYRIM)
 		case RE::BSShaderMaterial::Feature::kEnvironmentMap:
 			material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
 			break;
@@ -147,10 +153,53 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 		case RE::BSShaderMaterial::Feature::kLODLandNoise:
 			material = eastl::make_shared<LODLandscapeMaterial>(shaderMaterial, offset);
 			break;
+#elif defined(FALLOUT4)
+		case RE::BSShaderMaterial::Feature::kEnvmap:
+			material = eastl::make_shared<EnvmapMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kGlowmap:
+			material = eastl::make_shared<GlowmapMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kParallax:
+			material = eastl::make_shared<ParallaxMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kFace:
+			material = eastl::make_shared<FacegenMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kSkinTint:
+			material = eastl::make_shared<FacegenTintMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kHairTint:
+			material = eastl::make_shared<HairTintMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kParallaxOcc:
+			material = eastl::make_shared<ParallaxOccMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kMultiLayerParallax:
+			material = eastl::make_shared<MultiLayerParallaxMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kEye:
+			material = eastl::make_shared<EyeMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kLandscape:
+		case RE::BSShaderMaterial::Feature::kLODLandscapeBlend:
+			material = eastl::make_shared<LandscapeMaterial>(shaderMaterial, offset);
+			break;
+		case RE::BSShaderMaterial::Feature::kLODLandscape:
+		case RE::BSShaderMaterial::Feature::kLODLandscapeNoise:
+			material = eastl::make_shared<LODLandscapeMaterial>(shaderMaterial, offset);
+			break;
+#endif
 		case RE::BSShaderMaterial::Feature::kDefault:
 		case RE::BSShaderMaterial::Feature::kTreeAnim:
-		case RE::BSShaderMaterial::Feature::kMultiIndexTriShapeSnow:
 		case RE::BSShaderMaterial::Feature::kLODObjectsHD:
+#if defined(SKYRIM)
+		case RE::BSShaderMaterial::Feature::kMultiIndexTriShapeSnow:
+#elif defined(FALLOUT4)
+		case RE::BSShaderMaterial::Feature::kMultiIndexSnow:
+		case RE::BSShaderMaterial::Feature::kSnow:
+		case RE::BSShaderMaterial::Feature::kLODObjects:
+#endif
 		default:
 			material = eastl::make_shared<LightingMaterial>(shaderMaterial, offset);
 			break;

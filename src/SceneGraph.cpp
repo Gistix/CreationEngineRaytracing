@@ -188,13 +188,12 @@ void SceneGraph::UpdateCamera()
 	auto* playerCamera = RE::PlayerCamera::GetSingleton();
 
 	// Mimics the logic of Main::Draw (kind of)
-	m_DrawFirstPerson = !playerCharacter->GetPlayerRuntimeData().playerFlags.isInThirdPersonMode
-		&& Scene::GetSingleton()->GetMenuState().none(MenuState::MainMenu) 
-		&& !playerCamera->IsInFreeCameraMode();
+	m_DrawFirstPerson = Util::Adapter::IsInFirstPerson(playerCharacter, playerCamera)
+		&& Scene::GetSingleton()->GetMenuState().none(MenuState::MainMenu);
 
 	// Might not be exactly how the game does it, but the first person node is always at origin, except during first person view rendering
-	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
-	m_FirstPersonPosition = m_DrawFirstPerson ? runtimeData.posAdjust.getEye() - Util::Adapter::GetFirstPersonNodePosition(playerCamera) : RE::NiPoint3::Zero();
+	m_FirstPersonPosition = m_DrawFirstPerson ? Util::Adapter::GetCameraEyePosition() - Util::Adapter::GetFirstPersonNodePosition(playerCamera) : Util::Adapter::GetZeroNiPoint3();
+
 
 	const auto* tesCamera = playerCamera->currentState->camera;
 	m_Camera = tesCamera ? Util::Game::FindNiCamera(tesCamera->cameraRoot.get()) : nullptr;
@@ -372,16 +371,14 @@ void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 {
-	auto it = m_Meshes.find(bsDynamicTriShape);
+	auto it = m_Meshes.find(reinterpret_cast<RE::BSTriShape*>(bsDynamicTriShape));
 	if (it == m_Meshes.end())
 		return;
 
 	if (auto dynamicMesh = it->second->AsDynamicMesh()) {
-		auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
-
 		// Function is called through a hook thats already between lock
 		// Acessing without locking here is safe and correct
-		dynamicMesh->UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
+		Util::Adapter::UpdateDynamicData(dynamicMesh, bsDynamicTriShape);
 	}
 }
 
@@ -570,10 +567,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				auto& children = Util::Adapter::GetChildren(node);
 
-				if (auto switchNode = node->AsSwitchNode()) {
+				if (auto* switchNode = Util::Adapter::AsSwitchNode(node)) {
 					auto index = static_cast<uint16_t>(switchNode->index);
-					if (index < children.size())
-						walk(children[index].get(), parentRefr);
+					auto childAt = Util::Adapter::GetChildAt(node, index);
+					if (childAt)
+						walk(childAt, parentRefr);
 					return;
 				}
 
@@ -589,14 +587,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				// regular children, matching ScenegraphTriShapes behavior.
 				eastl::vector<RE::NiAVObject*> portalChildren;
 				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
-					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
-					if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
-						for (auto& child : portalGraph->alwaysRenderChildren) {
-							if (child->parent)
-								continue;
-							portalChildren.push_back(child.get());
-						}
-					}
+					Util::Adapter::GetAlwaysRenderChildren(node, portalChildren);
 				}
 
 				if (children.size() >= Constants::ParallelTraversalFanoutThreshold) {
@@ -724,7 +715,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					continue;
 				}
 
-				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
+				if (!Util::Adapter::IsValidTriShape(bsTriShape))
 					continue;
 
 				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
@@ -732,22 +723,24 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!shaderProperty)
 					continue;
 
-				const auto materialType = shaderProperty->GetMaterialType();
-				const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
-				const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
-				const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+				const auto materialType = static_cast<uint32_t>(shaderProperty->GetMaterialType());
+				const bool isLightingShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kLighting));
+				const bool isEffectShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kEffect));
+				const bool isWaterShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kWater));
 
 				auto* alphaProperty = geometryData.alphaProperty;
-				const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+				const bool isAlphaBlend = Util::Adapter::GetAlphaBlending(alphaProperty);
 				const bool validEffect = isEffectShader && !isAlphaBlend;
 
 				// Exclude procedural and displacement water
 				if (isWaterShader) {
+#if defined(SKYRIM)
 					auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 					const auto waterFlags = waterShaderProperty->waterFlags.underlying();
 
 					if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
 						continue;
+#endif
 				}
 
 				if (!isLightingShader && !validEffect && !isWaterShader)
@@ -762,14 +755,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
 					continue;
 
-				const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
+				const bool skinned = Util::Adapter::IsSkinned(geometryData);
 				if (!skinned) {
-					const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+					const auto& trishapeData = Util::Adapter::GetTrishapeRuntimeData(bsTriShape);
 					if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
 						continue;
 				}
 
-				const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+				const auto rendererData = Util::Adapter::GetRendererData(geometryData);
 				if (!rendererData)
 					continue;
 

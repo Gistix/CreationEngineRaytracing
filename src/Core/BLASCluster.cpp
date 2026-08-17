@@ -135,7 +135,7 @@ void BLASCluster::UpdateInstanceLightData(
 		}
 		else {
 			const auto& center = Util::Math::Float3(m_WorldBound.center);
-			const float boundRadius = m_WorldBound.radius;
+			const float boundRadius = Util::Adapter::GetNiBoundRadius(m_WorldBound);
 
 			const float3 toCenter = center - ld.Position;
 			const float dist = toCenter.Length();
@@ -248,7 +248,7 @@ uint32_t BLASCluster::Update()
 
 		const bool bypassFrustumCulling = m_Flags.all(Flags::Player) && sceneGraph->GetDrawFirstPerson();
 
-		const bool inFrustum = bypassFrustumCulling || camera->PointInFrustum(m_WorldBound.center, m_WorldBound.radius);
+		const bool inFrustum = bypassFrustumCulling || camera->PointInFrustum(m_WorldBound.center, Util::Adapter::GetNiBoundRadius(m_WorldBound));
 		m_Flags.set(!inFrustum, Flags::FrustumCulled);
 
 		if (!skipInstanceLights) {

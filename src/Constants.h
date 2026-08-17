@@ -71,9 +71,14 @@ namespace Constants
 		static REL::Relocation<const RE::NiRTTI*> BSOrderedNode{ NiRTTI(BSOrderedNode) };
 		static REL::Relocation<const RE::NiRTTI*> BSDistantTreeShaderProperty{ NiRTTI(BSDistantTreeShaderProperty) };
 		static REL::Relocation<const RE::NiRTTI*> BSGrassShaderProperty{ NiRTTI(BSGrassShaderProperty) };
+#if defined(SKYRIM)
 		static REL::Relocation<const RE::NiRTTI*> BSDismemberSkinInstance{ NiRTTI(BSDismemberSkinInstance) };
+#endif
 		static REL::Relocation<const RE::NiRTTI*> ShadowSceneNode{ NiRTTI(ShadowSceneNode) };
 		static REL::Relocation<const RE::NiRTTI*> BSFadeNode{ NiRTTI(BSFadeNode) };
+		static REL::Relocation<const RE::NiRTTI*> NiSwitchNode{ NiRTTI(NiSwitchNode) };
+		static REL::Relocation<const RE::NiRTTI*> BSTriShape{ NiRTTI(BSTriShape) };
+		static REL::Relocation<const RE::NiRTTI*> BSDynamicTriShape{ NiRTTI(BSDynamicTriShape) };
 	}
 
 	static constexpr float3x4 kIdentityTransform = {

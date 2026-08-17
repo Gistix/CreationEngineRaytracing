@@ -7,3 +7,7 @@
 #include "BSWaterShaderProperty.h"
 #include "BGSTerrainBlock.h"
 #include "BSSubIndexTriShape.h"
+#include "BSDynamicTriShape.h"
+#include "RE/B/BSMultiBoundAABB.h"
+#include "RE/B/BSMultiBoundNode.h"
+#include "BSSkin.h"

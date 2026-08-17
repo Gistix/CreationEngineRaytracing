@@ -11,7 +11,7 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* com
 	m_BSTriShape = bsTriShape;
 	m_Type = Type::Default;
 
-	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
@@ -19,7 +19,7 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* com
 		return;
 	}
 
-	const auto& triShapeData = bsTriShape->GetTrishapeRuntimeData();
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(bsTriShape);
 
 	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount))
 		return;

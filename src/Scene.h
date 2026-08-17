@@ -87,16 +87,10 @@ struct Scene
 
 	auto GetMenuState()
 	{
-		auto frameCount = RE::BSGraphics::State::GetSingleton()->frameCount;
+		auto frameCount = Util::Adapter::GetGraphicsFrameCount();
 
 		if (m_MenuStateUpdateFrame != frameCount) {
-			m_MenuState.reset();
-
-			const auto ui = RE::UI::GetSingleton();
-
-			m_MenuState.set(ui->IsMenuOpen(RE::MainMenu::MENU_NAME), MenuState::MainMenu);
-			m_MenuState.set(ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
-			m_MenuState.set(ui->IsMenuOpen(RE::MapMenu::MENU_NAME), MenuState::MapMenu);
+			m_MenuState = Util::Adapter::GetMenuState();
 
 			m_MenuStateUpdateFrame = frameCount;
 		}

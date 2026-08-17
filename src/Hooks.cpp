@@ -32,6 +32,7 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+#if 0
 	template <typename = decltype([] {}) >
 	struct MemoryManager_AllocateTriShape
 	{
@@ -277,13 +278,7 @@ namespace Hooks
 				if (vertexBuffer)
 					vertexBuffer->Release();
 
-				auto* mm = RE::MemoryManager::GetSingleton();
-
-				if (a_triShape->rawVertexData)
-					mm->Deallocate(a_triShape->rawVertexData, false);
-
-				if (a_triShape->rawIndexData)
-					mm->Deallocate(a_triShape->rawIndexData, false);
+				Util::Adapter::DeallocateTriShapeData(a_triShape);
 
 				if (static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->ownsDX12Buffers) {
 					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape);
@@ -295,13 +290,16 @@ namespace Hooks
 						triShapeDX12->vertexBufferDX12->Release();
 				}
 
+				auto* mm = RE::MemoryManager::GetSingleton();
 				mm->Deallocate(a_triShape, false);
 			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+#endif
 
+#if defined(SKYRIM)
 	struct BSTextureSet_SetTexture
 	{
 		static void thunk(RE::BSTextureSet* a_bsTextureSet, RE::BSTextureSet::Texture a_texture, RE::NiSourceTexturePtr& a_srcTexture)
@@ -311,19 +309,20 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+#endif
 
+#if defined(SKYRIM)
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
-#if defined(SKYRIM)
 		if (oThis && oThis->rendererTexture) {
 			auto scene = Scene::GetSingleton();
 			auto sceneGraph = scene->GetSceneGraph();
 			sceneGraph->ReleaseTexture(oThis->rendererTexture);
 		}
-#endif
 
 		func(oThis);
 	}
+#endif
 
 #if defined(SKYRIM)
 	HRESULT CreateTextureAndSRV::thunk(
@@ -879,9 +878,8 @@ namespace Hooks
 
 	void Install()
 	{
-		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
-
 #if defined(SKYRIM)
+		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
 		const auto createTriShapeA = REL::RelocationID(75473, 77259);
 		const auto createTriShapeB = REL::RelocationID(75474, 77260);
 		const auto createTriShapeC = REL::RelocationID(75475, 77261);
@@ -913,7 +911,9 @@ namespace Hooks
 		
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 		
+#if defined(SKYRIM)
 		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
+#endif
 		
 		// All textures loaded from DDS
 		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
