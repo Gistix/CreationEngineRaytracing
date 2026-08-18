@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/EffectMaterial.h"
+#include "Core/Material/Fallout4/EffectMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "Types/RE/FO4/BSLightingShaderMaterials.h"
 
 EffectMaterial::EffectMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -15,21 +15,22 @@ EffectMaterial::EffectMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t of
 void EffectMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
 	MaterialBase::UpdateData(shaderMaterial);
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
+    auto* mat = static_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
 	data->Type = MaterialBase::Type::Effect;
-	data->BaseColor = runtime.baseColor;
-	data->BaseColorScale = runtime.baseColorScale;
+	data->BaseColor.x = mat->baseColor.r; data->BaseColor.y = mat->baseColor.g; data->BaseColor.z = mat->baseColor.b;
+	data->BaseColorScale = mat->baseColorScale;
 }
 
 void EffectMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
-	const auto renderer = Renderer::GetSingleton();
+    auto* renderer = Renderer::GetSingleton();
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
-	if (m_SourceTexture.Update(runtime.sourceTexture, renderer->GetBlackTextureDescriptor()))
+    auto* mat = static_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
+
+	if (m_SourceTexture.Update(mat->sourceTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->SourceTexture = m_SourceTexture.texture.GetDescriptorIndex();
-	if (m_EffectTexture.Update(runtime.effectTexture, renderer->GetBlackTextureDescriptor()))
+	if (m_EffectTexture.Update(mat->greyscaleTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->EffectTexture = m_EffectTexture.texture.GetDescriptorIndex();
 }
 

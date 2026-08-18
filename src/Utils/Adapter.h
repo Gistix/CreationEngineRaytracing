@@ -78,57 +78,6 @@ namespace Util
 		SkinData GetSkinData(RE::BSGeometry* geometry);
 		const RE::NiTransform* GetSkinToBoneTransform(RE::BSGeometry* geometry, uint32_t a_boneIndex);
 
-		struct MaterialRuntimeData
-		{
-			RE::NiTexture* diffuseTexture = nullptr;
-			RE::NiTexture* normalTexture = nullptr;
-			RE::NiTexture* rimSoftLightingTexture = nullptr;
-			RE::NiTexture* specularBackLightingTexture = nullptr;
-			float3 specularColor{};
-			float specularPower = 0.0f;
-			float specularColorScale = 0.0f;
-			float materialAlpha = 1.0f;
-
-			RE::NiTexture* environmentTexture = nullptr;
-			RE::NiTexture* environmentMaskTexture = nullptr;
-			RE::NiTexture* glowTexture = nullptr;
-			RE::NiTexture* heightTexture = nullptr;
-			RE::NiTexture* faceTexture = nullptr;
-			float environmentScale = 0.0f;
-			float tintColor[3]{};
-
-			RE::NiTexture* layerTexture = nullptr;
-			float layerThickness = 0.0f;
-			float refractionScale = 0.0f;
-			float innerLayerUScale = 0.0f;
-			float innerLayerVScale = 0.0f;
-
-			std::array<RE::NiTexture*, 5> landscapeDiffuseTextures{};
-			std::array<RE::NiTexture*, 5> landscapeNormalTextures{};
-			uint32_t landscapeTextureCount = 0;
-			RE::NiTexture* terrainOverlayTexture = nullptr;
-			RE::NiTexture* terrainNoiseTexture = nullptr;
-			RE::NiTexture* parentDiffuseTexture = nullptr;
-			RE::NiTexture* parentNormalTexture = nullptr;
-			float terrainTexOffsetX = 0.0f;
-			float terrainTexOffsetY = 0.0f;
-			float terrainTexFade = 0.0f;
-
-			float4 baseColor{};
-			RE::NiTexture* sourceTexture = nullptr;
-			RE::NiTexture* effectTexture = nullptr;
-			float baseColorScale = 1.0f;
-
-			float3 shallowWaterColor{};
-			std::array<RE::NiTexture*, 4> waterNormalTextures{};
-			std::array<float2, 3> normalScroll{};
-			std::array<float, 3> uvScale{};
-			std::array<float, 3> amplitude{};
-			float displacementDampener = 0.0f;
-		};
-
-		MaterialRuntimeData GetMaterialRuntimeData(RE::BSShaderMaterial* a_material);
-
 		struct ShaderPropertyRuntimeData
 		{
 			uint64_t flags = 0;

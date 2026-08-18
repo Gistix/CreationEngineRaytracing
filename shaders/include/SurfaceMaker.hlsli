@@ -23,7 +23,7 @@
 #if defined(SKYRIM)   
 #   include "include/Material/SkyrimMaterials.hlsli"
 #elif defined(FALLOUT4)
-#   include "include/SurfaceFallout4.hlsli"
+#   include "include/Material/Fallout4Materials.hlsli"
 #endif
 
 struct SurfaceMaker

@@ -70,7 +70,11 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
 // --------------------------------------------------------
 
 #include "interop/Material/MaterialBaseData.hlsli"
-#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#if defined(SKYRIM)
+#   include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#elif defined(FALLOUT4)
+#   include "interop/Material/Fallout4/LightingMaterialData.hlsli"
+#endif
 
 #if USE_RAY_QUERY
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]

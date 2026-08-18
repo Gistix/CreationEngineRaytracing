@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/FacegenMaterial.h"
+#include "Core/Material/Fallout4/FacegenMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "Types/RE/FO4/BSLightingShaderMaterials.h"
 
 FacegenMaterial::FacegenMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -20,11 +20,11 @@ void FacegenMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 void FacegenMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
 	auto* renderer = Renderer::GetSingleton();
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
-	if (m_TintTexture.Update(runtime.faceTexture, renderer->GetWhiteTextureDescriptor()))
-		data->TintTexture = m_TintTexture.texture.GetDescriptorIndex();
+    auto* mat = static_cast<RE::BSLightingShaderMaterialFace*>(shaderMaterial);
+	if (m_FaceTexture.Update(mat->faceTexture.get(), renderer->GetWhiteTextureDescriptor()))
+		data->FaceTexture = m_FaceTexture.texture.GetDescriptorIndex();
 }
 
 #endif

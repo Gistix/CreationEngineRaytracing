@@ -14,10 +14,17 @@
 
 #include "interop/Properties.hlsli"
 #include "interop/Material/MaterialBaseData.hlsli"
-#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
-#include "interop/Material/Skyrim/WaterMaterialData.hlsli"
-#include "interop/Material/Skyrim/GlowmapMaterialData.hlsli"
-#include "interop/Material/Skyrim/PBRMaterialData.hlsli"
+#if defined(SKYRIM)
+#   include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#   include "interop/Material/Skyrim/WaterMaterialData.hlsli"
+#   include "interop/Material/Skyrim/GlowmapMaterialData.hlsli"
+#   include "interop/Material/Skyrim/PBRMaterialData.hlsli"
+#elif defined(FALLOUT4)
+#   include "interop/Material/Fallout4/LightingMaterialData.hlsli"
+#   include "interop/Material/Fallout4/WaterMaterialData.hlsli"
+#   include "interop/Material/Fallout4/GlowmapMaterialData.hlsli"
+#   include "interop/Material/Fallout4/PBRMaterialData.hlsli"
+#endif
 
 bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed)
 {
@@ -189,7 +196,13 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
                     [branch]
                     if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals) {
-                        Texture2D specularTexture = Textures[NonUniformResourceIndex(material.SpecularBackLightingTexture)];
+                        Texture2D specularTexture = Textures[NonUniformResourceIndex(
+#if defined(SKYRIM)
+                        material.SpecularBackLightingTexture
+#else
+                        material.SmoothnessSpecMaskTexture
+#endif
+)];
                         specularColor = specularTexture.SampleLevel(DefaultSampler, texCoord, 0).r * material.SpecularColor * material.SpecularColorScale;
                     } else {
                         Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
@@ -219,3 +232,4 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 }
 
 #endif // TRANSPARENCY_HLSLI
+

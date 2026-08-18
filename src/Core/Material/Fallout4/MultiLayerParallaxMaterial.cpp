@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/MultiLayerParallaxMaterial.h"
+#include "Core/Material/Fallout4/MultiLayerParallaxMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "Types/RE/FO4/BSLightingShaderMaterials.h"
 
 MultiLayerParallaxMaterial::MultiLayerParallaxMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -15,26 +15,27 @@ MultiLayerParallaxMaterial::MultiLayerParallaxMaterial(RE::BSShaderMaterial* sha
 void MultiLayerParallaxMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateData(shaderMaterial);
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
-	data->LayerThickness = runtime.layerThickness;
-	data->RefractionScale = runtime.refractionScale;
-	data->InnerLayerUScale = runtime.innerLayerUScale;
-	data->InnerLayerVScale = runtime.innerLayerVScale;
-	data->EnvironmentScale = runtime.environmentScale;
+    auto* mat = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(shaderMaterial);
+    data->LayerThickness = mat->parallaxLayerThickness;
+    data->RefractionScale = mat->parallaxRefractionScale;
+    data->InnerLayerUScale = mat->parallaxInnerLayerUScale;
+    data->InnerLayerVScale = mat->parallaxInnerLayerVScale;
+    data->EnvironmentScale = mat->envmapScale;
 }
 
 void MultiLayerParallaxMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
 	auto* renderer = Renderer::GetSingleton();
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
-	if (m_LayerTexture.Update(runtime.layerTexture, renderer->GetBlackTextureDescriptor()))
+    auto* mat = static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(shaderMaterial);
+
+	if (m_LayerTexture.Update(mat->layerTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->LayerTexture = m_LayerTexture.texture.GetDescriptorIndex();
-	if (m_EnvironmentTexture.Update(runtime.environmentTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+	if (m_EnvironmentTexture.Update(mat->envTexture.get(), renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
 		data->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
-	if (m_EnvironmentMaskTexture.Update(runtime.environmentMaskTexture, renderer->GetWhiteTextureDescriptor()))
+	if (m_EnvironmentMaskTexture.Update(mat->envMaskTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->EnvironmentMaskTexture = m_EnvironmentMaskTexture.texture.GetDescriptorIndex();
 }
 

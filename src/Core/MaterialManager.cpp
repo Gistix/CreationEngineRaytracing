@@ -1,5 +1,6 @@
 #include "Core/MaterialManager.h"
 
+#if defined(SKYRIM)
 #include "Core/Material/Skyrim/LightingMaterial.h"
 #include "Core/Material/Skyrim/EnvmapMaterial.h"
 #include "Core/Material/Skyrim/GlowmapMaterial.h"
@@ -16,6 +17,22 @@
 #include "Core/Material/Skyrim/PBRLandscapeMaterial.h"
 #include "Core/Material/Skyrim/EffectMaterial.h"
 #include "Core/Material/Skyrim/WaterMaterial.h"
+#elif defined(FALLOUT4)
+#include "Core/Material/Fallout4/LightingMaterial.h"
+#include "Core/Material/Fallout4/EnvmapMaterial.h"
+#include "Core/Material/Fallout4/GlowmapMaterial.h"
+#include "Core/Material/Fallout4/ParallaxMaterial.h"
+#include "Core/Material/Fallout4/FacegenMaterial.h"
+#include "Core/Material/Fallout4/FacegenTintMaterial.h"
+#include "Core/Material/Fallout4/HairTintMaterial.h"
+#include "Core/Material/Fallout4/ParallaxOccMaterial.h"
+#include "Core/Material/Fallout4/EyeMaterial.h"
+#include "Core/Material/Fallout4/MultiLayerParallaxMaterial.h"
+#include "Core/Material/Fallout4/LandscapeMaterial.h"
+#include "Core/Material/Fallout4/LODLandscapeMaterial.h"
+#include "Core/Material/Fallout4/EffectMaterial.h"
+#include "Core/Material/Fallout4/WaterMaterial.h"
+#endif
 #include "Renderer.h"
 #include "Scene.h"
 #include "Utils/Adapter.h"

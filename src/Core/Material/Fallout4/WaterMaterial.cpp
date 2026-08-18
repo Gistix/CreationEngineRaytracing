@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/WaterMaterial.h"
+#include "Core/Material/Fallout4/WaterMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "RE/B/BSWaterShaderMaterial.h"
 
 WaterMaterial::WaterMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -15,32 +15,41 @@ WaterMaterial::WaterMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offs
 void WaterMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
 	MaterialBase::UpdateData(shaderMaterial);
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
+	auto* water = static_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
 	data->Type = MaterialBase::Type::Water;
-	data->ShallowColor = runtime.shallowWaterColor;
-	data->NormalScroll1 = runtime.normalScroll[0];
-	data->NormalScroll2 = runtime.normalScroll[1];
-	data->NormalScroll3 = runtime.normalScroll[2];
-	data->UVScale1 = runtime.uvScale[0];
-	data->UVScale2 = runtime.uvScale[1];
-	data->UVScale3 = runtime.uvScale[2];
-	data->Amplitude1 = runtime.amplitude[0];
-	data->Amplitude2 = runtime.amplitude[1];
-	data->Amplitude3 = runtime.amplitude[2];
-	data->Amplitude4 = runtime.displacementDampener;
+	data->ShallowColor.x = water->shallowColor.r; data->ShallowColor.y = water->shallowColor.g; data->ShallowColor.z = water->shallowColor.b;
+	
+    // NiColorA is 4 floats.
+	data->NormalScroll1.x = water->normalsScroll1.r; data->NormalScroll1.y = water->normalsScroll1.g;
+	data->NormalScroll2.x = water->normalsScroll1.b; data->NormalScroll2.y = water->normalsScroll1.a;
+	data->NormalScroll3.x = water->normalsScroll2.r; data->NormalScroll3.y = water->normalsScroll2.g;
+	
+	data->UVScale1 = water->normalsScale.r;
+	data->UVScale2 = water->normalsScale.b;
+	data->UVScale3 = water->normalsAmplitude.r; // Assuming amplitude/scale packed
+
+	data->Amplitude1 = water->normalsAmplitude.r;
+	data->Amplitude2 = water->normalsAmplitude.g;
+	data->Amplitude3 = water->normalsAmplitude.b;
+	data->Amplitude4 = water->normalsAmplitude.a;
 }
 
 void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
+	auto* water = static_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
 	const auto renderer = Renderer::GetSingleton();
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
+    
 	MaterialTexture* textures[] = { &m_NormalTexture1, &m_NormalTexture2, &m_NormalTexture3, &m_NormalTexture4 };
+    RE::NiTexture* runtimeTextures[] = { water->normalMap01.get(), water->normalMap02.get(), water->normalMap03.get(), nullptr };
+    
 	for (uint32_t i = 0; i < 4; ++i) {
-		if (textures[i]->Update(runtime.waterNormalTextures[i], renderer->GetNormalTextureDescriptor()))
+		if (textures[i]->Update(runtimeTextures[i], renderer->GetNormalTextureDescriptor()))
 			(&data->NormalsTexture1)[i] = textures[i]->texture.GetDescriptorIndex();
 	}
 }
 
 #endif
+
+

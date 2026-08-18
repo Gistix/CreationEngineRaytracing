@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/ParallaxOccMaterial.h"
+#include "Core/Material/Fallout4/ParallaxOccMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "Types/RE/FO4/BSLightingShaderMaterials.h"
 
 ParallaxOccMaterial::ParallaxOccMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -20,8 +20,11 @@ void ParallaxOccMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 void ParallaxOccMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
-	if (m_HeightTexture.Update(Util::Adapter::GetMaterialRuntimeData(shaderMaterial).heightTexture, Renderer::GetSingleton()->GetWhiteTextureDescriptor()))
-		reinterpret_cast<Data*>(m_Data.get())->HeightTexture = m_HeightTexture.texture.GetDescriptorIndex();
+	auto* renderer = Renderer::GetSingleton();
+	auto* data = reinterpret_cast<Data*>(m_Data.get());
+    auto* mat = static_cast<RE::BSLightingShaderMaterialParallax*>(shaderMaterial);
+	if (m_HeightTexture.Update(mat->heightTexture.get(), renderer->GetBlackTextureDescriptor()))
+		data->HeightTexture = m_HeightTexture.texture.GetDescriptorIndex();
 }
 
 #endif

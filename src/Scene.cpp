@@ -338,12 +338,10 @@ void Scene::UpdateCameraData() const
 	}
 #elif defined(FALLOUT4)
 	auto state = RE::BSGraphics::State::GetSingleton();
-	auto& cameraData = state.cameraState.camViewData;
+	auto& camViewData = state.cameraState.camViewData;
 
-	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
-
-	auto viewMat = reinterpret_cast<const float4x4&>(cameraData.viewMat);
-	auto projMat = reinterpret_cast<const float4x4&>(cameraData.projMat);
+	auto viewMat = reinterpret_cast<const float4x4&>(camViewData.viewMat);
+	auto projMat = reinterpret_cast<const float4x4&>(camViewData.projMat);
 
 	m_CameraData->ViewInverse = viewMat.Invert();
 	m_CameraData->ProjInverse = projMat.Invert();
@@ -368,17 +366,14 @@ void Scene::UpdateCameraData() const
 	if (g_Time)
 		m_CameraData->Time = *g_Time;
 
-	m_CameraData->ViewProj = reinterpret_cast<const float4x4&>(cameraData.viewProjUnjittered);
-	m_CameraData->PrevViewProj = reinterpret_cast<const float4x4&>(cameraData.previousViewProjUnjittered);
+	m_CameraData->ViewProj = reinterpret_cast<const float4x4&>(camViewData.viewProjUnjittered);
+	m_CameraData->PrevViewProj = reinterpret_cast<const float4x4&>(camViewData.previousViewProjUnjittered);
+	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
 
 	m_CameraData->Jitter = renderer->GetJitter();
 
 	m_CameraData->IsUnderwater = false; // TODO: Fetch from FO4 water system
 	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
-
-	for (int i = 0; i < 25; ++i) {
-		m_CameraData->WaterData[i] = float4(1.0f, 1.0f, 1.0f, -FLT_MAX);
-	}
 #endif
 }
 
@@ -542,3 +537,5 @@ float Scene::GetResolutionScale() const
 
 	return m_Settings.RaytracingSettings.ResolutionScale;
 }
+
+

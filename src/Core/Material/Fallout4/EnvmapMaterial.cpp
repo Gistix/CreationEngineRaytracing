@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/EnvmapMaterial.h"
+#include "Core/Material/Fallout4/EnvmapMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "Types/RE/FO4/BSLightingShaderMaterials.h"
 
 EnvmapMaterial::EnvmapMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -15,18 +15,20 @@ EnvmapMaterial::EnvmapMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t of
 void EnvmapMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateData(shaderMaterial);
-	reinterpret_cast<Data*>(m_Data.get())->EnvironmentScale = Util::Adapter::GetMaterialRuntimeData(shaderMaterial).environmentScale;
+    auto* mat = static_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial);
+	reinterpret_cast<Data*>(m_Data.get())->EnvironmentScale = mat->envMapScale;
 }
 
 void EnvmapMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
 	auto* renderer = Renderer::GetSingleton();
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
-	if (m_EnvironmentTexture.Update(runtime.environmentTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+    auto* mat = static_cast<RE::BSLightingShaderMaterialEnvmap*>(shaderMaterial);
+    
+	if (m_EnvironmentTexture.Update(mat->envTexture.get(), renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
 		data->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
-	if (m_EnvironmentMaskTexture.Update(runtime.environmentMaskTexture, renderer->GetWhiteTextureDescriptor()))
+	if (m_EnvironmentMaskTexture.Update(mat->envMaskTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->EnvironmentMaskTexture = m_EnvironmentMaskTexture.texture.GetDescriptorIndex();
 }
 

@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/GlowmapMaterial.h"
+#include "Core/Material/Fallout4/GlowmapMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "Types/RE/FO4/BSLightingShaderMaterials.h"
 
 GlowmapMaterial::GlowmapMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -20,8 +20,11 @@ void GlowmapMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 void GlowmapMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
+	auto* renderer = Renderer::GetSingleton();
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
-	if (m_GlowTexture.Update(Util::Adapter::GetMaterialRuntimeData(shaderMaterial).glowTexture, Renderer::GetSingleton()->GetBlackTextureDescriptor()))
+    auto* mat = static_cast<RE::BSLightingShaderMaterialGlowmap*>(shaderMaterial);
+    
+	if (m_GlowTexture.Update(mat->glowTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->GlowTexture = m_GlowTexture.texture.GetDescriptorIndex();
 }
 

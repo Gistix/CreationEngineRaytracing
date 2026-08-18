@@ -1,8 +1,8 @@
 #if defined(FALLOUT4)
 
-#include "Core/Material/Skyrim/LandscapeMaterial.h"
+#include "Core/Material/Fallout4/LandscapeMaterial.h"
 #include "Renderer.h"
-#include "Utils/Adapter.h"
+#include "Types/RE/FO4/BSLightingShaderMaterials.h"
 
 LandscapeMaterial::LandscapeMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 {
@@ -20,18 +20,22 @@ void LandscapeMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 void LandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 {
 	LightingMaterial::UpdateTextures(shaderMaterial);
-	const auto runtime = Util::Adapter::GetMaterialRuntimeData(shaderMaterial);
 	auto* renderer = Renderer::GetSingleton();
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
-	for (uint32_t i = 0; i < runtime.landscapeTextureCount && i < 5; ++i) {
-		if (m_DiffuseTextures[i].Update(runtime.landscapeDiffuseTextures[i], renderer->GetGrayTextureDescriptor()))
+    auto* mat = static_cast<RE::BSLightingShaderMaterialLandscape*>(shaderMaterial);
+    
+    uint32_t landscapeTextureCount = std::min(mat->textureCount, 3u);
+    
+	for (uint32_t i = 0; i < landscapeTextureCount; ++i) {
+		if (m_DiffuseTextures[i].Update(mat->landscapeDiffuseTexture[i].get(), renderer->GetGrayTextureDescriptor()))
 			(&data->DiffuseTexture1)[i] = m_DiffuseTextures[i].texture.GetDescriptorIndex();
-		if (m_NormalTextures[i].Update(runtime.landscapeNormalTextures[i], renderer->GetNormalTextureDescriptor()))
+		if (m_NormalTextures[i].Update(mat->landscapeNormalTexture[i].get(), renderer->GetNormalTextureDescriptor()))
 			(&data->NormalTexture1)[i] = m_NormalTextures[i].texture.GetDescriptorIndex();
 	}
-	if (m_OverlayTexture.Update(runtime.terrainOverlayTexture, renderer->GetBlackTextureDescriptor()))
+
+	if (m_OverlayTexture.Update(mat->terrainOverlayTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->OverlayTexture = m_OverlayTexture.texture.GetDescriptorIndex();
-	if (m_NoiseTexture.Update(runtime.terrainNoiseTexture, renderer->GetBlackTextureDescriptor()))
+	if (m_NoiseTexture.Update(mat->terrainNoiseTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->NoiseTexture = m_NoiseTexture.texture.GetDescriptorIndex();
 }
 
