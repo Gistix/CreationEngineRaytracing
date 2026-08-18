@@ -88,7 +88,8 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	if (!subIndexShape)
 		return;
 
-	const bool bypassVisibility = *Scene::GetSingleton()->g_BypassSubIndexVisibility;
+	auto* bypassSubIndexVisibility = Scene::GetSingleton()->g_BypassSubIndexVisibility;
+	const bool bypassVisibility = bypassSubIndexVisibility ? *bypassSubIndexVisibility : false;
 
 	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(triShape);
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();

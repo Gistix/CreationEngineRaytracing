@@ -7,6 +7,7 @@
 
 #include "Core/Mesh/DynamicMesh.h"
 #include "Types/RE/TriShapeDX12.h"
+#include "Util.h"
 namespace Util
 {
 	namespace Adapter
@@ -411,8 +412,13 @@ namespace Util
 #if defined(SKYRIM)
 			return static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->vertexBufferDX12;
 #elif defined(FALLOUT4)
-			if (a_triShape->vertexBuffer)
-				return static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->vertexBuffer))->bufferDX12;
+			if (a_triShape->vertexBuffer) {
+				auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->vertexBuffer));
+				if (!bufferDX12->bufferDX12 && bufferDX12->buffer) {
+					Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(bufferDX12->buffer), &bufferDX12->bufferDX12);
+				}
+				return bufferDX12->bufferDX12;
+			}
 			return nullptr;
 #endif
 		}
@@ -425,8 +431,13 @@ namespace Util
 #if defined(SKYRIM)
 			return static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->indexBufferDX12;
 #elif defined(FALLOUT4)
-			if (a_triShape->indexBuffer)
-				return static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->indexBuffer))->bufferDX12;
+			if (a_triShape->indexBuffer) {
+				auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->indexBuffer));
+				if (!bufferDX12->bufferDX12 && bufferDX12->buffer) {
+					Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(bufferDX12->buffer), &bufferDX12->bufferDX12);
+				}
+				return bufferDX12->bufferDX12;
+			}
 			return nullptr;
 #endif
 		}

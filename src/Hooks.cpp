@@ -892,108 +892,23 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	inline void ShareBuffer(RE::BSGraphics::Buffer* a_buffer)
+	struct BSD3DResourceCreator_CreateBufferRequested
 	{
-		if (a_buffer && a_buffer->buffer) {
-			auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(a_buffer);
-			if (!bufferDX12->bufferDX12) {
-				Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(a_buffer->buffer), &bufferDX12->bufferDX12);
-			}
-		}
-	}
-
-	struct BSGraphics_CreateTriShape_A
-	{
-		static RE::BSGraphics::TriShape* thunk(
-			RE::BSGraphics::Renderer* a_renderer,
-			RE::NiStream& a_stream,
-			uint64_t a_vertexDesc,
-			uint32_t a_vertexCount,
-			uint32_t a_indexCount,
-			char*& a_dynamicData)
+		static void thunk(void* a_this, void* a_request)
 		{
-			auto* triShape = func(a_renderer, a_stream, a_vertexDesc, a_vertexCount, a_indexCount, a_dynamicData);
-			if (triShape) {
-				ShareBuffer(triShape->vertexBuffer);
-				ShareBuffer(triShape->indexBuffer);
-			}
-			return triShape;
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
+			func(a_this, a_request);
 
-	struct BSGraphics_CreateTriShape_B
-	{
-		static RE::BSGraphics::TriShape* thunk(
-			RE::BSGraphics::Renderer* a_renderer,
-			uint32_t& a_dataSize,
-			void* a_vertexData,
-			uint64_t a_vertexDesc,
-			uint16_t* a_indexData,
-			uint32_t a_numIndices)
-		{
-			auto* triShape = func(a_renderer, a_dataSize, a_vertexData, a_vertexDesc, a_indexData, a_numIndices);
-			if (triShape) {
-				ShareBuffer(triShape->vertexBuffer);
-				ShareBuffer(triShape->indexBuffer);
-			}
-			return triShape;
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
+			if (a_request) {
+				auto* buffer = *reinterpret_cast<RE::BSGraphics::Buffer**>(a_request);
 
-	struct BSGraphics_CreateTriShape_C
-	{
-		static RE::BSGraphics::TriShape* thunk(
-			RE::BSGraphics::Renderer* a_renderer,
-			uint32_t& a_dataSize,
-			void* a_vertexData,
-			uint64_t a_vertexDesc,
-			RE::BSGraphics::IndexBuffer* a_indexBuffer)
-		{
-			auto* triShape = func(a_renderer, a_dataSize, a_vertexData, a_vertexDesc, a_indexBuffer);
-			if (triShape) {
-				ShareBuffer(triShape->vertexBuffer);
-				ShareBuffer(triShape->indexBuffer);
+				if (buffer) {
+					auto* bufferDX12 = reinterpret_cast<RE::BSGraphics::BufferDX12*>(buffer);
+					Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(buffer->buffer), &bufferDX12->bufferDX12);
+				}
+				else {
+					logger::info("BSD3DResourceCreator::CreateBufferRequested - Buffer is nullptr");
+				}
 			}
-			return triShape;
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BSGraphics_CreateTriShape_D
-	{
-		static RE::BSGraphics::TriShape* thunk(
-			RE::BSGraphics::Renderer* a_renderer,
-			RE::BSGraphics::VertexBuffer* a_vertexBuffer,
-			uint64_t a_vertexDesc,
-			uint16_t* a_indexData,
-			uint32_t a_numIndices)
-		{
-			auto* triShape = func(a_renderer, a_vertexBuffer, a_vertexDesc, a_indexData, a_numIndices);
-			if (triShape) {
-				ShareBuffer(triShape->vertexBuffer);
-				ShareBuffer(triShape->indexBuffer);
-			}
-			return triShape;
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BSGraphics_CreateTriShape_E
-	{
-		static RE::BSGraphics::TriShape* thunk(
-			RE::BSGraphics::Renderer* a_renderer,
-			RE::BSGraphics::VertexBuffer* a_vertexBuffer,
-			uint64_t a_vertexDesc,
-			RE::BSGraphics::IndexBuffer* a_indexBuffer)
-		{
-			auto* triShape = func(a_renderer, a_vertexBuffer, a_vertexDesc, a_indexBuffer);
-			if (triShape) {
-				ShareBuffer(triShape->vertexBuffer);
-				ShareBuffer(triShape->indexBuffer);
-			}
-			return triShape;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -1110,11 +1025,7 @@ namespace Hooks
 		scene->g_BypassSubIndexVisibility = g_BypassSubIndexVisibility.get();
 
 #elif defined(FALLOUT4)
-		stl::detour_thunk<BSGraphics_CreateTriShape_A>(REL::ID(2276841));
-		stl::detour_thunk<BSGraphics_CreateTriShape_B>(REL::ID(2276842));
-		stl::detour_thunk<BSGraphics_CreateTriShape_C>(REL::ID(2276843));
-		stl::detour_thunk<BSGraphics_CreateTriShape_D>(REL::ID(2276844));
-		stl::detour_thunk<BSGraphics_CreateTriShape_E>(REL::ID(2276845));
+		stl::detour_thunk<BSD3DResourceCreator_CreateBufferRequested>(REL::ID(2277441));
 		stl::detour_thunk<BSD3DResourceCreator_AddBufferToRelease>(REL::ID(2277426));
 #endif
 		logger::info("[Raytracing] Installed hooks");
