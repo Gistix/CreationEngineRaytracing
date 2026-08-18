@@ -52,15 +52,18 @@ namespace Pass
 
 		// Water ObjectUV
 		{
-			int32_t flowMapSize = *scene->g_FlowMapSize;
+			if (scene->g_FlowMapSize && scene->g_DisplacementMeshFlowCellOffset) {
+				int32_t flowMapSize = *scene->g_FlowMapSize;
 
-			m_RaytracingData->WaterObjectUV = {
-				static_cast<float>(flowMapSize),
-				scene->g_DisplacementMeshFlowCellOffset->x,
-				1.0f - scene->g_DisplacementMeshFlowCellOffset->y
-			};
+				m_RaytracingData->WaterObjectUV = {
+					static_cast<float>(flowMapSize),
+					scene->g_DisplacementMeshFlowCellOffset->x,
+					1.0f - scene->g_DisplacementMeshFlowCellOffset->y
+				};
+			}
 
-			m_RaytracingData->WaterDisplacementPosition = Util::Math::Float2(*scene->g_DisplacementMeshPos);
+			if (scene->g_DisplacementMeshPos)
+				m_RaytracingData->WaterDisplacementPosition = Util::Math::Float2(*scene->g_DisplacementMeshPos);
 		}
 
 		m_RaytracingData->HitDistSettings = float4(
