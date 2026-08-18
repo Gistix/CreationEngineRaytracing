@@ -337,13 +337,48 @@ void Scene::UpdateCameraData() const
 		}
 	}
 #elif defined(FALLOUT4)
+	auto state = RE::BSGraphics::State::GetSingleton();
+	auto& cameraData = state.cameraState.camViewData;
+
 	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
-	m_CameraData->ViewInverse = float4x4();
-	m_CameraData->ProjInverse = float4x4();
-	m_CameraData->FrameIndex = 0;
-	m_CameraData->ScreenSize = uint2(1920, 1080);
-	m_CameraData->RenderSize = uint2(1920, 1080);
-	m_CameraData->Jitter = float2(0, 0);
+
+	auto viewMat = reinterpret_cast<const float4x4&>(cameraData.viewMat);
+	auto projMat = reinterpret_cast<const float4x4&>(cameraData.projMat);
+
+	m_CameraData->ViewInverse = viewMat.Invert();
+	m_CameraData->ProjInverse = projMat.Invert();
+
+	m_CameraData->CameraData = Util::Game::GetClippingData();
+
+	float2 ndcToViewMult = float2(2.0f / projMat(0, 0), -2.0f / projMat(1, 1));
+	float2 ndcToViewAdd = float2(-1.0f / projMat(0, 0), 1.0f / projMat(1, 1));
+
+	m_CameraData->NDCToView = float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y);
+
+	m_CameraData->Position = Util::Math::Float3(state.cameraState.posAdjust);
+
+	auto* renderer = Renderer::GetSingleton();
+
+	m_CameraData->FrameIndex = renderer->GetFrameIndex() % UINT_MAX;
+	m_CameraData->ScreenSize = renderer->GetResolution();
+	m_CameraData->RenderSize = renderer->GetDynamicResolution();
+
+	m_CameraData->PositionPrev = Util::Math::Float3(state.cameraState.previousPosAdjust);
+
+	if (g_Time)
+		m_CameraData->Time = *g_Time;
+
+	m_CameraData->ViewProj = reinterpret_cast<const float4x4&>(cameraData.viewProjUnjittered);
+	m_CameraData->PrevViewProj = reinterpret_cast<const float4x4&>(cameraData.previousViewProjUnjittered);
+
+	m_CameraData->Jitter = renderer->GetJitter();
+
+	m_CameraData->IsUnderwater = false; // TODO: Fetch from FO4 water system
+	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
+
+	for (int i = 0; i < 25; ++i) {
+		m_CameraData->WaterData[i] = float4(1.0f, 1.0f, 1.0f, -FLT_MAX);
+	}
 #endif
 }
 
