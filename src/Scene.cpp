@@ -540,4 +540,39 @@ float Scene::GetResolutionScale() const
 	return m_Settings.RaytracingSettings.ResolutionScale;
 }
 
+#if defined(FALLOUT4)
+void Scene::TryShareBuffer(REX::W32::ID3D11Buffer* a_buffer)
+{
+	auto buffer = reinterpret_cast<ID3D11Buffer*>(a_buffer);
 
+	std::scoped_lock mutex(m_BufferMutex);
+	auto [it, emplaced] = m_Buffers.try_emplace(buffer, nullptr);
+
+	// Already shared and in the map
+	if (!emplaced)
+		return;
+
+	Util::CreateSharedBuffer(buffer, it->second.put());
+}
+
+ID3D12Resource* Scene::GetSharedBuffer(REX::W32::ID3D11Buffer* a_buffer)
+{
+	auto buffer = reinterpret_cast<ID3D11Buffer*>(a_buffer);
+
+	std::scoped_lock mutex(m_BufferMutex);
+
+	auto it = m_Buffers.find(buffer);
+	if (it == m_Buffers.end()) {
+		logger::error("Scene::GetSharedBuffer - Buffer {} not found.", fmt::ptr(buffer));
+		return nullptr;
+	}
+
+	return it->second.get();
+}
+
+void Scene::TryReleaseBuffer(REX::W32::ID3D11Buffer* a_buffer)
+{
+	std::scoped_lock mutex(m_BufferMutex);
+	m_Buffers.erase(reinterpret_cast<ID3D11Buffer*>(a_buffer));
+}
+#endif

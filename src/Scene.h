@@ -47,6 +47,11 @@ struct Scene
 	// Used to draw full LOD when world map is open
 	bool* g_BypassSubIndexVisibility = nullptr;
 
+#if defined(FALLOUT4)
+	std::mutex m_BufferMutex;
+	eastl::unordered_map<ID3D11Buffer*, winrt::com_ptr<ID3D12Resource>> m_Buffers;
+#endif
+
 	CESEAdapter::REX::EnumSet<MenuState> m_MenuState;
 	uint m_MenuStateUpdateFrame = 0;
 
@@ -142,4 +147,12 @@ struct Scene
 	float GetResolutionScale() const;
 
 	void UpdateSettings(Settings settings);
+
+#if defined(FALLOUT4)
+	void TryShareBuffer(REX::W32::ID3D11Buffer* buffer);
+
+	ID3D12Resource* GetSharedBuffer(REX::W32::ID3D11Buffer* buffer);
+
+	void TryReleaseBuffer(REX::W32::ID3D11Buffer* buffer);
+#endif
 };

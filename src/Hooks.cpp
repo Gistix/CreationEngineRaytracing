@@ -867,26 +867,13 @@ namespace Hooks
 	};
 
 #elif defined(FALLOUT4)
-	struct BufferPoolInit
-	{
-		static void thunk(void* a_pool, void* a_allocator, uint32_t /*a_elementSize*/, uint32_t a_count)
-		{
-			func(a_pool, a_allocator, static_cast<std::uint32_t>(sizeof(RE::BSGraphics::BufferDX12)), a_count);
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BSD3DResourceCreator_AddBufferToRelease
 	{
 		static int thunk(void* a_this, RE::BSGraphics::Buffer* a_buffer)
 		{
-			if (a_buffer) {
-				auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(a_buffer);
-				if (bufferDX12->bufferDX12) {
-					bufferDX12->bufferDX12->Release();
-					bufferDX12->bufferDX12 = nullptr;
-				}
-			}
+			if (a_buffer)
+				Scene::GetSingleton()->TryReleaseBuffer(a_buffer->buffer);
+
 			return func(a_this, a_buffer);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -894,21 +881,44 @@ namespace Hooks
 
 	struct BSD3DResourceCreator_CreateBufferRequested
 	{
-		static void thunk(void* a_this, void* a_request)
+		enum class BufferType : uint32_t
+		{
+			Vertex = 0,
+			Index = 1,
+			Constant = 2,
+			Byte = 3,
+			Structured = 4
+		};
+
+		struct Request
+		{
+			RE::BSGraphics::Buffer* buffer;
+			BufferType type;
+			uint32_t size;
+			bool isDynamic;
+		};
+
+		static void thunk(void* a_this, Request* a_request)
 		{
 			func(a_this, a_request);
 
-			if (a_request) {
-				auto* buffer = *reinterpret_cast<RE::BSGraphics::Buffer**>(a_request);
-
-				if (buffer) {
-					auto* bufferDX12 = reinterpret_cast<RE::BSGraphics::BufferDX12*>(buffer);
-					Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(buffer->buffer), &bufferDX12->bufferDX12);
-				}
-				else {
-					logger::info("BSD3DResourceCreator::CreateBufferRequested - Buffer is nullptr");
-				}
+			if (!a_request) {
+				logger::info("BSD3DResourceCreator::CreateBufferRequested - Request is nullptr");
+				return;
 			}
+
+			if (a_request->type != BufferType::Vertex && a_request->type != BufferType::Index)
+				return;
+
+			if (a_request->isDynamic)
+				return;
+
+			if (!a_request->buffer) {
+				logger::info("BSD3DResourceCreator::CreateBufferRequested - Buffer is nullptr");
+				return;
+			}
+
+			Scene::GetSingleton()->TryShareBuffer(a_request->buffer->buffer);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -916,10 +926,7 @@ namespace Hooks
 
 	void InstallEarly()
 	{
-#if defined(FALLOUT4)
-		// BSD3DResourceCreator initializes the Buffer pool from WinMain. Patch the element stride before that call.
-		stl::write_thunk_call<BufferPoolInit>(REL::ID(2277414).address() + 0x521);
-#endif
+
 	}
 
 	void Install()

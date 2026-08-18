@@ -96,8 +96,8 @@ namespace Util
 	{
 		D3D11_BUFFER_DESC desc;
 		d3d11Buffer->GetDesc(&desc);
-		logger::info("Buffer Desc - ByteWidth: {}, Usage: {}, BindFlags: 0x{:08X}, CPUAccessFlags: 0x{:08X}, MiscFlags: 0x{:08X}, StructureByteStride: {}", 
-			desc.ByteWidth, magic_enum::enum_name(desc.Usage), desc.BindFlags, desc.CPUAccessFlags, desc.MiscFlags, desc.StructureByteStride);
+		logger::info("{} - Buffer Desc - ByteWidth: {}, Usage: {}, BindFlags: 0x{:08X}, CPUAccessFlags: 0x{:08X}, MiscFlags: 0x{:08X}, StructureByteStride: {}", 
+			fmt::ptr(d3d11Buffer), desc.ByteWidth, magic_enum::enum_name(desc.Usage), desc.BindFlags, desc.CPUAccessFlags, desc.MiscFlags, desc.StructureByteStride);
 	}
 
 	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer)
@@ -132,7 +132,10 @@ namespace Util
 		if (FAILED(hr)) {
 			logger::error("CreateSharedBuffer - OpenSharedHandle failed with hr: 0x{:08X}", static_cast<uint32_t>(hr));
 			LogBufferDesc(d3d11Buffer);
+			return;
 		}
+
+		LogBufferDesc(d3d11Buffer);
 	};
 
 #if defined(SKYRIM)

@@ -1,5 +1,7 @@
 #include "Adapter.h"
 #include "Constants.h"
+#include "Scene.h"
+
 #if defined(FALLOUT4)
 #include "Types/RE/FO4/ShadowSceneNode.h"
 #include "Types/RE/FO4/NiSwitchNode.h"
@@ -8,6 +10,7 @@
 #include "Core/Mesh/DynamicMesh.h"
 #include "Types/RE/TriShapeDX12.h"
 #include "Util.h"
+
 namespace Util
 {
 	namespace Adapter
@@ -412,14 +415,7 @@ namespace Util
 #if defined(SKYRIM)
 			return static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->vertexBufferDX12;
 #elif defined(FALLOUT4)
-			if (a_triShape->vertexBuffer) {
-				auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->vertexBuffer));
-				if (!bufferDX12->bufferDX12 && bufferDX12->buffer) {
-					Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(bufferDX12->buffer), &bufferDX12->bufferDX12);
-				}
-				return bufferDX12->bufferDX12;
-			}
-			return nullptr;
+			return Scene::GetSingleton()->GetSharedBuffer(a_triShape->vertexBuffer->buffer);
 #endif
 		}
 
@@ -431,14 +427,7 @@ namespace Util
 #if defined(SKYRIM)
 			return static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->indexBufferDX12;
 #elif defined(FALLOUT4)
-			if (a_triShape->indexBuffer) {
-				auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->indexBuffer));
-				if (!bufferDX12->bufferDX12 && bufferDX12->buffer) {
-					Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(bufferDX12->buffer), &bufferDX12->bufferDX12);
-				}
-				return bufferDX12->bufferDX12;
-			}
-			return nullptr;
+			return Scene::GetSingleton()->GetSharedBuffer(a_triShape->indexBuffer->buffer);
 #endif
 		}
 
@@ -450,9 +439,7 @@ namespace Util
 #if defined(SKYRIM)
 			return reinterpret_cast<ID3D11Buffer*>(a_triShape->vertexBuffer);
 #elif defined(FALLOUT4)
-			if (a_triShape->vertexBuffer)
-				return reinterpret_cast<ID3D11Buffer*>(a_triShape->vertexBuffer->buffer);
-			return nullptr;
+			return reinterpret_cast<ID3D11Buffer*>(a_triShape->vertexBuffer->buffer);
 #endif
 		}
 
@@ -464,9 +451,7 @@ namespace Util
 #if defined(SKYRIM)
 			return reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer);
 #elif defined(FALLOUT4)
-			if (a_triShape->indexBuffer)
-				return reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer->buffer);
-			return nullptr;
+			return reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer->buffer);
 #endif
 		}
 
