@@ -87,9 +87,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	if (!ValidateCounts(triShapeData.triangleCount, vertexCount))
 		return;
 
-	auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(rendererData);
-
-	m_VertexBuffer = CreateVertexBuffer(triShapeDX12);
+	m_VertexBuffer = CreateVertexBuffer(rendererData);
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
@@ -97,9 +95,9 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	m_VertexCount = vertexCount;
 
-	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(triShapeDX12->vertexDesc);
+	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
-	CreateSkinningBuffers(commandList, triShapeDX12, vertexCount, vertexStride);
+	CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride);
 
 	BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true);
 #endif
@@ -279,17 +277,17 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 	const uint32_t vertexCount = triShapeData.vertexCount;
 	const uint32_t indexCount = triShapeData.triangleCount * 3;
 
-	auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(Util::Adapter::GetGeometryRuntimeData(bsTriShape).rendererData);
-	if (!triShapeDX12)
+	auto* rendererData = Util::Adapter::GetGeometryRuntimeData(bsTriShape).rendererData;
+	if (!rendererData)
 		return;
 		
-	std::memcpy(&m_VertexDesc, &triShapeDX12->vertexDesc, sizeof(m_VertexDesc));
+	m_VertexDesc = rendererData->vertexDesc;
 
 	m_IndexBuffers.reserve(1);
 	m_GeometryEntries.reserve(1);
 	m_GeometryPartitionIndices.reserve(1);
 
-	auto indexBuffer = CreateIndexBuffer(triShapeDX12);
+	auto indexBuffer = CreateIndexBuffer(rendererData);
 	if (!indexBuffer.m_Buffer) {
 		logger::warn("SkinnedMesh::BuildSkinned - Failed to create index buffer for {}, skipping.", m_Name);
 		return;

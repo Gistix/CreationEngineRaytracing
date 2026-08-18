@@ -6,6 +6,7 @@
 #endif
 
 #include "Core/Mesh/DynamicMesh.h"
+#include "Types/RE/TriShapeDX12.h"
 namespace Util
 {
 	namespace Adapter
@@ -399,6 +400,62 @@ namespace Util
 #elif defined(FALLOUT4)
 			(void)rendererData;
 			// FO4 handles memory differently or doesn't have raw vertex/index data here
+#endif
+		}
+
+		ID3D12Resource* GetVertexBufferDX12(RE::BSGraphics::TriShape* a_triShape)
+		{
+			if (!a_triShape)
+				return nullptr;
+
+#if defined(SKYRIM)
+			return static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->vertexBufferDX12;
+#elif defined(FALLOUT4)
+			if (a_triShape->vertexBuffer)
+				return static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->vertexBuffer))->bufferDX12;
+			return nullptr;
+#endif
+		}
+
+		ID3D12Resource* GetIndexBufferDX12(RE::BSGraphics::TriShape* a_triShape)
+		{
+			if (!a_triShape)
+				return nullptr;
+
+#if defined(SKYRIM)
+			return static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->indexBufferDX12;
+#elif defined(FALLOUT4)
+			if (a_triShape->indexBuffer)
+				return static_cast<RE::BSGraphics::BufferDX12*>(static_cast<RE::BSGraphics::Buffer*>(a_triShape->indexBuffer))->bufferDX12;
+			return nullptr;
+#endif
+		}
+
+		ID3D11Buffer* GetD3D11VertexBuffer(RE::BSGraphics::TriShape* a_triShape)
+		{
+			if (!a_triShape)
+				return nullptr;
+
+#if defined(SKYRIM)
+			return reinterpret_cast<ID3D11Buffer*>(a_triShape->vertexBuffer);
+#elif defined(FALLOUT4)
+			if (a_triShape->vertexBuffer)
+				return reinterpret_cast<ID3D11Buffer*>(a_triShape->vertexBuffer->buffer);
+			return nullptr;
+#endif
+		}
+
+		ID3D11Buffer* GetD3D11IndexBuffer(RE::BSGraphics::TriShape* a_triShape)
+		{
+			if (!a_triShape)
+				return nullptr;
+
+#if defined(SKYRIM)
+			return reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer);
+#elif defined(FALLOUT4)
+			if (a_triShape->indexBuffer)
+				return reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer->buffer);
+			return nullptr;
 #endif
 		}
 

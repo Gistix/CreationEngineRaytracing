@@ -29,7 +29,12 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 
 	m_VertexDesc = rendererData->vertexDesc;
 
-	auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(rendererData);
+	auto* indexBufferDX12 = Util::Adapter::GetIndexBufferDX12(rendererData);
+	auto* vertexBufferDX12 = Util::Adapter::GetVertexBufferDX12(rendererData);
+
+	if (!indexBufferDX12 || !vertexBufferDX12)
+		return;
+
 	auto* device = Renderer::GetSingleton()->GetDevice();
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
@@ -37,25 +42,25 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 	// All K SubIndexSegmentMesh children will share this handle (different descriptor
 	// slots, different indexOffset/count in their GeometryDesc).
 	auto indexBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(triShapeDX12->indexBufferDX12->GetDesc().Width)
+		.setByteSize(indexBufferDX12->GetDesc().Width)
 		.setStructStride(sizeof(Triangle))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("SubIndex Index Buffer");
 
-	m_IndexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->indexBufferDX12), indexBufferDesc);
+	m_IndexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(indexBufferDX12), indexBufferDesc);
 
 	m_IndexDescriptor = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_IndexBuffer));
 
 	// Create the shared nvrhi vertex buffer handle from the parent's D3D12 resource.
 	auto vertexBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(triShapeDX12->vertexBufferDX12->GetDesc().Width)
+		.setByteSize(vertexBufferDX12->GetDesc().Width)
 		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("SubIndex Vertex Buffer");
 
-	m_VertexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->vertexBufferDX12), vertexBufferDesc);
+	m_VertexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(vertexBufferDX12), vertexBufferDesc);
 
 	m_VertexDescriptor = sceneGraph->GetVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, m_VertexBuffer));
 

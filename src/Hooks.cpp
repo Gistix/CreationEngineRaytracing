@@ -32,6 +32,7 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+#if defined(SKYRIM)
 	template <typename = decltype([] {}) >
 	struct MemoryManager_AllocateTriShape
 	{
@@ -46,7 +47,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-#if defined(SKYRIM)
 	struct BSGraphics_CreateTriShape
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(
@@ -867,52 +867,44 @@ namespace Hooks
 	};
 
 #elif defined(FALLOUT4)
-	struct TriShapePoolInit
+	struct BufferPoolInit
 	{
-		static inline void* g_TriShapePool = nullptr;
 		static void thunk(void* a_pool, void* a_allocator, uint32_t /*a_elementSize*/, uint32_t a_count)
 		{
-			logger::info("TriShapePoolInit: setting g_TriShapePool = {}", a_pool);
-			g_TriShapePool = a_pool;
-			func(a_pool, a_allocator, static_cast<std::uint32_t>(sizeof(RE::BSGraphics::TriShapeDX12)), a_count);
+			func(a_pool, a_allocator, static_cast<std::uint32_t>(sizeof(RE::BSGraphics::BufferDX12)), a_count);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct TLockingUserPool_Free
+	struct BSD3DResourceCreator_AddBufferToRelease
 	{
-		static void thunk(void* a_pool, void* a_element)
+		static int thunk(void* a_this, RE::BSGraphics::Buffer* a_buffer)
 		{
-			if (a_pool && a_element) {
-				if (a_pool == TriShapePoolInit::g_TriShapePool) {
-					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_element);
-					if (triShapeDX12->vertexBufferDX12) {
-						triShapeDX12->vertexBufferDX12->Release();
-						triShapeDX12->vertexBufferDX12 = nullptr;
-					}
-					if (triShapeDX12->indexBufferDX12) {
-						triShapeDX12->indexBufferDX12->Release();
-						triShapeDX12->indexBufferDX12 = nullptr;
-					}
-				} else {
-					// Is it the TriShape pool but the pointer doesn't exactly match?
-					// Let's log it just in case!
-					static bool s_logged = false;
-					if (!s_logged) {
-						logger::info("TLockingUserPool_Free: a_pool = {}, g_TriShapePool = {}", a_pool, TriShapePoolInit::g_TriShapePool);
-						s_logged = true;
-					}
+			if (a_buffer) {
+				auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(a_buffer);
+				if (bufferDX12->bufferDX12) {
+					bufferDX12->bufferDX12->Release();
+					bufferDX12->bufferDX12 = nullptr;
 				}
 			}
-			func(a_pool, a_element);
+			return func(a_this, a_buffer);
 		}
-
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+
+	inline void ShareBuffer(RE::BSGraphics::Buffer* a_buffer)
+	{
+		if (a_buffer && a_buffer->buffer) {
+			auto* bufferDX12 = static_cast<RE::BSGraphics::BufferDX12*>(a_buffer);
+			if (!bufferDX12->bufferDX12) {
+				Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(a_buffer->buffer), &bufferDX12->bufferDX12);
+			}
+		}
+	}
 
 	struct BSGraphics_CreateTriShape_A
 	{
-		static RE::BSGraphics::TriShapeDX12* thunk(
+		static RE::BSGraphics::TriShape* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
 			RE::NiStream& a_stream,
 			uint64_t a_vertexDesc,
@@ -920,12 +912,11 @@ namespace Hooks
 			uint32_t a_indexCount,
 			char*& a_dynamicData)
 		{
-			auto triShape = func(a_renderer, a_stream, a_vertexDesc, a_vertexCount, a_indexCount, a_dynamicData);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->vertexBuffer->buffer), &triShape->vertexBufferDX12);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->indexBuffer->buffer), &triShape->indexBufferDX12);
-
+			auto* triShape = func(a_renderer, a_stream, a_vertexDesc, a_vertexCount, a_indexCount, a_dynamicData);
+			if (triShape) {
+				ShareBuffer(triShape->vertexBuffer);
+				ShareBuffer(triShape->indexBuffer);
+			}
 			return triShape;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -933,7 +924,7 @@ namespace Hooks
 
 	struct BSGraphics_CreateTriShape_B
 	{
-		static RE::BSGraphics::TriShapeDX12* thunk(
+		static RE::BSGraphics::TriShape* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
 			uint32_t& a_dataSize,
 			void* a_vertexData,
@@ -941,12 +932,11 @@ namespace Hooks
 			uint16_t* a_indexData,
 			uint32_t a_numIndices)
 		{
-			auto triShape = func(a_renderer, a_dataSize, a_vertexData, a_vertexDesc, a_indexData, a_numIndices);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->vertexBuffer->buffer), &triShape->vertexBufferDX12);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->indexBuffer->buffer), &triShape->indexBufferDX12);
-
+			auto* triShape = func(a_renderer, a_dataSize, a_vertexData, a_vertexDesc, a_indexData, a_numIndices);
+			if (triShape) {
+				ShareBuffer(triShape->vertexBuffer);
+				ShareBuffer(triShape->indexBuffer);
+			}
 			return triShape;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -954,19 +944,18 @@ namespace Hooks
 
 	struct BSGraphics_CreateTriShape_C
 	{
-		static RE::BSGraphics::TriShapeDX12* thunk(
+		static RE::BSGraphics::TriShape* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
 			uint32_t& a_dataSize,
 			void* a_vertexData,
 			uint64_t a_vertexDesc,
 			RE::BSGraphics::IndexBuffer* a_indexBuffer)
 		{
-			auto triShape = func(a_renderer, a_dataSize, a_vertexData, a_vertexDesc, a_indexBuffer);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->vertexBuffer->buffer), &triShape->vertexBufferDX12);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->indexBuffer->buffer), &triShape->indexBufferDX12);
-
+			auto* triShape = func(a_renderer, a_dataSize, a_vertexData, a_vertexDesc, a_indexBuffer);
+			if (triShape) {
+				ShareBuffer(triShape->vertexBuffer);
+				ShareBuffer(triShape->indexBuffer);
+			}
 			return triShape;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -974,19 +963,18 @@ namespace Hooks
 
 	struct BSGraphics_CreateTriShape_D
 	{
-		static RE::BSGraphics::TriShapeDX12* thunk(
+		static RE::BSGraphics::TriShape* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
 			RE::BSGraphics::VertexBuffer* a_vertexBuffer,
 			uint64_t a_vertexDesc,
 			uint16_t* a_indexData,
 			uint32_t a_numIndices)
 		{
-			auto triShape = func(a_renderer, a_vertexBuffer, a_vertexDesc, a_indexData, a_numIndices);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->vertexBuffer->buffer), &triShape->vertexBufferDX12);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->indexBuffer->buffer), &triShape->indexBufferDX12);
-
+			auto* triShape = func(a_renderer, a_vertexBuffer, a_vertexDesc, a_indexData, a_numIndices);
+			if (triShape) {
+				ShareBuffer(triShape->vertexBuffer);
+				ShareBuffer(triShape->indexBuffer);
+			}
 			return triShape;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -994,18 +982,17 @@ namespace Hooks
 
 	struct BSGraphics_CreateTriShape_E
 	{
-		static RE::BSGraphics::TriShapeDX12* thunk(
+		static RE::BSGraphics::TriShape* thunk(
 			RE::BSGraphics::Renderer* a_renderer,
 			RE::BSGraphics::VertexBuffer* a_vertexBuffer,
 			uint64_t a_vertexDesc,
 			RE::BSGraphics::IndexBuffer* a_indexBuffer)
 		{
-			auto triShape = func(a_renderer, a_vertexBuffer, a_vertexDesc, a_indexBuffer);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->vertexBuffer->buffer), &triShape->vertexBufferDX12);
-
-			Util::CreateSharedBuffer(reinterpret_cast<ID3D11Buffer*>(triShape->indexBuffer->buffer), &triShape->indexBufferDX12);
-
+			auto* triShape = func(a_renderer, a_vertexBuffer, a_vertexDesc, a_indexBuffer);
+			if (triShape) {
+				ShareBuffer(triShape->vertexBuffer);
+				ShareBuffer(triShape->indexBuffer);
+			}
 			return triShape;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1015,8 +1002,8 @@ namespace Hooks
 	void InstallEarly()
 	{
 #if defined(FALLOUT4)
-		// BSGraphics initializes this pool from WinMain. Patch the element stride before that call.
-		stl::write_thunk_call<TriShapePoolInit>(REL::ID(2276814).address() + 0x685);
+		// BSD3DResourceCreator initializes the Buffer pool from WinMain. Patch the element stride before that call.
+		stl::write_thunk_call<BufferPoolInit>(REL::ID(2277414).address() + 0x521);
 #endif
 	}
 
@@ -1128,7 +1115,7 @@ namespace Hooks
 		stl::detour_thunk<BSGraphics_CreateTriShape_C>(REL::ID(2276843));
 		stl::detour_thunk<BSGraphics_CreateTriShape_D>(REL::ID(2276844));
 		stl::detour_thunk<BSGraphics_CreateTriShape_E>(REL::ID(2276845));
-		stl::detour_thunk<TLockingUserPool_Free>(REL::ID(2277072));
+		stl::detour_thunk<BSD3DResourceCreator_AddBufferToRelease>(REL::ID(2277426));
 #endif
 		logger::info("[Raytracing] Installed hooks");
 	}

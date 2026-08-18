@@ -89,12 +89,16 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 {
 	BufferDescriptor indexBuffer{};
 
-	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
+	auto* indexBufferDX12 = Util::Adapter::GetIndexBufferDX12(triShape);
+	auto* indexBuffer11 = Util::Adapter::GetD3D11IndexBuffer(triShape);
 
-	auto indexDesc = triShapeDX12->indexBufferDX12->GetDesc();
+	if (!indexBufferDX12 || !indexBuffer11)
+		return indexBuffer;
+
+	auto indexDesc = indexBufferDX12->GetDesc();
 
 	D3D11_BUFFER_DESC indexDesc11;
-	reinterpret_cast<ID3D11Buffer*>(triShapeDX12->indexBuffer)->GetDesc(&indexDesc11);
+	indexBuffer11->GetDesc(&indexDesc11);
 
 	if (indexDesc.Width != indexDesc11.ByteWidth) {
 		logger::error("D3D11 ({}) and D3D12 ({}) index buffer size mismatch.", indexDesc11.ByteWidth, indexDesc.Width);
@@ -111,7 +115,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 	auto device = Renderer::GetSingleton()->GetDevice();
 	indexBuffer.m_Buffer = device->createHandleForNativeBuffer(
 		nvrhi::ObjectTypes::D3D12_Resource, 
-		nvrhi::Object(triShapeDX12->indexBufferDX12), 
+		nvrhi::Object(indexBufferDX12), 
 		indexBufferDesc);
 
 	if (indexBuffer.m_Buffer) {
@@ -119,7 +123,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, indexBuffer.m_Buffer));
 	}
 	else {
-		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffer;");
 	}
 
 	return indexBuffer;
@@ -129,12 +133,16 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 {
 	BufferDescriptor vertexBuffer{};
 
-	auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
+	auto* vertexBufferDX12 = Util::Adapter::GetVertexBufferDX12(triShape);
+	auto* vertexBuffer11 = Util::Adapter::GetD3D11VertexBuffer(triShape);
 
-	auto vertexDesc = triShapeDX12->vertexBufferDX12->GetDesc();
+	if (!vertexBufferDX12 || !vertexBuffer11)
+		return vertexBuffer;
+
+	auto vertexDesc = vertexBufferDX12->GetDesc();
 
 	D3D11_BUFFER_DESC vertexDesc11;
-	reinterpret_cast<ID3D11Buffer*>(triShapeDX12->vertexBuffer)->GetDesc(&vertexDesc11);
+	vertexBuffer11->GetDesc(&vertexDesc11);
 
 	if (vertexDesc.Width != vertexDesc11.ByteWidth) {
 		logger::error("D3D11 ({}) and D3D12 ({}) vertex buffer size mismatch.", vertexDesc11.ByteWidth, vertexDesc.Width);
@@ -151,7 +159,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	auto device = Renderer::GetSingleton()->GetDevice();
 	vertexBuffer.m_Buffer = device->createHandleForNativeBuffer(
 		nvrhi::ObjectTypes::D3D12_Resource, 
-		nvrhi::Object(triShapeDX12->vertexBufferDX12), 
+		nvrhi::Object(vertexBufferDX12), 
 		vertexBufferDesc);
 
 	if (vertexBuffer.m_Buffer) {
@@ -159,7 +167,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 		vertexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, vertexBuffer.m_Buffer));
 	}
 	else {
-		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffe;");
+		logger::error("BaseMesh::CreateVertexBuffer - Failed to create handle for native buffer;");
 	}
 
 	return vertexBuffer;

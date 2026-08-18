@@ -72,9 +72,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	if (!ValidateCounts(triShapeData.triangleCount, vertexCount))
 		return;
 
-	auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(rendererData);
-
-	m_VertexBuffer = CreateVertexBuffer(triShapeDX12);
+	m_VertexBuffer = CreateVertexBuffer(rendererData);
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
@@ -82,9 +80,9 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	m_VertexCount = vertexCount;
 
-	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(triShapeDX12->vertexDesc);
+	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
-	CreateSkinningBuffers(commandList, triShapeDX12, vertexCount, vertexStride);
+	CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride);
 #endif
 
 	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4

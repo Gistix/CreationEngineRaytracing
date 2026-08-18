@@ -67,6 +67,11 @@ namespace Util
 		uint16_t* GetIndexData(RE::BSGraphics::TriShape* rendererData);
 		void DeallocateTriShapeData(RE::BSGraphics::TriShape* rendererData);
 
+		ID3D12Resource* GetVertexBufferDX12(RE::BSGraphics::TriShape* a_triShape);
+		ID3D12Resource* GetIndexBufferDX12(RE::BSGraphics::TriShape* a_triShape);
+		ID3D11Buffer* GetD3D11VertexBuffer(RE::BSGraphics::TriShape* a_triShape);
+		ID3D11Buffer* GetD3D11IndexBuffer(RE::BSGraphics::TriShape* a_triShape);
+
 		struct SkinData
 		{
 			bool hasSkin;
