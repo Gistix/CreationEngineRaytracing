@@ -96,11 +96,11 @@ bool Load()
 			errors.push_back(errorMessage);
 		}
 	}
+#endif
 
 	if (errors.empty()) {
 		scene->Load();
 	}
-#endif
 
 	return true;
 }
