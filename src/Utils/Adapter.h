@@ -146,6 +146,8 @@ namespace Util
 
 		const RE::BSGraphics::ViewData GetCameraEyeViewData();
 
+		RE::SceneGraph* GetWorldRootNode();
+
 		bool IsNiAVObjectHidden(const RE::NiAVObject* a_object);
 
 		bool IsMultiBoundNodeAllFail(const RE::BSMultiBoundNode* a_node);

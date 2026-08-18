@@ -489,7 +489,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		for (auto& v : m_PerWorkerCreateList) v.reserve(64);
 		for (auto& v : m_PerWorkerCurrentVisible) v.reserve(256);
 
-		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
+		auto worldRootNode = Util::Adapter::GetWorldRootNode();
 
 		// First person view
 		// Why? The first person node is always hidden, except during first person view rendering where it is unhid for culling + rendering

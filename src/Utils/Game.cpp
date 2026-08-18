@@ -55,7 +55,7 @@ namespace Util
 
 			if (!object->parent) {
 				// If the last node is not the WorldRoot Node, the object is detached
-				if (object != RE::Main::GetSingleton()->WorldRootNode())
+				if (object != Util::Adapter::GetWorldRootNode())
 					return true;
 
 				return false;

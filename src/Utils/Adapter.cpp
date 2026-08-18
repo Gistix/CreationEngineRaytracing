@@ -665,6 +665,16 @@ namespace Util
 #endif
 		}
 
+		RE::SceneGraph* GetWorldRootNode()
+		{
+#if defined(SKYRIM)
+			return RE::Main::GetSingleton()->WorldRootNode();
+#elif defined(FALLOUT4)
+			static REL::Relocation<RE::NiPointer<RE::SceneGraph>*> worldRootPtr{ RE::ID::Main::WorldRootNode };
+			return worldRootPtr->get();
+#endif
+		}
+
 		bool IsNiAVObjectHidden(const RE::NiAVObject* a_object)
 		{
 #if defined(SKYRIM)
