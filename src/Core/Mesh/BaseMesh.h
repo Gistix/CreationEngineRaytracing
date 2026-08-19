@@ -26,6 +26,7 @@ public:
 	struct BufferDescriptor {
 		nvrhi::BufferHandle m_Buffer = nullptr;
 		DescriptorHandle m_Descriptor;
+		uint64_t m_Offset;
 	};
 
 	enum class State : uint8_t
@@ -163,8 +164,8 @@ protected:
 	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(
-		nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount,
-		nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount,
+		nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount,
+		nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount,
 		uint32_t transformIndex);
 
 	void CreateMaterial();

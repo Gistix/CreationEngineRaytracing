@@ -92,9 +92,6 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 	auto* indexBufferDX12 = Util::Adapter::GetIndexBufferDX12(triShape);
 	auto* indexBuffer11 = Util::Adapter::GetD3D11IndexBuffer(triShape);
 
-	if (!indexBufferDX12 || !indexBuffer11)
-		return indexBuffer;
-
 	auto indexDesc = indexBufferDX12->GetDesc();
 
 	D3D11_BUFFER_DESC indexDesc11;
@@ -126,6 +123,12 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffer;");
 	}
 
+#if defined(FALLOUT4)
+	indexBuffer.m_Offset = triShape->indexBuffer->dataOffset;
+#else
+	indexBuffer.m_Offset = 0;
+#endif
+
 	return indexBuffer;
 }
 
@@ -135,9 +138,6 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 
 	auto* vertexBufferDX12 = Util::Adapter::GetVertexBufferDX12(triShape);
 	auto* vertexBuffer11 = Util::Adapter::GetD3D11VertexBuffer(triShape);
-
-	if (!vertexBufferDX12 || !vertexBuffer11)
-		return vertexBuffer;
 
 	auto vertexDesc = vertexBufferDX12->GetDesc();
 
@@ -169,6 +169,12 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	else {
 		logger::error("BaseMesh::CreateVertexBuffer - Failed to create handle for native buffer;");
 	}
+
+#if defined(FALLOUT4)
+	vertexBuffer.m_Offset = triShape->vertexBuffer->dataOffset;
+#else
+	vertexBuffer.m_Offset = 0;
+#endif
 
 	return vertexBuffer;
 }
@@ -247,19 +253,19 @@ void BaseMesh::CommitDirtyFlags()
 	ClearDirtyFlags();
 }
 
-nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)
 {
 	nvrhi::rt::GeometryDesc geometryDesc;
 
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
 
 	geometryTriangles.indexBuffer = indexBuffer;
-	geometryTriangles.indexOffset = indexOffset * sizeof(uint16_t); // Byte offset into index buffer GPU VA
+	geometryTriangles.indexOffset = indexOffset; // Byte offset into index buffer GPU VA
 	geometryTriangles.indexFormat = nvrhi::Format::R16_UINT;
 	geometryTriangles.indexCount = indexCount;
 
 	geometryTriangles.vertexBuffer = vertexBuffer;
-	geometryTriangles.vertexOffset = 0;
+	geometryTriangles.vertexOffset = vertexOffset; // Byte offset into vertex buffer GPU VA
 	geometryTriangles.vertexFormat = nvrhi::Format::RGB32_FLOAT;
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;

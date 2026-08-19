@@ -33,11 +33,13 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	m_LiveVertexBuffer = device->createBuffer(liveBufDesc);
 	//commandList->writeBuffer(m_LiveVertexBuffer, Util::Adapter::GetVertexData(const_cast<RE::BSGraphics::TriShape*>(rendererData)), byteSize);
 
-	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, 0, byteSize);
+	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, byteSize);
 
 	// Repoint the geometry desc to the live buffer for BLAS reads
-	for (auto& entry : m_GeometryEntries)
+	for (auto& entry : m_GeometryEntries) {
 		entry.desc.geometryData.triangles.vertexBuffer = m_LiveVertexBuffer;
+		entry.desc.geometryData.triangles.vertexOffset = 0;
+	}
 
 	// RT shaders read from here
 	device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),

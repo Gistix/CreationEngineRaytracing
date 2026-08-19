@@ -267,7 +267,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-		m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
+		m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, emplacedIndexBuffer.m_Offset, indexCount, vertexBuffer, 0, vertexStride, vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
 		m_GeometryPartitionIndices.push_back(i);
 	}
 #elif defined(FALLOUT4)
@@ -294,7 +294,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 	}
 
 	auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-	m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
+	m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, emplacedIndexBuffer.m_Offset, indexCount, vertexBuffer, 0, vertexStride, vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
 	m_GeometryPartitionIndices.push_back(0);
 #endif
 }
