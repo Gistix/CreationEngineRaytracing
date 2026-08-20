@@ -558,14 +558,18 @@ namespace Hooks
 	};
 
 #elif defined(FALLOUT4)
-	struct BSD3DResourceCreator_AddBufferToRelease
+	struct BSD3DResourceCreator_PoolBucket_Dtor
 	{
-		static int thunk(void* a_this, RE::BSGraphics::Buffer* a_buffer)
+		static void thunk(void* a_bucket)
 		{
-			if (a_buffer)
-				Scene::GetSingleton()->TryReleaseBuffer(a_buffer->buffer);
+			if (a_bucket) {
+				auto buffer = *reinterpret_cast<REX::W32::ID3D11Buffer**>(reinterpret_cast<uintptr_t>(a_bucket) + 288);
+				if (buffer) {
+					Scene::GetSingleton()->TryReleaseBuffer(buffer);
+				}
+			}
 
-			return func(a_this, a_buffer);
+			func(a_bucket);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -715,7 +719,7 @@ namespace Hooks
 
 #elif defined(FALLOUT4)
 		stl::detour_thunk<BSD3DResourceCreator_CreateBufferRequested>(REL::ID(2277441));
-		stl::detour_thunk<BSD3DResourceCreator_AddBufferToRelease>(REL::ID(2277426));
+		stl::detour_thunk<BSD3DResourceCreator_PoolBucket_Dtor>(REL::ID(2277467));
 #endif
 		logger::info("[Raytracing] Installed hooks");
 	}
