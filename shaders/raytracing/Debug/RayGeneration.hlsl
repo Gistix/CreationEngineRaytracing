@@ -116,10 +116,10 @@ void Main()
           
     float3 sourcePosition = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
     
-    bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
-    const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
+    //bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
+    //const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
     
-    /*float3 uvw = GetBary(sourcePayload.Barycentrics());
+    float3 uvw = GetBary(sourcePayload.Barycentrics());
     
     Instance sourceInstance;
     Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
@@ -153,7 +153,7 @@ void Main()
             
         const Texture2D diffuseTexture = Textures[lightingMaterial.DiffuseTexture];          
         color = diffuseTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
-    }*/
+    }
     
     Output[idx] = float4(color, 1.0f);
 }
