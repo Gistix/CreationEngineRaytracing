@@ -220,11 +220,10 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 		auto collectLights = [&](const auto& lights) {
 			for (const auto& activeLight : lights)
 			{
-#if defined(SKYRIM)
 				auto* ptr = activeLight.get();
-#elif defined(FALLOUT4)
-				auto* ptr = activeLight;
-#endif
+				if (!ptr)
+					continue;
+
 				m_TempActiveLights.insert(ptr);
 				m_Lights.try_emplace(ptr, ptr);
 			}
@@ -300,7 +299,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Color = Util::Math::Float3(runtimeData.diffuse);
 
-			lightData.Radius = runtimeData.radius.x;
+			lightData.Radius = runtimeData.radius;
 
 			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) <= 1e-4 || lightData.Radius <= 1e-4)
 				light.m_Active = false;
@@ -313,7 +312,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Position = Util::Math::Float3(niLight->world.translate);
 
-			lightData.InvRadius = 1.0f / runtimeData.radius.x;
+			lightData.InvRadius = 1.0f / runtimeData.radius;
 
 			lightData.Fade = runtimeData.fade;
 

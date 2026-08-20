@@ -617,23 +617,13 @@ namespace Util
 			auto& rd = a_light->GetLightRuntimeData();
 			data.ambient = rd.ambient;
 			data.diffuse = rd.diffuse;
-			data.specular = { 0.0f, 0.0f, 0.0f };
-			data.radius = rd.radius;
+			data.radius = rd.radius.x;
 			data.fade = rd.fade;
-			data.fadeZone = 0.0f;
 #elif defined(FALLOUT4)
-			data.ambient.r = a_light->amb.r;
-			data.ambient.g = a_light->amb.g;
-			data.ambient.b = a_light->amb.b;
-			data.diffuse.r = a_light->diff.r;
-			data.diffuse.g = a_light->diff.g;
-			data.diffuse.b = a_light->diff.b;
-			data.specular.r = a_light->spec.r;
-			data.specular.g = a_light->spec.g;
-			data.specular.b = a_light->spec.b;
-			data.radius = { 1.0f, 1.0f, 1.0f };
+			data.ambient = a_light->amb;
+			data.diffuse = a_light->diff;
+			data.radius = a_light->spec.r;
 			data.fade = a_light->dimmer;
-			data.fadeZone = 0.0f;
 #endif
 			return data;
 		}
@@ -837,7 +827,7 @@ namespace Util
 #if defined(SKYRIM)
 			return object->GetUserData();
 #elif defined(FALLOUT4)
-			return object->userData ? reinterpret_cast<RE::TESObjectREFR*>(object->userData) : nullptr;
+			return reinterpret_cast<RE::TESObjectREFR*>(object->userData);
 #endif
 		}
 

@@ -19,7 +19,7 @@ void Light::UpdateInstances()
 		float radius = instance->m_Node->worldBound.fRadius;
 #endif
 
-		if ((center - position).Length() > radius + runtimeData.radius.x)
+		if ((center - position).Length() > radius + runtimeData.radius)
 			return Iterator::Continue;
 
 		m_Instances.emplace(instance.get());
