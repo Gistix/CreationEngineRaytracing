@@ -340,7 +340,19 @@ void Scene::UpdateCameraData() const
 	}
 #elif defined(FALLOUT4)
 	auto& state = Util::Adapter::GetGraphicsState();
-	auto& camViewData = state.cameraState.camViewData;
+
+	const auto* mainCam = RE::Main::WorldRootCamera();
+
+	RE::BSGraphics::CameraStateData* cameraData = nullptr;
+	for (auto& cameraDataCache: state.cameraDataCache)
+	{
+		if (mainCam == cameraDataCache.referenceCamera && !cameraDataCache.useJitter) {
+			cameraData = &cameraDataCache;
+			break;
+		}
+	}
+
+	auto& camViewData = cameraData->camViewData;
 
 	auto viewMat = reinterpret_cast<const float4x4&>(camViewData.viewMat);
 	auto projMat = reinterpret_cast<const float4x4&>(camViewData.projMat);
@@ -359,14 +371,7 @@ void Scene::UpdateCameraData() const
 
 	m_CameraData->NDCToView = float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y);
 
-	m_CameraData->Position = Util::Math::Float3(state.cameraState.posAdjust);
-
-	// On first frame, initialize PositionPrev to current Position
-	if (m_CameraData->PositionPrev.x == 0.0f && m_CameraData->PositionPrev.y == 0.0f && m_CameraData->PositionPrev.z == 0.0f) {
-		m_CameraData->PositionPrev = m_CameraData->Position;
-		m_CameraData->PrevViewProj = reinterpret_cast<const float4x4&>(camViewData.viewProjUnjittered);
-		m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
-	}
+	m_CameraData->Position = Util::Math::Float3(cameraData->posAdjust);
 
 	auto* renderer = Renderer::GetSingleton();
 

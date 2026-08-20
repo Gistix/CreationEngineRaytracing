@@ -11,10 +11,13 @@ namespace Util
 			static float& cameraNear = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x40));
 			static float& cameraFar = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x44));
 #elif defined(FALLOUT4)
-			const auto& shaderState = Util::Adapter::GetShaderManagerState();
+			const auto* mainCam = RE::Main::WorldRootCamera();
 
-			float cameraNear = *reinterpret_cast<const float*>(reinterpret_cast<const std::uint8_t*>(&shaderState) + 0x160);
-			float cameraFar = *reinterpret_cast<const float*>(reinterpret_cast<const std::uint8_t*>(&shaderState) + 0x164);
+			const auto* viewFrustum = &mainCam->viewFrustum;
+
+			// near and far are MSVC keywords, defined in minwindef.h
+			float cameraNear = *(float*)((std::uintptr_t)viewFrustum + 0x10);
+			float cameraFar = *(float*)((std::uintptr_t)viewFrustum + 0x14);
 #endif
 
 			float4 cameraData{};
