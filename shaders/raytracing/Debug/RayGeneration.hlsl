@@ -116,10 +116,10 @@ void Main()
           
     float3 sourcePosition = Camera.Position.xyz + sourceDirection * sourcePayload.hitDistance;
     
-    //bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
-    //const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
+    bool2 pattern = frac(sourcePosition.xy * GAME_UNIT_TO_M) > 0.5;
+    const float3 color = (pattern.x ^ pattern.y ? 0.6 : 0.4).rrr;
     
-    float3 uvw = GetBary(sourcePayload.Barycentrics());
+    /*float3 uvw = GetBary(sourcePayload.Barycentrics());
     
     Instance sourceInstance;
     Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
@@ -139,7 +139,7 @@ void Main()
     //float3 bitangentWS = cross(tangentWS, normalWS) * handedness;
     
     ByteAddressBuffer materials = Materials[0];
-    uint typeFeature = materials.Load(sourceMesh.MaterialOffset);
+    uint typeFeature = materials.Load(sourceMesh.GetMaterialOffset());
 
     uint16_t type = (uint16_t) (typeFeature & 0xFFFF);
     uint16_t feature = (uint16_t) (typeFeature >> 16);
@@ -148,12 +148,12 @@ void Main()
     
     if (type == Type::Lighting)
     {
-        LightingMaterialData lightingMaterial = materials.Load<LightingMaterialData>(sourceMesh.MaterialOffset);    
+        LightingMaterialData lightingMaterial = materials.Load<LightingMaterialData> (sourceMesh.GetMaterialOffset());
         float2 texCoord = lightingMaterial.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
             
         const Texture2D diffuseTexture = Textures[lightingMaterial.DiffuseTexture];          
         color = diffuseTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
-    }
+    }*/
     
     Output[idx] = float4(color, 1.0f);
 }

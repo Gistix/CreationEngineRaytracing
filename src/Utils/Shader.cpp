@@ -103,6 +103,15 @@ namespace Util
 			return defines;
 		}
 
+		eastl::vector<ShaderDefine> GetDebugDefines(const Settings& settings)
+		{
+			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, false, false);
+
+			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::PT_DISPATCH_THREADS);
+
+			return defines;
+		}
+
 		eastl::vector<DxcDefine> GetDXCDefines(const eastl::vector<ShaderDefine>& defines) {
 			auto numDefines = defines.size();
 
