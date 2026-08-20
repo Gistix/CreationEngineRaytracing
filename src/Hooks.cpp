@@ -57,6 +57,25 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BGSTerrainBlock_Load
+	{
+		static RE::BGSTerrainBlock* thunk(RE::BGSTerrainBlock* a_block, RE::BGSTerrainManager* a_terrainManager, /* RE::BSStream */ void* a_stream, int32_t a4, int32_t a5)
+		{
+			auto result = func(a_block, a_terrainManager, a_stream, a4, a5);
+
+			if (result && result->node && result->land) {
+				auto lodLevel = static_cast<std::int32_t>(result->node->GetLODLevel());
+				auto key = RE::BSFixedString(Constants::ExtraData::LandLOD);
+				auto extra = RE::NiIntegersExtraData::Create(key, { lodLevel });
+				result->land->AddExtraData(extra);
+			}
+
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 #if defined(SKYRIM)
 	template <typename = decltype([] {}) >
 	struct MemoryManager_AllocateTriShape
@@ -422,25 +441,6 @@ namespace Hooks
 		return func();
 	}
 
-	struct BGSTerrainBlock_Load
-	{
-		static RE::BGSTerrainBlock* thunk(RE::BGSTerrainBlock* a_block, RE::BGSTerrainManager* a_terrainManager, RE::BSStream* a_stream, int32_t a4, int32_t a5)
-		{
-			auto result = func(a_block, a_terrainManager, a_stream, a4, a5);
-
-			if (result && result->node && result->land) {
-				auto lodLevel = static_cast<std::int32_t>(result->node->GetLODLevel());
-				auto key = RE::BSFixedString(Constants::ExtraData::LandLOD);
-				auto extra = RE::NiIntegersExtraData::Create(key, { lodLevel });
-				result->land->AddExtraData(extra);
-			}
-
-			return result;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BGSTerrainBlock_Dtor
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
@@ -720,7 +720,10 @@ namespace Hooks
 #elif defined(FALLOUT4)
 		stl::detour_thunk<BSD3DResourceCreator_CreateBufferRequested>(REL::ID(2277441));
 		stl::detour_thunk<BSD3DResourceCreator_PoolBucket_Dtor>(REL::ID(2277467));
+
+		stl::detour_thunk<BGSTerrainBlock_Load>(REL::ID(2213536));
 #endif
+
 		logger::info("[Raytracing] Installed hooks");
 	}
 
