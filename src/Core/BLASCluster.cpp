@@ -232,7 +232,8 @@ uint32_t BLASCluster::Update()
 					dynamicIndex,
 					meshIndex,
 					static_cast<uint16_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
-					materialIndex
+					materialIndex,
+					static_cast<uint32_t>(geomTris.vertexOffset)
 				);
 
 				meshManager->WriteMeshData(entry.geometryIndex, md);

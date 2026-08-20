@@ -56,7 +56,7 @@ inline float4 UnpackByte4SNorm(uint packed)
     return v * (1.0f / 255.0f) * 2.0f - 1.0f;
 }
 
-Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
+Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexByteOffset, uint index, bool isMSN, uint numVertices)
 {
     Vertex vertex = (Vertex)0;
 
@@ -64,7 +64,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     
     // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t, so a 16-bit
     // multiply would overflow (e.g. stride 32 * index 2048 = 0) and corrupt high-index vertices.
-    const uint vertexOffset = vertexSize * index;
+    const uint vertexOffset = vertexByteOffset + vertexSize * index;
 
     float4 pos = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -142,7 +142,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
 
     if (isMSN)
     {
-        const uint quatOffset = (vertexSize * numVertices) + index * 8u;
+        const uint quatOffset = vertexByteOffset + (vertexSize * numVertices) + index * 8u;
         const uint2 packed = vertices.Load2(quatOffset);
         
         half4 q;
@@ -156,6 +156,11 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     }
     
     return vertex;
+}
+
+Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
+{
+    return GetVertex(vertices, vertexDesc, 0u, index, isMSN, numVertices);
 }
 
 struct VertexOut
@@ -201,7 +206,7 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
 
     const bool isMSN = props.ShaderFlags & ShaderFlags::kModelSpaceNormals;
     ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
-    Vertex vertex = GetVertex(vertices, mesh.VertexDesc, triVertex, isMSN, mesh.NumVertices);
+    Vertex vertex = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, triVertex, isMSN, mesh.NumVertices);
 
     // Position-less dynamic meshes (BSDynamicTriShape) keep positions in a live float4 buffer.
     StructuredBuffer<float4> dynPos = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];
