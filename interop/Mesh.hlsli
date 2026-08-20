@@ -25,9 +25,10 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint16_t Type;
     uint16_t DynamicID;
     uint16_t MeshID;
-    uint16_t TriangleOffset;
-    uint MaterialOffsetComp;
+    uint16_t Pad;
+    uint TriangleOffset;
     uint VertexOffset;
+    uint MaterialOffsetComp;
 
     uint GetMaterialOffset()
     {

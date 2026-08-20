@@ -313,7 +313,7 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
     
     const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.TriangleOffset + safePrimitiveIndex);
 
-    const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = (mesh.Type == MeshType::Skinned) && (meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals);
     
     const ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
     v0 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.x, isMSN, mesh.NumVertices);
@@ -338,7 +338,7 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
 
     Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.TriangleOffset + safePrimitiveIndex);
 
-    const bool isMSN = meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = (mesh.Type == MeshType::Skinned) && (meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals);
 
     ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
     v0 = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.x, isMSN, mesh.NumVertices);

@@ -263,7 +263,7 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     const uint16_t triVerts[3] = { tri.x, tri.y, tri.z };
     uint16_t triVertex = triVerts[vertexInTriangle];
 
-    const bool isMSN = props.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = (mesh.Type == MeshType::Skinned) && (props.ShaderFlags & ShaderFlags::kModelSpaceNormals);
     ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
     Vertex vertex = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, triVertex, isMSN, mesh.NumVertices);
 
