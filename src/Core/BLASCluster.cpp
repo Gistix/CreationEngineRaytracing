@@ -214,7 +214,7 @@ uint32_t BLASCluster::Update()
 			const auto meshType = static_cast<uint16_t>(mesh->GetType());
 			const auto dynamicIndex = static_cast<uint16_t>(mesh->GetDynamicIndex());
 			const auto meshIndex = mesh->GetMeshIndex();
-			const auto materialIndex = mesh->GetMaterial()->GetOffsetComp();
+			const auto materialIndex = static_cast<uint32_t>(mesh->GetMaterial()->GetOffset());
 
 			for (size_t i = 0; i < entries.size(); i++) {
 				const auto& entry = entries[i];
@@ -232,7 +232,7 @@ uint32_t BLASCluster::Update()
 					dynamicIndex,
 					meshIndex,
 					0,
-					static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
+					static_cast<uint32_t>(geomTris.indexOffset),
 					static_cast<uint32_t>(geomTris.vertexOffset),
 					materialIndex
 				);

@@ -30,7 +30,7 @@ Texture2D<float4>                 WaterDisplacementMap : register(t6);
 Texture2D<float4>                 ProjNoiseMap         : register(t7);
 Texture2D<float4>                 SkinDetailNormal     : register(t8);
 
-StructuredBuffer<Triangle>        Triangles[]      : register(t0, space1);
+ByteAddressBuffer                 Indices[]        : register(t0, space1);
 ByteAddressBuffer                 Vertices[]       : register(t0, space2);
 ByteAddressBuffer                 Materials[]      : register(t0, space3);
 Texture2D<float4>                 Textures[]       : register(t0, space4);
@@ -45,6 +45,29 @@ SamplerState                      PointWrapSampler : register(s2);
 #include "include/Surface.hlsli"
 #include "include/SurfaceMaker.hlsli"
 
+Triangle GetTriangle(in uint meshIndex, in uint indexByteOffset, in uint primitiveIdx)
+{
+    const uint byteAddr = indexByteOffset + primitiveIdx * 6u;
+    const uint alignedAddr = byteAddr & ~3u;
+    const uint d0 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr);
+    const uint d1 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr + 4u);
+
+    Triangle tri;
+    if ((byteAddr & 2u) == 0)
+    {
+        tri.x = (uint16_t)(d0 & 0xFFFF);
+        tri.y = (uint16_t)(d0 >> 16);
+        tri.z = (uint16_t)(d1 & 0xFFFF);
+    }
+    else
+    {
+        tri.x = (uint16_t)(d0 >> 16);
+        tri.y = (uint16_t)(d1 & 0xFFFF);
+        tri.z = (uint16_t)(d1 >> 16);
+    }
+    return tri;
+}
+
 // Decodes a signed-normalized byte4 (ubyte4 * 2 - 1) from a raw uint.
 inline float4 UnpackByte4SNorm(uint packed)
 {
@@ -56,63 +79,15 @@ inline float4 UnpackByte4SNorm(uint packed)
     return v * (1.0f / 255.0f) * 2.0f - 1.0f;
 }
 
-#if defined(FALLOUT4)
-// FO4 packs meshes into shared buffers at byte offsets that are not guaranteed
-// to be 4-byte aligned. ByteAddressBuffer.Load* requires 4-byte alignment, so
-// read the containing aligned dword(s) and shift out the residual bytes.
-// alignedAddr is always 4-byte aligned; the attribute begins at alignedAddr + residual.
-uint LoadUnaligned(ByteAddressBuffer buf, uint alignedAddr, uint residual)
-{
-    if (residual == 0)
-        return buf.Load(alignedAddr);
-    const uint d0 = buf.Load(alignedAddr);
-    const uint d1 = buf.Load(alignedAddr + 4);
-    return (d0 >> (residual * 8)) | (d1 << (32 - residual * 8));
-}
-
-uint2 LoadUnaligned2(ByteAddressBuffer buf, uint alignedAddr, uint residual)
-{
-    if (residual == 0)
-        return buf.Load2(alignedAddr);
-    const uint s = residual * 8;
-    const uint d0 = buf.Load(alignedAddr);
-    const uint d1 = buf.Load(alignedAddr + 4);
-    const uint d2 = buf.Load(alignedAddr + 8);
-    return uint2((d0 >> s) | (d1 << (32 - s)), (d1 >> s) | (d2 << (32 - s)));
-}
-#else
-uint LoadUnaligned(ByteAddressBuffer buf, uint alignedAddr, uint residual)
-{
-    (void)residual;
-    return buf.Load(alignedAddr);
-}
-
-uint2 LoadUnaligned2(ByteAddressBuffer buf, uint alignedAddr, uint residual)
-{
-    (void)residual;
-    return buf.Load2(alignedAddr);
-}
-#endif
-
 Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexByteOffset, uint index, bool isMSN, uint numVertices)
 {
     Vertex vertex = (Vertex)0;
 
     const uint vertexSize = (uint)vertexDesc.GetVertexSize();
     
-#if defined(FALLOUT4)
-    // FO4 shared-buffer offsets may not be 4-byte aligned; snap to the aligned
-    // base and compensate with the residual in the unaligned loads below.
-    const uint alignedBase = vertexByteOffset & ~3u;
-    const uint residual = vertexByteOffset & 3u;
-#else
-    const uint alignedBase = vertexByteOffset;
-    const uint residual = 0u;
-#endif
-
     // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t, so a 16-bit
     // multiply would overflow (e.g. stride 32 * index 2048 = 0) and corrupt high-index vertices.
-    const uint vertexOffset = alignedBase + vertexSize * index;
+    const uint vertexOffset = vertexByteOffset + vertexSize * index;
 
     float4 pos = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -124,11 +99,11 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
         if (vertexDesc.HasFlag(VertexFlags::FullPrec))
         {
-            pos = asfloat(uint4(LoadUnaligned2(vertices, offset, residual), LoadUnaligned2(vertices, offset + 8, residual)));
+            pos = asfloat(vertices.Load4(offset));
         }
         else
         {
-            const uint2 packed = LoadUnaligned2(vertices, offset, residual);
+            const uint2 packed = vertices.Load2(offset);
             pos.x = f16tof32(packed.x & 0xFFFF);
             pos.y = f16tof32(packed.x >> 16);
             pos.z = f16tof32(packed.y & 0xFFFF);
@@ -141,7 +116,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
     if (vertexDesc.HasFlag(VertexFlags::UV))
     {
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Texcoord0);
-        const uint packed = LoadUnaligned(vertices, offset, residual);
+        const uint packed = vertices.Load(offset);
         vertex.Texcoord0 = half2(f16tof32(packed & 0xFFFF), f16tof32(packed >> 16));
     }
 
@@ -149,7 +124,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
     if (vertexDesc.HasFlag(VertexFlags::Normal))
     {
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Normal);
-        normal = UnpackByte4SNorm(LoadUnaligned(vertices, offset, residual));
+        normal = UnpackByte4SNorm(vertices.Load(offset));
 
         const float3 N = normalize(normal.xyz);
         vertex.Normal = (half3)N;
@@ -158,7 +133,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
         if (vertexDesc.HasFlag(VertexFlags::Tangent))
         {
             const uint tangOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Binormal);
-            bitangent = UnpackByte4SNorm(LoadUnaligned(vertices, tangOffset, residual));
+            bitangent = UnpackByte4SNorm(vertices.Load(tangOffset));
 
             float3 B = bitangent.xyz;
             B = normalize(B - N * dot(N, B));
@@ -174,7 +149,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
     if (vertexDesc.HasFlag(VertexFlags::Colors))
     {
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Color);
-        const uint packed = LoadUnaligned(vertices, offset, residual);
+        const uint packed = vertices.Load(offset);
         vertex.Color.x = (packed >> 0) & 0xFF;
         vertex.Color.y = (packed >> 8) & 0xFF;
         vertex.Color.z = (packed >> 16) & 0xFF;
@@ -185,8 +160,8 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
     if (vertexDesc.HasFlag(VertexFlags::LandData))
     {
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::LandData);
-        const uint packed0 = LoadUnaligned(vertices, offset, residual);
-        const uint packed1 = LoadUnaligned(vertices, offset + 4, residual);
+        const uint packed0 = vertices.Load(offset);
+        const uint packed1 = vertices.Load(offset + 4);
 
         vertex.LandBlend0.x = (packed0 >> 0) & 0xFF;
         vertex.LandBlend0.y = (packed0 >> 8) & 0xFF;
@@ -201,8 +176,8 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
 
     if (isMSN)
     {
-        const uint quatOffset = alignedBase + (vertexSize * numVertices) + index * 8u;
-        const uint2 packed = LoadUnaligned2(vertices, quatOffset, residual);
+        const uint quatOffset = vertexByteOffset + (vertexSize * numVertices) + index * 8u;
+        const uint2 packed = vertices.Load2(quatOffset);
         
         half4 q;
         q.x = (half)f16tof32(packed.x & 0xffff);
@@ -258,8 +233,8 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     const uint triangleID = vertexID / 3;
     const uint vertexInTriangle = vertexID % 3;
 
-    const uint safePrimitiveIndex = min(triangleID, (uint)mesh.NumTriangles);
-    Triangle tri = Triangles[NonUniformResourceIndex(mesh.IndexID)][mesh.TriangleOffset + safePrimitiveIndex];
+    const uint safePrimitiveIndex = min(triangleID, (uint)max(0, (int)mesh.NumTriangles - 1));
+    Triangle tri = GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
     const uint16_t triVerts[3] = { tri.x, tri.y, tri.z };
     uint16_t triVertex = triVerts[vertexInTriangle];
 

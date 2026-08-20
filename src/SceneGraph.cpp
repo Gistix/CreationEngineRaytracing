@@ -56,7 +56,7 @@ void SceneGraph::Initialize()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(1).setSize(UINT_MAX)
 		};
 
 		m_TriangleDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);

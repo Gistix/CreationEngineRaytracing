@@ -34,16 +34,16 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
+		if (!geometryData.rendererData->vertexDesc.HasFlag(RE::BSGraphics::Vertex::Flags::VF_VERTEX)) {
+			logger::warn("BaseMesh::Create - Mesh {} has no vertex position.", MakeDebugName(bsTriShape).c_str());
+			return nullptr;
+		}
+
 		return eastl::make_unique<Mesh>(bsTriShape, commandList);
 	}
 
-#if defined(SKYRIM)
-	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
-		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
-#elif defined(FALLOUT4)
-	if (auto bsDynamicTriShape = Util::Adapter::AsDynamicTriShape(bsTriShape))
-		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
-#endif
+	//if (auto bsDynamicTriShape = Util::Adapter::AsDynamicTriShape(bsTriShape))
+	//	return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
 
 	if (geometryData.skinInstance)
 		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
@@ -102,7 +102,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 
 	auto indexBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(indexDesc.Width)
-		.setStructStride(sizeof(Triangle))
+		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("Index Buffer");
@@ -115,7 +115,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 
 	if (indexBuffer.m_Buffer) {
 		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable;
-		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, indexBuffer.m_Buffer));
+		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, indexBuffer.m_Buffer));
 	}
 	else {
 		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffer;");

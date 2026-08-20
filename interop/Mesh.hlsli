@@ -26,13 +26,23 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint16_t DynamicID;
     uint16_t MeshID;
     uint16_t Pad;
-    uint TriangleOffset;
+    uint IndexOffset;
     uint VertexOffset;
-    uint MaterialOffsetComp;
+    uint MaterialOffset;
+
+    uint GetIndexOffset()
+    {
+        return IndexOffset;
+    }
+
+    uint GetVertexOffset()
+    {
+        return VertexOffset;
+    }
 
     uint GetMaterialOffset()
     {
-        return MaterialOffsetComp * 4;
+        return MaterialOffset;
     }
 };
 VALIDATE_TRIVIAL(MeshData);
