@@ -21,6 +21,7 @@ namespace RE
 
 	class BSTriShape;
 	class BSDynamicTriShape;
+	class TESObjectLIGH;
 }
 
 class DynamicMesh;
@@ -168,5 +169,8 @@ namespace Util
 		RE::ShadowSceneNode* GetShadowSceneNode(uint32_t index = 0);
 
 		RE::NiIntegersExtraData* GetIntegersExtraData(RE::BSTriShape* a_triShape, const char* a_name);
+
+		RE::TESObjectREFR* GetUserData(RE::NiAVObject* object);
+		bool IsSpotLight(const RE::TESObjectLIGH* a_light);
 	}
 }

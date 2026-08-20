@@ -831,5 +831,25 @@ namespace Util
 			return static_cast<RE::NiIntegersExtraData*>(a_triShape->GetExtraData(a_name));
 #endif
 		}
+
+		RE::TESObjectREFR* GetUserData(RE::NiAVObject* object)
+		{
+#if defined(SKYRIM)
+			return object->GetUserData();
+#elif defined(FALLOUT4)
+			return object->userData ? reinterpret_cast<RE::TESObjectREFR*>(object->userData) : nullptr;
+#endif
+		}
+
+		bool IsSpotLight(const RE::TESObjectLIGH* a_light)
+		{
+#if defined(SKYRIM)
+			return a_light->data.flags.any(RE::TES_LIGHT_FLAGS::kSpotlight, RE::TES_LIGHT_FLAGS::kSpotShadow);
+#elif defined(FALLOUT4)
+			constexpr auto spotMask = static_cast<std::uint32_t>(RE::TES_LIGHT_FLAGS::kSpotlight) |
+			                          static_cast<std::uint32_t>(RE::TES_LIGHT_FLAGS::kSpotShadow);
+			return (a_light->data.flags & spotMask) != 0;
+#endif
+		}
 	}
 }

@@ -21,6 +21,7 @@
 #include "Core/Mesh/SubIndexSegmentMesh.h"
 
 #include <chrono>
+#include <numbers>
 
 void SceneGraph::Initialize()
 {
@@ -199,27 +200,38 @@ void SceneGraph::UpdateCamera()
 	m_Camera = tesCamera ? Util::Game::FindNiCamera(tesCamera->cameraRoot.get()) : nullptr;
 }
 
-void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
+void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 {
+	auto* shadowSceneNode = Util::Adapter::GetShadowSceneNode(0);
+
 #if defined(SKYRIM)
-	auto& mainSSNRuntimeData = Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData();
+	auto& mainSSNRuntimeData = shadowSceneNode->GetRuntimeData();
+	auto& activeLights = mainSSNRuntimeData.activeLights;
+#elif defined(FALLOUT4)
+	auto& activeLights = shadowSceneNode->activeLights;
+	auto& activeShadowLights = shadowSceneNode->activeShadowLights;
+#endif
 
 	// Update Light Vector
 	{
 		m_TempActiveLights.clear();
-		m_TempActiveLights.reserve(mainSSNRuntimeData.activeLights.size() + mainSSNRuntimeData.activeShadowLights.size());
+		m_TempActiveLights.reserve(activeLights.size() + activeShadowLights.size());
 
 		auto collectLights = [&](const auto& lights) {
 			for (const auto& activeLight : lights)
 			{
+#if defined(SKYRIM)
 				auto* ptr = activeLight.get();
+#elif defined(FALLOUT4)
+				auto* ptr = activeLight;
+#endif
 				m_TempActiveLights.insert(ptr);
 				m_Lights.try_emplace(ptr, ptr);
 			}
 		};
 
-		collectLights(mainSSNRuntimeData.activeLights);
-		collectLights(mainSSNRuntimeData.activeShadowLights);
+		collectLights(activeLights);
+		collectLights(activeShadowLights);
 
 		for (auto it = m_Lights.begin(); it != m_Lights.end(); )
 		{
@@ -246,29 +258,25 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 		bool isSpotLight = false;
 		RE::TESObjectLIGH* ligh = nullptr;
 
-		const auto refr = niLight->GetUserData();
+		const auto refr = Util::Adapter::GetUserData(niLight);
 		if (refr) {
 			if (refr->IsDisabled())
 				light.m_Active = false;
 
 			if (auto* objRef = refr->GetObjectReference()) {
-				if (objRef->GetFormType() == RE::FormType::Light) {
+				if (objRef->GetFormType() == CESEAdapter::RE::FormType::Light) {
 					ligh = objRef->As<RE::TESObjectLIGH>();
 
 					if (ligh)
-						isSpotLight = ligh->data.flags.any(RE::TES_LIGHT_FLAGS::kSpotlight, RE::TES_LIGHT_FLAGS::kSpotShadow);
+						isSpotLight = Util::Adapter::IsSpotLight(ligh);
 				}
 			}
 		}
 
-#if defined(SKYRIM)
-		if (niLight->GetFlags().any(RE::NiAVObject::Flag::kHidden))
-#elif defined(FALLOUT4)
-		if (niLight->GetFlags() & static_cast<uint64_t>(CESEAdapter::RE::NiAVObjectFlag::kHidden))
-#endif
+
+		if (Util::Adapter::IsNiAVObjectHidden(niLight))
 			light.m_Active = false;
 
-#if defined(SKYRIM)
 		if (bsLight->IsShadowLight())
 		{
 			auto* shadowLight = reinterpret_cast<RE::BSShadowLight*>(bsLight);
@@ -276,7 +284,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 			if (shadowLight->GetRuntimeData().maskIndex == 255)
 				light.m_Active = false;
 		}
-#endif
 
 		auto runtimeData = Util::Adapter::GetLightRuntimeData(niLight);
 
@@ -315,7 +322,7 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 
 			if (isSpotLight) {
 				lightData.Type = LightType::Spot;
-				lightData.Direction = Util::Math::Normalize(Util::Math::Float3(niLight->world.rotate.GetVectorX()));
+				lightData.Direction = Util::Math::Normalize(float3(niLight->world.rotate.entry[0][0], niLight->world.rotate.entry[1][0], niLight->world.rotate.entry[2][0]));
 				lightData.CosOuterAngle = std::cosf(ligh->data.fov * std::numbers::pi_v<float> / 180.0f);
 				lightData.CosInnerAngle = 1.0f;
 			} else {
@@ -352,7 +359,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 	}
 
 	commandList->writeBuffer(GetLightBuffer(), m_LightData.data(), numLights * sizeof(LightData));
-#endif
 }
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
