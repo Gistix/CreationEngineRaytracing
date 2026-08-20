@@ -339,11 +339,15 @@ void Scene::UpdateCameraData() const
 		}
 	}
 #elif defined(FALLOUT4)
-	auto state = RE::BSGraphics::State::GetSingleton();
+	auto& state = Util::Adapter::GetGraphicsState();
 	auto& camViewData = state.cameraState.camViewData;
 
 	auto viewMat = reinterpret_cast<const float4x4&>(camViewData.viewMat);
 	auto projMat = reinterpret_cast<const float4x4&>(camViewData.projMat);
+
+	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
+	m_CameraData->PrevViewProj = m_CameraData->ViewProj;
+	m_CameraData->PositionPrev = m_CameraData->Position;
 
 	m_CameraData->ViewInverse = viewMat.Invert();
 	m_CameraData->ProjInverse = projMat.Invert();
@@ -357,20 +361,23 @@ void Scene::UpdateCameraData() const
 
 	m_CameraData->Position = Util::Math::Float3(state.cameraState.posAdjust);
 
+	// On first frame, initialize PositionPrev to current Position
+	if (m_CameraData->PositionPrev.x == 0.0f && m_CameraData->PositionPrev.y == 0.0f && m_CameraData->PositionPrev.z == 0.0f) {
+		m_CameraData->PositionPrev = m_CameraData->Position;
+		m_CameraData->PrevViewProj = reinterpret_cast<const float4x4&>(camViewData.viewProjUnjittered);
+		m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
+	}
+
 	auto* renderer = Renderer::GetSingleton();
 
 	m_CameraData->FrameIndex = renderer->GetFrameIndex() % UINT_MAX;
 	m_CameraData->ScreenSize = renderer->GetResolution();
 	m_CameraData->RenderSize = renderer->GetDynamicResolution();
 
-	m_CameraData->PositionPrev = Util::Math::Float3(state.cameraState.previousPosAdjust);
-
-	if (g_Time)
-		m_CameraData->Time = *g_Time;
+	const auto& shaderState = Util::Adapter::GetShaderManagerState();
+	m_CameraData->Time = *reinterpret_cast<const float*>(reinterpret_cast<const std::uint8_t*>(&shaderState) + 0x28);
 
 	m_CameraData->ViewProj = reinterpret_cast<const float4x4&>(camViewData.viewProjUnjittered);
-	m_CameraData->PrevViewProj = reinterpret_cast<const float4x4&>(camViewData.previousViewProjUnjittered);
-	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
 
 	m_CameraData->Jitter = renderer->GetJitter();
 

@@ -12,3 +12,5 @@
 #include "RE/B/BSMultiBoundNode.h"
 #include "BSSkin.h"
 #include "BSLightingShaderMaterials.h"
+#include "Types/RE/FO4/ShadowSceneNode.h"
+#include "Types/RE/FO4/NiIntegersExtraData.h"

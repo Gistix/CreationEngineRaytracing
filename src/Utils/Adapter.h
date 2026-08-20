@@ -165,5 +165,8 @@ namespace Util
 		RE::NiSwitchNode* AsSwitchNode(RE::NiNode* node);
 
 		RE::BSPortalGraph* GetPortalGraph(RE::NiNode* node);
+		RE::ShadowSceneNode* GetShadowSceneNode(uint32_t index = 0);
+
+		RE::NiIntegersExtraData* GetIntegersExtraData(RE::BSTriShape* a_triShape, const char* a_name);
 	}
 }

@@ -166,7 +166,18 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexB
     if (vertexDesc.HasFlag(VertexFlags::Vertex))
     {
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
-        pos = asfloat(vertices.Load4(offset));
+        if (vertexDesc.HasFlag(VertexFlags::FullPrec))
+        {
+            pos = asfloat(vertices.Load4(offset));
+        }
+        else
+        {
+            const uint2 packed = vertices.Load2(offset);
+            pos.x = f16tof32(packed.x & 0xFFFF);
+            pos.y = f16tof32(packed.x >> 16);
+            pos.z = f16tof32(packed.y & 0xFFFF);
+            pos.w = f16tof32(packed.y >> 16);
+        }
         vertex.Position = pos.xyz;
     }
 

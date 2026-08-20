@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Geometry.h"
+#include "interop/VertexDesc.hlsli"
 
 namespace
 {
@@ -125,6 +126,13 @@ namespace Util
 		{
 			const auto vertexDescUInt = *reinterpret_cast<uint64_t*>(&vertexDesc);
 			return ((vertexDescUInt & 0xF) << 2);
+		}
+
+		nvrhi::Format GetVertexPositionFormat(RE::BSGraphics::VertexDesc desc)
+		{
+			const auto vertexDescUInt = *reinterpret_cast<const uint64_t*>(&desc);
+			auto vertexDesc = VertexDesc(vertexDescUInt);
+			return vertexDesc.HasFlag(VertexFlags::FullPrec) ? nvrhi::Format::RGB32_FLOAT : nvrhi::Format::RGBA16_FLOAT;
 		}
 
 		bool IsDismemberSkinInstance(RE::NiObject* skinInstance)

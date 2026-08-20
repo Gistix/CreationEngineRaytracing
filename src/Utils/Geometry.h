@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Constants.h"
+#include <nvrhi/nvrhi.h>
 
 namespace Util
 {
@@ -9,6 +10,8 @@ namespace Util
 		std::uint16_t GetSkyrimVertexSize(RE::BSGraphics::Vertex::Flags flags);
 
 		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc desc);
+
+		nvrhi::Format GetVertexPositionFormat(RE::BSGraphics::VertexDesc desc);
 
 		bool IsDismemberSkinInstance(RE::NiObject* skinInstance);
 

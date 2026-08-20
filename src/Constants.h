@@ -65,6 +65,8 @@ namespace Constants
 
 	static constexpr uint32_t GI_DISPATCH_THREADS = 16;
 
+	static constexpr uint32_t DEBUG_DISPATCH_THREADS = 16;
+	
 	namespace rtti
 	{
 		static REL::Relocation<const RE::NiRTTI*> NiBillboardNode{ NiRTTI(NiBillboardNode) };

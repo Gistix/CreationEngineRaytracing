@@ -19,4 +19,15 @@ namespace RE
 #if defined(SKYRIM) || defined(FALLOUT4)
 	static_assert(sizeof(NiPointLight) == 0x190);
 #endif
+
+	class NiDirectionalLight : public NiLight
+	{
+	public:
+		static constexpr auto RTTI{ RTTI::NiDirectionalLight };
+		static constexpr auto VTABLE{ VTABLE::NiDirectionalLight };
+		static constexpr auto Ni_RTTI{ Ni_RTTI::NiDirectionalLight };
+	};
+#if defined(SKYRIM) || defined(FALLOUT4)
+	static_assert(sizeof(NiDirectionalLight) == 0x170);
+#endif
 }

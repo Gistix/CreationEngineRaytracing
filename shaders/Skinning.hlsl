@@ -141,7 +141,20 @@ void Main(uint2 DTid : SV_DispatchThreadID)
     float4 normal4 = float4(0.0f, 0.0f, 1.0f, 0.0f);
     
     if (hasPosition)
-        position4 = asfloat(original.Load4(posOffset));
+    {
+        if (vertexDesc.HasFlag(VertexFlags::FullPrec))
+        {
+            position4 = asfloat(original.Load4(posOffset));
+        }
+        else
+        {
+            const uint2 packed = original.Load2(posOffset);
+            position4.x = f16tof32(packed.x & 0xFFFF);
+            position4.y = f16tof32(packed.x >> 16);
+            position4.z = f16tof32(packed.y & 0xFFFF);
+            position4.w = f16tof32(packed.y >> 16);
+        }
+    }
     else if (isDynamic)
         position4 = DynamicVertices[dynSlot][vertexIndex];
 
@@ -220,11 +233,31 @@ void Main(uint2 DTid : SV_DispatchThreadID)
     }
 
 	// Save the live position as the previous frame's position before overwriting (motion vectors).
-	PrevPositions[slot][vertexIndex] = asfloat(output.Load3(posOffset));
+	if (vertexDesc.HasFlag(VertexFlags::FullPrec))
+		PrevPositions[slot][vertexIndex] = asfloat(output.Load3(posOffset));
+	else
+	{
+		const uint2 prevPacked = output.Load2(posOffset);
+		PrevPositions[slot][vertexIndex] = float3(
+			f16tof32(prevPacked.x & 0xFFFF),
+			f16tof32(prevPacked.x >> 16),
+			f16tof32(prevPacked.y & 0xFFFF));
+	}
 
 	// Position (xyz) is always refreshed; normal/tangent/bitangent only when the layout has them.
     if (hasPosition)
-        output.Store3(posOffset, asuint(position4.xyz));
+    {
+        if (vertexDesc.HasFlag(VertexFlags::FullPrec))
+        {
+            output.Store3(posOffset, asuint(position4.xyz));
+        }
+        else
+        {
+            const uint packedXy = f32tof16(position4.x) | (f32tof16(position4.y) << 16);
+            const uint packedZw = f32tof16(position4.z) | (f32tof16((hasNormal && hasTangent) ? T.x : position4.w) << 16);
+            output.Store2(posOffset, uint2(packedXy, packedZw));
+        }
+    }
 	else if(isDynamic)
     {
         // Save last frame's skinned position into the previous-position region (stored after the
@@ -239,7 +272,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 		{
 			// tangent.x is packed into pos.w, which only exists when the layout has a position attribute.
 			// No-position meshes (e.g. dynamic mesh) reconstruct tangent.x on read, so don't write it here.
-			if (hasPosition)
+			if (hasPosition && vertexDesc.HasFlag(VertexFlags::FullPrec))
 				output.Store(posOffset + 12, asuint(T.x));             // tangent.x
 
 			output.Store(normOffset, PackByte4SNorm(float4(N, T.y)));   // normal.xyz + tangent.y

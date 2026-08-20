@@ -20,6 +20,7 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 	m_VertexDesc = manager->GetVertexDesc();
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(m_VertexDesc);
+	const nvrhi::Format vertexFormat = Util::Geometry::GetVertexPositionFormat(m_VertexDesc);
 	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(parent);
 
 	const auto& indexBuffer = manager->GetIndexBuffer();
@@ -31,7 +32,7 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 	m_GeometryEntries.push_back({ MakeGeometryDesc(
 		indexBuffer.m_Buffer, indexOffset, numTris * 3u,
 		vertexBuffer.m_Buffer, vertexOffset, vertexStride, triShapeData.vertexCount,
-		manager->GetMeshIndex()), AllocateGeometryIndex() });
+		manager->GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
 
 	m_Material = manager->GetMaterial();
 }

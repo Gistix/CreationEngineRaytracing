@@ -107,7 +107,7 @@ namespace Util
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, false, false);
 
-			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::PT_DISPATCH_THREADS);
+			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::DEBUG_DISPATCH_THREADS);
 
 			return defines;
 		}

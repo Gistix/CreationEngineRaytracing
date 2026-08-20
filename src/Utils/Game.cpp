@@ -11,8 +11,10 @@ namespace Util
 			static float& cameraNear = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x40));
 			static float& cameraFar = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x44));
 #elif defined(FALLOUT4)
-			static float& cameraNear = *(float*)REL::ID(57985).address();
-			static float& cameraFar = *(float*)REL::ID(958877).address();
+			const auto& shaderState = Util::Adapter::GetShaderManagerState();
+
+			float cameraNear = *reinterpret_cast<const float*>(reinterpret_cast<const std::uint8_t*>(&shaderState) + 0x160);
+			float cameraFar = *reinterpret_cast<const float*>(reinterpret_cast<const std::uint8_t*>(&shaderState) + 0x164);
 #endif
 
 			float4 cameraData{};

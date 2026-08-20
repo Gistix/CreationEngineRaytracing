@@ -73,15 +73,26 @@ namespace Pass
 			0.0f);
 
 		// Directional Light
-#if defined(SKYRIM)
 		{
+#if defined(SKYRIM)
 			auto dirLight = ce_cast<RE::NiDirectionalLight*>(Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData().sunLight->light.get());
 			auto& lightRuntimeData = dirLight->GetLightRuntimeData();
 			m_RaytracingData->DirectionalLight.Direction = -Util::Math::Normalize(Util::Math::Float3(dirLight->GetWorldDirection()));
 			m_RaytracingData->DirectionalLight.Color = Util::Math::Float3(lightRuntimeData.diffuse);
 			m_RaytracingData->DirectionalLight.Fade = lightRuntimeData.fade;
-		}
+#elif defined(FALLOUT4)
+			auto ssn = Util::Adapter::GetShadowSceneNode(0);
+			if (ssn && ssn->sunLight && ssn->sunLight->light) {
+				auto* dirLight = static_cast<RE::NiDirectionalLight*>(ssn->sunLight->light.get());
+				if (dirLight) {
+					auto runtimeData = Util::Adapter::GetLightRuntimeData(dirLight);
+					m_RaytracingData->DirectionalLight.Direction = -Util::Math::Normalize(float3(dirLight->world.rotate.entry[0][0], dirLight->world.rotate.entry[1][0], dirLight->world.rotate.entry[2][0]));
+					m_RaytracingData->DirectionalLight.Color = Util::Math::Float3(runtimeData.diffuse);
+					m_RaytracingData->DirectionalLight.Fade = runtimeData.fade;
+				}
+			}
 #endif
+		}
 
 		// SSS
 		{

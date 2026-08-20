@@ -23,7 +23,6 @@
 #   include "interop/Material/Fallout4/LightingMaterialData.hlsli"
 #   include "interop/Material/Fallout4/WaterMaterialData.hlsli"
 #   include "interop/Material/Fallout4/GlowmapMaterialData.hlsli"
-#   include "interop/Material/Fallout4/PBRMaterialData.hlsli"
 #endif
 
 bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed)
@@ -181,7 +180,11 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             return false;
         }
     
+#if defined(SKYRIM)
         if ((material.Feature == Feature::kGlowMap || material.Type == Type::TruePBR) && props.ShaderFlags & ShaderFlags::kAssumeShadowmask)
+#else
+        if (material.Feature == Feature::kGlowMap && props.ShaderFlags & ShaderFlags::kAssumeShadowmask)
+#endif
         {
             float3 transmittance = 0.0f;
             float3 F0 = 0.04f;
@@ -211,6 +214,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                     F0 = clamp(0.08f * specularColor, 0.02f, 0.08f);
                 }
             }
+#if defined(SKYRIM)
             else
             {
                 PBRMaterialData pbr = Materials[0].Load<PBRMaterialData>(mesh.GetMaterialOffset());
@@ -221,6 +225,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 transmittance = emissive;
                 F0 = pbr.SpecularLevel * specular;
             }
+#endif
 
             float3 Normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, material, texCoord);
             ApplyFresnelTransmittance(Normal, F0, direction, transmittance, transmitanceInOut);

@@ -166,7 +166,7 @@ protected:
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(
 		nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount,
 		nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount,
-		uint32_t transformIndex);
+		uint32_t transformIndex, nvrhi::Format vertexFormat = nvrhi::Format::RGB32_FLOAT);
 
 	void CreateMaterial();
 

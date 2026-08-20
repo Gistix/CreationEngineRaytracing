@@ -26,12 +26,10 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 	if (geometryData.rendererData) {
-#if defined(SKYRIM)
-		if (auto* extra = bsTriShape->GetExtraData<RE::NiIntegersExtraData>(Constants::ExtraData::LandLOD)) {
+		if (auto* extra = Util::Adapter::GetIntegersExtraData(bsTriShape, Constants::ExtraData::LandLOD)) {
 			if (extra->size > 0 && extra->value[0] == 4)
 				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
 		}
-#endif
 
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
@@ -253,7 +251,7 @@ void BaseMesh::CommitDirtyFlags()
 	ClearDirtyFlags();
 }
 
-nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex, nvrhi::Format vertexFormat)
 {
 	nvrhi::rt::GeometryDesc geometryDesc;
 
@@ -266,7 +264,7 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 
 	geometryTriangles.vertexBuffer = vertexBuffer;
 	geometryTriangles.vertexOffset = vertexOffset; // Byte offset into vertex buffer GPU VA
-	geometryTriangles.vertexFormat = nvrhi::Format::RGB32_FLOAT;
+	geometryTriangles.vertexFormat = vertexFormat;
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;
 

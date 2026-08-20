@@ -665,7 +665,7 @@ namespace Util
 #if defined(SKYRIM)
 			return RE::BSShaderManager::State::GetSingleton();
 #elif defined(FALLOUT4)
-			static REL::Relocation<RE::BSShaderManager::State*> singleton{ REL::ID(1287208) };
+			static REL::Relocation<RE::BSShaderManager::State*> singleton{ REL::VariantID(1287208, 2712479) };
 			return *singleton;
 #endif
 		}
@@ -810,6 +810,25 @@ namespace Util
 #elif defined(FALLOUT4)
 			const auto& state = GetShaderManagerState();
 			return *reinterpret_cast<const float4*>(reinterpret_cast<const std::uint8_t*>(&state) + 0x44); // State::loadedRange
+#endif
+		}
+
+		RE::ShadowSceneNode* GetShadowSceneNode(uint32_t index)
+		{
+#if defined(SKYRIM)
+			return RE::BSShaderManager::State::GetSingleton().shadowSceneNode[index];
+#elif defined(FALLOUT4)
+			const auto& state = GetShaderManagerState();
+			return *reinterpret_cast<RE::ShadowSceneNode* const*>(reinterpret_cast<const std::uint8_t*>(&state) + index * sizeof(void*));
+#endif
+		}
+
+		RE::NiIntegersExtraData* GetIntegersExtraData(RE::BSTriShape* a_triShape, const char* a_name)
+		{
+#if defined(SKYRIM)
+			return a_triShape->GetExtraData<RE::NiIntegersExtraData>(a_name);
+#elif defined(FALLOUT4)
+			return static_cast<RE::NiIntegersExtraData*>(a_triShape->GetExtraData(a_name));
 #endif
 		}
 	}
