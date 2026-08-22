@@ -128,11 +128,16 @@ namespace Util
 			return ((vertexDescUInt & 0xF) << 2);
 		}
 
-		nvrhi::Format GetVertexPositionFormat(RE::BSGraphics::VertexDesc desc)
+		nvrhi::Format GetVertexPositionFormat([[ maybe_unused ]] RE::BSGraphics::VertexDesc desc)
 		{
+#if defined(SKYRIM)
+			// Skyrim is always full precision and doesn't use the FullPrec flag at all
+			return nvrhi::Format::RGB32_FLOAT;
+#else
 			const auto vertexDescUInt = *reinterpret_cast<const uint64_t*>(&desc);
 			auto vertexDesc = VertexDesc(vertexDescUInt);
 			return vertexDesc.HasFlag(VertexFlags::FullPrec) ? nvrhi::Format::RGB32_FLOAT : nvrhi::Format::RGBA16_FLOAT;
+#endif
 		}
 
 		bool IsDismemberSkinInstance(RE::NiObject* skinInstance)
@@ -150,9 +155,6 @@ namespace Util
 			outVisibility.clear();
 
 #if defined(SKYRIM)
-			if (!skinInstance)
-				return;
-
 			auto& runtime = reinterpret_cast<RE::BSDismemberSkinInstance*>(skinInstance)->GetRuntimeData();
 			outVisibility.resize(runtime.numPartitions);
 

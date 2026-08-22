@@ -342,7 +342,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 		// Dismember update.
 		if (m_Flags.all(Flags::DismemberSkinInstance)) {
 			const auto previousVisibility = m_PartitionVisibility;
-			Util::Geometry::GetDismemberPartitionVisibility(m_BSTriShape, m_PartitionVisibility);
+			Util::Geometry::GetDismemberPartitionVisibility(geometryData.skinInstance, m_PartitionVisibility);
 
 			if (previousVisibility != m_PartitionVisibility)
 				MarkDirty(DirtyFlags::Visibility);

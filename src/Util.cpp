@@ -134,8 +134,6 @@ namespace Util
 			LogBufferDesc(d3d11Buffer);
 			return;
 		}
-
-		LogBufferDesc(d3d11Buffer);
 	};
 
 #if defined(SKYRIM)

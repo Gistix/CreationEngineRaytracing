@@ -34,16 +34,22 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
+#if defined(FALLOUT4)
+		// Does this mean DynamicMesh has rendererData in Fallout4?
+		// It would also apply for SkinnedMesh
 		if (!geometryData.rendererData->vertexDesc.HasFlag(RE::BSGraphics::Vertex::Flags::VF_VERTEX)) {
 			logger::warn("BaseMesh::Create - Mesh {} has no vertex position.", MakeDebugName(bsTriShape).c_str());
 			return nullptr;
 		}
+#endif
 
 		return eastl::make_unique<Mesh>(bsTriShape, commandList);
 	}
 
-	//if (auto bsDynamicTriShape = Util::Adapter::AsDynamicTriShape(bsTriShape))
-	//	return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
+#if !defined(FALLOUT4)
+	if (auto bsDynamicTriShape = Util::Adapter::AsDynamicTriShape(bsTriShape))
+		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
+#endif
 
 	if (geometryData.skinInstance)
 		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);

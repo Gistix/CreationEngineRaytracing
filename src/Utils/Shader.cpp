@@ -25,9 +25,6 @@ namespace Util
 			if (settings.AdvancedSettings.GGXEnergyConservation)
 				defines.emplace_back(L"GGX_ENERGY_CONSERVATION");
 
-			if (settings.AdvancedSettings.PerLightTLAS)
-				defines.emplace_back(L"USE_LIGHT_TLAS", L"1");
-
 			if (settings.AdvancedSettings.RIS.Enabled) {
 				defines.emplace_back(L"RIS");
 				defines.emplace_back(L"RIS_MAX_CANDIDATES", settings.AdvancedSettings.RIS.MaxCandidates);

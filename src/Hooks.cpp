@@ -16,7 +16,17 @@ namespace Hooks
 
 			D3D11_BUFFER_DESC desc = *pDesc;
 
-			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0)
+			bool shareBuffer = (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0);
+
+#if defined(SKYRIM)
+			shareBuffer &= (desc.BindFlags & D3D11_BIND_VERTEX_BUFFER) || (desc.BindFlags & D3D11_BIND_INDEX_BUFFER);
+
+			// Byte address buffers must be aligned to 4 bytes
+			if (shareBuffer && (desc.BindFlags & D3D11_BIND_INDEX_BUFFER))
+				desc.ByteWidth = (desc.ByteWidth + 3u) & ~3u;
+#endif
+
+			if (shareBuffer)
 				desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
 
 			auto hr = func(a_device, &desc, pInitialData, ppBuffer);
@@ -363,6 +373,8 @@ namespace Hooks
 		func(oThis);
 	}
 
+
+
 	template <std::derived_from<RE::NiCullingProcess> T>
 	struct NiCullingProcess_AppendVirtual
 	{
@@ -661,6 +673,8 @@ namespace Hooks
 
 		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
 		
+
+
 		// Terrain LOD
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
 		//stl::detour_thunk<BGSTerrainBlock_Dtor>(REL::RelocationID(30933, 31736));
