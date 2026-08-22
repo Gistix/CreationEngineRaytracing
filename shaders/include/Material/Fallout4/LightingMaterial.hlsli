@@ -8,8 +8,23 @@
 #include "interop/Properties.hlsli"
 #include "interop/Material/MaterialBaseData.hlsli"
 #include "interop/Material/Fallout4/LightingMaterialData.hlsli"
+#include "interop/Material/Fallout4/EnvmapMaterialData.hlsli"
+#include "interop/Material/Fallout4/EyeMaterialData.hlsli"
 
 #include "include/Material/Fallout4/Common.hlsli"
+
+float EstimateMetallic(float3 albedo, float3 specularColor)
+{
+    float3 d = albedo - 0.04.xxx;
+    float3 n = specularColor - 0.04.xxx;
+
+    float3 m = n / max(abs(d), 1e-5);
+
+    // Least-squares solution across RGB.
+    float metallic = dot(d, n) / max(dot(d, d), 1e-5);
+
+    return saturate(metallic);
+}
 
 void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, Properties props, float4 boneRotation, float3 viewDir, float dist)
 {
@@ -19,32 +34,82 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     float4 diffuse = diffuseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
 
     Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
-    float4 normalMap = normalTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
+    float3 normalMap = normalTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel).xyz;
 
     Texture2D specMaskTexture = Textures[NonUniformResourceIndex(material.SmoothnessSpecMaskTexture)];
     float4 specMask = specMaskTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
 
-    surface.Albedo = ColorToLinear(diffuse.xyz) * ColorToLinear(vertexColor.xyz);
+    surface.Albedo = diffuse.xyz * vertexColor.xyz;
     
+    if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+    {
+        // Swizzle matches vanilla shaders        
+        normalMap = normalize(normalMap.xzy * 2.0f - 1.0f);
+        
+        if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
+        {
+            surface.Normal = RotateByQuaternion(normalMap, boneRotation);
+            CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
+        }
+        else
+        {
+            surface.Normal = normalMap;
+        }
+        
+        // Use shading values since the geometry ones aren't available
+        surface.GeomNormal = surface.Normal;
+        surface.GeomTangent = surface.Tangent;
+    }
+    else
+    {
+        NormalMap(
+            normalMap,
+            normalWS, tangentWS, bitangentWS,
+            surface.Normal, surface.Tangent, surface.Bitangent
+        );
+    }
+    
+    surface.Normal = -surface.Normal;
+    surface.Tangent = -surface.Tangent;
+    surface.Bitangent = -surface.Bitangent;
+    
+    surface.Roughness = 1.0f - saturate(material.Smoothness * specMask.y);
+    
+    [branch]
+    if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
+    {
+        uint16_t envMaskTexIndex;
+        uint16_t envTexIndex;
+        float envScale = 1.0f;
+        
+        if (material.Feature == Feature::kEye)
+        {
+            EyeMaterialDataExtra eye = Materials[0].Load<EyeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+            envMaskTexIndex = eye.EnvironmentMaskTexture;
+            envTexIndex = eye.EnvironmentTexture;
+            envScale = eye.EnvironmentScale;
+        }
+        else
+        {
+            EnvmapMaterialDataExtra envMap = Materials[0].Load<EnvmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+            envMaskTexIndex = envMap.EnvironmentMaskTexture;
+            envTexIndex = envMap.EnvironmentTexture;
+            envScale = envMap.EnvironmentScale;
+        }
+
+        Texture2D envMaskTexture = Textures[NonUniformResourceIndex(envMaskTexIndex)];
+        float4 envMask = envMaskTexture.SampleLevel(DefaultSampler, texCoord0, 0);
+       
+        //surface.Metallic = specMask.x * envMask.x * envScale;
+        TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(envTexIndex)];
+        float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
+        //surface.Metallic = EstimateMetallic(surface.Albedo, envMask.x * envColorBase.xyz * envScale);
+    }
+
+    //const float3 specularity = specMask.x * material.SpecularColor * material.SpecularColorScale;
+    //urface.F0 = lerp(float3(0.04f, 0.04f, 0.04f), surface.Albedo, surface.Metallic) * saturate(specularity);
+  
     float alpha = diffuse.a * material.MaterialAlpha;
-    surface.GeomNormal = normalWS;
-
-    float3 normal = normalMap.xyz * 2.0 - 1.0;
-    float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
-    surface.Normal = normalize(mul(normal, tbnTr));
-
-    // Basic mapping for FO4, avoiding Skyrim's VanillaToPBR logic for now.
-    // The mask texture is specular in R and smoothness in G? FO4 typically packs Smoothness in G, Spec in R or inversely?
-    // Let's just use the material properties directly.
-    float smoothness = material.Smoothness * specMask.y; // Guessing mask channels
-    surface.Roughness = ShininessToRoughness(smoothness * 100.0f); // Adjust mapping
-    surface.Metallic = material.WetnessControl_Metalness; // From wetness block or standard mask?
-    
-    // Instead of Surface.Specular, we compute F0
-    float specularity = max(material.SpecularColor.r, max(material.SpecularColor.g, material.SpecularColor.b)) * material.SpecularColorScale * specMask.x;
-    surface.F0 = lerp(float3(0.04f, 0.04f, 0.04f), surface.Albedo, surface.Metallic) * saturate(specularity);
-
-    
     
     [branch]
     if (props.AlphaFlags != AlphaFlags::None)

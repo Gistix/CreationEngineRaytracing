@@ -28,6 +28,7 @@ void EyeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	if (m_EnvironmentTexture.Update(mat->envTexture.get(), renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
 		data->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
+
 	if (m_EnvironmentMaskTexture.Update(mat->envMaskTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->EnvironmentMaskTexture = m_EnvironmentMaskTexture.texture.GetDescriptorIndex();
 }

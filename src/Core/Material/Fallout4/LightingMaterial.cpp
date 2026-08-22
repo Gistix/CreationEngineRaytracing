@@ -43,12 +43,16 @@ void LightingMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	if (m_DiffuseTexture.Update(lighting->diffuseTexture.get(), renderer->GetGrayTextureDescriptor()))
 		data->DiffuseTexture = m_DiffuseTexture.texture.GetDescriptorIndex();
+
 	if (m_NormalTexture.Update(lighting->normalTexture.get(), renderer->GetNormalTextureDescriptor()))
 		data->NormalTexture = m_NormalTexture.texture.GetDescriptorIndex();
+
 	if (m_RimSoftLightingTexture.Update(lighting->rimSoftLightingTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->RimSoftLightingTexture = m_RimSoftLightingTexture.texture.GetDescriptorIndex();
+
 	if (m_SmoothnessSpecMaskTexture.Update(lighting->smoothnessSpecMaskTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->SmoothnessSpecMaskTexture = m_SmoothnessSpecMaskTexture.texture.GetDescriptorIndex();
+
 	if (m_LookupTexture.Update(lighting->lookupTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->LookupTexture = m_LookupTexture.texture.GetDescriptorIndex();
 }

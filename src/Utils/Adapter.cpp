@@ -708,6 +708,46 @@ namespace Util
 #endif
 		}
 
+		CameraRuntimeData GetCameraRuntimeData()
+		{
+			CameraRuntimeData data{};
+#if defined(SKYRIM)
+			auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
+			auto cameraData = runtimeData.cameraData.getEye();
+
+			data.viewMat = cameraData.viewMat;
+			data.projMat = cameraData.projMat;
+			data.viewProjMatrixUnjittered = cameraData.viewProjMatrixUnjittered;
+			data.previousViewProjMatrixUnjittered = cameraData.previousViewProjMatrixUnjittered;
+			data.posAdjust = Util::Math::Float3(runtimeData.posAdjust.getEye());
+			data.previousPosAdjust = Util::Math::Float3(runtimeData.previousPosAdjust.getEye());
+#elif defined(FALLOUT4)
+			auto& state = Util::Adapter::GetGraphicsState();
+			const auto* mainCam = RE::Main::WorldRootCamera();
+
+			const RE::BSGraphics::CameraStateData* cameraDataUnjittered = nullptr;
+			const RE::BSGraphics::CameraStateData* cameraData = nullptr;
+
+			for (auto& cameraDataCache : state.cameraDataCache)
+			{
+				if (mainCam == cameraDataCache.referenceCamera) {
+					if (cameraDataCache.useJitter)
+						cameraDataUnjittered = &cameraDataCache;
+					else
+						cameraData = &cameraDataCache;
+				}
+			}
+
+			auto& camViewData = cameraData->camViewData;
+			data.viewMat = reinterpret_cast<const float4x4&>(camViewData.viewMat);
+			data.projMat = reinterpret_cast<const float4x4&>(camViewData.projMat);
+			data.viewProjMatrixUnjittered = reinterpret_cast<const float4x4&>(camViewData.viewProjUnjittered);
+			data.posAdjust = Util::Math::Float3(cameraData->posAdjust);
+			data.previousPosAdjust = Util::Math::Float3(cameraData->previousPosAdjust);
+#endif
+			return data;
+		}
+
 		RE::SceneGraph* GetWorldRootNode()
 		{
 #if defined(SKYRIM)

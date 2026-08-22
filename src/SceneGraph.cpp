@@ -207,6 +207,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 #if defined(SKYRIM)
 	auto& mainSSNRuntimeData = shadowSceneNode->GetRuntimeData();
 	auto& activeLights = mainSSNRuntimeData.activeLights;
+	auto& activeShadowLights = mainSSNRuntimeData.activeShadowLights;
 #elif defined(FALLOUT4)
 	auto& activeLights = shadowSceneNode->activeLights;
 	auto& activeShadowLights = shadowSceneNode->activeShadowLights;

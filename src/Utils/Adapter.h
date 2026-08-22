@@ -5,6 +5,7 @@
 #include "Types/GeometryRuntimeData.h"
 #include "Types/LightRuntimeData.h"
 #include "Types/PointLightRuntimeData.h"
+#include "Types/CameraRuntimeData.h"
 #include "Types/MenuState.h"
 
 namespace RE
@@ -151,6 +152,7 @@ namespace Util
 		float2 GetDynamicResolutionRatios();
 
 		const RE::BSGraphics::ViewData GetCameraEyeViewData();
+		CameraRuntimeData GetCameraRuntimeData();
 
 		RE::SceneGraph* GetWorldRootNode();
 

@@ -186,7 +186,8 @@ namespace Pass::NRD
 					{ nvrhi::ShaderType::Compute, pipeline.debugName.c_str(), instanceDesc.shaderEntryPoint },
 					pipelineDesc.computeShaderDXIL.bytecode,
 					size_t(pipelineDesc.computeShaderDXIL.size));
-			} else {
+			}
+			else {
 				std::string shaderIdentifier = pipelineDesc.shaderIdentifier;
 				eastl::vector<std::string> tokens;
 
@@ -405,7 +406,8 @@ namespace Pass::NRD
 			m_RelaxSettings.depthThreshold = eastl::max(relaxSettings.depthThreshold, 0.0f);
 			m_RelaxSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
 			m_RelaxSettings.enableRoughnessEdgeStopping = relaxSettings.enableRoughnessEdgeStopping;
-		} else {
+		}
+		else {
 			auto& reblurSettings = settings.NRDReblurSettings;
 
 			m_ReblurSettings.maxAccumulatedFrameNum = eastl::min(reblurSettings.maxAccumulatedFrameNum, nrd::REBLUR_MAX_HISTORY_FRAME_NUM);
@@ -449,18 +451,14 @@ namespace Pass::NRD
 
 	void NRDIntegration::UpdateCommonSettings()
 	{
-#if defined(SKYRIM)
 		auto* renderer = Renderer::GetSingleton();
-
-		auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
-
-		auto cameraData = runtimeData.cameraData.getEye();
+		const auto& cameraRuntimeData = Scene::GetSingleton()->GetCameraRuntimeData();
 
 		std::memcpy(m_CommonSettings.worldToViewMatrixPrev, m_CommonSettings.worldToViewMatrix, sizeof(float4x4));
 		std::memcpy(m_CommonSettings.viewToClipMatrixPrev, m_CommonSettings.viewToClipMatrix, sizeof(float4x4));
 
 		// Get camera's world position
-		float3 cameraWorldPos = Util::Math::Float3(runtimeData.posAdjust.getEye());
+		const float3& cameraWorldPos = cameraRuntimeData.posAdjust;
 
 		// Create a translation matrix for the inverse of the camera's world position
 		DirectX::XMMATRIX translationMat = DirectX::XMMatrixTranslation(-cameraWorldPos.x, -cameraWorldPos.y, -cameraWorldPos.z);
@@ -468,13 +466,13 @@ namespace Pass::NRD
 		// Combine view rotation with translation to get the full world-to-view matrix
 		// NRD expects worldToViewMatrix to transform from world space to camera space, including translation.
 		// So, V_full = ViewRotationMatrix * TranslationMatrix(-CameraWorldPosition)
-		DirectX::XMMATRIX worldToViewMat = DirectX::XMMatrixMultiply(translationMat, cameraData.viewMat);
+		DirectX::XMMATRIX worldToViewMat = DirectX::XMMatrixMultiply(translationMat, cameraRuntimeData.viewMat);
 
 		// Set full world to view
 		std::memcpy(m_CommonSettings.worldToViewMatrix, &worldToViewMat, sizeof(float4x4));
 
 		// Set original projection
-		std::memcpy(m_CommonSettings.viewToClipMatrix, &cameraData.projMat, sizeof(float4x4));
+		std::memcpy(m_CommonSettings.viewToClipMatrix, &cameraRuntimeData.projMat, sizeof(float4x4));
 
 		const auto resolution = renderer->GetResolution();
 		auto dynamicResolution = renderer->GetScaledDynamicResolution();
@@ -507,26 +505,25 @@ namespace Pass::NRD
 		m_CommonSettings.rectSize[1] = static_cast<uint16_t>(dynamicResolution.y);
 
 		m_CommonSettings.denoisingRange = 1e6f;
-#endif
 	}
 
-		bool NRDIntegration::IsDownscaled() const
-		{
-			return Scene::GetSingleton()->GetResolutionScale() != 1.0f;
-		}
+	bool NRDIntegration::IsDownscaled() const
+	{
+		return Scene::GetSingleton()->GetResolutionScale() != 1.0f;
+	}
 
-		nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
-		{
-			auto* renderer = Renderer::GetSingleton();
-			auto* renderTargets = renderer->GetRenderTargets();
-			
-			auto& textureManager = renderer->RenderTargetManager();
+	nvrhi::ITexture* NRDIntegration::GetDispatchResource(const nrd::ResourceDesc& resource) const
+	{
+		auto* renderer = Renderer::GetSingleton();
+		auto* renderTargets = renderer->GetRenderTargets();
 
-			auto* viewDepth = textureManager.GetTexture(RenderTarget::ViewDepth);
-			auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
-			auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
+		auto& textureManager = renderer->RenderTargetManager();
 
-			const bool downscaled = IsDownscaled();
+		auto* viewDepth = textureManager.GetTexture(RenderTarget::ViewDepth);
+		auto* diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
+		auto* specularTexture = textureManager.GetTexture(RenderTarget::SpecularRadiance);
+
+		const bool downscaled = IsDownscaled();
 
 		switch (resource.type) {
 		case nrd::ResourceType::IN_MV:
@@ -652,7 +649,7 @@ namespace Pass::NRD
 			const Pipeline& pipeline = m_Pipelines[dispatchDesc.pipelineIndex];
 			if (!pipeline.pipeline)
 				continue;
-			
+
 			commandList->beginMarker(dispatchDesc.name);
 
 			const nrd::PipelineDesc& pipelineDesc = instanceDesc.pipelines[dispatchDesc.pipelineIndex];
@@ -690,7 +687,8 @@ namespace Pass::NRD
 						}
 
 						srvTextures[srvBase + rangeResourceIndex] = texture;
-					} else {
+					}
+					else {
 						if (uavBase + rangeResourceIndex >= uavTextures.size()) {
 							logger::error("NRDIntegration: UAV range overflow for dispatch {}", dispatchDesc.name ? dispatchDesc.name : "<unnamed>");
 							return;
@@ -709,7 +707,7 @@ namespace Pass::NRD
 			auto& cache = m_DispatchBindingCaches[dispatchIndex];
 
 			bool cacheValid = cache.bindingSet.Get() != nullptr &&
-			                  cache.textures.size() == (srvTextures.size() + uavTextures.size());
+				cache.textures.size() == (srvTextures.size() + uavTextures.size());
 
 			if (cacheValid) {
 				size_t idx = 0;

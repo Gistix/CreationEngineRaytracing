@@ -41,7 +41,7 @@ namespace Hooks
 
 			D3D11_TEXTURE2D_DESC desc = *pDesc;
 
-			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0 && !(desc.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE))
+			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0)
 				desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
 
 			auto hr = func(a_device, &desc, pInitialData, ppTexture2D);

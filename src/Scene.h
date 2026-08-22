@@ -7,6 +7,7 @@
 #include "interop/CameraData.hlsli"
 #include "interop/SharedData.hlsli"
 
+#include "Types/CameraRuntimeData.h"
 #include "Types/MenuState.h"
 #include "Types/Settings.h"
 
@@ -17,6 +18,7 @@ struct Scene
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
 	eastl::unique_ptr<CameraData> m_CameraData;
+	mutable CameraRuntimeData m_CameraRuntimeData{};
 	nvrhi::BufferHandle m_CameraBuffer;
 
 	eastl::unique_ptr<FeatureData> m_FeatureData;
@@ -85,6 +87,7 @@ struct Scene
 	SceneGraph* GetSceneGraph() const;
 
 	inline auto GetCameraData() const { return m_CameraData.get(); }
+	inline const CameraRuntimeData& GetCameraRuntimeData() const { return m_CameraRuntimeData; }
 
 	inline auto GetCameraBuffer() const { return m_CameraBuffer; }
 
