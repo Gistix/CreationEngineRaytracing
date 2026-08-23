@@ -18,7 +18,13 @@ struct Scene
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
 	eastl::unique_ptr<CameraData> m_CameraData;
+
+#if defined(FALLOUT4)	
+	mutable CameraRuntimeData m_PrevCameraRuntimeData{};
+#endif
+
 	mutable CameraRuntimeData m_CameraRuntimeData{};
+
 	nvrhi::BufferHandle m_CameraBuffer;
 
 	eastl::unique_ptr<FeatureData> m_FeatureData;

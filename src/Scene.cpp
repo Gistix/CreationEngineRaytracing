@@ -238,6 +238,9 @@ void Scene::Execute()
 
 void Scene::UpdateCameraData() const
 {
+#if defined(FALLOUT4)
+	m_PrevCameraRuntimeData = m_CameraRuntimeData;
+#endif
 	m_CameraRuntimeData = Util::Adapter::GetCameraRuntimeData();
 
 	m_CameraData->PrevViewInverse = m_CameraData->ViewInverse;
@@ -253,7 +256,15 @@ void Scene::UpdateCameraData() const
 	m_CameraData->NDCToView = float4(ndcToViewMult.x, ndcToViewMult.y, ndcToViewAdd.x, ndcToViewAdd.y);
 
 	m_CameraData->Position = m_CameraRuntimeData.posAdjust;
+
+#if defined(FALLOUT4)
+	// Fallout 4 does not maintain previousViewProj/previousPosAdjust reliably
+	m_CameraData->PositionPrev = m_PrevCameraRuntimeData.posAdjust;
+	m_CameraData->PrevViewProj = m_PrevCameraRuntimeData.viewProjMatrixUnjittered;
+#else
 	m_CameraData->PositionPrev = m_CameraRuntimeData.previousPosAdjust;
+	m_CameraData->PrevViewProj = m_CameraRuntimeData.previousViewProjMatrixUnjittered;
+#endif
 
 	auto* renderer = Renderer::GetSingleton();
 
@@ -272,7 +283,6 @@ void Scene::UpdateCameraData() const
 
 	// Used by raster gbuffer
 	m_CameraData->ViewProj = m_CameraRuntimeData.viewProjMatrixUnjittered;
-	m_CameraData->PrevViewProj = m_CameraRuntimeData.previousViewProjMatrixUnjittered;
 
 	m_CameraData->Jitter = renderer->GetJitter();
 
