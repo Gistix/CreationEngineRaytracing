@@ -100,6 +100,7 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool sigma = (settings.GeneralSettings.ShadowDenoiser == ShadowDenoiser::NRD_Sigma) && nrd;
 
 		if (nrd || dlssrr) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Diffuse Albedo
@@ -135,6 +136,10 @@ namespace Pass
 
 			// ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(17)); // SurfaceDataBuffer
+		}
+
+		if (sigma) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(18)); // ShadowPenumbra
 		}
 
 #if defined(NVAPI)
@@ -340,6 +345,7 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool sigma = (settings.GeneralSettings.ShadowDenoiser == ShadowDenoiser::NRD_Sigma) && nrd;
 
 		if (nrd || dlssrr) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::DiffuseAlbedo)));
@@ -375,6 +381,10 @@ namespace Pass
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(15, rgi->secondaryGBufferDiffuseAlbedo));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(16, rgi->secondaryGBufferSpecularF0Roughness));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(17, rgi->surfaceDataBuffer));
+		}
+
+		if (sigma) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(18, textureManager.GetTexture(RenderTarget::ShadowPenumbra)));
 		}
 
 #if defined(NVAPI)

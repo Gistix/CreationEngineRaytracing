@@ -159,6 +159,9 @@ void Main()
         
         DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#           if defined(NRD_SIGMA)
+        ShadowPenumbra[idx] = SIGMA_FrontEnd_PackPenumbra(NRD_FP16_MAX, tan(SUN_ANGULAR_RADIUS));
+#           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
         SpecularHitDistance[idx] = 0;
@@ -176,6 +179,9 @@ void Main()
 #       if defined(NRD)
         DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#           if defined(NRD_SIGMA)
+        ShadowPenumbra[idx] = SIGMA_FrontEnd_PackPenumbra(NRD_FP16_MAX, tan(SUN_ANGULAR_RADIUS));
+#           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;                
@@ -708,6 +714,7 @@ void Main()
     // For non-delta lobes: standard NEE (EvaluateDirectRadiance) evaluates BSDF at sampled light directions.
     // For delta lobes: EvalDeltaLobeLighting checks if delta reflection/refraction directions fall within
     // each light source's solid angle, providing correct mirror reflections of analytical lights.
+    float primarySunHitDist = FLT_MAX;
     {
         const uint sourceLobes = sourceBSDF.GetLobes(sourceSurface);
         const bool sourceHasNonDeltaLobes = (sourceLobes & (uint)LobeType::NonDelta) != 0;
@@ -723,11 +730,11 @@ void Main()
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
                 StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
-                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true, primarySunHitDist);
             }
             else
 #endif
-                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
+                direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true, primarySunHitDist);
         }
         
         // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights.
@@ -1360,7 +1367,25 @@ void Main()
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;    
+#   if defined(NRD_SIGMA)
+    float penumbra = 0.0f;
+    if (dot(sourceSurface.Normal, DIRECTIONAL_LIGHT.Direction) > 0.0f)
+    {
+        float tanOfLightAngularRadius = tan(SUN_ANGULAR_RADIUS);
+        penumbra = SIGMA_FrontEnd_PackPenumbra(min(NRD_FP16_MAX, primarySunHitDist), tanOfLightAngularRadius);
+    }
+    ShadowPenumbra[idx] = penumbra;
+#   endif
 #else    
+#   if defined(NRD_SIGMA)
+    float penumbra = 0.0f;
+    if (dot(sourceSurface.Normal, DIRECTIONAL_LIGHT.Direction) > 0.0f)
+    {
+        float tanOfLightAngularRadius = tan(SUN_ANGULAR_RADIUS);
+        penumbra = SIGMA_FrontEnd_PackPenumbra(min(NRD_FP16_MAX, primarySunHitDist), tanOfLightAngularRadius);
+    }
+    ShadowPenumbra[idx] = penumbra;
+#   endif
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
 
 #   if defined(DLSS_RR)

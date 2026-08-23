@@ -104,8 +104,8 @@ void Scene::UpdateMode(Mode mode)
 
 		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
-		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
-		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
+		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination, tlasPtr);
+		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination, tlasPtr);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
 
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
@@ -134,8 +134,9 @@ void Scene::UpdateMode(Mode mode)
 		auto ptPass = eastl::make_unique<Pass::PathTracing>(renderer, tlasPtr, sharcPtr);
 		auto restirGI = eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(renderer, tlasPtr);
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::PathTracing, tlasPtr);
-		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
-		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::PathTracing);
+		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing, tlasPtr);
+		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::PathTracing, tlasPtr);
+		auto nrdSigmaPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::SIGMA_SHADOW, Mode::PathTracing, tlasPtr);
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
 		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);
 
@@ -149,6 +150,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
+		renderGraph->AddNode({ true, "NRD Sigma Shadow", eastl::move(nrdSigmaPass) });
 		renderGraph->AddNode({ true, "PT Composite", eastl::move(ptComposite) });
 		renderGraph->AddNode({ false, "Accumulation", eastl::move(accumulation) });
 	}
@@ -491,6 +493,7 @@ void Scene::UpdateSettings(Settings settings)
 
 	const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 		settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+	const bool sigma = (settings.GeneralSettings.ShadowDenoiser == ShadowDenoiser::NRD_Sigma) && nrd;
 
 	if (currentMode == Mode::GlobalIllumination) {
 		// NRDIntegration nodes gate themselves per denoiser variant in SettingsChanged
@@ -499,7 +502,7 @@ void Scene::UpdateSettings(Settings settings)
 		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
 		const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
 		renderGraph->SetEnabled<Pass::Common::Accumulation>(accumulation);
-		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd);
+		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd || sigma);
 	}
 
 	renderGraph->SettingsChanged(settings); 

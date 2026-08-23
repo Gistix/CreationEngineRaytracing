@@ -26,6 +26,8 @@ struct RenderTargetManager
 		DownscaledMotionVectors,
 		DownscaledNormalRoughness,
 		Accumulation,
+		ShadowPenumbra,
+		DenoisedShadow,
 		Total
 	};
 

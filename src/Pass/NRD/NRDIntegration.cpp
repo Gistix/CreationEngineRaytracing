@@ -1,5 +1,6 @@
 #include "NRDIntegration.h"
 
+#include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "ShaderUtils.h"
@@ -7,8 +8,8 @@
 
 namespace Pass::NRD
 {
-	NRDIntegration::NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode)
-		: RenderPass(renderer), kDenoiser(denoiser), m_Mode(mode)
+	NRDIntegration::NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode, Pass::SceneTLAS* sceneTLAS)
+		: RenderPass(renderer), kDenoiser(denoiser), m_Mode(mode), m_SceneTLAS(sceneTLAS)
 	{
 		auto device = GetRenderer()->GetDevice();
 
@@ -39,6 +40,8 @@ namespace Pass::NRD
 
 		// Required when using probabilistic sampling
 		m_RelaxSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
+
+		m_SigmaSettings = {};
 
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
 		Setup();
@@ -370,6 +373,10 @@ namespace Pass::NRD
 	{
 		if (IsRelax())
 			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+		else if (IsSigma())
+			m_Enabled = (settings.GeneralSettings.ShadowDenoiser == ShadowDenoiser::NRD_Sigma) &&
+				(settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur || settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) &&
+				!settings.SHaRCSettings.Enabled;
 		else
 			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur);
 
@@ -406,6 +413,12 @@ namespace Pass::NRD
 			m_RelaxSettings.depthThreshold = eastl::max(relaxSettings.depthThreshold, 0.0f);
 			m_RelaxSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
 			m_RelaxSettings.enableRoughnessEdgeStopping = relaxSettings.enableRoughnessEdgeStopping;
+		}
+		else if (IsSigma()) {
+			auto& sigmaSettings = settings.NRDSigmaSettings;
+
+			m_SigmaSettings.planeDistanceSensitivity = eastl::max(sigmaSettings.planeDistanceSensitivity, 0.0f);
+			m_SigmaSettings.maxStabilizedFrameNum = eastl::min(sigmaSettings.maxStabilizedFrameNum, nrd::SIGMA_MAX_HISTORY_FRAME_NUM);
 		}
 		else {
 			auto& reblurSettings = settings.NRDReblurSettings;
@@ -540,6 +553,10 @@ namespace Pass::NRD
 			return diffuseTexture;
 		case nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST:
 			return specularTexture;
+		case nrd::ResourceType::IN_PENUMBRA:
+			return textureManager.GetTexture(RenderTarget::ShadowPenumbra);
+		case nrd::ResourceType::OUT_SHADOW_TRANSLUCENCY:
+			return textureManager.GetTexture(RenderTarget::DenoisedShadow);
 		case nrd::ResourceType::TRANSIENT_POOL:
 			return resource.indexInPool < m_TransientPool.size() ? m_TransientPool[resource.indexInPool] : nullptr;
 		case nrd::ResourceType::PERMANENT_POOL:
@@ -578,9 +595,21 @@ namespace Pass::NRD
 		if (!m_NRD)
 			return;
 
-		if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser !=
-			(IsRelax() ? Denoiser::NRD_Relax : Denoiser::NRD_Reblur))
-			return;
+		const auto& generalSettings = Scene::GetSingleton()->m_Settings.GeneralSettings;
+		if (IsRelax()) {
+			if (generalSettings.Denoiser != Denoiser::NRD_Relax)
+				return;
+		}
+		else if (IsSigma()) {
+			if (generalSettings.ShadowDenoiser != ShadowDenoiser::NRD_Sigma ||
+				(generalSettings.Denoiser != Denoiser::NRD_Reblur && generalSettings.Denoiser != Denoiser::NRD_Relax) ||
+				Scene::GetSingleton()->m_Settings.SHaRCSettings.Enabled)
+				return;
+		}
+		else {
+			if (generalSettings.Denoiser != Denoiser::NRD_Reblur)
+				return;
+		}
 
 		if (m_ResourcesDirty) {
 			CreateResources();
@@ -606,9 +635,23 @@ namespace Pass::NRD
 			}
 		}
 
+		if (IsSigma()) {
+			const auto& lightDir = m_SceneTLAS->GetRaytracingData()->DirectionalLight.Direction;
+			if (m_SigmaSettings.lightDirection[0] != lightDir.x ||
+				m_SigmaSettings.lightDirection[1] != lightDir.y ||
+				m_SigmaSettings.lightDirection[2] != lightDir.z) {
+				m_SigmaSettings.lightDirection[0] = lightDir.x;
+				m_SigmaSettings.lightDirection[1] = lightDir.y;
+				m_SigmaSettings.lightDirection[2] = lightDir.z;
+				m_SettingsDirty = true;
+			}
+		}
+
 		if (m_SettingsDirty) {
 			if (IsRelax())
 				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_RelaxSettings);
+			else if (IsSigma())
+				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_SigmaSettings);
 			else
 				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_ReblurSettings);
 			m_SettingsDirty = false;

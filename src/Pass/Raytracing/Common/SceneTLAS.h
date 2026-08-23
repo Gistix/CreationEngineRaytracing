@@ -22,6 +22,7 @@ namespace Pass
 		SceneTLAS(Renderer* renderer);
 
 		nvrhi::IBuffer* GetRaytracingBuffer();
+		const RaytracingData* GetRaytracingData() const { return m_RaytracingData.get(); }
 		TopLevelAS& GetTopLevelAS();
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;

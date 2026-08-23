@@ -55,14 +55,21 @@ namespace Util
 				defines.emplace_back(L"SUBSURFACE_SCATTERING");
 
 			if (!sharc || (sharc && !sharcUpdate)) {
-				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
+				const bool reblur = settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur;
+				const bool relax = settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax;
+
+				if (reblur) {
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_REBLUR", L"1");
-				} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
+				} else if (relax) {
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_RELAX", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
+
+				if (settings.GeneralSettings.ShadowDenoiser == ShadowDenoiser::NRD_Sigma && (reblur || relax)) {
+					defines.emplace_back(L"NRD_SIGMA", L"1");
+				}
 
 				if (settings.AdvancedSettings.StablePlanes)
 					defines.emplace_back(L"STABLE_PLANES");

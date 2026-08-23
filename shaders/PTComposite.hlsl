@@ -11,13 +11,16 @@ Texture2D<float4> SpecularRadiance      : register(t2);
 #if defined(NRD)
 Texture2D<float3> DiffuseFactor         : register(t3);
 Texture2D<float3> SpecularFactor        : register(t4);
+#   if defined(NRD_SIGMA)
+Texture2D<float> DenoisedShadow         : register(t5);
+#   endif
 #endif
 
 RWTexture2D<float4> Output              : register(u0);
 
 #include "include/ColorConversions.hlsli"
 
-#if defined(NRD_REBLUR)
+#if defined(NRD_REBLUR) || defined(NRD_SIGMA)
 #include "include/NRD.hlsli"
 #endif
 
@@ -47,6 +50,11 @@ void Main(uint2 idx : SV_DispatchThreadID)
     diffuseRadiance *= float4(diffuseAlbedo, 1.0f);
 #endif
  
-    const float4 direct = Output[idx];    
+    float4 direct = Output[idx];
+#if defined(NRD_SIGMA)
+    float rawShadow = DenoisedShadow[idx];
+    float shadow = SIGMA_BackEnd_UnpackShadow(rawShadow);
+    direct.rgb *= shadow;
+#endif
     Output[idx] = float4(LLTrueLinearToGamma(direct.rgb + diffuseRadiance.rgb + specularRadiance.rgb), direct.a);
 }

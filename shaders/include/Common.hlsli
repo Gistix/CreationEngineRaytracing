@@ -8,6 +8,9 @@
 
 #define M_TO_GAME_UNIT (1.0f / (GAME_UNIT_TO_M))
 
+// Sun angular radius in radians (~0.266 degrees, ~0.53 degrees diameter)
+#define SUN_ANGULAR_RADIUS (0.00465f)
+
 #define DIV_EPSILON (1e-4f)
 #define LAND_MIN_WEIGHT (0.01f)
 

@@ -60,6 +60,10 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 		case RenderTarget::DownscaledNormalRoughness:
 			desc.format = nvrhi::Format::RGBA16_SNORM;
 			break;
+		case RenderTarget::ShadowPenumbra:
+		case RenderTarget::DenoisedShadow:
+			desc.format = nvrhi::Format::R16_FLOAT;
+			break;
 		default:
 			break;
 		}

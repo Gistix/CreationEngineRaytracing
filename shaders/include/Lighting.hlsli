@@ -95,7 +95,7 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
     irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Direction, Features.CloudShadows.Opacity);
 
     // Sun angular radius is ~0.00465 radians (~0.266 degrees)
-    float cosSunDisk = cos(0.00465f);
+    float cosSunDisk = cos(SUN_ANGULAR_RADIUS);
     lr = TangentToWorld(DIRECTIONAL_LIGHT.Direction, SampleConeUniform(randomSeed, cosSunDisk));
 
     // Correct MC weight for uniform cone sampling of a finite-size disk light.
@@ -103,23 +103,39 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
     irradiance *= 2.0f / (1.0f + cosSunDisk);
 }
 
-float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
+float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed, out float hitDist, bool isPrimary = false)
 {
     float3 irradiance;
     float3 lr;
     GetDirectionalLightIrradiance(irradiance, lr, randomSeed);
     float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * irradiance;
+    hitDist = FLT_MAX;
     [branch]
     if (any(direct > MIN_DIFFUSE_SHADOW))
     {
-        direct *= TraceRayShadow(Scene, surface, lr, randomSeed);
+        float3 shadow = TraceRayShadow(Scene, surface, lr, randomSeed, hitDist);
+#if defined(NRD_SIGMA)
+        if (!isPrimary)
+        {
+            direct *= shadow;
+        }
+#else
+        direct *= shadow;
+#endif
     }
     else
     {
         direct = 0.0f;
+        hitDist = 0.0f;
     }
 
     return direct;
+}
+
+float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
+{
+    float hitDist;
+    return EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed, hitDist, false);
 }
 
 float GetPointAttenuation(Light light, float dist, inout float lightSourceAngle)
@@ -349,7 +365,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
             float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, sunDir, Features.CloudShadows.Opacity);
 
             // Sun angular radius ~0.00465 radians. Check if delta direction is within the sun disk.
-            float cosSunDisk = cos(0.00465f);
+            float cosSunDisk = cos(SUN_ANGULAR_RADIUS);
             float cosDelta = dot(deltaDir, sunDir);
 
             if (cosDelta >= cosSunDisk)
@@ -408,12 +424,18 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
     return totalRadiance;
 }
 
-float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
+float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary, out float sunHitDist)
 {
-    float3 radiance = EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
+    float3 radiance = EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed, sunHitDist, isPrimary) * (isPrimary ? 1.0f : Raytracing.Directional);
     radiance += EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
 
     return radiance;
+}
+
+float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
+{
+    float sunHitDist;
+    return EvaluateDirectRadiance(type, feature, surface, brdfContext, instance, bsdf, randomSeed, isPrimary, sunHitDist);
 }
 
 void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 irradiance, out float3 lr, out float distance, inout uint randomSeed)

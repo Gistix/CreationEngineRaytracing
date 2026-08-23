@@ -7,6 +7,7 @@
 [shader("anyhit")]
 void Main(inout ShadowPayload payload, in BuiltInTriangleIntersectionAttributes attribs)
 {
+    payload.hitDistance = RayTCurrent();
     if (!ConsiderTransparentMaterialShadow(
                 InstanceID(),
                 GeometryIndex(),

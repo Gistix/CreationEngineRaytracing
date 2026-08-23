@@ -17,9 +17,16 @@ enum class Denoiser
 	Accumulation
 };
 
+enum class ShadowDenoiser
+{
+	None,
+	NRD_Sigma
+};
+
 struct GeneralSettings
 {
 	Denoiser Denoiser = Denoiser::None;
+	ShadowDenoiser ShadowDenoiser = ShadowDenoiser::None;
 	Mode Mode = Mode::None;
 	bool RaytracedShadows = false;
 };
@@ -137,6 +144,15 @@ struct NRDRelaxSettings
 
 	// Roughness based rejection
 	bool enableRoughnessEdgeStopping = true;
+};
+
+struct NRDSigmaSettings
+{
+	// (normalized %) - represents maximum allowed deviation from the local tangent plane
+	float planeDistanceSensitivity = 0.02f;
+
+	// [0; SIGMA_MAX_HISTORY_FRAME_NUM] - maximum number of linearly accumulated frames (0 disables stabilization)
+	uint32_t maxStabilizedFrameNum = 5;
 };
 
 struct MaterialSettings
@@ -308,6 +324,7 @@ struct Settings
 	NRDSettings NRDSettings;
 	NRDReblurSettings NRDReblurSettings;
 	NRDRelaxSettings NRDRelaxSettings;
+	NRDSigmaSettings NRDSigmaSettings;
 	MaterialSettings MaterialSettings;
 	SHaRCSettings SHaRCSettings;
 	AdvancedSettings AdvancedSettings;

@@ -6,6 +6,11 @@
 
 #include <NRD.h>
 
+namespace Pass
+{
+	class SceneTLAS;
+}
+
 namespace Pass::NRD
 {
 	class NRDIntegration : public RenderPass
@@ -24,6 +29,7 @@ namespace Pass::NRD
 		};
 
 		Mode m_Mode;
+		Pass::SceneTLAS* m_SceneTLAS = nullptr;
 
 		nrd::Denoiser kDenoiser;
 		nrd::Identifier kDenoiserIdentifier;
@@ -47,10 +53,12 @@ namespace Pass::NRD
 		nrd::Instance* m_NRD = nullptr;
 		nrd::ReblurSettings m_ReblurSettings = {};
 		nrd::RelaxSettings m_RelaxSettings = {};
+		nrd::SigmaSettings m_SigmaSettings = {};
 
 		nrd::CommonSettings m_CommonSettings = {};
 
 		bool IsRelax() const { return kDenoiser == nrd::Denoiser::RELAX_DIFFUSE_SPECULAR; }
+		bool IsSigma() const { return kDenoiser == nrd::Denoiser::SIGMA_SHADOW || kDenoiser == nrd::Denoiser::SIGMA_SHADOW_TRANSLUCENCY; }
 
 		eastl::vector<DispatchBindingCache> m_DispatchBindingCaches;
 
@@ -75,7 +83,7 @@ namespace Pass::NRD
 		uint32_t GetMaxResourceCount(nrd::DescriptorType type) const;
 
 	public:
-		NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode);
+		NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode, Pass::SceneTLAS* sceneTLAS = nullptr);
 		~NRDIntegration() override;
 
 		virtual void Initialize() override;

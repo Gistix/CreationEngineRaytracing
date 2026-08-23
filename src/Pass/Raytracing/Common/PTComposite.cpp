@@ -16,7 +16,19 @@ namespace
 			defines.emplace_back(L"NRD_RELAX", L"1");
 		}
 
+		if (settings.GeneralSettings.ShadowDenoiser == ShadowDenoiser::NRD_Sigma &&
+			(settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur || settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax)) {
+			defines.emplace_back(L"NRD_SIGMA", L"1");
+		}
+
 		return defines;
+	}
+
+	bool IsSigmaEnabled(const Settings& settings)
+	{
+		return settings.GeneralSettings.ShadowDenoiser == ShadowDenoiser::NRD_Sigma &&
+			(settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 	}
 }
 
@@ -46,8 +58,12 @@ namespace Pass::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
 			nvrhi::BindingLayoutItem::Texture_SRV(3),
 			nvrhi::BindingLayoutItem::Texture_SRV(4),
-			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
+
+		if (IsSigmaEnabled(Scene::GetSingleton()->m_Settings))
+			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_SRV(5));
+
+		globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::Texture_UAV(0));
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
@@ -85,11 +101,16 @@ namespace Pass::Common
 
 		if (defines != m_Defines) {
 			m_Defines = eastl::move(defines);
+			CreateBindingLayout();
 			CreatePipeline();
+
+			for (auto& dirty : m_BindingSetDirty)
+				dirty = true;
 		}
 
 		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
-					 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+					 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax ||
+					 IsSigmaEnabled(settings));
 	}
 
 	void PTComposite::CheckBindings()
@@ -121,8 +142,12 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::Texture_SRV(2, specularRadiance),
 			nvrhi::BindingSetItem::Texture_SRV(3, diffuseFactor),
 			nvrhi::BindingSetItem::Texture_SRV(4, specularFactor),
-			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
+
+		if (IsSigmaEnabled(Scene::GetSingleton()->m_Settings))
+			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_SRV(5, textureManager.GetTexture(RenderTarget::DenoisedShadow)));
+
+		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()));
 
 		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 

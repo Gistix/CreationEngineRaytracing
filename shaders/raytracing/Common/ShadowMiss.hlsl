@@ -3,5 +3,5 @@
 [shader("miss")]
 void Main(inout ShadowPayload payload)
 {
-    payload.missed = 1.0f;
+    payload.hitDistance = -1.0f;
 }

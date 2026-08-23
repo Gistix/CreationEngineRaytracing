@@ -5,6 +5,7 @@
 
 #include "include/Surface.hlsli"
 #include "include/Common.hlsli"
+#include "include/Utils/MathConstants.hlsli"
 #include "raytracing/include/Common.hlsli"
 #include "raytracing/include/ShadowPayload.hlsli"
 
@@ -109,7 +110,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
     return payload;
 }
 
-float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surface, float3 direction, float tmax, inout uint randomSeed)
+float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surface, float3 direction, float tmax, inout uint randomSeed, out float hitDist)
 {
     RayDesc ray;
     bool hasTransmission = any(surface.TransmissionColor > 0.0f) && dot(surface.FaceNormal, direction) < 0.0f;
@@ -123,9 +124,9 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
     ray.TMax = tmax;
 
     ShadowPayload shadowPayload;
-    shadowPayload.missed = 0.0f;
     shadowPayload.randomSeed = randomSeed;
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
+    shadowPayload.hitDistance = -1.0f;
 
 #if USE_RAY_QUERY
     RayQuery<RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
@@ -152,20 +153,38 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
 
     if (rayQuery.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
     {
-        shadowPayload.missed = 1.0f;
+        hitDist = FLT_MAX;
+    }
+    else
+    {
+        hitDist = rayQuery.CommittedRayT();
+        shadowPayload.hitDistance = hitDist;
     }
 #else // !USE_RAY_QUERY    
     TraceRay(scene, RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, INSTANCE_MASK, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
- #endif
+    hitDist = shadowPayload.Hit() ? shadowPayload.hitDistance : FLT_MAX;
+#endif
     
     randomSeed = shadowPayload.randomSeed;
     
-    return shadowPayload.transmission * shadowPayload.missed;
+    return shadowPayload.transmission * (shadowPayload.Hit() ? 0.0f : 1.0f);
+}
+
+float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surface, float3 direction, float tmax, inout uint randomSeed)
+{
+    float hitDist;
+    return TraceRayShadowFinite(scene, surface, direction, tmax, randomSeed, hitDist);
+}
+
+float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, float3 direction, inout uint randomSeed, out float hitDist)
+{
+    return TraceRayShadowFinite(scene, surface, direction, SHADOW_RAY_TMAX, randomSeed, hitDist);
 }
 
 float3 TraceRayShadow(RaytracingAccelerationStructure scene, Surface surface, float3 direction, inout uint randomSeed)
 {
-    return TraceRayShadowFinite(scene, surface, direction, SHADOW_RAY_TMAX, randomSeed);
+    float hitDist;
+    return TraceRayShadowFinite(scene, surface, direction, SHADOW_RAY_TMAX, randomSeed, hitDist);
 }
 
 Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 samplePosition, const float3 surfaceNormal, const float tmax, inout uint randomSeed)
