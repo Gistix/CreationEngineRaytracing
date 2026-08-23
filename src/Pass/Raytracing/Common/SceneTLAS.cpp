@@ -86,7 +86,7 @@ namespace Pass
 				auto* dirLight = static_cast<RE::NiDirectionalLight*>(ssn->sunLight->light.get());
 				if (dirLight) {
 					auto runtimeData = Util::Adapter::GetLightRuntimeData(dirLight);
-					m_RaytracingData->DirectionalLight.Direction = -Util::Math::Normalize(float3(dirLight->world.rotate.entry[0][0], dirLight->world.rotate.entry[1][0], dirLight->world.rotate.entry[2][0]));
+					m_RaytracingData->DirectionalLight.Direction = -Util::Math::Normalize(Util::Math::GetMatrixColumn(dirLight->world.rotate, 0));
 					m_RaytracingData->DirectionalLight.Color = Util::Math::Float3(runtimeData.diffuse);
 					m_RaytracingData->DirectionalLight.Fade = runtimeData.fade;
 				}

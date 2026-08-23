@@ -725,16 +725,12 @@ namespace Util
 			auto& state = Util::Adapter::GetGraphicsState();
 			const auto* mainCam = RE::Main::WorldRootCamera();
 
-			const RE::BSGraphics::CameraStateData* cameraDataUnjittered = nullptr;
 			const RE::BSGraphics::CameraStateData* cameraData = nullptr;
-
-			for (auto& cameraDataCache : state.cameraDataCache)
+			for (auto& cache : state.cameraDataCache)
 			{
-				if (mainCam == cameraDataCache.referenceCamera) {
-					if (cameraDataCache.useJitter)
-						cameraDataUnjittered = &cameraDataCache;
-					else
-						cameraData = &cameraDataCache;
+				if (mainCam == cache.referenceCamera && !cache.useJitter) {
+					cameraData = &cache;
+					break;
 				}
 			}
 
@@ -742,6 +738,7 @@ namespace Util
 			data.viewMat = reinterpret_cast<const float4x4&>(camViewData.viewMat);
 			data.projMat = reinterpret_cast<const float4x4&>(camViewData.projMat);
 			data.viewProjMatrixUnjittered = reinterpret_cast<const float4x4&>(camViewData.viewProjUnjittered);
+			data.previousViewProjMatrixUnjittered = reinterpret_cast<const float4x4&>(camViewData.previousViewProjUnjittered);
 			data.posAdjust = Util::Math::Float3(cameraData->posAdjust);
 			data.previousPosAdjust = Util::Math::Float3(cameraData->previousPosAdjust);
 #endif

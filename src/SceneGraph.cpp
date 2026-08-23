@@ -322,7 +322,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			if (isSpotLight) {
 				lightData.Type = LightType::Spot;
-				lightData.Direction = Util::Math::Normalize(float3(niLight->world.rotate.entry[0][0], niLight->world.rotate.entry[1][0], niLight->world.rotate.entry[2][0]));
+				lightData.Direction = Util::Math::Normalize(Util::Math::GetMatrixColumn(niLight->world.rotate, 0));
 				lightData.CosOuterAngle = std::cosf(ligh->data.fov * std::numbers::pi_v<float> / 180.0f);
 				lightData.CosInnerAngle = 1.0f;
 			} else {

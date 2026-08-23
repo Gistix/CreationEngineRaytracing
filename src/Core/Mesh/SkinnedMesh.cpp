@@ -9,22 +9,6 @@
 #include "Pass/Raytracing/Common/Skinning.h"
 #include "Types/RE/RE.h"
 
-static void PackNiTransform(const RE::NiTransform& src, NiTransformPacked& dst)
-{
-	dst.Rot0_Scale = float4(src.rotate.entry[0][0], src.rotate.entry[0][1], src.rotate.entry[0][2], src.scale);
-	dst.Rot1       = float4(src.rotate.entry[1][0], src.rotate.entry[1][1], src.rotate.entry[1][2], 0.0f);
-	dst.Rot2       = float4(src.rotate.entry[2][0], src.rotate.entry[2][1], src.rotate.entry[2][2], 0.0f);
-	dst.Translate  = float4(src.translate.x, src.translate.y, src.translate.z, 0.0f);
-}
-
-static void PackNiTransform(const RE::NiTransform& src, float4& r0s, float4& r1, float4& r2, float4& t)
-{
-	r0s = float4(src.rotate.entry[0][0], src.rotate.entry[0][1], src.rotate.entry[0][2], src.scale);
-	r1  = float4(src.rotate.entry[1][0], src.rotate.entry[1][1], src.rotate.entry[1][2], 0.0f);
-	r2  = float4(src.rotate.entry[2][0], src.rotate.entry[2][1], src.rotate.entry[2][2], 0.0f);
-	t   = float4(src.translate.x, src.translate.y, src.translate.z, 0.0f);
-}
-
 SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
@@ -120,7 +104,7 @@ void SkinnedMesh::InitSkinToBones(RE::BSGeometry* geometry)
 	auto skinInstance = Util::Adapter::GetGeometryRuntimeData(geometry).skinInstance;
 	auto* niSkinData = skinInstance->skinData.get();
 	for (uint32_t i = 0; i < skinData.numBones; i++)
-		PackNiTransform(niSkinData->boneData[i].skinToBone, m_SkinToBones[i]);
+		Util::Math::PackNiTransform(niSkinData->boneData[i].skinToBone, m_SkinToBones[i]);
 #elif defined(FALLOUT4)
 	RE::NiTransform identity;
 	identity.rotate.MakeIdentity();
@@ -128,9 +112,9 @@ void SkinnedMesh::InitSkinToBones(RE::BSGeometry* geometry)
 	identity.scale = 1.0f;
 	for (uint32_t i = 0; i < skinData.numBones; i++) {
 		if (auto* transform = Util::Adapter::GetSkinToBoneTransform(geometry, i))
-			PackNiTransform(*transform, m_SkinToBones[i]);
+			Util::Math::PackNiTransform(*transform, m_SkinToBones[i]);
 		else
-			PackNiTransform(identity, m_SkinToBones[i]);
+			Util::Math::PackNiTransform(identity, m_SkinToBones[i]);
 	}
 #endif
 }
@@ -331,9 +315,9 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 				}
 
 				for (uint32_t i = 0; i < skinData.numBones; i++)
-					PackNiTransform(*skinData.boneWorldTransforms[i], m_BoneWorlds[i]);
+					Util::Math::PackNiTransform(*skinData.boneWorldTransforms[i], m_BoneWorlds[i]);
 
-				PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
+				Util::Math::PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
 
 				MarkDirty(DirtyFlags::Skin);
 			}
