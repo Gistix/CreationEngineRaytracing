@@ -15,3 +15,4 @@
 #include "Types/RE/FO4/ShadowSceneNode.h"
 #include "Types/RE/FO4/NiIntegersExtraData.h"
 #include "Types/RE/FO4/TESObjectLIGH.h"
+#include "BSGeometry.h"

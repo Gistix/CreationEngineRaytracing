@@ -160,10 +160,17 @@ namespace Util
 		{
 #if defined(SKYRIM)
 			auto type = a_geometry->GetType();
-			return type == RE::BSGeometry::Type::kTriShape || type == RE::BSGeometry::Type::kDynamicTriShape || type == RE::BSGeometry::Type::kSubIndexTriShape;
+			return 
+				type == RE::BSGeometry::Type::kTriShape || 
+				type == RE::BSGeometry::Type::kDynamicTriShape || 
+				type == RE::BSGeometry::Type::kSubIndexTriShape;
 #elif defined(FALLOUT4)
-			auto rtti = a_geometry->GetRTTI();
-			return rtti == Constants::rtti::BSTriShape.get() || rtti == Constants::rtti::BSDynamicTriShape.get(); // FO4 uses RTTI check
+			auto type = static_cast<RE::BSGeometryType>(a_geometry->type);
+			return 
+				type == RE::BSGeometryType::kTriShape || 
+				type == RE::BSGeometryType::kDynamicTriShape || 
+				type == RE::BSGeometryType::kSubIndexTriShape || 
+				type == RE::BSGeometryType::kMeshLODTriShape;
 #endif
 		}
 
