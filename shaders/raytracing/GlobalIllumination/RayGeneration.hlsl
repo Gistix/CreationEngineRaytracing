@@ -199,6 +199,9 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
+        const uint sampleIndex = Camera.FrameIndex * MAX_SAMPLES + i;
+        randomSeed = InitRandomSeed(idx, size, sampleIndex);
+
 #if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif
@@ -221,6 +224,7 @@ void Main()
 #endif
         bool isEnter = true;
         bool isSpecularSample = false;
+        uint diffuseBounceCount = 0;
 
         // Water volume tracking for Beer-Lambert absorption
         bool insideWaterVolume = false;
@@ -238,7 +242,10 @@ void Main()
                               
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
        
-            if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed))
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples))
                 direction = bsdfSample.wo;
             else
                 break;            
@@ -247,6 +254,8 @@ void Main()
             if (j == 0)
                 isSpecularSample = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
 #endif
+            if (bsdfSample.isLobe(LobeType::Diffuse))
+                diffuseBounceCount++;
             
 #if defined(RAW_RADIANCE) && !defined(NRD)
             const bool demodulatedThroughput = (j == 0 && !isSpecularSample);

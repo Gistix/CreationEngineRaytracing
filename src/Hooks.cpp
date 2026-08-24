@@ -1,9 +1,131 @@
 #include "Hooks.h"
 #include "Renderer.h"
 #include "Util.h"
+#include "Core/TextureManager.h"
 
 namespace Hooks
 {
+	namespace
+	{
+		bool IsBlockCompressedFormat(DXGI_FORMAT format)
+		{
+			switch (format) {
+			case DXGI_FORMAT_BC1_TYPELESS:
+			case DXGI_FORMAT_BC1_UNORM:
+			case DXGI_FORMAT_BC1_UNORM_SRGB:
+			case DXGI_FORMAT_BC2_TYPELESS:
+			case DXGI_FORMAT_BC2_UNORM:
+			case DXGI_FORMAT_BC2_UNORM_SRGB:
+			case DXGI_FORMAT_BC3_TYPELESS:
+			case DXGI_FORMAT_BC3_UNORM:
+			case DXGI_FORMAT_BC3_UNORM_SRGB:
+			case DXGI_FORMAT_BC4_TYPELESS:
+			case DXGI_FORMAT_BC4_UNORM:
+			case DXGI_FORMAT_BC4_SNORM:
+			case DXGI_FORMAT_BC5_TYPELESS:
+			case DXGI_FORMAT_BC5_UNORM:
+			case DXGI_FORMAT_BC5_SNORM:
+			case DXGI_FORMAT_BC6H_TYPELESS:
+			case DXGI_FORMAT_BC6H_UF16:
+			case DXGI_FORMAT_BC6H_SF16:
+			case DXGI_FORMAT_BC7_TYPELESS:
+			case DXGI_FORMAT_BC7_UNORM:
+			case DXGI_FORMAT_BC7_UNORM_SRGB:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		bool IsAlphaCapableFormat(DXGI_FORMAT format)
+		{
+			switch (format) {
+			case DXGI_FORMAT_BC2_TYPELESS:
+			case DXGI_FORMAT_BC2_UNORM:
+			case DXGI_FORMAT_BC2_UNORM_SRGB:
+			case DXGI_FORMAT_BC3_TYPELESS:
+			case DXGI_FORMAT_BC3_UNORM:
+			case DXGI_FORMAT_BC3_UNORM_SRGB:
+			case DXGI_FORMAT_BC7_TYPELESS:
+			case DXGI_FORMAT_BC7_UNORM:
+			case DXGI_FORMAT_BC7_UNORM_SRGB:
+			case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+			case DXGI_FORMAT_R8G8B8A8_UNORM:
+			case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+			case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+			case DXGI_FORMAT_B8G8R8A8_UNORM:
+			case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		bool IsCriticalStreamingFormat(DXGI_FORMAT format)
+		{
+			switch (format) {
+			case DXGI_FORMAT_BC4_TYPELESS:
+			case DXGI_FORMAT_BC4_UNORM:
+			case DXGI_FORMAT_BC4_SNORM:
+			case DXGI_FORMAT_BC5_TYPELESS:
+			case DXGI_FORMAT_BC5_UNORM:
+			case DXGI_FORMAT_BC5_SNORM:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		uint32_t GetMipExtent(uint32_t extent, uint32_t mip)
+		{
+			return std::max(1u, extent >> mip);
+		}
+
+		uint32_t GetTextureStreamingMipBias(const ExperimentalSettings& settings, uint32_t width, uint32_t height, uint32_t mipLevels, DXGI_FORMAT format)
+		{
+			if (settings.TextureStreamingMode == TextureStreamingMode::Off || mipLevels <= 1)
+				return 0;
+
+			const uint32_t maxDimension = std::max(width, height);
+			if (maxDimension < 1024)
+				return 0;
+
+			if (IsCriticalStreamingFormat(format))
+				return 0;
+
+			uint32_t desiredBias = 0;
+			const bool alphaCapable = IsAlphaCapableFormat(format);
+			switch (settings.TextureStreamingMode) {
+			case TextureStreamingMode::Conservative:
+				if (alphaCapable)
+					return 0;
+
+				desiredBias = maxDimension >= 4096 ? 1 : 0;
+				break;
+			case TextureStreamingMode::Balanced:
+				if (alphaCapable)
+					return 0;
+
+				desiredBias = maxDimension >= 4096 ? 2 : 1;
+				break;
+			case TextureStreamingMode::Aggressive:
+				desiredBias = maxDimension >= 4096 ? 3 : (maxDimension >= 2048 ? 2 : 1);
+				if (alphaCapable)
+					desiredBias = std::min(desiredBias, 1u);
+				break;
+			default:
+				break;
+			}
+
+			desiredBias = std::min(desiredBias, settings.TextureMaxMipBias);
+
+			if (!IsBlockCompressedFormat(format))
+				desiredBias = std::min(desiredBias, 1u);
+
+			return std::min(desiredBias, mipLevels - 1);
+		}
+	}
+
 	struct ID3D11Device_CreateBuffer
 	{
 		static HRESULT thunk(ID3D11Device* a_device, const D3D11_BUFFER_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Buffer** ppBuffer)
@@ -93,8 +215,11 @@ namespace Hooks
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
 			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
-			if (triShape)
+			if (triShape) {
+				triShape->vertexBufferDX12 = nullptr;
+				triShape->indexBufferDX12 = nullptr;
 				triShape->ownsDX12Buffers = true;
+			}
 			return triShape;
 		}
 
@@ -374,6 +499,87 @@ namespace Hooks
 	}
 
 
+#if defined(SKYRIM)
+	HRESULT CreateTextureAndSRV::thunk(
+		ID3D11Device* a_device,
+		D3D11_RESOURCE_DIMENSION a_dimension,
+		uint32_t a_width,
+		uint32_t a_height,
+		uint32_t a_depth,
+		uint32_t a_mipLevels,
+		uint32_t a_arraySize,
+		DXGI_FORMAT a_format,
+		bool a_cubeMap,
+		const D3D11_SUBRESOURCE_DATA* a_data,
+		RE::BSGraphics::Texture** a_outTexture
+	) {
+		uint32_t streamingMipBias = 0;
+
+		// Only stream mips while path tracing replaces the game's raster output
+		if (a_dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D && !a_cubeMap && a_data && a_arraySize == 1) {
+			auto& settings = Scene::GetSingleton()->m_Settings;
+
+			if (settings.GeneralSettings.Mode == Mode::PathTracing)
+				streamingMipBias = GetTextureStreamingMipBias(settings.ExperimentalSettings, a_width, a_height, a_mipLevels, a_format);
+		}
+
+		if (streamingMipBias == 0)
+			return func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubeMap, a_data, a_outTexture);
+
+		auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
+
+		auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
+
+		if (!texture)
+			return E_OUTOFMEMORY;
+
+		std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
+
+		const uint32_t residentMipLevels = a_mipLevels - streamingMipBias;
+		const uint32_t residentWidth = GetMipExtent(a_width, streamingMipBias);
+		const uint32_t residentHeight = GetMipExtent(a_height, streamingMipBias);
+
+		auto desc = D3D11_TEXTURE2D_DESC{};
+		desc.Width = residentWidth;
+		desc.Height = residentHeight;
+		desc.MipLevels = residentMipLevels;
+		desc.ArraySize = a_arraySize;
+		desc.Format = a_format;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Usage = D3D11_USAGE_DEFAULT;
+		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		desc.CPUAccessFlags = 0;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+
+		// Skip the streamed-away top mips
+		const D3D11_SUBRESOURCE_DATA* residentData = a_data + streamingMipBias;
+		auto result = a_device->CreateTexture2D(&desc, residentData, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
+
+		if (FAILED(result) || !texture->texture) {
+			return result;
+		}
+
+		TextureManager::RegisterResidentMipOffset(texture->texture, streamingMipBias);
+
+		auto srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC{};
+		srvDesc.Format = a_format;
+		srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.MipLevels = residentMipLevels;
+
+		auto srvResult = a_device->CreateShaderResourceView(texture->texture, &srvDesc, &texture->resourceView);
+
+		if (FAILED(srvResult)) {
+			texture->texture->Release();
+			return srvResult;
+		}
+
+		*a_outTexture = texture;
+
+		return result;
+	}
+#endif
 
 	template <std::derived_from<RE::NiCullingProcess> T>
 	struct NiCullingProcess_AppendVirtual
@@ -672,7 +878,10 @@ namespace Hooks
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 
 		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
-		
+
+		// All textures loaded from DDS
+		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
+
 
 
 		// Terrain LOD
