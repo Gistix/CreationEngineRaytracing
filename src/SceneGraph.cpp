@@ -19,6 +19,7 @@
 #include "Core/Mesh/DynamicMesh.h"
 #include "Core/Mesh/SubIndexMesh.h"
 #include "Core/Mesh/SubIndexSegmentMesh.h"
+#include "Core/ParallelTriShapeWalker.h"
 
 #include <chrono>
 #include <numbers>
@@ -502,125 +503,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		RE::NiAVObject* firstPersonRoot = m_DrawFirstPerson ? Util::Adapter::GetFirstPerson3D(RE::PlayerCharacter::GetSingleton()) : nullptr;
 
 		// Flat accumulator of wide-NiNode children to be chunked across workers post-descent.
-		// Each entry is a (child object, propagated parentRefr) ready to be handed to serialWalk.
+		// Each entry is a (child object, propagated parentRefr) ready to be handed to ProcessSubtree.
 		eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> forkedChildren;
 
-		struct ParallelTriShapeWalker
-		{
-			SceneGraph* self;
-			eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>>* forkedChildren;
-			RE::NiAVObject* firstPersonRoot;
-
-			// Routes a leaf into the per-worker buffer [workerIdx].
-			void visitLeaf(RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr, size_t workerIdx)
-			{
-				if (!bsTriShape) {
-					logger::critical("[PhaseA-DBG] visitLeaf[{0}] was passed a NULL bsTriShape (refr={1:p})", workerIdx, static_cast<const void*>(refr));
-					return;
-				}
-
-				auto it = self->m_Meshes.find(bsTriShape);
-				if (it != self->m_Meshes.end()) {
-					auto mesh = it->second.get();
-					self->m_PerWorkerUpdateList[workerIdx].push_back({ mesh, refr });
-					self->m_PerWorkerCurrentVisible[workerIdx].push_back(mesh);
-				} else {
-					self->m_PerWorkerCreateList[workerIdx].push_back({ bsTriShape, refr });
-				}
-			}
-
-			// Walks a single subtree serially via the existing Util::Traversal::ScenegraphTriShapes,
-			// routing leaves into per-worker buffer [workerIdx].
-			void serialWalk(RE::NiAVObject* object, RE::TESObjectREFR* parentRefr, size_t workerIdx)
-			{
-				Util::Traversal::ScenegraphTriShapes(object, [this, workerIdx](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
-					if (!bsTriShape) {
-						logger::critical("[PhaseA-DBG] serialWalk[{0} visitor] received NULL bsTriShape from AsTriShape (object ptr inside ScenegraphTriShapes passed us null); refr={1:p}",
-						                 workerIdx, static_cast<const void*>(refr));
-						return CESEAdapter::RE::BSVisitControl::kContinue;
-					}
-					visitLeaf(bsTriShape, refr, workerIdx);
-					return CESEAdapter::RE::BSVisitControl::kContinue;
-				}, parentRefr, firstPersonRoot);
-			}
-
-			// Recursive serial descent. parentRefr is propagated to children exactly as in
-			// Util::Traversal::ScenegraphTriShapes so that BSFadeNode ownership resolves identically.
-			// When we hit a wide NiNode we record its children in forkedChildren instead of recursing.
-			void walk(RE::NiAVObject* object, RE::TESObjectREFR* parentRefr = nullptr)
-			{
-				if (!object)
-					return;
-
-				const bool isVisibleFP = (object == firstPersonRoot);
-				if (!isVisibleFP && Util::Adapter::IsNiAVObjectHidden(object))
-					return;
-
-				if (auto geom = Util::Adapter::AsTriShape(object)) {
-					// Leaves reached during the serial descent route to slot 0 (no concurrent writers;
-					// the worker tasks haven't been dispatched yet).
-					visitLeaf(geom, parentRefr, 0);
-					return;
-				}
-
-				auto rtti = object->GetRTTI();
-				if (rtti == Constants::rtti::NiBillboardNode.get() || rtti == Constants::rtti::BSOrderedNode.get())
-					return;
-
-				auto node = Util::Adapter::AsNode(object);
-				if (!node)
-					return;
-
-				auto& children = Util::Adapter::GetChildren(node);
-
-				if (auto* switchNode = Util::Adapter::AsSwitchNode(node)) {
-					auto index = static_cast<uint16_t>(switchNode->index);
-					auto childAt = Util::Adapter::GetChildAt(node, index);
-					if (childAt)
-						walk(childAt, parentRefr);
-					return;
-				}
-
-				// Resolve refr for this node, mirroring ScenegraphTriShapes.
-				auto refr = parentRefr;
-				if (rtti == Constants::rtti::BSFadeNode.get()) {
-					if (auto owner = Util::Adapter::GetOwner(object))
-						refr = owner;
-				}
-
-				// ShadowSceneNode: collect portalGraph->alwaysRenderChildren (nodes outside the regular
-				// scene graph that are nonetheless rendered this frame). We visit them in addition to the
-				// regular children, matching ScenegraphTriShapes behavior.
-				eastl::vector<RE::NiAVObject*> portalChildren;
-				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
-					Util::Adapter::GetAlwaysRenderChildren(node, portalChildren);
-				}
-
-				if (children.size() >= Constants::ParallelTraversalFanoutThreshold) {
-					// Wide fan-out: record children for post-descent chunked parallel processing instead
-					// of recursing. This is the deliberate granularity decision: forking 1:1 per child
-					// (1,254 tasks in a typical frame) swamps the pool with mutex overhead; chunking here
-					// keeps total pool tasks at exactly numWorkers, matching the existing Phase B pattern.
-					for (auto& child : children)
-						if (child)
-							forkedChildren->push_back({ child.get(), refr });
-					for (auto* child : portalChildren)
-						forkedChildren->push_back({ child, refr });
-				} else {
-					for (auto& child : children) {
-						if (child)
-							walk(child.get(), refr);
-					}
-					for (auto* child : portalChildren)
-						walk(child, refr);
-				}
-			}
-		} walker{ this, &forkedChildren, firstPersonRoot };
-
-		walker.walk(worldRootNode);
+		ParallelTriShapeWalker walker{ this, &forkedChildren, firstPersonRoot };
+		walker.Walk(worldRootNode);
 
 		// Dispatch the accumulated wide-fan-out children as exactly numWorkers chunked tasks. Each task
-		// iterates its chunk calling serialWalk on each subtree; per-worker output slot is chunkIdx+1
+		// iterates its chunk calling ProcessSubtree on each subtree; per-worker output slot is chunkIdx+1
 		// (slot 0 is reserved for the main-thread walk above).
 		const size_t totalForked = forkedChildren.size();
 		if (totalForked > 0) {
@@ -636,7 +526,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				m_ThreadPool->Enqueue([&, start, end, workerIdx]() {
 					for (size_t i = start; i < end; ++i) {
 						auto& [child, refr] = forkedChildren[i];
-						walker.serialWalk(child, refr, workerIdx);
+						walker.ProcessSubtree(child, refr, workerIdx);
 					}
 				});
 			}

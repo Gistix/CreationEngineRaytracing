@@ -92,12 +92,13 @@ namespace Util
 			return result;
 		}
 
-		template <typename Func>
-		static CESEAdapter::RE::BSVisitControl ScenegraphTriShapes(
-			RE::NiAVObject* a_object, 
-			Func&& a_func,
+		template <bool AllowFork = false, typename LeafFunc, typename ForkFunc = std::nullptr_t>
+		static CESEAdapter::RE::BSVisitControl SceneGraphTriShapes(
+			RE::NiAVObject* a_object,
+			LeafFunc&& a_leafFunc,
 			RE::TESObjectREFR* parentRefr = nullptr,
-			RE::NiAVObject* firstPersonRoot = nullptr)
+			RE::NiAVObject* firstPersonRoot = nullptr,
+			ForkFunc&& a_forkFunc = nullptr)
 		{
 			auto result = CESEAdapter::RE::BSVisitControl::kContinue;
 
@@ -109,64 +110,81 @@ namespace Util
 				return result;
 
 			// Early return for TriShapes — most common actionable leaf
-			if (auto geom = Util::Adapter::AsTriShape(a_object))
-				return a_func(geom, parentRefr);
+			if (auto geom = Util::Adapter::AsTriShape(a_object)) {
+				if constexpr (std::is_invocable_r_v<CESEAdapter::RE::BSVisitControl, LeafFunc, RE::BSTriShape*, RE::TESObjectREFR*>) {
+					return a_leafFunc(geom, parentRefr);
+				} else {
+					a_leafFunc(geom, parentRefr);
+					return CESEAdapter::RE::BSVisitControl::kContinue;
+				}
+			}
 
 			auto rtti = a_object->GetRTTI();
 
-			if (rtti == Constants::rtti::NiBillboardNode.get())
-				return result;
-
-			if (rtti == Constants::rtti::BSOrderedNode.get())
+			if (rtti == Constants::rtti::NiBillboardNode.get() || rtti == Constants::rtti::BSOrderedNode.get())
 				return result;
 
 			// Only nodes can have children or be FadeNodes
-			if (auto node = Util::Adapter::AsNode(a_object))
-			{
-				auto& children = Util::Adapter::GetChildren(node);
-				if (auto switchNode = Util::Adapter::AsSwitchNode(node)) {
-					auto index = static_cast<uint16_t>(switchNode->index);
-					if (index < children.size())
-						result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr, firstPersonRoot);
+			auto node = Util::Adapter::AsNode(a_object);
+			if (!node)
+				return result;
+
+			if (auto switchNode = Util::Adapter::AsSwitchNode(node)) {
+				auto index = static_cast<uint16_t>(switchNode->index);
+				auto childAt = Util::Adapter::GetChildAt(node, index);
+				if (childAt)
+					result = SceneGraphTriShapes<AllowFork>(childAt, a_leafFunc, parentRefr, firstPersonRoot, a_forkFunc);
+				return result;
+			}
+
+			// Propagate owner refr through FadeNodes
+			auto refr = parentRefr;
+			if (rtti == Constants::rtti::BSFadeNode.get()) {
+				if (auto owner = Util::Adapter::GetOwner(a_object))
+					refr = owner;
+			}
+
+			eastl::vector<RE::NiAVObject*> portalChildren;
+			if (rtti == Constants::rtti::ShadowSceneNode.get()) {
+				Util::Adapter::GetAlwaysRenderChildren(node, portalChildren);
+			}
+
+			auto& children = Util::Adapter::GetChildren(node);
+
+			if constexpr (AllowFork) {
+				if (children.size() >= Constants::ParallelTraversalFanoutThreshold) {
+					a_forkFunc(node, refr, portalChildren);
+					return result;
 				}
-				else {
-					// Propagate owner refr through FadeNodes
-					auto refr = parentRefr;
-					if (rtti == Constants::rtti::BSFadeNode.get()) {
-						if (auto owner = Util::Adapter::GetOwner(a_object))
-							refr = owner;
-					}
-					else if (rtti == Constants::rtti::ShadowSceneNode.get()) {
-						if (auto portalGraph = Util::Adapter::GetPortalGraph(node)) {
-							// Iterate over PortalGraph always render children
-							// This list contains rendered nodes that are outside of the normal SceneGraph
-#if defined(SKYRIM)
-							auto& renderChildren = portalGraph->alwaysRenderChildren;
-#elif defined(FALLOUT4)
-							auto& renderChildren = portalGraph->alwayRenderChildren;
-#endif
-							for (auto& child : renderChildren)
-							{
-								// Only those who are outside the Scenegraph
-								if (child->parent)
-									continue;
+			}
 
-								result = ScenegraphTriShapes(child.get(), a_func, refr, firstPersonRoot);
-								if (result == CESEAdapter::RE::BSVisitControl::kStop)
-									break;
-							}
-						}
-					}
+			for (auto& child : children) {
+				if (child) {
+					result = SceneGraphTriShapes<AllowFork>(child.get(), a_leafFunc, refr, firstPersonRoot, a_forkFunc);
+					if (result == CESEAdapter::RE::BSVisitControl::kStop)
+						return result;
+				}
+			}
 
-					for (auto& child : children) {
-						result = ScenegraphTriShapes(child.get(), a_func, refr, firstPersonRoot);
-						if (result == CESEAdapter::RE::BSVisitControl::kStop)
-							break;
-					}
+			for (auto* child : portalChildren) {
+				if (child) {
+					result = SceneGraphTriShapes<AllowFork>(child, a_leafFunc, refr, firstPersonRoot, a_forkFunc);
+					if (result == CESEAdapter::RE::BSVisitControl::kStop)
+						return result;
 				}
 			}
 
 			return result;
+		}
+
+		template <typename Func>
+		static CESEAdapter::RE::BSVisitControl ScenegraphTriShapes(
+			RE::NiAVObject* a_object, 
+			Func&& a_func,
+			RE::TESObjectREFR* parentRefr = nullptr,
+			RE::NiAVObject* firstPersonRoot = nullptr)
+		{
+			return SceneGraphTriShapes<false>(a_object, std::forward<Func>(a_func), parentRefr, firstPersonRoot);
 		}
 	}
 }

@@ -33,9 +33,12 @@
 
 class LandLODMesh;
 class SubIndexSegmentMesh;
+class ParallelTriShapeWalker;
 
 class SceneGraph
 {
+	friend class ParallelTriShapeWalker;
+
 	RE::NiCamera* m_Camera = nullptr;
 	bool m_DrawFirstPerson = false;
 	RE::NiPoint3 m_FirstPersonPosition = Util::Adapter::GetNiPoint3Zero();
