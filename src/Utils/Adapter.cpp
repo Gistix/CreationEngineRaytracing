@@ -732,7 +732,7 @@ namespace Util
 			auto& state = Util::Adapter::GetGraphicsState();
 			const auto* mainCam = RE::Main::WorldRootCamera();
 
-			const RE::BSGraphics::CameraStateData* cameraData = nullptr;
+			RE::BSGraphics::CameraStateData* cameraData = nullptr;
 			for (auto& cache : state.cameraDataCache)
 			{
 				if (mainCam == cache.referenceCamera && cache.useJitter) {
