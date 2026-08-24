@@ -88,7 +88,7 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 #   endif
 #endif
 
-StructuredBuffer<Triangle>                  Triangles[]                 : register(t0, space1);
+ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
 ByteAddressBuffer                           Materials[]                 : register(t0, space3);
 

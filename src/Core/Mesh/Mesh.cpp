@@ -11,7 +11,7 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* com
 	m_BSTriShape = bsTriShape;
 	m_Type = Type::Default;
 
-	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
@@ -19,7 +19,7 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* com
 		return;
 	}
 
-	const auto& triShapeData = bsTriShape->GetTrishapeRuntimeData();
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(bsTriShape);
 
 	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount))
 		return;
@@ -38,8 +38,9 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* com
 
 	const uint32_t indexCount = static_cast<uint32_t>(triShapeData.triangleCount) * 3;
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
+	const nvrhi::Format vertexFormat = Util::Geometry::GetVertexPositionFormat(rendererData->vertexDesc);
 
-	m_GeometryEntries.push_back({ MakeGeometryDesc(m_IndexBuffer.m_Buffer, 0, indexCount, m_VertexBuffer.m_Buffer, vertexStride, triShapeData.vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
+	m_GeometryEntries.push_back({ MakeGeometryDesc(m_IndexBuffer.m_Buffer, m_IndexBuffer.m_Offset, indexCount, m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, vertexStride, triShapeData.vertexCount, GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
 
 	CreateMaterial();
 }

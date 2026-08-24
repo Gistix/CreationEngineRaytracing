@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Constants.h"
+#include <nvrhi/nvrhi.h>
 
 namespace Util
 {
@@ -10,9 +11,11 @@ namespace Util
 
 		uint16_t GetStoredVertexSize(RE::BSGraphics::VertexDesc desc);
 
-		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance);
+		nvrhi::Format GetVertexPositionFormat(RE::BSGraphics::VertexDesc desc);
 
-		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility);
+		bool IsDismemberSkinInstance(RE::NiObject* skinInstance);
+
+		void GetDismemberPartitionVisibility(RE::NiObject* skinInstance, eastl::vector<bool>& outVisibility);
 
 		bool IsBlocklisted(const char* name);
 	}

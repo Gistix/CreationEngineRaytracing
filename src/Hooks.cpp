@@ -2,9 +2,6 @@
 #include "Renderer.h"
 #include "Util.h"
 
-#include "Core/D3D12Texture.h"
-#include "Core/Mesh/DynamicMesh.h"
-
 namespace Hooks
 {
 	struct ID3D11Device_CreateBuffer
@@ -19,7 +16,17 @@ namespace Hooks
 
 			D3D11_BUFFER_DESC desc = *pDesc;
 
-			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0 && (desc.BindFlags & D3D11_BIND_VERTEX_BUFFER || desc.BindFlags & D3D11_BIND_INDEX_BUFFER))
+			bool shareBuffer = (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0);
+
+#if defined(SKYRIM)
+			shareBuffer &= (desc.BindFlags & D3D11_BIND_VERTEX_BUFFER) || (desc.BindFlags & D3D11_BIND_INDEX_BUFFER);
+
+			// Byte address buffers must be aligned to 4 bytes
+			if (shareBuffer && (desc.BindFlags & D3D11_BIND_INDEX_BUFFER))
+				desc.ByteWidth = (desc.ByteWidth + 3u) & ~3u;
+#endif
+
+			if (shareBuffer)
 				desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
 
 			auto hr = func(a_device, &desc, pInitialData, ppBuffer);
@@ -35,6 +42,51 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct ID3D11Device_CreateTexture2D
+	{
+		static HRESULT thunk(ID3D11Device* a_device, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
+		{
+			if (!pDesc)
+				return func(a_device, pDesc, pInitialData, ppTexture2D);
+
+			D3D11_TEXTURE2D_DESC desc = *pDesc;
+
+			if (desc.Usage == D3D11_USAGE_DEFAULT && desc.CPUAccessFlags == 0)
+				desc.MiscFlags |= D3D11_RESOURCE_MISC_SHARED;
+
+			auto hr = func(a_device, &desc, pInitialData, ppTexture2D);
+
+			if (FAILED(hr)) {
+				logger::error("ID3D11Device::CreateTexture2D - Failed with HR: 0x{:08X}", static_cast<UINT>(hr));
+				hr = func(a_device, pDesc, pInitialData, ppTexture2D);
+			}
+
+			return hr;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BGSTerrainBlock_Load
+	{
+		static RE::BGSTerrainBlock* thunk(RE::BGSTerrainBlock* a_block, RE::BGSTerrainManager* a_terrainManager, /* RE::BSStream */ void* a_stream, int32_t a4, int32_t a5)
+		{
+			auto result = func(a_block, a_terrainManager, a_stream, a4, a5);
+
+			if (result && result->node && result->land) {
+				auto lodLevel = static_cast<std::int32_t>(result->node->GetLODLevel());
+				auto key = RE::BSFixedString(Constants::ExtraData::LandLOD);
+				auto extra = RE::NiIntegersExtraData::Create(key, { lodLevel });
+				result->land->AddExtraData(extra);
+			}
+
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+#if defined(SKYRIM)
 	template <typename = decltype([] {}) >
 	struct MemoryManager_AllocateTriShape
 	{
@@ -283,13 +335,7 @@ namespace Hooks
 				if (vertexBuffer)
 					vertexBuffer->Release();
 
-				auto* mm = RE::MemoryManager::GetSingleton();
-
-				if (a_triShape->rawVertexData)
-					mm->Deallocate(a_triShape->rawVertexData, false);
-
-				if (a_triShape->rawIndexData)
-					mm->Deallocate(a_triShape->rawIndexData, false);
+				Util::Adapter::DeallocateTriShapeData(a_triShape);
 
 				if (static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->ownsDX12Buffers) {
 					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape);
@@ -301,6 +347,7 @@ namespace Hooks
 						triShapeDX12->vertexBufferDX12->Release();
 				}
 
+				auto* mm = RE::MemoryManager::GetSingleton();
 				mm->Deallocate(a_triShape, false);
 			}
 		}
@@ -320,543 +367,16 @@ namespace Hooks
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
-#if defined(SKYRIM)
 		if (oThis && oThis->rendererTexture) {
 			auto scene = Scene::GetSingleton();
 			auto sceneGraph = scene->GetSceneGraph();
 			sceneGraph->ReleaseTexture(oThis->rendererTexture);
 		}
-#endif
 
 		func(oThis);
 	}
 
-#if defined(SKYRIM)
-	struct BSGraphicsTexture_Dtor
-	{
-		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::BSGraphics::Texture* a_texture)
-		{
-			if (!a_texture || a_texture->pad24 != NATIVE_DX12RESOURCE) {
-				func(a_renderer, a_texture);
-				return;
-			}
 
-			if (InterlockedExchangeAdd(&a_texture->refCount, 0xFFFFFFFF) == 1)
-			{
-				auto* d3d12Texture = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(a_texture);
-
-				if (d3d12Texture->d3d12Texture)
-					d3d12Texture->d3d12Texture->Release();
-
-				if (d3d12Texture->resourceView)
-					d3d12Texture->resourceView->Release();
-
-				if (d3d12Texture->texture)
-					d3d12Texture->texture->Release();
-
-				if (d3d12Texture->UAV)
-					d3d12Texture->UAV->Release();
-
-				auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
-
-				// Doesn't take size to be freed?
-				scrapHeap->Deallocate(d3d12Texture);
-			}
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	HRESULT CreateTextureAndSRV::thunk(
-		ID3D11Device* a_device,
-		D3D11_RESOURCE_DIMENSION a_dimension,
-		uint32_t a_width,
-		uint32_t a_height,
-		uint32_t a_depth,
-		uint32_t a_mipLevels,
-		uint32_t a_arraySize,
-		DXGI_FORMAT a_format,
-		bool a_cubemap,
-		const D3D11_SUBRESOURCE_DATA* a_data,
-		RE::BSGraphics::Texture** a_outTexture
-	) {
-		bool shareTexture = a_dimension == D3D11_RESOURCE_DIMENSION_TEXTURE2D && !a_cubemap;
-
-		if (!shareTexture) {
-			auto result = func(a_device, a_dimension, a_width, a_height, a_depth, a_mipLevels, a_arraySize, a_format, a_cubemap, a_data, a_outTexture);
-
-			// Enforce flag
-			if (SUCCEEDED(result))
-				(*a_outTexture)->pad24 = NO_DX12RESOURCE;
-
-			return result;
-		}
-
-		auto& expSettings = Scene::GetSingleton()->m_Settings.ExperimentalSettings;
-
-		bool exclusiveMode = expSettings.TextureMode == TextureMode::Exclusive;
-		bool cutOff = expSettings.TextureCutOff != 0;
-
-		if (cutOff) {
-			uint32_t cutOffSize = 1 << (expSettings.TextureCutOff + 7);
-			cutOff = (a_width * a_height) < (cutOffSize * cutOffSize);
-		}
-
-		auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
-
-		if (exclusiveMode && !cutOff) {
-			auto& stateRuntimeData = RE::BSGraphics::State::GetSingleton()->GetRuntimeData();
-
-			auto* texture = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::D3D12Texture), 8));
-
-			if (!texture)
-				return E_OUTOFMEMORY;
-
-			std::memset(texture, 0, sizeof(RE::BSGraphics::D3D12Texture));
-
-			auto defaultTexture = stateRuntimeData.defaultTextureGrey->rendererTexture;
-
-			texture->texture = defaultTexture->texture;
-			texture->UAV = defaultTexture->UAV;
-			texture->resourceView = defaultTexture->resourceView;
-			texture->width = defaultTexture->width;
-			texture->height = defaultTexture->height;
-			texture->format = defaultTexture->format;
-			texture->mips = defaultTexture->mips;
-			texture->unk1E = defaultTexture->unk1E;
-			texture->refCount = 1;
-
-			if (defaultTexture->texture)
-				defaultTexture->texture->AddRef();
-
-			if (defaultTexture->resourceView)
-				defaultTexture->resourceView->AddRef();
-
-			if (defaultTexture->UAV)
-				defaultTexture->UAV->AddRef();
-
-			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
-			texture->pad24 = NATIVE_DX12RESOURCE;
-
-			// Initialize to null to prevent Destructor from releasing a unitialized pointer
-			texture->d3d12Texture = nullptr;
-
-			auto renderer = Renderer::GetSingleton();
-			auto device = renderer->GetDevice();
-			auto nativeDevice = renderer->GetNativeD3D12Device();
-
-			D3D12_RESOURCE_DESC nativeDesc = {};
-			nativeDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-			nativeDesc.Width = a_width;
-			nativeDesc.Height = a_height;
-			nativeDesc.DepthOrArraySize = 1;
-			nativeDesc.MipLevels = static_cast<UINT16>(a_mipLevels);
-			nativeDesc.Format = a_format;
-			nativeDesc.SampleDesc.Count = 1;
-			nativeDesc.SampleDesc.Quality = 0;
-			nativeDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-
-			D3D12_HEAP_PROPERTIES heapProps = {};
-			heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-			HRESULT hr = nativeDevice->CreateCommittedResource(
-				&heapProps,
-				D3D12_HEAP_FLAG_NONE,
-				&nativeDesc,
-				D3D12_RESOURCE_STATE_COPY_DEST,
-				nullptr,
-				IID_PPV_ARGS(&texture->d3d12Texture)
-			);
-
-			if (FAILED(hr)) {
-				if (texture->d3d12Texture)
-					texture->d3d12Texture->Release();
-
-				return hr;
-			}
-
-			auto format = Renderer::GetFormat(a_format);
-			if (format == nvrhi::Format::UNKNOWN) {
-				if (texture->d3d12Texture)
-					texture->d3d12Texture->Release();
-
-				return E_FAIL;
-			}
-
-			auto& textureDesc = nvrhi::TextureDesc()
-				.setWidth(a_width)
-				.setHeight(a_height)
-				.setMipLevels(a_mipLevels)
-				.setFormat(format)
-				.setInitialState(nvrhi::ResourceStates::CopyDest)
-				.setDebugName("Shared Texture [?]");
-
-			auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(texture->d3d12Texture), textureDesc);
-
-			// Upload Texture Data
-			{
-				auto commandList = renderer->GetGraphicsCommandList();
-
-				commandList->open();
-
-				commandList->beginTrackingTextureState(textureHandle, nvrhi::AllSubresources, nvrhi::ResourceStates::CopyDest);
-
-				for (uint32_t i = 0; i < a_mipLevels; i++)
-				{
-					const auto& mipData = a_data[i];
-					commandList->writeTexture(textureHandle, 0, i, mipData.pSysMem, mipData.SysMemPitch, mipData.SysMemSlicePitch);
-				}
-
-				commandList->setPermanentTextureState(textureHandle, nvrhi::ResourceStates::ShaderResource);
-
-				commandList->commitBarriers();
-
-				commandList->close();
-
-				device->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
-
-				device->waitForIdle();
-			}
-
-			*a_outTexture = texture;
-
-			return hr;
-		}
-		else {
-			auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
-
-			if (!texture)
-				return E_OUTOFMEMORY;
-
-			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
-
-			auto desc = D3D11_TEXTURE2D_DESC{};
-			desc.Width = a_width;
-			desc.Height = a_height;
-			desc.MipLevels = a_mipLevels;
-			desc.ArraySize = a_arraySize;
-			desc.Format = a_format;
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Usage = D3D11_USAGE_DEFAULT;
-			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-			auto result = a_device->CreateTexture2D(&desc, a_data, reinterpret_cast<ID3D11Texture2D**>(&texture->texture));
-
-			if (FAILED(result) || !texture->texture) {
-				return result;
-			}
-
-			auto srvDesc = D3D11_SHADER_RESOURCE_VIEW_DESC{};
-			srvDesc.Format = a_format;
-			srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MostDetailedMip = 0;
-			srvDesc.Texture2D.MipLevels = a_mipLevels;
-
-			auto srvResult = a_device->CreateShaderResourceView(texture->texture, &srvDesc, &texture->resourceView);
-
-			if (FAILED(srvResult)) {
-				texture->texture->Release();
-				return srvResult;
-			}
-
-			texture->pad24 = NO_DX12RESOURCE;
-
-			*a_outTexture = texture;
-
-			return result;
-		}
-	}
-
-	struct CreateTexture2DAndSRV
-	{
-		static uint32_t GetBitsPerPixel(DXGI_FORMAT a_format)
-		{
-			auto fmt = static_cast<uint32_t>(a_format);
-			if (fmt >= 1 && fmt <= 4)       return 128;
-			if (fmt >= 5 && fmt <= 8)       return 96;
-			if (fmt >= 9 && fmt <= 22)      return 64;
-			if (fmt >= 23 && fmt <= 45)     return 32;
-			if (fmt == 87)                  return 32;
-			if (fmt >= 48 && fmt <= 59)     return 16;
-			if (fmt >= 60 && fmt <= 65)     return 8;
-			return 0;
-		}
-
-		static RE::BSGraphics::Texture* thunk(
-			RE::BSGraphics::Renderer* a_renderer,
-			uint32_t a_width,
-			uint32_t a_height,
-			void* a_pixelData,
-			D3D11_USAGE a_usage,
-			DXGI_FORMAT a_format,
-			bool a_unorderedAccess)
-		{
-			auto* scrapHeap = RE::MemoryManager::GetSingleton()->GetThreadScrapHeap();
-
-			auto* texture = reinterpret_cast<RE::BSGraphics::Texture*>(
-				scrapHeap->Allocate(sizeof(RE::BSGraphics::Texture), 8));
-
-			if (!texture)
-				return nullptr;
-
-			std::memset(texture, 0, sizeof(RE::BSGraphics::Texture));
-
-			D3D11_TEXTURE2D_DESC desc = {};
-			desc.Width = a_width;
-			desc.Height = a_height;
-			desc.MipLevels = 1;
-			desc.ArraySize = 1;
-			desc.Format = a_format;
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Usage = a_usage;
-			desc.BindFlags = (a_usage == D3D11_USAGE_STAGING) ? 0 : D3D11_BIND_SHADER_RESOURCE;
-
-			if (a_unorderedAccess)
-				desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
-
-			if (a_usage == D3D11_USAGE_DYNAMIC)
-				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-			else if (a_usage == D3D11_USAGE_STAGING)
-				desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE | D3D11_CPU_ACCESS_READ;
-			else
-				desc.CPUAccessFlags = 0;
-
-			desc.MiscFlags = (a_usage == 0 || a_usage == D3D11_USAGE_IMMUTABLE) ? D3D11_RESOURCE_MISC_SHARED : 0;
-
-			D3D11_SUBRESOURCE_DATA subresData = {};
-			D3D11_SUBRESOURCE_DATA* pSubres = nullptr;
-			if (a_pixelData) {
-				auto bpp = GetBitsPerPixel(a_format);
-				subresData.pSysMem = a_pixelData;
-				subresData.SysMemPitch = (bpp >> 3) * a_width;
-				subresData.SysMemSlicePitch = 0;
-				pSubres = &subresData;
-			}
-
-			auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
-
-			ID3D11Texture2D* d3dTex = nullptr;
-			HRESULT hr = device->CreateTexture2D(&desc, pSubres, &d3dTex);
-
-			if (FAILED(hr) || !d3dTex)
-				return nullptr;
-
-			texture->texture = d3dTex;
-			texture->width = static_cast<uint16_t>(a_width);
-			texture->height = static_cast<uint16_t>(a_height);
-			texture->format = static_cast<uint8_t>(a_format);
-			texture->mips = 1;
-			texture->unk1E = 0;
-			texture->refCount = 1;
-			texture->pad24 = NO_DX12RESOURCE;
-
-			if (a_usage != D3D11_USAGE_STAGING) {
-				D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-				srvDesc.Format = a_format;
-				srvDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
-				srvDesc.Texture2D.MostDetailedMip = 0;
-				srvDesc.Texture2D.MipLevels = 1;
-
-				device->CreateShaderResourceView(d3dTex, &srvDesc, &texture->resourceView);
-			}
-
-			return texture;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct CreateTextureFromFile
-	{
-		static RE::BSGraphics::Texture* thunk(
-			std::uintptr_t a_context,
-			const char* a_path,
-			std::int32_t a_type)
-		{
-			auto* result = func(a_context, a_path, a_type);
-			if (result)
-				result->pad24 = NO_DX12RESOURCE;
-			return result;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	void CreateRenderTarget::thunk(
-		RE::BSGraphics::Renderer* a_renderer,
-		RE::RENDER_TARGETS::RENDER_TARGET a_target,
-		const char* a_RenderTarget,
-		RE::BSGraphics::RenderTargetProperties* a_properties)
-	{
-		switch (a_target)
-		{
-		case RE::RENDER_TARGETS::kMOTION_VECTOR:
-		case RE::RENDER_TARGETS::kPLAYER_FACEGEN_TINT:
-		case RE::RENDER_TARGETS::kWATER_DISPLACEMENT:
-			break;
-		default:
-			func(a_renderer, a_target, a_RenderTarget, a_properties);
-			return;
-		}
-
-		auto desc = D3D11_TEXTURE2D_DESC{};
-		desc.Width = a_properties->width;
-		desc.Height = a_properties->height;
-		desc.MipLevels = a_properties->allowMipGeneration ? 0 : 1;
-		desc.ArraySize = 1;
-		desc.Format = static_cast<DXGI_FORMAT>(a_properties->format.underlying());
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Usage = D3D11_USAGE_DEFAULT;
-		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-		desc.CPUAccessFlags = 0;
-
-		// Yes, we created this entire function just to set the texture as shared
-		desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
-
-		if (a_properties->supportUnorderedAccess)
-			desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
-
-		if (a_properties->allowMipGeneration)
-			desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
-
-		auto& renderTexture = a_renderer->GetRuntimeData().renderTargets[a_target];
-
-		auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
-
-		device->CreateTexture2D(&desc, nullptr, &renderTexture.texture);
-		device->CreateRenderTargetView(renderTexture.texture, nullptr, &renderTexture.RTV);
-		device->CreateShaderResourceView(renderTexture.texture, nullptr, &renderTexture.SRV);
-
-		if (a_properties->copyable)
-		{
-			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-			device->CreateTexture2D(&desc, nullptr, &renderTexture.textureCopy);
-			device->CreateShaderResourceView(renderTexture.textureCopy, nullptr, &renderTexture.SRVCopy);
-		}
-
-		if (a_properties->supportUnorderedAccess)
-		{
-			D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
-			uavDesc.Format = desc.Format;
-			uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-			device->CreateUnorderedAccessView(renderTexture.texture, &uavDesc, &renderTexture.UAV);
-		}
-	}
-
-	void CreateDepthStencil::thunk(
-		RE::BSGraphics::Renderer* a_renderer,
-		RE::RENDER_TARGETS_DEPTHSTENCIL::RENDER_TARGET_DEPTHSTENCIL a_target,
-		[[ maybe_unused ]] const char* a_depthStencilTarget,
-		RE::BSGraphics::DepthStencilTargetProperties* a_properties)
-	{
-		DXGI_FORMAT texFormat, dsvFormat, srvFormat;
-		bool stencil = a_properties->stencil;
-
-		if (a_properties->use16BitsDepth)
-		{
-			texFormat = DXGI_FORMAT_R16_TYPELESS;
-			dsvFormat = DXGI_FORMAT_D16_UNORM;
-			srvFormat = DXGI_FORMAT_R16_UNORM;
-		}
-		else
-		{
-			texFormat = DXGI_FORMAT_R32_TYPELESS;
-			dsvFormat = DXGI_FORMAT_D32_FLOAT;
-			srvFormat = DXGI_FORMAT_R32_FLOAT;
-		}
-
-		if (stencil)
-		{
-			texFormat = DXGI_FORMAT_R24G8_TYPELESS;
-			dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-			srvFormat = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-		}
-
-		D3D11_TEXTURE2D_DESC texDesc = {};
-		texDesc.Width = a_properties->width;
-		texDesc.Height = a_properties->height;
-		texDesc.MipLevels = 1;
-		texDesc.ArraySize = a_properties->arraySize;
-		texDesc.Format = texFormat;
-		texDesc.SampleDesc.Count = 1;
-		texDesc.SampleDesc.Quality = 0;
-		texDesc.Usage = D3D11_USAGE_DEFAULT;
-		texDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
-		texDesc.CPUAccessFlags = 0;
-
-		// Yes, we created this entire function just to set the texture as shared (2)
-		texDesc.MiscFlags = a_target == RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN ? D3D11_RESOURCE_MISC_SHARED : 0;
-
-		auto& depthStencil = a_renderer->GetDepthStencilData().depthStencils[a_target];
-		auto device = reinterpret_cast<ID3D11Device*>(a_renderer->GetDevice());
-
-		device->CreateTexture2D(&texDesc, nullptr, &depthStencil.texture);
-
-		D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc2 = {};
-		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-
-		srvDesc.Format = srvFormat;
-
-		uint32_t arraySize = a_properties->arraySize;
-
-		if (arraySize > 1)
-		{
-			srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
-			srvDesc.Texture2DArray.MipLevels = 1;
-			srvDesc.Texture2DArray.ArraySize = arraySize;
-		}
-		else
-		{
-			srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-			srvDesc.Texture2D.MipLevels = 1;
-		}
-
-		for (uint32_t i = 0; i < arraySize; ++i)
-		{
-			if (arraySize > 1)
-			{
-				dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-				dsvDesc.Texture2DArray.MipSlice = 0;
-				dsvDesc.Texture2DArray.FirstArraySlice = i;
-				dsvDesc.Texture2DArray.ArraySize = 1;
-
-				dsvDesc2.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-				dsvDesc2.Texture2DArray.MipSlice = 0;
-				dsvDesc2.Texture2DArray.FirstArraySlice = i;
-				dsvDesc2.Texture2DArray.ArraySize = 1;
-			}
-			else
-			{
-				dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-				dsvDesc.Texture2D.MipSlice = 0;
-
-				dsvDesc2.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-				dsvDesc2.Texture2D.MipSlice = 0;
-			}
-
-			dsvDesc.Format = dsvFormat;
-			dsvDesc.Flags = 0;
-
-			dsvDesc2.Format = dsvFormat;
-			dsvDesc2.Flags = D3D11_DSV_READ_ONLY_DEPTH | (stencil ? D3D11_DSV_READ_ONLY_STENCIL : 0);
-
-			device->CreateDepthStencilView(depthStencil.texture, &dsvDesc, &depthStencil.views[i]);
-			device->CreateDepthStencilView(depthStencil.texture, &dsvDesc2, &depthStencil.readOnlyViews[i]);
-		}
-
-		device->CreateShaderResourceView(depthStencil.texture, &srvDesc, &depthStencil.depthSRV);
-
-		if (stencil)
-		{
-			srvDesc.Format = DXGI_FORMAT_X24_TYPELESS_G8_UINT;
-			device->CreateShaderResourceView(depthStencil.texture, &srvDesc, &depthStencil.stencilSRV);
-		}
-	}
 
 	template <std::derived_from<RE::NiCullingProcess> T>
 	struct NiCullingProcess_AppendVirtual
@@ -935,25 +455,6 @@ namespace Hooks
 
 		return func();
 	}
-
-	struct BGSTerrainBlock_Load
-	{
-		static RE::BGSTerrainBlock* thunk(RE::BGSTerrainBlock* a_block, RE::BGSTerrainManager* a_terrainManager, RE::BSStream* a_stream, int32_t a4, int32_t a5)
-		{
-			auto result = func(a_block, a_terrainManager, a_stream, a4, a5);
-
-			if (result && result->node && result->land) {
-				auto lodLevel = static_cast<std::int32_t>(result->node->GetLODLevel());
-				auto key = RE::BSFixedString(Constants::ExtraData::LandLOD);
-				auto extra = RE::NiIntegersExtraData::Create(key, { lodLevel });
-				result->land->AddExtraData(extra);
-			}
-
-			return result;
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
 
 	struct BGSTerrainBlock_Dtor
 	{
@@ -1072,14 +573,76 @@ namespace Hooks
 	};
 
 #elif defined(FALLOUT4)
+	struct BSD3DResourceCreator_PoolBucket_Dtor
+	{
+		static void thunk(void* a_bucket)
+		{
+			if (a_bucket) {
+				auto buffer = *reinterpret_cast<REX::W32::ID3D11Buffer**>(reinterpret_cast<uintptr_t>(a_bucket) + 288);
+				if (buffer) {
+					Scene::GetSingleton()->TryReleaseBuffer(buffer);
+				}
+			}
 
+			func(a_bucket);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSD3DResourceCreator_CreateBufferRequested
+	{
+		enum class BufferType : uint32_t
+		{
+			Vertex = 0,
+			Index = 1,
+			Constant = 2,
+			Byte = 3,
+			Structured = 4
+		};
+
+		struct Request
+		{
+			RE::BSGraphics::Buffer* buffer;
+			BufferType type;
+			uint32_t size;
+			bool isDynamic;
+		};
+
+		static void thunk(void* a_this, Request* a_request)
+		{
+			func(a_this, a_request);
+
+			if (!a_request) {
+				logger::info("BSD3DResourceCreator::CreateBufferRequested - Request is nullptr");
+				return;
+			}
+
+			if (a_request->type != BufferType::Vertex && a_request->type != BufferType::Index)
+				return;
+
+			if (a_request->isDynamic)
+				return;
+
+			if (!a_request->buffer) {
+				logger::info("BSD3DResourceCreator::CreateBufferRequested - Buffer is nullptr");
+				return;
+			}
+
+			Scene::GetSingleton()->TryShareBuffer(a_request->buffer->buffer);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 #endif
+
+	void InstallEarly()
+	{
+
+	}
 
 	void Install()
 	{
-		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
-
 #if defined(SKYRIM)
+		stl::write_vfunc<0x0, NiSourceTexture_Destructor>(RE::VTABLE_NiSourceTexture[0]);
 		const auto createTriShapeA = REL::RelocationID(75473, 77259);
 		const auto createTriShapeB = REL::RelocationID(75474, 77260);
 		const auto createTriShapeC = REL::RelocationID(75475, 77261);
@@ -1110,22 +673,10 @@ namespace Hooks
 		stl::detour_thunk<BSDynamicTriShape_UpdateDynamicData>(REL::RelocationID(69570, 70954));
 		
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
-		
+
 		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
 		
-		// All textures loaded from DDS
-		stl::detour_thunk<CreateTextureAndSRV>(REL::RelocationID(75724, 77538));
 
-		// Flowmap and Player FaceGen Tint
-		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
-
-		// Texture load from file (sub_140D6E110)
-		stl::detour_thunk<CreateTextureFromFile>(REL::RelocationID(75512, 77304));
-
-		stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
-
-		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
-		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
 
 		// Terrain LOD
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
@@ -1184,15 +735,18 @@ namespace Hooks
 		scene->g_BypassSubIndexVisibility = g_BypassSubIndexVisibility.get();
 
 #elif defined(FALLOUT4)
-#	if defined(FALLOUT_POST_NG)
-		stl::detour_thunk<TES_AttachModel>(REL::ID(2192085));
-#	endif
+		stl::detour_thunk<BSD3DResourceCreator_CreateBufferRequested>(REL::ID(2277441));
+		stl::detour_thunk<BSD3DResourceCreator_PoolBucket_Dtor>(REL::ID(2277467));
+
+		stl::detour_thunk<BGSTerrainBlock_Load>(REL::ID(2213536));
 #endif
+
 		logger::info("[Raytracing] Installed hooks");
 	}
 
 	void InstallD3D11(ID3D11Device* a_device)
 	{
 		stl::detour_vfunc<3, ID3D11Device_CreateBuffer>(a_device);
+		stl::detour_vfunc<5, ID3D11Device_CreateTexture2D>(a_device);
 	}
 }

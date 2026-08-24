@@ -7,7 +7,11 @@
 //   NO GBuffer reconstruction heuristics.
 
 #include "ReSTIRGI/Registers.hlsli"
-#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#if defined(SKYRIM)
+#   include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#elif defined(FALLOUT4)
+#   include "interop/Material/Fallout4/LightingMaterialData.hlsli"
+#endif
 
 // Include advanced settings for DIFFUSE_MODE defaults
 #include "raytracing/include/AdvancedSettings.hlsli"

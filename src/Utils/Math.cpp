@@ -63,26 +63,13 @@ namespace Util
 			const RE::NiMatrix3& m = Transform.rotate;
 			const float scale = Transform.scale;
 
-			temp.r[0] = DirectX::XMVectorScale(DirectX::XMVectorSet(
-				m.entry[0][0],
-				m.entry[1][0],
-				m.entry[2][0],
-				0.0f),
-				scale);
+			const float3 col0 = GetMatrixColumn(m, 0);
+			const float3 col1 = GetMatrixColumn(m, 1);
+			const float3 col2 = GetMatrixColumn(m, 2);
 
-			temp.r[1] = DirectX::XMVectorScale(DirectX::XMVectorSet(
-				m.entry[0][1],
-				m.entry[1][1],
-				m.entry[2][1],
-				0.0f),
-				scale);
-
-			temp.r[2] = DirectX::XMVectorScale(DirectX::XMVectorSet(
-				m.entry[0][2],
-				m.entry[1][2],
-				m.entry[2][2],
-				0.0f),
-				scale);
+			temp.r[0] = DirectX::XMVectorScale(DirectX::XMVectorSet(col0.x, col0.y, col0.z, 0.0f), scale);
+			temp.r[1] = DirectX::XMVectorScale(DirectX::XMVectorSet(col1.x, col1.y, col1.z, 0.0f), scale);
+			temp.r[2] = DirectX::XMVectorScale(DirectX::XMVectorSet(col2.x, col2.y, col2.z, 0.0f), scale);
 
 			temp.r[3] = DirectX::XMVectorSet(
 				Transform.translate.x,

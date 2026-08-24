@@ -30,7 +30,7 @@ Texture2D<float4>                 WaterDisplacementMap : register(t6);
 Texture2D<float4>                 ProjNoiseMap         : register(t7);
 Texture2D<float4>                 SkinDetailNormal     : register(t8);
 
-StructuredBuffer<Triangle>        Triangles[]      : register(t0, space1);
+ByteAddressBuffer                 Indices[]        : register(t0, space1);
 ByteAddressBuffer                 Vertices[]       : register(t0, space2);
 ByteAddressBuffer                 Materials[]      : register(t0, space3);
 Texture2D<float4>                 Textures[]       : register(t0, space4);
@@ -45,6 +45,29 @@ SamplerState                      PointWrapSampler : register(s2);
 #include "include/Surface.hlsli"
 #include "include/SurfaceMaker.hlsli"
 
+Triangle GetTriangle(in uint meshIndex, in uint indexByteOffset, in uint primitiveIdx)
+{
+    const uint byteAddr = indexByteOffset + primitiveIdx * 6u;
+    const uint alignedAddr = byteAddr & ~3u;
+    const uint d0 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr);
+    const uint d1 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr + 4u);
+
+    Triangle tri;
+    if ((byteAddr & 2u) == 0)
+    {
+        tri.x = (uint16_t)(d0 & 0xFFFF);
+        tri.y = (uint16_t)(d0 >> 16);
+        tri.z = (uint16_t)(d1 & 0xFFFF);
+    }
+    else
+    {
+        tri.x = (uint16_t)(d0 >> 16);
+        tri.y = (uint16_t)(d1 & 0xFFFF);
+        tri.z = (uint16_t)(d1 >> 16);
+    }
+    return tri;
+}
+
 // Decodes a signed-normalized byte4 (ubyte4 * 2 - 1) from a raw uint.
 inline float4 UnpackByte4SNorm(uint packed)
 {
@@ -56,7 +79,7 @@ inline float4 UnpackByte4SNorm(uint packed)
     return v * (1.0f / 255.0f) * 2.0f - 1.0f;
 }
 
-Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
+Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexByteOffset, uint index, bool isMSN, uint numVertices)
 {
     Vertex vertex = (Vertex)0;
 
@@ -64,7 +87,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     
     // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t, so a 16-bit
     // multiply would overflow (e.g. stride 32 * index 2048 = 0) and corrupt high-index vertices.
-    const uint vertexOffset = vertexSize * index;
+    const uint vertexOffset = vertexByteOffset + vertexSize * index;
 
     float4 pos = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float4 normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -74,7 +97,18 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     if (vertexDesc.HasFlag(VertexFlags::Vertex))
     {
         const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
-        pos = asfloat(vertices.Load4(offset));
+        if (vertexDesc.HasFlag(VertexFlags::FullPrec))
+        {
+            pos = asfloat(vertices.Load4(offset));
+        }
+        else
+        {
+            const uint2 packed = vertices.Load2(offset);
+            pos.x = f16tof32(packed.x & 0xFFFF);
+            pos.y = f16tof32(packed.x >> 16);
+            pos.z = f16tof32(packed.y & 0xFFFF);
+            pos.w = f16tof32(packed.y >> 16);
+        }
         vertex.Position = pos.xyz;
     }
 
@@ -142,7 +176,7 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
 
     if (isMSN)
     {
-        const uint quatOffset = (vertexSize * numVertices) + index * 8u;
+        const uint quatOffset = vertexByteOffset + (vertexSize * numVertices) + index * 8u;
         const uint2 packed = vertices.Load2(quatOffset);
         
         half4 q;
@@ -156,6 +190,11 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     }
     
     return vertex;
+}
+
+Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
+{
+    return GetVertex(vertices, vertexDesc, 0u, index, isMSN, numVertices);
 }
 
 struct VertexOut
@@ -194,14 +233,14 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
     const uint triangleID = vertexID / 3;
     const uint vertexInTriangle = vertexID % 3;
 
-    const uint safePrimitiveIndex = min(triangleID, (uint)mesh.NumTriangles);
-    Triangle tri = Triangles[NonUniformResourceIndex(mesh.IndexID)][mesh.TriangleOffset + safePrimitiveIndex];
+    const uint safePrimitiveIndex = min(triangleID, (uint)max(0, (int)mesh.NumTriangles - 1));
+    Triangle tri = GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
     const uint16_t triVerts[3] = { tri.x, tri.y, tri.z };
     uint16_t triVertex = triVerts[vertexInTriangle];
 
-    const bool isMSN = props.ShaderFlags & ShaderFlags::kModelSpaceNormals;
+    const bool isMSN = (props.ShaderFlags & ShaderFlags::kModelSpaceNormals) != 0;
     ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
-    Vertex vertex = GetVertex(vertices, mesh.VertexDesc, triVertex, isMSN, mesh.NumVertices);
+    Vertex vertex = GetVertex(vertices, mesh.VertexDesc, mesh.VertexOffset, triVertex, isMSN, mesh.NumVertices);
 
     // Position-less dynamic meshes (BSDynamicTriShape) keep positions in a live float4 buffer.
     StructuredBuffer<float4> dynPos = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];

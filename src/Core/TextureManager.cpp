@@ -1,5 +1,4 @@
 #include "TextureManager.h"
-#include "Core/D3D12Texture.h"
 #include "Renderer.h"
 
 TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager) :
@@ -58,106 +57,65 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 	if (!texture)
 		return;
 
-	std::scoped_lock lock(m_ReleaseMutex);
-
-	IUnknown* key = nullptr;
-
-#if defined(SKYRIM)
-	if (texture->pad24 == NATIVE_DX12RESOURCE)
-		key = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
-	else
-#endif
-		key = texture->texture;
-
-	m_Textures.erase(key);
+	std::scoped_lock lock(m_TexturesMutex);
+	m_Textures.erase(texture->texture);
 }
 
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType)
 {
 	ID3D11Resource* d3d11Resource = texture->texture;
-	ID3D12Resource* d3d12Resource = nullptr;
-
-#if defined(SKYRIM)
-	// Texure was already loaded on DX12
-	if (texture->pad24 == NATIVE_DX12RESOURCE) {
-		d3d12Resource = reinterpret_cast<RE::BSGraphics::D3D12Texture*>(texture)->d3d12Texture;
-	}
-#endif
-
-	return GetDescriptor(d3d11Resource, d3d12Resource, textureType);
-}
-
-eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource, TextureType textureType)
-{
-	if (textureType == TextureType::CubeMap)
+	if (!d3d11Resource)
 		return nullptr;
 
-	// If d3d12Resource is null we need to get the texture handle from dx11
-	bool shareResource = d3d12Resource == nullptr;
-	if (shareResource && !d3d11Resource)
-		return nullptr;
-
-	IUnknown* key = nullptr;
-
-	if (shareResource)
-		key = d3d11Resource;
-	else
-		key = d3d12Resource;
-
-	if (textureType == TextureType::Standard) {
-		if (auto refIt = m_Textures.find(key); refIt != m_Textures.end())
+	{
+		std::scoped_lock lock(m_TexturesMutex);
+		if (auto refIt = m_Textures.find(d3d11Resource); refIt != m_Textures.end())
 			return refIt->second->descriptorHandle;
 	}
+
+	// Share texture from DX11 to DX12
+	auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+
+	winrt::com_ptr<IDXGIResource> dxgiResource;
+	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+
+	if (FAILED(hr)) {
+		logger::error("{} - Failed to query interface.", __FUNCTION__);
+		return nullptr;
+	}
+
+	HANDLE sharedHandle = nullptr;
+	hr = dxgiResource->GetSharedHandle(&sharedHandle);
+
+	if (FAILED(hr) || !sharedHandle) {
+		D3D11_TEXTURE2D_DESC desc;
+		d3d11Texture->GetDesc(&desc);
+
+		logger::debug("TextureManager::GetDescriptor - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
+		return nullptr;
+	}
+
+	auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
 
 	// OpenSharedHandle returns an owned COM reference. Keep it in a com_ptr until
 	// the NVRHI wrapper takes its own reference, otherwise the opened reference
 	// outlives the TextureReference cache entry.
 	winrt::com_ptr<ID3D12Resource> openedSharedResource;
 
-	// Share texture from DX11 to DX12
-	if (shareResource) {
-		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+	hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(openedSharedResource.put()));
 
-		winrt::com_ptr<IDXGIResource> dxgiResource;
-		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
-
-		if (FAILED(hr)) {
-			logger::error("{} - Failed to query interface.", __FUNCTION__);
-			return nullptr;
-		}
-
-		HANDLE sharedHandle = nullptr;
-		hr = dxgiResource->GetSharedHandle(&sharedHandle);
-
-		if (FAILED(hr) || !sharedHandle) {
-			D3D11_TEXTURE2D_DESC desc;
-			d3d11Texture->GetDesc(&desc);
-
-			logger::debug("TextureManager::GetDescriptor - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
-			return nullptr;
-		}
-
-		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
-
-		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(openedSharedResource.put()));
-
-		if (FAILED(hr)) {
-			logger::error("TextureManager::GetDescriptor - Failed to open shared handle.");
-			return nullptr;
-		}
-
-		d3d12Resource = openedSharedResource.get();
-		if (!d3d12Resource) {
-			logger::error("TextureManager::GetDescriptor - Failed to acquire DX12 texture.");
-			return nullptr;
-		}
-
-		d3d12Resource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
-	}
-	else if (!d3d12Resource) {
-		logger::error("TextureManager::GetDescriptor - D3D12Resource is null");
+	if (FAILED(hr)) {
+		logger::error("TextureManager::GetDescriptor - Failed to open shared handle.");
 		return nullptr;
 	}
+
+	auto d3d12Resource = openedSharedResource.get();
+	if (!d3d12Resource) {
+		logger::error("TextureManager::GetDescriptor - Failed to acquire DX12 texture.");
+		return nullptr;
+	}
+
+	openedSharedResource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
 
 	// Create NVRHI handle for native texture
 	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
@@ -177,15 +135,20 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(ID3D11Resource
 
 	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 
-	auto [it, emplaced] = m_Textures.try_emplace(key, nullptr);
+	{
+		std::scoped_lock lock(m_TexturesMutex);
+		auto [it, emplaced] = m_Textures.try_emplace(d3d11Resource, nullptr);
 
-	if (!emplaced) {
-		logger::error("TextureManager::GetDescriptor - TextureReference emplace failed.");
-		return nullptr;
+		if (!emplaced) {
+			logger::error("TextureManager::GetDescriptor - TextureReference emplace failed.");
+			return nullptr;
+		}
+
+		if (textureType == TextureType::Standard)		
+			it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
+		else
+			it->second = eastl::make_unique<TextureReference>(textureHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+
+		return it->second->descriptorHandle;
 	}
-
-	it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
-	return it->second->descriptorHandle;
-
-	return nullptr;
 }

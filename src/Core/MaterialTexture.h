@@ -8,7 +8,8 @@
 struct MaterialTexture
 {
 	Texture texture;
-	RE::NiSourceTexture* sourceTexture = nullptr;
+	RE::NiTexture* sourceTexture = nullptr;
 
-	bool Update(const RE::NiSourceTexturePtr& a_sourceTexture, const eastl::shared_ptr<DescriptorHandle> a_defaultDescriptor, TextureType a_type = TextureType::Standard);
+	bool Update(const RE::NiPointer<RE::NiSourceTexture>& a_sourceTexture, const eastl::shared_ptr<DescriptorHandle> a_defaultDescriptor, TextureType a_type = TextureType::Standard);
+	bool Update(RE::NiTexture* a_sourceTexture, const eastl::shared_ptr<DescriptorHandle> a_defaultDescriptor, TextureType a_type = TextureType::Standard);
 };

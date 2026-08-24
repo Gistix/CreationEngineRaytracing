@@ -21,6 +21,7 @@
 #include "Core/Mesh/SubIndexSegmentMesh.h"
 
 #include <chrono>
+#include <numbers>
 
 void SceneGraph::Initialize()
 {
@@ -56,7 +57,7 @@ void SceneGraph::Initialize()
 		bindlessLayoutDesc.firstSlot = 0;
 		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
 		bindlessLayoutDesc.registerSpaces = {
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1).setSize(UINT_MAX)
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(1).setSize(UINT_MAX)
 		};
 
 		m_TriangleDescriptors = eastl::make_unique<BindlessTableManager>(device, bindlessLayoutDesc, true);
@@ -184,42 +185,53 @@ void SceneGraph::Initialize()
 
 void SceneGraph::UpdateCamera()
 {
+	auto* playerCharacter = RE::PlayerCharacter::GetSingleton();
 	auto* playerCamera = RE::PlayerCamera::GetSingleton();
 
 	// Mimics the logic of Main::Draw (kind of)
-	m_DrawFirstPerson = playerCamera->IsInFirstPerson()
-		&& Scene::GetSingleton()->GetMenuState().none(MenuState::MainMenu) 
-		&& !playerCamera->IsInFreeCameraMode();
+	m_DrawFirstPerson = Util::Adapter::IsInFirstPerson(playerCharacter, playerCamera)
+		&& Scene::GetSingleton()->GetMenuState().none(MenuState::MainMenu);
 
 	// Might not be exactly how the game does it, but the first person node is always at origin, except during first person view rendering
-	auto& runtimeData = RE::BSGraphics::RendererShadowState::GetSingleton()->GetRuntimeData();
-	m_FirstPersonPosition = m_DrawFirstPerson ? runtimeData.posAdjust.getEye() - Util::Adapter::GetFirstPersonNodePosition(playerCamera) : RE::NiPoint3::Zero();
+	m_FirstPersonPosition = m_DrawFirstPerson ? Util::Adapter::GetCameraEyePosition() - Util::Adapter::GetFirstPersonNodePosition(playerCamera) : Util::Adapter::GetZeroNiPoint3();
+
 
 	const auto* tesCamera = playerCamera->currentState->camera;
 	m_Camera = tesCamera ? Util::Game::FindNiCamera(tesCamera->cameraRoot.get()) : nullptr;
 }
 
-void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
+void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 {
+	auto* shadowSceneNode = Util::Adapter::GetShadowSceneNode(0);
+
 #if defined(SKYRIM)
-	auto& mainSSNRuntimeData = Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData();
+	auto& mainSSNRuntimeData = shadowSceneNode->GetRuntimeData();
+	auto& activeLights = mainSSNRuntimeData.activeLights;
+	auto& activeShadowLights = mainSSNRuntimeData.activeShadowLights;
+#elif defined(FALLOUT4)
+	auto& activeLights = shadowSceneNode->activeLights;
+	auto& activeShadowLights = shadowSceneNode->activeShadowLights;
+#endif
 
 	// Update Light Vector
 	{
 		m_TempActiveLights.clear();
-		m_TempActiveLights.reserve(mainSSNRuntimeData.activeLights.size() + mainSSNRuntimeData.activeShadowLights.size());
+		m_TempActiveLights.reserve(activeLights.size() + activeShadowLights.size());
 
 		auto collectLights = [&](const auto& lights) {
 			for (const auto& activeLight : lights)
 			{
 				auto* ptr = activeLight.get();
+				if (!ptr)
+					continue;
+
 				m_TempActiveLights.insert(ptr);
 				m_Lights.try_emplace(ptr, ptr);
 			}
 		};
 
-		collectLights(mainSSNRuntimeData.activeLights);
-		collectLights(mainSSNRuntimeData.activeShadowLights);
+		collectLights(activeLights);
+		collectLights(activeShadowLights);
 
 		for (auto it = m_Lights.begin(); it != m_Lights.end(); )
 		{
@@ -240,15 +252,31 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 		light.m_Index = static_cast<uint8_t>(numLights);
 
 		auto niLight = bsLight->light.get();
+		if (!niLight)
+			continue;
 
-#if defined(SKYRIM)
-		if (niLight->GetFlags().any(RE::NiAVObject::Flag::kHidden))
-#elif defined(FALLOUT4)
-		if (niLight->GetFlags() & static_cast<uint64_t>(CESEAdapter::RE::NiAVObjectFlag::kHidden))
-#endif
+		bool isSpotLight = false;
+		RE::TESObjectLIGH* ligh = nullptr;
+
+		const auto refr = Util::Adapter::GetUserData(niLight);
+		if (refr) {
+			if (refr->IsDisabled())
+				light.m_Active = false;
+
+			if (auto* objRef = refr->GetObjectReference()) {
+				if (objRef->GetFormType() == CESEAdapter::RE::FormType::Light) {
+					ligh = objRef->As<RE::TESObjectLIGH>();
+
+					if (ligh)
+						isSpotLight = Util::Adapter::IsSpotLight(ligh);
+				}
+			}
+		}
+
+
+		if (Util::Adapter::IsNiAVObjectHidden(niLight))
 			light.m_Active = false;
 
-#if defined(SKYRIM)
 		if (bsLight->IsShadowLight())
 		{
 			auto* shadowLight = reinterpret_cast<RE::BSShadowLight*>(bsLight);
@@ -256,7 +284,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 			if (shadowLight->GetRuntimeData().maskIndex == 255)
 				light.m_Active = false;
 		}
-#endif
 
 		auto runtimeData = Util::Adapter::GetLightRuntimeData(niLight);
 
@@ -271,9 +298,9 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 		{
 			auto& lightData = m_LightData[numLights];
 
-			lightData.Color = float3(runtimeData.diffuse.red, runtimeData.diffuse.green, runtimeData.diffuse.blue);
+			lightData.Color = Util::Math::Float3(runtimeData.diffuse);
 
-			lightData.Radius = runtimeData.radius.x;
+			lightData.Radius = runtimeData.radius;
 
 			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) <= 1e-4 || lightData.Radius <= 1e-4)
 				light.m_Active = false;
@@ -284,49 +311,25 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 			if (light.m_Active)
 				light.UpdateInstances();
 
-			lightData.Vector = Util::Math::Float3(niLight->world.translate);
+			lightData.Position = Util::Math::Float3(niLight->world.translate);
 
-			lightData.InvRadius = 1.0f / runtimeData.radius.x;
+			lightData.InvRadius = 1.0f / runtimeData.radius;
 
 			lightData.Fade = runtimeData.fade;
 
 			if (lightingSettings.LodDimmer)
 				lightData.Fade *= bsLight->lodDimmer;
 
-			// Determine light type: Spot, Point, or Directional
-			// NiSpotLight extends NiPointLight; both have BSLight::pointLight = true.
-			// We distinguish spots via NiRTTI pointer compare.
-			bool isSpot = false;
-			if (bsLight->pointLight) {
-				auto* rtti = niLight->GetRTTI();
-				if (rtti == Constants::rtti::NiSpotLight.get())
-					isSpot = true;
-			}
-
-			if (isSpot) {
+			if (isSpotLight) {
 				lightData.Type = LightType::Spot;
-
-				// Spot direction from world rotation matrix, first column = model direction (1,0,0) transformed
-				auto& rot = niLight->world.rotate;
-				float3 dir(rot.entry[0][0], rot.entry[1][0], rot.entry[2][0]);
-				dir = Util::Math::Normalize(dir);
-				lightData.Direction = dir;
-
-				auto pointLightData = Util::Adapter::GetPointLightRuntimeData(niLight);
-				float outerAngleDeg = pointLightData.spotOuterAngle;
-				float innerAngleDeg = pointLightData.spotInnerAngle;
-
-				// Clamp to valid range
-				outerAngleDeg = std::clamp(outerAngleDeg, 1.0f, 89.0f);
-				innerAngleDeg = std::clamp(innerAngleDeg, 0.0f, outerAngleDeg);
-
-				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(outerAngleDeg * (3.14159265f / 180.0f)));
-				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(std::cos(innerAngleDeg * (3.14159265f / 180.0f)));
+				lightData.Direction = Util::Math::Normalize(Util::Math::GetMatrixColumn(niLight->world.rotate, 0));
+				lightData.CosOuterAngle = std::cosf(ligh->data.fov * std::numbers::pi_v<float> / 180.0f);
+				lightData.CosInnerAngle = 1.0f;
 			} else {
-				lightData.Type = bsLight->pointLight ? LightType::Point : LightType::Directional;
+				lightData.Type = LightType::Point;
 				lightData.Direction = float3(0.0f, 0.0f, 0.0f);
-				lightData.CosOuterAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
-				lightData.CosInnerAngleHalf = DirectX::PackedVector::XMConvertFloatToHalf(-1.0f);
+				lightData.CosOuterAngle = -1.0f;
+				lightData.CosInnerAngle = -1.0f;
 			}
 
 			lightData.Flags = 0;
@@ -356,7 +359,6 @@ void SceneGraph::UpdateLights([[maybe_unused]] nvrhi::ICommandList* commandList)
 	}
 
 	commandList->writeBuffer(GetLightBuffer(), m_LightData.data(), numLights * sizeof(LightData));
-#endif
 }
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
@@ -375,16 +377,14 @@ void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 {
-	auto it = m_Meshes.find(bsDynamicTriShape);
+	auto it = m_Meshes.find(reinterpret_cast<RE::BSTriShape*>(bsDynamicTriShape));
 	if (it == m_Meshes.end())
 		return;
 
 	if (auto dynamicMesh = it->second->AsDynamicMesh()) {
-		auto& runtimeData = bsDynamicTriShape->GetDynamicTrishapeRuntimeData();
-
 		// Function is called through a hook thats already between lock
 		// Acessing without locking here is safe and correct
-		dynamicMesh->UpdateDynamicData(runtimeData.dynamicData, runtimeData.dataSize);
+		Util::Adapter::UpdateDynamicData(dynamicMesh, bsDynamicTriShape);
 	}
 }
 
@@ -495,7 +495,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		for (auto& v : m_PerWorkerCreateList) v.reserve(64);
 		for (auto& v : m_PerWorkerCurrentVisible) v.reserve(256);
 
-		auto worldRootNode = RE::Main::GetSingleton()->WorldRootNode();
+		auto worldRootNode = Util::Adapter::GetWorldRootNode();
 
 		// First person view
 		// Why? The first person node is always hidden, except during first person view rendering where it is unhid for culling + rendering
@@ -573,10 +573,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				auto& children = Util::Adapter::GetChildren(node);
 
-				if (auto switchNode = node->AsSwitchNode()) {
-					const auto index = static_cast<uint32_t>(switchNode->index);
-					if (index < children.capacity())
-						walk(children[static_cast<uint16_t>(index)].get(), parentRefr);
+				if (auto* switchNode = Util::Adapter::AsSwitchNode(node)) {
+					auto index = static_cast<uint16_t>(switchNode->index);
+					auto childAt = Util::Adapter::GetChildAt(node, index);
+					if (childAt)
+						walk(childAt, parentRefr);
 					return;
 				}
 
@@ -592,14 +593,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				// regular children, matching ScenegraphTriShapes behavior.
 				eastl::vector<RE::NiAVObject*> portalChildren;
 				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
-					auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
-					if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
-						for (auto& child : portalGraph->alwaysRenderChildren) {
-							if (child->parent)
-								continue;
-							portalChildren.push_back(child.get());
-						}
-					}
+					Util::Adapter::GetAlwaysRenderChildren(node, portalChildren);
 				}
 
 				if (children.size() >= Constants::ParallelTraversalFanoutThreshold) {
@@ -727,7 +721,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					continue;
 				}
 
-				if (bsTriShape->GetType().none(RE::BSGeometry::Type::kTriShape, RE::BSGeometry::Type::kDynamicTriShape, RE::BSGeometry::Type::kSubIndexTriShape))
+				if (!Util::Adapter::IsValidTriShape(bsTriShape))
 					continue;
 
 				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
@@ -735,22 +729,24 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!shaderProperty)
 					continue;
 
-				const auto materialType = shaderProperty->GetMaterialType();
-				const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
-				const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
-				const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+				const auto materialType = static_cast<uint32_t>(shaderProperty->GetMaterialType());
+				const bool isLightingShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kLighting));
+				const bool isEffectShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kEffect));
+				const bool isWaterShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kWater));
 
 				auto* alphaProperty = geometryData.alphaProperty;
-				const bool isAlphaBlend = alphaProperty ? alphaProperty->GetAlphaBlending() : false;
+				const bool isAlphaBlend = Util::Adapter::GetAlphaBlending(alphaProperty);
 				const bool validEffect = isEffectShader && !isAlphaBlend;
 
 				// Exclude procedural and displacement water
 				if (isWaterShader) {
+#if defined(SKYRIM)
 					auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 					const auto waterFlags = waterShaderProperty->waterFlags.underlying();
 
 					if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
 						continue;
+#endif
 				}
 
 				if (!isLightingShader && !validEffect && !isWaterShader)
@@ -765,14 +761,14 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
 					continue;
 
-				const bool skinned = !geometryData.rendererData && geometryData.skinInstance && geometryData.skinInstance->skinPartition && geometryData.skinInstance->skinPartition->numPartitions > 0;
+				const bool skinned = Util::Adapter::IsSkinned(geometryData);
 				if (!skinned) {
-					const auto& trishapeData = bsTriShape->GetTrishapeRuntimeData();
+					const auto& trishapeData = Util::Adapter::GetTrishapeRuntimeData(bsTriShape);
 					if (trishapeData.vertexCount == 0 || trishapeData.triangleCount == 0)
 						continue;
 				}
 
-				const auto rendererData = skinned ? geometryData.skinInstance->skinPartition->partitions[0].buffData : geometryData.rendererData;
+				const auto rendererData = Util::Adapter::GetRendererData(geometryData);
 				if (!rendererData)
 					continue;
 

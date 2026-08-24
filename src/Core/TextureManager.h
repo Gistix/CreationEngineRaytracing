@@ -4,9 +4,6 @@
 #include "Framework/DescriptorTableManager.h"
 #include "Types/BindlessTableManager.h"
 
-#define NO_DX12RESOURCE 0
-#define NATIVE_DX12RESOURCE 0x32315844u  // "DX12"
-
 struct TextureReference
 {
 	nvrhi::TextureHandle texture;
@@ -26,7 +23,7 @@ struct TextureManager
 		CubeMap
 	};
 
-	std::mutex m_ReleaseMutex;
+	std::mutex m_TexturesMutex;
 
 	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
 
@@ -36,7 +33,6 @@ struct TextureManager
 	TextureManager();
 	uint64_t GetFakeDoubledVRAMUsage();
 	eastl::shared_ptr<DescriptorHandle> GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType = TextureType::Standard);
-	eastl::shared_ptr<DescriptorHandle> GetDescriptor(ID3D11Resource* d3d11Resource, ID3D12Resource* d3d12Resource = nullptr, TextureType textureType = TextureType::Standard);
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 };
 

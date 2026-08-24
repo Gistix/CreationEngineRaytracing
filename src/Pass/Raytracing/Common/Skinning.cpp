@@ -110,7 +110,7 @@ namespace Pass
 		if (queuedMeshes.empty())
 			return false;
 
-		uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
+		const uint32_t currentSlot = GetRenderer()->GetCurrentSlot();
 		uint32_t meshIndex = 0;
 		uint32_t boneIndex = 0;
 
@@ -175,7 +175,7 @@ namespace Pass
 				header.SkinToBoneOffset = boneIndex;
 				header.Pad = 0;
 
-				NiTransformPacked geomInv = mesh->GetGeometryWorldInverse();
+				const NiTransformPacked geomInv = mesh->GetGeometryWorldInverse();
 				header.GeomInv_Rot0_Scale = geomInv.Rot0_Scale;
 				header.GeomInv_Rot1       = geomInv.Rot1;
 				header.GeomInv_Rot2       = geomInv.Rot2;
@@ -191,12 +191,10 @@ namespace Pass
 
 		// Upload raw bone transform data (BoneCompute input)
 		if (boneIndex > 0) {
-			auto bytes = sizeof(NiTransformPacked) * boneIndex;
+			const auto bytes = sizeof(NiTransformPacked) * boneIndex;
 
-			if (bytes > 0) {
-				commandList->writeBuffer(m_BoneWorldBuffer[currentSlot], m_BoneWorldData.data(), bytes);
-				commandList->writeBuffer(m_SkinToBoneBuffer[currentSlot], m_SkinToBoneData.data(), bytes);
-			}
+			commandList->writeBuffer(m_BoneWorldBuffer[currentSlot], m_BoneWorldData.data(), bytes);
+			commandList->writeBuffer(m_SkinToBoneBuffer[currentSlot], m_SkinToBoneData.data(), bytes);
 		}
 
 		commandList->writeBuffer(m_MeshBoneHeaderBuffer[currentSlot], m_MeshBoneHeaderData.data(), sizeof(MeshBoneHeader) * meshIndex);

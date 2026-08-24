@@ -3,6 +3,10 @@
 #include "Constants.h"
 #include <eastl/unordered_set.h>
 
+#if defined(FALLOUT4)
+#include "Types/RE/FO4/NiSwitchNode.h"
+#endif
+
 namespace Util
 {
 	namespace Traversal
@@ -120,7 +124,7 @@ namespace Util
 			if (auto node = Util::Adapter::AsNode(a_object))
 			{
 				auto& children = Util::Adapter::GetChildren(node);
-				if (auto switchNode = node->AsSwitchNode()) {
+				if (auto switchNode = Util::Adapter::AsSwitchNode(node)) {
 					auto index = static_cast<uint16_t>(switchNode->index);
 					if (index < children.size())
 						result = ScenegraphTriShapes(children[index].get(), a_func, parentRefr, firstPersonRoot);
@@ -133,11 +137,15 @@ namespace Util
 							refr = owner;
 					}
 					else if (rtti == Constants::rtti::ShadowSceneNode.get()) {
-						auto ssn = reinterpret_cast<RE::ShadowSceneNode*>(node);
-						if (auto portalGraph = ssn->GetRuntimeData().portalGraph) {
+						if (auto portalGraph = Util::Adapter::GetPortalGraph(node)) {
 							// Iterate over PortalGraph always render children
 							// This list contains rendered nodes that are outside of the normal SceneGraph
-							for (auto& child : portalGraph->alwaysRenderChildren)
+#if defined(SKYRIM)
+							auto& renderChildren = portalGraph->alwaysRenderChildren;
+#elif defined(FALLOUT4)
+							auto& renderChildren = portalGraph->alwayRenderChildren;
+#endif
+							for (auto& child : renderChildren)
 							{
 								// Only those who are outside the Scenegraph
 								if (child->parent)

@@ -45,7 +45,13 @@ struct MaterialBase
 	uint32_t GetHashKey() const { return m_HashKey; }
 
 	void Update(RE::BSShaderMaterial* shaderMaterial);
-protected:
+
+	protected:
+	void Initialize(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
+	{
+		m_Offset = offset;
+		m_HashKey = shaderMaterial->hashKey;
+	}
 	eastl::weak_ptr<MaterialManager> m_Manager;
 
 	// Material buffer offset

@@ -75,10 +75,10 @@ protected:
 	void BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer);
 
 	// Populates m_SkinToBones from the static skin data, called once during construction.
-	void InitSkinToBones(RE::NiSkinInstance* skinInstance);
+	void InitSkinToBones(RE::BSGeometry* geometry);
 
 	// Initialize dismember skin instance
-	void InitDismemberSkin(RE::NiSkinInstance* skinInstance);
+	void InitDismemberSkin(RE::NiObject* skinInstance);
 
 	// Creates the live (skinning output) byte-address UAV buffer seeded from the CPU rest-pose data, plus
 	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT

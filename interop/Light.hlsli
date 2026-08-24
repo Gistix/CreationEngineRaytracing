@@ -18,18 +18,19 @@ namespace LightFlags
 
 INTEROP_DATA_STRUCT(Light, 16)
 {
-	float3 Vector;
-	float Radius;
-	float3 Color;
-	float InvRadius;
+	float3 Position;
+    float InvRadius;
+    half3 Color;
+	half Radius;
+    float CosOuterAngle;
+    float CosInnerAngle;
 	float3 Direction;
-	uint16_t CosOuterAngleHalf;
-	uint16_t CosInnerAngleHalf;
 	float FadeZone;
 	float SizeBias;
 	float Fade;
 	uint16_t Type;
 	uint16_t Flags;
+    float Pad;
 };
 VALIDATE_CBUFFER(LightData, 16);
 
