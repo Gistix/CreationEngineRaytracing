@@ -360,7 +360,8 @@ void Main()
     bool isSssPath = false;
 #endif
     
-    float3 direct = sourceSurface.Emissive + primaryEffectEmissive;
+    float3 primaryEmissive = sourceSurface.Emissive + primaryEffectEmissive;
+    float3 direct = primaryEmissive;
     
     // =========================================================================
     // BUILD MODE: Deterministic delta path exploration
@@ -708,6 +709,42 @@ void Main()
     // For non-delta lobes: standard NEE (EvaluateDirectRadiance) evaluates BSDF at sampled light directions.
     // For delta lobes: EvalDeltaLobeLighting checks if delta reflection/refraction directions fall within
     // each light source's solid angle, providing correct mirror reflections of analytical lights.
+#if defined(NRD)
+    float3 directDiffuse = 0.0f;
+    float3 directSpecular = 0.0f;
+
+    {
+        const uint sourceLobes = sourceBSDF.GetLobes(sourceSurface);
+        const bool sourceHasNonDeltaLobes = (sourceLobes & (uint)LobeType::NonDelta) != 0;
+        const bool sourceHasDeltaLobes = (sourceLobes & (uint)LobeType::Delta) != 0;
+        
+        if (sourceHasNonDeltaLobes)
+        {
+#if defined(SUBSURFACE_SCATTERING)
+            if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
+                directDiffuse += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
+                isSssPath = true;
+                // Specular uses the standard path with diffuse suppressed
+                Surface specSurface = sourceSurface;
+                specSurface.DiffuseAlbedo = 0;
+                StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
+                float3 dummyDiff, specDirect;
+                EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true, dummyDiff, specDirect);
+                directSpecular += specDirect;
+            }
+            else
+#endif
+                EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true, directDiffuse, directSpecular);
+        }
+        
+        // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights.
+        // Skip for pure delta surfaces — their delta lighting was captured in BUILD's stable radiance.
+        if (sourceHasDeltaLobes && sourceHasNonDeltaLobes)
+        {
+            directSpecular += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
+        }
+    }
+#else
     {
         const uint sourceLobes = sourceBSDF.GetLobes(sourceSurface);
         const bool sourceHasNonDeltaLobes = (sourceLobes & (uint)LobeType::NonDelta) != 0;
@@ -737,6 +774,7 @@ void Main()
             direct += EvalDeltaLobeLighting(sourceSurface, sourceBRDFContext, sourceInstance, sourceBSDF, randomSeed, true);
         }
     }
+#endif
     
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     // Accumulate primary surface direct lighting with plane throughput baked in
@@ -751,8 +789,8 @@ void Main()
 #endif
 
 #if defined(NRD)
-    float3 diffuseRadiance = float3(0.0f, 0.0f, 0.0f);
-    float3 specularRadiance = float3(0.0f, 0.0f, 0.0f);
+    float3 diffuseRadiance = directDiffuse;
+    float3 specularRadiance = directSpecular;
 #else
     float3 radiance = float3(0.0f, 0.0f, 0.0f);
 #endif
@@ -1333,6 +1371,7 @@ void Main()
     if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
     {
         float3 primaryWaterAttenuation = exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
+        primaryEmissive *= primaryWaterAttenuation;
         direct *= primaryWaterAttenuation;
 #   if defined(NRD)
         diffuseRadiance *= primaryWaterAttenuation;
@@ -1349,7 +1388,7 @@ void Main()
     diffuseRadiance /= diffFactor;
     specularRadiance /= specFactor;    
     
-    Output[idx] = float4(direct, 1.0f);
+    Output[idx] = float4(primaryEmissive, 1.0f);
 #   if defined(NRD_REBLUR)
     DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  

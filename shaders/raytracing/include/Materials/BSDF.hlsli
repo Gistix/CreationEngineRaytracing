@@ -829,6 +829,33 @@ struct DefaultBSDF
         return float4(diffuse+specular, Average(specular)); // use average instead of sum to avoid hitting fp16 ceiling early
     }
 
+    void EvalDiffuseAndSpecular(const float3 wi, const float3 wo, out float3 outDiffuse, out float3 outSpecular)
+    {
+        float3 diffuse = 0.f; float3 specular = 0.f;
+        if (pDiffuseReflection > 0.f) diffuse += (1.f - specTrans) * (1.f - diffTrans) * diffuseReflection.Eval(wi, wo);
+        if (pDiffuseTransmission > 0.f) diffuse += (1.f - specTrans) * diffTrans * diffuseTransmission.Eval(wi, wo);
+        if (pSpecularReflection > 0.f) specular += (1.f - specTrans) * specularReflection.Eval(wi, wo);
+        if (pSpecularReflectionTransmission > 0.f) specular += specTrans * (specularReflectionTransmission.Eval(wi, wo));
+
+        // Fuzz lobe: diffuse-class sheen
+        if (pFuzzReflection > 0.f) diffuse += fuzzWeight * fuzzReflection.Eval(wi, wo);
+
+        // OpenPBR 3.9.7: View-dependent coat absorption applied to base lobes (including fuzz).
+        // Reflected rays traverse the coat twice; transmitted rays traverse it once.
+        if (coatStrength > 0)
+        {
+            float3 coatAbs = (wo.z > 0) ? evalCoatAbsorption(wi.z, wo.z) : evalCoatAbsorptionSinglePass(wi.z);
+            diffuse *= coatAbs;
+            specular *= coatAbs;
+        }
+
+        // Coat reflection is from above the absorbing medium and is not tinted.
+        if (pCoatReflection > 0.f) specular += coatStrength * coatReflection.Eval(toCoatLocal(wi), toCoatLocal(wo));
+
+        outDiffuse = diffuse;
+        outSpecular = specular;
+    }
+
     bool SampleBSDF(const float3 wi, out float3 wo, out float pdf, out float3 weight, out uint lobe, out float lobeP, const float4 preGeneratedSample)
     {
         wo = float3(0,0,0);
@@ -1083,6 +1110,35 @@ struct StandardBSDF
 #endif
         {
             return defaultBSDF.Eval(wiLocal, woLocal);
+        }
+    }
+
+    void EvalDiffuseAndSpecular(const BRDFContext brdfContext, const uint16_t feature, const Surface surface, const float3 wo, out float3 outDiffuse, out float3 outSpecular)
+    {
+        float3 wi = brdfContext.ViewDirection;
+        float3 wiLocal = surface.ToLocal(wi);
+        float3 woLocal = surface.ToLocal(wo);
+#if HAIR_MODE == HAIR_MODE_CHIANG_BSDF
+        if (feature == Feature::kHairTint)
+        {
+            HairChiangBSDF bsdf = HairChiangBSDF::make(wi, surface);
+            float4 res = bsdf.Eval(wiLocal, woLocal);
+            outDiffuse = 0.0f;
+            outSpecular = res.xyz;
+            return;
+        } else
+#elif HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
+        if (feature == Feature::kHairTint)
+        {
+            HairFarFieldBCSDF bsdf = HairFarFieldBCSDF::make(wi, surface);
+            float4 res = bsdf.Eval(wiLocal, woLocal);
+            outDiffuse = 0.0f;
+            outSpecular = res.xyz;
+            return;
+        } else
+#endif
+        {
+            defaultBSDF.EvalDiffuseAndSpecular(wiLocal, woLocal, outDiffuse, outSpecular);
         }
     }
 
