@@ -2,8 +2,6 @@
 
 #include "Constants.h"
 
-struct Mesh;
-
 namespace Util
 {
 	namespace Geometry
@@ -15,8 +13,6 @@ namespace Util
 		bool IsDismemberSkinInstance(RE::NiSkinInstance* skinInstance);
 
 		void GetDismemberPartitionVisibility(RE::NiSkinInstance* skinInstance, eastl::vector<bool>& outVisibility);
-
-		bool HasDoubleSidedGeom(Mesh* mesh);
 
 		bool IsBlocklisted(const char* name);
 	}

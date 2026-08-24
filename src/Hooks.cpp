@@ -3,7 +3,7 @@
 #include "Util.h"
 
 #include "Core/D3D12Texture.h"
-#include "Core/DynamicMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
 #include "Core/TextureManager.h"
 
 namespace Hooks
@@ -189,7 +189,13 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
-			return func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+			if (triShape) {
+				triShape->vertexBufferDX12 = nullptr;
+				triShape->indexBufferDX12 = nullptr;
+				triShape->ownsDX12Buffers = true;
+			}
+			return triShape;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -319,7 +325,23 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	// Blends vertex data between two BSTriShapes (body morphs).
+	// Re-shares the D3D11 vertex buffer of a TriShapeDX12 to D3D12 after the engine replaced it.
+	void ReShareVertexBuffer(RE::BSGraphics::TriShape* triShape)
+	{
+		if (!triShape)
+			return;
+
+		auto triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(triShape);
+
+		if (triShapeDX12->vertexBufferDX12) {
+			triShapeDX12->vertexBufferDX12->Release();
+			triShapeDX12->vertexBufferDX12 = nullptr;
+		}
+
+		Util::CreateSharedBuffer(triShapeDX12->vertexBuffer, &triShapeDX12->vertexBufferDX12);
+	}
+
+	// Blends vertex data between two non-skinned BSTriShapes (body morphs).
 	// Calls CopyTriShapeVertices internally, which replaces src's vertexBuffer.
 	// We must re-share the new D3D11 vertex buffer to D3D12 after the blend.
 	struct BSTriShape_ApplyBodyMorph
@@ -330,9 +352,36 @@ namespace Hooks
 
 			if (src) {
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
-				if (geomData.rendererData) {
-					auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(geomData.rendererData);
-					Util::CreateSharedBuffer(triShapeDX12->vertexBuffer, &triShapeDX12->vertexBufferDX12);
+				if (geomData.rendererData)
+					ReShareVertexBuffer(geomData.rendererData);
+			}
+
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// Blends vertex data between two skinned BSTriShapes (body morphs) by replacing the
+	// vertex buffer of every skin partition with the same new D3D11 buffer.
+	// We must re-share the new D3D11 vertex buffer to D3D12 after the blend, so meshes
+	// created afterwards wrap the morphed data.
+	struct BSTriShape_ApplyBodyMorphSkinned
+	{
+		// a_partitionMask (r9d): bitmask of skin partitions to blend; the engine always passes 0xFFFFFFFF.
+		static bool thunk(RE::BSTriShape* src, RE::BSTriShape* tgt, float weight, uint32_t partitionMask)
+		{
+			auto result = func(src, tgt, weight, partitionMask);
+
+			if (src) {
+				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
+				if (auto* skinInstance = geomData.skinInstance) {
+					const auto& skinPartition = skinInstance->skinPartition;
+					if (skinPartition && skinPartition->numPartitions > 0) {
+						// The renderer wraps only the first partition's buffer; all partitions
+						// share the same new D3D11 buffer after the blend.
+						ReShareVertexBuffer(skinPartition->partitions[0].buffData);
+					}
 				}
 			}
 
@@ -391,7 +440,7 @@ namespace Hooks
 				if (a_triShape->rawIndexData)
 					mm->Deallocate(a_triShape->rawIndexData, false);
 
-				if (a_triShape->pad1C == 1) {
+				if (static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape)->ownsDX12Buffers) {
 					auto* triShapeDX12 = static_cast<RE::BSGraphics::TriShapeDX12*>(a_triShape);
 
 					if (triShapeDX12->indexBufferDX12)
@@ -418,7 +467,6 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
 #if defined(SKYRIM)
@@ -435,10 +483,12 @@ namespace Hooks
 #if defined(SKYRIM)
 	struct BSGraphicsTexture_Dtor
 	{
-		static void thunk(void* a1, RE::BSGraphics::Texture* a_texture)
+		static void thunk(RE::BSGraphics::Renderer* a_renderer, RE::BSGraphics::Texture* a_texture)
 		{
-			if (a_texture->pad24 == NO_DX12RESOURCE)
-				func(a1, a_texture);
+			if (!a_texture || a_texture->pad24 != NATIVE_DX12RESOURCE) {
+				func(a_renderer, a_texture);
+				return;
+			}
 
 			if (InterlockedExchangeAdd(&a_texture->refCount, 0xFFFFFFFF) == 1)
 			{
@@ -530,13 +580,22 @@ namespace Hooks
 			texture->format = defaultTexture->format;
 			texture->mips = defaultTexture->mips;
 			texture->unk1E = defaultTexture->unk1E;
-			texture->refCount = defaultTexture->refCount;
+			texture->refCount = 1;
 
-			defaultTexture->texture->AddRef();
-			defaultTexture->resourceView->AddRef();
+			if (defaultTexture->texture)
+				defaultTexture->texture->AddRef();
+
+			if (defaultTexture->resourceView)
+				defaultTexture->resourceView->AddRef();
+
+			if (defaultTexture->UAV)
+				defaultTexture->UAV->AddRef();
 
 			// We use this as a flag to indicate this 'Texture' is actually 'D3D12Texture'
 			texture->pad24 = NATIVE_DX12RESOURCE;
+
+			// Initialize to null to prevent Destructor from releasing a unitialized pointer
+			texture->d3d12Texture = nullptr;
 
 			auto renderer = Renderer::GetSingleton();
 			auto device = renderer->GetDevice();
@@ -789,6 +848,22 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct CreateTextureFromFile
+	{
+		static RE::BSGraphics::Texture* thunk(
+			std::uintptr_t a_context,
+			const char* a_path,
+			std::int32_t a_type)
+		{
+			auto* result = func(a_context, a_path, a_type);
+			if (result)
+				result->pad24 = NO_DX12RESOURCE;
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	void CreateRenderTarget::thunk(
 		RE::BSGraphics::Renderer* a_renderer,
 		RE::RENDER_TARGETS::RENDER_TARGET a_target,
@@ -1034,8 +1109,9 @@ namespace Hooks
 
 	void* DrawWorld_BuildSceneLists::thunk()
 	{
-		if (Scene::GetSingleton()->ApplyPathTracingCull())
+		if (Scene::GetSingleton()->ApplyFullPathTracingCull())
 			return nullptr;
+
 		return func();
 	}
 
@@ -1202,6 +1278,7 @@ namespace Hooks
 		//stl::detour_thunk<BSGraphics_CopyTriShapeVertices>(REL::RelocationID(74735, 76477));
 
 		stl::detour_thunk<BSTriShape_ApplyBodyMorph>(REL::RelocationID(74720, 76460));
+		stl::detour_thunk<BSTriShape_ApplyBodyMorphSkinned>(REL::RelocationID(74721, 76462));
 
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSTriShape>>(RE::VTABLE_BSTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSDynamicTriShape>>(RE::VTABLE_BSDynamicTriShape[0]);
@@ -1221,7 +1298,10 @@ namespace Hooks
 		// Flowmap and Player FaceGen Tint
 		stl::detour_thunk<CreateTexture2DAndSRV>(REL::RelocationID(75511, 77303));
 
-		//stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
+		// Texture load from file (sub_140D6E110)
+		stl::detour_thunk<CreateTextureFromFile>(REL::RelocationID(75512, 77304));
+
+		stl::detour_thunk<BSGraphicsTexture_Dtor>(REL::RelocationID(75527, 77322));
 
 		stl::detour_thunk<CreateRenderTarget>(REL::RelocationID(75467, 77253));
 		stl::detour_thunk<CreateDepthStencil>(REL::RelocationID(75469, 77255));
@@ -1266,7 +1346,7 @@ namespace Hooks
 
 		stl::detour_thunk<BSBatchRenderer_RenderPassImmediately>(REL::RelocationID(100854, 107644));
 
-		//stl::detour_thunk<DrawWorld_BuildSceneLists>(REL::RelocationID(35630, 36643));
+		stl::detour_thunk<DrawWorld_BuildSceneLists>(REL::RelocationID(35630, 36643));
 
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());

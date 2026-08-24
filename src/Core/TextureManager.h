@@ -5,7 +5,7 @@
 #include "Types/BindlessTableManager.h"
 
 #define NO_DX12RESOURCE 0
-#define NATIVE_DX12RESOURCE 1
+#define NATIVE_DX12RESOURCE 0x32315844u  // "DX12"
 
 struct TextureReference
 {
@@ -30,6 +30,8 @@ struct TextureManager
 		Standard,
 		CubeMap
 	};
+
+	std::mutex m_ReleaseMutex;
 
 	eastl::unordered_map<IUnknown*, eastl::unique_ptr<TextureReference>> m_Textures;
 

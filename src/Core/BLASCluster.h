@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 #include "Constants.h"
 
 #include "Instance.hlsli"
@@ -33,7 +33,8 @@ class BLASCluster
 		None = 0,
 		Updatable = 1 << 0,
 		Player = 1 << 1,
-		TwoSided = 1 << 2
+		TwoSided = 1 << 2,
+		FrustumCulled = 1 << 3
 	};
 
 	RE::TESObjectREFR* m_Owner = nullptr; // null for orphan (no-owner) clusters; comparison key only
@@ -44,6 +45,8 @@ class BLASCluster
 
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
+	eastl::vector<uint16_t> m_GeometrySlots;
+
 	nvrhi::rt::AccelStructHandle m_BLAS;
 
 	eastl::string m_Name;
@@ -52,11 +55,8 @@ class BLASCluster
 	float3x4 m_PrevTransform = Constants::kIdentityTransform;
 	bool m_NeedsPrevInit = true;
 
-	// cached translation of m_InstanceTransform, invalid when transform changes
-	float3 m_ClusterPosition;
-
-	// world-space bounding sphere radius, accumulated from member bounds
-	float m_ClusterRadius = 0.0f; 
+	// Used to calculate instance light data
+	RE::NiBound m_WorldBound;
 
 	friend class SceneGraph;
 
@@ -69,16 +69,22 @@ class BLASCluster
 	CESEAdapter::REX::EnumSet<Flags> m_Flags = Flags::None;
 
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
+	mutable std::mutex m_DirtyMutex;
+
+	InstanceLightData m_InstanceLightData;
+
+	bool m_IsValid = false;
 
 	void UpdateTransform();
-	void CollectMemberDirtyFlags();
 	BuildMode DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex);
 
 	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
 
-	InstanceLightData GetInstanceLightData(
+	void UpdateInstanceLightData(
 		const eastl::map<RE::BSLight*, Light>& lights,
 		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
+
+	void SetValid(bool valid) { m_IsValid = valid; }
 public:
 	explicit BLASCluster(RE::TESObjectREFR* owner);
 
@@ -87,17 +93,15 @@ public:
 
 	const auto& GetMembers() const { return m_Members; }
 
-	// Grow the world-space bounding sphere to include the given bound (center + radius in world space).
-	void GrowBounds(const RE::NiBound& bound);
+	inline bool IsPlayer() const { return m_Flags.all(Flags::Player); }
+
+	void UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags);
 
 	// No live members remain.
 	bool Empty() const;
 
-	// Has visible meshes
+	// Has visible meshes — valid only after Update() has been called this frame.
 	bool Valid() const;
-	
-	// Returns total number of MeshData entries across visible members (zero if all hidden or empty).
-	uint32_t GetMeshEntryCount() const;
 
 	// Rebuilds or refits the BLAS as needed (once per frame), pulling dirty state from its members.
 	void BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph);
@@ -106,11 +110,10 @@ public:
 
 	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
 
-	uint32_t GetInstanceIndex() const { return m_InstanceIndex; }
+	// Updates the cluster and returns the number of visible geometry entries.
+	uint32_t Update();
 
-	// Writes one MeshData per visible geometry and one InstanceData at the given array offsets.
-	void Update(MeshData* meshData, InstanceData* instanceData,
-		uint32_t meshStart, uint32_t instanceIndex,
-	    const eastl::map<RE::BSLight*, Light>& lights,
-	    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
+	const auto& GetGeometrySlots() const { return m_GeometrySlots; }
+
+	void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const;
 };

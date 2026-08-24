@@ -27,6 +27,7 @@ namespace Pass::Utility
 	public:
 		FaceNormals(Renderer* renderer);
 
+		virtual void Initialize() override;
 		virtual void CreatePipeline() override;
 
 		virtual void CheckBindings();

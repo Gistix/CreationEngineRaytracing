@@ -35,7 +35,6 @@ namespace Pass
 		m_RaytracingData->TexLODBias = settings.AdvancedSettings.TexLODBias;
 
 		m_RaytracingData->NumLights = static_cast<uint32_t>(sceneGraph->GetLights().size());
-		m_RaytracingData->RussianRoulette = settings.RaytracingSettings.RussianRoulette;
 		m_RaytracingData->Roughness = settings.MaterialSettings.Roughness;
 		m_RaytracingData->Metalness = settings.MaterialSettings.Metalness;
 
@@ -46,6 +45,7 @@ namespace Pass
 		m_RaytracingData->Sky = settings.LightingSettings.Sky;
 		m_RaytracingData->WaterAbsorptionScale = settings.WaterSettings.AbsorptionScale;
 		m_RaytracingData->EnableReSTIRGI = settings.ReSTIRGI.Enabled ? 1 : 0;
+		m_RaytracingData->ResolutionScale = scene->GetResolutionScale();
 
 		m_RaytracingData->NumMeshes = sceneGraph->GetNumMeshesFrame();
 		m_RaytracingData->NumInstances = sceneGraph->GetNumInstancesFrame();
@@ -103,6 +103,6 @@ namespace Pass
 
 		sceneGraph->BuildClusters(commandList);
 
-		m_TopLevelAS.Update(commandList, sceneGraph->GetOwnerClusters(), sceneGraph->GetOrphanClusters(), sceneGraph->GetSubIndexSegmentClusters());
+		m_TopLevelAS.Update(commandList, sceneGraph->GetAllClusters());
 	}
 }

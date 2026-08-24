@@ -57,6 +57,8 @@ namespace Pass
 	public:
 		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);
 
+		virtual void Initialize() override;
+
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
 		{
 			m_BindingSetDirty.fill(true);

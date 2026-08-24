@@ -1,9 +1,9 @@
-#include "Core/BaseMesh.h"
-#include "Core/DirectMesh.h"
-#include "Core/LandLODMesh.h"
-#include "Core/SkinnedMesh.h"
-#include "Core/DynamicMesh.h"
-#include "Core/SubIndexMesh.h"
+#include "Core/Mesh/BaseMesh.h"
+#include "Core/Mesh/Mesh.h"
+#include "Core/Mesh/LandLODMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
+#include "Core/Mesh/SubIndexMesh.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
@@ -12,8 +12,13 @@
 
 BaseMesh::~BaseMesh()
 {
-	if (m_TransformIndex != UINT32_MAX)
-		Scene::GetSingleton()->GetSceneGraph()->GetTransformManager()->ReleaseTransformIndex(m_TransformIndex);
+	auto& meshManager = Scene::GetSingleton()->GetSceneGraph()->GetMeshManager();
+
+	for (const auto& entry : m_GeometryEntries)
+		meshManager->ReleaseGeometryIndex(entry.geometryIndex);
+
+	if (m_MeshIndex != UINT16_MAX)
+		meshManager->ReleaseMeshIndex(m_MeshIndex);
 }
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
@@ -29,7 +34,7 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
-		return eastl::make_unique<DirectMesh>(bsTriShape, commandList);
+		return eastl::make_unique<Mesh>(bsTriShape, commandList);
 	}
 
 	if (auto bsDynamicTriShape = bsTriShape->AsDynamicTriShape())
@@ -50,51 +55,10 @@ eastl::string BaseMesh::MakeDebugName(RE::BSTriShape* bsTriShape)
 	return { bsTriShape->name.c_str() };
 }
 
-void BaseMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
-{
-	// Nothing to update if transform hasn't updated
-	if (!m_DirtyFlags.all(DirtyFlags::Transform))
+void BaseMesh::MarkDirty(DirtyFlags flag) {
+	if (flag == DirtyFlags::None)
 		return;
 
-	XMStoreFloat3x4(&m_LocalTransform,
-		XMMatrixMultiply(XMLoadFloat3x4(&m_Transform), invTransform));
-
-	XMStoreFloat3x4(&m_PrevLocalTransform,
-		XMMatrixMultiply(XMLoadFloat3x4(&m_PrevTransform), prevInvTransform));
-
-	WriteTransformData();
-}
-
-uint32_t BaseMesh::WriteMeshData(MeshData* out) const
-{
-	using namespace DirectX;
-
-	const auto& descs = GetGeometryDescs();
-
-	const uint16_t vertexID = GetVertexID();
-
-	for (size_t i = 0; i < descs.size(); i++) {
-		auto& geomTris = descs[i].geometryData.triangles;
-
-		out[i] = {
-			GetIndexID(i),
-			vertexID,
-			VertexDesc(GetVertexDescRaw()),
-			static_cast<uint16_t>(geomTris.vertexCount),
-			static_cast<uint16_t>(geomTris.indexCount / 3),
-			m_Properties.GetData(),
-			static_cast<uint16_t>(m_Type),
-			static_cast<uint16_t>(GetDynamicIndex()),
-			static_cast<uint32_t>(geomTris.indexOffset / (sizeof(uint16_t) * 3)),
-			m_Material->GetOffsetComp(),
-			m_TransformIndex
-		};
-	}
-
-	return static_cast<uint32_t>(descs.size());
-}
-
-void BaseMesh::MarkDirty(DirtyFlags flag) {
 	m_DirtyFlags.set(flag);
 	Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }
@@ -196,28 +160,76 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 
 void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 { 
-	ClearDirtyFlags();
-
-	m_Properties = { m_BSTriShape, m_Flags.all(Flags::Eyes)};
+	m_Properties.Update(m_BSTriShape, m_Flags.all(Flags::Eyes));
+	WriteProperties();
 
 	m_WorldBound = m_BSTriShape->worldBound;
 
-	float3x4 transform;
-	XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_BSTriShape->world));
+	// Update Transform
+	{
+		m_World = m_BSTriShape->world;
 
-	if (m_NeedsPrevInit || !Util::Math::MatrixNearEqual(transform, m_Transform))
-		MarkDirty(DirtyFlags::Transform);
+		const bool isPlayer = m_Cluster ? m_Cluster->IsPlayer() : false;
+		bool drawFirstPerson = false;
+		if (isPlayer) {
+			const auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+			if ((drawFirstPerson = sceneGraph->GetDrawFirstPerson()))
+				m_World.translate += sceneGraph->GetFirstPersonPosition();
+		}
 
-	if (m_NeedsPrevInit) {
-		m_PrevTransform = transform;
-		m_NeedsPrevInit = false;
-	} else {
-		m_PrevTransform = m_Transform;
+		m_Flags.set(drawFirstPerson, Flags::FirstPerson);
+
+		float3x4 transform;
+		XMStoreFloat3x4(&transform, Util::Math::GetXMFromNiTransform(m_World));
+
+		if (m_NeedsPrevInit)
+			MarkDirty(DirtyFlags::Transform);
+		else if (!Util::Math::MatrixNearEqual(transform, m_Transform))
+			MarkDirty(DirtyFlags::Transform);
+		else if (!Util::Math::MatrixNearEqual(m_Transform, m_PrevTransform))
+			MarkDirty(DirtyFlags::Transform);
+
+		if (m_NeedsPrevInit) {
+			m_PrevTransform = transform;
+			m_NeedsPrevInit = false;
+		}
+		else {
+			m_PrevTransform = m_Transform;
+		}
+
+		m_Transform = transform;
+
+		WriteTransform();
 	}
 
-	m_Transform = transform;
+	// Update Geometry Desc opaque flag
+	{
+		const bool prevAlpha = m_Flags.all(Flags::Alpha);
+		const bool alpha = m_Properties.IsAlpha();
+		if (prevAlpha != alpha)
+		{
+			m_Flags.set(alpha, Flags::Alpha);
+
+			for (auto& entry: m_GeometryEntries)
+			{
+				entry.desc.flags = alpha ? nvrhi::rt::GeometryFlags::None : nvrhi::rt::GeometryFlags::Opaque;
+			}
+
+			MarkDirty(DirtyFlags::Alpha);
+		}
+	}
 
 	UpdateMaterial();
+}
+
+void BaseMesh::CommitDirtyFlags()
+{
+	// SubIndexMesh has no cluster
+	if (m_Cluster)
+		m_Cluster->UpdateDirtyFlags(m_DirtyFlags.get());
+
+	// Clear dirty flags after they've been "consumed" by the cluster
+	ClearDirtyFlags();
 }
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint32_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex)
@@ -244,6 +256,8 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 		Scene::GetSingleton()->GetSceneGraph()->GetTransformBuffer(),
 		transformIndex * sizeof(TransformData));
 
+	geometryDesc.flags = nvrhi::rt::GeometryFlags::Opaque;
+
 	return geometryDesc;
 }
 
@@ -264,7 +278,7 @@ bool BaseMesh::IsTwoSided()
 
 bool BaseMesh::IsHidden() const
 {
-	return m_State.any(State::Hidden) || m_State.any(State::SubIndexHidden);
+	return m_State.any(State::Hidden, State::SubIndexHidden);
 }
 
 void BaseMesh::OnDestroy() {
@@ -330,12 +344,25 @@ void BaseMesh::UpdateMaterial()
 	m_Material->Update(m_BSTriShape->GetGeometryRuntimeData().shaderProperty->material);
 }
 
-void BaseMesh::AllocateTransformIndex()
+void BaseMesh::AllocateMeshIndex()
 {
-	m_TransformIndex = Scene::GetSingleton()->GetSceneGraph()->AllocateTransformIndex();
+	m_MeshIndex = static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateMeshIndex());
 }
 
-void BaseMesh::WriteTransformData() const
+uint16_t BaseMesh::AllocateGeometryIndex()
 {
-	Scene::GetSingleton()->GetSceneGraph()->WriteTransformData(m_TransformIndex, m_LocalTransform, m_PrevLocalTransform);
+	return static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateGeometryIndex());
+}
+
+
+void BaseMesh::WriteProperties() const
+{
+	const auto& sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	sceneGraph->GetMeshManager()->WritePropertiesData(m_MeshIndex, m_Properties.GetData());
+}
+
+void BaseMesh::WriteTransform() const
+{
+	const auto& sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	sceneGraph->WriteTransformData(m_MeshIndex, m_Transform, m_PrevTransform);
 }

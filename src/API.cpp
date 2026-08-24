@@ -8,6 +8,16 @@ bool InitializeRenderer(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, 
 	return Renderer::GetSingleton()->Initialize(d3d11Device, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue);
 }
 
+bool InitializeVulkanRenderer(void* instance, void* physicalDevice, void* device, void* graphicsQueue, int graphicsQueueIndex, void* transferQueue, int transferQueueIndex, void* computeQueue, int computeQueueIndex)
+{
+	return Renderer::GetSingleton()->Initialize(
+		reinterpret_cast<VkInstance>(instance),
+		reinterpret_cast<VkPhysicalDevice>(physicalDevice), reinterpret_cast<VkDevice>(device),
+		reinterpret_cast<VkQueue>(graphicsQueue), graphicsQueueIndex,
+		reinterpret_cast<VkQueue>(transferQueue), transferQueueIndex,
+		reinterpret_cast<VkQueue>(computeQueue), computeQueueIndex);
+}
+
 void Initialize(Settings settings)
 {
 	auto* scene = Scene::GetSingleton();
@@ -120,8 +130,8 @@ void UpdateJitter(float2 jitter)
 
 uint32_t GetAccumulatedFrameCount()
 {
-	auto* rootNode = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode();
-	auto* accumulationPass = rootNode->GetPass<Pass::Common::Accumulation>();
+	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
+	auto* accumulationPass = renderGraph ? renderGraph->GetPass<Pass::Common::Accumulation>() : nullptr;
 	if (accumulationPass)
 		return accumulationPass->GetAccumulatedFrames();
 	return 0;

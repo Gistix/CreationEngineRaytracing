@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 
 class SceneGraph;
 class SubIndexSegmentMesh;
@@ -11,7 +11,7 @@ class SubIndexSegmentMesh;
 // own BLASCluster (in SceneGraph::m_SubIndexSegmentClusters) so it gets its own BLAS,
 // InstanceData, and TLAS entry.
 //
-// SubIndexMesh itself is a BaseMesh in SceneGraph::m_DirectMeshes (for lifecycle
+// SubIndexMesh itself is a BaseMesh in SceneGraph::m_Meshes (for lifecycle
 // tracking via the existing OnDestroy / deferred-destroy flow) but is NOT a member
 // of any BLASCluster; its m_GeometryDescs is empty.
 //
@@ -38,6 +38,9 @@ class SubIndexMesh : public BaseMesh
 	// Key: (start << 32) | numTris — the segment's identity in the parent's index buffer.
 	// Non-owning lookup into m_Segments.
 	eastl::hash_map<uint64_t, SubIndexSegmentMesh*> m_SegmentMap;
+
+	// Reused across Update() calls to preserve bucket capacity; cleared at the top of each Update().
+	eastl::hash_set<uint64_t> m_VisitedKeys;
 
 	void CreateSegment(uint32_t start, uint32_t numTris);
 
@@ -69,14 +72,14 @@ public:
 		return static_cast<uint16_t>(m_VertexDescriptor.Get());
 	}
 
-	auto GetTransformID() const { return m_TransformIndex; }
-
 	// Sync the K SubIndexSegmentMesh children with the parent's current segment
 	// visibility. Segments are identified by (start, numTris); new segments are
 	// created, existing segments have their SubIndexHidden flag toggled to match
 	// the engine's segment flag. Segments missing from runtimeData (engine removed
 	// them) are marked SubIndexHidden.
 	void Update(nvrhi::ICommandList* commandList) override;
+
+	void CommitDirtyFlags() override;
 
 	// Destroy all K SubIndexSegmentMesh children. Used when the manager is hidden
 	// (parent not visited this frame) and when OnDestroy is called.

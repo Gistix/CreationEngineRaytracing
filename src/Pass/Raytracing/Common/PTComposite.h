@@ -15,8 +15,8 @@ namespace Pass::Common
 	class PTComposite : public RenderPass
 	{
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
-		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
+		eastl::vector<ShaderDefine> m_Defines;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
@@ -26,12 +26,14 @@ namespace Pass::Common
 	public:
 		PTComposite(Renderer* renderer);
 
+		virtual void Initialize() override;
 		void CreateBindingLayout();
 
 		virtual void CreatePipeline() override;
 
 		void CheckBindings();
 
+		virtual void SettingsChanged(const Settings& settings) override;
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};
 }

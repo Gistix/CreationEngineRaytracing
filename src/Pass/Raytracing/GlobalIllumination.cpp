@@ -28,7 +28,10 @@ namespace Pass::Raytracing
 		m_Defines = Util::Shader::GetGlobalIlluminationDefines(Scene::GetSingleton()->m_Settings, m_SHaRC != nullptr, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+	}
 
+	void GlobalIllumination::Initialize()
+	{
 		CreatePipeline();
 	}
 
@@ -76,6 +79,8 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
 			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
 		};
 
@@ -84,16 +89,9 @@ namespace Pass::Raytracing
 		if (settings.SHaRCSettings.Enabled)
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
+if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // ViewZ
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(3)); // Diffuse Factor
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Specular Factor
-		}
-
-		if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1));
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2));
 		}
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
@@ -196,7 +194,7 @@ namespace Pass::Raytracing
 
 		auto device = GetRenderer()->GetDevice();
 
-		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
@@ -237,7 +235,8 @@ namespace Pass::Raytracing
 
 		auto& textureManager = renderer->RenderTargetManager();
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD)
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax)
 			diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
 		else
 			diffuseTexture = renderer->GetMainTexture();
@@ -267,20 +266,17 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 
 		if (settings.SHaRCSettings.Enabled)
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
 
-		if (settings.GeneralSettings.Denoiser == Denoiser::NRD) {
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::SpecularFactor)));
-		} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
 		}
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
@@ -306,7 +302,7 @@ namespace Pass::Raytracing
 			sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 		};
 
-		auto resolution = Renderer::GetSingleton()->GetDynamicResolution();
+		const auto resolution = Renderer::GetSingleton()->GetScaledDynamicResolution();
 
 		if (m_RayPipeline)
 		{

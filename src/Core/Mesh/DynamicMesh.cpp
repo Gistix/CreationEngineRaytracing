@@ -1,4 +1,4 @@
-#include "Core/DynamicMesh.h"
+#include "Core/Mesh/DynamicMesh.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Scene.h"
@@ -53,7 +53,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateTransformIndex();
+	AllocateMeshIndex();
 
 	m_VertexCount = vertexCount;
 

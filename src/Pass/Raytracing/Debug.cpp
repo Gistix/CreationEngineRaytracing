@@ -30,7 +30,10 @@ namespace Pass
 		m_Defines = Util::Shader::GetPathTracingDefines(settings, false, false);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+	}
 
+	void Debug::Initialize()
+	{
 		CreateBindingLayout();
 		CreatePipeline();
 	}
@@ -69,6 +72,8 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6), // Transforms
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),       // MeshSlotRemap
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),       // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -168,7 +173,7 @@ namespace Pass
 
 		auto device = GetRenderer()->GetDevice();
 
-		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, L"cs_6_5");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
@@ -214,6 +219,8 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 

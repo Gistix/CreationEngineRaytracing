@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Renderer.h"
-#include "Core/BaseMesh.h"
+#include "Core/Mesh/BaseMesh.h"
 #include "Core/BLASCluster.h"
-#include "Core/SubIndexSegmentMesh.h"
+#include "Core/Mesh/SubIndexSegmentMesh.h"
 #include "Scene.h"
 #include "Events/ITLASUpdateListener.h"
 
@@ -37,35 +37,19 @@ public:
 		eastl::erase(m_Listeners, listener);
 	}
 
-	void Update(nvrhi::ICommandList* commandList,
-		const eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>>& ownerClusters,
-		const eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>>& orphanClusters,
-		const eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>>& subIndexSegmentClusters)
+	void Update(nvrhi::ICommandList* commandList, const eastl::vector<BLASCluster*>& clusters)
 	{
 		m_InstanceDescs.clear();
-		m_InstanceDescs.reserve(ownerClusters.size() + orphanClusters.size() + subIndexSegmentClusters.size());
+		m_InstanceDescs.reserve(clusters.size());
 
-		auto* scene = Scene::GetSingleton();
-		const auto& markers = scene->m_Settings.DebugSettings.Markers;
-
-		auto addCluster = [&](BLASCluster* cluster)
-		{
+		for (const auto& cluster : clusters) {
 			if (!cluster->Valid())
-				return;
+				continue;
 
 			m_InstanceDescs.push_back(cluster->MakeInstanceDesc());
-		};
+		}
 
-		for (const auto& [owner, cluster] : ownerClusters)
-			addCluster(cluster.get());
-
-		for (const auto& [triShape, cluster] : orphanClusters)
-			addCluster(cluster.get());
-
-		// Per-segment clusters: each SubIndexMesh segment gets its own BLAS, InstanceData,
-		// and TLAS entry — independent of the parent BSSubIndexTriShape and its siblings.
-		for (const auto& [segment, cluster] : subIndexSegmentClusters)
-			addCluster(cluster.get());
+		auto* scene = Scene::GetSingleton();
 
 		const uint32_t numInstances = scene->GetSceneGraph()->GetNumInstancesFrame();
 		const uint32_t topLevelInstances = static_cast<uint32_t>(m_InstanceDescs.size());
@@ -92,6 +76,8 @@ public:
 
 			NotifyResized();
 		}
+
+		const auto& markers = scene->m_Settings.DebugSettings.Markers;
 
 		if (markers)
 			commandList->beginMarker("TLAS Update");

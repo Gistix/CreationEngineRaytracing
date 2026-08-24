@@ -11,7 +11,8 @@ enum class Mode
 enum class Denoiser
 {
 	None,
-	NRD,
+	NRD_Reblur,
+	NRD_Relax,
 	DLSS_RR,
 	Accumulation
 };
@@ -19,32 +20,28 @@ enum class Denoiser
 struct GeneralSettings
 {
 	Denoiser Denoiser = Denoiser::None;
-	Mode Mode = Mode::GlobalIllumination;
+	Mode Mode = Mode::None;
 	bool RaytracedShadows = false;
+};
+
+enum class RussianRoulette
+{
+	Disabled,
+	Standard,
+	Enhanced
 };
 
 struct RaytracingSettings
 {
 	int Bounces = 2;
 	int SamplesPerPixel = 1;
-	bool RussianRoulette = true;
+	RussianRoulette RussianRoulette = RussianRoulette::Standard;
+	float ResolutionScale = 1.0f;
 };
 
-struct ReblurSettings
+struct NRDSettings
 {
-	// [0; REBLUR_MAX_HISTORY_FRAME_NUM] - maximum number of linearly accumulated frames
-	// Always accumulate in "seconds" not in "frames", use "GetMaxAccumulatedFrameNum" for conversion
-	uint32_t maxAccumulatedFrameNum = 30;
-
-	// [0; maxAccumulatedFrameNum] - maximum number of linearly accumulated frames for fast history
-	// Values ">= maxAccumulatedFrameNum" disable fast history
-	// Usually 5x-7x times shorter than the main history (casting more rays, using SHARC or other signal improving techniques help to accumulate less)
-	uint32_t maxFastAccumulatedFrameNum = 6;
-
-	// [0; maxAccumulatedFrameNum] - maximum number of linearly accumulated frames for stabilized radiance
-	// "0" disables the stabilization pass
-	// Values ">= maxAccumulatedFrameNum" get clamped to "maxAccumulatedFrameNum"
-	uint32_t maxStabilizedFrameNum = 63;
+	// Parameters shared by both NVIDIA NRD denoisers (REBLUR and RELAX).
 
 	// [0; maxFastAccumulatedFrameNum) - number of reconstructed frames after history reset
 	uint32_t historyFixFrameNum = 3;
@@ -54,9 +51,7 @@ struct ReblurSettings
 	uint32_t historyFixAlternatePixelStride = 14; // see "historyFixAlternatePixelStrideMaterialID"
 
 	// [1; 3] - standard deviation scale of the color box for clamping slow "main" history to responsive "fast" history
-	// REBLUR clamps the spatially processed "main" history to the spatially unprocessed "fast" history. It implies using smaller variance scaling than in RELAX.
-	// A bit smaller values (> 1) may be used with clean signals. The implementation will adjust this under the hood if spatial sampling is disabled
-	float fastHistoryClampingSigmaScale = 2.0f; // 2 is old default, 1.5 works well even for dirty signals, 1.1 is a safe value for occlusion denoising
+	float fastHistoryClampingSigmaScale = 2.0f;
 
 	// (pixels) - pre-accumulation spatial reuse pass blur radius (0 = disabled, must be used in case of badly defined signals and probabilistic sampling)
 	float diffusePrepassBlurRadius = 30.0f;
@@ -65,17 +60,35 @@ struct ReblurSettings
 	// (0; 0.2] - bigger values reduce sensitivity to shadows in spatial passes, smaller values are recommended for signals with relatively clean hit distance (like RTXDI/RESTIR)
 	float minHitDistanceWeight = 0.1f;
 
-	// (pixels) - min denoising radius (for converged state)
-	float minBlurRadius = 1.0f;
-
-	// (pixels) - base (max) denoising radius (gets reduced over time)
-	float maxBlurRadius = 30.0f;
-
 	// (normalized %) - base fraction of diffuse or specular lobe angle used to drive normal based rejection
 	float lobeAngleFraction = 0.15f;
 
 	// (normalized %) - base fraction of center roughness used to drive roughness based rejection
 	float roughnessFraction = 0.15f;
+
+	// Helps to mitigate fireflies emphasized by DLSS. Very cheap and unbiased in most of the cases, better keep in enabled to maximize quality
+	bool enableAntiFirefly = true;
+};
+
+struct NRDReblurSettings
+{
+	// [0; REBLUR_MAX_HISTORY_FRAME_NUM] - maximum number of linearly accumulated frames
+	// Always accumulate in "seconds" not in "frames", use "GetMaxAccumulatedFrameNum" for conversion
+	uint32_t maxAccumulatedFrameNum = 30;
+
+	// [0; maxAccumulatedFrameNum] - maximum number of linearly accumulated frames for fast history
+	// Values ">= maxAccumulatedFrameNum" disable fast history
+	uint32_t maxFastAccumulatedFrameNum = 6;
+
+	// [0; maxAccumulatedFrameNum] - maximum number of linearly accumulated frames for stabilized radiance
+	// "0" disables the stabilization pass
+	uint32_t maxStabilizedFrameNum = 30;
+
+	// (pixels) - min denoising radius (for converged state)
+	float minBlurRadius = 1.0f;
+
+	// (pixels) - base (max) denoising radius (gets reduced over time)
+	float maxBlurRadius = 30.0f;
 
 	// (normalized %) - represents maximum allowed deviation from the local tangent plane
 	float planeDistanceSensitivity = 0.02f;
@@ -83,24 +96,47 @@ struct ReblurSettings
 	// "IN_MV = lerp(IN_MV, specularMotion, smoothstep(this[0], this[1], specularProbability))"
 	std::array<float, 2> specularProbabilityThresholdsForMvModification = { 0.5f, 0.9f };
 
-	// [1; 3] - undesired sporadic outliers suppression to keep output stable (smaller values maximize suppression in exchange of bias)
+	// [1; 3] - undesired sporadic outliers suppression to keep output stable (smaller values reduce aberration in exchange of bias)
 	float fireflySuppressorMinRelativeScale = 2.0f;
 
-	// Helps to mitigate fireflies emphasized by DLSS. Very cheap and unbiased in most of the cases, better keep in enabled to maximize quality
-	bool enableAntiFirefly = true;
-
 	// In rare cases, when bright samples are so sparse that any other bright neighbor can't
-	// be reached, pre-pass transforms a standalone bright pixel into a standalone bright blob,
-	// worsening the situation. Despite that it's a problem of sampling, the denoiser needs to
-	// handle it somehow on its side too. Diffuse pre-pass can be just disabled, but for specular
-	// it's still needed to find optimal hit distance for tracking. This boolean allow to use
-	// specular pre-pass for tracking purposes only (use with care)
+	// be reached, the pre-pass transforms a bright pixel into a standalone bright blob.
+	// This boolean allows the specular pre-pass to be used for motion estimation only.
 	bool usePrepassOnlyForSpecularMotionEstimation = false;
 
-	// Allows to get diffuse or specular history length in ".w" channel of the output instead of denoised ambient/specular occlusion (normalized hit distance).
-	// Diffuse history length shows disocclusions, specular history length is more complex and includes accelerations of various kinds caused by specular tracking.
-	// History length is measured in frames, it can be in "[0; maxAccumulatedFrameNum]" range
+	// Allows getting diffuse or specular history length in ".w" channel of the output instead of denoised occlusion
 	bool returnHistoryLengthInsteadOfOcclusion = false;
+};
+
+struct NRDRelaxSettings
+{
+	// [0; RELAX_MAX_HISTORY_FRAME_NUM] - maximum number of linearly accumulated frames
+	uint32_t diffuseMaxAccumulatedFrameNum = 30;
+	uint32_t specularMaxAccumulatedFrameNum = 30;
+
+	// [0; maxAccumulatedFrameNum) - maximum number of linearly accumulated frames for fast history
+	// Values ">= maxAccumulatedFrameNum" disable fast history
+	uint32_t diffuseMaxFastAccumulatedFrameNum = 6;
+	uint32_t specularMaxFastAccumulatedFrameNum = 6;
+
+	// A-trous edge stopping luminance sensitivity
+	float diffusePhiLuminance = 2.0f;
+	float specularPhiLuminance = 1.0f;
+
+	// [2; 8] - number of iterations for A-Trous wavelet transform
+	uint32_t atrousIterationNum = 3;
+
+	// (>= 0) - how much variance we inject to specular if reprojection confidence is low
+	float specularVarianceBoost = 0.0f;
+
+	// (degrees) - slack for the specular lobe angle used in normal based rejection during A-Trous passes
+	float specularLobeAngleSlack = 0.15f;
+
+	// (normalized %) - depth threshold for spatial passes
+	float depthThreshold = 0.003f;
+
+	// Roughness based rejection
+	bool enableRoughnessEdgeStopping = true;
 };
 
 struct MaterialSettings
@@ -111,17 +147,17 @@ struct MaterialSettings
 
 struct LightingSettings
 {
-	float Directional = 1.0f;
-	float Point = 1.0f;
+	float Directional = 5.0f;
+	float Point = 5.0f;
 	bool LodDimmer = false;
-	float Emissive = 1.0f;
-	float Effect = 1.0f;
-	float Sky = 1.0f;
+	float Emissive = 5.0f;
+	float Effect = 5.0f;
+	float Sky = 5.0f;
 };
 
 struct SHaRCSettings
 {
-	bool Enabled = true;
+	bool Enabled = false;
 	float SceneScale = 1.0f;
 	int AccumFrameNum = 10;
 	int StaleFrameNum = 64;
@@ -152,7 +188,7 @@ enum struct HairBSDF : int32_t
 
 struct SSSSettings
 {
-	bool Enabled = true;
+	bool Enabled = false;
 	int SampleCount = 1;
 	float MaxSampleRadius = 1.0f;
 	bool EnableTransmission = true;
@@ -229,6 +265,13 @@ struct ReSTIRGISettings
 	bool EnableFinalMIS = false;
 };
 
+enum struct PTCullMode : uint32_t
+{
+	Disabled = 0,
+	Enabled = 1,
+	Full = 2
+};
+
 enum struct TextureMode : uint32_t
 {
 	Share = 0,
@@ -245,7 +288,7 @@ enum struct TextureStreamingMode : uint32_t
 
 struct ExperimentalSettings
 {
-	bool PathTracingCull = false;
+	PTCullMode PathTracingCull = PTCullMode::Enabled;
 	TextureMode TextureMode = TextureMode::Share;
 	uint32_t TextureCutOff = 0;
 	bool GlobalLights = false;
@@ -254,10 +297,17 @@ struct ExperimentalSettings
 	uint32_t TextureMaxMipBias = 2;
 };
 
+enum struct TimingMode
+{
+	Disabled,
+	Standard,
+	Extended
+};
+
 struct DebugSettings
 {
 	bool Markers = false;
-	bool Timings = false;
+	TimingMode Timings = TimingMode::Disabled;
 };
 
 struct Settings
@@ -266,7 +316,9 @@ struct Settings
 	GeneralSettings GeneralSettings;
 	LightingSettings LightingSettings;
 	RaytracingSettings RaytracingSettings;
-	ReblurSettings ReblurSettings;
+	NRDSettings NRDSettings;
+	NRDReblurSettings NRDReblurSettings;
+	NRDRelaxSettings NRDRelaxSettings;
 	MaterialSettings MaterialSettings;
 	SHaRCSettings SHaRCSettings;
 	AdvancedSettings AdvancedSettings;

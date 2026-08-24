@@ -2,10 +2,33 @@
 #include "Renderer.h"
 #include "Scene.h"
 
+namespace
+{
+	eastl::vector<ShaderDefine> GetCompositeDefines(const Settings& settings)
+	{
+		eastl::vector<ShaderDefine> defines;
+
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
+			defines.emplace_back(L"NRD", L"1");
+			defines.emplace_back(L"NRD_REBLUR", L"1");
+		} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
+			defines.emplace_back(L"NRD", L"1");
+			defines.emplace_back(L"NRD_RELAX", L"1");
+		}
+
+		return defines;
+	}
+}
+
 namespace Pass::Common
 {
 	PTComposite::PTComposite(Renderer* renderer)
 		: RenderPass(renderer)
+	{
+		m_Defines = GetCompositeDefines(Scene::GetSingleton()->m_Settings);
+	}
+
+	void PTComposite::Initialize()
 	{
 		CreateBindingLayout();
 		CreatePipeline();
@@ -31,20 +54,42 @@ namespace Pass::Common
 
 	void PTComposite::CreatePipeline()
 	{
+		if (!m_BindingLayout)
+			CreateBindingLayout();
+
 		auto device = GetRenderer()->GetDevice();
 
-		winrt::com_ptr<IDxcBlob> shaderBlob;
-		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/PTComposite.hlsl", { { L"NRD", L"1" }, { L"NRD_REBLUR", L"1" }}, L"cs_6_5");
-		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
+		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 
-		if (!m_ComputeShader)
+		winrt::com_ptr<IDxcBlob> shaderBlob;
+		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/PTComposite.hlsl", defines, L"cs_6_5");
+
+		if (!shaderBlob)
+			return;
+
+		auto computeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
+
+		if (!computeShader)
 			return;
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
-			.setComputeShader(m_ComputeShader)
+			.setComputeShader(computeShader)
 			.addBindingLayout(m_BindingLayout);
 
 		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+	}
+
+	void PTComposite::SettingsChanged(const Settings& settings)
+	{
+		auto defines = GetCompositeDefines(settings);
+
+		if (defines != m_Defines) {
+			m_Defines = eastl::move(defines);
+			CreatePipeline();
+		}
+
+		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+					 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 	}
 
 	void PTComposite::CheckBindings()

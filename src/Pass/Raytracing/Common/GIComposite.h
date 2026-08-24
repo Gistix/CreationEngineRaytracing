@@ -9,9 +9,10 @@
 #include "Util.h"
 
 #include "Interop/VertexUpdate.hlsli"
-#include "Interop/BoneMatrix.hlsli"
+#include "Interop/RowMajorFloat3x4.hlsli"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
+#include "Pass/Raytracing/Common/SceneTLAS.h"
 
 #include "Types/ShaderDefine.h"
 
@@ -19,9 +20,12 @@ namespace Pass::Common
 {
 	class GIComposite : public RenderPass
 	{
+		Pass::SceneTLAS* m_SceneTLAS = nullptr;
+		nvrhi::SamplerHandle m_LinearClampSampler;
+		nvrhi::SamplerHandle m_PointClampSampler;
 		nvrhi::ShaderLibraryHandle m_ShaderLibrary;
-		nvrhi::ShaderHandle m_ComputeShader;
 		nvrhi::ComputePipelineHandle m_ComputePipeline;
+		eastl::vector<ShaderDefine> m_Defines;
 
 		nvrhi::BindingLayoutHandle m_BindingLayout;
 		eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
@@ -29,14 +33,16 @@ namespace Pass::Common
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 	public:
-		GIComposite(Renderer* renderer);
+		GIComposite(Renderer* renderer, Pass::SceneTLAS* sceneTLAS);
 
+		virtual void Initialize() override;
 		void CreateBindingLayout();
 
 		virtual void CreatePipeline() override;
 
 		void CheckBindings();
 
+		virtual void SettingsChanged(const Settings& settings) override;
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};
 }

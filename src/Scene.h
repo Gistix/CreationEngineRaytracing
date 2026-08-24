@@ -16,11 +16,6 @@ struct Scene
 {
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
-	eastl::unique_ptr<RenderNode> m_GlobalIllumination;
-	eastl::unique_ptr<RenderNode> m_PathTracing;
-	eastl::unique_ptr<RenderNode> m_GBuffer;
-	eastl::unique_ptr<RenderNode> m_Debug;
-
 	eastl::unique_ptr<CameraData> m_CameraData;
 	nvrhi::BufferHandle m_CameraBuffer;
 
@@ -57,6 +52,8 @@ struct Scene
 
 	Settings m_Settings;
 
+	bool m_IsDXVK = false;
+
 	INISettings m_INISettings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
@@ -71,6 +68,8 @@ struct Scene
 
 	void SetLogLevel(spdlog::level::level_enum a_level = spdlog::level::info);
 	spdlog::level::level_enum GetLogLevel();
+
+	bool IsDXVK() const { return m_IsDXVK; }
 
 	static Scene* GetSingleton()
 	{
@@ -112,7 +111,14 @@ struct Scene
 	inline bool ApplyPathTracingCull() 
 	{ 
 		return IsPathTracingActive() &&
-			m_Settings.ExperimentalSettings.PathTracingCull && 
+			m_Settings.ExperimentalSettings.PathTracingCull != PTCullMode::Disabled && 
+			GetMenuState() != MenuState::None;
+	}
+
+	inline bool ApplyFullPathTracingCull()
+	{
+		return IsPathTracingActive() &&
+			m_Settings.ExperimentalSettings.PathTracingCull == PTCullMode::Full &&
 			GetMenuState() != MenuState::None;
 	}
 
@@ -123,17 +129,7 @@ struct Scene
 
 	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 
-	RenderNode* GetGlobalIllumination();
-
-	RenderNode* GetPathTracing();
-
-	RenderNode* GetDebug();
-
-	RenderNode* GetModeNode(Mode mode);
-
-	bool IsModeInitialized(Mode mode);
-
-	void UpdateMode(Mode mode, Mode previousMode);
+	void UpdateMode(Mode mode);
 
 	void Initialize();
 
@@ -147,6 +143,8 @@ struct Scene
 	void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
 
 	void SetWaterFlowMap(ID3D12Resource* skyHemi);
+
+	float GetResolutionScale() const;
 
 	void UpdateSettings(Settings settings);
 };

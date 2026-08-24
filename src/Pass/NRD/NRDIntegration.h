@@ -17,6 +17,12 @@ namespace Pass::NRD
 			eastl::string debugName;
 		};
 
+		struct DispatchBindingCache
+		{
+			eastl::vector<nvrhi::ITexture*> textures;
+			nvrhi::BindingSetHandle bindingSet;
+		};
+
 		Mode m_Mode;
 
 		nrd::Denoiser kDenoiser;
@@ -40,8 +46,13 @@ namespace Pass::NRD
 
 		nrd::Instance* m_NRD = nullptr;
 		nrd::ReblurSettings m_ReblurSettings = {};
+		nrd::RelaxSettings m_RelaxSettings = {};
 
 		nrd::CommonSettings m_CommonSettings = {};
+
+		bool IsRelax() const { return kDenoiser == nrd::Denoiser::RELAX_DIFFUSE_SPECULAR; }
+
+		eastl::vector<DispatchBindingCache> m_DispatchBindingCaches;
 
 		bool m_ResourcesDirty = true;
 		bool m_SettingsDirty = true;
@@ -54,15 +65,20 @@ namespace Pass::NRD
 		void CreateGlobalBindingSet();
 
 		void UpdateCommonSettings();
+		void UpdateSettings(const Settings& settings);
 
 		nvrhi::ITexture* GetDispatchResource(const nrd::ResourceDesc& resource) const;
 		nvrhi::Format GetFormat(nrd::Format format) const;
+
+		bool IsDownscaled() const;
 
 		uint32_t GetMaxResourceCount(nrd::DescriptorType type) const;
 
 	public:
 		NRDIntegration(Renderer* renderer, nrd::Denoiser denoiser, Mode mode);
 		~NRDIntegration() override;
+
+		virtual void Initialize() override;
 
 		void SettingsChanged(const Settings& settings) override;
 		void ResolutionChanged(uint2 resolution) override;

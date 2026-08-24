@@ -19,7 +19,7 @@ namespace Constants
 	static constexpr uint32_t INSTANCE_LIGHTS_MAX = 32;
 
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
-	static constexpr uint32_t NUM_MESHES_MAX = 16 * 1024;
+	static constexpr uint32_t NUM_MESHES_MAX = 32 * 1024;
 
 	static constexpr uint32_t NUM_MATERIALS_MIN = 1024;
 	static constexpr uint32_t NUM_MATERIALS_THRESHOLD = 256;
@@ -33,10 +33,10 @@ namespace Constants
 	static constexpr uint32_t LIGHT_TLAS_INSTANCES_THRESHOLD = 16;
 	static constexpr uint32_t LIGHT_TLAS_INSTANCES_STEP = 32;
 
-	static constexpr uint32_t NUM_INSTANCES_MAX = 256 * 1024;
+	static constexpr uint32_t NUM_INSTANCES_MAX = UINT16_MAX;
 
 	static constexpr uint32_t NUM_TEXTURES_MIN = 512;
-	static constexpr uint32_t NUM_TEXTURES_MAX = 8 * 1024;
+	static constexpr uint32_t NUM_TEXTURES_MAX = 16 * 1024;
 
 	static constexpr uint32_t NUM_CUBEMAPS_MAX = 256;
 
@@ -47,6 +47,10 @@ namespace Constants
 	static constexpr uint32_t MAX_BLAS_UPDATES_BEFORE_MAINTENANCE = 256;
 
 	static constexpr uint32_t MAX_BLAS_MAINTENANCE_REBUILDS_PER_FRAME = 8;
+
+	// Minimum child count for a NiNode to fan-out its children into the thread pool during SceneGraph::Update's
+	// Phase A traversal. Below this count, recursion stays serial to avoid scheduler overhead.
+	static constexpr size_t ParallelTraversalFanoutThreshold = 32;
 
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
 
@@ -70,6 +74,7 @@ namespace Constants
 		static REL::Relocation<const RE::NiRTTI*> BSDismemberSkinInstance{ NiRTTI(BSDismemberSkinInstance) };
 		static REL::Relocation<const RE::NiRTTI*> ShadowSceneNode{ NiRTTI(ShadowSceneNode) };
 		static REL::Relocation<const RE::NiRTTI*> BSFadeNode{ NiRTTI(BSFadeNode) };
+		static REL::Relocation<const RE::NiRTTI*> NiSpotLight{ NiRTTI(NiSpotLight) };
 	}
 
 	static constexpr float3x4 kIdentityTransform = {

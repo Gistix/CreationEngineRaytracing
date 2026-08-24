@@ -50,6 +50,7 @@ namespace Pass
 
 		virtual void SettingsChanged(const Settings& settings) override;
 
+		virtual void Initialize() override;
 		void CreateBindingLayout();
 
 		virtual void CreatePipeline() override;

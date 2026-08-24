@@ -47,12 +47,18 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 		case RenderTarget::SpecularRadiance:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
-		case RenderTarget::DiffuseFactor:
-		case RenderTarget::SpecularFactor:
+		case RenderTarget::DiffuseFactor: // RRDiffuseAlbedo
+		case RenderTarget::SpecularFactor: // RRSpecularAlbedo
 			desc.format = nvrhi::Format::R11G11B10_FLOAT;
 			break;
 		case RenderTarget::RRSpecularHitDist:
 			desc.format = nvrhi::Format::R32_FLOAT;
+			break;
+		case RenderTarget::DownscaledMotionVectors:
+			desc.format = nvrhi::Format::RG16_FLOAT;
+			break;
+		case RenderTarget::DownscaledNormalRoughness:
+			desc.format = nvrhi::Format::RGBA16_SNORM;
 			break;
 		default:
 			break;
@@ -169,8 +175,4 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 	sharedTexture.native = renderTarget.d3d12Resource.get();
 	sharedTexture.shared = renderTarget.d3d11Texture.get();
 	return sharedTexture;
-}
-
-SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
-	return GetSharedTexture(texture, Renderer::GetSingleton()->GetCompletedSlot());
 }

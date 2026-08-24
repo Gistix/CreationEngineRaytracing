@@ -44,4 +44,13 @@
 #define USE_SIA_INTERPOLATION (0)
 #endif
 
+// Minimum PDF for BSDF importance sampling. The sampled lobe's weight is
+// computed as f / max(pdf, BSDF_MIN_PDF), capping the per-sample contribution
+// of a single bounce and reducing fireflies from near-zero PDFs at grazing
+// angles / tight specular lobes. Introduces a small bias on directions whose
+// PDF falls below the floor.
+#ifndef BSDF_MIN_PDF
+#define BSDF_MIN_PDF (1e-4)
+#endif
+
 #endif // ADVANCED_SETTINGS_HLSL

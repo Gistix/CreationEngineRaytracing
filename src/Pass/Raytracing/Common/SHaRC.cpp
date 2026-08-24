@@ -38,6 +38,14 @@ namespace Pass
 		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
 
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
+
+		SettingsChanged(Scene::GetSingleton()->m_Settings);
+	}
+
+	void SHaRC::Initialize()
+	{
+		SetupUpdate();
+		SetupResolve();
 	}
 
 	void SHaRC::SettingsChanged(const Settings& settings)
@@ -102,6 +110,8 @@ namespace Pass
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::Texture_SRV(10),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11), // Transforms
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
@@ -115,7 +125,7 @@ namespace Pass
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
-		auto* rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
 		if (!rayGenBlob) {
 			logger::error("SHaRC::SetupUpdate - Failed to compile update shader.");
 			return;
@@ -167,15 +177,13 @@ namespace Pass
 
 		m_ResolvePass.m_BindingLayout = device->createBindingLayout(globalBindingLayoutDesc);
 
-
 		const auto linearBlockSizeWStr = std::to_wstring(RESOLVE_LINEAR_BLOCK_SIZE);
 
 		eastl::vector<DxcDefine> defines = {
 			{ L"LINEAR_BLOCK_SIZE", linearBlockSizeWStr.c_str() },
 			{ L"SHARC", L"" },
 			{ L"SHARC_UPDATE", L"0" },
-			{ L"SHARC_RESOLVE", L"1" },
-			{ L"SHARC_ENABLE_FADE_ACCELERATION", L"1" }
+			{ L"SHARC_RESOLVE", L"1" }
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
@@ -247,6 +255,8 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_SRV(9, GetRenderer()->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_LockBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)

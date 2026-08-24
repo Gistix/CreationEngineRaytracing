@@ -1,4 +1,4 @@
-#include "Core/SkinnedMesh.h"
+#include "Core/Mesh/SkinnedMesh.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Constants.h"
@@ -62,7 +62,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateTransformIndex();
+	AllocateMeshIndex();
 
 	m_VertexCount = vertexCount;
 
@@ -79,11 +79,6 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	InitSkinToBones(skinInstance);
 
 	InitDismemberSkin(skinInstance);
-}
-
-void SkinnedMesh::UpdateLocalTransform(const float4x4& invTransform, const float4x4& prevInvTransform)
-{
-	BaseMesh::UpdateLocalTransform(invTransform, prevInvTransform);
 }
 
 void SkinnedMesh::InitSkinToBones(RE::NiSkinInstance* skinInstance)
@@ -188,7 +183,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 	std::memcpy(&m_VertexDesc, &basePartitionBuffer->vertexDesc, sizeof(m_VertexDesc));
 
 	m_IndexBuffers.reserve(skinPartition->numPartitions);
-	m_GeometryDescs.reserve(skinPartition->numPartitions);
+	m_GeometryEntries.reserve(skinPartition->numPartitions);
 	m_GeometryPartitionIndices.reserve(skinPartition->numPartitions);
 
 	for (size_t i = 0; i < skinPartition->numPartitions; i++)
@@ -210,7 +205,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		if (requireSharedNativeVertexBuffer && partitionBuffer->vertexBuffer != basePartitionBuffer->vertexBuffer) {
 			logger::warn("SkinnedMesh::BuildSkinned - Partition {} vertex buffer differs from partition 0 for {}, skipping mesh.", i, m_Name);
 			m_IndexBuffers.clear();
-			m_GeometryDescs.clear();
+			m_GeometryEntries.clear();
 			m_VertexBuffer = {};
 			return;
 		}
@@ -224,7 +219,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-		m_GeometryDescs.push_back(MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetTransformID()));
+		m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, 0, indexCount, vertexBuffer, vertexStride, vertexCount, GetMeshIndex()), AllocateGeometryIndex() });
 		m_GeometryPartitionIndices.push_back(i);
 	}
 }
@@ -242,7 +237,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 		bool isVisible = false;
 		if (isForceCulled)
-			isVisible = scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
+			isVisible = m_Flags.all(Flags::FirstPerson) || scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
 
 		// Only recompute when the game advanced the animation this frame.
 		const auto frameID = skinInstance->frameID;
@@ -278,25 +273,25 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 
 	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.
 	if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
-		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetRootNode()->GetPass<Pass::Skinning>())
+		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetPass<Pass::Skinning>())
 			skinningPass->QueueUpdate(m_DirtyFlags.get(), this);
 	}
 }
 
 void SkinnedMesh::RefreshVisibleGeometryCache()
 {
-	m_VisibleGeometryDescs.clear();
+	m_VisibleGeometryEntries.clear();
 	m_VisibleGeometrySourceIndices.clear();
 
-	m_VisibleGeometryDescs.reserve(m_GeometryDescs.size());
-	m_VisibleGeometrySourceIndices.reserve(m_GeometryDescs.size());
+	m_VisibleGeometryEntries.reserve(m_GeometryEntries.size());
+	m_VisibleGeometrySourceIndices.reserve(m_GeometryEntries.size());
 
-	for (size_t i = 0; i < m_GeometryDescs.size(); ++i) {
+	for (size_t i = 0; i < m_GeometryEntries.size(); ++i) {
 		const auto partitionIndex = (i < m_GeometryPartitionIndices.size()) ? m_GeometryPartitionIndices[i] : i;
 		if (partitionIndex >= m_PartitionVisibility.size() || m_PartitionVisibility[partitionIndex] == 0)
 			continue;
 
-		m_VisibleGeometryDescs.push_back(m_GeometryDescs[i]);
+		m_VisibleGeometryEntries.push_back(m_GeometryEntries[i]);
 		m_VisibleGeometrySourceIndices.push_back(i);
 	}
 }

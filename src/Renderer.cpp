@@ -56,7 +56,7 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	return true;
 }
 
-bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
+bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
 {
 	const char* deviceExtensions[] = {
 		"VK_KHR_acceleration_structure",
@@ -67,6 +67,7 @@ bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQu
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
+	deviceDesc.instance = instance;
 	deviceDesc.physicalDevice = physicalDevice;
 	deviceDesc.device = device;
 	deviceDesc.graphicsQueue = graphicsQueue;
@@ -82,6 +83,20 @@ bool Renderer::Initialize(VkPhysicalDevice physicalDevice, VkDevice device, VkQu
 
 	if (!m_NVRHIDevice)
 		return false;
+
+	m_IsVulkan = true;
+
+	// Map DXGI_FORMAT to NVRHI formats
+	if (m_FormatMapping.empty())
+		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+		{
+			auto format = (nvrhi::Format)i;
+
+			// This gets the SRV format, but I guess it should work
+			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
+
+			m_FormatMapping.emplace(nativeFormat, format);
+		}
 
 	PostInitialize();
 
@@ -218,15 +233,15 @@ void Renderer::InitGBufferOutput()
 	desc.isUAV = true;
 	desc.mipLevels = 1;
 
-	desc.format = nvrhi::Format::R11G11B10_FLOAT;
+	desc.format = nvrhi::Format::RG16_FLOAT;
 	desc.debugName = "GBuffer Motion Vectors";
 	m_GBufferOutput->motionVectors = device->createTexture(desc);
 
-	desc.format = nvrhi::Format::RGBA16_FLOAT;
+	desc.format = nvrhi::Format::R10G10B10A2_UNORM;
 	desc.debugName = "GBuffer Albedo";
 	m_GBufferOutput->albedo = device->createTexture(desc);
 
-	desc.format = nvrhi::Format::R10G10B10A2_UNORM;
+	desc.format = nvrhi::Format::RGBA16_FLOAT;
 	desc.debugName = "GBuffer Normal/Roughness";
 	m_GBufferOutput->normalRoughness = device->createTexture(desc);
 
@@ -249,7 +264,7 @@ void Renderer::InitGBufferOutput()
 	desc.isUAV = false;
 	desc.isTypeless = true;
 	desc.initialState = nvrhi::ResourceStates::DepthWrite;
-	desc.clearValue = nvrhi::Color(1.f);
+	desc.clearValue = nvrhi::Color(1.f, 0.f, 0.f, 0.f);
 	desc.debugName = "GBuffer Depth Texture";
 	m_GBufferOutput->depth = device->createTexture(desc);
 }
@@ -481,6 +496,17 @@ uint2 Renderer::GetDynamicResolution()
 	};
 }
 
+uint2 Renderer::GetScaledDynamicResolution()
+{
+	const float scale = Scene::GetSingleton()->GetResolutionScale();
+	const uint2 dynamicResolution = GetDynamicResolution();
+
+	return {
+		eastl::max(1u, static_cast<uint32_t>(std::ceil(dynamicResolution.x * scale))),
+		eastl::max(1u, static_cast<uint32_t>(std::ceil(dynamicResolution.y * scale)))
+	};
+}
+
 void Renderer::SettingsChanged(const Settings& settings)
 {
 	m_RenderGraph->SettingsChanged(settings);
@@ -568,10 +594,17 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 
 	m_PassTimings.clear();
 
-	if (timings) {
-		if (auto* rootNode = m_RenderGraph->GetRootNode()) {
-			rootNode->ForEach([&](RenderNode* node) {
-				if (node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))
+	if (timings != TimingMode::Disabled) {
+		if (timings == TimingMode::Extended) {
+			if (auto* sg = scene->GetSceneGraph()) {
+				for (auto& pt : sg->GetUpdateTimings())
+					m_PassTimings.push_back(pt);
+			}
+		}
+
+		if (m_RenderGraph) {
+			m_RenderGraph->ForEach([&](RenderNode* node) {
+				if (node->m_ExecutedThisFrame[slot] && node->m_TimerQueries[slot] && device->pollTimerQuery(node->m_TimerQueries[slot]))
 					m_PassTimings.push_back(PassTiming{ node->m_Name.c_str(), device->getTimerQueryTime(node->m_TimerQueries[slot]) * 1000.0f, node->m_CpuTimes[slot] });
 			});
 		}

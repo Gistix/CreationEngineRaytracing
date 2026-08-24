@@ -7,12 +7,12 @@
 #include "include/Utils/VanillaToPBR.hlsli"
 #include "interop/Material/Skyrim/LightingMaterialData.hlsli"
 
-void GrassMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh)
+void GrassMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh, Properties props)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
     float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
-    float alpha = diffuse.a * mesh.Properties.Alpha;
+    float alpha = diffuse.a * props.Alpha;
 
     surface.Albedo = VanillaDiffuseColor(diffuse.rgb);
 }
