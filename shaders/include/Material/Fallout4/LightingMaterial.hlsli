@@ -13,19 +13,6 @@
 
 #include "include/Material/Fallout4/Common.hlsli"
 
-float EstimateMetallic(float3 albedo, float3 specularColor)
-{
-    float3 d = albedo - 0.04.xxx;
-    float3 n = specularColor - 0.04.xxx;
-
-    float3 m = n / max(abs(d), 1e-5);
-
-    // Least-squares solution across RGB.
-    float metallic = dot(d, n) / max(dot(d, d), 1e-5);
-
-    return saturate(metallic);
-}
-
 void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, Properties props, float4 boneRotation, float3 viewDir, float dist)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
@@ -49,12 +36,13 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
         {
             surface.Normal = RotateByQuaternion(normalMap, boneRotation);
-            CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
         }
         else
         {
             surface.Normal = normalMap;
         }
+        
+        CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
         
         // Use shading values since the geometry ones aren't available
         surface.GeomNormal = surface.Normal;
@@ -63,52 +51,42 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     else
     {
         NormalMap(
-            normalMap,
+            normalMap.xy,
             normalWS, tangentWS, bitangentWS,
             surface.Normal, surface.Tangent, surface.Bitangent
         );
     }
-    
-    surface.Normal = -surface.Normal;
-    surface.Tangent = -surface.Tangent;
-    surface.Bitangent = -surface.Bitangent;
-    
+
     surface.Roughness = 1.0f - saturate(material.Smoothness * specMask.y);
     
     [branch]
     if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
     {
-        uint16_t envMaskTexIndex;
         uint16_t envTexIndex;
         float envScale = 1.0f;
         
         if (material.Feature == Feature::kEye)
         {
             EyeMaterialDataExtra eye = Materials[0].Load<EyeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            envMaskTexIndex = eye.EnvironmentMaskTexture;
             envTexIndex = eye.EnvironmentTexture;
             envScale = eye.EnvironmentScale;
         }
         else
         {
             EnvmapMaterialDataExtra envMap = Materials[0].Load<EnvmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            envMaskTexIndex = envMap.EnvironmentMaskTexture;
             envTexIndex = envMap.EnvironmentTexture;
             envScale = envMap.EnvironmentScale;
         }
 
-        Texture2D envMaskTexture = Textures[NonUniformResourceIndex(envMaskTexIndex)];
-        float4 envMask = envMaskTexture.SampleLevel(DefaultSampler, texCoord0, 0);
-       
-        //surface.Metallic = specMask.x * envMask.x * envScale;
         TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(envTexIndex)];
         float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
-        //surface.Metallic = EstimateMetallic(surface.Albedo, envMask.x * envColorBase.xyz * envScale);
+        
+        float envMask = specMask.x * 3.0;
+        float envStrength = envMask * min(1.0 / rsqrt(saturate(specMask.y - 0.3)), 1.0) * material.SpecularColorScale;
+        
+        surface.Metallic = saturate(envStrength * envScale);
     }
 
-    //const float3 specularity = specMask.x * material.SpecularColor * material.SpecularColorScale;
-    //urface.F0 = lerp(float3(0.04f, 0.04f, 0.04f), surface.Albedo, surface.Metallic) * saturate(specularity);
-  
     float alpha = diffuse.a * material.MaterialAlpha;
     
     [branch]
