@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "Scene.h"
 #include "Util.h"
+#include "Types/RE/RE.h"
 
 LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 	: Mesh(bsTriShape, commandList)
@@ -15,7 +16,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	auto device = Renderer::GetSingleton()->GetDevice();
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-	const auto& triShapeData = bsTriShape->GetTrishapeRuntimeData();
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(bsTriShape);
 	const auto vertexStride = Util::Geometry::GetStoredVertexSize(m_VertexDesc);
 	const auto byteSize = static_cast<size_t>(triShapeData.vertexCount) * vertexStride;
 
@@ -32,11 +33,13 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	m_LiveVertexBuffer = device->createBuffer(liveBufDesc);
 	//commandList->writeBuffer(m_LiveVertexBuffer, Util::Adapter::GetVertexData(const_cast<RE::BSGraphics::TriShape*>(rendererData)), byteSize);
 
-	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, 0, byteSize);
+	commandList->copyBuffer(m_LiveVertexBuffer, 0, m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, byteSize);
 
 	// Repoint the geometry desc to the live buffer for BLAS reads
-	for (auto& entry : m_GeometryEntries)
+	for (auto& entry : m_GeometryEntries) {
 		entry.desc.geometryData.triangles.vertexBuffer = m_LiveVertexBuffer;
+		entry.desc.geometryData.triangles.vertexOffset = 0;
+	}
 
 	// RT shaders read from here
 	device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
@@ -57,22 +60,22 @@ void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 
 	for (auto* node = static_cast<RE::NiAVObject*>(m_BSTriShape->parent); node; node = node->parent) {
 		if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(node)) {
-			auto& runtimeData = multiBoundNode->GetRuntimeData();
-			auto* multiBound = runtimeData.multiBound.get();
-			if (!multiBound || !multiBound->data)
-				break;
-
-			auto* aabb = netimmerse_cast<RE::BSMultiBoundAABB*>(multiBound->data.get());
+			auto* multiBound = Util::Adapter::GetMultiBound(multiBoundNode);
+			auto* aabb = Util::Adapter::GetMultiBoundAABB(multiBound);
 			if (!aabb)
 				break;
 
 			m_AABBCenter = { aabb->center.x, aabb->center.y };
+#if defined(SKYRIM)
 			m_AABBSize = { aabb->size.x, aabb->size.y };
+#elif defined(FALLOUT4)
+			m_AABBSize = { aabb->halfExtents.x * 2.0f, aabb->halfExtents.y * 2.0f };
+#endif
 			break;
 		}
 	}
 
-	float4 loadedRange = *reinterpret_cast<const float4*>(&RE::BSShaderManager::State::GetSingleton().loadedRange);
+	const float4 loadedRange = Util::Adapter::GetShaderManagerLoadedRange();
 
 	const float2 loadedPosition = { loadedRange.x , loadedRange.y };
 	const float2 loadedSize = { loadedRange.z * 2.0f , loadedRange.w * 2.0f };

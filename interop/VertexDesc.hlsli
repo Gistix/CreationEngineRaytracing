@@ -68,6 +68,10 @@ INTEROP_STRUCT(VertexDesc, 4)
 
     bool HasFlag(uint16_t flag)
     {
+#if defined(SKYRIM)
+        if (flag == VertexFlags::FullPrec)
+            return true;
+#endif
         return (GetFlags() & flag) != 0;
     }
 

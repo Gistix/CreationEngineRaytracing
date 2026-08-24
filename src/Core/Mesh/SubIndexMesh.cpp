@@ -13,14 +13,14 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 	m_Name = MakeDebugName(triShape);
 	m_Type = Type::SubIndex;
 
-	const auto& geometryData = triShape->GetGeometryRuntimeData();
+	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(triShape);
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
 		logger::warn("SubIndexMesh::SubIndexMesh - No renderer data for {}", m_Name);
 		return;
 	}
 
-	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(triShape);
 	if (!ValidateCounts(triShapeData.triangleCount, triShapeData.vertexCount)) {
 		logger::error("SubIndexMesh::SubIndexMesh - Failed to validate Triangle Count: {}, Vertex Count: {}",
 			triShapeData.triangleCount, triShapeData.vertexCount);
@@ -29,35 +29,13 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 
 	m_VertexDesc = rendererData->vertexDesc;
 
-	auto* triShapeDX12 = reinterpret_cast<RE::BSGraphics::TriShapeDX12*>(rendererData);
-	auto* device = Renderer::GetSingleton()->GetDevice();
-	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	m_IndexBuffer = CreateIndexBuffer(rendererData);
+	if (!m_IndexBuffer.m_Buffer)
+		return;
 
-	// Create the shared nvrhi index buffer handle from the parent's D3D12 resource.
-	// All K SubIndexSegmentMesh children will share this handle (different descriptor
-	// slots, different indexOffset/count in their GeometryDesc).
-	auto indexBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(triShapeDX12->indexBufferDX12->GetDesc().Width)
-		.setStructStride(sizeof(Triangle))
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
-		.setIsAccelStructBuildInput(true)
-		.setDebugName("SubIndex Index Buffer");
-
-	m_IndexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->indexBufferDX12), indexBufferDesc);
-
-	m_IndexDescriptor = sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_IndexBuffer));
-
-	// Create the shared nvrhi vertex buffer handle from the parent's D3D12 resource.
-	auto vertexBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(triShapeDX12->vertexBufferDX12->GetDesc().Width)
-		.setCanHaveRawViews(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
-		.setIsAccelStructBuildInput(true)
-		.setDebugName("SubIndex Vertex Buffer");
-
-	m_VertexBuffer = device->createHandleForNativeBuffer(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(triShapeDX12->vertexBufferDX12), vertexBufferDesc);
-
-	m_VertexDescriptor = sceneGraph->GetVertexDescriptors()->m_DescriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, m_VertexBuffer));
+	m_VertexBuffer = CreateVertexBuffer(rendererData);
+	if (!m_VertexBuffer.m_Buffer)
+		return;
 
 	AllocateMeshIndex();
 
@@ -83,9 +61,10 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 	if (!subIndexShape)
 		return;
 
-	const bool bypassVisibility = *Scene::GetSingleton()->g_BypassSubIndexVisibility;
+	auto* bypassSubIndexVisibility = Scene::GetSingleton()->g_BypassSubIndexVisibility;
+	const bool bypassVisibility = bypassSubIndexVisibility ? *bypassSubIndexVisibility : false;
 
-	const auto& triShapeData = triShape->GetTrishapeRuntimeData();
+	const auto& triShapeData = Util::Adapter::GetTrishapeRuntimeData(triShape);
 	const auto& runtimeData = subIndexShape->GetSubIndexedTrishapeRuntimeData();
 
 	for (auto& seg : m_Segments) {

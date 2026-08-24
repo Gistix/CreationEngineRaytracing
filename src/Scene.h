@@ -7,6 +7,7 @@
 #include "interop/CameraData.hlsli"
 #include "interop/SharedData.hlsli"
 
+#include "Types/CameraRuntimeData.h"
 #include "Types/MenuState.h"
 #include "Types/Settings.h"
 
@@ -17,6 +18,13 @@ struct Scene
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
 
 	eastl::unique_ptr<CameraData> m_CameraData;
+
+#if defined(FALLOUT4)	
+	mutable CameraRuntimeData m_PrevCameraRuntimeData{};
+#endif
+
+	mutable CameraRuntimeData m_CameraRuntimeData{};
+
 	nvrhi::BufferHandle m_CameraBuffer;
 
 	eastl::unique_ptr<FeatureData> m_FeatureData;
@@ -46,6 +54,11 @@ struct Scene
 
 	// Used to draw full LOD when world map is open
 	bool* g_BypassSubIndexVisibility = nullptr;
+
+#if defined(FALLOUT4)
+	std::mutex m_BufferMutex;
+	eastl::unordered_map<ID3D11Buffer*, winrt::com_ptr<ID3D12Resource>> m_Buffers;
+#endif
 
 	CESEAdapter::REX::EnumSet<MenuState> m_MenuState;
 	uint m_MenuStateUpdateFrame = 0;
@@ -80,6 +93,7 @@ struct Scene
 	SceneGraph* GetSceneGraph() const;
 
 	inline auto GetCameraData() const { return m_CameraData.get(); }
+	inline const CameraRuntimeData& GetCameraRuntimeData() const { return m_CameraRuntimeData; }
 
 	inline auto GetCameraBuffer() const { return m_CameraBuffer; }
 
@@ -87,18 +101,10 @@ struct Scene
 
 	auto GetMenuState()
 	{
-		auto frameCount = RE::BSGraphics::State::GetSingleton()->frameCount;
+		auto frameCount = Util::Adapter::GetGraphicsFrameCount();
 
 		if (m_MenuStateUpdateFrame != frameCount) {
-			m_MenuState.reset();
-
-			const auto ui = RE::UI::GetSingleton();
-
-			m_MenuState.set(ui->IsMenuOpen(RE::MainMenu::MENU_NAME), MenuState::MainMenu);
-			m_MenuState.set(ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME), MenuState::LoadingMenu);
-			m_MenuState.set(ui->IsMenuOpen(RE::MapMenu::MENU_NAME), MenuState::MapMenu);
-
-			m_MenuState.set(ui->IsShowingMenus(), MenuState::Any);
+			m_MenuState = Util::Adapter::GetMenuState();
 
 			m_MenuStateUpdateFrame = frameCount;
 		}
@@ -106,20 +112,23 @@ struct Scene
 		return m_MenuState;
 	}
 
+	bool CanCull()
+	{
+		return GetMenuState().none(MenuState::MainMenu, MenuState::LoadingMenu);
+	}
+
 	inline bool IsPathTracingActive() const { return m_Settings.Enabled && m_Settings.GeneralSettings.Mode == Mode::PathTracing; };
 
 	inline bool ApplyPathTracingCull() 
 	{ 
 		return IsPathTracingActive() &&
-			m_Settings.ExperimentalSettings.PathTracingCull != PTCullMode::Disabled && 
-			GetMenuState() != MenuState::None;
+			m_Settings.ExperimentalSettings.PathTracingCull != PTCullMode::Disabled && CanCull();
 	}
 
 	inline bool ApplyFullPathTracingCull()
 	{
 		return IsPathTracingActive() &&
-			m_Settings.ExperimentalSettings.PathTracingCull == PTCullMode::Full &&
-			GetMenuState() != MenuState::None;
+			m_Settings.ExperimentalSettings.PathTracingCull == PTCullMode::Full && CanCull();
 	}
 
 	inline nvrhi::ITexture* GetSkyHemiTexture() const { return m_SkyHemisphereTexture; }
@@ -147,4 +156,12 @@ struct Scene
 	float GetResolutionScale() const;
 
 	void UpdateSettings(Settings settings);
+
+#if defined(FALLOUT4)
+	void TryShareBuffer(REX::W32::ID3D11Buffer* buffer);
+
+	ID3D12Resource* GetSharedBuffer(REX::W32::ID3D11Buffer* buffer);
+
+	void TryReleaseBuffer(REX::W32::ID3D11Buffer* buffer);
+#endif
 };

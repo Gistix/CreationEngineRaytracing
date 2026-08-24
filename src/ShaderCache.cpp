@@ -212,13 +212,7 @@ namespace ShaderCache
 		// TODO: Consider adding cache eviction or periodic cleanup of stale entries
 		// to prevent unbounded growth of the disk cache directory.
 
-#if defined(SKYRIM)
-		std::filesystem::path cacheDir = "Data/SKSE/Plugins/CreationEngineRaytracing/ShaderCache";
-#elif defined(FALLOUT4)
-		std::filesystem::path cacheDir = "Data/F4SE/Plugins/CreationEngineRaytracing/ShaderCache";
-#else
-		std::filesystem::path cacheDir = "Data/CreationEngineRaytracing/ShaderCache";
-#endif
+		std::filesystem::path cacheDir = std::string(PLUGIN_FOLDER) + "/CreationEngineRaytracing/ShaderCache";
 
 		std::filesystem::path hlslPath(filePath);
 		// Build the cache filename entirely in wide characters. Narrowing the

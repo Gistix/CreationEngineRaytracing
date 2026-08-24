@@ -109,6 +109,8 @@ target_compile_definitions(
     ${PROJECT_NAME}
     PRIVATE 
     CERT_EXPORTS
+    PLUGIN_FOLDER_W=L\"Data/${ScriptExtenderName}/Plugins\"
+    PLUGIN_FOLDER=\"Data/${ScriptExtenderName}/Plugins\"
 )
 
 if(AUTO_DEPLOYMENT)

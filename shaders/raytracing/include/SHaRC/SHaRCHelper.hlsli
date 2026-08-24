@@ -29,14 +29,14 @@ SharcParameters GetSharcParameters()
 {
     SharcParameters sharcParameters;
     {
-        sharcParameters.gridParameters = GetSharcGridParameters();
+        sharcParameters.hashGridParameters = GetSharcGridParameters();
 
-        sharcParameters.hashMapData.capacity = SHARC_CAPACITY;
-        sharcParameters.hashMapData.hashEntriesBuffer = SharcHashEntriesBuffer;
+        sharcParameters.hashGridData.capacity = SHARC_CAPACITY;
+        sharcParameters.hashGridData.hashEntriesBuffer = SharcHashEntriesBuffer;
 
-#if !SHARC_ENABLE_64_BIT_ATOMICS && SHARC_UPDATE
-        sharcParameters.hashMapData.lockBuffer = SharcLockBuffer;
-#endif // !SHARC_ENABLE_64_BIT_ATOMICS && SHARC_UPDATE
+#if !HASH_GRID_ENABLE_64_BIT_ATOMICS && SHARC_UPDATE
+        sharcParameters.hashGridData.lockBuffer = SharcLockBuffer;
+#endif // !HASH_GRID_ENABLE_64_BIT_ATOMICS && SHARC_UPDATE
 
 #if SHARC_UPDATE || SHARC_RESOLVE
         sharcParameters.accumulationBuffer = SharcAccumulationBuffer;
@@ -44,7 +44,6 @@ SharcParameters GetSharcParameters()
 
         sharcParameters.resolvedBuffer = SharcResolvedBuffer;
         sharcParameters.radianceScale = SHaRC.RadianceScale;
-        sharcParameters.enableAntiFireflyFilter = true;
     }
 
     return sharcParameters;

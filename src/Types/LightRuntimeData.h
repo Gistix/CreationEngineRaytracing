@@ -4,8 +4,6 @@ struct LightRuntimeData
 {
 	RE::NiColor ambient;
 	RE::NiColor diffuse;
-	RE::NiColor specular;
-	RE::NiPoint3 radius;
+	float radius;
 	float fade;
-	float fadeZone;
 };

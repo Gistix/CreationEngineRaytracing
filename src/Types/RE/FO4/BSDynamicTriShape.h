@@ -47,13 +47,13 @@ namespace RE
 		std::uint32_t                        unk174;                          // 174
 		std::uint64_t                        lock;                            // 178
 		void*                                dynamicData;                     // 180
-		NiPointer<BSGeometrySegmentData>     segmentData;                     // 188
+		BSGeometrySegmentData*               segmentData;                     // 188
 		void*                                unk190;                          // 190
 		std::uint32_t                        unk198;                          // 198
-		std::uint32_t                        pad19C;						  // 19C
+		std::uint32_t                        pad19C;                           // 19C
 		void*                                unk1A0;                          // 1A0
 		std::uint32_t                        unk1A8;                          // 1A8
-		std::uint32_t                        pad1AC;						  // 1AC
+		std::uint32_t                        pad1AC;                           // 1AC
 	};
 	static_assert(sizeof(BSDynamicTriShape) == 0x1B0);
 }

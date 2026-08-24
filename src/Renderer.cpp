@@ -206,12 +206,15 @@ nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
 }
 
 nvrhi::ITexture* Renderer::GetWaterDisplacementTexture() {
-#if defined(SKYRIM)
 	if (!m_WaterDisplacementTexture) {
+#if defined(SKYRIM)
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
 		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::ShaderResource);
-	}
+#elif defined(FALLOUT4)
+		m_WaterDisplacementTexture = m_GrayTexture->texture;
 #endif
+	}
+
 	return m_WaterDisplacementTexture;
 }
 
@@ -611,6 +614,12 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 
 		if (m_FrameTimerQueries[slot] && device->pollTimerQuery(m_FrameTimerQueries[slot]))
 			m_PassTimings.push_back(PassTiming{ "Total", device->getTimerQueryTime(m_FrameTimerQueries[slot]) * 1000.0f, m_FrameCpuTimes[slot] });
+
+#if defined(FALLOUT4)
+		for (auto& passTiming : m_PassTimings) {
+			logger::info("Name: {}, CPU: {}, GPU: {}", passTiming.name.c_str(), passTiming.cpuTiming, passTiming.gpuTiming);
+		}
+#endif
 	}
 
 	m_LastCompletedSlot = slot;
@@ -660,19 +669,27 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	}
 
 	winrt::com_ptr<IDXGIResource1> dxgiResource;
-	d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+	if (FAILED(hr)) {
+		logger::error("Renderer::ShareTexture - QueryInterface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+		return nullptr;
+	}
 
 	HANDLE sharedHandle = nullptr;
 
-	dxgiResource->GetSharedHandle(&sharedHandle);
+	hr = dxgiResource->GetSharedHandle(&sharedHandle);
+	if (FAILED(hr)) {
+		logger::error("Renderer::ShareTexture - GetSharedHandle failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+		return nullptr;
+	}
 
 	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
 
 	winrt::com_ptr<ID3D12Resource> d3d12Resource;
-	nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
+	hr = nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
 
-	if (!d3d12Resource) {
-		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}", debugName);
+	if (FAILED(hr) || !d3d12Resource) {
+		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
 		return nullptr;
 	}
 

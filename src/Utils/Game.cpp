@@ -11,8 +11,13 @@ namespace Util
 			static float& cameraNear = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x40));
 			static float& cameraFar = (*(float*)(REL::RelocationID(517032, 403540).address() + 0x44));
 #elif defined(FALLOUT4)
-			static float& cameraNear = *(float*)REL::ID(57985).address();
-			static float& cameraFar = *(float*)REL::ID(958877).address();
+			const auto* mainCam = RE::Main::WorldRootCamera();
+
+			const auto* viewFrustum = &mainCam->viewFrustum;
+
+			// near and far are MSVC keywords, defined in minwindef.h
+			float cameraNear = *(float*)((std::uintptr_t)viewFrustum + 0x10);
+			float cameraFar = *(float*)((std::uintptr_t)viewFrustum + 0x14);
 #endif
 
 			float4 cameraData{};
@@ -55,7 +60,7 @@ namespace Util
 
 			if (!object->parent) {
 				// If the last node is not the WorldRoot Node, the object is detached
-				if (object != RE::Main::GetSingleton()->WorldRootNode())
+				if (object != Util::Adapter::GetWorldRootNode())
 					return true;
 
 				return false;
@@ -79,14 +84,14 @@ namespace Util
 
 		RE::NiCamera* FindNiCamera(RE::NiAVObject* object)
 		{
-			if (auto* camera = skyrim_cast<RE::NiCamera*>(object))
+			if (auto* camera = netimmerse_cast<RE::NiCamera*>(object))
 				return camera;
 
-			auto* node = object->AsNode();
+			auto* node = Util::Adapter::AsNode(object);
 			if (!node)
 				return nullptr;
 
-			for (auto& child : node->GetChildren()) {
+			for (auto& child : Util::Adapter::GetChildren(node)) {
 				if (child) {
 					if (auto* res = FindNiCamera(child.get()))
 						return res;
