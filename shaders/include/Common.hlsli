@@ -46,7 +46,7 @@ void NormalMap(float3 normalMap, float3 geomNormalWS, float3 geomTangentWS, floa
     bitangentWS = cross(normalWS, tangentWS);
     bitangentWS *= (dot(bitangentWS, geomBitangentWS) < 0.0f) ? -1.0f : 1.0f;
 }
-#else // elif defined(FALLOUT4)
+#elif defined(FALLOUT4)
 void NormalMap(float2 rawNormalXY, float3 geomNormalWS, float3 geomTangentWS, float3 geomBitangentWS, out float3 normalWS, out float3 tangentWS, out float3 bitangentWS)
 {
     rawNormalXY = rawNormalXY * 2.0f - 1.0f;

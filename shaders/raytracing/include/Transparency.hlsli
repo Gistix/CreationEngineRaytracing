@@ -84,7 +84,11 @@ float3 ComputeShadowNormal(
     Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture)];
     float3 normal = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).xyz;
     float3 N, T, B;
+#if defined(SKYRIM)    
     NormalMap(normal, normalWS, tangentWS, bitangentWS, N, T, B);
+#elif defined(FALLOUT4)
+    NormalMap(normal.xy, normalWS, tangentWS, bitangentWS, N, T, B);    
+#endif    
     return N;
 }
 
