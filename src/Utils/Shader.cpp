@@ -58,9 +58,13 @@ namespace Util
 				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_REBLUR", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_RELAX", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
 
@@ -89,10 +93,14 @@ namespace Util
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_REBLUR", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_RELAX", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
 			}

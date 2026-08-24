@@ -9,6 +9,16 @@
 // 1 - DIFFUSE_SPECULAR
 #define NRD_COMBINED                        1
 
+// Normal encoding (4 = RGBA16_SNORM / Float [-1, 1])
+#ifndef NRD_NORMAL_ENCODING
+#    define NRD_NORMAL_ENCODING             4
+#endif
+
+// Roughness encoding (1 = Linear)
+#ifndef NRD_ROUGHNESS_ENCODING
+#    define NRD_ROUGHNESS_ENCODING          1
+#endif
+
 // NORMAL - common (non specialized) denoisers
 // SH - SH (spherical harmonics or spherical gaussian) denoisers
 // OCCLUSION - OCCLUSION (ambient or specular occlusion only) denoisers

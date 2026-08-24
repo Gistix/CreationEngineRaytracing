@@ -728,7 +728,7 @@ namespace Util
 			const RE::BSGraphics::CameraStateData* cameraData = nullptr;
 			for (auto& cache : state.cameraDataCache)
 			{
-				if (mainCam == cache.referenceCamera && !cache.useJitter) {
+				if (mainCam == cache.referenceCamera && cache.useJitter) {
 					cameraData = &cache;
 					break;
 				}
