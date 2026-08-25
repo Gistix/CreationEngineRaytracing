@@ -97,10 +97,7 @@ namespace Util
 			float4 projectedUVColor{};
 		};
 
-		ShaderPropertyRuntimeData GetShaderPropertyRuntimeData(RE::BSShaderProperty* a_property);
 		RE::BSGraphics::Texture* GetRendererTexture(RE::NiTexture* a_texture);
-		uint16_t GetAlphaPropertyFlags(const RE::NiAlphaProperty* a_property);
-		uint8_t GetAlphaTestReference(const RE::NiAlphaProperty* a_property);
 
 		RE::BSMultiBound* GetMultiBound(RE::BSMultiBoundNode* a_node);
 		RE::BSMultiBoundAABB* GetMultiBoundAABB(RE::BSMultiBound* a_multiBound);

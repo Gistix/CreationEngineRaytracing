@@ -525,62 +525,6 @@ namespace Util
 #endif
 		}
 
-		ShaderPropertyRuntimeData GetShaderPropertyRuntimeData(RE::BSShaderProperty* a_property)
-		{
-			ShaderPropertyRuntimeData result;
-			if (!a_property)
-				return result;
-
-#if defined(FALLOUT4)
-			result.flags = a_property->flags.underlying();
-			result.alpha = a_property->alpha;
-			result.materialType = a_property->GetMaterialType();
-			result.material = a_property->material;
-
-			if (result.materialType == 2) {
-				auto* lightingProperty = reinterpret_cast<RE::BSLightingShaderProperty*>(a_property);
-				if (lightingProperty->emitColor)
-					result.emissiveColor = { lightingProperty->emitColor->r, lightingProperty->emitColor->g, lightingProperty->emitColor->b };
-				result.emissiveScale = lightingProperty->emitColorScale;
-				result.projectedUVParams = {
-					lightingProperty->projectedUVParams.r,
-					lightingProperty->projectedUVParams.g,
-					lightingProperty->projectedUVParams.b,
-					lightingProperty->projectedUVParams.a
-				};
-				result.projectedUVColor = {
-					lightingProperty->projectedUVColor.r,
-					lightingProperty->projectedUVColor.g,
-					lightingProperty->projectedUVColor.b,
-					lightingProperty->projectedUVColor.a
-				};
-			}
-#else
-			(void)a_property;
-#endif
-			return result;
-		}
-
-		uint16_t GetAlphaPropertyFlags(const RE::NiAlphaProperty* a_property)
-		{
-#if defined(FALLOUT4)
-			return a_property ? a_property->flags.flags : 0;
-#else
-			(void)a_property;
-			return 0;
-#endif
-		}
-
-		uint8_t GetAlphaTestReference(const RE::NiAlphaProperty* a_property)
-		{
-#if defined(FALLOUT4)
-			return a_property ? static_cast<uint8_t>(a_property->alphaTestRef) : 0;
-#else
-			(void)a_property;
-			return 0;
-#endif
-		}
-
 		RE::TESObjectREFR* AsReference(RE::TESForm* a_object)
 		{
 #if defined(SKYRIM)

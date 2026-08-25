@@ -21,99 +21,127 @@ Properties::Properties()
 void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 {
 	auto runtimeData = Util::Adapter::GetGeometryRuntimeData(triShape);
-	auto* shaderProperty = runtimeData.shaderProperty;
-	auto shaderRuntime = Util::Adapter::GetShaderPropertyRuntimeData(shaderProperty);
+
 	AlphaFlags alphaFlags = AlphaFlags::None;
 	Feature feature = Feature::kDefault;
 	bool isWater = false;
 
-	if (runtimeData.alphaProperty) {
-		const auto alphaPropertyFlags = Util::Adapter::GetAlphaPropertyFlags(runtimeData.alphaProperty);
-		if (alphaPropertyFlags & 1)
+	auto alphaProperty = runtimeData.alphaProperty;
+	if (alphaProperty) {
+		const auto alphaPropertyFlags = alphaProperty->flags.flags;
+		if (alphaPropertyFlags & static_cast<uint16_t>(RE::NiAlphaPropertyFlags::kAlphaBlend))
 			alphaFlags |= AlphaFlags::Blend;
-		if ((alphaPropertyFlags & 0x100) || (shaderRuntime.flags & static_cast<uint64_t>(EShaderPropertyFlag::kAlphaTest))) {
+
+		if (alphaPropertyFlags & static_cast<uint16_t>(RE::NiAlphaPropertyFlags::kAlphaTest)) {
 			alphaFlags |= AlphaFlags::Test;
-			m_Data.AlphaThreshold = Util::Adapter::GetAlphaTestReference(runtimeData.alphaProperty) / 255.0f;
+			m_Data.AlphaThreshold = alphaProperty->alphaTestRef / 255.0f;
 		}
 	}
 
-	if (!shaderProperty)
-		return;
+	auto* shaderProperty = runtimeData.shaderProperty;
+	if (shaderProperty) {
+		const auto& shaderFlags = shaderProperty->flags;
 
-	m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
-	m_Data.Alpha = shaderRuntime.alpha;
+		m_Data.ShaderFlags = MapShaderFlags(shaderProperty);
+		m_Data.Alpha = shaderProperty->alpha;
 
-	const auto materialType = shaderRuntime.materialType;
-	if (materialType == 3) {
-		isWater = true;
-		m_Data.WaterFlags = MapWaterShaderFlags(reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty));
-	}
-	else if (materialType == 2) {
-		if (shaderRuntime.material)
-			feature = shaderRuntime.material->GetFeature();
+		const auto materialType = shaderProperty->GetMaterialType();
+		if (materialType == 3) {
+			isWater = true;
+			m_Data.WaterFlags = MapWaterShaderFlags(reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty));
+		}
+		else if (materialType == 2) {
+			auto* lightingProperty = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 
-		if (feature == Feature::kSnow)
-			m_Data.ShaderFlags |= ShaderFlags::kSnow;
+			if (shaderProperty->material)
+				feature = shaderProperty->material->GetFeature();
 
-		m_Data.EmissiveColor.x = shaderRuntime.emissiveColor.x;
-		m_Data.EmissiveColor.y = shaderRuntime.emissiveColor.y;
-		m_Data.EmissiveColor.z = shaderRuntime.emissiveColor.z;
-		m_Data.EmissiveColor.w = shaderRuntime.emissiveScale;
+			if (feature == Feature::kSnow)
+				m_Data.ShaderFlags |= ShaderFlags::kSnow;
 
-			if (shaderRuntime.flags & static_cast<uint64_t>(EShaderPropertyFlag::kProjectedUV)) {
-				auto params = shaderRuntime.projectedUVParams;
-				const float oneMinusAlpha = 1.0f - params.w;
+			if (lightingProperty->emitColor) {
+				m_Data.EmissiveColor.x = lightingProperty->emitColor->r;
+				m_Data.EmissiveColor.y = lightingProperty->emitColor->g;
+				m_Data.EmissiveColor.z = lightingProperty->emitColor->b;
+			}
+
+			m_Data.EmissiveColor.w = lightingProperty->emitColorScale;
+
+			if (lightingProperty->flags.all(EShaderPropertyFlag::kProjectedUV)) {
+				auto params = Util::Math::Float4(lightingProperty->projectedUVParams);
+				float oneMinusAlpha = 1.0f - params.w;
+
 				m_Data.ProjectedUVParams = half4(oneMinusAlpha * params.x, 0.0f, params.z, (oneMinusAlpha * params.y) + params.w);
-				m_Data.ProjectedUVParams2 = half4(shaderRuntime.projectedUVColor);
+				m_Data.ProjectedUVParams2 = Util::Math::Float4(lightingProperty->projectedUVColor);
+
+				const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
+
+				// All yoinked from Nukem 
+				// https://github.com/Nukem9/skyrimse-test/blob/328916305165a46c4e4b527735bbcfd46b09a0ca/skyrim64_test/src/patches/TES/BSShader/Shaders/BSLightingShader.cpp#L883
+				{
+					auto renderFlags = 0;
+					bool enableProjectedNormals = iniSettings.enableProjecteUVDiffuseNormals && (!(renderFlags & 0x8) || !iniSettings.enableProjecteUVDiffuseNormalsOnCubemap);
+
+					m_Data.ProjectedUVParams3 = half4(
+						iniSettings.projectedUVDiffuseNormalTilingScale,
+						iniSettings.projectedUVNormalDetailTilingScale,
+						0.0f,
+						enableProjectedNormals ? 1.0f : 0.0f
+					);
+				}
+
+				// Texture Projection - Non-Default if BSGeometry::IsMultiIndexTriShape() is true
 				m_Data.TextureProj = half4(0.0f, 0.0f, 1.0f, 0.0f);
 			}
-	}
+		}
 
-	const bool isEyeFeature = feature == Feature::kEye || (feature == Feature::kEnvmap && isEye);
-	const bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFace ||
-		feature == Feature::kSkinTint || isEyeFeature ||
-		(shaderRuntime.flags & (static_cast<uint64_t>(EShaderPropertyFlag::kDecal) | static_cast<uint64_t>(EShaderPropertyFlag::kDynamicDecal)));
+		const bool isEyeFeature = feature == Feature::kEye || (feature == Feature::kEnvmap && isEye);
+		const bool blendMaterial = feature == Feature::kHairTint || feature == Feature::kFace ||
+			feature == Feature::kSkinTint || isEyeFeature ||
+			shaderFlags.any(EShaderPropertyFlag::kDecal, EShaderPropertyFlag::kDynamicDecal);
 
-	if (shaderRuntime.flags & static_cast<uint64_t>(EShaderPropertyFlag::kPremultAlpha)) {
-		alphaFlags &= ~AlphaFlags::Blend;
-		alphaFlags |= AlphaFlags::Transmission;
-	}
-	else if ((alphaFlags & AlphaFlags::Blend) != AlphaFlags::None && !blendMaterial) {
-		alphaFlags &= ~AlphaFlags::Blend;
-		alphaFlags |= AlphaFlags::Transmission;
-	}
+		if ((alphaFlags & AlphaFlags::Additive) != AlphaFlags::None) {
+			alphaFlags &= ~AlphaFlags::Blend;
+			alphaFlags |= AlphaFlags::Transmission;
+		}
+		else if ((alphaFlags & AlphaFlags::Blend) != AlphaFlags::None && !blendMaterial) {
+			alphaFlags &= ~AlphaFlags::Blend;
+			alphaFlags |= AlphaFlags::Transmission;
+		}
 
-	if (alphaFlags == AlphaFlags::None && (shaderRuntime.flags & static_cast<uint64_t>(EShaderPropertyFlag::kRefraction) || isWater))
-		alphaFlags |= AlphaFlags::Transmission;
+		if (alphaFlags == AlphaFlags::None) {
+			if (shaderFlags.any(EShaderPropertyFlag::kRefraction) || isWater)
+				alphaFlags |= AlphaFlags::Transmission;
+		}
+	}
 
 	m_Data.AlphaFlags = alphaFlags;
 }
 
 uint32_t Properties::MapShaderFlags(RE::BSShaderProperty* shaderProperty)
 {
-	const auto flags = Util::Adapter::GetShaderPropertyRuntimeData(shaderProperty).flags;
+	const auto flags = shaderProperty->flags;
 	uint32_t result = 0;
 
-	const auto has = [flags](EShaderPropertyFlag a_flag) { return flags & static_cast<uint64_t>(a_flag); };
-	if (has(EShaderPropertyFlag::kSpecular)) result |= kSpecular;
-	if (has(EShaderPropertyFlag::kVertexAlpha)) result |= kVertexAlpha;
-	if (has(EShaderPropertyFlag::kGrayscaleToPaletteColor)) result |= kGrayscaleToPaletteColor;
-	if (has(EShaderPropertyFlag::kGrayscaleToPaletteAlpha)) result |= kGrayscaleToPaletteAlpha;
-	if (has(EShaderPropertyFlag::kFalloff)) result |= kFalloff;
-	if (has(EShaderPropertyFlag::kEnvMap)) result |= kEnvMap;
-	if (has(EShaderPropertyFlag::kFace)) result |= kFace;
-	if (has(EShaderPropertyFlag::kModelSpaceNormals)) result |= kModelSpaceNormals;
-	if (has(EShaderPropertyFlag::kRefraction)) result |= kRefraction;
-	if (has(EShaderPropertyFlag::kProjectedUV)) result |= kProjectedUV;
-	if (has(EShaderPropertyFlag::kExternalEmittance)) result |= kExternalEmittance;
-	if (has(EShaderPropertyFlag::kVertexColors)) result |= kVertexColors;
-	if (has(EShaderPropertyFlag::kMultiTextureLandscape)) result |= kMultiTextureLandscape;
-	if (has(EShaderPropertyFlag::kEyeReflect)) result |= kEyeReflect;
-	if (has(EShaderPropertyFlag::kHairTint)) result |= kHairTint;
-	if (has(EShaderPropertyFlag::kTwoSided)) result |= kTwoSided;
-	if (has(EShaderPropertyFlag::kTreeAnim)) result |= kTreeAnim;
-	if (has(EShaderPropertyFlag::kLODLandscape)) result |= kLODLandscape;
-	if (has(EShaderPropertyFlag::kLODObjects)) result |= kLODObjects;
+	if (flags.any(EShaderPropertyFlag::kSpecular)) result |= kSpecular;
+	if (flags.any(EShaderPropertyFlag::kVertexAlpha)) result |= kVertexAlpha;
+	if (flags.any(EShaderPropertyFlag::kGrayscaleToPaletteColor)) result |= kGrayscaleToPaletteColor;
+	if (flags.any(EShaderPropertyFlag::kGrayscaleToPaletteAlpha)) result |= kGrayscaleToPaletteAlpha;
+	if (flags.any(EShaderPropertyFlag::kFalloff)) result |= kFalloff;
+	if (flags.any(EShaderPropertyFlag::kEnvMap)) result |= kEnvMap;
+	if (flags.any(EShaderPropertyFlag::kFace)) result |= kFace;
+	if (flags.any(EShaderPropertyFlag::kModelSpaceNormals)) result |= kModelSpaceNormals;
+	if (flags.any(EShaderPropertyFlag::kRefraction)) result |= kRefraction;
+	if (flags.any(EShaderPropertyFlag::kProjectedUV)) result |= kProjectedUV;
+	if (flags.any(EShaderPropertyFlag::kExternalEmittance)) result |= kExternalEmittance;
+	if (flags.any(EShaderPropertyFlag::kVertexColors)) result |= kVertexColors;
+	if (flags.any(EShaderPropertyFlag::kMultiTextureLandscape)) result |= kMultiTextureLandscape;
+	if (flags.any(EShaderPropertyFlag::kEyeReflect)) result |= kEyeReflect;
+	if (flags.any(EShaderPropertyFlag::kHairTint)) result |= kHairTint;
+	if (flags.any(EShaderPropertyFlag::kTwoSided)) result |= kTwoSided;
+	if (flags.any(EShaderPropertyFlag::kTreeAnim)) result |= kTreeAnim;
+	if (flags.any(EShaderPropertyFlag::kLODLandscape)) result |= kLODLandscape;
+	if (flags.any(EShaderPropertyFlag::kLODObjects)) result |= kLODObjects;
 
 	return result;
 }
