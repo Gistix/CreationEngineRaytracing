@@ -85,6 +85,7 @@ class BLASCluster
 		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 
 	void SetValid(bool valid) { m_IsValid = valid; }
+
 public:
 	explicit BLASCluster(RE::TESObjectREFR* owner);
 

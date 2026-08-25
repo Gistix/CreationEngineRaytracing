@@ -69,7 +69,17 @@ namespace Hooks
 	};
 
 #elif defined(FALLOUT4)
+	struct BSMergeInstancedTriShape_SetupShapeDataBuffer
+	{
+		static void thunk(RE::BSMergeInstancedTriShape* a_this, RE::BSMergeInstancedTriShape::ShapeData* a_data, std::uint32_t a_count);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
+	struct BSMergeInstancedTriShape_SetupShapeIdLookupTable
+	{
+		static void thunk(RE::BSMergeInstancedTriShape* a_this, void* a_data, std::uint32_t a_size);
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 #endif
 
 	void InstallEarly();

@@ -57,6 +57,12 @@ class SceneGraph
 	// Each SubIndexSegmentMesh lives in its own cluster so it gets its own BLAS
 	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
 
+#if defined(FALLOUT4)
+	eastl::unordered_map<RE::BSTriShape*, eastl::vector<RE::BSMergeInstancedTriShape::ShapeData>> m_MergeShapeData;
+	eastl::unordered_map<RE::BSTriShape*, eastl::vector<uint16_t>> m_MergeLookupData;
+	mutable std::shared_mutex m_MergeShapeDataMutex;
+#endif
+
 	eastl::vector<BLASCluster*> m_AllClusters;
 
 	std::mutex m_BLASClusterUpdateMutex;
@@ -227,6 +233,15 @@ public:
 	void WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform);
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
+
+#if defined(FALLOUT4)
+	BLASCluster* GetOrCreateInstancedCluster(RE::BSTriShape* bsTriShape);
+	void SetMergeShapeData(RE::BSMergeInstancedTriShape* a_triShape, const RE::BSMergeInstancedTriShape::ShapeData* a_data, uint32_t a_count);
+	const eastl::vector<RE::BSMergeInstancedTriShape::ShapeData>* GetMergeShapeData(RE::BSTriShape* a_triShape) const;
+	void SetMergeLookupData(RE::BSMergeInstancedTriShape* a_triShape, const uint16_t* a_data, uint32_t a_count);
+	const eastl::vector<uint16_t>* GetMergeLookupData(RE::BSTriShape* a_triShape) const;
+	void RemoveMergeShapeData(RE::BSTriShape* a_triShape);
+#endif
 
 private:
 	eastl::vector<PassTiming> m_UpdateTimings;

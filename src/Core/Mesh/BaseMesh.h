@@ -45,7 +45,8 @@ public:
 		Default,
 		Skinned,
 		Dynamic,
-		SubIndex
+		SubIndex,
+		MergeInstanced
 	};
 
 	enum class Flags : uint8_t
@@ -75,6 +76,8 @@ public:
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
 
 	virtual class SubIndexMesh* AsSubIndexMesh() { return nullptr; }
+
+	virtual class MergeInstancedMesh* AsMergeInstancedMesh() { return nullptr; }
 
 	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
 	virtual uint32_t GetDynamicIndex() const { return 0; }
@@ -121,7 +124,7 @@ public:
 
 	const float3x4& GetPrevTransform() const { return m_PrevTransform; }
 
-	uint16_t GetMeshIndex() const { return m_MeshIndex; }
+	virtual uint16_t GetMeshIndex([[maybe_unused]] size_t geometryIndex = 0) const { return m_MeshIndex; }
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
 	
@@ -141,6 +144,9 @@ public:
 
 	CESEAdapter::REX::EnumSet<Flags> GetFlags() const { return m_Flags; }
 	bool HasFlag(Flags f) const { return m_Flags.all(f); }
+
+	RE::BSTriShape* GetBSTriShape() const { return m_BSTriShape; }
+	const RE::NiTransform& GetWorld() const { return m_World; }
 
 	// Per-geometry index buffer descriptor index (into the Triangles bindless table).
 	virtual uint16_t GetIndexID(size_t geometryIndex) const = 0;

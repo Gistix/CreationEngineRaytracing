@@ -570,6 +570,32 @@ namespace Hooks
 	};
 
 #elif defined(FALLOUT4)
+	void BSMergeInstancedTriShape_SetupShapeDataBuffer::thunk(
+		RE::BSMergeInstancedTriShape* a_this,
+		RE::BSMergeInstancedTriShape::ShapeData* a_data,
+		std::uint32_t a_count)
+	{
+		func(a_this, a_data, a_count);
+
+		if (a_this && a_data && a_count > 0) {
+			Scene::GetSingleton()->GetSceneGraph()->SetMergeShapeData(a_this, a_data, a_count);
+		}
+	}
+
+	void BSMergeInstancedTriShape_SetupShapeIdLookupTable::thunk(
+		RE::BSMergeInstancedTriShape* a_this,
+		void* a_data,
+		std::uint32_t a_size)
+	{
+		func(a_this, a_data, a_size);
+
+		if (a_this && a_data && a_size > 0) {
+			const auto* lookup = static_cast<const uint16_t*>(a_data);
+			const uint32_t count = a_size / sizeof(uint16_t);
+			Scene::GetSingleton()->GetSceneGraph()->SetMergeLookupData(a_this, lookup, count);
+		}
+	}
+
 	struct BSD3DResourceCreator_PoolBucket_Dtor
 	{
 		static void thunk(void* a_bucket)
@@ -732,6 +758,9 @@ namespace Hooks
 		scene->g_BypassSubIndexVisibility = g_BypassSubIndexVisibility.get();
 
 #elif defined(FALLOUT4)
+		stl::detour_thunk<BSMergeInstancedTriShape_SetupShapeDataBuffer>(REL::ID(2276068));
+		stl::detour_thunk<BSMergeInstancedTriShape_SetupShapeIdLookupTable>(REL::ID(2276069));
+
 		stl::detour_thunk<BSD3DResourceCreator_CreateBufferRequested>(REL::ID(2277441));
 		stl::detour_thunk<BSD3DResourceCreator_PoolBucket_Dtor>(REL::ID(2277467));
 

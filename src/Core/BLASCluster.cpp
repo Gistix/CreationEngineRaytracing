@@ -213,13 +213,14 @@ uint32_t BLASCluster::Update()
 			const auto vertexDesc = VertexDesc(mesh->GetVertexDescRaw());
 			const auto meshType = static_cast<uint16_t>(mesh->GetType());
 			const auto dynamicIndex = static_cast<uint16_t>(mesh->GetDynamicIndex());
-			const auto meshIndex = mesh->GetMeshIndex();
 			const auto materialIndex = static_cast<uint32_t>(mesh->GetMaterial()->GetOffset());
 
 			for (size_t i = 0; i < entries.size(); i++) {
 				const auto& entry = entries[i];
 				m_GeometryDescs.push_back(entry.desc);
 				m_GeometrySlots.push_back(entry.geometryIndex);
+
+				const auto meshIndex = mesh->GetMeshIndex(i);
 
 				auto& geomTris = entry.desc.geometryData.triangles;
 				MeshData md(

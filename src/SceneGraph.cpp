@@ -804,7 +804,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		m_AllClusters.reserve(
 			m_OwnerClusters.size() +
 			m_OrphanClusters.size() +
-			m_SubIndexSegmentClusters.size());
+			m_SubIndexSegmentClusters.size()
+		);
 
 		for (auto& [_, cluster] : m_OwnerClusters)
 			m_AllClusters.push_back(cluster.get());
@@ -838,7 +839,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						if (meshCount == 0)
 							continue;
 
-						// Acdquire indices and advance counts atomically
+						// Acquire indices and advance counts atomically
 						uint32_t firstMesh = 0;
 						uint32_t instanceIndex = 0;
 						{
@@ -1033,3 +1034,41 @@ void SceneGraph::WriteTransformData(uint32_t index, const float3x4& transform, c
 {
 	m_MeshManager->WriteTransformData(index, transform, prevTransform);
 }
+
+#if defined(FALLOUT4)
+void SceneGraph::SetMergeShapeData(RE::BSMergeInstancedTriShape* a_triShape, const RE::BSMergeInstancedTriShape::ShapeData* a_data, uint32_t a_count)
+{
+	std::unique_lock lock(m_MergeShapeDataMutex);
+	auto& vec = m_MergeShapeData[a_triShape];
+	vec.assign(a_data, a_data + a_count);
+}
+
+const eastl::vector<RE::BSMergeInstancedTriShape::ShapeData>* SceneGraph::GetMergeShapeData(RE::BSTriShape* a_triShape) const
+{
+	std::shared_lock lock(m_MergeShapeDataMutex);
+	auto it = m_MergeShapeData.find(a_triShape);
+	return (it != m_MergeShapeData.end()) ? &it->second : nullptr;
+}
+
+void SceneGraph::SetMergeLookupData(RE::BSMergeInstancedTriShape* a_triShape, const uint16_t* a_data, uint32_t a_count)
+{
+	std::unique_lock lock(m_MergeShapeDataMutex);
+	auto& vec = m_MergeLookupData[a_triShape];
+	vec.assign(a_data, a_data + a_count);
+}
+
+const eastl::vector<uint16_t>* SceneGraph::GetMergeLookupData(RE::BSTriShape* a_triShape) const
+{
+	std::shared_lock lock(m_MergeShapeDataMutex);
+	auto it = m_MergeLookupData.find(a_triShape);
+	return (it != m_MergeLookupData.end()) ? &it->second : nullptr;
+}
+
+void SceneGraph::RemoveMergeShapeData(RE::BSTriShape* a_triShape)
+{
+	std::unique_lock lock(m_MergeShapeDataMutex);
+	m_MergeShapeData.erase(a_triShape);
+	m_MergeLookupData.erase(a_triShape);
+}
+#endif
+

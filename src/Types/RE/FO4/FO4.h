@@ -8,6 +8,7 @@
 #include "BGSTerrainBlock.h"
 #include "BSSubIndexTriShape.h"
 #include "BSDynamicTriShape.h"
+#include "BSMergeInstancedTriShape.h"
 #include "RE/B/BSMultiBoundAABB.h"
 #include "RE/B/BSMultiBoundNode.h"
 #include "BSSkin.h"

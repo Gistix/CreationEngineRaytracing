@@ -1,5 +1,6 @@
 #include "Core/Mesh/BaseMesh.h"
 #include "Core/Mesh/Mesh.h"
+#include "Core/Mesh/MergeInstancedMesh.h"
 #include "Core/Mesh/LandLODMesh.h"
 #include "Core/Mesh/SkinnedMesh.h"
 #include "Core/Mesh/DynamicMesh.h"
@@ -41,6 +42,9 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 			logger::warn("BaseMesh::Create - Mesh {} has no vertex position.", MakeDebugName(bsTriShape).c_str());
 			return nullptr;
 		}
+
+		if (bsTriShape->IsBSMergeInstancedTriShape())
+			return eastl::make_unique<MergeInstancedMesh>(bsTriShape, commandList);
 #endif
 
 		return eastl::make_unique<Mesh>(bsTriShape, commandList);
@@ -380,7 +384,6 @@ uint16_t BaseMesh::AllocateGeometryIndex()
 {
 	return static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateGeometryIndex());
 }
-
 
 void BaseMesh::WriteProperties() const
 {
