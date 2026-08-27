@@ -32,7 +32,9 @@ INTEROP_STRUCT(LightingMaterialData : MaterialBaseData, 4)
     uint16_t RimSoftLightingTexture;
     uint16_t SmoothnessSpecMaskTexture;
     uint16_t LookupTexture;
-    uint16_t _Pad;
+    
+    // PBR field
+    half MetallicScale;
 };
 VALIDATE_ALIGNMENT(LightingMaterialData, 4);
 

@@ -12,6 +12,31 @@ LightingMaterial::LightingMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_
 	UpdateTextures(shaderMaterial);
 }
 
+void LightingMaterial::UpdatePBR(RE::BSShaderProperty* shaderProperty)
+{
+	auto extra = static_cast<RE::NiFloatsExtraData*>(shaderProperty->GetExtraData(Constants::ExtraData::FO4PBR_Modulators));
+	if (extra && extra->size == 8) {
+		auto roughnessScale = extra->data[0];
+		auto roughnessBias = extra->data[1];
+		auto metallicMin = extra->data[2];
+		auto metallicMax = extra->data[3];
+		auto metallicScale = extra->data[4];
+		auto albedoFactorR = extra->data[5];
+		auto albedoFactorG = extra->data[6];
+		auto albedoFactorB = extra->data[7];
+
+		auto* data = reinterpret_cast<Data*>(m_Data.get());
+		// Not true but still PBR
+		data->Type = Type::TruePBR;
+		data->RefractionPower = roughnessScale;
+		data->FresnelPower = roughnessBias;
+		data->RimLightPower = metallicMin;
+		data->BackLightPower = metallicMax;
+		data->MetallicScale = metallicScale;
+		data->SpecularColor = float3(albedoFactorR, albedoFactorG, albedoFactorB);
+	}
+}
+
 void LightingMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 {
 	MaterialBase::UpdateData(shaderMaterial);

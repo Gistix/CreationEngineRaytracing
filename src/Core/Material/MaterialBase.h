@@ -46,6 +46,10 @@ struct MaterialBase
 
 	void Update(RE::BSShaderMaterial* shaderMaterial);
 
+#if defined(FALLOUT4)
+	virtual void UpdatePBR([[maybe_unused]] RE::BSShaderProperty* shaderProperty) {};
+#endif
+
 	protected:
 	void Initialize(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 	{

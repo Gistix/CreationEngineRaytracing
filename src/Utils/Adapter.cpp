@@ -806,7 +806,7 @@ namespace Util
 #if defined(SKYRIM)
 			return a_triShape->GetExtraData<RE::NiIntegersExtraData>(a_name);
 #elif defined(FALLOUT4)
-			return static_cast<RE::NiIntegersExtraData*>(a_triShape->GetExtraData(a_name));
+			return reinterpret_cast<RE::NiIntegersExtraData*>(a_triShape->GetExtraData(a_name));
 #endif
 		}
 

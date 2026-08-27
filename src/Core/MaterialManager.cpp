@@ -95,7 +95,7 @@ void MaterialManager::Release(uint64_t offset)
 	m_Slots.Release(offset);
 }
 
-eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shaderMaterial)
+eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderProperty* shaderProperty)
 {
 	using Feature = RE::BSShaderMaterial::Feature;
 	using Type = RE::BSShaderMaterial::Type;
@@ -105,6 +105,8 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 	eastl::shared_ptr<MaterialBase> material = nullptr;
 
 	bool isEmplaced = false;
+
+	auto shaderMaterial = shaderProperty->material;
 
 	auto it = m_Material.find(shaderMaterial);
 	if (it != m_Material.end()) {
@@ -222,6 +224,10 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderMaterial* shade
 			material = eastl::make_shared<LightingMaterial>(shaderMaterial, offset);
 			break;
 		}
+
+#if defined(FALLOUT4)
+		material->UpdatePBR(shaderProperty);
+#endif
 	}
 	else if (type == Type::kEffect) {
 		material = eastl::make_shared<EffectMaterial>(shaderMaterial, offset);

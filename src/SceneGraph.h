@@ -187,7 +187,7 @@ public:
 	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 	void BuildClusters(nvrhi::ICommandList* commandList);
 
-	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
+	auto GetMaterial(RE::BSShaderProperty* shaderProperty) { return m_MaterialManager->Get(shaderProperty); }
 
 	inline auto& GetLandLODMeshUpdates() { return m_LandLODMeshUpdates; }
 

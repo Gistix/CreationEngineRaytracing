@@ -56,37 +56,65 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.Normal, surface.Tangent, surface.Bitangent
         );
     }
-
-    surface.Roughness = 1.0f - saturate(material.Smoothness * specMask.y);
     
     [branch]
-    if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
+    if (material.Type == Type::TruePBR)
     {
-        uint16_t envTexIndex;
-        float envScale = 1.0f;
-        
-        if (material.Feature == Feature::kEye)
-        {
-            EyeMaterialDataExtra eye = Materials[0].Load<EyeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            envTexIndex = eye.EnvironmentTexture;
-            envScale = eye.EnvironmentScale;
-        }
-        else
-        {
-            EnvmapMaterialDataExtra envMap = Materials[0].Load<EnvmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            envTexIndex = envMap.EnvironmentTexture;
-            envScale = envMap.EnvironmentScale;
-        }
+        const float roughnessScale  = material.RefractionPower;
+        const float roughnessBias = material.FresnelPower;
+        const float metallicMin = material.RimLightPower;
+        const float metallicMax = material.BackLightPower;
+        const float metallicScale = material.MetallicScale;
+        const float3 albedoFactor = material.SpecularColor;
 
-        TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(envTexIndex)];
-        float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
-        
-        float envMask = specMask.x * 3.0;
-        float envStrength = envMask * min(1.0 / rsqrt(saturate(specMask.y - 0.3)), 1.0) * material.SpecularColorScale;
-        
-        surface.Metallic = saturate(envStrength * envScale);
+        float gloss    = saturate(material.Smoothness * specMask.y);
+        float power    = exp2(gloss * 10.0 + 1.0);
+        float rawRough = pow(2.0 / (power + 2.0), 0.25);
+        surface.Roughness = clamp(rawRough * roughnessScale + roughnessBias, 0.04, 0.99);
+
+        if (material.Feature == Feature::kEnvironmentMap)
+        {
+            float specInt = specMask.x * material.SpecularColorScale;
+            float effMax = max(metallicMax, metallicMin + 0.02);
+            float mRaw = saturate((specInt - metallicMin) / (effMax - metallicMin));
+            surface.Metallic = clamp(mRaw * mRaw * (3.0 - 2.0 * mRaw) * metallicScale, 0.0, 1.0);
+
+            surface.Albedo = surface.Albedo * albedoFactor;
+        }
     }
+    else
+    {
+        surface.Roughness = 1.0f - saturate(material.Smoothness * specMask.y);
+    
+        [branch]
+        if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
+        {
+            uint16_t envTexIndex;
+            float envScale = 1.0f;
+        
+            if (material.Feature == Feature::kEye)
+            {
+                EyeMaterialDataExtra eye = Materials[0].Load < EyeMaterialDataExtra > (mesh.GetMaterialOffset() + kLightingSize);
+                envTexIndex = eye.EnvironmentTexture;
+                envScale = eye.EnvironmentScale;
+            }
+            else
+            {
+                EnvmapMaterialDataExtra envMap = Materials[0].Load < EnvmapMaterialDataExtra > (mesh.GetMaterialOffset() + kLightingSize);
+                envTexIndex = envMap.EnvironmentTexture;
+                envScale = envMap.EnvironmentScale;
+            }
 
+            TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(envTexIndex)];
+            float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
+        
+            float envMask = specMask.x * 3.0;
+            float envStrength = envMask * min(1.0 / rsqrt(saturate(specMask.y - 0.3)), 1.0) * material.SpecularColorScale;
+        
+            surface.Metallic = saturate(envStrength * envScale);
+        }
+    }
+    
     float alpha = diffuse.a * material.MaterialAlpha;
     
     [branch]

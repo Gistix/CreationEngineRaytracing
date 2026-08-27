@@ -356,7 +356,8 @@ void BaseMesh::SetEyeFlag()
 
 void BaseMesh::CreateMaterial()
 {
-	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->material);
+	auto shaderProperty = Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty;
+	m_Material = Scene::GetSingleton()->GetSceneGraph()->GetMaterial(shaderProperty);
 }
 
 void BaseMesh::UpdateMaterial()

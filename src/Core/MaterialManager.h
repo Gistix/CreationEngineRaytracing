@@ -60,7 +60,7 @@ public:
 	inline nvrhi::IBuffer* GetBuffer() const { return m_Buffer; }
 	inline auto& GetDescriptors() const { return m_Descriptors; }
 
-	eastl::shared_ptr<MaterialBase> Get(RE::BSShaderMaterial* shaderMaterial);
+	eastl::shared_ptr<MaterialBase> Get(RE::BSShaderProperty* shaderProperty);
 	void Release(uint64_t offset);
 
 	void Update(MaterialBase* material);
