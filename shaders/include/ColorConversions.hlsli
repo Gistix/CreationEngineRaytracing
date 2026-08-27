@@ -7,16 +7,24 @@
 #define LLSETTINGS Features.LinearLighting
 #define LLON LLSETTINGS.enableLinearLighting
 
+#if defined (SKYRIM)
 // Attempt to match vanilla materials that are darker than PBR
 const static float PBRLightingScale = LLON ? 1.0f : 0.65f;
 	
 const static float PBRLightingScaleRcp = 1.0f / PBRLightingScale;
 
-const static float PBRLightingCompensation = LLON ? 1.0 : K_PI;
+const static float PBRLightingCompensation = LLON ? 1.0f : K_PI;
+#else
+const static float PBRLightingScaleCompensation = 1.0f;
+#endif
 
 float3 PBRColorScale(float3 color)
 {
+#if defined (SKYRIM)   
     return color * PBRLightingScale;
+#else
+    return color;
+#endif   
 }
 
 float4 PBRColorScale(float4 color)

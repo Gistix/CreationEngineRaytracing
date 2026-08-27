@@ -85,7 +85,7 @@ float3 EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface 
     return EvalDiffuse(l, surface, brdfContext);
 #else
     float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
-    float4 bsdfEval = bsdf.Eval(brdfContext, feature, surface, l) * shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingCompensation * PBRLightingScale);
+    float4 bsdfEval = bsdf.Eval(brdfContext, feature, surface, l) * shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingScaleCompensation);
     return bsdfEval.xyz;
 #endif
 }
@@ -97,7 +97,7 @@ void EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface su
     outSpecular = 0.0f;
 #else
     float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
-    float scale = shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingCompensation * PBRLightingScale);
+    float scale = shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingScaleCompensation);
     bsdf.EvalDiffuseAndSpecular(brdfContext, feature, surface, l, outDiffuse, outSpecular);
     outDiffuse *= scale;
     outSpecular *= scale;
