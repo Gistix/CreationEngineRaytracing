@@ -829,5 +829,14 @@ namespace Util
 			return (a_light->data.flags & spotMask) != 0;
 #endif
 		}
+
+		RE::BSMultiBoundNode* AsMultiBoundNode(RE::NiNode* a_node)
+		{
+#if defined(SKYRIM)
+			return a_node->AsMultiBoundNode();
+#elif defined(FALLOUT4)
+			return a_node->IsMultiBoundNode();
+#endif
+		}
 	}
 }

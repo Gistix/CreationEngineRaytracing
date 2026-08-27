@@ -171,5 +171,6 @@ namespace Util
 
 		RE::TESObjectREFR* GetUserData(RE::NiAVObject* object);
 		bool IsSpotLight(const RE::TESObjectLIGH* a_light);
+		RE::BSMultiBoundNode* AsMultiBoundNode(RE::NiNode* a_node);
 	}
 }

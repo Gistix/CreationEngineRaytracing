@@ -58,22 +58,16 @@ void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 {
 	Mesh::Update(commandList);
 
-	for (auto* node = static_cast<RE::NiAVObject*>(m_BSTriShape->parent); node; node = node->parent) {
-		if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(node)) {
-			auto* multiBound = Util::Adapter::GetMultiBound(multiBoundNode);
-			auto* aabb = Util::Adapter::GetMultiBoundAABB(multiBound);
-			if (!aabb)
-				break;
+	auto multiBoundNode = Util::Adapter::AsMultiBoundNode(m_BSTriShape->parent);
+	auto* multiBound = Util::Adapter::GetMultiBound(multiBoundNode);
+	auto* aabb = Util::Adapter::GetMultiBoundAABB(multiBound);
 
-			m_AABBCenter = { aabb->center.x, aabb->center.y };
+	m_AABBCenter = { aabb->center.x, aabb->center.y };
 #if defined(SKYRIM)
-			m_AABBSize = { aabb->size.x, aabb->size.y };
+	m_AABBSize = { aabb->size.x, aabb->size.y };
 #elif defined(FALLOUT4)
-			m_AABBSize = { aabb->halfExtents.x * 2.0f, aabb->halfExtents.y * 2.0f };
+	m_AABBSize = { aabb->halfExtents.x * 2.0f, aabb->halfExtents.y * 2.0f };
 #endif
-			break;
-		}
-	}
 
 	const float4 loadedRange = Util::Adapter::GetShaderManagerLoadedRange();
 
