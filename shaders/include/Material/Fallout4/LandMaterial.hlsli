@@ -9,30 +9,63 @@
 #include "interop/Material/MaterialBaseData.hlsli"
 #include "interop/Material/Fallout4/LandscapeMaterialData.hlsli"
 
+#include "include/Material/Common.hlsli"
 #include "include/Material/Fallout4/Common.hlsli"
 
 void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh, float3 viewDir, float dist)
 {
+    const float mipLevel = surface.MipLevel;
+    
     LandscapeMaterialData material = Materials[0].Load<LandscapeMaterialData>(mesh.GetMaterialOffset());
 
-    Texture2D diffuseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture1)];
-    float4 diffuse = diffuseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
-
-    Texture2D normalTexture = Textures[NonUniformResourceIndex(material.NormalTexture1)];
-    float4 normalMap = normalTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
-
-    surface.Albedo = ColorToLinear(diffuse.xyz) * ColorToLinear(vertexColor.xyz);
+    uint16_t diffTex0 = NonUniformResourceIndex(material.DiffuseTexture);
+    uint16_t diffTex1 = NonUniformResourceIndex(material.DiffuseTexture1);
+    uint16_t diffTex2 = NonUniformResourceIndex(material.DiffuseTexture2);
+    uint16_t diffTex3 = NonUniformResourceIndex(material.DiffuseTexture3);
     
-    surface.GeomNormal = normalWS;
+    uint16_t normalTex0 = NonUniformResourceIndex(material.NormalTexture);
+    uint16_t normalTex1 = NonUniformResourceIndex(material.NormalTexture1);
+    uint16_t normalTex2 = NonUniformResourceIndex(material.NormalTexture2);
+    uint16_t normalTex3 = NonUniformResourceIndex(material.NormalTexture3);
+    
+    uint16_t smoothSpecTex0 = NonUniformResourceIndex(material.SmoothnessSpecMaskTexture);
+    uint16_t smoothSpecTex1 = NonUniformResourceIndex(material.SmoothSpecTexture1);
+    uint16_t smoothSpecTex2 = NonUniformResourceIndex(material.SmoothSpecTexture2);
+    uint16_t smoothSpecTex3 = NonUniformResourceIndex(material.SmoothSpecTexture3);
+    
+    float totalWeight = landBlend0.x + landBlend0.y + landBlend0.z + landBlend0.w;
 
-    float3 normal = normalMap.xyz * 2.0 - 1.0;
-    float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
-    surface.Normal = normalize(mul(normal, tbnTr));
+    landBlend0 /= totalWeight;
 
-    surface.Roughness = 0.8f; 
+    float3 blendedAlbedo =
+        BlendLandTexture(diffTex0, texCoord0, landBlend0.x, mipLevel).xyz +
+        BlendLandTexture(diffTex1, texCoord0, landBlend0.y, mipLevel).xyz +
+        BlendLandTexture(diffTex2, texCoord0, landBlend0.z, mipLevel).xyz +
+        BlendLandTexture(diffTex3, texCoord0, landBlend0.w, mipLevel).xyz;
+       
+    
+    float2 blendedNormal =
+        BlendLandTexture(normalTex0, texCoord0, landBlend0.x, mipLevel).xy +
+        BlendLandTexture(normalTex1, texCoord0, landBlend0.y, mipLevel).xy +
+        BlendLandTexture(normalTex2, texCoord0, landBlend0.z, mipLevel).xy +
+        BlendLandTexture(normalTex3, texCoord0, landBlend0.w, mipLevel).xy;
+    
+    float blendedSmoothness =
+        BlendLandTexture(smoothSpecTex0, texCoord0, landBlend0.x, mipLevel).y +
+        BlendLandTexture(smoothSpecTex1, texCoord0, landBlend0.y, mipLevel).y +
+        BlendLandTexture(smoothSpecTex2, texCoord0, landBlend0.z, mipLevel).y +
+        BlendLandTexture(smoothSpecTex3, texCoord0, landBlend0.w, mipLevel).y;
+
+    surface.Albedo = blendedAlbedo;
+     
+    NormalMap(
+        blendedNormal.xy,
+        normalWS, tangentWS, bitangentWS,
+        surface.Normal, surface.Tangent, surface.Bitangent
+    );
+    
+    surface.Roughness = 1.0f - blendedSmoothness;
     surface.Metallic = 0.0f;
-    
-    surface.F0 = float3(0.04f, 0.04f, 0.04f);
 }
 
 #endif // LAND_MATERIAL_FUNC_HLSL

@@ -226,7 +226,6 @@ struct SurfaceMaker
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
     
-#   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
         {
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
@@ -254,34 +253,6 @@ struct SurfaceMaker
         {
             LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, -rayDir, payload.hitDistance);
         }
-#   elif defined(FALLOUT4)
-        if (material.Type == Type::Water)
-        {
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh, props);
-        }
-        else if (material.Type == Type::Effect)
-        {
-            EffectMaterial(surface, texCoord0, vertexColor, mesh, props);
-        }
-        else if (material.Type == Type::DistantTree)
-        {
-            DistantTreeMaterial(surface, texCoord0, mesh, props);
-        }
-        else if (material.Type == Type::Grass)
-        {
-            GrassMaterial(surface, texCoord0, mesh, props);
-        }
-        else if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
-        {
-            float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
-            float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, -rayDir, payload.hitDistance);
-        }
-        else
-        {
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, -rayDir, payload.hitDistance);        
-        }
-#   endif
         
         surface.Roughness = PBR::Roughness(surface.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
         surface.Metallic = Remap(surface.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);

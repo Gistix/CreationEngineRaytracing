@@ -6,12 +6,16 @@
 
 INTEROP_STRUCT(LandscapeMaterialDataExtra, 4)
 {
+    uint16_t NumTextures;
     uint16_t DiffuseTexture1;
     uint16_t DiffuseTexture2;
     uint16_t DiffuseTexture3;
     uint16_t NormalTexture1;
     uint16_t NormalTexture2;
     uint16_t NormalTexture3;
+    uint16_t SmoothSpecTexture1;
+    uint16_t SmoothSpecTexture2;
+    uint16_t SmoothSpecTexture3;
     uint16_t OverlayTexture;
     uint16_t NoiseTexture;
 };
@@ -19,12 +23,16 @@ VALIDATE_ALIGNMENT(LandscapeMaterialDataExtra, 4);
 
 INTEROP_STRUCT(LandscapeMaterialData : LightingMaterialData, 4)
 {
+    uint16_t NumTextures;
     uint16_t DiffuseTexture1;
     uint16_t DiffuseTexture2;
     uint16_t DiffuseTexture3;
     uint16_t NormalTexture1;
     uint16_t NormalTexture2;
     uint16_t NormalTexture3;
+    uint16_t SmoothSpecTexture1;
+    uint16_t SmoothSpecTexture2;
+    uint16_t SmoothSpecTexture3;
     uint16_t OverlayTexture;
     uint16_t NoiseTexture;
 };

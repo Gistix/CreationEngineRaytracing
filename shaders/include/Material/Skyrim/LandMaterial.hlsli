@@ -12,8 +12,8 @@
 #include "interop/Material/Skyrim/LandscapeMaterialData.hlsli"
 #include "include/Wetness.hlsli"
 
+#include "include/Material/Common.hlsli"
 #include "include/Material/Skyrim/Common.hlsli"
-#include "include/Material/Skyrim/BlendLandTexture.hlsli"
 #include "include/Common/ExtendedMaterials.hlsli"
 
 void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh, float3 viewDir, float dist)

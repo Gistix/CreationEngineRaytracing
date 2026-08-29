@@ -1,8 +1,7 @@
-#ifndef BLEND_LAND_TEXTURE_FUNC_HLSL
-#define BLEND_LAND_TEXTURE_FUNC_HLSL
+#ifndef MATERIAL_COMMON_HLSL
+#define MATERIAL_COMMON_HLSL
 
 #include "include/Common.hlsli"
-#include "include/Surface.hlsli"
 
 float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, float mipLevel)
 {
@@ -17,4 +16,4 @@ float4 BlendLandTexture(uint16_t textureIndex, float2 texcoord, float weight, fl
     }
 }
 
-#endif // BLEND_LAND_TEXTURE_FUNC_HLSL
+#endif // MATERIAL_COMMON_HLSL
