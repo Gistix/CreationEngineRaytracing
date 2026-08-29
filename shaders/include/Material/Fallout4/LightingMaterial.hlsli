@@ -10,6 +10,7 @@
 #include "interop/Material/Fallout4/LightingMaterialData.hlsli"
 #include "interop/Material/Fallout4/EnvmapMaterialData.hlsli"
 #include "interop/Material/Fallout4/EyeMaterialData.hlsli"
+#include "interop/Material/Fallout4/GlowmapMaterialData.hlsli"
 
 #include "include/Material/Fallout4/Common.hlsli"
 
@@ -57,6 +58,9 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         );
     }
     
+    // Matches 1:1 with PBR
+    surface.Roughness = 1.0f - saturate(material.Smoothness * specMask.y);
+    
     [branch]
     if (material.Type == Type::TruePBR)
     {
@@ -67,52 +71,33 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         const float metallicScale = material.MetallicScale;
         const float3 albedoFactor = material.SpecularColor;
 
-        float gloss    = saturate(material.Smoothness * specMask.y);
-        float power    = exp2(gloss * 10.0 + 1.0);
-        float rawRough = pow(2.0 / (power + 2.0), 0.25);
-        surface.Roughness = clamp(rawRough * roughnessScale + roughnessBias, 0.04, 0.99);
+        surface.Roughness = clamp(surface.Roughness * roughnessScale + roughnessBias, 0.04, 0.99);
 
-        if (material.Feature == Feature::kEnvironmentMap)
-        {
-            float specInt = specMask.x * material.SpecularColorScale;
-            float effMax = max(metallicMax, metallicMin + 0.02);
-            float mRaw = saturate((specInt - metallicMin) / (effMax - metallicMin));
-            surface.Metallic = clamp(mRaw * mRaw * (3.0 - 2.0 * mRaw) * metallicScale, 0.0, 1.0);
+        float specInt = specMask.x * material.SpecularColorScale;
+        float effMax = max(metallicMax, metallicMin + 0.02);
+        float mRaw = saturate((specInt - metallicMin) / (effMax - metallicMin));
+        surface.Metallic = clamp(mRaw * mRaw * (3.0 - 2.0 * mRaw) * metallicScale, 0.0, 1.0);
 
-            surface.Albedo = surface.Albedo * albedoFactor;
-        }
+        surface.Albedo *= ((1.0f - surface.Metallic) + surface.Metallic * albedoFactor);
     }
     else
     {
-        surface.Roughness = 1.0f - saturate(material.Smoothness * specMask.y);
+        // SpecMask B channel is unused by the game, so we can safely use it to store our metallic map
+        surface.Metallic = specMask.z;
+        surface.Albedo = lerp(surface.Albedo, material.SpecularColor, surface.Metallic);
+    }
     
+    if (props.ShaderFlags & ShaderFlags::kOwnEmit)
+    {
+        surface.Emissive = props.EmissiveColor.rgb * props.EmissiveColor.a * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+        
         [branch]
-        if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
+        if (material.Feature == Feature::kGlowMap)
         {
-            uint16_t envTexIndex;
-            float envScale = 1.0f;
-        
-            if (material.Feature == Feature::kEye)
-            {
-                EyeMaterialDataExtra eye = Materials[0].Load < EyeMaterialDataExtra > (mesh.GetMaterialOffset() + kLightingSize);
-                envTexIndex = eye.EnvironmentTexture;
-                envScale = eye.EnvironmentScale;
-            }
-            else
-            {
-                EnvmapMaterialDataExtra envMap = Materials[0].Load < EnvmapMaterialDataExtra > (mesh.GetMaterialOffset() + kLightingSize);
-                envTexIndex = envMap.EnvironmentTexture;
-                envScale = envMap.EnvironmentScale;
-            }
-
-            TextureCube envCubemap = CubeTextures[NonUniformResourceIndex(envTexIndex)];
-            float4 envColorBase = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15);
-        
-            float envMask = specMask.x * 3.0;
-            float envStrength = envMask * min(1.0 / rsqrt(saturate(specMask.y - 0.3)), 1.0) * material.SpecularColorScale;
-        
-            surface.Metallic = saturate(envStrength * envScale);
-        }
+            GlowmapMaterialDataExtra glowData = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+            Texture2D glowTexture = Textures[NonUniformResourceIndex(glowData.GlowTexture)];
+            surface.Emissive *= glowTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel).rgb;
+        }       
     }
     
     float alpha = diffuse.a * material.MaterialAlpha;

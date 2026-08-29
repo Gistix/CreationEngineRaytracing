@@ -30,6 +30,7 @@ namespace ShaderFlags
     static const uint kLODObjects = (1 << 22);
     static const uint kHDLODObjects = (1 << 23);
     static const uint kSnow = (1 << 24);
+    static const uint kOwnEmit = (1 << 25);
 }
 
 namespace AlphaFlags

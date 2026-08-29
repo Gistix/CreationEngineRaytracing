@@ -142,7 +142,7 @@ uint32_t Properties::MapShaderFlags(RE::BSShaderProperty* shaderProperty)
 	if (flags.any(EShaderPropertyFlag::kTreeAnim)) result |= kTreeAnim;
 	if (flags.any(EShaderPropertyFlag::kLODLandscape)) result |= kLODLandscape;
 	if (flags.any(EShaderPropertyFlag::kLODObjects)) result |= kLODObjects;
-
+	if (flags.any(EShaderPropertyFlag::kOwnEmit)) result |= kOwnEmit;
 	return result;
 }
 
