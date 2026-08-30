@@ -97,7 +97,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		.setByteSize(2ull * dynamicDataSize)
 		.setStructStride(sizeof(float4))
 		.setCanHaveUAVs(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName(std::format("{} - Dynamic (Live)", m_Name.c_str()));
 
@@ -107,7 +107,7 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	auto originalBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(dynamicDataSize)
 		.setStructStride(sizeof(float4))
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName(std::format("{} - Dynamic (Original)", m_Name.c_str()));
 
 	m_OriginalDynamicBuffer = device->createBuffer(originalBufferDesc);

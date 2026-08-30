@@ -155,7 +155,7 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 		.setByteSize(vertexBufferSize)
 		.setCanHaveRawViews(true)
 		.setCanHaveUAVs(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName(std::format("{} (Live Vertex Buffer)", m_Name.c_str()).c_str());
 
@@ -171,7 +171,7 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 		.setByteSize(sizeof(float3) * vertexCount)
 		.setStructStride(sizeof(float3))
 		.setCanHaveUAVs(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()).c_str());
 
 	m_PrevPositionBuffer = device->createBuffer(prevPositionBufferDesc);

@@ -109,7 +109,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 	auto indexBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(indexDesc.Width)
 		.setCanHaveRawViews(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("Index Buffer");
 
@@ -156,7 +156,7 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 	auto vertexBufferDesc = nvrhi::BufferDesc()
 		.setByteSize(vertexDesc.Width)
 		.setCanHaveRawViews(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName("Vertex Buffer");
 

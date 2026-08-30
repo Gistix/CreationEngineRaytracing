@@ -24,7 +24,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 		.setByteSize(byteSize)
 		.setCanHaveRawViews(true)
 		.setCanHaveUAVs(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName(std::format("{} - LandLOD", m_Name.c_str()));
 		
