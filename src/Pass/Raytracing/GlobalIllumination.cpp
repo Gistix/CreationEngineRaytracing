@@ -73,8 +73,6 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::Texture_SRV(10),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
 			nvrhi::BindingLayoutItem::Texture_SRV(13),           // Water displacement
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
 			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
@@ -86,10 +84,13 @@ namespace Pass::Raytracing
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
-		if (settings.SHaRCSettings.Enabled)
+		if (settings.SHaRCSettings.Enabled) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12));
+		}
 
-if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
 		}
@@ -260,8 +261,6 @@ if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
@@ -271,8 +270,11 @@ if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 
-		if (settings.SHaRCSettings.Enabled)
+		if (settings.SHaRCSettings.Enabled) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()));
+		}
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {

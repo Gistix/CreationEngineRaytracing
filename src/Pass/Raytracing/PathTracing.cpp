@@ -78,8 +78,6 @@ namespace Pass
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_SRV(9),           // Water displacement
 			nvrhi::BindingLayoutItem::Texture_SRV(10),          // Projection noise
@@ -94,8 +92,11 @@ namespace Pass
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
-		if (settings.SHaRCSettings.Enabled)
+		if (settings.SHaRCSettings.Enabled) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(6));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(7));
+		}
 
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
@@ -318,8 +319,6 @@ namespace Pass
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_SHaRC->GetResolveBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(7, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(9, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
@@ -334,8 +333,11 @@ namespace Pass
 
 		const auto& settings = scene->m_Settings;
 
-		if (settings.SHaRCSettings.Enabled)
+		if (settings.SHaRCSettings.Enabled) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(6, m_SHaRC->GetResolveBuffer()));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(7, m_SHaRC->GetHashEntriesBuffer()));
+		}
 
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
