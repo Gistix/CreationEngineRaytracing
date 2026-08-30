@@ -14,6 +14,8 @@ const static float PBRLightingScale = LLON ? 1.0f : 0.65f;
 const static float PBRLightingScaleRcp = 1.0f / PBRLightingScale;
 
 const static float PBRLightingCompensation = LLON ? 1.0f : K_PI;
+
+const static float PBRLightingScaleCompensation = PBRLightingScale * PBRLightingCompensation;
 #else
 const static float PBRLightingScaleCompensation = 1.0f;
 #endif
@@ -88,7 +90,7 @@ float3 DirLightToLinear(float3 color)
     float3 finalColor = isLinear ? color : LightToLinear(color * PBRLightingScaleRcp);
     return finalColor * mult;
 #else
-    return color;
+    return color * K_PI;
 #endif 
 }
 
