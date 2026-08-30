@@ -34,7 +34,7 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 
 		if (alphaPropertyFlags & static_cast<uint16_t>(RE::NiAlphaPropertyFlags::kAlphaTest)) {
 			alphaFlags |= AlphaFlags::Test;
-			m_Data.AlphaThreshold = alphaProperty->alphaTestRef / 255.0f;
+			m_Data.AlphaThreshold = static_cast<uint8_t>(alphaProperty->alphaTestRef) / 255.0f;
 		}
 	}
 
