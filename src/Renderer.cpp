@@ -6,6 +6,7 @@
 #include <Rtxdi/RtxdiUtils.h>
 
 #include "Renderer/RenderNode.h"
+#include "interop/PackedSurfaceData.hlsli"
 
 Renderer::Renderer()
 {
@@ -368,9 +369,9 @@ void Renderer::InitReSTIRGI()
 		m_ReSTIRGIResources->needsNeighborOffsetUpload = true;
 	}
 
-	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 52 bytes)
+	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 64 bytes)
 	{
-		constexpr uint surfaceDataStride = 52; // sizeof(PackedSurfaceData)
+		constexpr uint surfaceDataStride = sizeof(PackedSurfaceData);
 		nvrhi::BufferDesc desc;
 		desc.byteSize = 2u * width * height * surfaceDataStride;
 		desc.structStride = surfaceDataStride;

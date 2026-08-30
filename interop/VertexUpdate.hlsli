@@ -38,7 +38,11 @@ INTEROP_STRUCT(VertexUpdateData, 4)
 	uint numMatrices;
 	// Native packed vertex layout used to read the original buffer and write the live buffer.
 	VertexDesc VertexDesc;
+	uint Pad0;
+	uint Pad1;
+	uint Pad2;
 };
 VALIDATE_ALIGNMENT(VertexUpdateData, 4);
+VALIDATE_SIZE(VertexUpdateData, 48);
 
 #endif
