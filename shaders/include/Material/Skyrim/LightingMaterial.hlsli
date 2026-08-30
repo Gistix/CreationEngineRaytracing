@@ -21,6 +21,7 @@
 #include "include/Common/Triplanar.hlsli"
 #include "include/Common/ExtendedMaterials.hlsli"
 
+#include "include/Material/Common.hlsli"
 #include "include/Material/Skyrim/Common.hlsli"
 
 void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, Properties props, float4 boneRotation, float3 viewDir, float dist)
@@ -574,51 +575,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
     }
     
-    [branch]
-    if (props.AlphaFlags != AlphaFlags::None)
-    {
-        alpha *= material.MaterialAlpha * props.Alpha;
-        
-        [branch]
-        if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
-            alpha *= vertexColor.a;
-
-        [branch]
-        if (props.AlphaFlags & AlphaFlags::Transmission)
-        {
-            surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);
-            surface.Albedo *= alpha;
-            surface.Metallic *= alpha;
-            surface.SpecTrans = 1.0f;
-            surface.IsThinSurface |= (props.ShaderFlags & ShaderFlags::kTwoSided) != 0;
-            if (material.Type != Type::TruePBR)
-            {
-                surface.Roughness = 0.0f;
-            }
-        }
-
-        [branch]
-        if (props.AlphaFlags & AlphaFlags::Additive)
-        {
-            surface.Albedo = 0.0f;
-            surface.Metallic = 0.0f;
-            surface.Roughness = 0.0f;
-            surface.TransmissionColor = 1.0f;
-            surface.SpecTrans = 1.0f;
-            surface.F0 = 0.04f;
-
-            surface.SubsurfaceData.HasSubsurface = 0;
-            surface.SubsurfaceData.TransmissionColor = 0.0f;
-            surface.SubsurfaceData.ScatteringColor = 0.0f;
-            surface.SubsurfaceData.Scale = 0.0f;
-            surface.SubsurfaceData.Anisotropy = 0.0f;
-
-            surface.CoatColor = 1.0f;
-            surface.CoatStrength = 0.0f;
-            surface.CoatRoughness = 0.0f;
-            surface.CoatF0 = 0.0f;
-        }
-    }
+    MaterialAlpha(props, alpha, material.MaterialAlpha, vertexColor.a, surface);
 
     [branch]
     if (isWindows)

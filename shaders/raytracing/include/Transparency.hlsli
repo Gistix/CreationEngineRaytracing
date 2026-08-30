@@ -21,6 +21,7 @@
 #   include "interop/Material/Skyrim/PBRMaterialData.hlsli"
 #elif defined(FALLOUT4)
 #   include "interop/Material/Fallout4/LightingMaterialData.hlsli"
+#   include "interop/Material/Fallout4/EffectMaterialData.hlsli"
 #   include "interop/Material/Fallout4/WaterMaterialData.hlsli"
 #   include "interop/Material/Fallout4/GlowmapMaterialData.hlsli"
 #endif
@@ -29,44 +30,65 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
 {
     Instance instance;
     Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
-    uint meshSlot = GetMeshSlot(instance, geometryIndex);
-    Properties props = GetMeshProperties(meshSlot);
-    
-    Vertex v0, v1, v2;
-    GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
-    
-    float3 uvw = GetBary(barycentrics);
 
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     
     if (material.Type == Type::Water) {
         return true;
     }
-    
-    float2 texCoord = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
-    
-    float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
-    
-    alpha *= props.Alpha * instance.Alpha;
-    
-    if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
-        alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
-
-    [branch]
-    if (props.AlphaFlags & AlphaFlags::Test)
+    else
     {
-        if (alpha < props.AlphaThreshold)
-            return false;
-    }
-
-	if (props.AlphaFlags & AlphaFlags::Additive)
-		alpha = 0.0f;
+        uint meshSlot = GetMeshSlot(instance, geometryIndex);
+        Properties props = GetMeshProperties(meshSlot);
     
-    if (props.AlphaFlags & AlphaFlags::Blend)
-    {
-        float rnd = Random(randomSeed);
-        if (alpha < rnd)
-            return false;
+        Vertex v0, v1, v2;
+        GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
+    
+        float3 uvw = GetBary(barycentrics);
+        
+        float2 texCoord = material.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
+    
+        float alpha = props.Alpha * instance.Alpha;
+
+        [branch]
+        if (alpha > 0.0f)
+        {
+            if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
+                alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
+        }
+        
+        [branch]
+        if (alpha > 0.0f)
+        {
+            // Only Fallout 4 has alpha blended effect support
+#if defined(FALLOUT4)
+            if (material.Type == Type::Effect)
+            {
+                EffectMaterialData effectMaterial = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
+                alpha *= Textures[NonUniformResourceIndex(effectMaterial.SourceTexture)].SampleLevel(DefaultSampler, texCoord, 0).r;
+            }
+            else
+#endif
+                alpha *= Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
+        }
+        
+        [branch]
+        if (props.AlphaFlags & AlphaFlags::Test)
+        {
+            if (alpha < props.AlphaThreshold)
+                return false;
+        }
+
+        if (props.AlphaFlags & AlphaFlags::Additive)
+            alpha = 0.0f;
+    
+        [branch]
+        if (props.AlphaFlags & AlphaFlags::Blend)
+        {
+            float rnd = Random(randomSeed);
+            if (alpha < rnd)
+                return false;
+        }
     }
     
     return true;
@@ -141,7 +163,17 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         return false;        
     }else
     {   
-        float alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
+        float alpha;
+#if defined(FALLOUT4)
+        [branch]
+        if (material.Type == Type::Effect)
+        {
+            EffectMaterialData effectMaterial = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
+            alpha = Textures[NonUniformResourceIndex(effectMaterial.SourceTexture)].SampleLevel(DefaultSampler, texCoord, 0).r;
+        }
+        else
+#endif
+            alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
     
         alpha *= props.Alpha * instance.Alpha;
     
@@ -173,6 +205,12 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             {
                 transmittance = 1.0f; // fully transparent glass
             }
+#if defined(FALLOUT4)
+            else if (material.Type == Type::Effect)
+            {
+                transmittance = 1.0f; // fully transparent glass
+            }
+#endif
             else
             {
                 float3 baseColor = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;

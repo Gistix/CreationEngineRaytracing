@@ -624,20 +624,26 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				const bool isEffectShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kEffect));
 				const bool isWaterShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kWater));
 
+				// Skip alpha blended effects (particles and effects)
 				auto* alphaProperty = geometryData.alphaProperty;
 				const bool isAlphaBlend = Util::Adapter::GetAlphaBlending(alphaProperty);
-				const bool validEffect = isEffectShader && !isAlphaBlend;
+				bool validEffect = isEffectShader && !isAlphaBlend;
 
+#if defined(FALLOUT4)
+				// Glass
+				validEffect |= isEffectShader && shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kEnvMap);
+#endif
+
+#if defined(SKYRIM)
 				// Exclude procedural and displacement water
 				if (isWaterShader) {
-#if defined(SKYRIM)
 					auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 					const auto waterFlags = waterShaderProperty->waterFlags.underlying();
 
 					if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
 						continue;
-#endif
 				}
+#endif
 
 				if (!isLightingShader && !validEffect && !isWaterShader)
 					continue;

@@ -22,5 +22,7 @@ struct EffectMaterial : public MaterialBase
 
 	MaterialTexture m_SourceTexture;
 	MaterialTexture m_EffectTexture;
+	MaterialTexture m_NormalTexture;
+	MaterialTexture m_EnvMaskTexture;
 };
 

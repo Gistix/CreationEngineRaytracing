@@ -239,7 +239,7 @@ namespace RE
 		BSFixedString        normalTexturePath;             // A8
 		union
 		{
-			float            envMaskScale;                  // B0
+			float            envMapScale;                  // B0
 			float            refractionPower;               // B0
 		};
 		std::uint8_t         textureClampMode;              // B4

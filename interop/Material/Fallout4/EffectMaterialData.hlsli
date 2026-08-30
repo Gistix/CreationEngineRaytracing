@@ -13,6 +13,8 @@ INTEROP_STRUCT(EffectMaterialData : MaterialBaseData, 4)
     half BaseColorScale;       // BSEffectShaderMaterial::baseColorScale
     uint16_t SourceTexture;    // BSEffectShaderMaterial::sourceTexture (main sprite)
     uint16_t EffectTexture;    // BSEffectShaderMaterial::greyscaleTexture (palette lookup)
+    uint16_t NormalTexture;
+    uint16_t EnvMaskTexture;
 };
 VALIDATE_ALIGNMENT(EffectMaterialData, 4);
 
