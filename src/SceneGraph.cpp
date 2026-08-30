@@ -918,7 +918,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		m_UpdateTimings.push_back({"SG::Total", 0.0f, std::chrono::duration<float, std::milli>(totalEnd - updateStart).count()});
 	}
 
+#if defined(FALLOUT4)
 	logger::info("Cluster: {}, Orphan Clusters: {}, SubIndexSegment Clusters: {}", m_OwnerClusters.size(), m_OrphanClusters.size(), m_SubIndexSegmentClusters.size());
+#endif
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
