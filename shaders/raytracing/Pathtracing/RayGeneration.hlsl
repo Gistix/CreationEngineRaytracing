@@ -806,22 +806,10 @@ void Main()
     float specHitDist = 0.0f;
 #endif
 
-    RayDesc ray;
-    Payload payload;
-
-    Instance instance;
-    LightingMaterialData material;
-
-    Surface surface;
-    BRDFContext brdfContext;
-
-    StandardBSDF bsdf;
-    
     RayCone rayCone;    
     
 #if defined(SHARC)
     SharcState sharcState;
-    SharcHitData sharcHitData;
 #endif    
     
     [loop]
@@ -831,18 +819,11 @@ void Main()
         SharcInit(sharcState);
 #endif
         
-        surface = sourceSurface;
-        brdfContext = sourceBRDFContext;
-        bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
         
 #if defined(NRD)
         float accumulatedHitDist = 0;
 #endif        
-        
-        material = sourceMaterial;
-        instance = sourceInstance;
-        payload = sourcePayload;
         
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
@@ -862,11 +843,11 @@ void Main()
         float3 giSecThroughput = 0;
         float giSecPdf = 0;
         bool giSecStarted = false;
-        Surface giScatterSurface = (Surface)0;
-        float3 giScatterViewDir = 0;
-        float3 giScatterThp = 0;
-        uint giScatterFeature = Feature::kDefault;
-        bool giScatterHasSpecularTransmission = false;
+        Surface giScatterSurface = sourceSurface;
+        float3 giScatterViewDir = sourceBRDFContext.ViewDirection;
+        float3 giScatterThp = throughput;
+        uint giScatterFeature = sourceMaterial.Feature;
+        bool giScatterHasSpecularTransmission = sourceSurface.SpecTrans > 0.0f;
 #   endif
 #endif
 
@@ -883,149 +864,122 @@ void Main()
         float3 throughputDelta = float3(1.0f, 1.0f, 1.0f);
 #endif        
         
+        // --- Sample primary surface to prepare the first bounce ray ---
+        RayDesc ray;
+        bool hasRay = false;
+        bool isPrimaryReplacement = false;
+        float bsdfSamplePdfPrev = 0.0f;
+        {
+            BSDFSample bsdfSample;
+            float3 faceNormalOriented = dot(sourceBRDFContext.ViewDirection, sourceSurface.FaceNormal) >= 0.0f ? sourceSurface.FaceNormal : -sourceSurface.FaceNormal;
+
+#if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
+            float3 direction = sourceSurface.Mul(SampleCosineHemisphere(randomSeed));
+            throughput *= sourceSurface.AO;
+            throughput *= sourceSurface.Albedo;
+            const bool hasTransmission = false;
+            hasRay = true;
+#else
+            if (sourceBSDF.SampleBSDF(sourceBRDFContext, sourceMaterial.Feature, sourceSurface, bsdfSample, randomSeed))
+            {
+                hasRay = true;
+                float3 direction = bsdfSample.wo;
+                bsdfSamplePdfPrev = bsdfSample.pdf;
+                bool isDelta = bsdfSample.isLobe(LobeType::Delta);
+                isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
+                isSpecularSample = isSpecular;
+                bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+                isPrimaryReplacement = sourceSurface.Primary && isDelta;
+                arrivedViaDelta = isDelta;
+
+                throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : sourceSurface.AO;
+
+                // Track water volume entry/exit on transmission
+                if (hasTransmission && any(sourceSurface.VolumeAbsorption > 0.0f))
+                {
+                    insideWaterVolume = sourceIsEnter;
+                    waterVolumeAbsorption = insideWaterVolume ? sourceSurface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
+                }
+
+#if defined(RAW_RADIANCE)
+                MonteCarlo::BRDFWeight brdfWeight;
+                brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+                brdfWeight.diffuse /= max(sourceSurface.DiffuseAlbedo, 1e-4f);
+                brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+                brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+
+                float3 brdfWeightOriginal = brdfWeight.diffuse * sourceSurface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
+
+#   if defined(SHARC) && SHARC_UPDATE
+                throughput *= brdfWeightOriginal;
+#   else
+                float3 brdfWeightRaw = bsdfSample.weight;
+                throughputDelta = brdfWeightOriginal / brdfWeightRaw;
+                throughput *= brdfWeightRaw;
+#   endif
+#else
+                throughput *= bsdfSample.weight;
+#endif
+
+#if defined(SHARC) && SHARC_UPDATE
+                SharcSetThroughput(sharcState, throughput);
+#else
+#   if RUSSIAN_ROULETTE != 0
+#       if defined(RAW_RADIANCE)
+                float3 throughputColor = throughput * throughputDelta;
+#       else
+                float3 throughputColor = throughput;
+#       endif
+#   endif
+#   if RUSSIAN_ROULETTE == 1
+                const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));
+                const float rrProb = min(rrVal, 0.95f);
+                if (Random(randomSeed) < rrProb)
+                    hasRay = false;
+                else
+                    throughput /= (1.0f - rrProb);
+#   elif RUSSIAN_ROULETTE == 2
+                const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
+                float rrProb = saturate(0.85 - rrVal);
+                rrProb *= rrProb;
+                rrProb = saturate(rrProb + max(0, (-0.4f)));
+                if (Random(randomSeed) < rrProb)
+                    hasRay = false;
+                else
+                    throughput /= (1.0f - rrProb);
+#   endif
+#endif
+
+#if defined(SHARC)
+                materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : sourceSurface.Roughness;
+#endif
+
+#if USE_SIA_INTERPOLATION
+                ray.Origin = OffsetRaySIA(sourceSurface.Position, faceNormalOriented, sourceSurface.SIAOffset, hasTransmission);
+#else
+                ray.Origin = OffsetRay(sourceSurface.Position, faceNormalOriented, sourceSurface.PositionError, hasTransmission);
+#endif
+                ray.Direction = direction;
+                ray.TMin = 0.0f;
+                ray.TMax = RAY_TMAX;
+
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+                StablePlanesOnScatter(fillState, fillPathL, bsdfSample, 2, spCtx, idx);
+#endif
+
+                if (!bsdfSample.isLobe(LobeType::Delta))
+                    rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(bsdfSample.pdf), 2.0 * K_PI));
+            }
+#endif
+        }
+
+        if (!hasRay)
+            continue;
+
         [loop]
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
-            BSDFSample bsdfSample;
-            bool isPrimaryReplacement = false;
-            
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
-
-#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-#   if defined(RESTIR_GI)
-            // ReSTIR GI: snapshot the current scattering surface for SurfaceDataBuffer.
-            // Updated each iteration until giSecStarted; the final snapshot is the
-            // surface from which the first non-delta ray was emitted.
-            if (Raytracing.EnableReSTIRGI && !giSecStarted)
-            {
-                giScatterSurface = surface;
-                giScatterViewDir = brdfContext.ViewDirection;
-                giScatterThp = throughput;
-                giScatterFeature = material.Feature;
-                giScatterHasSpecularTransmission = surface.SpecTrans > 0.0f;
-            }
-#   endif
-#endif
-
-#if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
-            direction = surface.Mul(SampleCosineHemisphere(randomSeed));
-
-            throughput *= surface.AO;
-            throughput *= surface.Albedo;
-            
-            const bool hasTransmission = false;
-#else            
-            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed);
-            
-            if (isValid)
-                direction = bsdfSample.wo;
-            else
-                break;
-            
-            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
-            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
-            
-            if (j == 0)
-                isSpecularSample = isSpecular;         
-                  
-            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
-            isPrimaryReplacement = surface.Primary && isDelta;
-            arrivedViaDelta = isDelta;
-
-            throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
-
-            // Track water volume entry/exit on transmission
-            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
-            {
-                // isEnter (front face) + transmission = entering volume
-                insideWaterVolume = isEnter;
-                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
-            }
-
-#   if defined(RAW_RADIANCE)
-            brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
-            brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-
-            float3 brdfWeightOriginal = brdfWeight.diffuse * surface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
-
-#       if defined(SHARC) && SHARC_UPDATE
-            throughput *= brdfWeightOriginal;
-#       else
-            if (j > 0) {
-                throughput *= brdfWeightOriginal;
-            } else {
-                float3 brdfWeightRaw = bsdfSample.weight;
-
-                throughputDelta = brdfWeightOriginal / brdfWeightRaw;
-
-                throughput *= brdfWeightRaw;
-            }
-#       endif
-#   else    // RAW_RADIANCE
-            throughput *= bsdfSample.weight;
-#   endif   // !RAW_RADIANCE
-#endif  
-            
-#if defined(SHARC) && SHARC_UPDATE
-            SharcSetThroughput(sharcState, throughput);
-#else
-
-#   if RUSSIAN_ROULETTE != 0          
-#       if defined(RAW_RADIANCE)
-        // Apply russian roulette based on the original throughput
-        float3 throughputColor = throughput * throughputDelta;
-#       else
-        float3 throughputColor = throughput;
-#       endif            
-#   endif
-            
-#   if RUSSIAN_ROULETTE == 1
-            const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
-            const float rrProb = min(rrVal, 0.95f);
-
-            if (Random(randomSeed) < rrProb)
-                break;
-
-            throughput /= (1.0f - rrProb); 
-#   elif RUSSIAN_ROULETTE == 2
-            const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));            
-            float rrProb = saturate(0.85 - rrVal);
-            rrProb *= rrProb;
-
-            rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
-
-            if (Random(randomSeed) < rrProb)
-                break;
-
-            throughput /= (1.0f - rrProb);
-#   endif
-#endif
-            
-#if defined(SHARC)
-            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
-#endif
-            
-#if USE_SIA_INTERPOLATION
-            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
-#else
-            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
-#endif
-            ray.Direction = direction;
-            ray.TMin = 0.0f;  // Offset already handles precision, no additional offset needed
-            ray.TMax = RAY_TMAX;
-
-#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-            // Track stable plane branch after each scatter
-            StablePlanesOnScatter(fillState, fillPathL, bsdfSample, j + 2, spCtx, idx);
-#endif
-
-            if (!bsdfSample.isLobe(LobeType::Delta))
-                rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(bsdfSample.pdf), 2.0 * K_PI));
-
-            payload = TraceRayStandard(Scene, ray, randomSeed);
-            
+            Payload payload = TraceRayStandard(Scene, ray, randomSeed);
             rayCone = rayCone.propagateDistance(payload.hitDistance);
 
             // Apply Beer-Lambert volume absorption for water
@@ -1044,12 +998,11 @@ void Main()
             
             if (!payload.Hit())
             {
-                float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
+                float3 skyIrradiance = SampleSky(SkyHemisphere, ray.Direction) * Raytracing.Sky;
 
 #if defined(SHARC) && SHARC_UPDATE
                 SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
-                // In FILL mode: skip sky if on stable branch (already captured in BUILD)
 #   if defined(RESTIR_GI)
                 if (giSecStarted)
                 {
@@ -1070,9 +1023,10 @@ void Main()
                 break;
             }
             
-            float3 localPosition = ray.Origin + direction * payload.hitDistance;
-
-            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, isPrimaryReplacement);
+            float3 localPosition = ray.Origin + ray.Direction * payload.hitDistance;
+            Instance instance;
+            LightingMaterialData material;
+            Surface surface = SurfaceMaker::make(localPosition, payload, ray.Direction, rayCone, instance, material, isPrimaryReplacement);
 
 #if defined(EFFECT_PASSTHROUGH)         
             // Pass through Effect materials in bounce: accumulate emissive, continue ray unchanged
@@ -1090,17 +1044,15 @@ void Main()
                     float specAvg = isSpecular ? Color::RGBToLuminance(surface.Emissive * throughput) : 0;
                     fillPathL += float4(surface.Emissive * throughput, specAvg);
                 }
-                // Effect emissive after giSecStarted is captured via the main giSecRadiance accumulation
 #else
                 sampleRadiance += surface.Emissive * throughput;
 #endif
-                float3 fn = dot(direction, surface.FaceNormal) <= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+                float3 fn = dot(ray.Direction, surface.FaceNormal) <= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
 #if USE_SIA_INTERPOLATION
                 ray.Origin = OffsetRaySIA(surface.Position, fn, surface.SIAOffset, true);
 #else
                 ray.Origin = OffsetRay(surface.Position, fn, surface.PositionError, true);
 #endif
-                ray.Direction = direction;
                 ray.TMin = 0.0f;
                 ray.TMax = RAY_TMAX;
 
@@ -1116,13 +1068,13 @@ void Main()
                     break;
                 }
 
-                localPosition = ray.Origin + direction * payload.hitDistance;
-                surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, isPrimaryReplacement);
+                localPosition = ray.Origin + ray.Direction * payload.hitDistance;
+                surface = SurfaceMaker::make(localPosition, payload, ray.Direction, rayCone, instance, material, isPrimaryReplacement);
             }
 
             if (effectMiss)
             {
-                float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
+                float3 skyIrradiance = SampleSky(SkyHemisphere, ray.Direction) * Raytracing.Sky;
 #if defined(SHARC) && SHARC_UPDATE
                 SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
@@ -1164,7 +1116,7 @@ void Main()
                     fillSceneLength);
 
                 // Write secondary surface geometry (the hit surface)
-                float3 captureNormal = dot(surface.FaceNormal, -direction) >= 0.0f ? surface.Normal : -surface.Normal;
+                float3 captureNormal = dot(surface.FaceNormal, -ray.Direction) >= 0.0f ? surface.Normal : -surface.Normal;
                 half2 encodedN = EncodeNormal((half3)captureNormal);
                 uint packedNorm = f32tof16(encodedN.x) | (f32tof16(encodedN.y) << 16);
                 SecondaryGBufPositionNormal[idx] = float4(surface.Position, asfloat(packedNorm));
@@ -1172,17 +1124,18 @@ void Main()
                 SecondaryGBufSpecularRough[idx] = float4(surface.F0, surface.Roughness);
                 giSecStarted = true;
                 giSecThroughput = throughput;
-                giSecPdf = bsdfSample.pdf;
+                giSecPdf = bsdfSamplePdfPrev;
             }
 #   endif
 #endif
 
 #if defined(SHARC)
+            SharcHitData sharcHitData;
             sharcHitData.positionWorld = surface.Position;
             sharcHitData.normalWorld = surface.GeomNormal;
 
 #   if SHARC_ENABLE_SH_ENCODING
-            sharcHitData.radianceDirectionWorld = -direction;
+            sharcHitData.radianceDirectionWorld = -ray.Direction;
             sharcHitData.radianceDirectionWeight = saturate(1.0f - materialRoughnessPrev);
 #   endif // SHARC_ENABLE_SH_ENCODING
 
@@ -1228,7 +1181,7 @@ void Main()
 #   endif // !SHARC_UPDATE
 #endif // SHARC  
             
-            brdfContext = BRDFContext::make(surface, -direction);
+            BRDFContext brdfContext = BRDFContext::make(surface, -ray.Direction);
             isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
             if (!isEnter) {
                 surface.FlipNormal();
@@ -1236,7 +1189,7 @@ void Main()
             }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
+            StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
@@ -1304,6 +1257,109 @@ void Main()
             sampleRadiance += surface.Emissive * throughput;
 #endif
 
+            // Early exit on last bounce - no need to sample BSDF or prepare next ray!
+            if (j == MAX_BOUNCES - 1)
+                break;
+
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(RESTIR_GI)
+            if (Raytracing.EnableReSTIRGI && !giSecStarted)
+            {
+                giScatterSurface = surface;
+                giScatterViewDir = brdfContext.ViewDirection;
+                giScatterThp = throughput;
+                giScatterFeature = material.Feature;
+                giScatterHasSpecularTransmission = surface.SpecTrans > 0.0f;
+            }
+#   endif
+#endif
+
+            // Sample BSDF for next bounce
+            BSDFSample bsdfSample;
+            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+
+#if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
+            float3 nextDirection = surface.Mul(SampleCosineHemisphere(randomSeed));
+            throughput *= surface.AO;
+            throughput *= surface.Albedo;
+            const bool hasTransmission = false;
+#else
+            if (!bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed))
+                break;
+
+            float3 nextDirection = bsdfSample.wo;
+            bsdfSamplePdfPrev = bsdfSample.pdf;
+            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
+            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
+            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+            isPrimaryReplacement = isPrimaryReplacement && isDelta;
+            arrivedViaDelta = isDelta;
+
+            throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
+
+            // Track water volume entry/exit on transmission
+            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
+            {
+                insideWaterVolume = isEnter;
+                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
+            }
+
+#if defined(RAW_RADIANCE)
+            MonteCarlo::BRDFWeight brdfWeight;
+            brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+            brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
+            brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+            brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+
+            float3 brdfWeightOriginal = brdfWeight.diffuse * surface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
+            throughput *= brdfWeightOriginal;
+#else
+            throughput *= bsdfSample.weight;
+#endif
+
+#if defined(SHARC) && SHARC_UPDATE
+            SharcSetThroughput(sharcState, throughput);
+#else
+#   if RUSSIAN_ROULETTE != 0
+            float3 throughputColor = throughput;
+#   endif
+#   if RUSSIAN_ROULETTE == 1
+            const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));
+            const float rrProb = min(rrVal, 0.95f);
+            if (Random(randomSeed) < rrProb)
+                break;
+            throughput /= (1.0f - rrProb);
+#   elif RUSSIAN_ROULETTE == 2
+            const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
+            float rrProb = saturate(0.85 - rrVal);
+            rrProb *= rrProb;
+            rrProb = saturate(rrProb + max(0, ((float)(j + 1) / (float)MAX_BOUNCES - 0.4f)));
+            if (Random(randomSeed) < rrProb)
+                break;
+            throughput /= (1.0f - rrProb);
+#   endif
+#endif
+
+#if defined(SHARC)
+            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
+#endif
+
+#if USE_SIA_INTERPOLATION
+            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+#else
+            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+#endif
+            ray.Direction = nextDirection;
+            ray.TMin = 0.0f;
+            ray.TMax = RAY_TMAX;
+
+#if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+            StablePlanesOnScatter(fillState, fillPathL, bsdfSample, j + 3, spCtx, idx);
+#endif
+
+            if (!bsdfSample.isLobe(LobeType::Delta))
+                rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(bsdfSample.pdf), 2.0 * K_PI));
+#endif // LIGHTING_MODE
         }
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES

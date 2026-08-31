@@ -95,7 +95,7 @@ void Main()
     Instance instance;
     LightingMaterialData material;
 
-    Surface surface = SurfaceMaker::make(worldPosition, payload, ray.Direction, rayCone, instance, material);
+    Surface surface = SurfaceMaker::make(worldPosition, payload, ray.Direction, rayCone, instance, material, true);
 
     float3 viewPos = viewDir * payload.hitDistance;    
     

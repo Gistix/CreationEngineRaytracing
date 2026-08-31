@@ -162,11 +162,6 @@ void Main()
     bool isSssPath = false;
 #endif
 
-    float3 direction;
-#if defined(RAW_RADIANCE) && !defined(NRD)
-    MonteCarlo::BRDFWeight brdfWeight;
-#endif
-
 #if defined(RAW_RADIANCE)
     float3 diffuseRadiance = float3(0.0f, 0.0f, 0.0f);
     float3 specularRadiance = float3(0.0f, 0.0f, 0.0f);
@@ -174,22 +169,10 @@ void Main()
     float3 radiance = float3(0.0f, 0.0f, 0.0f);
 #endif
 
-    RayDesc ray;
-    Payload payload;
-
-    Instance instance;
-    LightingMaterialData material;
-
-    Surface surface;
-    BRDFContext brdfContext;
-
-    StandardBSDF bsdf;
-    
     RayCone rayCone;    
     
 #if defined(SHARC)
     SharcState sharcState;
-    SharcHitData sharcHitData;
 #endif    
     
 #if defined(NRD)
@@ -205,16 +188,11 @@ void Main()
         SharcInit(sharcState);
 #endif
         
-        surface = sourceSurface;
-        brdfContext = sourceBRDFContext;
-        bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
 
 #if defined(NRD)
         float accumulatedHitDist = 0;
 #endif
-
-        material = sourceMaterial;
         
         float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
         float3 throughput = float3(1.0f, 1.0f, 1.0f);
@@ -233,121 +211,119 @@ void Main()
         float3 originalThroughput = float3(1.0f, 1.0f, 1.0f);
 #endif            
         
-        [loop]
-        for (uint j = 0; j < MAX_BOUNCES; j++)
+        // --- Sample primary surface to prepare the first bounce ray ---
+        RayDesc ray;
+        bool hasRay = false;
+#if defined(RAW_RADIANCE) && !defined(NRD)
+        bool demodulatedThroughput = false;
+#endif
         {
             BSDFSample bsdfSample;
-                              
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
+            float3 faceNormalOriented = dot(sourceBRDFContext.ViewDirection, sourceSurface.FaceNormal) >= 0.0f ? sourceSurface.FaceNormal : -sourceSurface.FaceNormal;            
        
-            if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed))
-                direction = bsdfSample.wo;
-            else
-                break;            
+            if (sourceBSDF.SampleBSDF(sourceBRDFContext, sourceMaterial.Feature, sourceSurface, bsdfSample, randomSeed))
+            {
+                hasRay = true;
+                float3 direction = bsdfSample.wo;
  
 #if defined(RAW_RADIANCE)
-            if (j == 0)
                 isSpecularSample = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
 #endif
             
 #if defined(RAW_RADIANCE) && !defined(NRD)
-            const bool demodulatedThroughput = (j == 0 && !isSpecularSample);
+                demodulatedThroughput = !isSpecularSample;
 #endif
             
-            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+                bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
-            throughput *= hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : surface.AO;
+                throughput *= hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : sourceSurface.AO;
 
-            // Track water volume entry/exit on transmission
-            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
-            {
-                // isEnter (front face) + transmission = entering volume
-                insideWaterVolume = isEnter;
-                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
-            }
+                // Track water volume entry/exit on transmission
+                if (hasTransmission && any(sourceSurface.VolumeAbsorption > 0.0f))
+                {
+                    insideWaterVolume = isEnter;
+                    waterVolumeAbsorption = insideWaterVolume ? sourceSurface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
+                }
 
 #if defined(RAW_RADIANCE) && !defined(NRD)
-            brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+                MonteCarlo::BRDFWeight brdfWeight;
+                brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+                brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
+                brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
 
-            if (demodulatedThroughput) {
-                originalThroughput = throughput * bsdfSample.weight;
+                if (demodulatedThroughput) {
+                    originalThroughput = throughput * bsdfSample.weight;
 
-                float3 diffuseWeightDemodulated = all(surface.DiffuseAlbedo > 0.f)
-                    ? brdfWeight.diffuse / max(surface.DiffuseAlbedo, 1e-4f)
-                    : brdfWeight.diffuse;            
-        
-                throughput *= diffuseWeightDemodulated + brdfWeight.specular + brdfWeight.transmission;                      
-            } else {
-                throughput *= bsdfSample.weight;
-            }         
+                    float3 diffuseWeightDemodulated = all(sourceSurface.DiffuseAlbedo > 0.f)
+                        ? brdfWeight.diffuse / max(sourceSurface.DiffuseAlbedo, 1e-4f)
+                        : brdfWeight.diffuse;            
+            
+                    throughput *= diffuseWeightDemodulated + brdfWeight.specular + brdfWeight.transmission;                      
+                } else {
+                    throughput *= bsdfSample.weight;
+                }         
 #else    // RAW_RADIANCE
-            throughput *= bsdfSample.weight;
+                throughput *= bsdfSample.weight;
 #endif   // !RAW_RADIANCE
             
 #if defined(SHARC) && SHARC_UPDATE
-            SharcSetThroughput(sharcState, throughput);
+                SharcSetThroughput(sharcState, throughput);
 #else
 #   if RUSSIAN_ROULETTE != 0          
 #       if defined(RAW_RADIANCE) && !defined(NRD)
-        // Apply russian roulette based on the original throughput
-        float3 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
+                float3 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
 #       else
-        float3 throughputColor = throughput;
+                float3 throughputColor = throughput;
 #       endif            
 #   endif
             
 #   if RUSSIAN_ROULETTE == 1
-        const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
-        const float rrProb = min(rrVal, 0.95f);
+                const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
+                const float rrProb = min(rrVal, 0.95f);
 
-            if (Random(randomSeed) < rrProb)
-                break;
-
-            throughput /= (1.0f - rrProb);
+                if (Random(randomSeed) < rrProb)
+                    hasRay = false;
+                else
+                    throughput /= (1.0f - rrProb);
 #   elif RUSSIAN_ROULETTE == 2
-            const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
-            float rrProb = saturate(0.85 - rrVal);
-            rrProb *= rrProb;
+                const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
+                float rrProb = saturate(0.85 - rrVal);
+                rrProb *= rrProb;
+                rrProb = saturate(rrProb + max(0, (-0.4f)));
 
-            rrProb = saturate(rrProb + max(0, ((float)j / (float)MAX_BOUNCES - 0.4f)));
-
-            if (Random(randomSeed) < rrProb)
-                break;
-
-            throughput /= (1.0f - rrProb);
-                
+                if (Random(randomSeed) < rrProb)
+                    hasRay = false;
+                else
+                {
+                    throughput /= (1.0f - rrProb);
 #       if defined(RAW_RADIANCE) && !defined(NRD)
-            if (demodulatedThroughput)
-                originalThroughput /= (1.0f - rrProb);
-#       endif                
+                    if (demodulatedThroughput)
+                        originalThroughput /= (1.0f - rrProb);
+#       endif
+                }
 #   endif
 #endif
             
 #if defined(SHARC) && (SHARC_ENABLE_SH_ENCODING || !SHARC_UPDATE)
-            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
+                materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : sourceSurface.Roughness;
 #endif
-            // First bounce comes from GBuffer
-            if (j == 0)
-                ray.Origin = OffsetRayAlt(surface.Position, faceNormalOriented, hasTransmission);
-            else
-            {
-#if USE_SIA_INTERPOLATION
-                ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
-#else
-                ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
-#endif
+                ray.Origin = OffsetRayAlt(sourceSurface.Position, faceNormalOriented, hasTransmission);
+                ray.Direction = direction;
+                ray.TMin = 0.0f;
+                ray.TMax = RAY_TMAX;
+
+                if (!bsdfSample.isLobe(LobeType::Delta))
+                    rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(bsdfSample.pdf), 2.0 * K_PI));
             }
+        }
 
-            ray.Direction = direction;
-            ray.TMin = 0.0f;
-            ray.TMax = RAY_TMAX;
+        if (!hasRay)
+            continue;
 
-            if (!bsdfSample.isLobe(LobeType::Delta))
-                rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(bsdfSample.pdf), 2.0 * K_PI));
-
-            payload = TraceRayStandard(Scene, ray, randomSeed);
+        [loop]
+        for (uint j = 0; j < MAX_BOUNCES; j++)
+        {
+            Payload payload = TraceRayStandard(Scene, ray, randomSeed);
             
             rayCone = rayCone.propagateDistance(payload.hitDistance);
 
@@ -356,15 +332,15 @@ void Main()
             {
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
                 
-#   if defined(RAW_RADIANCE) && !defined(NRD)
+#if defined(RAW_RADIANCE) && !defined(NRD)
                 if (demodulatedThroughput)
                     originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
-#   endif
+#endif
             }
                        
             if (!payload.Hit())
             {
-                float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
+                float3 skyIrradiance = SampleSky(SkyHemisphere, ray.Direction) * Raytracing.Sky;
 
 #if defined(SHARC) && SHARC_UPDATE
                 SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
@@ -379,16 +355,18 @@ void Main()
                 accumulatedHitDist = payload.hitDistance;
 #endif                      
             
-            float3 localPosition = ray.Origin + direction * payload.hitDistance;
-
-            surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
+            float3 localPosition = ray.Origin + ray.Direction * payload.hitDistance;
+            Instance instance;
+            LightingMaterialData material;
+            Surface surface = SurfaceMaker::make(localPosition, payload, ray.Direction, rayCone, instance, material, false);
 
 #if defined(SHARC)
+            SharcHitData sharcHitData;
             sharcHitData.positionWorld = surface.Position;
             sharcHitData.normalWorld = surface.GeomNormal;
 
 #   if SHARC_ENABLE_SH_ENCODING
-            sharcHitData.radianceDirectionWorld = -direction;
+            sharcHitData.radianceDirectionWorld = -ray.Direction;
             sharcHitData.radianceDirectionWeight = saturate(1.0f - materialRoughnessPrev);
 #   endif // SHARC_ENABLE_SH_ENCODING
 
@@ -417,7 +395,7 @@ void Main()
 #   endif // !SHARC_UPDATE
 #endif // SHARC  
             
-            brdfContext = BRDFContext::make(surface, -direction);
+            BRDFContext brdfContext = BRDFContext::make(surface, -ray.Direction);
             isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
             if (!isEnter) {
                 surface.FlipNormal();
@@ -425,7 +403,7 @@ void Main()
             }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
+            StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
@@ -471,14 +449,79 @@ void Main()
             sampleRadiance += surface.Emissive * throughput;
 #endif
             
-#   if defined(RAW_RADIANCE) && !defined(NRD)
+#if defined(RAW_RADIANCE) && !defined(NRD)
             // After throughput is applied to radiance, restore original throughput so that subsequent bounces is not increased due to missing diffuse albedo multiplication
             // This ensures first bounce has low frequency, allowing denoisers and linear upscaling to work with less per-pixel data
             // Diffuse albedo is re-applied during compositing (DiffuseRadiance * DiffuseAlbedo + SpecularRadiance)            
             if (demodulatedThroughput)
+            {
                 throughput = originalThroughput;
-#   endif    // RAW_RADIANCE     
-        
+                demodulatedThroughput = false;
+            }
+#endif    // RAW_RADIANCE     
+
+            // Early exit on last bounce - no need to sample BSDF or setup next ray
+            if (j == MAX_BOUNCES - 1)
+                break;
+
+            // Sample BSDF for next bounce
+            BSDFSample bsdfSample;
+            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+
+            if (!bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed))
+                break;
+
+            float3 nextDirection = bsdfSample.wo;
+            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+
+            throughput *= hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : surface.AO;
+
+            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
+            {
+                insideWaterVolume = isEnter;
+                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
+            }
+
+            throughput *= bsdfSample.weight;
+
+#if defined(SHARC) && SHARC_UPDATE
+            SharcSetThroughput(sharcState, throughput);
+#else
+#   if RUSSIAN_ROULETTE != 0
+            float3 throughputColor = throughput;
+#   endif
+#   if RUSSIAN_ROULETTE == 1
+            const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));
+            const float rrProb = min(rrVal, 0.95f);
+            if (Random(randomSeed) < rrProb)
+                break;
+            throughput /= (1.0f - rrProb);
+#   elif RUSSIAN_ROULETTE == 2
+            const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
+            float rrProb = saturate(0.85 - rrVal);
+            rrProb *= rrProb;
+            rrProb = saturate(rrProb + max(0, ((float)(j + 1) / (float)MAX_BOUNCES - 0.4f)));
+            if (Random(randomSeed) < rrProb)
+                break;
+            throughput /= (1.0f - rrProb);
+#   endif
+#endif
+
+#if defined(SHARC) && (SHARC_ENABLE_SH_ENCODING || !SHARC_UPDATE)
+            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
+#endif
+
+#if USE_SIA_INTERPOLATION
+            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+#else
+            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+#endif
+            ray.Direction = nextDirection;
+            ray.TMin = 0.0f;
+            ray.TMax = RAY_TMAX;
+
+            if (!bsdfSample.isLobe(LobeType::Delta))
+                rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(bsdfSample.pdf), 2.0 * K_PI));
         }
 
 #if defined(NRD)
