@@ -62,7 +62,7 @@ namespace Pass::Common
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 
 		winrt::com_ptr<IDxcBlob> shaderBlob;
-		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/PTComposite.hlsl", defines, L"cs_6_5");
+		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/PTComposite.hlsl", defines, ShaderStage::Compute);
 
 		if (!shaderBlob)
 			return;

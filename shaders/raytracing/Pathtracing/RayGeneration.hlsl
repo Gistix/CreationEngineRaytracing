@@ -10,6 +10,7 @@
 
 #include "include/Common.hlsli"
 #include "raytracing/include/Common.hlsli"
+#include "include/WaveSize.hlsli"
 #include "raytracing/include/Payload.hlsli"
 #include "raytracing/include/Geometry.hlsli"
 
@@ -41,6 +42,7 @@
 #include "include/NRD.hlsli"
 
 #if USE_RAY_QUERY
+WAVE_SIZE(32)
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 #   if defined(GROUP_TILING)
 void Main(uint2 GTid : SV_GroupThreadID, uint2 Gid : SV_GroupID)

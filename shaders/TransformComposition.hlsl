@@ -2,6 +2,7 @@
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
 #include "interop/RowMajorFloat3x4.hlsli"
+#include "include/WaveSize.hlsli"
 float4x4 ToFloat4x4(float3x4 m)
 {
     return float4x4(
@@ -71,6 +72,7 @@ ConstantBuffer<PushConstants> PC : register(b0);
 
 RWStructuredBuffer<Transform> TransformsOut    : register(u0);
 
+WAVE_SIZE(32)
 [numthreads(64, 1, 1)]
 void Main(uint3 DTid : SV_DispatchThreadID)
 {

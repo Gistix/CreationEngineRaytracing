@@ -173,7 +173,7 @@ namespace Pass
 
 		auto device = GetRenderer()->GetDevice();
 
-		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, ShaderStage::Compute);
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)

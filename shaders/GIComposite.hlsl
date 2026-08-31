@@ -21,6 +21,7 @@ SamplerState PointClampSampler          : register(s1);
 
 #include "include/ColorConversions.hlsli"
 #include "include/Common.hlsli"
+#include "include/WaveSize.hlsli"
 #include "include/PBR.hlsli"
 #include "include/NRD.hlsli"
 
@@ -44,6 +45,7 @@ float4 SampleJBUTexel4(
     return result;
 }
 
+WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {

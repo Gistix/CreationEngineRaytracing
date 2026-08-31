@@ -3,7 +3,9 @@
 
 #include "../RtxdiApplicationBridge.hlsli"
 #include <Rtxdi/GI/SpatialResampling.hlsli>
+#include "include/WaveSize.hlsli"
 
+WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void Main(uint2 GlobalIndex : SV_DispatchThreadID)
 {

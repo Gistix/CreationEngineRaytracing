@@ -1,4 +1,5 @@
 #include "interop/Mesh.hlsli"
+#include "include/WaveSize.hlsli"
 
 cbuffer ArgsConstants : register(b0)
 {
@@ -19,6 +20,7 @@ struct IndirectCommand
 
 RWStructuredBuffer<IndirectCommand> IndirectArgs : register(u0);
 
+WAVE_SIZE(32)
 [numthreads(64, 1, 1)]
 void Main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {

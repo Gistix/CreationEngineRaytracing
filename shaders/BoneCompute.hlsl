@@ -1,5 +1,6 @@
 #include "Interop/RowMajorFloat3x4.hlsli"
 #include "Interop/BoneTransform.hlsli"
+#include "include/WaveSize.hlsli"
 
 StructuredBuffer<NiTransformPacked> BoneWorlds       : register(t0);
 StructuredBuffer<NiTransformPacked> SkinToBones      : register(t1);
@@ -31,6 +32,7 @@ float3x4 MulAffine(float3x4 a, float3x4 b)
 	return r;
 }
 
+WAVE_SIZE(32)
 [numthreads(64, 1, 1)]
 void Main(uint3 DTid : SV_DispatchThreadID)
 {

@@ -13,8 +13,10 @@ Renderer::Renderer()
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
 }
 
-bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
+bool Renderer::Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
+	m_Settings = *rendererSettings;
+
 	Hooks::InstallD3D11(d3d11Device);
 
 	// NVRHI Device
@@ -38,6 +40,10 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	m_NativeD3D11Device = d3d11Device;
 	m_NativeD3D12Device = d3d12Device;
 
+	D3D12_FEATURE_DATA_SHADER_MODEL smFeature{ D3D_SHADER_MODEL_6_6 };
+	if (SUCCEEDED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &smFeature, sizeof(smFeature))))
+		m_ShaderModel = smFeature.HighestShaderModel;
+
 	// Map DXGI_FORMAT to NVRHI formats
 	if (m_FormatMapping.empty())
 		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
@@ -55,8 +61,10 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	return true;
 }
 
-bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
+bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
 {
+	m_Settings = *rendererSettings;
+
 	const char* deviceExtensions[] = {
 		"VK_KHR_acceleration_structure",
 		"VK_KHR_deferred_host_operations",
@@ -693,4 +701,31 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	}
 
 	return CreateHandleForNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
+}
+
+const wchar_t* Renderer::GetShaderTarget(ShaderStage a_Stage) const noexcept
+{
+	const bool isSM66 = (m_ShaderModel >= D3D_SHADER_MODEL_6_6);
+
+	switch (a_Stage) {
+	case ShaderStage::Compute:
+		return isSM66 ? L"cs_6_6" : L"cs_6_5";
+	case ShaderStage::Vertex:
+		return isSM66 ? L"vs_6_6" : L"vs_6_5";
+	case ShaderStage::Pixel:
+		return isSM66 ? L"ps_6_6" : L"ps_6_5";
+	case ShaderStage::Geometry:
+		return isSM66 ? L"gs_6_6" : L"gs_6_5";
+	case ShaderStage::Hull:
+		return isSM66 ? L"hs_6_6" : L"hs_6_5";
+	case ShaderStage::Domain:
+		return isSM66 ? L"ds_6_6" : L"ds_6_5";
+	case ShaderStage::Mesh:
+		return isSM66 ? L"ms_6_6" : L"ms_6_5";
+	case ShaderStage::Amplification:
+		return isSM66 ? L"as_6_6" : L"as_6_5";
+	case ShaderStage::Library:
+	default:
+		return isSM66 ? L"lib_6_6" : L"lib_6_5";
+	}
 }

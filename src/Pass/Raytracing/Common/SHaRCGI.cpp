@@ -128,7 +128,7 @@ namespace Pass::Raytracing::Common
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
-		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, ShaderStage::Compute);
 		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		auto* sceneGraph = scene->GetSceneGraph();
@@ -176,7 +176,7 @@ namespace Pass::Raytracing::Common
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
-		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/SharcResolve.hlsl", defines, L"cs_6_5");
+		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/SharcResolve.hlsl", defines, ShaderStage::Compute);
 		m_ResolvePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Resolve Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()

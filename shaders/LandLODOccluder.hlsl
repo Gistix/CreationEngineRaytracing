@@ -1,5 +1,6 @@
 #include "Interop/Vertex.hlsli"
 #include "Interop/LandLODUpdate.hlsli"
+#include "include/WaveSize.hlsli"
 
 struct PushContants
 {
@@ -24,6 +25,7 @@ float3 AdjustLodLandscapeVertexPositionMS(float3 positionMS, float3 positionWS, 
     return positionMS;
 }
 
+WAVE_SIZE(32)
 [numthreads(1, 32, 1)]
 void Main(uint2 DTid : SV_DispatchThreadID)
 {

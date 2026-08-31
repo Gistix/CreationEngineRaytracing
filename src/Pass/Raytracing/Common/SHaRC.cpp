@@ -125,7 +125,7 @@ namespace Pass
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
-		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, ShaderStage::Compute);
 		if (!rayGenBlob) {
 			logger::error("SHaRC::SetupUpdate - Failed to compile update shader.");
 			return;
@@ -187,7 +187,7 @@ namespace Pass
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
-		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/SharcResolve.hlsl", defines, L"cs_6_5");
+		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/SharcResolve.hlsl", defines, ShaderStage::Compute);
 		if (!rayGenBlob) {
 			logger::error("SHaRC::SetupResolve - Failed to compile resolve shader.");
 			return;

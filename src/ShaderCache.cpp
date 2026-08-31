@@ -195,6 +195,12 @@ namespace ShaderCache
 		logger::debug("ShaderCache - Saved shader binary to disk cache: {}", cacheFilePath.string());
 	}
 
+	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* filePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* entryPoint)
+	{
+		const wchar_t* target = Renderer::GetSingleton()->GetShaderTarget(stage);
+		return GetShader(filePath, std::move(defines), target, entryPoint);
+	}
+
 	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* filePath, eastl::vector<DxcDefine> defines, const wchar_t* target, const wchar_t* entryPoint)
 	{
 		bool isVulkan = Renderer::GetSingleton()->IsVulkan();

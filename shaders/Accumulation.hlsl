@@ -1,4 +1,5 @@
 #include "interop/CameraData.hlsli"
+#include "include/WaveSize.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
 
@@ -13,6 +14,7 @@ struct AccumulationConstants
 
 ConstantBuffer<AccumulationConstants> PC : register(b1);
 
+WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {

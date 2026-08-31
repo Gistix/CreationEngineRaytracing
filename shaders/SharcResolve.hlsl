@@ -28,7 +28,9 @@ RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer   : register
 RWStructuredBuffer<SharcPackedData>         SharcResolvedBuffer       : register(u2);
 
 #include "Raytracing/Include/SHaRC/SHaRCHelper.hlsli"
+#include "include/WaveSize.hlsli"
 
+WAVE_SIZE(32)
 [numthreads(LINEAR_BLOCK_SIZE, 1, 1)]
 void Main(in uint2 did : SV_DispatchThreadID)
 {

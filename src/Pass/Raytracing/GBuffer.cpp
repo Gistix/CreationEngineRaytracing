@@ -179,7 +179,7 @@ namespace Pass::Raytracing
 		auto device = GetRenderer()->GetDevice();
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
-		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/GBuffer/RayGeneration.hlsl", defines, L"cs_6_5");
+		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/raytracing/GBuffer/RayGeneration.hlsl", defines, ShaderStage::Compute);
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)

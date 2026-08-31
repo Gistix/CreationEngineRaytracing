@@ -11,7 +11,11 @@
 #include "Renderer/RenderGraph.h"
 #include "Renderer/RenderTargetManager.h"
 
+#include "Types/ShaderStage.h"
+
 #include "Constants.h"
+
+#include "Types/Settings.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback
 {
@@ -157,11 +161,9 @@ public:
 
 	eastl::unique_ptr<RenderTargets> m_RenderTargets;
 
-	struct RendererSettings
-	{
-		bool UseRayQuery = true;
-		bool ValidationLayer = true;
-	} m_Settings;
+	D3D_SHADER_MODEL m_ShaderModel = D3D_SHADER_MODEL_6_5;
+
+	RendererSettings m_Settings;
 
 	static Renderer* GetSingleton()
 	{
@@ -171,11 +173,14 @@ public:
 
 	Renderer();
 
-	bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
+	bool Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 
-	bool Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
+	bool Initialize(RendererSettings* rendererSettings, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
 
 	bool IsVulkan() const { return m_IsVulkan; }
+
+	[[nodiscard]] D3D_SHADER_MODEL GetHighestShaderModel() const noexcept { return m_ShaderModel; }
+	[[nodiscard]] const wchar_t* GetShaderTarget(ShaderStage a_Stage) const noexcept;
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 

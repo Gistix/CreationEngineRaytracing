@@ -71,7 +71,7 @@ namespace Pass::Utility
 		m_BindingLayout = device->createBindingLayout(bindingLayoutDesc);
 
 		winrt::com_ptr<IDxcBlob> blob;
-		ShaderUtils::CompileShader(blob, L"data/shaders/PostProcess.hlsl", defines, L"cs_6_5", L"main");
+		ShaderUtils::CompileShader(blob, L"data/shaders/PostProcess.hlsl", defines, ShaderStage::Compute, L"main");
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()

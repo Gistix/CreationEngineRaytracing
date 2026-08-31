@@ -3,6 +3,7 @@
 #include "Interop/RowMajorFloat3x4.hlsli"
 #include "Interop/Mesh.hlsli"
 #include "Interop/VertexDesc.hlsli"
+#include "include/WaveSize.hlsli"
 
 StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
 StructuredBuffer<RowMajorFloat3x4> BoneMatrices               : register(t1);
@@ -103,6 +104,7 @@ float4 MatrixToQuaternion(float3x3 m)
     return normalize(q);
 }
 
+WAVE_SIZE(32)
 [numthreads(1, 32, 1)]
 void Main(uint2 DTid : SV_DispatchThreadID)
 {

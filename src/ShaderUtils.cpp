@@ -7,6 +7,11 @@
 
 namespace ShaderUtils
 {
+	bool PreprocessShader(winrt::com_ptr<IDxcBlobUtf8>& outPreprocessedText, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		return PreprocessShader(outPreprocessedText, FilePath, std::move(defines), Renderer::GetSingleton()->GetShaderTarget(stage), EntryPoint);
+	}
+
 	bool PreprocessShader(winrt::com_ptr<IDxcBlobUtf8>& outPreprocessedText, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
 	{
 		auto dxc = DirectXShaderCompiler::GetSingleton();
@@ -89,6 +94,11 @@ namespace ShaderUtils
 		return false;
 	}
 
+	void CompileShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		CompileShader(shader, FilePath, std::move(defines), Renderer::GetSingleton()->GetShaderTarget(stage), EntryPoint);
+	}
+
 	void CompileShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
 	{
 		winrt::com_ptr<IDxcBlob> blob = ShaderCache::GetShader(FilePath, std::move(defines), Target, EntryPoint);
@@ -97,6 +107,11 @@ namespace ShaderUtils
 		} else {
 			shader = nullptr;
 		}
+	}
+
+	void CompileRawShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		CompileRawShader(shader, FilePath, std::move(defines), Renderer::GetSingleton()->GetShaderTarget(stage), EntryPoint);
 	}
 
 	void CompileRawShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
@@ -176,6 +191,11 @@ namespace ShaderUtils
 			logger::error("Failed to get compiled shader");
 			return;
 		}
+	}
+
+	void CompilePreprocessedShader(winrt::com_ptr<IDxcBlob>& shader, const char* sourceData, size_t sourceSize, const wchar_t* FilePath, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		CompilePreprocessedShader(shader, sourceData, sourceSize, FilePath, Renderer::GetSingleton()->GetShaderTarget(stage), EntryPoint);
 	}
 
 	void CompilePreprocessedShader(winrt::com_ptr<IDxcBlob>& shader, const char* sourceData, size_t sourceSize, const wchar_t* FilePath, const wchar_t* Target, const wchar_t* EntryPoint)

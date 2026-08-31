@@ -226,7 +226,7 @@ namespace Pass::NRD
 
 				const std::wstring shaderPath = L"extern/NRD/Shaders/" + Util::StringToWString(tokens[0]);
 				const std::wstring entryPoint = Util::StringToWString(std::string{ instanceDesc.shaderEntryPoint });
-				ShaderUtils::CompileShader(shaderBlob, shaderPath.c_str(), defines, L"cs_6_5", entryPoint.c_str());
+				ShaderUtils::CompileShader(shaderBlob, shaderPath.c_str(), defines, ShaderStage::Compute, entryPoint.c_str());
 
 				if (shaderBlob) {
 					pipeline.shader = device->createShader(
