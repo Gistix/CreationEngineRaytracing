@@ -194,7 +194,8 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Graphics)
 			.setEnableImmediateExecution(false)
-			.setScratchChunkSize(16 * 1024 * 1024)
+			.setUploadChunkSize(Constants::NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE)
+			.setScratchChunkSize(Constants::NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE)
 		);
 	}
 
@@ -203,7 +204,8 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Compute)
 			.setEnableImmediateExecution(false)
-			.setScratchChunkSize(16 * 1024 * 1024)
+			.setUploadChunkSize(Constants::NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE)
+			.setScratchChunkSize(Constants::NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE)
 		);
 	}
 
@@ -212,7 +214,8 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Copy)
 			.setEnableImmediateExecution(false)
-			.setScratchChunkSize(16 * 1024 * 1024)
+			.setUploadChunkSize(Constants::NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE)
+			.setScratchChunkSize(Constants::NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE)
 		);
 	}
 
