@@ -57,6 +57,7 @@ namespace Clustering
 	constexpr float SPARSITY_FILL_RATIO_THRESHOLD = 0.25f; // Split if sub-mesh volume / bounding volume < 25% (Figure 1)
 	constexpr float OVERLAP_RATIO_THRESHOLD = 0.40f;      // Merge if overlap volume / min volume >= 40% (Figure 2)
 	constexpr float BROADPHASE_CELL_SIZE = 256.0f;        // 256 game units (~4 meters) for broadphase neighbor queries
+	constexpr float MAX_CLUSTER_AABB_DIAGONAL = 2500.0f;  // Subdivide multi-member clusters whose enclosing AABB diagonal exceeds ~36m
 
 	// 1. Figure 1: Compute Fill Ratio (Individual Volumes / Enclosing AABB Volume)
 	inline float ComputeFillRatio(const eastl::vector<AABB>& aabbs, const AABB& enclosingAABB)

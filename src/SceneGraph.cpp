@@ -588,7 +588,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				const bool ownerChanged = mesh->SetOwner(refr);
 				auto cluster = mesh->GetCluster();
 
-				BLASCluster* targetCluster = GetOrCreateCluster(refr, mesh->GetTriShape());
+				BLASCluster* targetCluster = IsSpatialCandidate(mesh, refr)
+					? GetOrCreateSpatialCluster(mesh)
+					: GetOrCreateCluster(refr, mesh->GetTriShape());
 
 				if (ownerChanged || !cluster || cluster != targetCluster) {
 					if (cluster) {
@@ -739,7 +741,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				// SubIndexMesh: not a member of any cluster itself; the K SubIndexSegmentMesh
 				// children will be added to their own clusters by SubIndexMesh::Update.
 				if (!mesh->AsSubIndexMesh()) {
-					BLASCluster* cluster = GetOrCreateCluster(refr, bsTriShape);
+					BLASCluster* cluster = IsSpatialCandidate(mesh, refr)
+						? GetOrCreateSpatialCluster(mesh)
+						: GetOrCreateCluster(refr, bsTriShape);
 					cluster->AddMember(mesh);
 					MarkClusterDirty(cluster);
 				}
@@ -812,115 +816,176 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	// Phase F2: RTX Best Practices - AABB Split & Merge Clustering Pass
+	// Phase F2: RTX Best Practices - persistent spatial partition maintenance.
+	//
+	// Static non-actor meshes live in spatial cell clusters (stable grid keys). This pass re-partitions
+	// them lazily: only clusters that were marked dirty this frame (new members, membership/visibility
+	// changes, transform changes) are re-evaluated, plus a slow periodic sweep to catch drift. Once a
+	// cluster is partitioned its dirty flags clear after the BLAS build, so membership stays stable
+	// across frames - no per-frame split/merge churn (the previous implementation recomputed the entire
+	// partition every frame, fighting doUpdate's owner routing and forcing a full BLAS rebuild every frame).
 	{
-		// 1. Figure 1: Sparsity Check (Split multi-mesh references with large empty space)
-		for (auto& [refr, cluster] : m_OwnerClusters) {
-			if (!cluster || cluster->Empty() || Util::IsActor(refr))
+		eastl::vector<BLASCluster*> spatialClusters;
+		spatialClusters.reserve(m_SpatialClusters.Size());
+		m_SpatialClusters.CollectAll(spatialClusters);
+
+		const bool evaluateAll = (m_SpatialMaintenanceCounter++ % SPATIAL_MAINTENANCE_INTERVAL == 0);
+
+		// Snapshot spatial clusters to re-evaluate (subdivide + merge candidates). Normally only clusters
+		// marked dirty this frame (new/removed members, visibility or transform changes). On the periodic
+		// sweep, every spatial cluster is re-evaluated (cheap CPU checks; membership changes only when the
+		// fill/overlap criteria actually fire, so the partition converges and stays stable between sweeps).
+		eastl::vector<BLASCluster*> candidates;
+		candidates.reserve(m_DirtyClusters.size() + (evaluateAll ? spatialClusters.size() : 0));
+		eastl::hash_set<BLASCluster*> candidateSet;
+		auto addCandidate = [&](BLASCluster* cluster) {
+			if (cluster && cluster->IsSpatial() && !cluster->Empty() && candidateSet.insert(cluster).second)
+				candidates.push_back(cluster);
+		};
+		for (auto* cluster : m_DirtyClusters)
+			addCandidate(cluster);
+		if (evaluateAll) {
+			for (auto* cluster : spatialClusters)
+				addCandidate(cluster);
+		}
+
+		// 1. Figure 1: Sparsity subdivision. Cells whose members are sparse relative to their enclosing
+		// AABB are re-homed into finer octant sub-cells (level + 1). Persisted: the sub-cells are only
+		// re-evaluated once they themselves become dirty.
+		for (auto* cluster : candidates) {
+			if (cluster->GetPartitionLevel() >= SPATIAL_MAX_LEVEL)
 				continue;
 
 			const auto& members = cluster->GetMembers();
-			if (members.size() > 1) {
-				eastl::vector<AABB> memberAABBs;
-				memberAABBs.reserve(members.size());
-				AABB enclosingAABB;
+			if (members.size() < 2)
+				continue;
 
-				for (const auto* mesh : members) {
-					if (!mesh->IsHidden()) {
-						memberAABBs.push_back(mesh->GetWorldAABB());
-						enclosingAABB.Union(mesh->GetWorldAABB());
-					}
-				}
+			eastl::vector<AABB> memberAABBs;
+			memberAABBs.reserve(members.size());
+			AABB enclosingAABB;
 
-				if (memberAABBs.size() > 1 && enclosingAABB.IsValid()) {
-					const float fillRatio = Clustering::ComputeFillRatio(memberAABBs, enclosingAABB);
-					if (fillRatio < Clustering::SPARSITY_FILL_RATIO_THRESHOLD) {
-						// Group has > 75% empty space -> SPLIT into individual sub-clusters
-						auto membersCopy = members;
-						for (auto* mesh : membersCopy) {
-							if (!mesh->IsHidden()) {
-								cluster->RemoveMember(mesh);
-								auto* subCluster = GetOrCreateCluster(nullptr, mesh->GetTriShape());
-								subCluster->AddMember(mesh);
-								MarkClusterDirty(subCluster);
-							}
-						}
-						MarkClusterDirty(cluster.get());
-					}
+			for (const auto* mesh : members) {
+				if (!mesh->IsHidden()) {
+					memberAABBs.push_back(mesh->GetWorldAABB());
+					enclosingAABB.Union(mesh->GetWorldAABB());
 				}
 			}
-		}
 
-		// 2. Figure 2: Overlap Check (Merge static instances with significant volume overlap)
-		eastl::vector<BLASCluster*> candidateStatics;
-		candidateStatics.reserve(m_OwnerClusters.size() + m_OrphanClusters.size());
+			if (memberAABBs.size() < 2 || !enclosingAABB.IsValid())
+				continue;
 
-		for (auto& [refr, cluster] : m_OwnerClusters) {
-			if (cluster && !cluster->Empty() && !Util::IsActor(refr))
-				candidateStatics.push_back(cluster.get());
-		}
-		for (auto& [_, cluster] : m_OrphanClusters) {
-			if (cluster && !cluster->Empty())
-				candidateStatics.push_back(cluster.get());
-		}
-
-		if (candidateStatics.size() > 1) {
-			Clustering::SpatialAABBBroadphase broadphase;
-			for (uint32_t i = 0; i < static_cast<uint32_t>(candidateStatics.size()); ++i) {
-				broadphase.Insert(i, candidateStatics[i]->GetWorldAABB());
-			}
-
-			Clustering::DSU dsu(candidateStatics.size());
-			for (const auto& [cellKey, indices] : broadphase.grid) {
-				if (indices.size() < 2)
-					continue;
-
-				for (size_t a = 0; a < indices.size(); ++a) {
-					const uint32_t idxA = indices[a];
-					const auto& boxA = candidateStatics[idxA]->GetWorldAABB();
-					if (!boxA.IsValid())
+			// Subdivide when the group is sparse (NVIDIA Fig 1) OR its enclosing AABB is simply too
+			// large for a single BLAS instance. The diagonal bound directly caps instance AABB size,
+			// tightening the TLAS even for dense-but-wide groups.
+			const float fillRatio = Clustering::ComputeFillRatio(memberAABBs, enclosingAABB);
+			const float clusterDiag = enclosingAABB.GetExtents().Length();
+			if (fillRatio < Clustering::SPARSITY_FILL_RATIO_THRESHOLD || clusterDiag > Clustering::MAX_CLUSTER_AABB_DIAGONAL) {
+				auto membersCopy = members;
+				for (auto* mesh : membersCopy) {
+					if (mesh->IsHidden())
 						continue;
 
-					for (size_t b = a + 1; b < indices.size(); ++b) {
-						const uint32_t idxB = indices[b];
-						if (dsu.Find(idxA) == dsu.Find(idxB))
+					cluster->RemoveMember(mesh);
+					auto* subCluster = GetOrCreateSpatialClusterAt(mesh, static_cast<uint8_t>(cluster->GetPartitionLevel() + 1));
+					if (subCluster == cluster) {
+						cluster->AddMember(mesh); // cannot happen (different key level), but stay safe
+					} else {
+						subCluster->AddMember(mesh);
+						MarkClusterDirty(subCluster);
+					}
+				}
+				MarkClusterDirty(cluster);
+				m_DebugSubdivideCount++;
+			}
+		}
+
+		// 2. Figure 2: Overlap merge. Spatial clusters whose world AABBs overlap significantly are merged
+		// into a single BLAS (identity instance transform; per-geometry transforms place them in world space).
+		// Only pairs involving a dirty cluster are considered, unless the periodic sweep is evaluating all.
+		{
+			// Rebuild candidates after subdivision (a subdivided cell may now be empty).
+			candidateSet.clear();
+			for (auto* cluster : candidates) {
+				if (!cluster->Empty())
+					candidateSet.insert(cluster);
+			}
+
+			eastl::vector<BLASCluster*> nonEmptySpatial;
+			nonEmptySpatial.reserve(spatialClusters.size());
+			for (auto* cluster : spatialClusters) {
+				if (cluster && !cluster->Empty())
+					nonEmptySpatial.push_back(cluster);
+			}
+
+			if (nonEmptySpatial.size() > 1) {
+				Clustering::SpatialAABBBroadphase broadphase;
+				for (uint32_t i = 0; i < static_cast<uint32_t>(nonEmptySpatial.size()); ++i)
+					broadphase.Insert(i, nonEmptySpatial[i]->GetWorldAABB());
+
+				Clustering::DSU dsu(nonEmptySpatial.size());
+				for (const auto& [cellKey, indices] : broadphase.grid) {
+					if (indices.size() < 2)
+						continue;
+
+					for (size_t a = 0; a < indices.size(); ++a) {
+						const uint32_t idxA = indices[a];
+						const auto& boxA = nonEmptySpatial[idxA]->GetWorldAABB();
+						if (!boxA.IsValid())
 							continue;
 
-						const auto& boxB = candidateStatics[idxB]->GetWorldAABB();
-						if (!boxB.IsValid())
+						if (!evaluateAll && !candidateSet.contains(nonEmptySpatial[idxA]))
 							continue;
 
-						if (boxA.OverlapRatio(boxB) >= Clustering::OVERLAP_RATIO_THRESHOLD) {
-							dsu.Union(idxA, idxB);
+						for (size_t b = a + 1; b < indices.size(); ++b) {
+							const uint32_t idxB = indices[b];
+							if (dsu.Find(idxA) == dsu.Find(idxB))
+								continue;
+
+							const auto& boxB = nonEmptySpatial[idxB]->GetWorldAABB();
+							if (!boxB.IsValid())
+								continue;
+
+							if (boxA.OverlapRatio(boxB) >= Clustering::OVERLAP_RATIO_THRESHOLD)
+								dsu.Union(idxA, idxB);
 						}
 					}
 				}
-			}
 
-			// Group components merged by DSU
-			eastl::hash_map<int32_t, eastl::vector<uint32_t>> mergedGroups;
-			for (uint32_t i = 0; i < static_cast<uint32_t>(candidateStatics.size()); ++i) {
-				int32_t root = dsu.Find(i);
-				mergedGroups[root].push_back(i);
-			}
+				// Group components merged by DSU
+				eastl::hash_map<int32_t, eastl::vector<uint32_t>> mergedGroups;
+				for (uint32_t i = 0; i < static_cast<uint32_t>(nonEmptySpatial.size()); ++i)
+					mergedGroups[dsu.Find(i)].push_back(i);
 
-			for (auto& [root, group] : mergedGroups) {
-				if (group.size() > 1) {
-					// Merge all members into the root candidate's cluster
-					auto* primaryCluster = candidateStatics[root];
-					for (size_t k = 1; k < group.size(); ++k) {
-						auto* secondaryCluster = candidateStatics[group[k]];
-						if (secondaryCluster != primaryCluster && !secondaryCluster->Empty()) {
-							auto membersToMove = secondaryCluster->GetMembers();
-							for (auto* m : membersToMove) {
-								secondaryCluster->RemoveMember(m);
-								primaryCluster->AddMember(m);
-							}
-							MarkClusterDirty(secondaryCluster);
+				for (auto& [root, group] : mergedGroups) {
+					if (group.size() < 2)
+						continue;
+
+					// Pick the first non-empty cluster as primary (a member may have been subdivided this frame).
+					uint32_t primaryIdx = group.front();
+					for (const auto idx : group) {
+						if (!nonEmptySpatial[idx]->Empty()) {
+							primaryIdx = idx;
+							break;
 						}
 					}
-					// For multi-instance merged cluster, set owner to nullptr so transform is Identity
-					primaryCluster->m_Owner = nullptr;
+
+					auto* primaryCluster = nonEmptySpatial[primaryIdx];
+					for (const auto idx : group) {
+						if (idx == primaryIdx)
+							continue;
+
+						auto* secondaryCluster = nonEmptySpatial[idx];
+						if (secondaryCluster->Empty())
+							continue;
+
+						auto membersToMove = secondaryCluster->GetMembers();
+						for (auto* m : membersToMove) {
+							secondaryCluster->RemoveMember(m);
+							primaryCluster->AddMember(m);
+						}
+						MarkClusterDirty(secondaryCluster);
+						m_DebugMergeCount++;
+					}
 					primaryCluster->UpdateTransform();
 					MarkClusterDirty(primaryCluster);
 				}
@@ -1051,24 +1116,124 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		m_UpdateTimings.push_back({"SG::Total", 0.0f, std::chrono::duration<float, std::milli>(totalEnd - updateStart).count()});
 	}
 
-	uint32_t actorClusterCount = 0;
-	uint32_t staticOwnerClusterCount = 0;
-	for (const auto& [refr, cluster] : m_OwnerClusters) {
-		if (cluster && !cluster->Empty()) {
-			if (Util::IsActor(refr))
-				actorClusterCount++;
-			else
-				staticOwnerClusterCount++;
+	if (m_SpatialMaintenanceCounter % 120 == 0) {
+		uint32_t actorClusterCount = 0;
+		uint32_t staticOwnerClusterCount = 0;
+		for (const auto& [refr, cluster] : m_OwnerClusters) {
+			if (cluster && !cluster->Empty()) {
+				if (Util::IsActor(refr))
+					actorClusterCount++;
+				else
+					staticOwnerClusterCount++;
+			}
 		}
-	}
 
-	logger::info("Clusters: Total Instances: {}, Actor Clusters: {}, Static REFR Clusters: {}, Orphan/Split Clusters: {}, SubIndex Clusters: {}, Total Meshes: {}",
-		m_NumInstances,
-		actorClusterCount,
-		staticOwnerClusterCount,
-		m_OrphanClusters.size(),
-		m_SubIndexSegmentClusters.size(),
-		m_NumMeshes);
+		// Spatial partition breakdown: level distribution, member-count buckets, AABB tightness.
+		eastl::vector<BLASCluster*> spatialClusters;
+		spatialClusters.reserve(m_SpatialClusters.Size());
+		m_SpatialClusters.CollectAll(spatialClusters);
+
+		uint32_t levelCounts[SPATIAL_MAX_LEVEL + 1] = { 0, 0, 0 };
+		uint32_t bucket1 = 0, bucket2_4 = 0, bucket5_10 = 0, bucket10 = 0;
+		uint32_t invalidAABB = 0;
+		float avgDiagonal = 0.0f;
+		float maxDiagonal = 0.0f;
+		uint32_t counted = 0;
+		for (auto* c : spatialClusters) {
+			if (!c || c->Empty())
+				continue;
+
+			const uint8_t lvl = c->GetPartitionLevel() <= SPATIAL_MAX_LEVEL ? c->GetPartitionLevel() : SPATIAL_MAX_LEVEL;
+			levelCounts[lvl]++;
+
+			const size_t n = c->GetMembers().size();
+			if (n == 1)
+				bucket1++;
+			else if (n <= 4)
+				bucket2_4++;
+			else if (n <= 10)
+				bucket5_10++;
+			else
+				bucket10++;
+
+			const AABB& box = c->GetWorldAABB();
+			if (box.IsValid()) {
+				const float d = box.GetExtents().Length();
+				avgDiagonal += d;
+				maxDiagonal = std::max(maxDiagonal, d);
+				counted++;
+			} else {
+				invalidAABB++;
+			}
+		}
+		if (counted > 0)
+			avgDiagonal /= static_cast<float>(counted);
+
+		logger::info("Clusters: Total Instances: {}, Actor Clusters: {}, Static REFR Clusters: {}, Spatial Clusters: {}, Orphan/Split Clusters: {}, SubIndex Clusters: {}, Total Meshes: {}",
+			m_NumInstances,
+			actorClusterCount,
+			staticOwnerClusterCount,
+			m_SpatialClusters.Size(),
+			m_OrphanClusters.size(),
+			m_SubIndexSegmentClusters.size(),
+			m_NumMeshes);
+
+		logger::info("SpatialPartition: {} clusters (L0:{}, L1:{}, L2:{}), members(1:{}, 2-4:{}, 5-10:{}, 10+:{}, invalidAABB:{}), AABB diag avg {:.0f} max {:.0f}",
+			counted,
+			levelCounts[0], levelCounts[1], levelCounts[2],
+			bucket1, bucket2_4, bucket5_10, bucket10, invalidAABB,
+			avgDiagonal, maxDiagonal);
+
+		logger::info("BLASBuilds: Rebuild {} Update {} Skip {} | Spatial Subdivide {} Merge {}",
+			m_DebugRebuildCount, m_DebugUpdateCount, m_DebugSkipCount, m_DebugSubdivideCount, m_DebugMergeCount);
+
+		// Top-N largest spatial clusters with member mesh AABB details (diagnostic).
+		{
+			struct BigCluster {
+				float diag;
+				BLASCluster* c;
+			};
+			eastl::vector<BigCluster> biggest;
+			biggest.reserve(9);
+			for (auto* c : spatialClusters) {
+				if (!c || c->Empty())
+					continue;
+				const AABB& box = c->GetWorldAABB();
+				if (!box.IsValid())
+					continue;
+				const float d = box.GetExtents().Length();
+				auto it = biggest.begin();
+				while (it != biggest.end() && it->diag >= d)
+					++it;
+				biggest.insert(it, { d, c });
+				if (biggest.size() > 8)
+					biggest.pop_back();
+			}
+
+			for (const auto& [d, c] : biggest) {
+				logger::info("BIG {} level {} members {} diag {:.0f}:", c->m_Name.c_str(), c->GetPartitionLevel(), c->GetMembers().size(), d);
+				uint32_t shown = 0;
+				for (const auto* m : c->GetMembers()) {
+					if (shown >= 5)
+						break;
+					const AABB& wb = m->GetWorldAABB();
+					const AABB& lb = m->GetLocalAABB();
+					logger::info("    [{}] {} worldDiag {:.0f} localDiag {:.0f} center ({:.0f},{:.0f},{:.0f})",
+						shown,
+						m->GetName().c_str(),
+						wb.IsValid() ? wb.GetExtents().Length() : 0.0f,
+						lb.IsValid() ? lb.GetExtents().Length() : 0.0f,
+						wb.IsValid() ? wb.GetCenter().x : 0.0f,
+						wb.IsValid() ? wb.GetCenter().y : 0.0f,
+						wb.IsValid() ? wb.GetCenter().z : 0.0f);
+					shown++;
+				}
+			}
+		}
+
+		m_DebugSubdivideCount = 0;
+		m_DebugMergeCount = 0;
+	}
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
@@ -1120,14 +1285,87 @@ BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriS
 		: GetOrCreateClusterImpl(m_OrphanClusters, m_OrphanClusterMutex, bsTriShape, nullptr);
 }
 
+bool SceneGraph::IsSpatialCandidate(BaseMesh* mesh, RE::TESObjectREFR* refr) const
+{
+	if (!mesh)
+		return false;
+
+	if (refr && Util::IsActor(refr))
+		return false;
+
+	if (mesh->HasFlag(BaseMesh::Flags::LandLOD4))
+		return false;
+
+	if (mesh->GetType() != BaseMesh::Type::Default)
+		return false;
+
+	// Terrain/landscape ground quads are excluded from the spatial partition: their world AABBs dwarf
+	// the 1024-unit cells (a ~2048-unit quad's transform scales its local extent up to ~32x, so a single
+	// quad's AABB can span the whole map). Grouping them spatially only bloats nearby cell clusters.
+	// They keep per-owner clustering, as on the original branch.
+	if (auto* triShape = mesh->GetTriShape()) {
+		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(triShape);
+		if (auto* shaderProperty = geometryData.shaderProperty) {
+			if (auto* material = shaderProperty->material) {
+				switch (material->GetFeature())
+				{
+#if defined(SKYRIM)
+				case RE::BSShaderMaterial::Feature::kMultiTexLand:
+				case RE::BSShaderMaterial::Feature::kMultiTexLandLODBlend:
+				case RE::BSShaderMaterial::Feature::kLODLand:
+				case RE::BSShaderMaterial::Feature::kLODLandNoise:
+#elif defined(FALLOUT4)
+				case RE::BSShaderMaterial::Feature::kLandscape:
+				case RE::BSShaderMaterial::Feature::kLODLandscapeBlend:
+				case RE::BSShaderMaterial::Feature::kLODLandscape:
+				case RE::BSShaderMaterial::Feature::kLODLandscapeNoise:
+#endif
+					return false;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	// Robust catch-all for terrain/ground quads (and any oversized ground mesh): their local AABB
+	// diagonal (measured 4k-6k units) far exceeds any normal static object (buildings/trees < ~2k).
+	// Such meshes can't benefit from spatial grouping and only bloat cell cluster AABBs.
+	const AABB& local = mesh->GetLocalAABB();
+	if (local.IsValid() && local.GetExtents().Length() > 3000.0f)
+		return false;
+
+	// Also exclude meshes whose WORLD AABB is very large even though their local geometry is small
+	// (e.g. transform-scaled ground/water/ruin pieces). Their huge instance AABB would dominate any
+	// cell cluster they land in, so they keep per-owner clustering instead.
+	const AABB& world = mesh->GetWorldAABB();
+	if (world.IsValid() && world.GetExtents().Length() > 8000.0f)
+		return false;
+
+	return true;
+}
+
 BLASCluster* SceneGraph::GetOrCreateSpatialCluster(BaseMesh* mesh)
 {
+	// Keep the mesh in its current spatial cluster if one is already assigned. This is what makes the
+	// partition stable frame-to-frame: routing never drags a partitioned static back to an owner cluster,
+	// and a mesh stays put unless its cluster is pruned or the periodic sweep re-homes it.
+	if (auto* cluster = mesh->GetCluster(); cluster && cluster->IsSpatial())
+		return cluster;
+
+	return GetOrCreateSpatialClusterAt(mesh, 0);
+}
+
+BLASCluster* SceneGraph::GetOrCreateSpatialClusterAt(BaseMesh* mesh, uint8_t level)
+{
 	const auto center = mesh->GetWorldAABB().GetCenter();
-	const auto spatialKey = GetSpatialKey(RE::NiPoint3(center.x, center.y, center.z));
+	const auto spatialKey = GetSpatialKey(RE::NiPoint3(center.x, center.y, center.z), level);
 
 	auto* cluster = m_SpatialClusters.FindOrEmplace(spatialKey, [&]() {
-		const auto name = std::format("SpatialCluster ({}, {}, {})", spatialKey.cellX, spatialKey.cellY, spatialKey.cellZ);
+		const auto name = std::format("SpatialCluster ({}, {}, {}) L{}", spatialKey.cellX, spatialKey.cellY, spatialKey.cellZ, spatialKey.level);
 		auto newCluster = eastl::make_unique<BLASCluster>(nullptr, name.c_str());
+		newCluster->m_IsSpatial = true;
+		newCluster->m_PartitionLevel = spatialKey.level;
 		MarkClusterDirty(newCluster.get());
 		return newCluster;
 	});
@@ -1171,6 +1409,10 @@ void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 {
 	// Process only clusters that were marked dirty.
+	m_DebugRebuildCount = 0;
+	m_DebugUpdateCount = 0;
+	m_DebugSkipCount = 0;
+
 	for (auto* cluster : m_DirtyClusters)
 		cluster->BuildUpdate(commandList, this);
 	

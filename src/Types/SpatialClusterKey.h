@@ -13,6 +13,7 @@ struct SpatialClusterKey
 	int32_t cellX{ 0 };
 	int32_t cellY{ 0 };
 	int32_t cellZ{ 0 };
+	uint8_t level{ 0 };
 
 	bool operator==(const SpatialClusterKey& other) const = default;
 };
@@ -25,19 +26,30 @@ struct SpatialClusterKeyHash
 		h = (h ^ static_cast<size_t>(k.cellX)) * 16777619u;
 		h = (h ^ static_cast<size_t>(k.cellY)) * 16777619u;
 		h = (h ^ static_cast<size_t>(k.cellZ)) * 16777619u;
+		h = (h ^ static_cast<size_t>(k.level)) * 16777619u;
 		return h;
 	}
 };
 
-// Default spatial cell size in game units (~15 meters).
+// Base spatial cell size in game units (~15 meters). Each subdivision level halves it.
 constexpr float DEFAULT_SPATIAL_CELL_SIZE = 1024.0f;
 
-inline SpatialClusterKey GetSpatialKey(const RE::NiPoint3& center, float cellSize = DEFAULT_SPATIAL_CELL_SIZE)
+// Number of subdivision levels (0 = 1024, 1 = 512, 2 = 256 units). Bounds the cluster count.
+constexpr uint8_t SPATIAL_MAX_LEVEL = 2;
+
+inline float GetSpatialCellSize(uint8_t level)
 {
+	return DEFAULT_SPATIAL_CELL_SIZE / static_cast<float>(1 << level);
+}
+
+inline SpatialClusterKey GetSpatialKey(const RE::NiPoint3& center, uint8_t level = 0)
+{
+	const float cellSize = GetSpatialCellSize(level);
 	return SpatialClusterKey{
 		static_cast<int32_t>(std::floor(center.x / cellSize)),
 		static_cast<int32_t>(std::floor(center.y / cellSize)),
-		static_cast<int32_t>(std::floor(center.z / cellSize))
+		static_cast<int32_t>(std::floor(center.z / cellSize)),
+		level
 	};
 }
 

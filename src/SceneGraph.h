@@ -111,6 +111,17 @@ class SceneGraph
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
 	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
+	// Periodic full spatial partition sweep (in frames) to catch drift without per-frame churn.
+	static constexpr uint32_t SPATIAL_MAINTENANCE_INTERVAL = 120;
+	uint32_t m_SpatialMaintenanceCounter = 0;
+
+	// Diagnostics (accumulated per frame, logged periodically).
+	uint32_t m_DebugRebuildCount = 0;
+	uint32_t m_DebugUpdateCount = 0;
+	uint32_t m_DebugSkipCount = 0;
+	uint32_t m_DebugSubdivideCount = 0;
+	uint32_t m_DebugMergeCount = 0;
+
 	// Mesh/transform/properties buffer managed by MeshManager
 	eastl::unique_ptr<MeshManager> m_MeshManager;
 
@@ -142,8 +153,13 @@ class SceneGraph
 
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
 	BLASCluster* GetOrCreateSpatialCluster(BaseMesh* mesh);
+	BLASCluster* GetOrCreateSpatialClusterAt(BaseMesh* mesh, uint8_t level);
 	template <typename Key, typename Map>
 	BLASCluster* GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a_mutex, Key a_key, RE::TESObjectREFR* a_owner);
+
+	// Static (non-actor, non-LandLOD) meshes are routed into spatial cell clusters. Everything else
+	// (actors, skinned, dynamic, subindex, terrain LOD) keeps per-owner / per-segment clustering.
+	bool IsSpatialCandidate(BaseMesh* mesh, RE::TESObjectREFR* refr) const;
 
 	struct PerThreadResult
 	{
@@ -227,6 +243,11 @@ public:
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 	void MarkClusterDirty(BLASCluster* cluster);
+
+	// Diagnostics counters (accumulated in BLASCluster::BuildUpdate, reset in BuildClusters).
+	void RecordRebuild() { m_DebugRebuildCount++; }
+	void RecordUpdate() { m_DebugUpdateCount++; }
+	void RecordSkip() { m_DebugSkipCount++; }
 
 	uint32_t AllocateMeshIndex();
 	uint32_t AllocateGeometryIndex();

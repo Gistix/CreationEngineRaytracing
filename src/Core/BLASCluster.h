@@ -43,6 +43,12 @@ class BLASCluster
 	eastl::hash_set<BaseMesh*> m_MemberSet;
 	mutable std::mutex m_MemberMutex;
 
+	// Spatial (cell-partitioned) clusters hold static non-actor meshes grouped by a stable grid key.
+	// Their instance transform is Identity; per-geometry transforms (via TransformComposition) place
+	// the geometry in world space. m_PartitionLevel tracks the spatial subdivision level (0..SPATIAL_MAX_LEVEL).
+	bool m_IsSpatial = false;
+	uint8_t m_PartitionLevel = 0;
+
 	std::vector<nvrhi::rt::GeometryDesc> m_GeometryDescs;
 
 	eastl::vector<uint16_t> m_GeometrySlots;
@@ -90,6 +96,10 @@ public:
 	explicit BLASCluster(RE::TESObjectREFR* owner, const char* customName = nullptr);
 
 	RE::TESObjectREFR* GetOwner() const { return m_Owner; }
+
+	bool IsSpatial() const { return m_IsSpatial; }
+	uint8_t GetPartitionLevel() const { return m_PartitionLevel; }
+	void SetPartitionLevel(uint8_t level) { m_PartitionLevel = level; }
 
 	void AddMember(BaseMesh* mesh);
 	void RemoveMember(BaseMesh* mesh);

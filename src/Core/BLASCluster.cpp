@@ -376,6 +376,13 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	}
 
 	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
+	if (buildMode == BuildMode::Rebuild)
+		sceneGraph->RecordRebuild();
+	else if (buildMode == BuildMode::Update)
+		sceneGraph->RecordUpdate();
+	else
+		sceneGraph->RecordSkip();
+
 	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_Members.size() <= 1 && m_DirtyFlags == DirtyFlags::Visibility) {
 		// Single-mesh orphan clusters are excluded from the TLAS while hidden.
 		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
