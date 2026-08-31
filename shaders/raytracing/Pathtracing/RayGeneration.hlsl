@@ -285,59 +285,59 @@ void Main()
 
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
 
-    bool sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
+    bool sourceIsEnter = dot(sourceSurface.Geometry.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
     if (!sourceIsEnter) {
         sourceSurface.FlipNormal();
-        sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
+        sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Geometry.Normal, sourceBRDFContext.ViewDirection));
     }
 
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);    
 
-    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Geometry.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
     
  #if !(defined(SHARC) && SHARC_UPDATE)
     // Coat-priority GBuffer: when coat is present, use coat normal/roughness for denoiser;
     // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
-    const bool useCoat = sourceSurface.CoatStrength > 0;
+    const bool useCoat = sourceSurface.Coat.Strength > 0;
   
 #   if defined(NRD) | defined(DLSS_RR)    
-    const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
-    DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+    const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.Coat.Color, sourceSurface.Coat.Strength);
+    DiffuseAlbedo[idx] = sourceSurface.Material.DiffuseAlbedo * coatTint;
 #   endif   
     
 #   if defined(DLSS_RR)    
     if (useCoat)
     {
-        float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
-        const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * envBRDF.x + envBRDF.y);
+        float coatNdotV = saturate(dot(sourceSurface.Coat.Normal, sourceBRDFContext.ViewDirection));
+        const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Coat.Roughness, coatNdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.Coat.F0 * envBRDF.x + envBRDF.y);
     }
     else
     {
-        const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
+        const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Material.Roughness, sourceBRDFContext.NdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.Material.F0 * envBRDF.x + envBRDF.y);
     }
 #   endif
 #if defined(NRD)
     NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(
-        useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal, 
-        useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness, 
+        useCoat ? sourceSurface.Coat.Normal : sourceSurface.Geometry.Normal, 
+        useCoat ? sourceSurface.Coat.Roughness : sourceSurface.Material.Roughness, 
         0.0f
     );
 #else
     NormalRoughness[idx] = float4(
-        normalize(useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal), 
-        saturate(useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness)
+        normalize(useCoat ? sourceSurface.Coat.Normal : sourceSurface.Geometry.Normal), 
+        saturate(useCoat ? sourceSurface.Coat.Roughness : sourceSurface.Material.Roughness)
     );
 #endif
 
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
     MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
-        sourceSurface.CameraRelativePosition,
-        sourceSurface.PrevCameraRelativePosition), 0);
+        sourceSurface.Geometry.CameraRelativePosition,
+        sourceSurface.Geometry.PrevCameraRelativePosition), 0);
     
-    const float depth = computeClipDepthCameraRelative(sourceSurface.CameraRelativePosition);
+    const float depth = computeClipDepthCameraRelative(sourceSurface.Geometry.CameraRelativePosition);
     Depth[idx] = depth;
     
 #   if defined(NRD) 
@@ -348,11 +348,12 @@ void Main()
 #       if defined(RESTIR_GI)    
     // Write packed surface data for ReSTIR GI (REFERENCE mode)
     SurfaceDataBuffer[surfBufIdx] = PSD_Pack(
-        sourceSurface.Position, sourceSurface.Normal, sourceSurface.Tangent, sourceSurface.Bitangent,
-        sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection,
-        sourceSurface.DiffuseAlbedo, sourceSurface.F0,
-        sourceSurface.Roughness, sourceSurface.Metallic,
-        sourceMaterial.Feature, sourceSurface.SpecTrans > 0.0f,
+        sourceSurface.Geometry.Position, sourceSurface.Geometry.Normal,
+        sourceSurface.Frame.Tangent, sourceSurface.Frame.Bitangent,
+        sourceSurface.Geometry.FaceNormal, sourceBRDFContext.ViewDirection,
+        sourceSurface.Material.DiffuseAlbedo, sourceSurface.Material.F0,
+        sourceSurface.Material.Roughness, sourceSurface.Material.Metallic,
+        sourceMaterial.Feature, sourceSurface.Material.SpecTrans > 0.0f,
         primarySceneDistance);
 #       endif  
 #   endif   
@@ -362,7 +363,7 @@ void Main()
     bool isSssPath = false;
 #endif
     
-    float3 primaryEmissive = sourceSurface.Emissive + primaryEffectEmissive;
+    float3 primaryEmissive = sourceSurface.Material.Emissive + primaryEffectEmissive;
     float3 direct = primaryEmissive;
     
     // =========================================================================
@@ -657,42 +658,42 @@ void Main()
     }
     else
     {
-        if (sourceSurface.CoatStrength > 0)
+        if (sourceSurface.Coat.Strength > 0)
         {
-            float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
+            float3 coatTint = lerp(float3(1,1,1), sourceSurface.Coat.Color, sourceSurface.Coat.Strength);
 #   if defined(NRD) | defined(DLSS_RR)
-            DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+            DiffuseAlbedo[idx] = sourceSurface.Material.DiffuseAlbedo * coatTint;
 #   endif
 #   if defined(NRD)
-            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.CoatNormal, sourceSurface.CoatRoughness, 0.0f);
+            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.Coat.Normal, sourceSurface.Coat.Roughness, 0.0f);
 #   else
-            NormalRoughness[idx] = float4(normalize(sourceSurface.CoatNormal), saturate(sourceSurface.CoatRoughness));
+            NormalRoughness[idx] = float4(normalize(sourceSurface.Coat.Normal), saturate(sourceSurface.Coat.Roughness));
 #   endif
         }
         else
         {
 #   if defined(NRD) | defined(DLSS_RR)
-            DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+            DiffuseAlbedo[idx] = sourceSurface.Material.DiffuseAlbedo;
 #   endif
 #   if defined(NRD)
-            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.Normal, sourceSurface.Roughness, 0.0f);
+            NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.Geometry.Normal, sourceSurface.Material.Roughness, 0.0f);
 #   else
-            NormalRoughness[idx] = float4(normalize(sourceSurface.Normal), saturate(sourceSurface.Roughness));
+            NormalRoughness[idx] = float4(normalize(sourceSurface.Geometry.Normal), saturate(sourceSurface.Material.Roughness));
 #   endif
         }
     }
 
 #   if defined(DLSS_RR) 
-    if (sourceSurface.CoatStrength > 0)
+    if (sourceSurface.Coat.Strength > 0)
     {
-        float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
-        const float2 coatEnvBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * coatEnvBRDF.x + coatEnvBRDF.y);
+        float coatNdotV = saturate(dot(sourceSurface.Coat.Normal, sourceBRDFContext.ViewDirection));
+        const float2 coatEnvBRDF = BRDF::EnvBRDF(sourceSurface.Coat.Roughness, coatNdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.Coat.F0 * coatEnvBRDF.x + coatEnvBRDF.y);
     }
     else
     {
-        const float2 envBRDF2 = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
+        const float2 envBRDF2 = BRDF::EnvBRDF(sourceSurface.Material.Roughness, sourceBRDFContext.NdotV);
+        SpecularAlbedo[idx] = float3(sourceSurface.Material.F0 * envBRDF2.x + envBRDF2.y);
     }
 #   endif
     
@@ -703,7 +704,7 @@ void Main()
  #if defined(SHARC) && SHARC_DEBUG
     HashGridParameters gridParameters = GetSharcGridParameters();
 
-    Output[idx] = float4(HashGridDebugColoredHash(sourceSurface.Position, sourceSurface.GeomNormal, gridParameters), 1);
+    Output[idx] = float4(HashGridDebugColoredHash(sourceSurface.Geometry.Position, sourceSurface.Geometry.GeomNormal, gridParameters), 1);
     return;
 #endif     
     
@@ -728,8 +729,8 @@ void Main()
                 isSssPath = true;
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
-                specSurface.DiffuseAlbedo = 0;
-                StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
+                specSurface.Material.DiffuseAlbedo = 0;
+                StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Geometry.Normal, sourceBRDFContext.ViewDirection, true);
                 float3 dummyDiff, specDirect;
                 EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true, dummyDiff, specDirect);
                 directSpecular += specDirect;
@@ -760,8 +761,8 @@ void Main()
                 isSssPath = true;
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
-                specSurface.DiffuseAlbedo = 0;
-                StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
+                specSurface.Material.DiffuseAlbedo = 0;
+                StandardBSDF specBsdf = StandardBSDF::make(specSurface, sourceSurface.Geometry.Normal, sourceBRDFContext.ViewDirection, true);
                 direct += EvaluateDirectRadiance(sourceMaterial.Type, sourceMaterial.Feature, specSurface, sourceBRDFContext, sourceInstance, specBsdf, randomSeed, true);
             }
             else
@@ -858,14 +859,14 @@ void Main()
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if defined(RESTIR_GI)
         // ReSTIR GI: multi-bounce secondary radiance accumulation
-        float3 giSecRadiance = 0;
-        float3 giSecThroughput = 0;
-        float giSecPdf = 0;
         bool giSecStarted = false;
-        Surface giScatterSurface = (Surface)0;
-        float3 giScatterViewDir = 0;
-        float3 giScatterThp = 0;
-        uint giScatterFeature = Feature::kDefault;
+        float3 giSecRadiance = float3(0, 0, 0);
+        float3 giSecThroughput = float3(1, 1, 1);
+        float giSecPdf = 1.0f;
+        Surface giScatterSurface;
+        float3 giScatterViewDir;
+        float3 giScatterThp;
+        uint16_t giScatterFeature = Feature::kDefault;
         bool giScatterHasSpecularTransmission = false;
 #   endif
 #endif
@@ -889,7 +890,7 @@ void Main()
             BSDFSample bsdfSample;
             bool isPrimaryReplacement = false;
             
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
+            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.Geometry.FaceNormal) >= 0.0f ? surface.Geometry.FaceNormal : -surface.Geometry.FaceNormal;            
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if defined(RESTIR_GI)
@@ -902,7 +903,7 @@ void Main()
                 giScatterViewDir = brdfContext.ViewDirection;
                 giScatterThp = throughput;
                 giScatterFeature = material.Feature;
-                giScatterHasSpecularTransmission = surface.SpecTrans > 0.0f;
+                giScatterHasSpecularTransmission = surface.Material.SpecTrans > 0.0f;
             }
 #   endif
 #endif
@@ -910,8 +911,8 @@ void Main()
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
             direction = surface.Mul(SampleCosineHemisphere(randomSeed));
 
-            throughput *= surface.AO;
-            throughput *= surface.Albedo;
+            throughput *= surface.Material.AO;
+            throughput *= surface.Material.Albedo;
             
             const bool hasTransmission = false;
 #else            
@@ -932,23 +933,23 @@ void Main()
             isPrimaryReplacement = surface.Primary && isDelta;
             arrivedViaDelta = isDelta;
 
-            throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
+            throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.Material.AO;
 
             // Track water volume entry/exit on transmission
-            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
+            if (hasTransmission && any(surface.Material.VolumeAbsorption > 0.0f))
             {
                 // isEnter (front face) + transmission = entering volume
                 insideWaterVolume = isEnter;
-                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
+                waterVolumeAbsorption = insideWaterVolume ? surface.Material.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
 #   if defined(RAW_RADIANCE)
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
-            brdfWeight.diffuse /= max(surface.DiffuseAlbedo, 1e-4f);
+            brdfWeight.diffuse /= max(surface.Material.DiffuseAlbedo, 1e-4f);
             brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
 
-            float3 brdfWeightOriginal = brdfWeight.diffuse * surface.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
+            float3 brdfWeightOriginal = brdfWeight.diffuse * surface.Material.DiffuseAlbedo + brdfWeight.specular + brdfWeight.transmission;
 
 #       if defined(SHARC) && SHARC_UPDATE
             throughput *= brdfWeightOriginal;
@@ -982,8 +983,8 @@ void Main()
 #   endif
             
 #   if RUSSIAN_ROULETTE == 1
-            const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
-            const float rrProb = min(rrVal, 0.95f);
+        const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
+        const float rrProb = min(rrVal, 0.95f);
 
             if (Random(randomSeed) < rrProb)
                 break;
@@ -1004,13 +1005,13 @@ void Main()
 #endif
             
 #if defined(SHARC)
-            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
+            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Material.Roughness;
 #endif
             
 #if USE_SIA_INTERPOLATION
-            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+            ray.Origin = OffsetRaySIA(surface.Geometry.Position, faceNormalOriented, surface.Geometry.SIAOffset, hasTransmission);
 #else
-            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+            ray.Origin = OffsetRay(surface.Geometry.Position, faceNormalOriented, surface.Geometry.PositionError, hasTransmission);
 #endif
             ray.Direction = direction;
             ray.TMin = 0.0f;  // Offset already handles precision, no additional offset needed
@@ -1082,23 +1083,23 @@ void Main()
             {
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if defined(RESTIR_GI)
-                if (!giSecStarted && !fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
+                if (!giSecStarted && !fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Material.Emissive > 0))
 #   else
-                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Material.Emissive > 0))
 #   endif
                 {
-                    float specAvg = isSpecular ? Color::RGBToLuminance(surface.Emissive * throughput) : 0;
-                    fillPathL += float4(surface.Emissive * throughput, specAvg);
+                    float specAvg = isSpecular ? Color::RGBToLuminance(surface.Material.Emissive * throughput) : 0;
+                    fillPathL += float4(surface.Material.Emissive * throughput, specAvg);
                 }
                 // Effect emissive after giSecStarted is captured via the main giSecRadiance accumulation
 #else
-                sampleRadiance += surface.Emissive * throughput;
+                sampleRadiance += surface.Material.Emissive * throughput;
 #endif
-                float3 fn = dot(direction, surface.FaceNormal) <= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+                float3 fn = dot(direction, surface.Geometry.FaceNormal) <= 0.0f ? surface.Geometry.FaceNormal : -surface.Geometry.FaceNormal;
 #if USE_SIA_INTERPOLATION
-                ray.Origin = OffsetRaySIA(surface.Position, fn, surface.SIAOffset, true);
+                ray.Origin = OffsetRaySIA(surface.Geometry.Position, fn, surface.Geometry.SIAOffset, true);
 #else
-                ray.Origin = OffsetRay(surface.Position, fn, surface.PositionError, true);
+                ray.Origin = OffsetRay(surface.Geometry.Position, fn, surface.Geometry.PositionError, true);
 #endif
                 ray.Direction = direction;
                 ray.TMin = 0.0f;
@@ -1151,25 +1152,25 @@ void Main()
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES     
             if (Raytracing.EnableReSTIRGI && !giSecStarted && !arrivedViaDelta &&
                 giScatterFeature != Feature::kHairTint && material.Feature != Feature::kHairTint &&
-                !giScatterHasSpecularTransmission && surface.SpecTrans <= 0.0f)
+                !giScatterHasSpecularTransmission && surface.Material.SpecTrans <= 0.0f)
             {
                 // Write SurfaceDataBuffer with the scattering surface (primary for GI)
                 SurfaceDataBuffer[surfBufIdx] = PSD_Pack(
-                    giScatterSurface.Position, giScatterSurface.Normal,
-                    giScatterSurface.Tangent, giScatterSurface.Bitangent,
-                    giScatterSurface.FaceNormal, giScatterViewDir,
-                    giScatterSurface.DiffuseAlbedo, giScatterSurface.F0,
-                    giScatterSurface.Roughness, giScatterSurface.Metallic,
+                    giScatterSurface.Geometry.Position, giScatterSurface.Geometry.Normal,
+                    giScatterSurface.Frame.Tangent, giScatterSurface.Frame.Bitangent,
+                    giScatterSurface.Geometry.FaceNormal, giScatterViewDir,
+                    giScatterSurface.Material.DiffuseAlbedo, giScatterSurface.Material.F0,
+                    giScatterSurface.Material.Roughness, giScatterSurface.Material.Metallic,
                     giScatterFeature, giScatterHasSpecularTransmission,
                     fillSceneLength);
 
                 // Write secondary surface geometry (the hit surface)
-                float3 captureNormal = dot(surface.FaceNormal, -direction) >= 0.0f ? surface.Normal : -surface.Normal;
+                float3 captureNormal = dot(surface.Geometry.FaceNormal, -direction) >= 0.0f ? surface.Geometry.Normal : -surface.Geometry.Normal;
                 half2 encodedN = EncodeNormal((half3)captureNormal);
                 uint packedNorm = f32tof16(encodedN.x) | (f32tof16(encodedN.y) << 16);
-                SecondaryGBufPositionNormal[idx] = float4(surface.Position, asfloat(packedNorm));
-                SecondaryGBufDiffuseAlbedo[idx] = float4(surface.DiffuseAlbedo, Color::RGBToLuminance(giScatterThp));
-                SecondaryGBufSpecularRough[idx] = float4(surface.F0, surface.Roughness);
+                SecondaryGBufPositionNormal[idx] = float4(surface.Geometry.Position, asfloat(packedNorm));
+                SecondaryGBufDiffuseAlbedo[idx] = float4(surface.Material.DiffuseAlbedo, Color::RGBToLuminance(giScatterThp));
+                SecondaryGBufSpecularRough[idx] = float4(surface.Material.F0, surface.Material.Roughness);
                 giSecStarted = true;
                 giSecThroughput = throughput;
                 giSecPdf = bsdfSample.pdf;
@@ -1178,8 +1179,8 @@ void Main()
 #endif
 
 #if defined(SHARC)
-            sharcHitData.positionWorld = surface.Position;
-            sharcHitData.normalWorld = surface.GeomNormal;
+            sharcHitData.positionWorld = surface.Geometry.Position;
+            sharcHitData.normalWorld = surface.Geometry.GeomNormal;
 
 #   if SHARC_ENABLE_SH_ENCODING
             sharcHitData.radianceDirectionWorld = -direction;
@@ -1187,11 +1188,11 @@ void Main()
 #   endif // SHARC_ENABLE_SH_ENCODING
 
 #   if SHARC_SEPARATE_EMISSIVE
-            sharcHitData.emissive = surface.Emissive;
+            sharcHitData.emissive = surface.Material.Emissive;
 #   endif // SHARC_SEPARATE_EMISSIVE
 
 #   if !SHARC_UPDATE
-            uint gridLevel = HashGridGetLevel(surface.Position, sharcParameters.hashGridParameters);
+            uint gridLevel = HashGridGetLevel(surface.Geometry.Position, sharcParameters.hashGridParameters);
             float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.hashGridParameters);
             bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
             
@@ -1229,14 +1230,14 @@ void Main()
 #endif // SHARC  
             
             brdfContext = BRDFContext::make(surface, -direction);
-            isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+            isEnter = dot(surface.Geometry.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
             if (!isEnter) {
                 surface.FlipNormal();
-                brdfContext.NdotV = saturate(dot(surface.Normal, brdfContext.ViewDirection));
+                brdfContext.NdotV = saturate(dot(surface.Geometry.Normal, brdfContext.ViewDirection));
             }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
+            bsdf = StandardBSDF::make(surface, surface.Geometry.Normal, brdfContext.ViewDirection, isEnter);
 
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
@@ -1252,8 +1253,8 @@ void Main()
                     isSssPath = true;
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;
-                    specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
+                    specSurface.Material.DiffuseAlbedo = 0;
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Geometry.Normal, brdfContext.ViewDirection, isEnter);
                     directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
                 }
                 else
@@ -1275,7 +1276,7 @@ void Main()
             {
                 // ReSTIR GI owns radiance from secondary surface onward — divert everything
                 float3 relTp = throughput / max(giSecThroughput, 1e-10);
-                giSecRadiance += (directRadiance + surface.Emissive) * relTp;
+                giSecRadiance += (directRadiance + surface.Material.Emissive) * relTp;
             }
             else
 #   endif
@@ -1287,10 +1288,10 @@ void Main()
                     fillPathL += float4(directRadiance * throughput, specAvg);
                 }
                 // Emissive: gated by OnBranch (BUILD already captured emissive along delta paths)
-                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Emissive > 0))
+                if (!fillState.hasFlag(kStablePlaneFlag_OnBranch) && any(surface.Material.Emissive > 0))
                 {
-                    float specAvg = isSpecular ? Color::RGBToLuminance(surface.Emissive * throughput) : 0;
-                    fillPathL += float4(surface.Emissive * throughput, specAvg);
+                    float specAvg = isSpecular ? Color::RGBToLuminance(surface.Material.Emissive * throughput) : 0;
+                    fillPathL += float4(surface.Material.Emissive * throughput, specAvg);
                 }
             }
 #elif defined(SHARC) && SHARC_UPDATE
@@ -1301,7 +1302,7 @@ void Main()
             throughput = float3(1.0f, 1.0f, 1.0f);
 #else
             sampleRadiance += directRadiance * throughput;
-            sampleRadiance += surface.Emissive * throughput;
+            sampleRadiance += surface.Material.Emissive * throughput;
 #endif
 
         }

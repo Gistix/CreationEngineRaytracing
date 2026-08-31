@@ -43,159 +43,10 @@ SamplerState                      ClampSampler     : register(s1);
 SamplerState                      PointWrapSampler : register(s2);
 
 #include "include/Surface.hlsli"
+#include "raytracing/include/Geometry.hlsli"
 #include "include/SurfaceMaker.hlsli"
 
-Triangle GetTriangle(in uint meshIndex, in uint indexByteOffset, in uint primitiveIdx)
-{
-    const uint byteAddr = indexByteOffset + primitiveIdx * 6u;
-    const uint alignedAddr = byteAddr & ~3u;
-    const uint d0 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr);
-    const uint d1 = Indices[NonUniformResourceIndex(meshIndex)].Load(alignedAddr + 4u);
 
-    Triangle tri;
-    if ((byteAddr & 2u) == 0)
-    {
-        tri.x = (uint16_t)(d0 & 0xFFFF);
-        tri.y = (uint16_t)(d0 >> 16);
-        tri.z = (uint16_t)(d1 & 0xFFFF);
-    }
-    else
-    {
-        tri.x = (uint16_t)(d0 >> 16);
-        tri.y = (uint16_t)(d1 & 0xFFFF);
-        tri.z = (uint16_t)(d1 >> 16);
-    }
-    return tri;
-}
-
-// Decodes a signed-normalized byte4 (ubyte4 * 2 - 1) from a raw uint.
-inline float4 UnpackByte4SNorm(uint packed)
-{
-    const float4 v = float4(
-        (float)((packed >>  0) & 0xFF),
-        (float)((packed >>  8) & 0xFF),
-        (float)((packed >> 16) & 0xFF),
-        (float)((packed >> 24) & 0xFF));
-    return v * (1.0f / 255.0f) * 2.0f - 1.0f;
-}
-
-Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint vertexByteOffset, uint index, bool isMSN, uint numVertices)
-{
-    Vertex vertex = (Vertex)0;
-
-    const uint vertexSize = (uint)vertexDesc.GetVertexSize();
-    
-    // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t, so a 16-bit
-    // multiply would overflow (e.g. stride 32 * index 2048 = 0) and corrupt high-index vertices.
-    const uint vertexOffset = vertexByteOffset + vertexSize * index;
-
-    float4 pos = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    float4 normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    float4 bitangent = float4(0.0f, 0.0f, 0.0f, 0.0f);
-
-    // Position (float4; w carries tangent.x)
-    if (vertexDesc.HasFlag(VertexFlags::Vertex))
-    {
-        const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Position);
-        if (vertexDesc.HasFlag(VertexFlags::FullPrec))
-        {
-            pos = asfloat(vertices.Load4(offset));
-        }
-        else
-        {
-            const uint2 packed = vertices.Load2(offset);
-            pos.x = f16tof32(packed.x & 0xFFFF);
-            pos.y = f16tof32(packed.x >> 16);
-            pos.z = f16tof32(packed.y & 0xFFFF);
-            pos.w = f16tof32(packed.y >> 16);
-        }
-        vertex.Position = pos.xyz;
-    }
-
-    // Texcoord0 (half2)
-    if (vertexDesc.HasFlag(VertexFlags::UV))
-    {
-        const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Texcoord0);
-        const uint packed = vertices.Load(offset);
-        vertex.Texcoord0 = half2(f16tof32(packed & 0xFFFF), f16tof32(packed >> 16));
-    }
-
-    // Normal (byte4 snorm; w carries tangent.y)
-    if (vertexDesc.HasFlag(VertexFlags::Normal))
-    {
-        const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Normal);
-        normal = UnpackByte4SNorm(vertices.Load(offset));
-
-        const float3 N = normalize(normal.xyz);
-        vertex.Normal = (half3)N;
-
-        // Tangent (reconstructed from the binormal attribute; w carries tangent.z)
-        if (vertexDesc.HasFlag(VertexFlags::Tangent))
-        {
-            const uint tangOffset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Binormal);
-            bitangent = UnpackByte4SNorm(vertices.Load(tangOffset));
-
-            float3 B = bitangent.xyz;
-            B = normalize(B - N * dot(N, B));
-            vertex.Bitangent = (half3)B;
-            
-            float3 T = float3(pos.w, normal.w, bitangent.w);
-            T = normalize(T - N * dot(N, T));
-            vertex.Tangent = (half3)T;
-        }
-    }
-
-    // Vertex color
-    if (vertexDesc.HasFlag(VertexFlags::Colors))
-    {
-        const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Color);
-        const uint packed = vertices.Load(offset);
-        vertex.Color.x = (packed >> 0) & 0xFF;
-        vertex.Color.y = (packed >> 8) & 0xFF;
-        vertex.Color.z = (packed >> 16) & 0xFF;
-        vertex.Color.w = (packed >> 24) & 0xFF;
-    }
-
-    // Landscape blend data (two packed uints)
-    if (vertexDesc.HasFlag(VertexFlags::LandData))
-    {
-        const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::LandData);
-        const uint packed0 = vertices.Load(offset);
-        const uint packed1 = vertices.Load(offset + 4);
-
-        vertex.LandBlend0.x = (packed0 >> 0) & 0xFF;
-        vertex.LandBlend0.y = (packed0 >> 8) & 0xFF;
-        vertex.LandBlend0.z = (packed0 >> 16) & 0xFF;
-        vertex.LandBlend0.w = (packed0 >> 24) & 0xFF;
-
-        vertex.LandBlend1.x = (packed1 >> 0) & 0xFF;
-        vertex.LandBlend1.y = (packed1 >> 8) & 0xFF;
-        vertex.LandBlend1.z = (packed1 >> 16) & 0xFF;
-        vertex.LandBlend1.w = (packed1 >> 24) & 0xFF;
-    }
-
-    if (isMSN)
-    {
-        const uint quatOffset = vertexByteOffset + (vertexSize * numVertices) + index * 8u;
-        const uint2 packed = vertices.Load2(quatOffset);
-        
-        half4 q;
-        q.x = (half)f16tof32(packed.x & 0xffff);
-        q.y = (half)f16tof32(packed.x >> 16);
-        q.z = (half)f16tof32(packed.y & 0xffff);
-        q.w = (half)f16tof32(packed.y >> 16);
-        
-        vertex.Normal = q.xyz;
-        vertex.Tangent.x = q.w;
-    }
-    
-    return vertex;
-}
-
-Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, bool isMSN, uint numVertices)
-{
-    return GetVertex(vertices, vertexDesc, 0u, index, isMSN, numVertices);
-}
 
 struct VertexOut
 {
@@ -331,16 +182,16 @@ PixelOut MainPS(in VertexOut i)
  
     Surface surface = SurfaceMaker::make(i.WorldPosition, i.TexCoord, i.Normal, i.Tangent, i.Bitangent, i.Color, i.LandBlend0, i.LandBlend1, mesh, props);
     
-    if (props.AlphaFlags & AlphaFlags::Test && surface.Alpha < props.AlphaThreshold)
+    if (props.AlphaFlags & AlphaFlags::Test && surface.Material.Alpha < props.AlphaThreshold)
         discard;
 
     const float2 currNDC = i.CurrentClip.xy / i.CurrentClip.w;
     const float2 prevNDC = i.PreviousClip.xy / i.PreviousClip.w;
  
     o.MotionVectors = (prevNDC - currNDC) * float2(0.5f, -0.5f);
-    o.Albedo = float4(surface.Albedo, 1.0f);
-    o.NormalRoughness = float4(surface.Normal, surface.Roughness);
-    o.EmissiveMetallic = float4(surface.Emissive, surface.Metallic);
+    o.Albedo = float4(surface.Material.Albedo, 1.0f);
+    o.NormalRoughness = float4(surface.Geometry.Normal, surface.Material.Roughness);
+    o.EmissiveMetallic = float4(surface.Material.Emissive, surface.Material.Metallic);
     
     return o;
 }

@@ -13,7 +13,7 @@
 void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in Mesh mesh, Properties props)
 {
     EffectMaterialData material = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
-    const float mipLevel = surface.MipLevel;
+    const float mipLevel = surface.Geometry.MipLevel;
     
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.SourceTexture)];
     float4 baseTexColor = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
@@ -23,12 +23,12 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
     [branch]
     if (props.ShaderFlags & ShaderFlags::kEnvMap)
     {
-        surface.Albedo = float3(1.0f, 1.0f, 1.0f);
-        surface.Roughness = 0.0f;
-        surface.F0 = 0.04f;
-        surface.TransmissionColor = 1.0f;
-        surface.SpecTrans = 1.0f;
-        surface.IsThinSurface = true;
+        surface.Material.Albedo = float3(1.0f, 1.0f, 1.0f);
+        surface.Material.Roughness = 0.0f;
+        surface.Material.F0 = 0.04f;
+        surface.Material.TransmissionColor = 1.0f;
+        surface.Material.SpecTrans = 1.0f;
+        surface.Material.IsThinSurface = true;
   
         MaterialAlpha(props, baseTexColor.r, baseColor.a, vertexColor.a, surface);
     }
@@ -59,8 +59,8 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
             baseColor = baseTexColor * baseColorMul;
         }
 
-        surface.Albedo = 0;
-        surface.Emissive = EffectToLinear(baseColor.xyz) * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
+        surface.Material.Albedo = 0;
+        surface.Material.Emissive = EffectToLinear(baseColor.xyz) * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
     }
 }
 

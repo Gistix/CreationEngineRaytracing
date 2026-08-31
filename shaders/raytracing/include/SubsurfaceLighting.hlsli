@@ -46,9 +46,9 @@ float3 evalSingleScatteringTransmission(
         {
             RayDesc transmissionRay;
 #if USE_SIA_INTERPOLATION
-            transmissionRay.Origin = OffsetRaySIA(hitPos, sourceSurface.FaceNormal, sourceSurface.SIAOffset, true);
+            transmissionRay.Origin = OffsetRaySIA(hitPos, sourceSurface.Geometry.FaceNormal, sourceSurface.Geometry.SIAOffset, true);
 #else
-            transmissionRay.Origin = OffsetRay(hitPos, -sourceSurface.FaceNormal);
+            transmissionRay.Origin = OffsetRay(hitPos, -sourceSurface.Geometry.FaceNormal);
 #endif
             transmissionRay.Direction = refractedRayDirection;
             transmissionRay.TMin = 0.0f;
@@ -67,7 +67,7 @@ float3 evalSingleScatteringTransmission(
                 LightingMaterialData sampleLightingMaterialData;
                 Surface sampleSurface = SurfaceMaker::make(localPosition, payload, refractedRayDirection, rayCone, sampleInstance, sampleLightingMaterialData, false);
 
-                const float3 sampleShadingNormal = sampleSurface.Normal;
+                const float3 sampleShadingNormal = sampleSurface.Geometry.Normal;
                 // Prepare data needed to evaluate the light
                 float3 incidentVector = 0.0f;
                 float lightDistance = 0.0f;
@@ -82,7 +82,7 @@ float3 evalSingleScatteringTransmission(
                     if (any(lightVisibility > 0.0f))
                     {
                         const float3 lightRadiance = irradiance * lightVisibility;
-                        const float3 transmissionBsdf = EvaluateBoundaryTerm(sourceSurface.Normal,
+                        const float3 transmissionBsdf = EvaluateBoundaryTerm(sourceSurface.Geometry.Normal,
                                                                              vectorToLight,
                                                                              refractedRayDirection,
                                                                              sampleShadingNormal,
@@ -133,13 +133,13 @@ float3 evalSingleScatteringTransmission(
                 LightingMaterialData scatterLightingMaterialData;
                 Surface scatterSurface = SurfaceMaker::make(scatterLocalPosition, scatteringPayload, scatteringDirection, rayCone, scatterInstance, scatterLightingMaterialData, false);
 
-                const float3 scatteringSampleGeometryNormal = scatterSurface.FaceNormal;
+                const float3 scatteringSampleGeometryNormal = scatterSurface.Geometry.FaceNormal;
 
                 float3 scatteringBoundaryPosition = samplePosition + scatteringPayload.hitDistance * scatteringDirection;
 #if USE_SIA_INTERPOLATION
-                scatteringBoundaryPosition = OffsetRaySIA(scatteringBoundaryPosition, scatteringSampleGeometryNormal, scatterSurface.SIAOffset, false);
+                scatteringBoundaryPosition = OffsetRaySIA(scatteringBoundaryPosition, scatteringSampleGeometryNormal, scatterSurface.Geometry.SIAOffset, false);
 #else
-                scatteringBoundaryPosition = OffsetRay(scatteringBoundaryPosition, scatteringSampleGeometryNormal, scatterSurface.PositionError, false);
+                scatteringBoundaryPosition = OffsetRay(scatteringBoundaryPosition, scatteringSampleGeometryNormal, scatterSurface.Geometry.PositionError, false);
 #endif
 
                 // Prepare data needed to evaluate the light
@@ -158,7 +158,7 @@ float3 evalSingleScatteringTransmission(
                         const float3 lightRadiance = irradiance * lightVisibility;
                         const float totalScatteringDistance = currentT + scatteringPayload.hitDistance;
                         const float3 ssTransmissionBsdf = EvaluateSingleScattering(vectorToLight,
-                                                                                   scatterSurface.Normal,
+                                                                                   scatterSurface.Geometry.Normal,
                                                                                    totalScatteringDistance,
                                                                                    sssMaterialCoefficients);
 
@@ -197,17 +197,17 @@ float3 EvaluateSubsurfaceDiffuseNEE(
         subsurfaceMaterialData.g = SSS_SETTINGS.AnisotropyOverride;
     }
 
-    const float3 geometryNormal = surface.FaceNormal;
-    const float3 shadingNormal = surface.Normal;
+    const float3 geometryNormal = surface.Geometry.FaceNormal;
+    const float3 shadingNormal = surface.Geometry.Normal;
 
-    const float3 tangentWorld = any(dot(surface.Tangent, surface.Tangent) > 1e-5f) ?
-        normalize(surface.Tangent) :
+    const float3 tangentWorld = any(dot(surface.Frame.Tangent, surface.Frame.Tangent) > 1e-5f) ?
+        normalize(surface.Frame.Tangent) :
         (dot(geometryNormal, float3(0.0f, 1.0f, 0.0f)) < 0.999f ? cross(geometryNormal, float3(0.0f, 1.0f, 0.0f)) :
                                                                   cross(geometryNormal, float3(1.0f, 0.0f, 0.0f)));
 
     const float3 biTangentWorld = cross(tangentWorld, geometryNormal);
     SubsurfaceInteraction subsurfaceInteraction =
-        CreateSubsurfaceInteraction(surface.Position, shadingNormal, tangentWorld, biTangentWorld);
+        CreateSubsurfaceInteraction(surface.Geometry.Position, shadingNormal, tangentWorld, biTangentWorld);
 
     float3 radiance = float3(0.0f, 0.0f, 0.0f);
 
@@ -218,34 +218,22 @@ float3 EvaluateSubsurfaceDiffuseNEE(
     const float3 vectorToLight = normalize(incidentVector);
     if (any(irradiance > MIN_DIFFUSE_SHADOW))
     {
-        const float3 diffuseAlbedo = surface.DiffuseAlbedo;
-        subsurfaceMaterialData.transmissionColor = SSS_SETTINGS.MaterialOverride ? subsurfaceMaterialData.transmissionColor : diffuseAlbedo;
-
-        const float3 cameraUp = float3(
-            Camera.ViewInverse[0][0],
-            Camera.ViewInverse[1][0],
-            Camera.ViewInverse[2][0]);
-
-        const float3 cameraDirection = float3(
-            Camera.ViewInverse[0][2],
-            Camera.ViewInverse[1][2],
-            Camera.ViewInverse[2][2]);
-
-        if (Random(randomSeed) < 0.5f)
+        const float3 lightVisibility = TraceRayShadowFinite(Scene, surface, vectorToLight, lightDistance, randomSeed);
+        if (any(lightVisibility > 0.0f))
         {
-            subsurfaceInteraction.normal = -cameraDirection;
-            subsurfaceInteraction.tangent = cameraUp;
-            subsurfaceInteraction.biTangent = cross(cameraUp, -cameraDirection);
+            const float3 lightRadiance = irradiance * lightVisibility;
+            const float cosThetaI = min(max(0.00001f, dot(vectorToLight, shadingNormal)), 1.0f);
+            radiance += max(EvalBurleyDiffusionProfileCenter(sssMaterialCoefficients, lightRadiance, cosThetaI), 0.0f);
         }
+    }
 
-        const SubsurfaceMaterialCoefficients sssMaterialCoefficients =
-            ComputeSubsurfaceMaterialCoefficients(subsurfaceMaterialData);
-        const uint sampleCount = min(SSS_SETTINGS.SampleCount, (uint)MAX_SSS_SAMPLE_COUNT);
+    if (SSS_SETTINGS.EnableDiffusionProfile)
+    {
+        uint sampleCount = SSS_SETTINGS.DiffusionProfileSampleCount;
 
-        for (uint sssSampleIndex = 0; sssSampleIndex < sampleCount; ++sssSampleIndex)
+        for (uint i = 0; i < sampleCount; ++i)
         {
             SubsurfaceSample subsurfaceSample;
-
             const float2 rand2 = float2(Random(randomSeed), Random(randomSeed));
             EvalBurleyDiffusionProfile(sssMaterialCoefficients,
                                       subsurfaceInteraction,
@@ -267,8 +255,8 @@ float3 EvaluateSubsurfaceDiffuseNEE(
                     continue;
                 }
 
-                const float3 sampleGeometryNormal = sampleSurface.FaceNormal;
-                const float3 sampleShadingNormal = sampleSurface.Normal;
+                const float3 sampleGeometryNormal = sampleSurface.Geometry.FaceNormal;
+                const float3 sampleShadingNormal = sampleSurface.Geometry.Normal;
                 const bool transition = dot(vectorToLight, sampleGeometryNormal) < 0.0f;
                 const float3 samplePosition = subsurfaceSample.samplePosition - subsurfaceInteraction.normal * samplePayload.hitDistance;
 

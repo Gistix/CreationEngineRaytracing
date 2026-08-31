@@ -289,28 +289,28 @@ StablePlanesHitResult StablePlanesHandleHit(
     bool isEnterSurface = bsdf.isEnter;
 
     // Coat-priority GBuffer: use coat layer properties for denoiser when coat is present
-    bool hasCoat = surface.CoatStrength > 0;
-    float  gbufferRoughness = hasCoat ? surface.CoatRoughness : surface.Roughness;
-    float3 gbufferNormal    = hasCoat ? surface.CoatNormal    : surface.Normal;
-    float3 coatTint         = lerp(float3(1,1,1), surface.CoatColor, surface.CoatStrength);
+    bool hasCoat = surface.Coat.Strength > 0;
+    float  gbufferRoughness = hasCoat ? surface.Coat.Roughness : surface.Material.Roughness;
+    float3 gbufferNormal    = hasCoat ? surface.Coat.Normal    : surface.Geometry.Normal;
+    float3 coatTint         = lerp(float3(1,1,1), surface.Coat.Color, surface.Coat.Strength);
 
-    float3 emissive = surface.Emissive;
+    float3 emissive = surface.Material.Emissive;
     if (any(emissive > 0))
         ctx.AccumulateStableRadiance(pixelPos, emissive * throughput);
 
     if (vertexIndex >= ctx.maxStablePlaneVertexDepth)
     {
-        float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
+        float3 faceNormal = dot(brdfContext.ViewDirection, surface.Geometry.FaceNormal) >= 0.0 ? surface.Geometry.FaceNormal : -surface.Geometry.FaceNormal;
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
+            surface.Geometry.CameraRelativePosition, surface.Geometry.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
             throughput, psrMV,
             gbufferRoughness, gbufferNormal,
-            surface.DiffuseAlbedo.xxx * coatTint, hasCoat ? surface.CoatF0 : surface.F0,
+            surface.Material.DiffuseAlbedo.xxx * coatTint, hasCoat ? surface.Coat.F0 : surface.Material.F0,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
@@ -326,7 +326,7 @@ StablePlanesHitResult StablePlanesHandleHit(
     float nonDeltaPart;
     bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
 
-    bool isInternalSpecularTransmission = surface.SpecTrans > 0.0f && !surface.IsThinSurface && !isEnterSurface;
+    bool isInternalSpecularTransmission = surface.Material.SpecTrans > 0.0f && !surface.Material.IsThinSurface && !isEnterSurface;
     for (int k = 0; k < deltaLobeCount; k++)
     {
         // Internal reflection/TIR in refractive media is not stable enough for PSR reuse.
@@ -362,16 +362,16 @@ StablePlanesHitResult StablePlanesHandleHit(
         }
     }
 
-    float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
+    float3 faceNormal = dot(brdfContext.ViewDirection, surface.Geometry.FaceNormal) >= 0.0 ? surface.Geometry.FaceNormal : -surface.Geometry.FaceNormal;
 
     if (nonDeltaPart > 1e-5 || activeDeltaLobes == 0)
     {
-        float3 diffBSDFEstimate = max(surface.DiffuseAlbedo, 0.04) * coatTint;
-        float3 specBSDFEstimate = max(hasCoat ? surface.CoatF0 : surface.F0, 0.04);
+        float3 diffBSDFEstimate = max(surface.Material.DiffuseAlbedo, 0.04) * coatTint;
+        float3 specBSDFEstimate = max(hasCoat ? surface.Coat.F0 : surface.Material.F0, 0.04);
 
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
+            surface.Geometry.CameraRelativePosition, surface.Geometry.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
@@ -423,9 +423,9 @@ StablePlanesHitResult StablePlanesHandleHit(
             result.continueTracing      = true;
             result.nextRayDir           = deltaLobes[lobeIdx].dir;
 #if USE_SIA_INTERPOLATION
-            result.nextRayOrigin        = OffsetRaySIA(surface.Position, faceNormal, surface.SIAOffset, deltaLobes[lobeIdx].transmission != 0);
+            result.nextRayOrigin        = OffsetRaySIA(surface.Geometry.Position, faceNormal, surface.Geometry.SIAOffset, deltaLobes[lobeIdx].transmission != 0);
 #else
-            result.nextRayOrigin        = OffsetRay(surface.Position, faceNormal, surface.PositionError, deltaLobes[lobeIdx].transmission != 0);
+            result.nextRayOrigin        = OffsetRay(surface.Geometry.Position, faceNormal, surface.Geometry.PositionError, deltaLobes[lobeIdx].transmission != 0);
 #endif
             result.nextThp              = throughput * deltaLobes[lobeIdx].thp;
             result.nextBranchID         = StablePlanesAdvanceBranchID(stableBranchID, lobeIdx);
@@ -433,10 +433,10 @@ StablePlanesHitResult StablePlanesHandleHit(
             result.nextImageXform       = UpdateImageXform(imageXform, -rayDir, deltaLobes[lobeIdx].dir, faceNormal, deltaLobes[lobeIdx].transmission != 0);
             result.nextRoughnessAccum   = roughnessAccum;
 
-            if (deltaLobes[lobeIdx].transmission != 0 && any(surface.VolumeAbsorption > 0.0f))
+            if (deltaLobes[lobeIdx].transmission != 0 && any(surface.Material.VolumeAbsorption > 0.0f))
             {
                 result.nextInsideWater     = isEnterSurface;
-                result.nextWaterAbsorption = isEnterSurface ? surface.VolumeAbsorption : float3(0, 0, 0);
+                result.nextWaterAbsorption = isEnterSurface ? surface.Material.VolumeAbsorption : float3(0, 0, 0);
             }
         }
         else
@@ -447,13 +447,13 @@ StablePlanesHitResult StablePlanesHandleHit(
                 forkedCount++;
 
                 StablePlaneExplorationPayload forkPayload = SplitDeltaPath(
-                    surface.Position, faceNormal, deltaLobes[lobeIdx], lobeIdx,
+                    surface.Geometry.Position, faceNormal, deltaLobes[lobeIdx], lobeIdx,
                     stableBranchID, vertexIndex, throughput, motionVectors,
                     totalSceneLength, imageXform, roughnessAccum, -rayDir,
-                    insideWaterVolume, waterVolumeAbsorption, isEnterSurface, surface.VolumeAbsorption,
-                    surface.PositionError
+                    insideWaterVolume, waterVolumeAbsorption, isEnterSurface, surface.Material.VolumeAbsorption,
+                    surface.Geometry.PositionError
 #if USE_SIA_INTERPOLATION
-                    , surface.SIAOffset
+                    , surface.Geometry.SIAOffset
 #endif
                 );
 
@@ -469,14 +469,14 @@ StablePlanesHitResult StablePlanesHandleHit(
         bool storeAsDominant = isDominant && canReuseCurrent;
         float3 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
-            surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
+            surface.Geometry.CameraRelativePosition, surface.Geometry.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
             throughput, psrMV,
             gbufferRoughness, gbufferNormal,
-            max(surface.DiffuseAlbedo, 0.04) * coatTint, max(hasCoat ? surface.CoatF0 : surface.F0, 0.04),
+            max(surface.Material.DiffuseAlbedo, 0.04) * coatTint, max(hasCoat ? surface.Coat.F0 : surface.Material.F0, 0.04),
             storeAsDominant, waterFlags, waterCounters
         );
         if (storeAsDominant)

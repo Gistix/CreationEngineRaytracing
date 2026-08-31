@@ -639,12 +639,12 @@ struct DefaultBSDF
 
     void __init(float3 N, float3 V, Surface surface, bool isEnter = true)
     {
-        bool isThinSurface = surface.IsThinSurface;
+        bool isThinSurface = surface.Material.IsThinSurface;
 
-        float3 transmissionAlbedo = surface.TransmissionColor;
-        float surfaceRoughness = saturate(surface.Roughness);
+        float3 transmissionAlbedo = surface.Material.TransmissionColor;
+        float surfaceRoughness = saturate(surface.Material.Roughness);
 
-        diffuseReflection.albedo = surface.DiffuseAlbedo;
+        diffuseReflection.albedo = surface.Material.DiffuseAlbedo;
         diffuseReflection.roughness = surfaceRoughness;
         diffuseTransmission.albedo = transmissionAlbedo;
 
@@ -658,8 +658,8 @@ struct DefaultBSDF
             activeLobes |= (uint)LobeType::DiffuseTransmission | (uint)LobeType::SpecularTransmission | (uint)LobeType::DeltaTransmission;
         }
 
-        float3 surfaceSpecular = surface.F0;
-        float surfaceIoR = surface.IOR;
+        float3 surfaceSpecular = surface.Material.F0;
+        float surfaceIoR = surface.Material.IOR;
         float surfaceEta = isEnter ? (1.f / surfaceIoR) : surfaceIoR;
 
         specularReflection.albedo = surfaceSpecular;
@@ -668,15 +668,15 @@ struct DefaultBSDF
 
 #if defined(GLINT)
         // Glint: discrete stochastic microfacet NDF
-        specularReflection.glintEnabled = surface.GlintLogMicrofacetDensity > 0;
+        specularReflection.glintEnabled = surface.Glint.LogMicrofacetDensity > 0;
         if (specularReflection.glintEnabled)
         {
-            specularReflection.glintAlpha = surface.GlintMicrofacetRoughness;
-            specularReflection.glintN = pow(10.0, surface.GlintLogMicrofacetDensity);
-            specularReflection.glintFilterSize = surface.GlintScreenSpaceScale;
-            specularReflection.glintDensityRandomization = surface.GlintDensityRandomization;
-            specularReflection.glintUV = surface.GlintTexCoord;
-            specularReflection.glintMipLevel = surface.MipLevel;
+            specularReflection.glintAlpha = surface.Glint.MicrofacetRoughness;
+            specularReflection.glintN = pow(10.0, surface.Glint.LogMicrofacetDensity);
+            specularReflection.glintFilterSize = surface.Glint.ScreenSpaceScale;
+            specularReflection.glintDensityRandomization = surface.Glint.DensityRandomization;
+            specularReflection.glintUV = surface.Glint.TexCoord;
+            specularReflection.glintMipLevel = surface.Geometry.MipLevel;
         }
 #endif
 
@@ -686,17 +686,17 @@ struct DefaultBSDF
         specularReflectionTransmission.activeLobes = activeLobes;
         specularReflectionTransmission.isThinSurface = isThinSurface;
 
-        diffTrans = surface.DiffTrans;
-        specTrans = surface.SpecTrans;
+        diffTrans = surface.Material.DiffTrans;
+        specTrans = surface.Material.SpecTrans;
 
         // Fuzz layer: OpenPBR §3.7 microfiber sheen on top of base substrate
         fuzzWeight = 0;
         fuzzReflection.albedo = float3(0, 0, 0);
         fuzzReflection.roughness = surfaceRoughness;
-        if (surface.FuzzWeight > 0.0f)
+        if (surface.Fuzz.Weight > 0.0f)
         {
-            fuzzWeight = surface.FuzzWeight;
-            fuzzReflection.albedo = surface.FuzzColor;
+            fuzzWeight = surface.Fuzz.Weight;
+            fuzzReflection.albedo = surface.Fuzz.Color;
 
             // OpenPBR eq.(81): base *= lerp(1, 1 - E_fuzz(μ_o, α), fuzzWeight)
             // E_fuzz is the view-dependent directional albedo of the fuzz BRDF.
@@ -710,10 +710,10 @@ struct DefaultBSDF
         // Coat layer: independent specular lobe with energy-conserving base attenuation
         float coatWeight = 0;
         coatStrength = 0;
-        if (surface.CoatStrength > 0.0f)
+        if (surface.Coat.Strength > 0.0f)
         {
-            coatStrength = surface.CoatStrength;
-            float3 coatF0 = surface.CoatF0;
+            coatStrength = surface.Coat.Strength;
+            float3 coatF0 = surface.Coat.F0;
             float NdotV = saturate(dot(N, V));
             float3 coatFresnel = evalFresnelSchlick(coatF0, 1.f, NdotV);
             float3 layerAttenuation = 1.0 - coatFresnel * coatStrength;
@@ -721,7 +721,7 @@ struct DefaultBSDF
             diffuseReflection.albedo *= layerAttenuation;
             specularReflection.albedo *= layerAttenuation;
 
-            float coatAlpha = surface.CoatRoughness * surface.CoatRoughness;
+            float coatAlpha = surface.Coat.Roughness * surface.Coat.Roughness;
             if (coatAlpha < kMinGGXAlpha)
                 coatAlpha = USE_DELTALOBES != 0 ? 0.0 : kMinGGXAlpha;
 
@@ -733,10 +733,10 @@ struct DefaultBSDF
             coatWeight = Luminance(coatFresnel) * coatStrength;
 
             // Coat normal in base tangent frame
-            coatLocalN = surface.ToLocal(surface.CoatNormal);
+            coatLocalN = surface.ToLocal(surface.Coat.Normal);
 
             // OpenPBR: coat_color = T^2, so single-pass transmittance T = sqrt(coat_color)
-            coatTransmittance = sqrt(max(surface.CoatColor, float3(1e-5, 1e-5, 1e-5)));
+            coatTransmittance = sqrt(max(surface.Coat.Color, float3(1e-5, 1e-5, 1e-5)));
         }
         else
         {
@@ -748,12 +748,12 @@ struct DefaultBSDF
             coatTransmittance = float3(1, 1, 1);
         }
 
-        float surfaceMetallic = surface.Metallic;
+        float surfaceMetallic = surface.Material.Metallic;
         float metallicBRDF = surfaceMetallic * (1.f - specTrans);
         float dielectricBSDF = (1.f - surfaceMetallic) * (1.f - specTrans);
         float specularBSDF = specTrans;
 
-        float diffuseWeight = Luminance(surface.DiffuseAlbedo);
+        float diffuseWeight = Luminance(surface.Material.DiffuseAlbedo);
         float specularWeight = Luminance(evalFresnelSchlick(surfaceSpecular, 1.f, dot(V, N)));
 
         pDiffuseReflection = (activeLobes & (uint)LobeType::DiffuseReflection) ? diffuseWeight * dielectricBSDF * (1.f - diffTrans) : 0.f;
@@ -785,15 +785,15 @@ struct DefaultBSDF
 
     static uint getLobes(Surface surface)
     {
-        float surfaceRoughness = saturate(surface.Roughness);
+        float surfaceRoughness = saturate(surface.Material.Roughness);
         float alpha = surfaceRoughness * surfaceRoughness;
         bool isDelta = (alpha < kMinGGXAlpha && USE_DELTALOBES != 0);
 
-        float diffTrans = surface.DiffTrans;
-        float specTrans = surface.SpecTrans;
+        float diffTrans = surface.Material.DiffTrans;
+        float specTrans = surface.Material.SpecTrans;
 
         uint lobes = isDelta ? (uint)LobeType::DeltaReflection : (uint)LobeType::SpecularReflection;
-        if (any(surface.DiffuseAlbedo > 0.f) && specTrans < 1.f)
+        if (any(surface.Material.DiffuseAlbedo > 0.f) && specTrans < 1.f)
         {
             if (diffTrans < 1.f) lobes |= (uint)LobeType::DiffuseReflection;
             if (diffTrans > 0.f) lobes |= (uint)LobeType::DiffuseTransmission;
@@ -1082,8 +1082,8 @@ struct StandardBSDF
     static StandardBSDF make(Surface surface, float3 N, float3 V, bool isEnter = true)
     {
         StandardBSDF bsdf;
-        bsdf.emission = surface.Emissive;
-        bsdf.isEnter = surface.IsThinSurface ? true : isEnter;
+        bsdf.emission = surface.Material.Emissive;
+        bsdf.isEnter = surface.Material.IsThinSurface ? true : isEnter;
         bsdf.defaultBSDF.__init(N, V, surface, isEnter);
         return bsdf;
     }
@@ -1091,7 +1091,7 @@ struct StandardBSDF
     float4 Eval(const BRDFContext brdfContext, const uint16_t feature, const Surface surface, const float3 wo)
     {
         float3 wi = brdfContext.ViewDirection;
-        float3 N = surface.Normal;
+        float3 N = surface.Geometry.Normal;
 
         float3 wiLocal = surface.ToLocal(wi);
         float3 woLocal = surface.ToLocal(wo);
@@ -1152,7 +1152,7 @@ struct StandardBSDF
         );
         
         float3 wi = brdfContext.ViewDirection;
-        float3 N = surface.Normal;
+        float3 N = surface.Geometry.Normal;
 
         float3 wiLocal = surface.ToLocal(wi);
         
@@ -1198,7 +1198,7 @@ struct StandardBSDF
     float EvalPdf(const BRDFContext brdfContext, const Surface surface, const float3 wo)
     {
         float3 wi = brdfContext.ViewDirection;
-        float3 N = surface.Normal;
+        float3 N = surface.Geometry.Normal;
 
         float3 wiLocal = surface.ToLocal(wi);
         float3 woLocal = surface.ToLocal(wo);
@@ -1214,7 +1214,7 @@ struct StandardBSDF
     void EvalDeltaLobes(const BRDFContext brdfContext, const Surface surface, out DeltaLobe deltaLobes[cMaxDeltaLobes], out int deltaLobeCount, out float nonDeltaPart)
     {
         float3 wi = brdfContext.ViewDirection;
-        float3 N = surface.Normal;
+        float3 N = surface.Geometry.Normal;
 
         float3 wiLocal = surface.ToLocal(wi);
 

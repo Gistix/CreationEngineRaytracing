@@ -32,17 +32,17 @@ struct SurfaceMaker
 #if !defined(RASTER)
     static Surface make(float3 position, Payload payload, float3 rayDir, RayCone rayCone, out Instance instance, out LightingMaterialData material, bool primary)
     { 
-        Surface surface;         
+        Surface surface = (Surface)0;         
 
         surface.Primary = primary;
         
-        surface.Position = position;
-        surface.CameraRelativePosition = position - Camera.Position;
-        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
+        surface.Geometry.Position = position;
+        surface.Geometry.CameraRelativePosition = position - Camera.Position;
+        surface.Geometry.PrevCameraRelativePosition = surface.Geometry.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
-        surface.DiffTrans = 0.0f;
-        surface.SpecTrans = 0.0f;
-        surface.IsThinSurface = false;
+        surface.Material.DiffTrans = 0.0f;
+        surface.Material.SpecTrans = 0.0f;
+        surface.Material.IsThinSurface = false;
 
         Mesh mesh = GetMesh(payload, instance);
 
@@ -100,10 +100,10 @@ struct SurfaceMaker
                 o2w);
 
             // Override position with SIA precise interpolation result
-            surface.Position = siaWldPosition;
-            surface.FaceNormal = siaWldFaceNormal;
-            surface.PositionError = 0.0f; // Not used in SIA path
-            surface.SIAOffset = siaWldOffset;
+            surface.Geometry.Position = siaWldPosition;
+            surface.Geometry.FaceNormal = siaWldFaceNormal;
+            surface.Geometry.PositionError = 0.0f; // Not used in SIA path
+            surface.Geometry.SIAOffset = siaWldOffset;
         }
 #else
         // Accumulate position error through transform chain for accurate ray offsetting.
@@ -113,11 +113,11 @@ struct SurfaceMaker
                 max(CalculatePositionError(v1.Position),
                     CalculatePositionError(v2.Position)));
             float worldError = CalculatePositionError(position);
-            surface.PositionError = max(baryInterpError, worldError);
+            surface.Geometry.PositionError = max(baryInterpError, worldError);
         }
 #endif // USE_SIA_INTERPOLATION
 
-        surface.CameraRelativePosition = TransformMeshInstancePointCameraRelative(
+        surface.Geometry.CameraRelativePosition = TransformMeshInstancePointCameraRelative(
             currentObjectSpacePos, meshTransform.Transform, instance.Transform, Camera.Position);
 
         // Previous-frame positions for motion vectors.
@@ -144,11 +144,11 @@ struct SurfaceMaker
             // Apply object motion after current/previous reconstruction cancel, so
             // static geometry does not inherit world-coordinate cancellation error.
             // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.
-            surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
+            surface.Geometry.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
                 prevObjectSpacePos, meshTransform.PrevTransform, instance.PrevTransform, Camera.PositionPrev);
         }
 #else
-        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
+        surface.Geometry.PrevCameraRelativePosition = surface.Geometry.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
 #endif
 
         float coneTexLODValue = ComputeRayConeTriangleLODValue(v0, v1, v2, objectToWorld3x3);
@@ -189,42 +189,42 @@ struct SurfaceMaker
             
 #if !USE_SIA_INTERPOLATION
         // Standard path: compute face normal from object-space cross product
-        surface.FaceNormal = hasNormal ? mul(objectToWorld3x3, objectSpaceFlatNormal) : normalWS;
+        surface.Geometry.FaceNormal = hasNormal ? mul(objectToWorld3x3, objectSpaceFlatNormal) : normalWS;
 #endif
 
-        surface.MipLevel = rayCone.computeLOD(coneTexLODValue, rayDir, normalWS, true) + Raytracing.TexLODBias;
+        surface.Geometry.MipLevel = rayCone.computeLOD(coneTexLODValue, rayDir, normalWS, true) + Raytracing.TexLODBias;
         Texture2D baseTextureForLod = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
         uint baseTexWidth, baseTexHeight;
         baseTextureForLod.GetDimensions(baseTexWidth, baseTexHeight);
-        surface.MipLevel += 0.5f * SafeLog2(max(1.0f, (float)baseTexWidth * (float)baseTexHeight));
+        surface.Geometry.MipLevel += 0.5f * SafeLog2(max(1.0f, (float)baseTexWidth * (float)baseTexHeight));
         
-        surface.GeomNormal = normalWS;
-        surface.GeomTangent = tangentWS;
+        surface.Geometry.GeomNormal = normalWS;
+        surface.Frame.GeomTangent = tangentWS;
 
         // Set as defaults
-        surface.Normal = normalWS;
-        surface.Tangent = tangentWS;
-        surface.Bitangent = bitangentWS;
+        surface.Geometry.Normal = normalWS;
+        surface.Frame.Tangent = tangentWS;
+        surface.Frame.Bitangent = bitangentWS;
         
-        surface.Albedo = float3(1.0f, 1.0f, 1.0f);
-        surface.Emissive = float3(0.0f, 0.0f, 0.0f);
-        surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
-        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
-        surface.Roughness = PBR::Defaults::Roughness;
-        surface.Metallic = PBR::Defaults::Metallic;
+        surface.Material.Albedo = float3(1.0f, 1.0f, 1.0f);
+        surface.Material.Emissive = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.Roughness = PBR::Defaults::Roughness;
+        surface.Material.Metallic = PBR::Defaults::Metallic;
         
-        surface.AO = 1.0f;
-        surface.F0 = PBR::Defaults::F0;
+        surface.Material.AO = 1.0f;
+        surface.Material.F0 = PBR::Defaults::F0;
 
-        surface.CoatColor = float3(1.0f, 1.0f, 1.0f);
-        surface.CoatStrength = 0.0f;
-        surface.CoatRoughness = 0.0f;
-        surface.CoatF0 = float3(0.04f, 0.04f, 0.04f);
-        surface.CoatNormal = normalWS;
-        surface.CoatTangent = tangentWS;
-        surface.CoatBitangent = bitangentWS;
-        surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
-        surface.FuzzWeight = 0.0f;
+        surface.Coat.Color = float3(1.0f, 1.0f, 1.0f);
+        surface.Coat.Strength = 0.0f;
+        surface.Coat.Roughness = 0.0f;
+        surface.Coat.F0 = float3(0.04f, 0.04f, 0.04f);
+        surface.Coat.Normal = normalWS;
+        surface.Coat.Tangent = tangentWS;
+        surface.Coat.Bitangent = bitangentWS;
+        surface.Fuzz.Color = float3(0.0f, 0.0f, 0.0f);
+        surface.Fuzz.Weight = 0.0f;
     
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
         {
@@ -254,13 +254,13 @@ struct SurfaceMaker
             LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, -rayDir, payload.hitDistance);
         }
         
-        surface.Roughness = PBR::Roughness(surface.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
-        surface.Metallic = Remap(surface.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
+        surface.Material.Roughness = PBR::Roughness(surface.Material.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
+        surface.Material.Metallic = Remap(surface.Material.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
 
-        surface.DiffuseAlbedo = surface.Albedo * (1.0f - surface.Metallic);
+        surface.Material.DiffuseAlbedo = surface.Material.Albedo * (1.0f - surface.Material.Metallic);
 
-        surface.F0 = PBR::F0(surface.F0, surface.Albedo, surface.Metallic);
-        surface.IOR = F0toIOR(surface.F0);
+        surface.Material.F0 = PBR::F0(surface.Material.F0, surface.Material.Albedo, surface.Material.Metallic);
+        surface.Material.IOR = F0toIOR(surface.Material.F0);
                
         return surface; 
     }  
@@ -268,58 +268,58 @@ struct SurfaceMaker
   
     static Surface make(float3 position, float2 texCoord, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 vertexColor, float4 landBlend0, float4 landBlend1, Mesh mesh, Properties props)
     { 
-        Surface surface;         
+        Surface surface = (Surface)0;         
 
         surface.Primary = false;
         
-        surface.Position = position;
-        surface.CameraRelativePosition = position - Camera.Position;
-        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
+        surface.Geometry.Position = position;
+        surface.Geometry.CameraRelativePosition = position - Camera.Position;
+        surface.Geometry.PrevCameraRelativePosition = surface.Geometry.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         surface.SubsurfaceData = (Subsurface)0;
-        surface.DiffTrans = 0.0f;
-        surface.SpecTrans = 0.0f;
-        surface.IsThinSurface = false;
+        surface.Material.DiffTrans = 0.0f;
+        surface.Material.SpecTrans = 0.0f;
+        surface.Material.IsThinSurface = false;
 
         LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
 
         float2 texCoord0 = material.TexCoord(texCoord);
 
-        surface.FaceNormal = normalWS;
+        surface.Geometry.FaceNormal = normalWS;
 
-        surface.MipLevel = 0;
-        surface.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
+        surface.Geometry.MipLevel = 0;
+        surface.Geometry.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
 #if USE_SIA_INTERPOLATION
-        surface.SIAOffset = 0.0f; // No SIA data available in raster path
+        surface.Geometry.SIAOffset = 0.0f; // No SIA data available in raster path
 #endif
 
-        surface.GeomNormal = normalWS;
-        surface.GeomTangent = tangentWS;
+        surface.Geometry.GeomNormal = normalWS;
+        surface.Frame.GeomTangent = tangentWS;
 
-        surface.Albedo = float3(1.0f, 1.0f, 1.0f);
-        surface.Emissive = float3(0.0f, 0.0f, 0.0f);
-        surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
-        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
-        surface.Roughness = PBR::Defaults::Roughness;
-        surface.Metallic = PBR::Defaults::Metallic;
+        surface.Material.Albedo = float3(1.0f, 1.0f, 1.0f);
+        surface.Material.Emissive = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.Roughness = PBR::Defaults::Roughness;
+        surface.Material.Metallic = PBR::Defaults::Metallic;
         
-        surface.AO = 1.0f;
-        surface.F0 = PBR::Defaults::F0;
+        surface.Material.AO = 1.0f;
+        surface.Material.F0 = PBR::Defaults::F0;
 
-        surface.CoatColor = float3(1.0f, 1.0f, 1.0f);
-        surface.CoatStrength = 0.0f;
-        surface.CoatRoughness = 0.0f;
-        surface.CoatF0 = float3(0.04f, 0.04f, 0.04f);
-        surface.CoatNormal = normalWS;
-        surface.CoatTangent = tangentWS;
-        surface.CoatBitangent = bitangentWS;
-        surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
-        surface.FuzzWeight = 0.0f;
+        surface.Coat.Color = float3(1.0f, 1.0f, 1.0f);
+        surface.Coat.Strength = 0.0f;
+        surface.Coat.Roughness = 0.0f;
+        surface.Coat.F0 = float3(0.04f, 0.04f, 0.04f);
+        surface.Coat.Normal = normalWS;
+        surface.Coat.Tangent = tangentWS;
+        surface.Coat.Bitangent = bitangentWS;
+        surface.Fuzz.Color = float3(0.0f, 0.0f, 0.0f);
+        surface.Fuzz.Weight = 0.0f;
 
 #   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
         {
-            float dist = length(surface.CameraRelativePosition);
-            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            float dist = length(surface.Geometry.CameraRelativePosition);
+            float3 viewDir = -(surface.Geometry.CameraRelativePosition / dist);
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, viewDir, dist);
         }
         else if (material.Type == Type::Effect)
@@ -333,8 +333,8 @@ struct SurfaceMaker
         else
         {
             float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
-            float dist = length(surface.CameraRelativePosition);
-            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            float dist = length(surface.Geometry.CameraRelativePosition);
+            float3 viewDir = -(surface.Geometry.CameraRelativePosition / dist);
             LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, viewDir, dist);
         }
 #   elif defined(FALLOUT4)
@@ -348,27 +348,26 @@ struct SurfaceMaker
             GrassMaterial(surface, texCoord0, mesh, props);
         else if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
         {
-            float dist = length(surface.CameraRelativePosition);
-            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            float dist = length(surface.Geometry.CameraRelativePosition);
+            float3 viewDir = -(surface.Geometry.CameraRelativePosition / dist);
             LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, viewDir, dist);
         }
         else
         {
             float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
-            float dist = length(surface.CameraRelativePosition);
-            float3 viewDir = -(surface.CameraRelativePosition / dist);
+            float dist = length(surface.Geometry.CameraRelativePosition);
+            float3 viewDir = -(surface.Geometry.CameraRelativePosition / dist);
             LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, viewDir, dist);
         }
 #   endif
    
-        surface.Roughness = PBR::Roughness(surface.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
-        surface.Metallic = Remap(surface.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
+        surface.Material.Roughness = PBR::Roughness(surface.Material.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
+        surface.Material.Metallic = Remap(surface.Material.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
 
-        surface.DiffuseAlbedo = surface.Albedo * (1.0f - surface.Metallic);
+        surface.Material.DiffuseAlbedo = surface.Material.Albedo * (1.0f - surface.Material.Metallic);
 
-        surface.F0 = PBR::F0(surface.F0, surface.Albedo, surface.Metallic);
-        surface.IOR = F0toIOR(surface.F0);
-        
+        surface.Material.F0 = PBR::F0(surface.Material.F0, surface.Material.Albedo, surface.Material.Metallic);
+        surface.Material.IOR = F0toIOR(surface.Material.F0);
         
         return surface; 
     }    
@@ -380,62 +379,62 @@ struct SurfaceMaker
         surface.Primary = false;        
          
         surface.SubsurfaceData = (Subsurface)0;
-        surface.DiffTrans = 0.0f;
-        surface.SpecTrans = 0.0f;
-        surface.IsThinSurface = false;
+        surface.Material.DiffTrans = 0.0f;
+        surface.Material.SpecTrans = 0.0f;
+        surface.Material.IsThinSurface = false;
 
-        surface.Position = position;
-        surface.CameraRelativePosition = position - Camera.Position;
-        surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
+        surface.Geometry.Position = position;
+        surface.Geometry.CameraRelativePosition = position - Camera.Position;
+        surface.Geometry.PrevCameraRelativePosition = surface.Geometry.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
 
-        surface.FaceNormal = faceNormal;
+        surface.Geometry.FaceNormal = faceNormal;
 
-        surface.MipLevel = 0.0f + Raytracing.TexLODBias;
-        surface.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
+        surface.Geometry.MipLevel = 0.0f + Raytracing.TexLODBias;
+        surface.Geometry.PositionError = max(abs(position.x), max(abs(position.y), abs(position.z)));
 #if USE_SIA_INTERPOLATION
-        surface.SIAOffset = 0.0f; // No SIA data available in hybrid path
+        surface.Geometry.SIAOffset = 0.0f; // No SIA data available in hybrid path
 #endif
-        surface.GeomNormal = faceNormal;
-        surface.GeomTangent = tangent; // not needed for hybrid
+        surface.Geometry.GeomNormal = faceNormal;
+        surface.Frame.GeomTangent = tangent; // not needed for hybrid
 
-        surface.Normal = normal;
-        surface.Tangent = tangent;
-        surface.Bitangent = bitangent;
+        surface.Geometry.Normal = normal;
+        surface.Frame.Tangent = tangent;
+        surface.Frame.Bitangent = bitangent;
 
 #   ifdef DEBUG_WHITE_FURNACE
-        surface.Albedo = float3(1.0f, 1.0f, 1.0f);
+        surface.Material.Albedo = float3(1.0f, 1.0f, 1.0f);
 #   else
-        surface.Albedo = albedo;
+        surface.Material.Albedo = albedo;
 #   endif
-        surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
-        surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
-        surface.Emissive = emissive * Raytracing.Emissive;
+        surface.Material.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);
+        surface.Material.Emissive = emissive * Raytracing.Emissive;
         
-        surface.Roughness = PBR::Roughness(roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
-        surface.Metallic = Remap(metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
-        surface.AO = ao;
+        surface.Material.Roughness = PBR::Roughness(roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
+        surface.Material.Metallic = Remap(metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);
+        surface.Material.AO = ao;
         
-        surface.DiffuseAlbedo = surface.Albedo * (1.0f - surface.Metallic);
+        surface.Material.DiffuseAlbedo = surface.Material.Albedo * (1.0f - surface.Material.Metallic);
 
-        surface.F0 = PBR::F0(albedo, surface.Metallic);
-        surface.IOR = F0toIOR(surface.F0);
+        surface.Material.F0 = PBR::F0(albedo, surface.Material.Metallic);
+        surface.Material.IOR = F0toIOR(surface.Material.F0);
 
-        surface.CoatColor = float3(1.0f, 1.0f, 1.0f);
-        surface.CoatStrength = 0.0f;
-        surface.CoatRoughness = 0.0f;
-        surface.CoatF0 = float3(0.04f, 0.04f, 0.04f);
-        surface.CoatNormal = normal;
-        surface.CoatTangent = tangent;
-        surface.CoatBitangent = bitangent;
-        surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
-        surface.FuzzWeight = 0.0f;
+        surface.Coat.Color = float3(1.0f, 1.0f, 1.0f);
+        surface.Coat.Strength = 0.0f;
+        surface.Coat.Roughness = 0.0f;
+        surface.Coat.F0 = float3(0.04f, 0.04f, 0.04f);
+        surface.Coat.Normal = normal;
+        surface.Coat.Tangent = tangent;
+        surface.Coat.Bitangent = bitangent;
+        surface.Fuzz.Color = float3(0.0f, 0.0f, 0.0f);
+        surface.Fuzz.Weight = 0.0f;
 
 #if defined(GLINT)
-        surface.GlintScreenSpaceScale = 1.0f;
-        surface.GlintLogMicrofacetDensity = 0.0f;
-        surface.GlintMicrofacetRoughness = 0.0f;
-        surface.GlintDensityRandomization = 0.0f;
-        surface.GlintTexCoord = float2(0.0f, 0.0f);
+        surface.Glint.ScreenSpaceScale = 1.0f;
+        surface.Glint.LogMicrofacetDensity = 0.0f;
+        surface.Glint.MicrofacetRoughness = 0.0f;
+        surface.Glint.DensityRandomization = 0.0f;
+        surface.Glint.TexCoord = float2(0.0f, 0.0f);
 #endif
         
         return surface; 

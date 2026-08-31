@@ -247,8 +247,8 @@ namespace MonteCarlo
     {
         // Evaluate Fresnel term using the shading normal
         // Note: we use the shading normal instead of the microfacet normal (half-vector) for Fresnel term here. That's suboptimal for rough surfaces at grazing angles, but half-vector is yet unknown at this point
-        float specularF0 = CalcLuminance(surface.F0);
-        float diffuseReflectance = CalcLuminance(surface.DiffuseAlbedo);
+        float specularF0 = CalcLuminance(surface.Material.F0);
+        float diffuseReflectance = CalcLuminance(surface.Material.DiffuseAlbedo);
 
         float fresnel = saturate(CalcLuminance(BRDF::F_Schlick(specularF0, BRDF::ShadowedF90(specularF0), max(0.0f, dot(viewVector, shadingNormal)))));
 
@@ -347,7 +347,7 @@ namespace MonteCarlo
     bool GGXBRDF(in Surface surface, in BRDFContext brdfContext, inout uint randomSeed, out float3 direction, out float3 BRDF_over_PDF)
     {
         bool isSpecularRay = false;
-        const bool isDeltaSurface = surface.Roughness == 0;
+        const bool isDeltaSurface = surface.Material.Roughness == 0;
         float specular_PDF;
         float overall_PDF;
 
@@ -356,19 +356,19 @@ namespace MonteCarlo
             float3 specular_BRDF_over_PDF;
             {
                 float3 Ve = float3(
-                    dot(brdfContext.ViewDirection, surface.Tangent),
-                    dot(brdfContext.ViewDirection, surface.Bitangent),
-                    dot(brdfContext.ViewDirection, surface.Normal)
+                    dot(brdfContext.ViewDirection, surface.Frame.Tangent),
+                    dot(brdfContext.ViewDirection, surface.Frame.Bitangent),
+                    dot(brdfContext.ViewDirection, surface.Geometry.Normal)
                 );
 
-                const float alpha = surface.Roughness * surface.Roughness;
+                const float alpha = surface.Material.Roughness * surface.Material.Roughness;
 
                 float3 He = SampleGGX_VNDF(Ve, alpha, randomSeed);
-                float3 H = isDeltaSurface ? surface.Normal : surface.Mul(He);
+                float3 H = isDeltaSurface ? surface.Geometry.Normal : surface.Mul(He);
                 specularDirection = reflect(-brdfContext.ViewDirection, H);
 
                 float HoV = saturate(dot(H, brdfContext.ViewDirection));
-                float3 F = Schlick_Fresnel(surface.F0, HoV);
+                float3 F = Schlick_Fresnel(surface.Material.F0, HoV);
                 float G1 = isDeltaSurface ? 1.0 : (brdfContext.NdotV > 0) ? G1_Smith(alpha, brdfContext.NdotV) : 0;
                 specular_BRDF_over_PDF = F * G1;
             }
@@ -382,7 +382,7 @@ namespace MonteCarlo
             }
 
             specular_PDF = saturate(CalcLuminance(specular_BRDF_over_PDF) /
-                CalcLuminance(specular_BRDF_over_PDF + diffuse_BRDF_over_PDF * surface.DiffuseAlbedo));
+                CalcLuminance(specular_BRDF_over_PDF + diffuse_BRDF_over_PDF * surface.Material.DiffuseAlbedo));
 
             isSpecularRay = Random(randomSeed) < specular_PDF;
 

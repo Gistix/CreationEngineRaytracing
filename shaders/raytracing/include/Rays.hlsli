@@ -112,11 +112,11 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
 float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surface, float3 direction, float tmax, inout uint randomSeed)
 {
     RayDesc ray;
-    bool hasTransmission = any(surface.TransmissionColor > 0.0f) && dot(surface.FaceNormal, direction) < 0.0f;
+    bool hasTransmission = any(surface.Material.TransmissionColor > 0.0f) && dot(surface.Geometry.FaceNormal, direction) < 0.0f;
 #if USE_SIA_INTERPOLATION
-    ray.Origin = OffsetRaySIA(surface.Position, surface.FaceNormal, surface.SIAOffset, hasTransmission);
+    ray.Origin = OffsetRaySIA(surface.Geometry.Position, surface.Geometry.FaceNormal, surface.Geometry.SIAOffset, hasTransmission);
 #else
-    ray.Origin = OffsetRay(surface.Position, surface.FaceNormal, surface.PositionError, hasTransmission);
+    ray.Origin = OffsetRay(surface.Geometry.Position, surface.Geometry.FaceNormal, surface.Geometry.PositionError, hasTransmission);
 #endif
     ray.Direction = direction;
     ray.TMin = 0.0f;

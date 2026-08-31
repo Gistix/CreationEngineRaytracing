@@ -368,35 +368,36 @@ namespace Wetness
         if (params.wetness <= 0 && params.waterRoughness >= 1.0)
             return;
 
-        float wetnessStrength = saturate(1.0 - params.waterRoughness);
+        half wetnessStrength = (half)saturate(1.0 - params.waterRoughness);
 
         // Albedo darkening (porosity-based, basic calculation for all bounces)
         {
-            float porosity = 1.0;
-            porosity = lerp(porosity, 0.0, saturate(sqrt(surface.Metallic)));
-            float wetnessDarkeningAmount = porosity * params.wetnessGlossinessAlbedo;
-            surface.Albedo = lerp(surface.Albedo, pow(abs(surface.Albedo), 1.0 + wetnessDarkeningAmount), 0.5);
+            half porosity = 1.0h;
+            porosity = lerp(porosity, 0.0h, (half)saturate(sqrt((float)surface.Material.Metallic)));
+            half wetnessDarkeningAmount = porosity * (half)params.wetnessGlossinessAlbedo;
+            surface.Material.Albedo = lerp(surface.Material.Albedo, (half3)pow(abs((float3)surface.Material.Albedo), 1.0f + (float)wetnessDarkeningAmount), 0.5h);
         }
 
         // Apply wet coat: override coat roughness and normal even if coat already exists
-        if (wetnessStrength > 0)
+        if (wetnessStrength > 0.0h)
         {
-            if (surface.CoatStrength <= 0)
+            if (surface.Coat.Strength <= 0.0h)
             {
                 // No existing coat — set up new wet coat
-                surface.CoatStrength = wetnessStrength;
-                surface.CoatF0 = float3(0.02, 0.02, 0.02);
-                surface.CoatColor = float3(1.0, 1.0, 1.0);
+                surface.Coat.Strength = wetnessStrength;
+                surface.Coat.F0 = half3(0.02h, 0.02h, 0.02h);
+                surface.Coat.Color = half3(1.0h, 1.0h, 1.0h);
             }
 
             // Always override coat roughness and normal with wetness values
-            surface.CoatRoughness = min(surface.CoatRoughness, params.waterRoughness);
-            surface.CoatNormal = params.wetnessNormal;
+            surface.Coat.Roughness = min(surface.Coat.Roughness, (half)params.waterRoughness);
+            surface.Coat.Normal = (half3)params.wetnessNormal;
 
             // Recompute coat tangent frame from wetness normal
             float3 up = abs(params.wetnessNormal.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
-            surface.CoatTangent = normalize(cross(up, params.wetnessNormal));
-            surface.CoatBitangent = cross(params.wetnessNormal, surface.CoatTangent);
+            float3 coatT = normalize(cross(up, params.wetnessNormal));
+            surface.Coat.Tangent = (half3)coatT;
+            surface.Coat.Bitangent = (half3)cross(params.wetnessNormal, coatT);
         }
     }
 }

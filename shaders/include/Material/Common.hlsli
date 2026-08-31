@@ -30,22 +30,22 @@ void MaterialAlpha(Properties props, float alpha, float materialAlpha, float ver
         [branch]
         if (props.AlphaFlags & AlphaFlags::Transmission)
         {
-            surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);
-            surface.Albedo *= alpha;
-            surface.Metallic *= alpha;
-            surface.SpecTrans = 1.0f;
-            surface.IsThinSurface |= (props.ShaderFlags & ShaderFlags::kTwoSided) != 0;
+            surface.Material.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Material.Albedo, alpha);
+            surface.Material.Albedo *= alpha;
+            surface.Material.Metallic *= alpha;
+            surface.Material.SpecTrans = 1.0f;
+            surface.Material.IsThinSurface |= (props.ShaderFlags & ShaderFlags::kTwoSided) != 0;
         }
 
         [branch]
         if (props.AlphaFlags & AlphaFlags::Additive)
         {
-            surface.Albedo = 0.0f;
-            surface.Metallic = 0.0f;
-            surface.Roughness = 0.0f;
-            surface.TransmissionColor = 1.0f;
-            surface.SpecTrans = 1.0f;
-            surface.F0 = 0.04f;
+            surface.Material.Albedo = 0.0f;
+            surface.Material.Metallic = 0.0f;
+            surface.Material.Roughness = 0.0f;
+            surface.Material.TransmissionColor = 1.0f;
+            surface.Material.SpecTrans = 1.0f;
+            surface.Material.F0 = 0.04f;
 
             surface.SubsurfaceData.HasSubsurface = 0;
             surface.SubsurfaceData.TransmissionColor = 0.0f;
@@ -53,10 +53,10 @@ void MaterialAlpha(Properties props, float alpha, float materialAlpha, float ver
             surface.SubsurfaceData.Scale = 0.0f;
             surface.SubsurfaceData.Anisotropy = 0.0f;
 
-            surface.CoatColor = 1.0f;
-            surface.CoatStrength = 0.0f;
-            surface.CoatRoughness = 0.0f;
-            surface.CoatF0 = 0.0f;
+            surface.Coat.Color = 1.0f;
+            surface.Coat.Strength = 0.0f;
+            surface.Coat.Roughness = 0.0f;
+            surface.Coat.F0 = 0.0f;
         }
     }
 }

@@ -158,8 +158,8 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         Surface surface = (Surface)0;
         WaterMaterial(surface, texCoord, tangentWS, bitangentWS, mesh, props);
         
-        float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
-        ApplyFresnelTransmittance(surface.Normal, surface.F0, direction, transmittance, transmitanceInOut);
+        float3 transmittance = exp(-surface.Material.VolumeAbsorption * hitDistance);
+        ApplyFresnelTransmittance(surface.Geometry.Normal, surface.Material.F0, direction, transmittance, transmitanceInOut);
         return false;        
     }else
     {   

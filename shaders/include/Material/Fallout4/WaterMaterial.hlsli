@@ -12,13 +12,13 @@
 void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, in Properties props)
 {
     WaterMaterialData water = Materials[0].Load<WaterMaterialData>(mesh.GetMaterialOffset());
-    const float mipLevel = surface.MipLevel;
+    const float mipLevel = surface.Geometry.MipLevel;
 
-    surface.Albedo = float3(1.0f, 1.0f, 1.0f);
-    surface.Roughness = 0.0f;
-    surface.Metallic = 0.0f;
-    surface.F0 = 0.02f;
-    surface.IOR = 1.33f;
+    surface.Material.Albedo = float3(1.0f, 1.0f, 1.0f);
+    surface.Material.Roughness = 0.0f;
+    surface.Material.Metallic = 0.0f;
+    surface.Material.F0 = 0.02f;
+    surface.Material.IOR = 1.33f;
 
     const bool hasFlowMap = (props.WaterFlags & WaterFlags::kEnableFlowmap) != 0;
     const bool hasBlendNormals = true;
@@ -51,9 +51,9 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         scrollAdjust3 = texCoord0.xy / scaledNormals.zz;
     } else
     {
-        scrollAdjust1 = surface.Position.xy / normalsScale.xx;
-        scrollAdjust2 = surface.Position.xy / normalsScale.yy;
-        scrollAdjust3 = surface.Position.xy / normalsScale.zz;
+        scrollAdjust1 = surface.Geometry.Position.xy / normalsScale.xx;
+        scrollAdjust2 = surface.Geometry.Position.xy / normalsScale.yy;
+        scrollAdjust3 = surface.Geometry.Position.xy / normalsScale.zz;
     }
 
     if (hasFlowMap)
@@ -90,14 +90,14 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         // Always enabled for flowmapped water, since we do not render the displacement water mesh
         {   
             // Project UV from displacement mesh position and size
-            float2 displacementUv = ((surface.Position.xy - Raytracing.WaterDisplacementPosition.xy) + 1024.0) / 2048.0;
+            float2 displacementUv = ((surface.Geometry.Position.xy - Raytracing.WaterDisplacementPosition.xy) + 1024.0) / 2048.0;
             displacementUv.y = 1.0f - displacementUv.y;
             
             float3 displacement = normalize(float3(water.Amplitude4 * (-0.5 + WaterDisplacementMap.SampleLevel(ClampSampler, displacementUv, mipLevel).zw), 0.04));
             flowmapNormal = lerp(displacement, flowmapNormal, displacement.z);
         }
 
-        surface.Normal = normalize(flowmapNormal);
+        surface.Geometry.Normal = normalize(flowmapNormal);
     } else
     {
         float2 normalCoord1 = normalScroll1 + scrollAdjust1;
@@ -115,7 +115,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             float3 normals2 = normals02Texture.SampleLevel(DefaultSampler, normalCoord2, mipLevel).xyz * 2.0 - 1.0;
             float3 normals3 = normals03Texture.SampleLevel(DefaultSampler, normalCoord3, mipLevel).xyz * 2.0 - 1.0;
 
-            surface.Normal = normalize(
+            surface.Geometry.Normal = normalize(
                 float3(0, 0, 1) +
                 water.Amplitude1 * normals1 +
                 water.Amplitude2 * normals2 +
@@ -124,7 +124,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
         }
         else
         {
-            surface.Normal = normalize(
+            surface.Geometry.Normal = normalize(
                 float3(0, 0, 1) + normals1
             );
         }
@@ -133,7 +133,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
     // ---- Rain ripples on water surface ----
     if (surface.Primary && Features.WetnessEffects.Raining > 0.0 && Features.WetnessEffects.EnableRaindropFx)
     {
-        float3 ripplePosition = surface.Position.xyz;
+        float3 ripplePosition = surface.Geometry.Position.xyz;
         float4 raindropInfo = Wetness::GetRainDrops(
             ripplePosition,
             Features.WetnessEffects.Time,
@@ -141,19 +141,19 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
             1.0,
             Features.WetnessEffects);
         float3 rippleNormal = normalize(raindropInfo.xyz);
-        surface.Normal = ReorientNormal(rippleNormal, surface.Normal);
+        surface.Geometry.Normal = ReorientNormal(rippleNormal, surface.Geometry.Normal);
     }
 
-    surface.Tangent = normalize(tangentWS - surface.Normal * dot(tangentWS, surface.Normal));
-    surface.Bitangent = cross(surface.Normal, surface.Tangent);
-    surface.Bitangent *= (dot(surface.Bitangent, bitangentWS) < 0.0f) ? -1.0f : 1.0f;
+    surface.Frame.Tangent = normalize(tangentWS - surface.Geometry.Normal * dot(tangentWS, surface.Geometry.Normal));
+    surface.Frame.Bitangent = cross(surface.Geometry.Normal, surface.Frame.Tangent);
+    surface.Frame.Bitangent *= (dot(surface.Frame.Bitangent, bitangentWS) < 0.0f) ? -1.0f : 1.0f;
 
     // Distance-based absorption via Beer-Lambert law instead of flat surface tint.
     static const float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0;
     float3 waterColor = saturate(water.ShallowColor.rgb);
-    surface.VolumeAbsorption = -log(max(waterColor, 1e-4)) / WATER_ABSORPTION_REFERENCE_DEPTH * Raytracing.WaterAbsorptionScale;
-    surface.TransmissionColor = float3(1.0f, 1.0f, 1.0f);
-    surface.SpecTrans = 1.0f;
+    surface.Material.VolumeAbsorption = -log(max(waterColor, 1e-4)) / WATER_ABSORPTION_REFERENCE_DEPTH * Raytracing.WaterAbsorptionScale;
+    surface.Material.TransmissionColor = float3(1.0f, 1.0f, 1.0f);
+    surface.Material.SpecTrans = 1.0f;
 }
 
 #endif // WATER_MATERIAL_FUNC_HLSL

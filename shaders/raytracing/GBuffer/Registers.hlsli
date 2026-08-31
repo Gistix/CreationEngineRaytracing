@@ -19,7 +19,13 @@ ConstantBuffer<FeatureData>                 Features                    : regist
 RaytracingAccelerationStructure             Scene                       : register(t0);
 StructuredBuffer<Instance>                  Instances                   : register(t1);
 StructuredBuffer<Mesh>                      Meshes                      : register(t2);
-StructuredBuffer<Transform>             Transforms                  : register(t3);
+StructuredBuffer<Transform>                 Transforms                  : register(t3);
+Texture2D<float4>                           WaterFlowMap                : register(t4);
+Texture2D<float4>                           WaterDisplacementMap        : register(t5);
+Texture2D<float4>                           SkinDetailNormal            : register(t6);
+Texture2D<float4>                           ProjNoiseMap                : register(t7);
+ByteAddressBuffer                           MeshSlotRemap               : register(t19);
+ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);

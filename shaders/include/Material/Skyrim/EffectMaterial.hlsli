@@ -12,7 +12,7 @@
 void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in Mesh mesh, Properties props)
 {
     EffectMaterialData effect = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
-    const float mipLevel = surface.MipLevel;
+    const float mipLevel = surface.Geometry.MipLevel;
     
     Texture2D baseTexture = Textures[NonUniformResourceIndex(effect.SourceTexture)];
 
@@ -45,8 +45,8 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
         baseColor = baseTexColor * baseColorMul;
     }
 
-    surface.Albedo = 0;
-    surface.Emissive = EffectToLinear(baseColor.xyz) * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
+    surface.Material.Albedo = 0;
+    surface.Material.Emissive = EffectToLinear(baseColor.xyz) * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
 }
 
 #endif // EFFECT_MATERIAL_FUNC_HLSL

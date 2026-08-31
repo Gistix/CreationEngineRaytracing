@@ -19,7 +19,7 @@
 void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh, float3 viewDir, float dist)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-    float mipLevel = surface.MipLevel;
+    float mipLevel = surface.Geometry.MipLevel;
 
     uint16_t diffTex0, diffTex1, diffTex2, diffTex3, diffTex4, diffTex5;
     uint16_t normTex0, normTex1, normTex2, normTex3, normTex4, normTex5;
@@ -202,10 +202,10 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
         rmaos += BlendLandTexture(rmaosTex4, texCoord0, landBlend1.x, mipLevel) * float4(roughness4, 1.0f, 1.0f, specular4);
         rmaos += BlendLandTexture(rmaosTex5, texCoord0, landBlend1.y, mipLevel) * float4(roughness5, 1.0f, 1.0f, specular5);
 
-        surface.Roughness = saturate(rmaos.x);
-        surface.Metallic = saturate(rmaos.y);
-        surface.AO = rmaos.z;
-        surface.F0 = rmaos.w;
+        surface.Material.Roughness = saturate(rmaos.x);
+        surface.Material.Metallic = saturate(rmaos.y);
+        surface.Material.AO = rmaos.z;
+        surface.Material.F0 = rmaos.w;
     }
     else if (material.Type == Type::Lighting)
     {
@@ -221,23 +221,23 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
 
         float roughnessFromSpecularTexture = pow(1.0f - specularStrength, 2);
 
-        surface.Roughness = lerp(roughnessFromSpecularTexture, roughnessFromShininess, specularStrength);
-        surface.F0 = clamp(0.08f * specularColor * material.SpecularColorScale, 0.02f, 0.08f);
+        surface.Material.Roughness = lerp(roughnessFromSpecularTexture, roughnessFromShininess, specularStrength);
+        surface.Material.F0 = clamp(0.08f * specularColor * material.SpecularColorScale, 0.02f, 0.08f);
     }
 
-    surface.Albedo = blendedLand.rgb;
+    surface.Material.Albedo = blendedLand.rgb;
 
     NormalMap(
         blendedNormal.xyz,
         normalWS, tangentWS, bitangentWS,
-        surface.Normal, surface.Tangent, surface.Bitangent
+        surface.Geometry.Normal, surface.Frame.Tangent, surface.Frame.Bitangent
     );
 
     {
         Wetness::WetnessParams wetnessParams = Wetness::ComputeWetness(
-            surface.Position,
+            surface.Geometry.Position,
             normalWS,
-            surface.Normal,
+            surface.Geometry.Normal,
             Camera.Position,
             Camera.WaterData,
             Features.WetnessEffects,

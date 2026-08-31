@@ -95,7 +95,7 @@ void Main()
     Instance instance;
     LightingMaterialData material;
 
-    Surface surface = SurfaceMaker::make(worldPosition, payload, ray.Direction, rayCone, instance, material);
+    Surface surface = SurfaceMaker::make(worldPosition, payload, ray.Direction, rayCone, instance, material, true);
 
     float3 viewPos = viewDir * payload.hitDistance;    
     
@@ -113,7 +113,7 @@ void Main()
     
     Depth[idx] = viewPos.z;
     MotionVectors[idx] = motion * float3(0.5f * Camera.RenderSize.x, -0.5f * Camera.RenderSize.y, 1.0f);    
-    Albedo[idx] = float4(surface.Albedo, 1.0f);   
-    NormalRoughness[idx] = float4(surface.Normal * 0.5f + 0.5f, surface.Roughness);   
-    EmissiveMetallic[idx] = float4(surface.Emissive, surface.Metallic);      
+    Albedo[idx] = float4(surface.Material.Albedo, 1.0f);   
+    NormalRoughness[idx] = float4(surface.Geometry.Normal * 0.5f + 0.5f, surface.Material.Roughness);   
+    EmissiveMetallic[idx] = float4(surface.Material.Emissive, surface.Material.Metallic);      
 }

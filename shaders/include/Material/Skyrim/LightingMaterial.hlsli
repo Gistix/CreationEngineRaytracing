@@ -27,7 +27,7 @@
 void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, Properties props, float4 boneRotation, float3 viewDir, float dist)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-    float mipLevel = surface.MipLevel;
+    float mipLevel = surface.Geometry.MipLevel;
 
     const Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
 
@@ -119,24 +119,24 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         
         if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
         {
-            surface.Normal = RotateByQuaternion(normal, boneRotation);
-            CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
+            surface.Geometry.Normal = RotateByQuaternion(normal, boneRotation);
+            CreateOrthonormalBasis(surface.Geometry.Normal, surface.Frame.Tangent, surface.Frame.Bitangent);
         }
         else
         {
-            surface.Normal = normal;
+            surface.Geometry.Normal = normal;
         }
         
         // Use shading values since the geometry ones aren't available
-        surface.GeomNormal = surface.Normal;
-        surface.GeomTangent = surface.Tangent;
+        surface.Geometry.GeomNormal = surface.Geometry.Normal;
+        surface.Frame.GeomTangent = surface.Frame.Tangent;
     }
     else
     {
         NormalMap(
             normal,
             normalWS, tangentWS, bitangentWS,
-            surface.Normal, surface.Tangent, surface.Bitangent
+            surface.Geometry.Normal, surface.Frame.Tangent, surface.Frame.Bitangent
         );
     }
 
@@ -165,12 +165,12 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             windowAlpha = emissive;
         }
 
-        surface.Albedo = albedo.rgb * vertexColor.rgb;
-        surface.Emissive = emissive * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
-        surface.Roughness = saturate(rmaos.x * pbr.RoughnessScale);
-        surface.Metallic = saturate(rmaos.y);
-        surface.AO = rmaos.z;
-        surface.F0 = pbr.SpecularLevel * rmaos.w;
+        surface.Material.Albedo = albedo.rgb * vertexColor.rgb;
+        surface.Material.Emissive = emissive * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+        surface.Material.Roughness = saturate(rmaos.x * pbr.RoughnessScale);
+        surface.Material.Metallic = saturate(rmaos.y);
+        surface.Material.AO = rmaos.z;
+        surface.Material.F0 = pbr.SpecularLevel * rmaos.w;
 
         if (pbr.PBRFlags & PBR::Flags::Subsurface)
         {
@@ -178,13 +178,13 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
 
             float4 subsurfaceColor = subsurfaceTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
             float thickness = subsurfaceColor.a * pbr.FeatureScalar;
-            surface.TransmissionColor = surface.Albedo;
-            surface.DiffTrans = 0.5f;
+            surface.Material.TransmissionColor = surface.Material.Albedo;
+            surface.Material.DiffTrans = 0.5f;
 
             if (!(props.ShaderFlags & ShaderFlags::kTwoSided))
             {
                 surface.SubsurfaceData.ScatteringColor = subsurfaceColor.rgb * pbr.FeatureColor.rgb;
-                surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+                surface.SubsurfaceData.TransmissionColor = surface.Material.Albedo;
 
                 surface.SubsurfaceData.Scale = 40.0f;
                 surface.SubsurfaceData.Anisotropy = 0.0f;
@@ -197,31 +197,31 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (pbr.PBRFlags & PBR::Flags::TwoLayer)
         {
             half4 coatColorParam = pbr.FeatureColor;
-            surface.CoatColor = coatColorParam.rgb;
-            surface.CoatStrength = coatColorParam.a;
-            surface.CoatRoughness = pbr.FeatureScalar;
-            surface.CoatF0 = float3(0.04, 0.04, 0.04);
+            surface.Coat.Color = coatColorParam.rgb;
+            surface.Coat.Strength = coatColorParam.a;
+            surface.Coat.Roughness = pbr.FeatureScalar;
+            surface.Coat.F0 = float3(0.04, 0.04, 0.04);
 
             if (pbr.PBRFlags & PBR::Flags::HasFeatureTexture0)
             {
                 Texture2D coatColorTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture0)];
                 float4 sampledCoat = coatColorTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-                surface.CoatColor *= sampledCoat.rgb;
-                surface.CoatStrength *= sampledCoat.a;
+                surface.Coat.Color *= sampledCoat.rgb;
+                surface.Coat.Strength *= sampledCoat.a;
             }
 
             if (pbr.PBRFlags & PBR::Flags::HasFeatureTexture1)
             {
                 Texture2D coatNormalTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture1)];
                 float4 sampledCoatNormal = coatNormalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-                surface.CoatRoughness *= sampledCoatNormal.a;
+                surface.Coat.Roughness *= sampledCoatNormal.a;
 
                 if (pbr.PBRFlags & PBR::Flags::CoatNormal)
                 {
                     NormalMap(
                         sampledCoatNormal.xyz,
                         normalWS, tangentWS, bitangentWS,
-                        surface.CoatNormal, surface.CoatTangent, surface.CoatBitangent
+                        surface.Coat.Normal, surface.Coat.Tangent, surface.Coat.Bitangent
                     );
                 }
             }
@@ -231,15 +231,15 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (pbr.PBRFlags & PBR::Flags::Fuzz)
         {
             half4 fuzzColorWeight = pbr.FeatureColor;
-            surface.FuzzColor = fuzzColorWeight.rgb;
-            surface.FuzzWeight = fuzzColorWeight.a;
+            surface.Fuzz.Color = fuzzColorWeight.rgb;
+            surface.Fuzz.Weight = fuzzColorWeight.a;
 
             if (pbr.PBRFlags & PBR::Flags::HasFeatureTexture1)
             {
                 Texture2D fuzzTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture1)];
                 float4 sampledFuzz = fuzzTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-                surface.FuzzColor *= sampledFuzz.rgb;
-                surface.FuzzWeight *= sampledFuzz.a;
+                surface.Fuzz.Color *= sampledFuzz.rgb;
+                surface.Fuzz.Weight *= sampledFuzz.a;
             }
         }
 
@@ -248,19 +248,19 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (pbr.PBRFlags & PBR::Flags::Glint)
         {
             half4 glintParams = pbr.GlintParameters;
-            surface.GlintScreenSpaceScale = glintParams.x;
-            surface.GlintLogMicrofacetDensity = glintParams.y;
-            surface.GlintMicrofacetRoughness = glintParams.z;
-            surface.GlintDensityRandomization = glintParams.w;
-            surface.GlintTexCoord = texCoord0;
+            surface.Glint.ScreenSpaceScale = glintParams.x;
+            surface.Glint.LogMicrofacetDensity = glintParams.y;
+            surface.Glint.MicrofacetRoughness = glintParams.z;
+            surface.Glint.DensityRandomization = glintParams.w;
+            surface.Glint.TexCoord = texCoord0;
         }
 #endif
 
         // OpenPBR 3.11: Emission sits below the coat and is absorbed.
         // At normal incidence, coat_color = T^2 gives the round-trip absorption.
-        if (surface.CoatStrength > 0)
+        if (surface.Coat.Strength > 0)
         {
-            surface.Emissive *= lerp(float3(1, 1, 1), surface.CoatColor, surface.CoatStrength);
+            surface.Material.Emissive *= lerp(float3(1, 1, 1), surface.Coat.Color, surface.Coat.Strength);
         }
     }
     else if (material.Type == Type::Lighting)
@@ -285,13 +285,13 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             albedo = pow(albedo, Features.LODBlending.LODObjectGamma) * Features.LODBlending.LODObjectBrightness;
         }
         
-        surface.Albedo = VanillaDiffuseColor(albedo);
+        surface.Material.Albedo = VanillaDiffuseColor(albedo);
 
         [branch]
         if (material.Feature == Feature::kHairTint)
         {
             HairTintMaterialDataExtra hair = Materials[0].Load<HairTintMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            surface.Albedo *= VanillaDiffuseColor(hair.TintColor);
+            surface.Material.Albedo *= VanillaDiffuseColor(hair.TintColor);
         }
     
         [branch]
@@ -316,8 +316,8 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             float roughnessFromShininess = ShininessToRoughness(material.SpecularPower);
             float roughnessFromSpecularTexture = pow(1.0f - specularStrength, 2);
 
-            surface.Roughness = lerp(roughnessFromSpecularTexture, roughnessFromShininess, specularStrength);
-            surface.F0 = clamp(0.08f * specularColor * material.SpecularColorScale, 0.02f, 0.08f);
+            surface.Material.Roughness = lerp(roughnessFromSpecularTexture, roughnessFromShininess, specularStrength);
+            surface.Material.F0 = clamp(0.08f * specularColor * material.SpecularColorScale, 0.02f, 0.08f);
         }
          
         [branch]
@@ -356,8 +356,8 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
              
             if (complexMaterial)
             {
-                surface.Roughness = 1.0f - envMask.y;
-                surface.Metallic = envMask.z;
+                surface.Material.Roughness = 1.0f - envMask.y;
+                surface.Material.Metallic = envMask.z;
             }
             else
             {
@@ -374,21 +374,21 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
 
                     if (envColorBase.a < 1.0f)
                     {
-                        surface.F0 = lerp(surface.F0, ColorToLinear(envColorBase.rgb), envMask.r);
-                        surface.Roughness = lerp(surface.Roughness, envColorBase.a, envMask.r);
+                        surface.Material.F0 = lerp(surface.Material.F0, ColorToLinear(envColorBase.rgb), envMask.r);
+                        surface.Material.Roughness = lerp(surface.Material.Roughness, envColorBase.a, envMask.r);
                     }
                     else
                     {
-                        surface.F0 = lerp(surface.F0, float3(1.0, 1.0, 1.0), envMask.r);
-                        surface.Roughness = lerp(surface.Roughness, 1.0 / 7.0, envMask.r);
+                        surface.Material.F0 = lerp(surface.Material.F0, float3(1.0, 1.0, 1.0), envMask.r);
+                        surface.Material.Roughness = lerp(surface.Material.Roughness, 1.0 / 7.0, envMask.r);
                     }
                 }
                 else
                 {
                     // Static cubemap: use +X face average color as metallic tint
                     float3 faceAvg = envCubemap.SampleLevel(DefaultSampler, float3(1.0, 0.0, 0.0), 15).rgb;
-                    surface.F0 = lerp(surface.F0, saturate(ColorToLinear(faceAvg)), envMask.r);
-                    surface.Roughness = lerp(surface.Roughness, 0.0f, envMask.r);
+                    surface.Material.F0 = lerp(surface.Material.F0, saturate(ColorToLinear(faceAvg)), envMask.r);
+                    surface.Material.Roughness = lerp(surface.Material.Roughness, 0.0f, envMask.r);
                 }
             }
         }
@@ -404,18 +404,18 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             {
                 windowAlpha = glow;
             }
-            surface.Emissive = GlowToLinear(glow) * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+            surface.Material.Emissive = GlowToLinear(glow) * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         }
         else
         {
-            surface.Emissive = surface.Albedo * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+            surface.Material.Emissive = surface.Material.Albedo * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         }
 
         [branch]
         if (material.Feature == Feature::kFaceGen)
         {
             FacegenMaterialDataExtra facegen = Materials[0].Load<FacegenMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Material.Albedo);
             
             Texture2D detailTexture = Textures[NonUniformResourceIndex(facegen.DetailTexture)];
             float3 detailColor = detailTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
@@ -425,30 +425,30 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
             tintColor = tintColor * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor);
+            surface.Material.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor);
                 
         }
         else if (material.Feature == Feature::kSkinTint)
         {
             FacegenTintMaterialDataExtra tintData = Materials[0].Load<FacegenTintMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
+            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Material.Albedo);
             
             float3 tintColor = tintData.TintColor * gammaAlbedo * 2.0f;
             tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor));
+            surface.Material.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor));
         }
         
         [branch]
         if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint)
         {
-            surface.F0 = 0.02776f;
-            surface.Metallic = 0.0f;
+            surface.Material.F0 = 0.02776f;
+            surface.Material.Metallic = 0.0f;
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
 
             // Typical skin values
             surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
-            surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+            surface.SubsurfaceData.TransmissionColor = surface.Material.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
 
             if (skinEnabled)
@@ -458,51 +458,51 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                 rfaosTexture.GetDimensions(rfaosDimensions.x, rfaosDimensions.y);
                 bool hasValidRFAOS = rfaosDimensions.x > 32 && rfaosDimensions.y > 32;
 
-                surface.Albedo *= SKINSETTINGS.skinParams2.w;
-                surface.Roughness = SKINSETTINGS.skinParams.x;
-                surface.F0 = SKINSETTINGS.skinParams2.zzz;
+                surface.Material.Albedo *= SKINSETTINGS.skinParams2.w;
+                surface.Material.Roughness = SKINSETTINGS.skinParams.x;
+                surface.Material.F0 = SKINSETTINGS.skinParams2.zzz;
 
                 // Skin coat layer (second specular lobe)
-                surface.CoatStrength = SKINSETTINGS.skinParams2.x;
-                surface.CoatRoughness = SKINSETTINGS.skinParams.y;
-                surface.CoatF0 = float3(0.04, 0.04, 0.04);
-                surface.CoatNormal = surface.Normal;
+                surface.Coat.Strength = SKINSETTINGS.skinParams2.x;
+                surface.Coat.Roughness = SKINSETTINGS.skinParams.y;
+                surface.Coat.F0 = float3(0.04, 0.04, 0.04);
+                surface.Coat.Normal = surface.Geometry.Normal;
 
                 if (hasValidRFAOS)
                 {
                     float4 rfaos = rfaosTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-                    surface.Roughness = rfaos.x * SKINSETTINGS.physicalParams.x;
-                    surface.CoatRoughness = rfaos.x * SKINSETTINGS.physicalParams.y;
-                    surface.F0 = 0.08 * rfaos.w * SKINSETTINGS.physicalParams.z;
-                    surface.AO = rfaos.z;
+                    surface.Material.Roughness = rfaos.x * SKINSETTINGS.physicalParams.x;
+                    surface.Coat.Roughness = rfaos.x * SKINSETTINGS.physicalParams.y;
+                    surface.Material.F0 = 0.08 * rfaos.w * SKINSETTINGS.physicalParams.z;
+                    surface.Material.AO = rfaos.z;
                 }
             }
             else
             {
-                surface.Roughness *= K_2_PI;
+                surface.Material.Roughness *= K_2_PI;
             }
         }
         else if (material.Feature == Feature::kEye)
         {
-            surface.Roughness = 0.2f;
-            surface.F0 = 0.02776f;
-            surface.Metallic = 0.0f;
+            surface.Material.Roughness = 0.2f;
+            surface.Material.F0 = 0.02776f;
+            surface.Material.Metallic = 0.0f;
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
             
             // Typical eye values
             surface.SubsurfaceData.ScatteringColor = float3(0.482f, 0.169f, 0.109f);
-            surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+            surface.SubsurfaceData.TransmissionColor = surface.Material.Albedo;
             surface.SubsurfaceData.Scale = 10.f;
 
-            surface.CoatStrength = 1.f;
-            surface.CoatRoughness = 0.0f;
-            surface.CoatF0 = 0.026f;
+            surface.Coat.Strength = 1.f;
+            surface.Coat.Roughness = 0.0f;
+            surface.Coat.F0 = 0.026f;
         }
         else if (props.ShaderFlags & ShaderFlags::kSoftLighting || props.ShaderFlags & ShaderFlags::kBackLighting)
         {
-            surface.TransmissionColor = surface.Albedo;
-            surface.DiffTrans = 0.5f;
+            surface.Material.TransmissionColor = surface.Material.Albedo;
+            surface.Material.DiffTrans = 0.5f;
             
             if (!(props.ShaderFlags & ShaderFlags::kTwoSided) && (props.ShaderFlags & ShaderFlags::kSoftLighting))
             {
@@ -511,7 +511,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
 
                 Texture2D scatterTexture = Textures[NonUniformResourceIndex(material.RimSoftLightingTexture)];
                 surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
-                surface.SubsurfaceData.TransmissionColor = surface.Albedo;
+                surface.SubsurfaceData.TransmissionColor = surface.Material.Albedo;
                 surface.SubsurfaceData.Scale = 1.f;
             }
         }
@@ -519,20 +519,20 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         [branch]
         if (props.ShaderFlags & ShaderFlags::kRefraction) // As glass
         {
-            surface.Albedo = float3(0.0f, 0.0f, 0.0f);
-            surface.Roughness = 0.0f;
-            surface.Emissive = float3(0.0f, 0.0f, 0.0f);
-            surface.F0 = 0.04f;
-            surface.Metallic = 0.0f;
-            surface.TransmissionColor = 1.0f;
-            surface.SpecTrans = 1.0f;
-            surface.IsThinSurface = true;
+            surface.Material.Albedo = float3(0.0f, 0.0f, 0.0f);
+            surface.Material.Roughness = 0.0f;
+            surface.Material.Emissive = float3(0.0f, 0.0f, 0.0f);
+            surface.Material.F0 = 0.04f;
+            surface.Material.Metallic = 0.0f;
+            surface.Material.TransmissionColor = 1.0f;
+            surface.Material.SpecTrans = 1.0f;
+            surface.Material.IsThinSurface = true;
             alpha = 0.0f;
         }
     }
     else
     {
-        surface.Albedo = float3(1.0f, 0.0f, 1.0f);
+        surface.Material.Albedo = float3(1.0f, 0.0f, 1.0f);
     }
 
     [branch]
@@ -542,8 +542,8 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         const float4 projectedUVParams2 = props.ProjectedUVParams2;
         const float4 projectedUVParams3 = props.ProjectedUVParams3;
             
-        float3 triWeights = Triplanar::GetWeights(surface.GeomNormal, surface.FaceNormal);
-        float projNoise = Triplanar::Sample(ProjNoiseMap, DefaultSampler, mipLevel, surface.Position, triWeights, projectedUVParams.z).x;
+        float3 triWeights = Triplanar::GetWeights(surface.Geometry.GeomNormal, surface.Geometry.FaceNormal);
+        float projNoise = Triplanar::Sample(ProjNoiseMap, DefaultSampler, mipLevel, surface.Geometry.Position, triWeights, projectedUVParams.z).x;
 
         float3 texProj = props.TextureProj.xyz;
              
@@ -553,7 +553,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         else
             vertexAlpha = vertexColor.a;
             
-        float projWeight = -projectedUVParams.x * projNoise + (dot(surface.Normal.xyz, texProj) * vertexAlpha - projectedUVParams.w);
+        float projWeight = -projectedUVParams.x * projNoise + (dot(surface.Geometry.Normal.xyz, texProj) * vertexAlpha - projectedUVParams.w);
             
         if (props.ShaderFlags & ShaderFlags::kHDLODObjects)
             projWeight += (-0.5 + vertexColor.a) * 2.5;
@@ -571,7 +571,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                 projBaseColor = pow(projBaseColor, Features.LODBlending.LODObjectSnowGamma) * Features.LODBlending.LODObjectSnowBrightness;
             }
             
-            surface.Albedo = lerp(surface.Albedo, projBaseColor, projWeight > 0 ? 1.0f : 0.0f);
+            surface.Material.Albedo = lerp(surface.Material.Albedo, projBaseColor, projWeight > 0 ? 1.0f : 0.0f);
         }
     }
     
@@ -580,18 +580,18 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     [branch]
     if (isWindows)
     {
-        surface.TransmissionColor = windowAlpha;
-        surface.Albedo *= 1.0f - windowAlpha;
-        surface.Emissive *= 0;
-        surface.SpecTrans = 1.0f;
+        surface.Material.TransmissionColor = windowAlpha;
+        surface.Material.Albedo *= 1.0f - windowAlpha;
+        surface.Material.Emissive *= 0;
+        surface.Material.SpecTrans = 1.0f;
     }
 
     // Hair flowmap processing
 #if HAIR_MODE
     [branch]
     if (material.Feature == Feature::kHairTint && HAIRSETTINGS.Enabled) {
-        surface.Roughness = 1.0f - saturate(HAIRSETTINGS.HairGlossiness * 0.01f);
-        surface.Albedo = saturate(surface.Albedo * HAIRSETTINGS.BaseColorMult);
+        surface.Material.Roughness = 1.0f - saturate(HAIRSETTINGS.HairGlossiness * 0.01f);
+        surface.Material.Albedo = saturate(surface.Material.Albedo * HAIRSETTINGS.BaseColorMult);
         [branch]
         if (props.ShaderFlags & ShaderFlags::kBackLighting) {
             Texture2D hairFlowMapTexture = Textures[NonUniformResourceIndex(material.SpecularBackLightingTexture)];
@@ -605,15 +605,15 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                 [branch]
                 if (sampledHairFlow2D.x > 0.0 || sampledHairFlow2D.y > 0.0) {
                     float3 sampledHairFlow = float3(sampledHairFlow2D * 2.0f - 1.0f, 0.0f);
-                    float3x3 tbn = float3x3(surface.Tangent, surface.Bitangent, surface.Normal);
+                    float3x3 tbn = float3x3(surface.Frame.Tangent, surface.Frame.Bitangent, surface.Geometry.Normal);
                     float3 hairRootDirection = normalize(mul(sampledHairFlow, tbn));
                         
                     // Re-orthogonalize T and B to N and the new hair root direction
-                    hairRootDirection = normalize(hairRootDirection - surface.Normal * dot(hairRootDirection, surface.Normal));
-                    surface.Bitangent = hairRootDirection;
+                    hairRootDirection = normalize(hairRootDirection - surface.Geometry.Normal * dot(hairRootDirection, surface.Geometry.Normal));
+                    surface.Frame.Bitangent = hairRootDirection;
                         
-                    float hairHandedness = (dot(cross(surface.Normal, surface.Tangent), surface.Bitangent) < 0.0f) ? -1.0f : 1.0f;
-                    surface.Tangent = normalize(cross(surface.Bitangent, surface.Normal)) * hairHandedness;
+                    float hairHandedness = (dot(cross(surface.Geometry.Normal, surface.Frame.Tangent), surface.Frame.Bitangent) < 0.0f) ? -1.0f : 1.0f;
+                    surface.Frame.Tangent = normalize(cross(surface.Frame.Bitangent, surface.Geometry.Normal)) * hairHandedness;
                 }
             }
         }
@@ -626,9 +626,9 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     {
         bool isSkinned = (material.Feature == Feature::kFaceGen || material.Feature == Feature::kHairTint);
         Wetness::WetnessParams wetnessParams = Wetness::ComputeWetness(
-            surface.Position,
+            surface.Geometry.Position,
             normalWS,
-            surface.Normal,
+            surface.Geometry.Normal,
             Camera.Position,
             Camera.WaterData,
             Features.WetnessEffects,

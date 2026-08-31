@@ -152,10 +152,8 @@ void Main()
 
     AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);    
 
-    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);     
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Geometry.Normal, sourceBRDFContext.ViewDirection, true);     
 
-
-    
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
 #ifdef SUBSURFACE_SCATTERING
@@ -238,7 +236,7 @@ void Main()
         {
             BSDFSample bsdfSample;
                               
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
+            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.Geometry.FaceNormal) >= 0.0f ? surface.Geometry.FaceNormal : -surface.Geometry.FaceNormal;            
        
             if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed))
                 direction = bsdfSample.wo;
@@ -256,14 +254,14 @@ void Main()
             
             bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
 
-            throughput *= hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : surface.AO;
+            throughput *= hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : surface.Material.AO;
 
             // Track water volume entry/exit on transmission
-            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
+            if (hasTransmission && any(surface.Material.VolumeAbsorption > 0.0f))
             {
                 // isEnter (front face) + transmission = entering volume
                 insideWaterVolume = isEnter;
-                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
+                waterVolumeAbsorption = insideWaterVolume ? surface.Material.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
 #if defined(RAW_RADIANCE) && !defined(NRD)
@@ -274,8 +272,8 @@ void Main()
             if (demodulatedThroughput) {
                 originalThroughput = throughput * bsdfSample.weight;
 
-                float3 diffuseWeightDemodulated = all(surface.DiffuseAlbedo > 0.f)
-                    ? brdfWeight.diffuse / max(surface.DiffuseAlbedo, 1e-4f)
+                float3 diffuseWeightDemodulated = all(surface.Material.DiffuseAlbedo > 0.f)
+                    ? brdfWeight.diffuse / max(surface.Material.DiffuseAlbedo, 1e-4f)
                     : brdfWeight.diffuse;            
         
                 throughput *= diffuseWeightDemodulated + brdfWeight.specular + brdfWeight.transmission;                      
@@ -326,17 +324,17 @@ void Main()
 #endif
             
 #if defined(SHARC) && (SHARC_ENABLE_SH_ENCODING || !SHARC_UPDATE)
-            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
+            materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Material.Roughness;
 #endif
             // First bounce comes from GBuffer
             if (j == 0)
-                ray.Origin = OffsetRayAlt(surface.Position, faceNormalOriented, hasTransmission);
+                ray.Origin = OffsetRayAlt(surface.Geometry.Position, faceNormalOriented, hasTransmission);
             else
             {
 #if USE_SIA_INTERPOLATION
-                ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+                ray.Origin = OffsetRaySIA(surface.Geometry.Position, faceNormalOriented, surface.Geometry.SIAOffset, hasTransmission);
 #else
-                ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+                ray.Origin = OffsetRay(surface.Geometry.Position, faceNormalOriented, surface.Geometry.PositionError, hasTransmission);
 #endif
             }
 
@@ -377,15 +375,20 @@ void Main()
 #if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
-#endif                      
-            
+#endif            
+
             float3 localPosition = ray.Origin + direction * payload.hitDistance;
 
             surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, material, false);
 
+#if defined(SHARC) && !SHARC_UPDATE
+            if (material.Type != Type::Lighting && material.Type != Type::TruePBR)
+                break;
+#endif
+
 #if defined(SHARC)
-            sharcHitData.positionWorld = surface.Position;
-            sharcHitData.normalWorld = surface.GeomNormal;
+            sharcHitData.positionWorld = surface.Geometry.Position;
+            sharcHitData.normalWorld = surface.Geometry.GeomNormal;
 
 #   if SHARC_ENABLE_SH_ENCODING
             sharcHitData.radianceDirectionWorld = -direction;
@@ -393,11 +396,11 @@ void Main()
 #   endif // SHARC_ENABLE_SH_ENCODING
 
 #   if SHARC_SEPARATE_EMISSIVE
-            sharcHitData.emissive = surface.Emissive;
+            sharcHitData.emissive = surface.Material.Emissive;
 #   endif // SHARC_SEPARATE_EMISSIVE
 
 #   if !SHARC_UPDATE
-            uint gridLevel = HashGridGetLevel(surface.Position, sharcParameters.hashGridParameters);
+            uint gridLevel = HashGridGetLevel(surface.Geometry.Position, sharcParameters.hashGridParameters);
             float voxelSize = HashGridGetVoxelSize(gridLevel, sharcParameters.hashGridParameters);
             bool isValidHit = payload.hitDistance > voxelSize * sqrt(3.0f);
             
@@ -418,14 +421,14 @@ void Main()
 #endif // SHARC  
             
             brdfContext = BRDFContext::make(surface, -direction);
-            isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+            isEnter = dot(surface.Geometry.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
             if (!isEnter) {
                 surface.FlipNormal();
-                brdfContext.NdotV = saturate(dot(surface.Normal, brdfContext.ViewDirection));
+                brdfContext.NdotV = saturate(dot(surface.Geometry.Normal, brdfContext.ViewDirection));
             }
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
+            bsdf = StandardBSDF::make(surface, surface.Geometry.Normal, brdfContext.ViewDirection, isEnter);
 
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
@@ -441,8 +444,8 @@ void Main()
                     isSssPath = true;
                     // Specular uses the standard path with diffuse suppressed
                     Surface specSurface = surface;
-                    specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
+                    specSurface.Material.DiffuseAlbedo = 0;
+                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Geometry.Normal, brdfContext.ViewDirection, isEnter);
                     directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
                 }
                 else
@@ -468,7 +471,7 @@ void Main()
 
             throughput = float3(1.0f, 1.0f, 1.0f);
 #else
-            sampleRadiance += surface.Emissive * throughput;
+            sampleRadiance += surface.Material.Emissive * throughput;
 #endif
             
 #   if defined(RAW_RADIANCE) && !defined(NRD)

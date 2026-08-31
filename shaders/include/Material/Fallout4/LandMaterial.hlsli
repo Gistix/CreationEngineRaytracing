@@ -14,7 +14,7 @@
 
 void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh, float3 viewDir, float dist)
 {
-    const float mipLevel = surface.MipLevel;
+    const float mipLevel = surface.Geometry.MipLevel;
     
     LandscapeMaterialData material = Materials[0].Load<LandscapeMaterialData>(mesh.GetMaterialOffset());
 
@@ -56,16 +56,16 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
         BlendLandTexture(smoothSpecTex2, texCoord0, landBlend0.z, mipLevel).y +
         BlendLandTexture(smoothSpecTex3, texCoord0, landBlend0.w, mipLevel).y;
 
-    surface.Albedo = blendedAlbedo;
+    surface.Material.Albedo = blendedAlbedo;
      
     NormalMap(
         blendedNormal.xy,
         normalWS, tangentWS, bitangentWS,
-        surface.Normal, surface.Tangent, surface.Bitangent
+        surface.Geometry.Normal, surface.Frame.Tangent, surface.Frame.Bitangent
     );
     
-    surface.Roughness = 1.0f - blendedSmoothness;
-    surface.Metallic = 0.0f;
+    surface.Material.Roughness = 1.0f - blendedSmoothness;
+    surface.Material.Metallic = 0.0f;
 }
 
 #endif // LAND_MATERIAL_FUNC_HLSL

@@ -46,9 +46,9 @@ struct HairFarFieldBCSDF
 
     void __init(float3 wi, Surface surface)
     {
-        hairMaterialData.baseColor = surface.DiffuseAlbedo;
-        hairMaterialData.longitudinalRoughness = surface.Roughness;
-        hairMaterialData.azimuthalRoughness = surface.Roughness;
+        hairMaterialData.baseColor = surface.Material.DiffuseAlbedo;
+        hairMaterialData.longitudinalRoughness = surface.Material.Roughness;
+        hairMaterialData.azimuthalRoughness = surface.Material.Roughness;
 
         hairMaterialData.ior = 1.55f; // Typical value for human hair
         hairMaterialData.eta = 1.0f / 1.55f;
@@ -59,8 +59,8 @@ struct HairFarFieldBCSDF
         hairMaterialData.melaninRedness = 0.5f;
         hairMaterialData.cuticleAngleInDegrees = 3.0f;
 
-        hairInteractionSurface = CreateHairInteractionSurface(wi, surface.Tangent, surface.Bitangent, surface.Normal);
-        hairMaterialInteractionBcsdf = CreateHairMaterialInteractionBcsdf(hairMaterialData, 0.f, 0.f, surface.Roughness);
+        hairInteractionSurface = CreateHairInteractionSurface(wi, surface.Frame.Tangent, surface.Frame.Bitangent, surface.Geometry.Normal);
+        hairMaterialInteractionBcsdf = CreateHairMaterialInteractionBcsdf(hairMaterialData, 0.f, 0.f, surface.Material.Roughness);
     }
 
     static HairFarFieldBCSDF make(float3 wi, Surface surface)

@@ -70,13 +70,13 @@ float EvalSkyOcclusion(Texture2D<float4> SkyHemisphere, float3 dir, float opacit
 
 float3 EvalDiffuse(in float3 l, in Surface surface, in BRDFContext brdfContext)
 {
-    float NdotL = saturate(dot(surface.Normal, l));
+    float NdotL = saturate(dot(surface.Geometry.Normal, l));
 
     if (NdotL <= 0.0f)
         return float3(0.0f, 0.0f, 0.0f);
 
     // Diffuse is meant to be very light (and used with DDGI), so I don't see much point in using a different diffuse or shading model here
-    return surface.DiffuseAlbedo * NdotL * BRDF::Diffuse_Lambert();
+    return surface.Material.DiffuseAlbedo * NdotL * BRDF::Diffuse_Lambert();
 }
 
 float3 EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf)
@@ -84,7 +84,7 @@ float3 EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface 
 #if LIGHTEVAL_MODE == LIGHTEVAL_MODE_DIFFUSE
     return EvalDiffuse(l, surface, brdfContext);
 #else
-    float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
+    float shadowTerminator = dot(surface.Geometry.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Geometry.Normal, surface.Geometry.GeomNormal) : 1.0f;
     float4 bsdfEval = bsdf.Eval(brdfContext, feature, surface, l) * shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingScaleCompensation);
     return bsdfEval.xyz;
 #endif
@@ -96,7 +96,7 @@ void EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface su
     outDiffuse = EvalDiffuse(l, surface, brdfContext);
     outSpecular = 0.0f;
 #else
-    float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
+    float shadowTerminator = dot(surface.Geometry.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Geometry.Normal, surface.Geometry.GeomNormal) : 1.0f;
     float scale = shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingScaleCompensation);
     bsdf.EvalDiffuseAndSpecular(brdfContext, feature, surface, l, outDiffuse, outSpecular);
     outDiffuse *= scale;
@@ -213,7 +213,7 @@ float GetLightAngle(Light light, float dist)
 
 float GetLightSampleWeight(Surface surface, Light light)
 {
-    float3 l = (light.Position - surface.Position);
+    float3 l = (light.Position - surface.Geometry.Position);
     float dist = length(l) * GAME_UNIT_TO_M;
     float3 lr = l / dist;
     float lightSourceAngle = 0.0f;
@@ -305,7 +305,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
     const bool isLinear = (light.Flags & LightFlags::LinearLight) != 0;
     light.Color = (half3)PointLightToLinear(light.Color, isLinear);
 
-    lr = (light.Position - surface.Position);
+    lr = (light.Position - surface.Geometry.Position);
     dist = length(lr);
     lr /= dist;
 
@@ -320,39 +320,6 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #else
     return lightID;
 #endif
-}
-
-float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
-{
-    float3 lightIrradiance;
-    float3 lr;
-    float dist;
-    
-    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
-
-    if (lightIndex < 0)
-        return 0.0f;
-    
-    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
-
-    [branch]
-    if (any(direct > MIN_DIFFUSE_SHADOW))
-    {
-        
-#if USE_LIGHT_TLAS    
-#   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
-#else
-#   define LIGHT_TLAS Scene     
-#endif
-        
-        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
-    }
-    else
-    {
-        direct = 0.0f;
-    }
-
-    return direct;
 }
 
 void EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed, out float3 outDiffuse, out float3 outSpecular)
@@ -374,8 +341,10 @@ void EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, i
     outDiffuse *= lightIrradiance;
     outSpecular *= lightIrradiance;
 
+    float3 total = outDiffuse + outSpecular;
+
     [branch]
-    if (any((outDiffuse + outSpecular) > MIN_DIFFUSE_SHADOW))
+    if (any(total > MIN_DIFFUSE_SHADOW))
     {
 #if USE_LIGHT_TLAS    
 #   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
@@ -393,25 +362,56 @@ void EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, i
     }
 }
 
+float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
+{
+    float3 lightIrradiance;
+    float3 lr;
+    float dist;
+    
+    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
+
+    if (lightIndex < 0)
+        return float3(0, 0, 0);
+
+    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
+
+    [branch]
+    if (any(direct > MIN_DIFFUSE_SHADOW))
+    {
+#if USE_LIGHT_TLAS    
+#   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
+#else
+#   define LIGHT_TLAS Scene     
+#endif
+        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
+    }
+    else
+    {
+        direct = 0.0f;
+    }
+
+    return direct;
+}
+
 // Evaluate analytical lights for delta lobes specifically.
 // For delta (perfect mirror/glass) surfaces, the standard bsdf.Eval() returns 0 for any light direction.
 // Instead, we use EvalDeltaLobes to get the exact reflection/refraction directions and check whether
-// each delta direction falls within a light source's solid angle. If so, we contribute the delta lobe's
-// throughput multiplied by the light irradiance. This correctly handles sun glints, point light
-// reflections in mirrors, etc.
-float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance,
-                              in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
+// each delta ray falls within the angular extent of the sun or any analytical point light.
+float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
     DeltaLobe deltaLobes[cMaxDeltaLobes];
     int deltaLobeCount;
     float nonDeltaPart;
     bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
 
+    if (deltaLobeCount == 0)
+        return float3(0.0f, 0.0f, 0.0f);
+
     float3 totalRadiance = 0.0f;
 
     for (int i = 0; i < deltaLobeCount; i++)
     {
-        if (deltaLobes[i].probability <= 0.0f)
+        if (!any(deltaLobes[i].thp > 0.0f))
             continue;
 
         float3 deltaDir = deltaLobes[i].dir;
@@ -457,7 +457,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
                 float lightSourceAngle = GetLightAngle(light, dist * GAME_UNIT_TO_M);
                 
                 // Check if delta direction is within the light's angular extent
-                float3 dirToLight = normalize(light.Position - surface.Position);
+                float3 dirToLight = normalize(light.Position - surface.Geometry.Position);
                 float cosAngle = cos(lightSourceAngle);
                 float cosDelta = dot(deltaDir, dirToLight);
                 
@@ -570,20 +570,20 @@ bool ComputeTangentSpace(inout Surface surface, const bool ignoreTangent)
     //  - It is not parallel to the normal. This can occur due to normal mapping or bad assets.
     //  - It does not have NaNs. These will propagate and trigger the fallback.
 
-    float NdotT = dot(surface.GeomTangent, surface.Normal);
+    float NdotT = dot((float3)surface.Frame.GeomTangent, (float3)surface.Geometry.Normal);
     bool nonParallel = abs(NdotT) < 0.9999f;
-    bool nonZero = dot(surface.GeomTangent, surface.GeomTangent) > 0.f;
+    bool nonZero = dot((float3)surface.Frame.GeomTangent, (float3)surface.Frame.GeomTangent) > 0.f;
 
     bool valid = nonZero && nonParallel;
     if (!ignoreTangent && valid)
     {
-        surface.Tangent = normalize(surface.GeomTangent - surface.Normal * NdotT);
-        surface.Bitangent = cross(surface.Normal, surface.Tangent);
+        surface.Frame.Tangent = (half3)normalize((float3)surface.Frame.GeomTangent - (float3)surface.Geometry.Normal * NdotT);
+        surface.Frame.Bitangent = (half3)cross((float3)surface.Geometry.Normal, (float3)surface.Frame.Tangent);
     }
     else
     {
-        surface.Tangent = perp_stark(surface.Normal);
-        surface.Bitangent = cross(surface.Normal, surface.Tangent);
+        surface.Frame.Tangent = (half3)perp_stark((float3)surface.Geometry.Normal);
+        surface.Frame.Bitangent = (half3)cross((float3)surface.Geometry.Normal, (float3)surface.Frame.Tangent);
     }
 
     return valid;
@@ -591,9 +591,9 @@ bool ComputeTangentSpace(inout Surface surface, const bool ignoreTangent)
 
 void AdjustShadingNormal(inout Surface surface, BRDFContext brdfContext, uniform bool recomputeTangentSpace, const bool ignoreTangent)
 {
-    float3 Ng = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.f ? surface.FaceNormal : -surface.FaceNormal;
-    float signN = dot(surface.Normal, Ng) >= 0.f ? 1.f : -1.f;
-    float3 Ns = signN * surface.Normal;
+    float3 Ng = dot(brdfContext.ViewDirection, (float3)surface.Geometry.FaceNormal) >= 0.f ? (float3)surface.Geometry.FaceNormal : -(float3)surface.Geometry.FaceNormal;
+    float signN = dot((float3)surface.Geometry.Normal, Ng) >= 0.f ? 1.f : -1.f;
+    float3 Ns = signN * (float3)surface.Geometry.Normal;
 
     // Blend the shading normal towards the geometric normal at grazing angles.
     // This is to avoid the view vector from becoming back-facing.
@@ -602,7 +602,7 @@ void AdjustShadingNormal(inout Surface surface, BRDFContext brdfContext, uniform
     if (cosTheta <= kCosThetaThreshold)
     {
         float t = saturate(cosTheta * (1.f / kCosThetaThreshold));
-        surface.Normal = signN * normalize(lerp(Ng, Ns, t));
+        surface.Geometry.Normal = (half3)(signN * normalize(lerp(Ng, Ns, t)));
     }
     if (cosTheta <= kCosThetaThreshold || recomputeTangentSpace)
         ComputeTangentSpace(surface, ignoreTangent);
