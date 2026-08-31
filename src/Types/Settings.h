@@ -316,3 +316,9 @@ struct Settings
 	ReSTIRGISettings ReSTIRGI;
 	DebugSettings DebugSettings;
 };
+
+struct RendererSettings
+{
+	bool UseRayQuery = true;
+	bool ValidationLayer = false;
+};

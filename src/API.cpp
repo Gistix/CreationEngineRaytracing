@@ -3,14 +3,15 @@
 #include "Renderer.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
 
-bool InitializeRenderer(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
+bool InitializeRenderer(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
-	return Renderer::GetSingleton()->Initialize(d3d11Device, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue);
+	return Renderer::GetSingleton()->Initialize(rendererSettings, d3d11Device, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue);
 }
 
-bool InitializeVulkanRenderer(void* instance, void* physicalDevice, void* device, void* graphicsQueue, int graphicsQueueIndex, void* transferQueue, int transferQueueIndex, void* computeQueue, int computeQueueIndex)
+bool InitializeVulkanRenderer(RendererSettings* rendererSettings, void* instance, void* physicalDevice, void* device, void* graphicsQueue, int graphicsQueueIndex, void* transferQueue, int transferQueueIndex, void* computeQueue, int computeQueueIndex)
 {
 	return Renderer::GetSingleton()->Initialize(
+		rendererSettings,
 		reinterpret_cast<VkInstance>(instance),
 		reinterpret_cast<VkPhysicalDevice>(physicalDevice), reinterpret_cast<VkDevice>(device),
 		reinterpret_cast<VkQueue>(graphicsQueue), graphicsQueueIndex,
