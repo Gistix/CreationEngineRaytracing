@@ -132,6 +132,12 @@ if(AUTO_DEPLOYMENT)
         install(FILES ${D3D12_CORE_DLL_FIRST} DESTINATION "${DEPLOY_DIR}/${ScriptExtenderName}/Plugins")
     endif()
 
+    file(GLOB_RECURSE D3D12_SDK_LAYERS "${CMAKE_BINARY_DIR}/vcpkg_installed/*/bin/d3d12SDKLayers.dll")
+    if(D3D12_SDK_LAYERS)
+        list(GET D3D12_SDK_LAYERS 0 D3D12_SDK_LAYERS_FIRST)
+        install(FILES ${D3D12_SDK_LAYERS_FIRST} DESTINATION "${DEPLOY_DIR}/${ScriptExtenderName}/Plugins")
+    endif()
+
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/Shaders)
 
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/interop/ DESTINATION ${DEPLOY_DIR}/Shaders/Interop)
