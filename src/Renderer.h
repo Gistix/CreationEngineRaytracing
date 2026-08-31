@@ -13,8 +13,6 @@
 
 #include "Constants.h"
 
-#include <d3d12compatibility.h>
-
 struct MessageCallback : public nvrhi::IMessageCallback
 {
 	static MessageCallback& GetInstance()
@@ -48,7 +46,6 @@ class Renderer
 
 	ID3D12Device5* m_NativeD3D12Device;
 	ID3D11Device5* m_NativeD3D11Device;
-	winrt::com_ptr<ID3D12CompatibilityDevice> m_CompatDevice;
 
 	nvrhi::DeviceHandle m_NVRHIDevice;
 
@@ -186,8 +183,6 @@ public:
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
 	static auto GetNativeD3D11Device() { return GetSingleton()->m_NativeD3D11Device; }
-
-	static auto GetCompatDevice() { return GetSingleton()->m_CompatDevice.get(); }
 
 	nvrhi::CommandListHandle GetGraphicsCommandList() const {
 		return GetDevice()->createCommandList(

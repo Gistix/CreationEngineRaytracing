@@ -218,6 +218,8 @@ void Scene::Execute()
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
 
+		renderer->RenderTargetManager().CopySharedTextures(commandList, currentSlot);
+
 		commandList->endTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
 
 		auto cpuEnd = std::chrono::high_resolution_clock::now();
@@ -231,6 +233,8 @@ void Scene::Execute()
 
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
+
+		renderer->RenderTargetManager().CopySharedTextures(commandList, currentSlot);
 	}
 
 	renderer->EndExecution();

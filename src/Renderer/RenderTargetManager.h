@@ -37,6 +37,8 @@ struct RenderTargetManager
 	nvrhi::ITexture* GetTexture(Texture texture);
 
 	SharedTexture GetSharedTexture(Texture texture, uint32_t slot);
+
+	void CopySharedTextures(nvrhi::ICommandList* commandList, uint32_t slot);
 };
 
 using RenderTarget = RenderTargetManager::Texture;

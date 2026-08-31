@@ -38,8 +38,6 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	m_NativeD3D11Device = d3d11Device;
 	m_NativeD3D12Device = d3d12Device;
 
-	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
-
 	// Map DXGI_FORMAT to NVRHI formats
 	if (m_FormatMapping.empty())
 		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
