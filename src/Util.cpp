@@ -16,6 +16,14 @@ namespace Util
 		return IsPlayerFormID(form->GetFormID());
 	};
 
+	bool IsActor(RE::TESObjectREFR* refr)
+	{
+		if (!refr)
+			return false;
+
+		return refr->GetFormType() == CESEAdapter::RE::FormType::ActorCharacter;
+	};
+
 	std::string WStringToString(const std::wstring& wideString)
 	{
 		std::string result;

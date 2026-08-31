@@ -57,6 +57,7 @@ class BLASCluster
 
 	// Used to calculate instance light data
 	RE::NiBound m_WorldBound;
+	AABB m_WorldAABB;
 
 	friend class SceneGraph;
 
@@ -86,12 +87,15 @@ class BLASCluster
 
 	void SetValid(bool valid) { m_IsValid = valid; }
 public:
-	explicit BLASCluster(RE::TESObjectREFR* owner);
+	explicit BLASCluster(RE::TESObjectREFR* owner, const char* customName = nullptr);
+
+	RE::TESObjectREFR* GetOwner() const { return m_Owner; }
 
 	void AddMember(BaseMesh* mesh);
 	void RemoveMember(BaseMesh* mesh);
 
 	const auto& GetMembers() const { return m_Members; }
+	const AABB& GetWorldAABB() const { return m_WorldAABB; }
 
 	inline bool IsPlayer() const { return m_Flags.all(Flags::Player); }
 

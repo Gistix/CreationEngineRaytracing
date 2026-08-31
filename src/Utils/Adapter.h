@@ -103,6 +103,7 @@ namespace Util
 		RE::BSMultiBoundAABB* GetMultiBoundAABB(RE::BSMultiBound* a_multiBound);
 
 		float GetNiBoundRadius(const RE::NiBound& a_bound);
+		void SetNiBound(RE::NiBound& a_bound, const RE::NiPoint3& a_center, float a_radius);
 
 		struct TrishapeRuntimeData
 		{

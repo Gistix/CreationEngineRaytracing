@@ -20,6 +20,8 @@ namespace Util
 
 	bool IsPlayer(RE::TESForm* form);
 
+	bool IsActor(RE::TESObjectREFR* refr);
+
 	std::string WStringToString(const std::wstring& wideString);
 
 	std::wstring StringToWString(const std::string& str);

@@ -8,10 +8,12 @@
 
 #include <eastl/algorithm.h>
 
-BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
+BLASCluster::BLASCluster(RE::TESObjectREFR* owner, const char* customName) :
 	m_Owner(owner)
 {
-	if (m_Owner)
+	if (customName)
+		m_Name = customName;
+	else if (m_Owner)
 		m_Name = { std::format("Cluster {:08X}", m_Owner->GetFormID()).c_str() };
 	else
 		m_Name = { "Cluster (orphan)" };
@@ -74,14 +76,23 @@ void BLASCluster::UpdateTransform() {
 		m_Transform = transform;
 
 		m_WorldBound = object->worldBound;
+
+		AABB clusterAABB;
+		for (const auto* mesh : m_Members) {
+			if (!mesh->IsHidden())
+				clusterAABB.Union(mesh->GetWorldAABB());
+		}
+		m_WorldAABB = clusterAABB;
 	}
 	else {
 		if (m_Members.empty()) {
 			m_Transform = Constants::kIdentityTransform;
 			m_PrevTransform = Constants::kIdentityTransform;
 			m_NeedsPrevInit = false;
+			Util::Adapter::SetNiBound(m_WorldBound, { 0.0f, 0.0f, 0.0f }, 0.0f);
+			m_WorldAABB = AABB();
 		}
-		else {
+		else if (m_Members.size() == 1) {
 			const auto& mesh = m_Members.front();
 			m_Transform = mesh->GetTransform();
 
@@ -93,6 +104,35 @@ void BLASCluster::UpdateTransform() {
 			}
 
 			m_WorldBound = mesh->GetWorldBound();
+			m_WorldAABB = mesh->GetWorldAABB();
+		}
+		else {
+			// Multi-member spatial cluster: instance transform is Identity
+			m_Transform = Constants::kIdentityTransform;
+			m_PrevTransform = Constants::kIdentityTransform;
+			m_NeedsPrevInit = false;
+
+			AABB clusterAABB;
+			bool anyVisible = false;
+
+			for (const auto* mesh : m_Members) {
+				if (mesh->IsHidden())
+					continue;
+
+				clusterAABB.Union(mesh->GetWorldAABB());
+				anyVisible = true;
+			}
+
+			m_WorldAABB = clusterAABB;
+
+			if (anyVisible && clusterAABB.IsValid()) {
+				const float3 center = clusterAABB.GetCenter();
+				const float3 halfExt = clusterAABB.GetHalfExtents();
+				const float radius = std::sqrt(halfExt.x * halfExt.x + halfExt.y * halfExt.y + halfExt.z * halfExt.z);
+				Util::Adapter::SetNiBound(m_WorldBound, RE::NiPoint3(center.x, center.y, center.z), radius);
+			} else {
+				Util::Adapter::SetNiBound(m_WorldBound, { 0.0f, 0.0f, 0.0f }, 0.0f);
+			}
 		}
 	}
 }
@@ -296,9 +336,9 @@ BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, u
 	const bool hasMesh = m_DirtyFlags.any(DirtyFlags::Mesh);
 	const bool hasVisibility = m_DirtyFlags.any(DirtyFlags::Visibility);
 	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform, DirtyFlags::Alpha);
-	const bool isOrphan = (m_Owner == nullptr);
+	const bool isSingleMemberOrphan = (m_Owner == nullptr && m_Members.size() <= 1);
 
-	if (firstBuild || !m_BLAS || hasMesh || (!isOrphan && hasVisibility))
+	if (firstBuild || !m_BLAS || hasMesh || (!isSingleMemberOrphan && hasVisibility))
 		return BuildMode::Rebuild;
 
 	if (hasUpdate) {
@@ -336,8 +376,8 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	}
 
 	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
-	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags == DirtyFlags::Visibility) {
-		// Orphan clusters contain one mesh and are excluded from the TLAS while hidden.
+	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_Members.size() <= 1 && m_DirtyFlags == DirtyFlags::Visibility) {
+		// Single-mesh orphan clusters are excluded from the TLAS while hidden.
 		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
 		m_DirtyFlags.reset();
 		m_LastBuildFrame = frameIndex;

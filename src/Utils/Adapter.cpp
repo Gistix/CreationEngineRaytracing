@@ -357,6 +357,16 @@ namespace Util
 			return a_bound.fRadius;
 #endif
 		}
+
+		void SetNiBound(RE::NiBound& a_bound, const RE::NiPoint3& a_center, float a_radius)
+		{
+			a_bound.center = a_center;
+#if defined(SKYRIM)
+			a_bound.radius = a_radius;
+#elif defined(FALLOUT4)
+			a_bound.fRadius = a_radius;
+#endif
+		}
 		
 		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node) {
 #if defined(SKYRIM)

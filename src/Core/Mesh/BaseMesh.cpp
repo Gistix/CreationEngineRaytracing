@@ -224,6 +224,8 @@ void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)
 
 		m_Transform = transform;
 
+		m_WorldAABB = m_LocalAABB.Transform(m_Transform);
+
 		WriteTransform();
 	}
 
@@ -393,4 +395,24 @@ void BaseMesh::WriteTransform() const
 {
 	const auto& sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 	sceneGraph->WriteTransformData(m_MeshIndex, m_Transform, m_PrevTransform);
+}
+
+void BaseMesh::InitLocalAABB(RE::BSTriShape* bsTriShape, RE::BSGraphics::TriShape* rendererData, uint32_t vertexCount, uint16_t vertexStride)
+{
+	const auto* rawVertices = rendererData ? Util::Adapter::GetVertexData(rendererData) : nullptr;
+	if (rawVertices && vertexCount > 0 && vertexStride >= sizeof(float) * 3) {
+		AABB localAABB;
+		for (uint32_t i = 0; i < vertexCount; ++i) {
+			const float* pos = reinterpret_cast<const float*>(rawVertices + i * vertexStride);
+			localAABB.Expand(float3(pos[0], pos[1], pos[2]));
+		}
+		m_LocalAABB = localAABB;
+	} else if (bsTriShape) {
+		const auto& mb = bsTriShape->modelBound;
+		const float r = Util::Adapter::GetNiBoundRadius(mb);
+		m_LocalAABB = AABB(
+			float3(mb.center.x - r, mb.center.y - r, mb.center.z - r),
+			float3(mb.center.x + r, mb.center.y + r, mb.center.z + r)
+		);
+	}
 }

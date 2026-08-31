@@ -42,5 +42,7 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* com
 
 	m_GeometryEntries.push_back({ MakeGeometryDesc(m_IndexBuffer.m_Buffer, m_IndexBuffer.m_Offset, indexCount, m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, vertexStride, triShapeData.vertexCount, GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
 
+	InitLocalAABB(bsTriShape, rendererData, triShapeData.vertexCount, vertexStride);
+
 	CreateMaterial();
 }

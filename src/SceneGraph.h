@@ -21,6 +21,8 @@
 #include "Types/VectorStorage.h"
 #include "Types/RE/RE.h"
 #include "Types/RingBuffer.h"
+#include "Types/SpatialClusterKey.h"
+#include "Types/ClusterPartitioner.h"
 #include "Utils/Adapter.h"
 
 #include <eastl/array.h>
@@ -47,8 +49,11 @@ class SceneGraph
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
-	// One BLAS instance per owner reference
+	// One BLAS instance per owner reference (Actors and characters)
 	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
+
+	// Spatial static clusters for non-actor / environment meshes
+	ShardedConcurrentMap<SpatialClusterKey, eastl::unique_ptr<BLASCluster>, SpatialClusterKeyHash, 64> m_SpatialClusters;
 
 	// Meshes without an owner get a degenerate per-mesh cluster
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
@@ -133,9 +138,10 @@ class SceneGraph
 	eastl::vector<MeshCreateCandidate> m_CreateCandidates;
 	eastl::vector<eastl::vector<MeshCreateCandidate>> m_PerWorkerCreateCandidates;
 	
-	// Mesh helpers: route meshes into per-owner BLAS clusters (owner pointer used as key only).
+	// Mesh helpers: route meshes into per-owner BLAS clusters or spatial static clusters.
 
 	BLASCluster* GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriShape* bsTriShape);
+	BLASCluster* GetOrCreateSpatialCluster(BaseMesh* mesh);
 	template <typename Key, typename Map>
 	BLASCluster* GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a_mutex, Key a_key, RE::TESObjectREFR* a_owner);
 
@@ -175,6 +181,7 @@ public:
 	inline const auto& GetDirectMeshes() { return m_Meshes; }
 
 	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
+	inline auto& GetSpatialClusters() { return m_SpatialClusters; }
 	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }
 	inline const auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
 	inline const auto& GetDirtyClusters() { return m_DirtyClusters; }

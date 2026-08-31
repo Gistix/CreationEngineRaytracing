@@ -580,25 +580,26 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			auto& [mesh, refr] = entry;
 			mesh->SetLastVisitedFrame(frameIndex);
 
+			mesh->Update(commandList);
+			mesh->SetHidden(false);
+			mesh->CommitDirtyFlags();
+
 			if (!mesh->AsSubIndexMesh()) {	
 				const bool ownerChanged = mesh->SetOwner(refr);
 				auto cluster = mesh->GetCluster();
 
-				if (ownerChanged || !cluster) {
+				BLASCluster* targetCluster = GetOrCreateCluster(refr, mesh->GetTriShape());
+
+				if (ownerChanged || !cluster || cluster != targetCluster) {
 					if (cluster) {
 						cluster->RemoveMember(mesh);
 						MarkClusterDirty(cluster);
 					}
 
-					cluster = GetOrCreateCluster(refr, mesh->GetTriShape());
-					cluster->AddMember(mesh);
-					MarkClusterDirty(cluster);
+					targetCluster->AddMember(mesh);
+					MarkClusterDirty(targetCluster);
 				}
 			}
-
-			mesh->Update(commandList);
-			mesh->SetHidden(false);
-			mesh->CommitDirtyFlags();
 		};
 
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
@@ -730,18 +731,18 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			if (inserted) {
 				auto mesh = it2->second.get();
 
-				// SubIndexMesh: not a member of any cluster itself; the K SubIndexSegmentMesh
-				// children will be added to their own clusters by SubIndexMesh::Update.
-				if (!mesh->AsSubIndexMesh()) {
-					auto* cluster = GetOrCreateCluster(refr, bsTriShape);
-					cluster->AddMember(mesh);
-					MarkClusterDirty(cluster);
-				}
-
 				mesh->SetLastVisitedFrame(frameIndex);
 				mesh->Update(commandList);
 				mesh->CommitDirtyFlags();
 				m_CurrentVisible.push_back(mesh);
+
+				// SubIndexMesh: not a member of any cluster itself; the K SubIndexSegmentMesh
+				// children will be added to their own clusters by SubIndexMesh::Update.
+				if (!mesh->AsSubIndexMesh()) {
+					BLASCluster* cluster = GetOrCreateCluster(refr, bsTriShape);
+					cluster->AddMember(mesh);
+					MarkClusterDirty(cluster);
+				}
 			}
 		}
 	}
@@ -795,6 +796,13 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		}
 	};
 	removeEmptyClusters(m_OwnerClusters);
+	m_SpatialClusters.Prune([this](BLASCluster* cluster) {
+		if (cluster && cluster->Empty()) {
+			m_DirtyClusters.erase(cluster);
+			return true;
+		}
+		return false;
+	});
 	removeEmptyClusters(m_OrphanClusters);
 	removeEmptyClusters(m_SubIndexSegmentClusters);
 
@@ -804,16 +812,141 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
+	// Phase F2: RTX Best Practices - AABB Split & Merge Clustering Pass
+	{
+		// 1. Figure 1: Sparsity Check (Split multi-mesh references with large empty space)
+		for (auto& [refr, cluster] : m_OwnerClusters) {
+			if (!cluster || cluster->Empty() || Util::IsActor(refr))
+				continue;
+
+			const auto& members = cluster->GetMembers();
+			if (members.size() > 1) {
+				eastl::vector<AABB> memberAABBs;
+				memberAABBs.reserve(members.size());
+				AABB enclosingAABB;
+
+				for (const auto* mesh : members) {
+					if (!mesh->IsHidden()) {
+						memberAABBs.push_back(mesh->GetWorldAABB());
+						enclosingAABB.Union(mesh->GetWorldAABB());
+					}
+				}
+
+				if (memberAABBs.size() > 1 && enclosingAABB.IsValid()) {
+					const float fillRatio = Clustering::ComputeFillRatio(memberAABBs, enclosingAABB);
+					if (fillRatio < Clustering::SPARSITY_FILL_RATIO_THRESHOLD) {
+						// Group has > 75% empty space -> SPLIT into individual sub-clusters
+						auto membersCopy = members;
+						for (auto* mesh : membersCopy) {
+							if (!mesh->IsHidden()) {
+								cluster->RemoveMember(mesh);
+								auto* subCluster = GetOrCreateCluster(nullptr, mesh->GetTriShape());
+								subCluster->AddMember(mesh);
+								MarkClusterDirty(subCluster);
+							}
+						}
+						MarkClusterDirty(cluster.get());
+					}
+				}
+			}
+		}
+
+		// 2. Figure 2: Overlap Check (Merge static instances with significant volume overlap)
+		eastl::vector<BLASCluster*> candidateStatics;
+		candidateStatics.reserve(m_OwnerClusters.size() + m_OrphanClusters.size());
+
+		for (auto& [refr, cluster] : m_OwnerClusters) {
+			if (cluster && !cluster->Empty() && !Util::IsActor(refr))
+				candidateStatics.push_back(cluster.get());
+		}
+		for (auto& [_, cluster] : m_OrphanClusters) {
+			if (cluster && !cluster->Empty())
+				candidateStatics.push_back(cluster.get());
+		}
+
+		if (candidateStatics.size() > 1) {
+			Clustering::SpatialAABBBroadphase broadphase;
+			for (uint32_t i = 0; i < static_cast<uint32_t>(candidateStatics.size()); ++i) {
+				broadphase.Insert(i, candidateStatics[i]->GetWorldAABB());
+			}
+
+			Clustering::DSU dsu(candidateStatics.size());
+			for (const auto& [cellKey, indices] : broadphase.grid) {
+				if (indices.size() < 2)
+					continue;
+
+				for (size_t a = 0; a < indices.size(); ++a) {
+					const uint32_t idxA = indices[a];
+					const auto& boxA = candidateStatics[idxA]->GetWorldAABB();
+					if (!boxA.IsValid())
+						continue;
+
+					for (size_t b = a + 1; b < indices.size(); ++b) {
+						const uint32_t idxB = indices[b];
+						if (dsu.Find(idxA) == dsu.Find(idxB))
+							continue;
+
+						const auto& boxB = candidateStatics[idxB]->GetWorldAABB();
+						if (!boxB.IsValid())
+							continue;
+
+						if (boxA.OverlapRatio(boxB) >= Clustering::OVERLAP_RATIO_THRESHOLD) {
+							dsu.Union(idxA, idxB);
+						}
+					}
+				}
+			}
+
+			// Group components merged by DSU
+			eastl::hash_map<int32_t, eastl::vector<uint32_t>> mergedGroups;
+			for (uint32_t i = 0; i < static_cast<uint32_t>(candidateStatics.size()); ++i) {
+				int32_t root = dsu.Find(i);
+				mergedGroups[root].push_back(i);
+			}
+
+			for (auto& [root, group] : mergedGroups) {
+				if (group.size() > 1) {
+					// Merge all members into the root candidate's cluster
+					auto* primaryCluster = candidateStatics[root];
+					for (size_t k = 1; k < group.size(); ++k) {
+						auto* secondaryCluster = candidateStatics[group[k]];
+						if (secondaryCluster != primaryCluster && !secondaryCluster->Empty()) {
+							auto membersToMove = secondaryCluster->GetMembers();
+							for (auto* m : membersToMove) {
+								secondaryCluster->RemoveMember(m);
+								primaryCluster->AddMember(m);
+							}
+							MarkClusterDirty(secondaryCluster);
+						}
+					}
+					// For multi-instance merged cluster, set owner to nullptr so transform is Identity
+					primaryCluster->m_Owner = nullptr;
+					primaryCluster->UpdateTransform();
+					MarkClusterDirty(primaryCluster);
+				}
+			}
+		}
+	}
+
+	if (timings) {
+		const auto nowTp = std::chrono::high_resolution_clock::now();
+		m_UpdateTimings.push_back({"SG::PhaseF2-SplitMerge", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		phaseStart = nowTp;
+	}
+
 	// Phase G (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
 	{
 		m_AllClusters.clear();
 		m_AllClusters.reserve(
 			m_OwnerClusters.size() +
+			m_SpatialClusters.Size() +
 			m_OrphanClusters.size() +
 			m_SubIndexSegmentClusters.size());
 
 		for (auto& [_, cluster] : m_OwnerClusters)
 			m_AllClusters.push_back(cluster.get());
+
+		m_SpatialClusters.CollectAll(m_AllClusters);
 
 		for (auto& [_, cluster] : m_OrphanClusters)
 			m_AllClusters.push_back(cluster.get());
@@ -918,9 +1051,24 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		m_UpdateTimings.push_back({"SG::Total", 0.0f, std::chrono::duration<float, std::milli>(totalEnd - updateStart).count()});
 	}
 
-#if defined(FALLOUT4)
-	logger::info("Cluster: {}, Orphan Clusters: {}, SubIndexSegment Clusters: {}", m_OwnerClusters.size(), m_OrphanClusters.size(), m_SubIndexSegmentClusters.size());
-#endif
+	uint32_t actorClusterCount = 0;
+	uint32_t staticOwnerClusterCount = 0;
+	for (const auto& [refr, cluster] : m_OwnerClusters) {
+		if (cluster && !cluster->Empty()) {
+			if (Util::IsActor(refr))
+				actorClusterCount++;
+			else
+				staticOwnerClusterCount++;
+		}
+	}
+
+	logger::info("Clusters: Total Instances: {}, Actor Clusters: {}, Static REFR Clusters: {}, Orphan/Split Clusters: {}, SubIndex Clusters: {}, Total Meshes: {}",
+		m_NumInstances,
+		actorClusterCount,
+		staticOwnerClusterCount,
+		m_OrphanClusters.size(),
+		m_SubIndexSegmentClusters.size(),
+		m_NumMeshes);
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
@@ -970,6 +1118,21 @@ BLASCluster* SceneGraph::GetOrCreateCluster(RE::TESObjectREFR* owner, RE::BSTriS
 	return owner
 		? GetOrCreateClusterImpl(m_OwnerClusters, m_OwnerClusterMutex, owner, owner)
 		: GetOrCreateClusterImpl(m_OrphanClusters, m_OrphanClusterMutex, bsTriShape, nullptr);
+}
+
+BLASCluster* SceneGraph::GetOrCreateSpatialCluster(BaseMesh* mesh)
+{
+	const auto center = mesh->GetWorldAABB().GetCenter();
+	const auto spatialKey = GetSpatialKey(RE::NiPoint3(center.x, center.y, center.z));
+
+	auto* cluster = m_SpatialClusters.FindOrEmplace(spatialKey, [&]() {
+		const auto name = std::format("SpatialCluster ({}, {}, {})", spatialKey.cellX, spatialKey.cellY, spatialKey.cellZ);
+		auto newCluster = eastl::make_unique<BLASCluster>(nullptr, name.c_str());
+		MarkClusterDirty(newCluster.get());
+		return newCluster;
+	});
+
+	return cluster;
 }
 
 BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment, RE::TESObjectREFR* owner)

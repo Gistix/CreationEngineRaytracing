@@ -8,6 +8,7 @@
 #include "Interop/LandLODUpdate.hlsli"
 #include "Mesh.hlsli"
 #include "Transform.hlsli"
+#include "Types/AABB.h"
 #include "Util.h"
 
 class SkinnedMesh;
@@ -124,6 +125,10 @@ public:
 	uint16_t GetMeshIndex() const { return m_MeshIndex; }
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
+	const AABB& GetLocalAABB() const { return m_LocalAABB; }
+	const AABB& GetWorldAABB() const { return m_WorldAABB; }
+	void SetLocalAABB(const AABB& aabb) { m_LocalAABB = aabb; }
+	void InitLocalAABB(RE::BSTriShape* bsTriShape, RE::BSGraphics::TriShape* rendererData, uint32_t vertexCount, uint16_t vertexStride);
 	
 	const Properties& GetProperties() const { return m_Properties; }
 	const eastl::shared_ptr<MaterialBase>& GetMaterial() const { return m_Material; }
@@ -200,6 +205,8 @@ protected:
 	uint16_t m_MeshIndex = UINT16_MAX;
 
 	RE::NiBound m_WorldBound;
+	AABB m_LocalAABB;
+	AABB m_WorldAABB;
 
 	mutable uint64_t m_LastVisitedFrame = Constants::INVALID_FRAME_INDEX;
 
