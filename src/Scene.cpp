@@ -26,6 +26,7 @@
 #include "Pass/Raytracing/GlobalIllumination.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
+#include "Pass/Raytracing/PathTracing/GBuffer.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raytracing/Debug.h"
 #include "Pass/Raster/GBuffer.h"
@@ -128,7 +129,12 @@ void Scene::UpdateMode(Mode mode)
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
 		auto* tlasPtr = sceneTLAS.get();
 
-		auto sharc = eastl::make_unique<Pass::SHaRC>(renderer, tlasPtr);
+		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
+		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
+		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
+		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+
+		/*auto sharc = eastl::make_unique<Pass::SHaRC>(renderer, tlasPtr);
 		auto* sharcPtr = sharc.get();
 
 		auto ptPass = eastl::make_unique<Pass::PathTracing>(renderer, tlasPtr, sharcPtr);
@@ -139,10 +145,6 @@ void Scene::UpdateMode(Mode mode)
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
 		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);
 
-		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
-		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
-		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
-		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "PathTracing", eastl::move(ptPass) });
 		renderGraph->AddNode({ true, "ReSTIRGI", eastl::move(restirGI) });
@@ -150,7 +152,11 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
 		renderGraph->AddNode({ true, "PT Composite", eastl::move(ptComposite) });
-		renderGraph->AddNode({ false, "Accumulation", eastl::move(accumulation) });
+		renderGraph->AddNode({ false, "Accumulation", eastl::move(accumulation) });*/
+
+		auto ptPass = eastl::make_unique<Pass::Raytracing::PathTracing::GBuffer>(renderer, tlasPtr);
+
+		renderGraph->AddNode({ true, "PathTracing::GBuffer", eastl::move(ptPass) });
 	}
 	else if (mode == Mode::Debug) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);

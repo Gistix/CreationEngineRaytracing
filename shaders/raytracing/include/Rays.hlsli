@@ -87,12 +87,12 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
     const uint instanceInclusionMask = primaryRay ? INSTANCE_MASK & ~FRUSTUM_CULLED_MASK : INSTANCE_MASK;
     
 #if USE_RAY_QUERY
-#if SER_ENABLED
+#   if SER_ENABLED
     if (!primaryRay)
     {
         SER_ReorderThread(SER_CalculateRayCoherenceHint(ray.Direction), 16);
     }
-#endif
+#   endif
     RayQuery<RAY_FLAGS> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, instanceInclusionMask, ray);
 
@@ -112,13 +112,13 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
         }
     }
 
-#if SER_ENABLED
+#   if SER_ENABLED
     if (!primaryRay)
     {
         uint hitStatus = (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? (rayQuery.CommittedInstanceID() | (1u << 15)) : 0;
         SER_ReorderThread(hitStatus, 16);
     }
-#endif
+#   endif
 
     if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {
@@ -130,7 +130,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
             rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
-#if SER_ENABLED
+#   if SER_ENABLED
     if (!primaryRay)
     {
         SER_ReorderThread(SER_CalculateRayCoherenceHint(ray.Direction), 8);
@@ -142,9 +142,9 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
     {
         TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
     }
-#else
+#   else
     TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
-#endif
+#   endif
 #endif
     
     randomSeed = payload.randomSeed;

@@ -179,6 +179,8 @@ public:
 
 	bool IsVulkan() const { return m_IsVulkan; }
 
+	const bool IsFeatureSupported(nvrhi::Feature feature) const { return m_SupportedFeatures[static_cast<uint8_t>(feature)]; };
+
 	[[nodiscard]] const wchar_t* GetShaderStage(ShaderStage a_Stage) const noexcept;
 	[[nodiscard]] std::wstring GetShaderTarget(ShaderStage a_Stage) const noexcept;
 

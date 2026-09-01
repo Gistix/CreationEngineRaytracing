@@ -16,7 +16,7 @@ private:
     Renderer* m_Renderer = nullptr;
 
 protected:
-    Renderer* GetRenderer() { return m_Renderer; }
+    Renderer* GetRenderer() const { return m_Renderer; }
     bool m_Enabled = true;
     bool m_Initialized = false;
 
