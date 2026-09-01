@@ -56,8 +56,7 @@ find_package(directx-dxc CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(mikktspace CONFIG REQUIRED)
 
-find_path(DETOURS_INCLUDE_DIRS "detours/detours.h")
-find_library(DETOURS_LIBRARY detours REQUIRED)
+include(detours)
 
 target_link_libraries(
 	${PROJECT_NAME}
@@ -70,7 +69,7 @@ target_link_libraries(
     xbyak::xbyak
     mikktspace::mikktspace
 	d3dcompiler.lib
-    ${DETOURS_LIBRARY}
+	${DETOURS_LIBRARIES}
 )
 
 if(BUILD_FALLOUT4)

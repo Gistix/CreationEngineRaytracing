@@ -40,9 +40,11 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d
 	m_NativeD3D11Device = d3d11Device;
 	m_NativeD3D12Device = d3d12Device;
 
-	D3D12_FEATURE_DATA_SHADER_MODEL smFeature{ D3D_SHADER_MODEL_6_6 };
+	D3D12_FEATURE_DATA_SHADER_MODEL smFeature{ D3D_SHADER_MODEL_6_9 };
 	if (SUCCEEDED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &smFeature, sizeof(smFeature))))
 		m_ShaderModel = smFeature.HighestShaderModel;
+
+	logger::info("Shader Model: {}", magic_enum::enum_name(m_ShaderModel));
 
 	// Map DXGI_FORMAT to NVRHI formats
 	if (m_FormatMapping.empty())
@@ -703,29 +705,34 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 	return CreateHandleForNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
 }
 
-const wchar_t* Renderer::GetShaderTarget(ShaderStage a_Stage) const noexcept
+const wchar_t* Renderer::GetShaderStage(ShaderStage a_Stage) const noexcept
 {
-	const bool isSM66 = (m_ShaderModel >= D3D_SHADER_MODEL_6_6);
-
 	switch (a_Stage) {
 	case ShaderStage::Compute:
-		return isSM66 ? L"cs_6_6" : L"cs_6_5";
+		return L"cs";
 	case ShaderStage::Vertex:
-		return isSM66 ? L"vs_6_6" : L"vs_6_5";
+		return L"vs";
 	case ShaderStage::Pixel:
-		return isSM66 ? L"ps_6_6" : L"ps_6_5";
+		return L"ps";
 	case ShaderStage::Geometry:
-		return isSM66 ? L"gs_6_6" : L"gs_6_5";
+		return L"gs";
 	case ShaderStage::Hull:
-		return isSM66 ? L"hs_6_6" : L"hs_6_5";
+		return L"hs";
 	case ShaderStage::Domain:
-		return isSM66 ? L"ds_6_6" : L"ds_6_5";
+		return L"ds";
 	case ShaderStage::Mesh:
-		return isSM66 ? L"ms_6_6" : L"ms_6_5";
+		return L"ms";
 	case ShaderStage::Amplification:
-		return isSM66 ? L"as_6_6" : L"as_6_5";
+		return L"as";
 	case ShaderStage::Library:
 	default:
-		return isSM66 ? L"lib_6_6" : L"lib_6_5";
+		return L"lib";
 	}
+}
+
+std::wstring Renderer::GetShaderTarget(ShaderStage a_Stage) const noexcept
+{
+	const uint32_t major = (static_cast<uint32_t>(m_ShaderModel) >> 4) & 0xF;
+	const uint32_t minor = static_cast<uint32_t>(m_ShaderModel) & 0xF;
+	return std::format(L"{}_{}_{}", GetShaderStage(a_Stage), major, minor);
 }

@@ -197,8 +197,8 @@ namespace ShaderCache
 
 	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* filePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* entryPoint)
 	{
-		const wchar_t* target = Renderer::GetSingleton()->GetShaderTarget(stage);
-		return GetShader(filePath, std::move(defines), target, entryPoint);
+		const std::wstring target = Renderer::GetSingleton()->GetShaderTarget(stage);
+		return GetShader(filePath, std::move(defines), target.c_str(), entryPoint);
 	}
 
 	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* filePath, eastl::vector<DxcDefine> defines, const wchar_t* target, const wchar_t* entryPoint)

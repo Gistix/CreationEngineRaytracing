@@ -179,8 +179,8 @@ public:
 
 	bool IsVulkan() const { return m_IsVulkan; }
 
-	[[nodiscard]] D3D_SHADER_MODEL GetHighestShaderModel() const noexcept { return m_ShaderModel; }
-	[[nodiscard]] const wchar_t* GetShaderTarget(ShaderStage a_Stage) const noexcept;
+	[[nodiscard]] const wchar_t* GetShaderStage(ShaderStage a_Stage) const noexcept;
+	[[nodiscard]] std::wstring GetShaderTarget(ShaderStage a_Stage) const noexcept;
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 
