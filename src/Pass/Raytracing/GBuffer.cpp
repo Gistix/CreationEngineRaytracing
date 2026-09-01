@@ -86,7 +86,8 @@ namespace Pass::Raytracing
 		};
 
 #if defined(NVAPI)
-		globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
+		if (!GetRenderer()->m_Settings.UseRayQuery)
+			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
 #endif
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
@@ -258,7 +259,8 @@ namespace Pass::Raytracing
 
 		
 #if defined(NVAPI)
-		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
+		if (!renderer->m_Settings.UseRayQuery)
+			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);

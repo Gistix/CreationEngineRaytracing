@@ -34,6 +34,7 @@ namespace ShaderUtils
 			L"-P",
 			L"-E",  EntryPoint,
 			L"-enable-16bit-types",
+			L"-disable-payload-qualifiers",
 			L"-T", Target,
 			L"-I", L"Data/shaders",
 			L"-I", L"extern/RTXDI-Library/Include"
@@ -137,6 +138,7 @@ namespace ShaderUtils
 			FilePath,
 			L"-E",  EntryPoint,
 			L"-enable-16bit-types",
+			L"-disable-payload-qualifiers",
 			L"-all-resources-bound",
 			L"-T", Target,
 			L"-I", L"Data/shaders",
@@ -215,6 +217,7 @@ namespace ShaderUtils
 			FilePath,   // Filename used for diagnostics only
 			L"-E",  EntryPoint,
 			L"-enable-16bit-types",
+			L"-disable-payload-qualifiers",
 			L"-all-resources-bound",
 			L"-T", Target,
 			L"-O3"

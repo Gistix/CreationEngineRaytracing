@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
     nvapi
     GIT_REPOSITORY https://github.com/NVIDIA/nvapi
-    GIT_TAG 9296d671e71608d6d6b7749ed93989af4ada8858
+    GIT_TAG cd6918f60b3c9a0476fdfe7e89bb32330602049d
 )
 
 FetchContent_MakeAvailable(nvapi)

@@ -95,6 +95,11 @@ namespace Pass::Raytracing
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
 		}
 
+#if defined(NVAPI)
+		if (!GetRenderer()->m_Settings.UseRayQuery)
+			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
+#endif
+
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
 
@@ -167,6 +172,10 @@ namespace Pass::Raytracing
 
 		// When enabled causes: D3D12 ERROR: ID3D12Device::CreateStateObject: Invalid D3D12_RAYTRACING_PIPELINE_CONFIG1.Flags: 0x1024 specified
 		pipelineDesc.allowOpacityMicromaps = false;
+
+#if defined(NVAPI)
+		pipelineDesc.hlslExtensionsUAV = 127;
+#endif
 
 		m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
 		if (!m_RayPipeline)
@@ -280,6 +289,11 @@ namespace Pass::Raytracing
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
 		}
+
+#if defined(NVAPI)
+		if (!renderer->m_Settings.UseRayQuery)
+			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
+#endif
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 

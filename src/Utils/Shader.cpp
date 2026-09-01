@@ -35,6 +35,12 @@ namespace Util
 			if (settings.ExperimentalSettings.GlobalLights)
 				defines.emplace_back(L"GLOBAL_LIGHTS", L"1");
 
+			if (settings.AdvancedSettings.ShaderExecutionReordering) {
+#if defined(NVAPI)
+				defines.emplace_back(L"ENABLE_SER", L"1");
+#endif
+			}
+
 			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
 

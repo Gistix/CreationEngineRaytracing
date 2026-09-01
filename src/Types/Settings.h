@@ -207,6 +207,7 @@ struct AdvancedSettings
 	bool VariableUpdateRate = true;
 	bool GGXEnergyConservation = true;
 	bool PerLightTLAS = false;
+	bool ShaderExecutionReordering = true;
 	RISSettings RIS;
 	HairBSDF HairBSDF = HairBSDF::FarFieldBCSDF;
 	DiffuseBRDF DiffuseBRDF = DiffuseBRDF::Burley;
