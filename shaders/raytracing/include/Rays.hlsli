@@ -133,6 +133,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
 #if SER_ENABLED
     if (!primaryRay)
     {
+        SER_ReorderThread(SER_CalculateRayCoherenceHint(ray.Direction), 8);
         NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
         SER_ReorderHitObject(hitObj);
         NvInvokeHitObject(scene, hitObj, payload);

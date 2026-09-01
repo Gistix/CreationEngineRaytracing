@@ -18,15 +18,16 @@
 #   endif
 #endif
 
-// Octahedron map projection to 16-bit key for ray direction coherence
+// Octahedron map projection to an 8-bit key for ray direction coherence.
+// Pack four bits per axis so all eight hint bits contribute to the key.
 inline uint SER_CalculateRayCoherenceHint(float3 dir)
 {
     float l1 = abs(dir.x) + abs(dir.y) + abs(dir.z);
     float3 p = (l1 > 1e-6f) ? (dir / l1) : float3(0.0f, 0.0f, 1.0f);
     float2 s = select(p.xy >= 0.0f, float2(1.0f, 1.0f), float2(-1.0f, -1.0f));
     float2 oct = (p.z >= 0.0f) ? p.xy : ((1.0f - abs(p.yx)) * s);
-    uint2 grid = clamp((uint2)round((oct * 0.5f + 0.5f) * 255.0f), 0u, 255u);
-    return (grid.y << 8) | grid.x;
+    uint2 grid = clamp((uint2)round((oct * 0.5f + 0.5f) * 15.0f), 0u, 15u);
+    return (grid.y << 4) | grid.x;
 }
 
 inline uint SER_CalculateHitCoherenceHint(bool isHit, uint instanceID, uint materialType = 0)
