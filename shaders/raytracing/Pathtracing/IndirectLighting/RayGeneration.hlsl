@@ -90,82 +90,64 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
     
-    float3 radiance = float3(0.0f, 0.0f, 0.0f);
-    bool isSpecular = false;
+    half3 radiance = half3(0.0h, 0.0h, 0.0h);
     
 #if MAX_SAMPLES > 1    
     [loop]
-    for (uint i = 0; i < MAX_SAMPLES; i++) 
+    for (uint16_t i = 0; i < MAX_SAMPLES; i++) 
     {
 #else
     {
-        const uint i = 0;
+        const uint16_t i = 0;
 #endif
+        half3 sampleRadiance = half3(0.0h, 0.0h, 0.0h);
 
-        float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
-        float3 throughput = float3(1.0f, 1.0f, 1.0f);
-        
-        Surface surface = sourceSurface;
-        RayCone rayCone = sourceRayCone;
-        
-        BRDFContext brdfContext = sourceBRDFContext;
-        StandardBSDF bsdf = sourceBSDF;
-        
-#if MAX_BOUNCES > 1  
-        [loop]
-        for (uint j = 0; j < MAX_BOUNCES; j++)
+        BSDFSample firstSample;
+        [branch]
+        if (sourceBSDF.SampleBSDF(sourceBRDFContext, materialFeature, sourceSurface, firstSample, randomSeed))
         {
-#else
-        {
-            const uint j = 0;
-#endif 
-            
-            BSDFSample bsdfSample;
-            
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
-            
-            bool isValid = bsdf.SampleBSDF(brdfContext, materialFeature, surface, bsdfSample, randomSeed);
+            half3 throughput = (half3)firstSample.weight * (firstSample.isLobe(LobeType::Transmission) ? 1.0h : (half)sourceSurface.AO);
+            float3 firstFaceNormal = dot(sourceBRDFContext.ViewDirection, sourceSurface.FaceNormal) >= 0.0f ? sourceSurface.FaceNormal : -sourceSurface.FaceNormal;
+            bool firstHasTransmission = firstSample.isLobe(LobeType::Transmission);
 
-            [branch]
-            if (!isValid)
-                break;
-            
-            float3 direction = bsdfSample.wo;
-            
-            bool isDelta = bsdfSample.isLobe(LobeType::Delta);
-            isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
-
-            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
-
-            throughput *= bsdfSample.isLobe(LobeType::Transmission) ? 1.f : surface.AO;
-            
-            RayDesc ray;
-            
+            float3 rayOrigin;
 #if USE_SIA_INTERPOLATION
-            ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
+            rayOrigin = OffsetRaySIA(sourceSurface.Position, firstFaceNormal, sourceSurface.SIAOffset, firstHasTransmission);
 #else
-            ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
+            rayOrigin = OffsetRay(sourceSurface.Position, firstFaceNormal, sourceSurface.PositionError, firstHasTransmission);
 #endif
-            ray.Direction = direction;
-            ray.TMin = 0.0f; // Offset already handles precision, no additional offset needed
-            ray.TMax = RAY_TMAX;
+            half3 rayDirection = (half3)firstSample.wo;
 
-            Payload payload = TraceRayStandard(Scene, ray, randomSeed);  
-            
-            if (!payload.Hit())
-            {
-                float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
-                sampleRadiance += skyIrradiance * throughput;          
-            }
-            else
-            {
-                float3 localPosition = ray.Origin + direction * payload.hitDistance;
+            RayCone rayCone = sourceRayCone;
+            if (!firstSample.isLobe(LobeType::Delta))
+                rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(firstSample.pdf), (float)(2.0 * K_PI)));
+
+            [loop]
+            for (uint16_t j = 0; j < MAX_BOUNCES; j++)
+            {               
+                RayDesc ray;
+                ray.Origin = rayOrigin;
+                ray.Direction = (float3)rayDirection;
+                ray.TMin = 0.0f;
+                ray.TMax = RAY_TMAX;
+
+                Payload payload = TraceRayStandard(Scene, ray, randomSeed);  
+                rayCone = rayCone.propagateDistance(payload.hitDistance);
+                
+                if (!payload.Hit())
+                {
+                    half3 skyIrradiance = (half3)(SampleSky(SkyHemisphere, (float3)rayDirection) * Raytracing.Sky);
+                    sampleRadiance += skyIrradiance * throughput;
+                    break;
+                }
+
+                float3 localPosition = rayOrigin + (float3)rayDirection * payload.hitDistance;
 
                 Instance instance;              
                 LightingMaterialData materialData;
-                surface = SurfaceMaker::make(localPosition, payload, direction, rayCone, instance, materialData, false);
+                Surface surface = SurfaceMaker::make(localPosition, payload, (float3)rayDirection, rayCone, instance, materialData, false);
                 
-                brdfContext = BRDFContext::make(surface, -direction);
+                BRDFContext brdfContext = BRDFContext::make(surface, -(float3)rayDirection);
                 const bool isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
                 if (!isEnter)
                 {
@@ -173,13 +155,58 @@ void Main()
                     brdfContext.NdotV = saturate(dot(surface.Normal, brdfContext.ViewDirection));
                 }
 
-                AdjustShadingNormal(surface, brdfContext, true, false); // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
+                AdjustShadingNormal(surface, brdfContext, true, false);
                 StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
-                const float3 directRadiance = EvaluateDirectRadiance(materialType, materialFeature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+                const half3 directRadiance = (half3)EvaluateDirectRadiance(materialData.Type, materialData.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+                sampleRadiance += (directRadiance + (half3)surface.Emissive) * throughput;
+
+                if (j == MAX_BOUNCES - 1)
+                    break;
+
+                BSDFSample nextSample;
+                if (!bsdf.SampleBSDF(brdfContext, materialData.Feature, surface, nextSample, randomSeed))
+                    break;
+
+                throughput *= (half3)nextSample.weight * (nextSample.isLobe(LobeType::Transmission) ? 1.0h : (half)surface.AO);
                 
-                sampleRadiance += directRadiance * throughput;
-                sampleRadiance += surface.Emissive * throughput;
+#   if RUSSIAN_ROULETTE == 1
+                {
+                    const half rrVal = 1.0h - min(1.0h, (half)Color::RGBToLuminance(throughput));              
+                    const half rrProb = min(rrVal, 0.95h);
+
+                    if ((half)Random(randomSeed) < rrProb)
+                        break;
+
+                    throughput /= (1.0h - rrProb); 
+                }
+#   elif RUSSIAN_ROULETTE == 2
+                {
+                    const half rrVal = (half)sqrt(Color::RGBToLuminance(throughput));            
+                    half rrProb = saturate(0.85h - rrVal);
+                    rrProb *= rrProb;
+
+                    rrProb = saturate(rrProb + max(0.0h, ((half)j / (half)MAX_BOUNCES - 0.4h)));
+
+                    if ((half)Random(randomSeed) < rrProb)
+                        break;
+
+                    throughput /= (1.0h - rrProb);
+                }
+#   endif
+
+                const float3 hitFaceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+                const bool hitHasTransmission = nextSample.isLobe(LobeType::Transmission);
+
+#if USE_SIA_INTERPOLATION
+                rayOrigin = OffsetRaySIA(surface.Position, hitFaceNormal, surface.SIAOffset, hitHasTransmission);
+#else
+                rayOrigin = OffsetRay(surface.Position, hitFaceNormal, surface.PositionError, hitHasTransmission);
+#endif
+                rayDirection = (half3)nextSample.wo;
+
+                if (!nextSample.isLobe(LobeType::Delta))
+                    rayCone = RayCone::make(rayCone.getWidth(), min(rayCone.getSpreadAngle() + ComputeRayConeSpreadAngleExpansionByScatterPDF(nextSample.pdf), (float)(2.0 * K_PI)));
             }
         }
         
@@ -187,9 +214,8 @@ void Main()
     }
     
 #if MAX_SAMPLES > 1    
-    radiance /= MAX_SAMPLES;
+    radiance /= (half)MAX_SAMPLES;
 #endif
     
-    const half3 indirect = half3(radiance);
-    Output[idx].xyz += indirect;
+    Output[idx] += half4(Output[idx].xyz + radiance, 0.0f);
 }

@@ -109,7 +109,7 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
     irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Direction, Features.CloudShadows.Opacity);
 
     // Sun angular radius is ~0.00465 radians (~0.266 degrees)
-    float cosSunDisk = cos(0.00465f);
+    const float cosSunDisk = cos(0.00465f);
     lr = TangentToWorld(DIRECTIONAL_LIGHT.Direction, SampleConeUniform(randomSeed, cosSunDisk));
 
     // Correct MC weight for uniform cone sampling of a finite-size disk light.
@@ -117,21 +117,19 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
     irradiance *= 2.0f / (1.0f + cosSunDisk);
 }
 
-float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
+half3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 irradiance;
     float3 lr;
     GetDirectionalLightIrradiance(irradiance, lr, randomSeed);
-    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * irradiance;
+    
+    half3 direct = (half3) EvalLight(lr, type, feature, surface, brdfContext, bsdf) * (half3) irradiance;
+    
     [branch]
     if (any(direct > MIN_DIFFUSE_SHADOW))
-    {
-        direct *= TraceRayShadow(Scene, surface, lr, randomSeed);
-    }
+        direct *= (half3) TraceRayShadow(Scene, surface, lr, randomSeed);
     else
-    {
         direct = 0.0f;
-    }
 
     return direct;
 }
@@ -437,7 +435,7 @@ float3 EvalGlobalPointLight(in uint16_t type, in uint16_t feature, in Surface su
     return direct;
 }
 
-float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
+half3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 lightIrradiance;
     float3 lr;
@@ -448,7 +446,7 @@ float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface,
     if (lightIndex < 0)
         return 0.0f;
     
-    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
+    half3 direct = (half3) EvalLight(lr, type, feature, surface, brdfContext, bsdf) * (half3) lightIrradiance;
 
     [branch]
     if (any(direct > MIN_DIFFUSE_SHADOW))
@@ -460,7 +458,7 @@ float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface,
 #   define LIGHT_TLAS Scene     
 #endif
         
-        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
+        direct *= (half3) TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
     }
     else
     {

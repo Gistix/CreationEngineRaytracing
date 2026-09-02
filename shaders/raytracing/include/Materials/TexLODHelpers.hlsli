@@ -35,7 +35,7 @@
 #define TEXLOD_SPREADANGLE_FROM_CURVATURE_MODE TEXLOD_SPREADANGLE_ARC_LENGTH_OPTIMIZED
 
 // Uncomment to use FP16 for ray cone payload
-// #define USE_RAYCONES_WITH_FP16_IN_RAYPAYLOAD
+#define USE_RAYCONES_WITH_FP16_IN_RAYPAYLOAD
 
 // log2 function clamped to a valid domain. The range of lod values that can be returned is [-126, 127].
 float SafeLog2(float x) { return log2(clamp(x, FLT_MIN, FLT_MAX)); }
