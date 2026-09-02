@@ -29,6 +29,7 @@
 
 #include "Pass/Raytracing/PathTracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing/DirectLighting.h"
+#include "Pass/Raytracing/PathTracing/IndirectLighting.h"
 
 #include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raytracing/Debug.h"
@@ -159,9 +160,11 @@ void Scene::UpdateMode(Mode mode)
 
 		auto ptPass = eastl::make_unique<Pass::Raytracing::PathTracing::GBuffer>(renderer, tlasPtr);
 		auto directLightingPass = eastl::make_unique<Pass::Raytracing::PathTracing::DirectLighting>(renderer, tlasPtr);
+		auto indirectLightingPass = eastl::make_unique<Pass::Raytracing::PathTracing::IndirectLighting>(renderer, tlasPtr);
 
 		renderGraph->AddNode({ true, "PathTracing::GBuffer", eastl::move(ptPass) });
 		renderGraph->AddNode({ true, "PathTracing::DirectLighting", eastl::move(directLightingPass) });
+		renderGraph->AddNode({ true, "PathTracing::IndirectLighting", eastl::move(indirectLightingPass) });
 	}
 	else if (mode == Mode::Debug) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
