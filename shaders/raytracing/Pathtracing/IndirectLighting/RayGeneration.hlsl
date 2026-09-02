@@ -81,14 +81,21 @@ void Main()
     
     const float3 faceNormal = normalWS;
     
-    Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo.xyz, normalRoughness.w, emissiveMetallic.w, emissiveMetallic.xyz, 0);
+    Surface sourceSurface = SurfaceMaker::make(positionWS, faceNormal, normalWS, tangentWS, bitangentWS, albedo.xyz, normalRoughness.w, emissiveMetallic.w, emissiveMetallic.xyz, 1.0f);
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -positionCS / hitDistance);
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
-    AdjustShadingNormal(sourceSurface, sourceBRDFContext, false, false);
+    bool sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
+    if (!sourceIsEnter)
+    {
+        sourceSurface.FlipNormal();
+        sourceBRDFContext.NdotV = saturate(dot(sourceSurface.Normal, sourceBRDFContext.ViewDirection));
+    }
 
-    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);
+    AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);
+
+    StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
     
     half3 radiance = half3(0.0h, 0.0h, 0.0h);
     
@@ -217,5 +224,5 @@ void Main()
     radiance /= (half)MAX_SAMPLES;
 #endif
     
-    Output[idx] += half4(Output[idx].xyz + radiance, 0.0f);
+    Output[idx].xyz += radiance;
 }
