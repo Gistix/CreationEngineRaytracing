@@ -322,6 +322,121 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #endif
 }
 
+// Get irradiance for point light without BRDF evaluation
+int GetGlobalPointLightIrradiance(in Surface surface, out float3 irradiance, out float3 lr, out float dist, inout uint randomSeed)
+{
+    const uint lightCount = Raytracing.NumLights;
+
+    if (lightCount == 0)
+    {
+        irradiance = float3(0, 0, 0);
+        lr = float3(0, 0, 0);
+        dist = 0.0f;
+        return -1;
+    }
+
+    float lightWeight = float(lightCount);
+
+#if defined(RIS)
+    const uint candidateCount = lightCount;
+
+    uint selectedLightID = 0;
+    float totalWeight = 0.0f;
+    float selectedWeight = 0.0f;
+
+    for (uint i = 0; i < candidateCount; i++)
+    {
+        const uint lightIdx = min(uint(Random(randomSeed) * lightCount), lightCount - 1);
+    
+        const uint lightID = lightIdx;
+    
+        Light testLight = Lights[lightID];
+    
+        const bool isTestLinear = (testLight.Flags & LightFlags::LinearLight) != 0;
+        testLight.Color = (half3)PointLightToLinear(testLight.Color, isTestLinear);
+        float weight = GetLightSampleWeight(surface, testLight);
+        totalWeight += weight;
+
+        if (Random(randomSeed) * totalWeight < weight)
+        {
+            selectedLightID = lightID;
+            selectedWeight = weight;
+        }
+    }
+    
+    if (totalWeight == 0.0f)
+    {
+        irradiance = float3(0, 0, 0);
+        lr = float3(0, 0, 0);
+        dist = 0.0f;    
+        return -1;
+    }
+
+    float risWeight = (totalWeight / max(selectedWeight, 1e-7f)) / float(candidateCount);
+
+    lightWeight *= risWeight;
+
+    Light light = Lights[selectedLightID];
+#else
+    const uint lightIdx = min(uint(Random(randomSeed) * lightCount), lightCount - 1);
+    
+    const uint lightID = lightIdx;
+    
+    Light light = Lights[lightID];
+#endif
+
+    const bool isLinear = (light.Flags & LightFlags::LinearLight) != 0;
+    light.Color = (half3) PointLightToLinear(light.Color, isLinear);
+
+    lr = (light.Position - surface.Position);
+    dist = length(lr);
+    lr /= dist;
+
+    float lightSourceAngle = 0.005f;
+
+    float atten = GetAttenuation(light, lr, dist, lightSourceAngle);
+    irradiance = light.Color * light.Fade * atten * lightWeight;
+    lr = TangentToWorld(lr, SampleCosineHemisphereScaled(randomSeed, lightSourceAngle));
+    
+#if defined(RIS)
+    return selectedLightID;
+#else
+    return lightID;
+#endif
+}
+float3 EvalGlobalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
+{
+    float3 lightIrradiance;
+    float3 lr;
+    float dist;
+    
+    int lightIndex = GetGlobalPointLightIrradiance(surface, lightIrradiance, lr, dist, randomSeed);
+
+    if (lightIndex < 0)
+        return 0.0f;
+    
+    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
+
+    [branch]
+    if (any(direct > MIN_DIFFUSE_SHADOW))
+    {
+        
+#if USE_LIGHT_TLAS    
+#define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
+#else
+#define LIGHT_TLAS Scene     
+#endif
+        
+        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
+    }
+    else
+    {
+        direct = 0.0f;
+    }
+
+    return direct;
+}
+
 float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
 {
     float3 lightIrradiance;
