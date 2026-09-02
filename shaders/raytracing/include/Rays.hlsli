@@ -27,9 +27,6 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
     payload.Init(randomSeed);
 
 #if USE_RAY_QUERY
-#if SER_ENABLED
-    SER_ReorderThread(SER_CalculateRayCoherenceHint(ray.Direction), 16);
-#endif
     RayQuery<RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
 
@@ -49,11 +46,6 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
         }
     }
 
-#if SER_ENABLED
-    uint hitStatus = (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? (rayQuery.CommittedInstanceID() | (1u << 15)) : 0;
-    SER_ReorderThread(hitStatus, 16);
-#endif
-
     if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {
         payload.SetCommittedHit(
@@ -64,13 +56,13 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
             rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
-#if SER_ENABLED
+#   if SER_ENABLED
     NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
     SER_ReorderHitObject(hitObj);
     NvInvokeHitObject(scene, hitObj, payload);
-#else
+#   else
     TraceRay(scene, RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
-#endif
+#   endif
 #endif
     
     randomSeed = payload.randomSeed;
@@ -87,12 +79,6 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
     const uint instanceInclusionMask = primaryRay ? INSTANCE_MASK & ~FRUSTUM_CULLED_MASK : INSTANCE_MASK;
     
 #if USE_RAY_QUERY
-#   if SER_ENABLED
-    if (!primaryRay)
-    {
-        SER_ReorderThread(SER_CalculateRayCoherenceHint(ray.Direction), 16);
-    }
-#   endif
     RayQuery<RAY_FLAGS> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, instanceInclusionMask, ray);
 
@@ -112,14 +98,6 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
         }
     }
 
-#   if SER_ENABLED
-    if (!primaryRay)
-    {
-        uint hitStatus = (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? (rayQuery.CommittedInstanceID() | (1u << 15)) : 0;
-        SER_ReorderThread(hitStatus, 16);
-    }
-#   endif
-
     if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {
         payload.SetCommittedHit(
@@ -137,11 +115,7 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
         NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
         SER_ReorderHitObject(hitObj);
         NvInvokeHitObject(scene, hitObj, payload);
-    }
-    else
-    {
-        TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
-    }
+    } else
 #   else
     TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
 #   endif
@@ -171,9 +145,6 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
 
 #if USE_RAY_QUERY
-#if SER_ENABLED
-    SER_ReorderThread(SER_CalculateRayCoherenceHint(direction), 16);
-#endif
     RayQuery<RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
 
@@ -225,9 +196,6 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
     Payload payload;
     payload.Init(randomSeed);
 #if USE_RAY_QUERY
-#if SER_ENABLED
-    SER_ReorderThread(SER_CalculateRayCoherenceHint(ray.Direction), 16);
-#endif
     RayQuery<RAY_FLAGS | RAY_FLAG_CULL_BACK_FACING_TRIANGLES> rayQuery;
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
 
@@ -247,11 +215,6 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
         }
     }
 
-#if SER_ENABLED
-    uint hitStatus = (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? (rayQuery.CommittedInstanceID() | (1u << 15)) : 0;
-    SER_ReorderThread(hitStatus, 16);
-#endif
-
     if (rayQuery.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
     {
         payload.SetCommittedHit(
@@ -263,13 +226,13 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
     }
     
 #else // !USE_RAY_QUERY    
-#if SER_ENABLED
+#   if SER_ENABLED
     NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
     SER_ReorderHitObject(hitObj);
     NvInvokeHitObject(scene, hitObj, payload);
-#else
+#   else
     TraceRay(scene, RAY_FLAGS | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
-#endif
+#   endif
 #endif
     
     randomSeed = payload.randomSeed;
