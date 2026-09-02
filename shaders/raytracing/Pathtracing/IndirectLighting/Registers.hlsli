@@ -20,23 +20,23 @@ RWTexture2D<half4>                          Output                      : regist
 
 RaytracingAccelerationStructure             Scene                       : register(t0);
 Texture2D<float4>                           SkyHemisphere               : register(t1);
-StructuredBuffer<Light>                     Lights                      : register(t2);
-StructuredBuffer<Instance>                  Instances                   : register(t3);
-StructuredBuffer<Mesh>                      Meshes                      : register(t4);
-StructuredBuffer<Transform>                 Transforms                  : register(t5);
-ByteAddressBuffer                           MeshSlotRemap               : register(t6);
-ByteAddressBuffer                           PropertiesBuffer            : register(t7);
+Texture2D<float4>                           WaterFlowMap                : register(t2);
+StructuredBuffer<Light>                     Lights                      : register(t3);
+StructuredBuffer<Instance>                  Instances                   : register(t4);
+StructuredBuffer<Mesh>                      Meshes                      : register(t5);
+Texture2D<float4>                           SkinDetailNormal            : register(t8);
+Texture2D<float4>                           WaterDisplacementMap        : register(t9);
+Texture2D<float4>                           ProjNoiseMap                : register(t10);
+StructuredBuffer<Transform>                 Transforms                  : register(t11);
 
-Texture2D<float>                            Depth                       : register(t8);
-Texture2D<half4>                            Albedo                      : register(t9);
-Texture2D<half4>                            EmissiveMetallic            : register(t10);
-Texture2D<half4>                            NormalRoughness             : register(t11);
-Texture2D<uint>                             Material                    : register(t12);
+Texture2D<float>                            Depth                       : register(t12);
+Texture2D<half4>                            Albedo                      : register(t13);
+Texture2D<half4>                            EmissiveMetallic            : register(t14);
+Texture2D<half4>                            NormalRoughness             : register(t15);
+Texture2D<uint>                             Material                    : register(t16);
 
-Texture2D<float4>                           WaterFlowMap                : register(t13);
-Texture2D<float4>                           ProjNoiseMap                : register(t14);
-Texture2D<float4>                           SkinDetailNormal            : register(t15);
-Texture2D<float4>                           WaterDisplacementMap        : register(t16);
+ByteAddressBuffer                           MeshSlotRemap               : register(t19);
+ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);

@@ -67,21 +67,21 @@ namespace Pass::Raytracing::PathTracing
 			nvrhi::BindingLayoutItem::VolatileConstantBuffer(2),
 			nvrhi::BindingLayoutItem::RayTracingAccelStruct(0),
 			nvrhi::BindingLayoutItem::Texture_SRV(1),           // SkyHemisphere
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2), // Lights
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // Instances
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4), // Meshes
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5), // Transforms
-			nvrhi::BindingLayoutItem::RawBuffer_SRV(6),        // MeshSlotRemap
-			nvrhi::BindingLayoutItem::RawBuffer_SRV(7),        // PropertiesBuffer
-			nvrhi::BindingLayoutItem::Texture_SRV(8),          // Depth
-			nvrhi::BindingLayoutItem::Texture_SRV(9),          // Albedo
-			nvrhi::BindingLayoutItem::Texture_SRV(10),         // EmissiveMetallic
-			nvrhi::BindingLayoutItem::Texture_SRV(11),         // NormalRoughness
-			nvrhi::BindingLayoutItem::Texture_SRV(12),         // Material
-			nvrhi::BindingLayoutItem::Texture_SRV(13),         // WaterFlowMap
-			nvrhi::BindingLayoutItem::Texture_SRV(14),         // ProjNoiseMap
-			nvrhi::BindingLayoutItem::Texture_SRV(15),         // SkinDetailNormal
-			nvrhi::BindingLayoutItem::Texture_SRV(16),         // WaterDisplacementMap
+			nvrhi::BindingLayoutItem::Texture_SRV(2),           // WaterFlowMap
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // Lights
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(4), // Instances
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(5), // Meshes
+			nvrhi::BindingLayoutItem::Texture_SRV(8),          // SkinDetailNormal
+			nvrhi::BindingLayoutItem::Texture_SRV(9),          // WaterDisplacementMap
+			nvrhi::BindingLayoutItem::Texture_SRV(10),         // ProjNoiseMap
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),// Transforms
+			nvrhi::BindingLayoutItem::Texture_SRV(12),         // Depth
+			nvrhi::BindingLayoutItem::Texture_SRV(13),         // Albedo
+			nvrhi::BindingLayoutItem::Texture_SRV(14),         // EmissiveMetallic
+			nvrhi::BindingLayoutItem::Texture_SRV(15),         // NormalRoughness
+			nvrhi::BindingLayoutItem::Texture_SRV(16),         // Material
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
+			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_UAV(0)           // Output
 		};
 
@@ -237,21 +237,21 @@ namespace Pass::Raytracing::PathTracing
 			nvrhi::BindingSetItem::ConstantBuffer(2, scene->GetFeatureBuffer()),
 			nvrhi::BindingSetItem::RayTracingAccelStruct(0, m_SceneTLAS->GetTopLevelAS().GetHandle()),
 			nvrhi::BindingSetItem::Texture_SRV(1, scene->GetSkyHemiTexture()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetLightBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetInstanceBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetMeshBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetTransformBuffer()),
-			nvrhi::BindingSetItem::RawBuffer_SRV(6, sceneGraph->GetMeshSlotRemapBuffer()),
-			nvrhi::BindingSetItem::RawBuffer_SRV(7, sceneGraph->GetPropertiesBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(8, textureManager.GetTexture(RenderTarget::ClipDepth)),
-			nvrhi::BindingSetItem::Texture_SRV(9, textureManager.GetTexture(RenderTarget::Albedo)),
-			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::EmissiveMetallic)),
-			nvrhi::BindingSetItem::Texture_SRV(11, textureManager.GetTexture(RenderTarget::NormalRoughness)),
-			nvrhi::BindingSetItem::Texture_SRV(12, textureManager.GetTexture(RenderTarget::Material)),
-			nvrhi::BindingSetItem::Texture_SRV(13, scene->GetFlowMapTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetProjNoiseTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetSkinDetailNormalTexture()),
-			nvrhi::BindingSetItem::Texture_SRV(16, renderer->GetWaterDisplacementTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(2, scene->GetFlowMapTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetLightBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(4, sceneGraph->GetInstanceBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(5, sceneGraph->GetMeshBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(9, renderer->GetWaterDisplacementTexture()),
+			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::Texture_SRV(12, textureManager.GetTexture(RenderTarget::ClipDepth)),
+			nvrhi::BindingSetItem::Texture_SRV(13, textureManager.GetTexture(RenderTarget::Albedo)),
+			nvrhi::BindingSetItem::Texture_SRV(14, textureManager.GetTexture(RenderTarget::EmissiveMetallic)),
+			nvrhi::BindingSetItem::Texture_SRV(15, textureManager.GetTexture(RenderTarget::NormalRoughness)),
+			nvrhi::BindingSetItem::Texture_SRV(16, textureManager.GetTexture(RenderTarget::Material)),
+			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
+			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 
