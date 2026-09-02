@@ -115,7 +115,11 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
         NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
         SER_ReorderHitObject(hitObj);
         NvInvokeHitObject(scene, hitObj, payload);
-    } else
+    }
+    else
+    {
+        TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    }
 #   else
     TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
 #   endif
