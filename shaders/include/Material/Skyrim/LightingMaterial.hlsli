@@ -58,43 +58,47 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     }
     
     // Parallax
-    if (isPBRParallax || isVanillaParallax || isVanillaParallaxOcc)
+    [branch]
+    if (surface.Primary)
     {
-        uint16_t displacementTextureIdx = 0;
-        float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
-        float noise = 0;
-        float pixelOffset;
+        if (isPBRParallax || isVanillaParallax || isVanillaParallaxOcc)
+        {
+            uint16_t displacementTextureIdx = 0;
+            float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
+            float noise = 0;
+            float pixelOffset;
         
-        DisplacementParams displacementParams;
-        displacementParams.DisplacementScale = 1.f;
-        displacementParams.DisplacementOffset = 0.f;
-        displacementParams.HeightScale = 1;
-        displacementParams.FlattenAmount = 0;
+            DisplacementParams displacementParams;
+            displacementParams.DisplacementScale = 1.f;
+            displacementParams.DisplacementOffset = 0.f;
+            displacementParams.HeightScale = 1;
+            displacementParams.FlattenAmount = 0;
         
-        bool interlayer = false;
+            bool interlayer = false;
         
         [branch]
-        if (isPBRParallax)
-        {
-            displacementTextureIdx = pbr.DisplacementTexture;
-            displacementParams.HeightScale *= pbr.DisplacementScale;
+            if (isPBRParallax)
+            {
+                displacementTextureIdx = pbr.DisplacementTexture;
+                displacementParams.HeightScale *= pbr.DisplacementScale;
                     
-            interlayer = (pbr.PBRFlags & PBR::Flags::InterlayerParallax) != 0;
-        }
-        else if (isVanillaParallax || isVanillaParallaxOcc)
-        {
+                interlayer = (pbr.PBRFlags & PBR::Flags::InterlayerParallax) != 0;
+            }
+            else if (isVanillaParallax || isVanillaParallaxOcc)
+            {
             // Load ParallaxOcc for Parallax as well
-            ParallaxOccMaterialData parallaxOccMaterial = Materials[0].Load<ParallaxOccMaterialData>(mesh.GetMaterialOffset());
+                ParallaxOccMaterialData parallaxOccMaterial = Materials[0].Load < ParallaxOccMaterialData > (mesh.GetMaterialOffset());
            
-            displacementTextureIdx = parallaxOccMaterial.HeightTexture;
+                displacementTextureIdx = parallaxOccMaterial.HeightTexture;
 
             // Only valid if material is ParallaxOcc
-            if (isVanillaParallaxOcc)
-                displacementParams.HeightScale *= parallaxOccMaterial.Scale;
-        }
+                if (isVanillaParallaxOcc)
+                    displacementParams.HeightScale *= parallaxOccMaterial.Scale;
+            }
         
-        Texture2D displacementTexture = Textures[NonUniformResourceIndex(displacementTextureIdx)];
-        texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, viewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, interlayer, pixelOffset);
+            Texture2D displacementTexture = Textures[NonUniformResourceIndex(displacementTextureIdx)];
+            texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, viewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, interlayer, pixelOffset);
+        }
     }
     
     float3 normal = clampSampler ? 

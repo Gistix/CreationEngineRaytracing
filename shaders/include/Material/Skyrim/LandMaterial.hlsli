@@ -129,7 +129,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
 
     // Parallax — select dominant tile's displacement texture for raymarch
     [branch]
-    if (Features.ExtendedMaterial.EnableParallax && material.Type == Type::TruePBR)
+    if (surface.Primary && Features.ExtendedMaterial.EnableParallax && material.Type == Type::TruePBR)
     {
         float weights[6] = { landBlend0.x, landBlend0.y, landBlend0.z, landBlend0.w, landBlend1.x, landBlend1.y };
         uint16_t dispTextures[6] = { dispTex0, dispTex1, dispTex2, dispTex3, dispTex4, dispTex5 };
