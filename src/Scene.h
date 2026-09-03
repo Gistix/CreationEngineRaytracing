@@ -157,6 +157,8 @@ struct Scene
 
 	void UpdateSettings(Settings settings);
 
+	void ReloadShaders();
+
 #if defined(FALLOUT4)
 	void TryShareBuffer(REX::W32::ID3D11Buffer* buffer);
 

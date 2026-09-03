@@ -535,6 +535,20 @@ float Scene::GetResolutionScale() const
 	return m_Settings.RaytracingSettings.ResolutionScale;
 }
 
+void Scene::ReloadShaders()
+{
+	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
+
+	for (auto& node: renderGraph->GetNodes())
+	{
+		auto* renderPass = node.GetPass<RenderPass>();
+		if (!renderPass)
+			continue;
+
+		renderPass->ReloadShaders();
+	}
+}
+
 #if defined(FALLOUT4)
 void Scene::TryShareBuffer(REX::W32::ID3D11Buffer* a_buffer)
 {

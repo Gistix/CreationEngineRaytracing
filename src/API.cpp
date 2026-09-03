@@ -152,3 +152,8 @@ uint64_t GetFakeDoubledVRAMUsage()
 
 	return textureManager->GetFakeDoubledVRAMUsage();
 }
+
+void ReloadShaders()
+{
+	Scene::GetSingleton()->ReloadShaders();
+}
