@@ -43,4 +43,5 @@ public:
     virtual void SettingsChanged([[maybe_unused]] const Settings& settings) {};
     virtual void ResolutionChanged([[maybe_unused]] uint2 resolution) {};
     virtual void Execute(nvrhi::ICommandList* commandList) = 0;
+    virtual void ReloadShaders() {};
 };
