@@ -56,6 +56,12 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 		case RenderTarget::DownscaledNormalRoughness:
 			desc.format = nvrhi::Format::RGBA16_SNORM;
 			break;
+		case RenderTarget::PSR_RaySegment:
+			desc.format = nvrhi::Format::RGBA32_FLOAT;
+			break;
+		case RenderTarget::PSR_Throughput:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			break;
 		default:
 			break;
 		}

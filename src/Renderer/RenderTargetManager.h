@@ -26,6 +26,8 @@ struct RenderTargetManager
 		DownscaledMotionVectors,
 		DownscaledNormalRoughness,
 		Accumulation,
+		PSR_RaySegment,
+		PSR_Throughput,
 		Total
 	};
 

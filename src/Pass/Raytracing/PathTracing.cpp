@@ -121,10 +121,9 @@ namespace Pass
 		}
 
 		if (m_UseStablePlanes) {
-			// Stable Planes UAVs
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(10));
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_UAV(11));
-			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(12));
+			// Stable Planes / PSR UAVs
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(10)); // PSR_RaySegment
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(11)); // PSR_Throughput
 		}
 
 		if (m_UseRestirGI) {
@@ -155,11 +154,10 @@ namespace Pass
 		}
 	}
 
-	void PathTracing::CreateRayTracingPipelineForMode(int mode, nvrhi::rt::PipelineHandle& outPipeline, nvrhi::rt::ShaderTableHandle& outShaderTable)
+	void PathTracing::CreateRayTracingPipeline()
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"0");
-		defines.emplace_back(L"PATH_TRACER_MODE", mode == 1 ? L"1" : (mode == 2 ? L"2" : L"0"));
 		eastl::vector<DxcDefine> commonDefines;
 
 		auto device = GetRenderer()->GetDevice();
@@ -213,57 +211,42 @@ namespace Pass
 		pipelineDesc.hlslExtensionsUAV = 127;
 #endif
 
-		outPipeline = device->createRayTracingPipeline(pipelineDesc);
-		if (!outPipeline)
+		m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
+		if (!m_RayPipeline)
 			return;
 
 		auto shaderTableDesc = nvrhi::rt::ShaderTableDesc()
 			.enableCaching(5)
 			.setDebugName("Shader Table");
 
-		outShaderTable = outPipeline->createShaderTable(shaderTableDesc);
-		if (!outShaderTable)
+		m_ShaderTable = m_RayPipeline->createShaderTable(shaderTableDesc);
+		if (!m_ShaderTable)
 			return;
 
-		outShaderTable->setRayGenerationShader("RayGen");
-		outShaderTable->addMissShader("Miss");
-		outShaderTable->addMissShader("ShadowMiss");
-		outShaderTable->addHitGroup("HitGroup");
-		outShaderTable->addHitGroup("ShadowHitGroup");
+		m_ShaderTable->setRayGenerationShader("RayGen");
+		m_ShaderTable->addMissShader("Miss");
+		m_ShaderTable->addMissShader("ShadowMiss");
+		m_ShaderTable->addHitGroup("HitGroup");
+		m_ShaderTable->addHitGroup("ShadowHitGroup");
 	}
 
-	void PathTracing::CreateRayTracingPipeline()
-	{
-		if (m_UseStablePlanes) {
-			// BUILD mode (mode 1)
-			CreateRayTracingPipelineForMode(1, m_BuildRayPipeline, m_BuildShaderTable);
-			// FILL mode (mode 2)
-			CreateRayTracingPipelineForMode(2, m_FillRayPipeline, m_FillShaderTable);
-		}
-		else{
-			// Reference mode (mode 0)
-			CreateRayTracingPipelineForMode(0, m_RayPipeline, m_ShaderTable);
-		}
-	}
-
-	void PathTracing::CreateComputePipelineForMode(int mode, nvrhi::ShaderHandle& outShader, nvrhi::ComputePipelineHandle& outPipeline)
+	void PathTracing::CreateComputePipeline()
 	{
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
-		defines.emplace_back(L"PATH_TRACER_MODE", mode == 1 ? L"1" : (mode == 2 ? L"2" : L"0"));
 
 		auto device = GetRenderer()->GetDevice();
 
 		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/PathTracing/RayGeneration.hlsl", defines, ShaderStage::Compute);
-		outShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
+		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
-		if (!outShader)
+		if (!m_ComputeShader)
 			return;
 
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
-			.setComputeShader(outShader)
+			.setComputeShader(m_ComputeShader)
 			.addBindingLayout(m_BindingLayout)
 			.addBindingLayout(sceneGraph->GetTriangleDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
@@ -271,23 +254,9 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
-		.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
+			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
-		outPipeline = device->createComputePipeline(pipelineDesc);
-	}
-
-	void PathTracing::CreateComputePipeline()
-	{
-		if (m_UseStablePlanes) {
-			// BUILD mode (mode 1)
-			CreateComputePipelineForMode(1, m_BuildComputeShader, m_BuildComputePipeline);
-			// FILL mode (mode 2)
-			CreateComputePipelineForMode(2, m_FillComputeShader, m_FillComputePipeline);
-		}
-		else {
-			// Reference mode (mode 0)
-			CreateComputePipelineForMode(0, m_ComputeShader, m_ComputePipeline);
-		}
+		m_ComputePipeline = device->createComputePipeline(pipelineDesc);
 	}
 
 	void PathTracing::CheckBindings()
@@ -361,12 +330,9 @@ namespace Pass
 		}
 
 		if (m_UseStablePlanes) {
-			auto* sp = renderer->GetStablePlanes();
-
-			// Stable Planes UAVs
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(10, sp->header));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_UAV(11, sp->buffer));
-			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(12, sp->stableRadiance));
+			// Stable Planes / PSR UAVs
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(10, textureManager.GetTexture(RenderTarget::PSR_RaySegment)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(11, textureManager.GetTexture(RenderTarget::PSR_Throughput)));
 		}
 
 		if (m_UseRestirGI) {
@@ -447,16 +413,6 @@ namespace Pass
 	{
 		CheckBindings();
 
-		if (m_UseStablePlanes)
-		{
-			// Two-pass stable planes: BUILD then FILL
-			ExecuteDispatch(commandList, m_BuildRayPipeline, m_BuildShaderTable, m_BuildComputePipeline);
-			ExecuteDispatch(commandList, m_FillRayPipeline, m_FillShaderTable, m_FillComputePipeline);
-		}
-		else
-		{
-			// Reference mode: single pass
-			ExecuteDispatch(commandList, m_RayPipeline, m_ShaderTable, m_ComputePipeline);
-		}
+		ExecuteDispatch(commandList, m_RayPipeline, m_ShaderTable, m_ComputePipeline);
 	}
 }

@@ -75,7 +75,7 @@ namespace Util
 					defines.emplace_back(L"DLSS_RR", L"1");
 
 				if (settings.AdvancedSettings.StablePlanes)
-					defines.emplace_back(L"STABLE_PLANES");
+					defines.emplace_back(L"PSR", L"1");
 
 				if (settings.ReSTIRGI.Enabled)
 					defines.emplace_back(L"RESTIR_GI");

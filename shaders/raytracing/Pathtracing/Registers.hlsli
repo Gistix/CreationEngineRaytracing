@@ -1,8 +1,6 @@
 #ifndef REGISTERS_HLSLI
 #define REGISTERS_HLSLI
 
-#include "raytracing/include/StablePlanes.hlsli"
-
 #include "interop/CameraData.hlsli"
 #include "interop/RaytracingData.hlsli"
 #include "interop/SharedData.hlsli"
@@ -54,11 +52,9 @@ RWTexture2D<float>                          SpecularHitDistance         : regist
 
 #   endif
 
-#   if defined(STABLE_PLANES)
-// Stable Planes UAVs (always declared, used when PATH_TRACER_MODE != REFERENCE)
-RWTexture2DArray<uint>                      StablePlanesHeaderUAV       : register(u10);
-RWStructuredBuffer<StablePlane>             StablePlanesBufferUAV       : register(u11);
-RWTexture2D<float4>                         StableRadianceUAV           : register(u12);
+#   if defined(PSR)
+RWTexture2D<float4>                         PSR_RaySegment              : register(u10);
+RWTexture2D<float4>                         PSR_Throughput              : register(u11);
 #   endif
 
 #   if defined(RESTIR_GI)
