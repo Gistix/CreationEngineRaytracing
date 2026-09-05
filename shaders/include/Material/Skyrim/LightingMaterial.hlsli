@@ -105,17 +105,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         normalTexture.SampleLevel(ClampSampler, texCoord0, mipLevel).xyz : 
         normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
 
-#if SKIN_DETAIL_NORMAL
     [branch]
-    if (SKINSETTINGS.skinDetailParams.w > 0.0f && skinEnabled)
-    {
-        float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
-        float3 detailNormal = float3(SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy, 0.5f);
-        detailNormal = (detailNormal * 2.0 - 1.0) * SKINSETTINGS.skinDetailParams.z;
-        normal = normalize(float3(ReorientNormal(detailNormal, (normal * 2 - 1)).xy, normal.z)) * 0.5f + 0.5f;
-    }
-#endif
-
     if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
     {
         // Swizzle matches vanilla shaders        
@@ -124,12 +114,13 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
         {
             surface.Normal = RotateByQuaternion(normal, boneRotation);
-            CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
         }
         else
         {
             surface.Normal = normal;
         }
+      
+        CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
         
         // Use shading values since the geometry ones aren't available
         surface.GeomNormal = surface.Normal;
@@ -144,6 +135,27 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         );
     }
 
+    [branch]
+    if (SKINSETTINGS.skinDetailParams.w > 0.0f && skinEnabled)
+    {
+        const float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
+        
+        // Tangent space normal map with invalid .z channel
+        const float2 detailNormalXY = (SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy * 2.0f - 1.0f) * SKINSETTINGS.skinDetailParams.z;
+        const float3 detailNormal = float3(detailNormalXY, sqrt(saturate(1.0f - dot(detailNormalXY, detailNormalXY))));
+
+        // This method works for both model space and tangent space normal maps
+        surface.Normal = normalize(
+            detailNormal.x * surface.Tangent +
+            detailNormal.y * surface.Bitangent +
+            detailNormal.z * surface.Normal
+        );
+        
+        // Re-orthogonalize basis for downstream shading / BSDF
+        surface.Tangent = normalize(surface.Tangent - surface.Normal * dot(surface.Tangent, surface.Normal));
+        surface.Bitangent = cross(surface.Normal, surface.Tangent);
+    }
+    
     vertexColor.rgb = saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
     
     const bool isWindows = material.Feature == Feature::kGlowMap && props.ShaderFlags & ShaderFlags::kAssumeShadowmask;

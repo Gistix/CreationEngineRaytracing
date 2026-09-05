@@ -162,30 +162,27 @@ struct SurfaceMaker
         float3 bitangentWS = float3(1.0f, 0.0f, 0.0f);
 
         const bool hasNormal = mesh.VertexDesc.HasFlag(VertexFlags::Normal);
-        if (hasNormal)
+
+        float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+        {
+            normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
+            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
+            
+            // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
+            boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
+            boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
+        }
+        else if (hasNormal)
         {
             normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
             tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
             bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
         }
-        else
-        {
-            normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
-            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);         
-        }
- 
-        float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
-        {
-            // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
-            boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
-            boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
-        }
         
         float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
         if (props.ShaderFlags & ShaderFlags::kVertexColors)
-            vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
-       
+            vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);      
             
 #if !USE_SIA_INTERPOLATION
         // Standard path: compute face normal from object-space cross product
