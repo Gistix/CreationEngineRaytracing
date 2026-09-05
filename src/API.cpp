@@ -99,9 +99,10 @@ void UpdateSettings(Settings settings)
 	scene->UpdateSettings(settings);
 }
 
-void GetRRInput(ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance)
+void GetRRInput(ID3D12Resource*& diffuseAlbedo, ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
+	diffuseAlbedo = textureManager.GetTexture(RenderTarget::DiffuseAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
 	specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
 	specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
 }
@@ -112,7 +113,7 @@ void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, 
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
 }
 
-void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main, SharedTexture* diffuseAlbedo)
+void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
 
@@ -120,7 +121,6 @@ void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, Shared
 		depth[i] = textureManager.GetSharedTexture(RenderTarget::ClipDepth, i);
 		motionVector[i] = textureManager.GetSharedTexture(RenderTarget::MotionVectors3D, i);
 		main[i] = textureManager.GetSharedTexture(RenderTarget::Main, i);
-		diffuseAlbedo[i] = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo, i);
 	}
 }
 

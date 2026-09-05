@@ -1,5 +1,6 @@
 #include "RenderTargetManager.h"
 #include "Renderer.h"
+#include "Scene.h"
 
 nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot) {
 	auto& renderTarget = m_Textures[slot][static_cast<size_t>(texture)];
@@ -156,10 +157,26 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 }
 
 void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, uint32_t slot) {
-	for (size_t i = 0; i < static_cast<size_t>(Texture::Total); ++i) {
-		auto& rt = m_Textures[slot][i];
-		if (rt.sharedD3D12Handle && rt.handle) {
+	auto currentMode = Scene::GetSingleton()->m_Settings.GeneralSettings.Mode;
+
+	const bool gi = (currentMode == Mode::GlobalIllumination);
+	const bool pt = (currentMode == Mode::PathTracing);
+
+	if (!gi && !pt)
+		return;
+
+	auto copyTexture = [&](Texture texture){
+		auto& rt = m_Textures[slot][static_cast<size_t>(texture)];
+
+		if (rt.sharedD3D12Handle && rt.handle)
 			commandList->copyTexture(rt.sharedD3D12Handle, nvrhi::TextureSlice(), rt.handle, nvrhi::TextureSlice());
-		}
+	};
+
+	if (gi || pt)
+		copyTexture(Texture::Main);
+
+	if (pt) {
+		copyTexture(Texture::ViewDepth);
+		copyTexture(Texture::MotionVectors3D);
 	}
 }
