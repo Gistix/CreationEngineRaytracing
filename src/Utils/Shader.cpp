@@ -2,6 +2,7 @@
 
 #include "Types/InstanceMask.h"
 #include "Constants.h"
+#include "Renderer.h"
 
 namespace Util
 {
@@ -35,11 +36,10 @@ namespace Util
 			if (settings.ExperimentalSettings.GlobalLights)
 				defines.emplace_back(L"GLOBAL_LIGHTS", L"1");
 
-			if (settings.AdvancedSettings.ShaderExecutionReordering) {
 #if defined(NVAPI)
+			if (settings.AdvancedSettings.ShaderExecutionReordering && Renderer::GetSingleton()->m_ShaderModel >= D3D_SHADER_MODEL_6_9)
 				defines.emplace_back(L"ENABLE_SER", L"1");
 #endif
-			}
 
 			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
