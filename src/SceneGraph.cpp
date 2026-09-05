@@ -605,11 +605,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			for (size_t i = start; i < end; ++i) {
 				auto& [bsTriShape, refr] = m_CreateList[i];
 
-				if (!bsTriShape) {
-					logger::critical("[PhaseB-DBG] doFilter[{0},{1}) at i={2} found NULL bsTriShape; refr={3:p}; m_CreateList.size()={4}",
-					                 start, end, i, static_cast<const void*>(refr), m_CreateList.size());
+				if (!bsTriShape)
 					continue;
-				}
 
 				if (!Util::Adapter::IsValidTriShape(bsTriShape))
 					continue;
@@ -619,10 +616,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!shaderProperty)
 					continue;
 
-				const auto materialType = static_cast<uint32_t>(shaderProperty->GetMaterialType());
-				const bool isLightingShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kLighting));
-				const bool isEffectShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kEffect));
-				const bool isWaterShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kWater));
+				const auto materialType = static_cast<RE::BSShaderMaterial::Type>(shaderProperty->GetMaterialType());
+
+				const bool isBase = (materialType == RE::BSShaderMaterial::Type::kBase);
+				const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
+				const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
+				const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
 
 				// Skip alpha blended effects (particles and effects)
 				auto* alphaProperty = geometryData.alphaProperty;
@@ -645,14 +644,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				}
 #endif
 
-				if (!isLightingShader && !validEffect && !isWaterShader)
+				// Let base pass, we'll filter below
+				if (!isBase && !isLightingShader && !validEffect && !isWaterShader)
 					continue;
 
-				// Exclude tree lod and grass for now
-				const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-				if (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get() ||
-				    shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get())
-					continue;
+				if (isBase) {
+					// We're only interested in Tree LOD
+					const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+					if (shaderPropertyRTTI != Constants::rtti::BSDistantTreeShaderProperty.get())
+						continue;
+				}
 
 				if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
 					continue;

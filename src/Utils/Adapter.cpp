@@ -163,7 +163,8 @@ namespace Util
 			return 
 				type == RE::BSGeometry::Type::kTriShape || 
 				type == RE::BSGeometry::Type::kDynamicTriShape || 
-				type == RE::BSGeometry::Type::kSubIndexTriShape;
+				type == RE::BSGeometry::Type::kSubIndexTriShape ||          // Object LOD
+				type == RE::BSGeometry::Type::kMultiStreamInstanceTriShape; // DistantTree (LOD)
 #elif defined(FALLOUT4)
 			auto type = static_cast<RE::BSGeometryType>(a_geometry->type);
 			return 
