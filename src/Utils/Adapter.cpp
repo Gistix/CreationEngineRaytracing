@@ -236,6 +236,18 @@ namespace Util
 #endif	
 		}
 
+		RE::BSMultiStreamInstanceTriShape* AsMultiStreamInstanceTriShape(RE::BSGeometry* a_geometry)
+		{
+#if defined(SKYRIM)
+			if (a_geometry->GetType() == RE::BSGeometry::Type::kMultiStreamInstanceTriShape)
+				return static_cast<RE::BSMultiStreamInstanceTriShape*>(a_geometry);
+#elif defined(FALLOUT4)
+			if (static_cast<RE::BSGeometryType>(a_geometry->type) == RE::BSGeometryType::kMultiStreamInstanceTriShape)
+				return reinterpret_cast<RE::BSMultiStreamInstanceTriShape*>(a_geometry);
+#endif
+			return nullptr;
+		}
+
 		RE::BSDynamicTriShape* AsDynamicTriShape(RE::BSTriShape* a_geometry)
 		{
 #if defined(SKYRIM)

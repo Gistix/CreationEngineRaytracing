@@ -146,6 +146,9 @@ class SceneGraph
 		eastl::vector<eastl::pair<MeshData, RE::BSTriShape*>> meshes;
 		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
 	};
+
+	eastl::unordered_map<RE::BSTriShape*, eastl::vector<RE::BGSDistantTreeBlock::InstanceData>> m_DistantTree;
+	std::mutex m_DistantTreeMutex;
 public:
 	void Initialize();
 
@@ -228,6 +231,9 @@ public:
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
 
+	void RegisterBlock(RE::BGSDistantTreeBlock* block);
+	void ReleaseBlock(RE::BGSDistantTreeBlock* block);
+	eastl::vector<RE::BGSDistantTreeBlock::InstanceData> GetBlockInstanceData(RE::BSTriShape* triShape);
 private:
 	eastl::vector<PassTiming> m_UpdateTimings;
 

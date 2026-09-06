@@ -22,6 +22,7 @@ namespace RE
 
 	class BSTriShape;
 	class BSDynamicTriShape;
+	class BSMultiStreamInstanceTriShape;
 	class TESObjectLIGH;
 }
 
@@ -46,6 +47,7 @@ namespace Util
 		RE::NiNode* AsNode(RE::NiAVObject* a_object);
 		RE::BSFadeNode* AsFadeNode(RE::NiAVObject* a_object);
 		RE::BSSubIndexTriShape* AsSubIndexTriShape(RE::BSGeometry* a_geometry);
+		RE::BSMultiStreamInstanceTriShape* AsMultiStreamInstanceTriShape(RE::BSGeometry* a_geometry);
 		RE::BSDynamicTriShape* AsDynamicTriShape(RE::BSTriShape* a_geometry);
 
 		// This version mimics direct pointer retrieval rather than CommonLib's implementation, which iterates up the parent hierarchy to find a valid owner

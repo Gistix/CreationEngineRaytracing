@@ -4,6 +4,7 @@
 #include "Core/Mesh/SkinnedMesh.h"
 #include "Core/Mesh/DynamicMesh.h"
 #include "Core/Mesh/SubIndexMesh.h"
+#include "Core/Mesh/InstancedMesh.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
@@ -33,6 +34,9 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
+
+		if (auto* multiStreamTriShape = Util::Adapter::AsMultiStreamInstanceTriShape(bsTriShape))
+			return eastl::make_unique<InstancedMesh>(multiStreamTriShape, commandList);
 
 #if defined(FALLOUT4)
 		// Does this mean DynamicMesh has rendererData in Fallout4?

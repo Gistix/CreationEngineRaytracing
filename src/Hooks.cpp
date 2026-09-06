@@ -493,10 +493,8 @@ namespace Hooks
 			func(a_block, a2);
 
 			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			if (a_block->doneLoading && valid) {
-				if (!a_block->treeGroups.empty()) {
-				}
-			}
+			if (a_block->doneLoading && valid)
+				Scene::GetSingleton()->GetSceneGraph()->RegisterBlock(a_block);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -511,11 +509,8 @@ namespace Hooks
 			func(a_block);
 
 			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			if (a_block->doneLoading && valid) {
-				if (!a_block->treeGroups.empty()) {
-
-				}
-			}
+			if (a_block->doneLoading && valid)
+				Scene::GetSingleton()->GetSceneGraph()->RegisterBlock(a_block);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -525,6 +520,7 @@ namespace Hooks
 	{
 		static void thunk(RE::BGSDistantTreeBlock* a_block)
 		{
+			Scene::GetSingleton()->GetSceneGraph()->ReleaseBlock(a_block);
 			func(a_block);
 		}
 
@@ -537,17 +533,11 @@ namespace Hooks
 
 		static void thunk(RE::BSResource::IEntryDB* a_entryDB, RE::BGSTerrainNode::Layer<RE::BGSDistantTreeBlock>* a2, int a3, void* a4)
 		{
-			RE::BGSDistantTreeBlock* block = nullptr;
-
-			if (a2)
-				block = a2->block;
+			// This function being called does not guarantee the block will be released
+			if (a2 && a2->block)
+				Scene::GetSingleton()->GetSceneGraph()->ReleaseBlock(a2->block);
 
 			func(a_entryDB, a2, a3, a4);
-
-			if (a2 && block) {
-				if (block != a2->block) {
-				}
-			}
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -686,14 +676,14 @@ namespace Hooks
 		//stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
 		// Tree LOD
-		/*if (REL::Module::IsSE()) {
+		if (REL::Module::IsSE()) {
 			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
 			stl::detour_thunk<BGSDistantTreeBlock_DtorSE>(REL::RelocationID(30821, 0));
 		}
 		else {
 			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
 			stl::detour_thunk<BGSDistantTreeBlock_DtorAE>(REL::RelocationID(0, 31717));
-		}*/
+		}
 		
 		// Landscape
 		//stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));

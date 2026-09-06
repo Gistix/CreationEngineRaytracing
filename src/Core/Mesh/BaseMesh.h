@@ -45,7 +45,8 @@ public:
 		Default,
 		Skinned,
 		Dynamic,
-		SubIndex
+		SubIndex,
+		Instanced
 	};
 
 	enum class Flags : uint8_t
@@ -75,6 +76,7 @@ public:
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
 
 	virtual class SubIndexMesh* AsSubIndexMesh() { return nullptr; }
+	virtual class InstancedMesh* AsInstancedMesh() { return nullptr; }
 
 	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
 	virtual uint32_t GetDynamicIndex() const { return 0; }

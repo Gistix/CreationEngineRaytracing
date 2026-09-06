@@ -1042,3 +1042,57 @@ void SceneGraph::WriteTransformData(uint32_t index, const float3x4& transform, c
 {
 	m_MeshManager->WriteTransformData(index, transform, prevTransform);
 }
+
+void SceneGraph::RegisterBlock(RE::BGSDistantTreeBlock* block)
+{
+	if (block->treeGroups.empty())
+		return;
+
+	for (auto& group: block->treeGroups)
+	{
+		if (!group->geometry)
+			continue;
+
+		auto* geometry = group->geometry.get();
+
+		logger::info("{}", fmt::ptr(geometry));
+
+		std::scoped_lock lock(m_DistantTreeMutex);
+
+		auto [it, emplaced] = m_DistantTree.try_emplace(geometry);
+
+		for (auto& instanceData : group->instances)
+		{
+			it->second.push_back(instanceData);
+		}
+	}
+}
+
+void SceneGraph::ReleaseBlock(RE::BGSDistantTreeBlock* block)
+{
+	if (block->treeGroups.empty())
+		return;
+
+	for (auto& group : block->treeGroups)
+	{
+		if (!group->geometry)
+			continue;
+
+		auto* geometry = group->geometry.get();
+
+		std::scoped_lock lock(m_DistantTreeMutex);
+
+		m_DistantTree.erase(geometry);
+	}
+}
+
+eastl::vector<RE::BGSDistantTreeBlock::InstanceData> SceneGraph::GetBlockInstanceData(RE::BSTriShape* triShape)
+{
+	std::scoped_lock lock(m_DistantTreeMutex);
+
+	auto it = m_DistantTree.find(triShape);
+	if (it == m_DistantTree.end())
+		return {};
+
+	return it->second;
+}
