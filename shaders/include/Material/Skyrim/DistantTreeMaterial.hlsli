@@ -4,16 +4,18 @@
 #include "include/Common.hlsli"
 #include "include/Surface.hlsli"
 #include "interop/Properties.hlsli"
-#include "interop/Material/Skyrim/LightingMaterialData.hlsli"
+#include "include/ColorConversions.hlsli"
+
+#include "interop/Material/Skyrim/DistantTreeMaterialData.hlsli"
 
 void DistantTreeMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh, Properties props)
 {
-    LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-    Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
-    float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
+    DistantTreeMaterialData material = Materials[0].Load<DistantTreeMaterialData>(mesh.GetMaterialOffset());
+    Texture2D treeLODAtlasTexture = Textures[NonUniformResourceIndex(material.TreeLODAtlas)];
+    float4 diffuse = treeLODAtlasTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
     float alpha = diffuse.a * props.Alpha;
 
-    surface.Albedo = diffuse.rgb;
+    surface.Albedo = VanillaDiffuseColor(diffuse.rgb);
 }
 
 #endif // DISTANT_TREE_MATERIAL_FUNC_HLSL

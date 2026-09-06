@@ -17,6 +17,7 @@
 #include "Core/Material/Skyrim/PBRLandscapeMaterial.h"
 #include "Core/Material/Skyrim/EffectMaterial.h"
 #include "Core/Material/Skyrim/WaterMaterial.h"
+#include "Core/Material/Skyrim/DistantTreeMaterial.h"
 #elif defined(FALLOUT4)
 #include "Core/Material/Fallout4/LightingMaterial.h"
 #include "Core/Material/Fallout4/EnvmapMaterial.h"
@@ -236,7 +237,10 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderProperty* shade
 		material = eastl::make_shared<WaterMaterial>(shaderMaterial, offset);
 	}
 	else {
-		material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
+		if (shaderProperty->GetRTTI() == Constants::rtti::BSDistantTreeShaderProperty.get()) {
+			material = eastl::make_shared<DistantTreeMaterial>(shaderMaterial, offset);
+		} else
+			material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
 	}
 
 	material->SetManager(shared_from_this());
@@ -285,9 +289,9 @@ void MaterialManager::Flush(nvrhi::ICommandList* commandList)
 	}
 }
 
+#if defined(SKYRIM)
 Texture MaterialManager::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiSourceTexture>& niPointer, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, [[maybe_unused]] TextureType textureType)
 {
-#if defined(SKYRIM)
 	if (!niPointer || !niPointer->rendererTexture)
 		return Texture(defaultDescHandle, nullptr);
 
@@ -295,14 +299,14 @@ Texture MaterialManager::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiS
 
 	if (auto result = textureManager->GetDescriptor(niPointer->rendererTexture, textureType))
 		return Texture(result, defaultDescHandle.get());
-#endif
+
 	return Texture(defaultDescHandle, nullptr);
 
 }
+#endif
 
 Texture MaterialManager::GetTexture(RE::NiTexture* a_texture, eastl::shared_ptr<DescriptorHandle> defaultDescHandle, TextureType textureType)
 {
-#if defined(FALLOUT4)
 	if (!a_texture)
 		return Texture(defaultDescHandle, nullptr);
 
@@ -313,9 +317,6 @@ Texture MaterialManager::GetTexture(RE::NiTexture* a_texture, eastl::shared_ptr<
 	auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
 	if (auto result = textureManager->GetDescriptor(rendererTexture, textureType))
 		return Texture(result, defaultDescHandle.get());
-#else
-	(void)a_texture;
-	(void)textureType;
-#endif
+
 	return Texture(defaultDescHandle, nullptr);
 }
