@@ -179,6 +179,11 @@ struct SurfaceMaker
             tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
             bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
         }
+        else
+        {
+            normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
+            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
+        }
         
         float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
         if (props.ShaderFlags & ShaderFlags::kVertexColors)
