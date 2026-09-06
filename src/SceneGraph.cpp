@@ -1074,8 +1074,6 @@ void SceneGraph::RegisterBlock(RE::BGSDistantTreeBlock* block)
 
 		auto* geometry = group->geometry.get();
 
-		logger::info("{}", fmt::ptr(geometry));
-
 		std::scoped_lock lock(m_DistantTreeMutex);
 
 		auto [it, emplaced] = m_DistantTree.try_emplace(geometry);
