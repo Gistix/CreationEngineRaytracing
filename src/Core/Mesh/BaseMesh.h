@@ -21,7 +21,6 @@ struct GeometryEntry {
 
 class BaseMesh
 {
-	void UpdateMaterial();
 public:
 	struct BufferDescriptor {
 		nvrhi::BufferHandle m_Buffer = nullptr;
@@ -171,6 +170,7 @@ protected:
 		uint32_t transformIndex, nvrhi::Format vertexFormat = nvrhi::Format::RGB32_FLOAT);
 
 	void CreateMaterial();
+	void UpdateMaterial();
 
 	void AllocateMeshIndex();
 

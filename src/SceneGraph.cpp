@@ -19,6 +19,8 @@
 #include "Core/Mesh/DynamicMesh.h"
 #include "Core/Mesh/SubIndexMesh.h"
 #include "Core/Mesh/SubIndexSegmentMesh.h"
+#include "Core/Mesh/InstancedMesh.h"
+#include "Core/BLASInstanceCluster.h"
 #include "Core/ParallelTriShapeWalker.h"
 
 #include <chrono>
@@ -845,7 +847,11 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						if (meshCount == 0)
 							continue;
 
-						// Acdquire indices and advance counts atomically
+						const uint32_t instCount = cluster->GetInstanceCount();
+						if (instCount == 0)
+							continue;
+
+						// Acquire indices and advance counts atomically
 						uint32_t firstMesh = 0;
 						uint32_t instanceIndex = 0;
 						{
@@ -860,10 +866,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 								continue;
 							}
 
-							if (m_NumInstances + 1 > Constants::NUM_INSTANCES_MAX) {
+							if (m_NumInstances + instCount > Constants::NUM_INSTANCES_MAX) {
 								cluster->SetValid(false);
 								if (!reportedInstanceLimit) {
-									logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_INSTANCES_MAX, meshCount);
+									logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} instances.", Constants::NUM_INSTANCES_MAX, instCount);
 									reportedInstanceLimit = true;
 								}
 								continue;
@@ -872,7 +878,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 							firstMesh = m_NumMeshes;
 							m_NumMeshes += meshCount;
 
-							instanceIndex = m_NumInstances++;
+							instanceIndex = m_NumInstances;
+							m_NumInstances += instCount;
 						}
 
 						// Write remap entries: packed (instanceID << 16) | geometrySlot into the ByteAddress remap buffer
@@ -886,7 +893,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 						cluster->SetInstanceIndex(instanceIndex);
 
 						// Update Instance Data
-						cluster->WriteInstanceData(firstMesh, meshCount, m_InstanceData[instanceIndex]);
+						cluster->WriteInstanceData(firstMesh, meshCount, &m_InstanceData[instanceIndex]);
 					}
 				});
 			}
@@ -944,7 +951,9 @@ BLASCluster* SceneGraph::GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a
 {
 	{
 		std::shared_lock lock(a_mutex);
+
 		auto it = a_map.find(a_key);
+
 		if (it != a_map.end())
 			return it->second.get();
 	}
@@ -953,9 +962,19 @@ BLASCluster* SceneGraph::GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a
 	bool didInsert = false;
 	{
 		std::unique_lock lock(a_mutex);
+
 		auto [it, inserted] = a_map.try_emplace(a_key, nullptr);
-		if (inserted)
-			it->second = eastl::make_unique<BLASCluster>(a_owner);
+
+		if (inserted) {
+			if constexpr (std::is_same_v<Key, RE::BSTriShape*>) {
+				if (Util::Adapter::AsMultiStreamInstanceTriShape(a_key))
+					it->second = eastl::make_unique<BLASInstanceCluster>(a_owner);
+				else
+					it->second = eastl::make_unique<BLASCluster>(a_owner);
+			} else
+				it->second = eastl::make_unique<BLASCluster>(a_owner);
+		}
+
 		result = it->second.get();
 		didInsert = inserted;
 	} // exclusive lock released here

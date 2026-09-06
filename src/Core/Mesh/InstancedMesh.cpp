@@ -48,6 +48,7 @@ InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi:
 			return;
 		}
 
+		m_InstanceData.reserve(instanceData.size());
 		for (auto& data : instanceData)
 		{
 			half3 position;
@@ -64,7 +65,51 @@ InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi:
 			instanceTransform.translate = RE::NiPoint3(position.x, position.y, position.z);
 			instanceTransform.scale = scale;
 
-			m_InstanceData.emplace_back(instanceTransform, 1.0f);
+			auto worldTransform = m_BSTriShape->local * instanceTransform;
+
+			float3x4 xf;
+			XMStoreFloat3x4(&xf, Util::Math::GetXMFromNiTransform(worldTransform));
+
+			m_InstanceData.push_back({ xf, xf, 1.0f });
 		}
 	}
+}
+
+void InstancedMesh::Update([[maybe_unused]] nvrhi::ICommandList* commandList)
+{
+	m_Properties.Update(m_BSTriShape, m_Flags.all(Flags::Eyes));
+	WriteProperties();
+
+	m_WorldBound = m_BSTriShape->worldBound;
+
+	// Template mesh local transform: match first instance's transform so GPU TransformComposition
+	// (InverseAffine(Instances[remapInstance].Transform) * CurrentTransforms[meshID]) evaluates to identity.
+	if (!m_InstanceData.empty()) {
+		m_Transform = m_InstanceData.front().transform;
+		m_PrevTransform = m_InstanceData.front().prevTransform;
+	} else {
+		m_Transform = Constants::kIdentityTransform;
+		m_PrevTransform = Constants::kIdentityTransform;
+	}
+	m_World = RE::NiTransform();
+	m_NeedsPrevInit = false;
+
+	WriteTransform();
+
+	// Update geometry desc alpha / opaque flag
+	const bool prevAlpha = m_Flags.all(Flags::Alpha);
+	const bool alpha = m_Properties.IsAlpha();
+	if (prevAlpha != alpha)
+	{
+		m_Flags.set(alpha, Flags::Alpha);
+
+		for (auto& entry : m_GeometryEntries)
+		{
+			entry.desc.flags = alpha ? nvrhi::rt::GeometryFlags::None : nvrhi::rt::GeometryFlags::Opaque;
+		}
+
+		MarkDirty(DirtyFlags::Alpha);
+	}
+
+	UpdateMaterial();
 }

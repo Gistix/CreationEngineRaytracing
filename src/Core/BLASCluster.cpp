@@ -262,8 +262,14 @@ uint32_t BLASCluster::Update()
 	return meshCount;
 }
 
-void BLASCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const
+void BLASCluster::AppendInstanceDescs(eastl::vector<nvrhi::rt::InstanceDesc>& outDescs) const
 {
+	outDescs.push_back(MakeInstanceDesc());
+}
+
+void BLASCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances) const
+{
+	InstanceData& instanceData = outInstances[0];
 	instanceData.Transform = m_Transform;
 	instanceData.PrevTransform = m_PrevTransform;
 	instanceData.LightData = m_InstanceLightData;
