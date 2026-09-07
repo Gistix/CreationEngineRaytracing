@@ -1,5 +1,6 @@
 #include "TextureManager.h"
 #include "Renderer.h"
+#include "Utils/DXVKInterop.h"
 
 TextureReference::TextureReference(nvrhi::TextureHandle texture, DescriptorTableManager* descriptorTableManager) :
 	texture(texture)
@@ -73,67 +74,118 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 			return refIt->second->descriptorHandle;
 	}
 
-	// Share texture from DX11 to DX12
-	auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+	nvrhi::TextureHandle textureHandle = nullptr;
 
-	winrt::com_ptr<IDXGIResource> dxgiResource;
-	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+	if (Renderer::GetSingleton()->IsVulkan()) {
+		winrt::com_ptr<IDXGIVkInteropSurface> interopSurface;
+		HRESULT hr = d3d11Resource->QueryInterface(__uuidof(IDXGIVkInteropSurface), interopSurface.put_void());
+		if (FAILED(hr)) {
+			logger::error("TextureManager::GetDescriptor - QueryInterface IDXGIVkInteropSurface failed.");
+			return nullptr;
+		}
 
-	if (FAILED(hr)) {
-		logger::error("{} - Failed to query interface.", __FUNCTION__);
-		return nullptr;
+		VkImage vkImage = VK_NULL_HANDLE;
+		VkImageLayout vkLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		VkImageCreateInfo createInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+
+		hr = interopSurface->GetVulkanImageInfo(&vkImage, &vkLayout, &createInfo);
+		if (FAILED(hr) || !vkImage) {
+			logger::error("TextureManager::GetDescriptor - GetVulkanImageInfo failed.");
+			return nullptr;
+		}
+
+		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+		D3D11_TEXTURE2D_DESC desc11{};
+		d3d11Texture->GetDesc(&desc11);
+
+		auto format = Renderer::GetFormat(desc11.Format);
+		if (format == nvrhi::Format::UNKNOWN) {
+			format = Renderer::GetFormatFromVkFormat(createInfo.format);
+		}
+		if (format == nvrhi::Format::UNKNOWN) {
+			logger::error("TextureManager::GetDescriptor - Unmapped format {}", magic_enum::enum_name(desc11.Format));
+			return nullptr;
+		}
+
+		auto textureDesc = nvrhi::TextureDesc()
+			.setWidth(createInfo.extent.width)
+			.setHeight(createInfo.extent.height)
+			.setDepth(createInfo.extent.depth)
+			.setMipLevels(createInfo.mipLevels)
+			.setArraySize(createInfo.arrayLayers)
+			.setDimension(textureType == TextureType::CubeMap ? nvrhi::TextureDimension::TextureCube : nvrhi::TextureDimension::Texture2D)
+			.setFormat(format)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+			.setDebugName(std::format("Shared Vulkan Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
+
+		textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, nvrhi::Object(vkImage), textureDesc);
+		if (!textureHandle) {
+			logger::error("TextureManager::GetDescriptor - Failed to create handle for native Vulkan texture.");
+			return nullptr;
+		}
+	} else {
+		// Share texture from DX11 to DX12
+		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+
+		winrt::com_ptr<IDXGIResource> dxgiResource;
+		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(&dxgiResource));
+
+		if (FAILED(hr)) {
+			logger::error("{} - Failed to query interface.", __FUNCTION__);
+			return nullptr;
+		}
+
+		HANDLE sharedHandle = nullptr;
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+
+		if (FAILED(hr) || !sharedHandle) {
+			D3D11_TEXTURE2D_DESC desc;
+			d3d11Texture->GetDesc(&desc);
+
+			logger::debug("TextureManager::GetDescriptor - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
+			return nullptr;
+		}
+
+		auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
+
+		// OpenSharedHandle returns an owned COM reference. Keep it in a com_ptr until
+		// the NVRHI wrapper takes its own reference, otherwise the opened reference
+		// outlives the TextureReference cache entry.
+		winrt::com_ptr<ID3D12Resource> openedSharedResource;
+
+		hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(openedSharedResource.put()));
+
+		if (FAILED(hr)) {
+			logger::error("TextureManager::GetDescriptor - Failed to open shared handle.");
+			return nullptr;
+		}
+
+		auto d3d12Resource = openedSharedResource.get();
+		if (!d3d12Resource) {
+			logger::error("TextureManager::GetDescriptor - Failed to acquire DX12 texture.");
+			return nullptr;
+		}
+
+		openedSharedResource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
+
+		// Create NVRHI handle for native texture
+		D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
+
+		auto format = Renderer::GetFormat(nativeTexDesc.Format);
+		if (format == nvrhi::Format::UNKNOWN) {
+			logger::error("TextureManager::GetDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
+			return nullptr;
+		}
+
+		auto& textureDesc = nvrhi::TextureDesc()
+			.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
+			.setHeight(nativeTexDesc.Height)
+			.setFormat(format)
+			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+			.setDebugName("Shared Texture [?]");
+
+		textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 	}
-
-	HANDLE sharedHandle = nullptr;
-	hr = dxgiResource->GetSharedHandle(&sharedHandle);
-
-	if (FAILED(hr) || !sharedHandle) {
-		D3D11_TEXTURE2D_DESC desc;
-		d3d11Texture->GetDesc(&desc);
-
-		logger::debug("TextureManager::GetDescriptor - Failed to get shared handle - [{}, {}] Format: {}", desc.Width, desc.Height, magic_enum::enum_name(desc.Format));
-		return nullptr;
-	}
-
-	auto* d3d12Device = Renderer::GetSingleton()->GetNativeD3D12Device();
-
-	// OpenSharedHandle returns an owned COM reference. Keep it in a com_ptr until
-	// the NVRHI wrapper takes its own reference, otherwise the opened reference
-	// outlives the TextureReference cache entry.
-	winrt::com_ptr<ID3D12Resource> openedSharedResource;
-
-	hr = d3d12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(openedSharedResource.put()));
-
-	if (FAILED(hr)) {
-		logger::error("TextureManager::GetDescriptor - Failed to open shared handle.");
-		return nullptr;
-	}
-
-	auto d3d12Resource = openedSharedResource.get();
-	if (!d3d12Resource) {
-		logger::error("TextureManager::GetDescriptor - Failed to acquire DX12 texture.");
-		return nullptr;
-	}
-
-	openedSharedResource->SetName(std::format(L"Shared Texture 0x{:08X}", reinterpret_cast<uintptr_t>(d3d11Resource)).c_str());
-
-	// Create NVRHI handle for native texture
-	D3D12_RESOURCE_DESC nativeTexDesc = d3d12Resource->GetDesc();
-
-	auto format = Renderer::GetFormat(nativeTexDesc.Format);
-	if (format == nvrhi::Format::UNKNOWN) {
-		logger::error("TextureManager::GetDescriptor - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
-		return nullptr;
-	}
-
-	auto& textureDesc = nvrhi::TextureDesc()
-		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
-		.setHeight(nativeTexDesc.Height)
-		.setFormat(format)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
-		.setDebugName("Shared Texture [?]");
-
-	auto textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 
 	{
 		std::scoped_lock lock(m_TexturesMutex);

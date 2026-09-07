@@ -5,6 +5,7 @@
 
 #include <Rtxdi/RtxdiUtils.h>
 
+#include "Utils/DXVKInterop.h"
 #include "Renderer/RenderNode.h"
 #include "interop/PackedSurfaceData.hlsli"
 
@@ -105,6 +106,15 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
 
 			m_FormatMapping.emplace(nativeFormat, format);
+		}
+
+	// Map VkFormat to NVRHI formats
+	if (m_VkFormatMapping.empty())
+		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+		{
+			auto format = (nvrhi::Format)i;
+			auto nativeFormat = nvrhi::vulkan::convertFormat(format);
+			m_VkFormatMapping.emplace(nativeFormat, format);
 		}
 
 	PostInitialize();
@@ -670,11 +680,73 @@ nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nati
 	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeResource, textureDesc);
 }
 
+nvrhi::TextureHandle Renderer::CreateHandleForNativeVulkanTexture(VkImage vkImage, const char* debugName, const nvrhi::TextureDesc& desc)
+{
+	nvrhi::TextureDesc textureDesc = desc;
+	if (debugName) {
+		textureDesc.setDebugName(debugName);
+	}
+	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, nvrhi::Object(vkImage), textureDesc);
+}
+
 nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
 {
 	if (!d3d11Texture) {
 		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");
 		return nullptr;
+	}
+
+	if (IsVulkan()) {
+		winrt::com_ptr<IDXGIVkInteropSurface> interopSurface;
+		HRESULT hr = d3d11Texture->QueryInterface(__uuidof(IDXGIVkInteropSurface), interopSurface.put_void());
+		if (FAILED(hr)) {
+			logger::error("Renderer::ShareTexture - QueryInterface IDXGIVkInteropSurface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
+
+		VkImage vkImage = VK_NULL_HANDLE;
+		VkImageLayout vkLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		VkImageCreateInfo createInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+
+		hr = interopSurface->GetVulkanImageInfo(&vkImage, &vkLayout, &createInfo);
+		if (FAILED(hr) || !vkImage) {
+			logger::error("Renderer::ShareTexture - GetVulkanImageInfo failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
+
+		D3D11_TEXTURE2D_DESC desc11{};
+		d3d11Texture->GetDesc(&desc11);
+
+		if (format == nvrhi::Format::UNKNOWN) {
+			format = Renderer::GetFormat(desc11.Format);
+			if (format == nvrhi::Format::UNKNOWN) {
+				format = Renderer::GetFormatFromVkFormat(createInfo.format);
+			}
+			if (format == nvrhi::Format::UNKNOWN) {
+				logger::error("Renderer::ShareTexture - Unmapped format for {}", debugName);
+				return nullptr;
+			}
+		}
+
+		auto textureDesc = nvrhi::TextureDesc()
+			.setWidth(createInfo.extent.width)
+			.setHeight(createInfo.extent.height)
+			.setDepth(createInfo.extent.depth)
+			.setMipLevels(createInfo.mipLevels)
+			.setArraySize(createInfo.arrayLayers)
+			.setDimension((desc11.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) ? nvrhi::TextureDimension::TextureCube : nvrhi::TextureDimension::Texture2D)
+			.setFormat(format)
+			.setKeepInitialState(true)
+			.setDebugName(std::format("{} [Vulkan Shared Texture]", debugName).c_str());
+
+		if (resourceState == nvrhi::ResourceStates::Unknown)
+			textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
+		else if (resourceState == nvrhi::ResourceStates::UnorderedAccess) {
+			textureDesc.setInitialState(nvrhi::ResourceStates::UnorderedAccess).setIsUAV(true);
+		} else
+			textureDesc.setInitialState(resourceState);
+
+		return CreateHandleForNativeVulkanTexture(vkImage, nullptr, textureDesc);
 	}
 
 	winrt::com_ptr<IDXGIResource1> dxgiResource;
