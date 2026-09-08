@@ -14,6 +14,43 @@ Renderer::Renderer()
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
 }
 
+void Renderer::BuildFormatMapping()
+{
+	// Map DXGI_FORMAT to NVRHI formats
+	if (!m_FormatMapping.empty())
+		return;
+
+	for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+	{
+		auto format = (nvrhi::Format)i;
+
+		// This gets the SRV format, but I guess it should work
+		auto nativeFormat = nvrhi::d3d12::convertFormat(format);
+
+		m_FormatMapping.emplace(nativeFormat, format);
+	}
+
+	// Depth SRV format
+	m_FormatMapping.emplace(DXGI_FORMAT_R24G8_TYPELESS, nvrhi::Format::D24S8);
+}
+
+void Renderer::BuildVkFormatMapping()
+{
+	// Map VkFormat to NVRHI formats
+	if (!m_VkFormatMapping.empty())
+		return;
+
+	for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+	{
+		auto format = (nvrhi::Format)i;
+		auto nativeFormat = nvrhi::vulkan::convertFormat(format);
+		m_VkFormatMapping.emplace(nativeFormat, format);
+	}
+
+	// Depth SRV format - unecessary?
+	m_VkFormatMapping.emplace(VK_FORMAT_D24_UNORM_S8_UINT, nvrhi::Format::D24S8);
+}
+
 bool Renderer::Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
 	m_Settings = *rendererSettings;
@@ -47,17 +84,7 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d
 
 	logger::info("Shader Model: {}", magic_enum::enum_name(m_ShaderModel));
 
-	// Map DXGI_FORMAT to NVRHI formats
-	if (m_FormatMapping.empty())
-		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
-		{
-			auto format = (nvrhi::Format)i;
-
-			// This gets the SRV format, but I guess it should work
-			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
-
-			m_FormatMapping.emplace(nativeFormat, format);
-		}
+	BuildFormatMapping();
 
 	PostInitialize();
 
@@ -97,26 +124,8 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 
 	m_IsVulkan = true;
 
-	// Map DXGI_FORMAT to NVRHI formats
-	if (m_FormatMapping.empty())
-		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
-		{
-			auto format = (nvrhi::Format)i;
-
-			// This gets the SRV format, but I guess it should work
-			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
-
-			m_FormatMapping.emplace(nativeFormat, format);
-		}
-
-	// Map VkFormat to NVRHI formats
-	if (m_VkFormatMapping.empty())
-		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
-		{
-			auto format = (nvrhi::Format)i;
-			auto nativeFormat = nvrhi::vulkan::convertFormat(format);
-			m_VkFormatMapping.emplace(nativeFormat, format);
-		}
+	BuildFormatMapping();
+	BuildVkFormatMapping();
 
 	PostInitialize();
 
@@ -687,9 +696,11 @@ nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char
 			return nullptr;
 		}
 
-		desc.format = GetFormatFromVkFormat(createInfo.format);
+		desc.format = GetFormat(createInfo.format);
+
 		if (desc.format == nvrhi::Format::UNKNOWN) {
-			desc.format = renderer->GetFormat(targetDesc.Format);
+			logger::error("Renderer::WrapNativeTexture - Unmapped format {} for {}", magic_enum::enum_name(createInfo.format), desc.debugName);
+			return nullptr;
 		}
 
 		if (targetDesc.BindFlags & D3D11_BIND_UNORDERED_ACCESS) {
@@ -711,6 +722,11 @@ nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char
 		if (targetDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
 			desc.isUAV = true;
 			//desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		}
+
+		if (desc.format == nvrhi::Format::UNKNOWN) {
+			logger::error("Renderer::WrapNativeTexture - Unmapped format {} for {}", magic_enum::enum_name(targetDesc.Format), desc.debugName);
+			return nullptr;
 		}
 
 		return renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeTexture, desc);

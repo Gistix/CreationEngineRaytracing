@@ -110,6 +110,9 @@ class Renderer
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
 	inline static eastl::unordered_map<VkFormat, nvrhi::Format> m_VkFormatMapping;
 
+	static void BuildFormatMapping();
+	static void BuildVkFormatMapping();
+
 	void InitGBufferOutput();
 
 	void PostInitialize();
@@ -287,7 +290,7 @@ public:
 		return it->second;
 	}
 
-	static inline auto GetFormatFromVkFormat(VkFormat nativeFormat)
+	static inline auto GetFormat(VkFormat nativeFormat)
 	{
 		auto it = m_VkFormatMapping.find(nativeFormat);
 

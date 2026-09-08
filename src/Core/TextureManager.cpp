@@ -94,17 +94,20 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 			return nullptr;
 		}
 
-		auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
-		D3D11_TEXTURE2D_DESC desc11{};
-		d3d11Texture->GetDesc(&desc11);
+		auto format = Renderer::GetFormat(createInfo.format);
 
-		auto format = Renderer::GetFormat(desc11.Format);
 		if (format == nvrhi::Format::UNKNOWN) {
-			format = Renderer::GetFormatFromVkFormat(createInfo.format);
-		}
-		if (format == nvrhi::Format::UNKNOWN) {
-			logger::error("TextureManager::GetDescriptor - Unmapped format {}", magic_enum::enum_name(desc11.Format));
-			return nullptr;
+			logger::warn("TextureManager::GetDescriptor - Unmapped VK format: {}, falling back to D3D11 format.", magic_enum::enum_name(createInfo.format));
+
+			auto d3d11Texture = reinterpret_cast<ID3D11Texture2D*>(d3d11Resource);
+			D3D11_TEXTURE2D_DESC desc11{};
+			d3d11Texture->GetDesc(&desc11);
+			format = Renderer::GetFormat(desc11.Format);
+		
+			if (format == nvrhi::Format::UNKNOWN) {
+				logger::error("TextureManager::GetDescriptor - Unmapped D3D11 format: {}", magic_enum::enum_name(desc11.Format));
+				return nullptr;
+			}
 		}
 
 		auto textureDesc = nvrhi::TextureDesc()
