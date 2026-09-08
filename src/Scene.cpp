@@ -36,6 +36,8 @@
 #include "Pass/Raytracing/Common/TransformComposition.h"
 #include "Pass/Raytracing/Common/PTComposite.h"
 
+#include "Utils/DXVKInterop.h"
+
 Scene::Scene()
 {
 	m_SceneGraph = eastl::make_unique<SceneGraph>();
@@ -375,35 +377,21 @@ void Scene::UpdateFeatureData(void* data, uint32_t size)
 	m_DirtyFeatureData = true;
 }
 
-void Scene::SetSkyHemisphere(ID3D12Resource* skyHemi)
+void Scene::SetSkyHemisphere(void* skyHemi)
 {
 	if (skyHemi == m_SkyHemisphereResource)
 		return;
 
 	m_SkyHemisphereResource = skyHemi;
 
-	auto* renderer = Renderer::GetSingleton();
-
-	auto targetDesc = skyHemi->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = renderer->GetFormat(targetDesc.Format);
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "NVRHI Sky Hemisphere Texture";
-
-	m_SkyHemisphereTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skyHemi, desc);
+	m_SkyHemisphereTexture = Renderer::WrapNativeTexture(skyHemi, "NVRHI Sky Hemisphere Texture");
 }
 
 nvrhi::ITexture* Scene::GetSkinDetailNormalTexture() const
 {
 	if (m_SkinDetailNormalTexture)
 		return m_SkinDetailNormalTexture;
+
 	return Renderer::GetSingleton()->GetNormalTexture();
 }
 
@@ -416,68 +404,29 @@ nvrhi::ITexture* Scene::GetProjNoiseTexture() const
 	if (!projNoiseMap)
 		return nullptr;
 
-	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(
-		Util::Adapter::GetTextureResource(projNoiseMap),
-		"Projection Noise Map", 
-		nvrhi::Format::UNKNOWN, 
-		nvrhi::ResourceStates::ShaderResource);
+	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(Util::Adapter::GetTextureResource(projNoiseMap), "Projection Noise Map");
 
 	return m_ProjNoiseTexture;
 }
 
-void Scene::SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
+void Scene::SetSkinDetailNormal(void* skinDetailNormal)
 {
 	if (skinDetailNormal == m_SkinDetailNormalResource)
 		return;
 
 	m_SkinDetailNormalResource = skinDetailNormal;
 
-	if (!skinDetailNormal) {
-		m_SkinDetailNormalTexture = nullptr;
-		return;
-	}
-
-	auto* renderer = Renderer::GetSingleton();
-
-	auto targetDesc = skinDetailNormal->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = renderer->GetFormat(targetDesc.Format);
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "Skin Detail Normal Texture";
-
-	m_SkinDetailNormalTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skinDetailNormal, desc);
+	m_SkinDetailNormalTexture = Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture");
 }
 
-void Scene::SetWaterFlowMap(ID3D12Resource* waterFlowMap)
+void Scene::SetWaterFlowMap(void* waterFlowMap)
 {
 	if (waterFlowMap == m_WaterFlowMapResource)
 		return;
 
 	m_WaterFlowMapResource = waterFlowMap;
 
-	auto* renderer = Renderer::GetSingleton();
-
-	auto targetDesc = waterFlowMap->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = renderer->GetFormat(targetDesc.Format);
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "NVRHI Water FlowMap Texture";
-
-	m_WaterFlowMapTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, waterFlowMap, desc);
+	m_WaterFlowMapTexture = Renderer::WrapNativeTexture(waterFlowMap, "NVRHI Water FlowMap Texture");
 }
 
 void Scene::UpdateSettings(Settings settings)

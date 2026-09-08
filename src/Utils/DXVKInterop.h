@@ -15,6 +15,17 @@ IDXGIVkInteropSurface : public IUnknown
 		VkImageCreateInfo* pInfo) = 0;
 };
 
+MIDL_INTERFACE("b7b13df1-5364-4e94-81d3-6e3e5c9f91a0")
+IDXGIVkInteropBuffer : public IUnknown
+{
+	virtual HRESULT STDMETHODCALLTYPE GetDevice(IDXGIVkInteropDevice** ppDevice) = 0;
+	virtual HRESULT STDMETHODCALLTYPE GetVulkanBufferInfo(
+		VkBuffer* pBuffer,
+		VkDeviceSize* pOffset,
+		VkDeviceSize* pLength,
+		VkDeviceAddress* pGpuAddress) = 0;
+};
+
 MIDL_INTERFACE("e2ef5fa5-dc21-4af7-90c4-f67ef6a09323")
 IDXGIVkInteropDevice : public IUnknown
 {

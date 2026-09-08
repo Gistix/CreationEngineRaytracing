@@ -60,19 +60,19 @@ void UpdateFeatureData(void* data, uint32_t size)
 	scene->UpdateFeatureData(data, size);
 }
 
-void SetSkyHemisphere(ID3D12Resource* skyHemi)
+void SetSkyHemisphere(void* skyHemi)
 {
 	auto* scene = Scene::GetSingleton();
 	scene->SetSkyHemisphere(skyHemi);
 }
 
-void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
+void SetSkinDetailNormal(void* skinDetailNormal)
 {
 	auto* scene = Scene::GetSingleton();
 	scene->SetSkinDetailNormal(skinDetailNormal);
 }
 
-void SetWaterFlowMap(ID3D12Resource* waterFlowMap)
+void SetWaterFlowMap(void* waterFlowMap)
 {
 	auto* scene = Scene::GetSingleton();
 	scene->SetWaterFlowMap(waterFlowMap);
@@ -107,7 +107,7 @@ void GetRRInput(ID3D12Resource*& diffuseAlbedo, ID3D12Resource*& specularAlbedo,
 	specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
 }
 
-void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
+void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao)
 {
 	auto* renderer = Renderer::GetSingleton();
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);

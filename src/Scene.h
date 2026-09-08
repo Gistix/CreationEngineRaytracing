@@ -31,14 +31,15 @@ struct Scene
 	bool m_DirtyFeatureData = true;
 	nvrhi::BufferHandle m_FeatureBuffer;
 
-	ID3D12Resource* m_SkyHemisphereResource = nullptr;
+	void* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
-	ID3D12Resource* m_SkinDetailNormalResource = nullptr;
+
+	void* m_SkinDetailNormalResource = nullptr;
 	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
 	mutable nvrhi::TextureHandle m_ProjNoiseTexture;
 
-	ID3D12Resource* m_WaterFlowMapResource = nullptr;
+	void* m_WaterFlowMapResource = nullptr;
 	nvrhi::TextureHandle m_WaterFlowMapTexture;
 
 	int32_t* g_FlowMapSize = nullptr;
@@ -148,10 +149,9 @@ struct Scene
 
 	void UpdateFeatureData(void* data, uint32_t size);
 
-	void SetSkyHemisphere(ID3D12Resource* skyHemi);
-	void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
-
-	void SetWaterFlowMap(ID3D12Resource* skyHemi);
+	void SetSkyHemisphere(void* skyHemi);
+	void SetSkinDetailNormal(void* skinDetailNormal);
+	void SetWaterFlowMap(void* skyHemi);
 
 	float GetResolutionScale() const;
 

@@ -1,10 +1,19 @@
 #include "interop/Mesh.hlsli"
 #include "include/WaveSize.hlsli"
 
+#if defined(__spirv__)
+struct ArgsConstants
+{
+    uint NumMeshes;
+};
+[[vk::push_constant]] ConstantBuffer<ArgsConstants> PC : register(b0);
+#define NumMeshes (PC.NumMeshes)
+#else
 cbuffer ArgsConstants : register(b0)
 {
     uint NumMeshes;
 };
+#endif
 
 ByteAddressBuffer MeshSlotRemap : register(t0);
 StructuredBuffer<Mesh> Meshes : register(t1);

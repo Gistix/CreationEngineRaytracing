@@ -68,7 +68,11 @@ struct PushConstants
     uint NumMeshes;
 };
 
+#if defined(__spirv__)
+[[vk::push_constant]] ConstantBuffer<PushConstants> PC : register(b0);
+#else
 ConstantBuffer<PushConstants> PC : register(b0);
+#endif
 
 RWStructuredBuffer<Transform> TransformsOut    : register(u0);
 

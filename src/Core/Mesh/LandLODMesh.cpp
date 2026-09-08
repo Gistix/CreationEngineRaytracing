@@ -47,7 +47,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	// LandLODOccluder input
 	device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
-		nvrhi::BindingSetItem::RawBuffer_SRV(slotIndex, m_VertexBuffer.m_Buffer));
+		nvrhi::BindingSetItem::RawBuffer_SRV(slotIndex, m_VertexBuffer.m_Buffer, nvrhi::BufferRange(m_VertexBuffer.m_Offset, byteSize)));
 
 	// LandLODOccluder output
 	device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,

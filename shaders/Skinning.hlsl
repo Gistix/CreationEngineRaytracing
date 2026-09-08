@@ -8,6 +8,13 @@
 StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
 StructuredBuffer<RowMajorFloat3x4> BoneMatrices               : register(t1);
 
+#if defined(__spirv__)
+StructuredBuffer<float4> DynamicVertices[]             : register(t0, space1);
+ByteAddressBuffer OriginalVertices[]                   : register(t0, space2);
+[[vk::binding(0, 3)]] RWByteAddressBuffer OutputVertices[];
+[[vk::binding(0, 4)]] RWStructuredBuffer<float3> PrevPositions[];
+[[vk::binding(0, 5)]] RWStructuredBuffer<float4> DynamicVerticesOut[];
+#else
 // Dynamic float4 positions (input). Lives in DynamicMesh, addressed by updateData.dynamicIndex.
 StructuredBuffer<float4> DynamicVertices[]             : register(t0, space1);
 // Original (rest-pose) vertices in native packed format; also carries inline skinning. Shared slot.
@@ -19,6 +26,7 @@ RWByteAddressBuffer OutputVertices[]                   : register(u0);
 RWStructuredBuffer<float3> PrevPositions[]             : register(u0, space1);
 // Dynamic float4 positions (output). Lives in DynamicMesh, addressed by updateData.dynamicIndex.
 RWStructuredBuffer<float4> DynamicVerticesOut[]        : register(u0, space2);
+#endif
 
 // Decodes a signed-normalized byte4 (ubyte4 * 2 - 1) from a raw uint.
 float4 UnpackByte4SNorm(uint packed)

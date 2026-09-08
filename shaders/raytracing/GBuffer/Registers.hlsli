@@ -24,10 +24,15 @@ StructuredBuffer<Transform>             Transforms                  : register(t
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
 ByteAddressBuffer                           Materials[]                 : register(t0, space3);
-
 Texture2D<float4>                           Textures[]                  : register(t0, space4);
+
+#if defined(__spirv__)
+[[vk::binding(0, 5)]] TextureCube<float4>   CubeTextures[];
+[[vk::binding(0, 6)]] StructuredBuffer<float4> DynamicPositions[];
+#else
 TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
 StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
+#endif
 
 RWTexture2D<float>                          Depth                       : register(u0);
 RWTexture2D<float3>                         MotionVectors               : register(u1);

@@ -7,12 +7,21 @@ struct PushContants
     float4 HighDetailRange;
 };
 
+#if defined(__spirv__)
+[[vk::push_constant]] ConstantBuffer<PushContants> PC : register(b0);
+#else
 ConstantBuffer<PushContants> PC             : register(b0);
+#endif
 
 StructuredBuffer<LandLODUpdate> UpdateData  : register(t0);
 
+#if defined(__spirv__)
+[[vk::binding(0, 1)]] ByteAddressBuffer Vertices[];
+[[vk::binding(0, 2)]] RWByteAddressBuffer OutputVertices[];
+#else
 ByteAddressBuffer Vertices[]                : register(t0, space2);
 RWByteAddressBuffer OutputVertices[]        : register(u0);
+#endif
 
 float3 AdjustLodLandscapeVertexPositionMS(float3 positionMS, float3 positionWS, float4 cellParams)
 {

@@ -91,12 +91,21 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
 ByteAddressBuffer                           Materials[]                 : register(t0, space3);
-
 Texture2D<float4>                           Textures[]                  : register(t0, space4);
+
+#if defined(USE_LIGHT_TLAS)
 RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space5);
+#endif
+
+#if defined(__spirv__)
+[[vk::binding(0, 5)]] StructuredBuffer<float3> PrevPositions[];
+[[vk::binding(0, 6)]] TextureCube<float4>   CubeTextures[];
+[[vk::binding(0, 7)]] StructuredBuffer<float4> DynamicPositions[];
+#else
 StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space6);
 TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
 StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
+#endif
 Texture2D<float4>                           SkinDetailNormal            : register(t8);
 Texture2D<float4>                           WaterDisplacementMap        : register(t9);
 Texture2D<float4>                           ProjNoiseMap                : register(t10);

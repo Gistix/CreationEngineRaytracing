@@ -72,7 +72,7 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 		"VK_KHR_acceleration_structure",
 		"VK_KHR_deferred_host_operations",
 		"VK_KHR_ray_tracing_pipeline",
-		// list the extensions that were requested when the device was created
+		"VK_KHR_ray_query"
 	};
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
@@ -88,6 +88,7 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 	deviceDesc.computeQueueIndex = computeQueueIndex;
 	deviceDesc.deviceExtensions = deviceExtensions;
 	deviceDesc.numDeviceExtensions = std::size(deviceExtensions);
+	deviceDesc.bufferDeviceAddressSupported = true;
 
 	m_NVRHIDevice = nvrhi::vulkan::createDevice(deviceDesc);
 
@@ -208,7 +209,7 @@ void Renderer::InitDefaultTextures()
 nvrhi::ITexture* Renderer::GetDepthTexture() {
 	if (!m_DepthTexture) {
 		auto* d3d11Texture = Util::Adapter::GetMainDepthStencilTexture();
-		m_DepthTexture = ShareTexture(d3d11Texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::Common);
+		m_DepthTexture = ShareTexture(d3d11Texture, "Depth");
 	}
 
 	return m_DepthTexture;
@@ -218,7 +219,7 @@ nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
 #if defined(SKYRIM)
 	if (!m_MotionVectorTexture) {
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
-		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector", nvrhi::Format::RG16_FLOAT, nvrhi::ResourceStates::ShaderResource);
+		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector");
 	}
 #endif
 	return m_MotionVectorTexture;
@@ -228,7 +229,7 @@ nvrhi::ITexture* Renderer::GetWaterDisplacementTexture() {
 	if (!m_WaterDisplacementTexture) {
 #if defined(SKYRIM)
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
-		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::ShaderResource);
+		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement");
 #elif defined(FALLOUT4)
 		m_WaterDisplacementTexture = m_GrayTexture->texture;
 #endif
@@ -481,15 +482,15 @@ void Renderer::InitReSTIRGI()
 	logger::info("ReSTIR GI resources created ({}x{})", width, height);
 }
 
-void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, [[maybe_unused]] ID3D12Resource* gnmao)
+void Renderer::SetRenderTargets(void* albedo, void* normalRoughness, [[maybe_unused]] void* gnmao)
 {
 	if (!m_RenderTargets)
 		m_RenderTargets = eastl::make_unique<RenderTargets>();
 
-	m_RenderTargets->albedo = CreateHandleForNativeTexture(albedo, "Albedo RenderTarget");
-	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
+	m_RenderTargets->albedo = WrapNativeTexture(albedo, "Albedo RenderTarget");
+	m_RenderTargets->normalRoughness = WrapNativeTexture(normalRoughness, "Normal Roughness RenderTarget");
 #if defined(SKYRIM)
-	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget");
+	m_RenderTargets->gnmao = WrapNativeTexture(gnmao, "GNMAO RenderTarget");
 #endif
 }
 
@@ -648,59 +649,31 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 	logger::trace("Renderer::RunPostExecutionForSlot - Slot {} completed", slot);
 }
 
-nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
+nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char* name)
 {
-	D3D12_RESOURCE_DESC nativeTexDesc = nativeResource->GetDesc();
+	auto* renderer = Renderer::GetSingleton();
 
-	if (format == nvrhi::Format::UNKNOWN)
-	{
-		format = Renderer::GetFormat(nativeTexDesc.Format);
-		if (format == nvrhi::Format::UNKNOWN) {
-			logger::error("Renderer::CreateHandleForNativeTexture - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
-			return nullptr;
-		}
-	}
+	nvrhi::TextureDesc desc{};
+	desc.dimension = nvrhi::TextureDimension::Texture2D;
+	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.keepInitialState = true;
+	desc.debugName = name;
 
-	auto textureDesc = nvrhi::TextureDesc()
-		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
-		.setHeight(nativeTexDesc.Height)
-		.setFormat(format)
-		.setKeepInitialState(true)
-		.setDebugName(debugName);
+	if (renderer->IsVulkan()) {
+		auto d3d11Resource = reinterpret_cast<ID3D11Texture2D*>(nativeTexture);
 
-	if (resourceState == nvrhi::ResourceStates::Unknown)
-		textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
-	else if (resourceState == nvrhi::ResourceStates::UnorderedAccess) {
-		textureDesc.
-			setInitialState(nvrhi::ResourceStates::UnorderedAccess).
-			setIsUAV(true);
-	} else
-		textureDesc.setInitialState(resourceState);
+		D3D11_TEXTURE2D_DESC targetDesc;
+		d3d11Resource->GetDesc(&targetDesc);
 
-	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeResource, textureDesc);
-}
+		desc.width = static_cast<uint32_t>(targetDesc.Width);
+		desc.height = targetDesc.Height;
+		desc.mipLevels = targetDesc.MipLevels;
+		desc.arraySize = targetDesc.ArraySize;
 
-nvrhi::TextureHandle Renderer::CreateHandleForNativeVulkanTexture(VkImage vkImage, const char* debugName, const nvrhi::TextureDesc& desc)
-{
-	nvrhi::TextureDesc textureDesc = desc;
-	if (debugName) {
-		textureDesc.setDebugName(debugName);
-	}
-	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, nvrhi::Object(vkImage), textureDesc);
-}
-
-nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
-{
-	if (!d3d11Texture) {
-		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");
-		return nullptr;
-	}
-
-	if (IsVulkan()) {
 		winrt::com_ptr<IDXGIVkInteropSurface> interopSurface;
-		HRESULT hr = d3d11Texture->QueryInterface(__uuidof(IDXGIVkInteropSurface), interopSurface.put_void());
+		HRESULT hr = d3d11Resource->QueryInterface(__uuidof(IDXGIVkInteropSurface), interopSurface.put_void());
 		if (FAILED(hr)) {
-			logger::error("Renderer::ShareTexture - QueryInterface IDXGIVkInteropSurface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			logger::error("Scene::SetTexture - QueryInterface IDXGIVkInteropSurface failed.");
 			return nullptr;
 		}
 
@@ -710,71 +683,78 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 
 		hr = interopSurface->GetVulkanImageInfo(&vkImage, &vkLayout, &createInfo);
 		if (FAILED(hr) || !vkImage) {
-			logger::error("Renderer::ShareTexture - GetVulkanImageInfo failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			logger::error("Scene::SetTexture - GetVulkanImageInfo failed.");
 			return nullptr;
 		}
 
-		D3D11_TEXTURE2D_DESC desc11{};
-		d3d11Texture->GetDesc(&desc11);
-
-		if (format == nvrhi::Format::UNKNOWN) {
-			format = Renderer::GetFormat(desc11.Format);
-			if (format == nvrhi::Format::UNKNOWN) {
-				format = Renderer::GetFormatFromVkFormat(createInfo.format);
-			}
-			if (format == nvrhi::Format::UNKNOWN) {
-				logger::error("Renderer::ShareTexture - Unmapped format for {}", debugName);
-				return nullptr;
-			}
+		desc.format = GetFormatFromVkFormat(createInfo.format);
+		if (desc.format == nvrhi::Format::UNKNOWN) {
+			desc.format = renderer->GetFormat(targetDesc.Format);
 		}
 
-		auto textureDesc = nvrhi::TextureDesc()
-			.setWidth(createInfo.extent.width)
-			.setHeight(createInfo.extent.height)
-			.setDepth(createInfo.extent.depth)
-			.setMipLevels(createInfo.mipLevels)
-			.setArraySize(createInfo.arrayLayers)
-			.setDimension((desc11.MiscFlags & D3D11_RESOURCE_MISC_TEXTURECUBE) ? nvrhi::TextureDimension::TextureCube : nvrhi::TextureDimension::Texture2D)
-			.setFormat(format)
-			.setKeepInitialState(true)
-			.setDebugName(std::format("{} [Vulkan Shared Texture]", debugName).c_str());
+		if (targetDesc.BindFlags & D3D11_BIND_UNORDERED_ACCESS) {
+			desc.isUAV = true;
+			//desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		}
 
-		if (resourceState == nvrhi::ResourceStates::Unknown)
-			textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
-		else if (resourceState == nvrhi::ResourceStates::UnorderedAccess) {
-			textureDesc.setInitialState(nvrhi::ResourceStates::UnorderedAccess).setIsUAV(true);
-		} else
-			textureDesc.setInitialState(resourceState);
-
-		return CreateHandleForNativeVulkanTexture(vkImage, nullptr, textureDesc);
+		return renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, vkImage, desc);
 	}
+	else {
+		auto targetDesc = reinterpret_cast<ID3D12Resource*>(nativeTexture)->GetDesc();
 
-	winrt::com_ptr<IDXGIResource1> dxgiResource;
-	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
-	if (FAILED(hr)) {
-		logger::error("Renderer::ShareTexture - QueryInterface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+		desc.width = static_cast<uint32_t>(targetDesc.Width);
+		desc.height = targetDesc.Height;
+		desc.format = renderer->GetFormat(targetDesc.Format);
+		desc.mipLevels = targetDesc.MipLevels;
+		desc.arraySize = targetDesc.DepthOrArraySize;
+
+		if (targetDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+			desc.isUAV = true;
+			//desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		}
+
+		return renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeTexture, desc);
+	}
+}
+
+nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName)
+{
+	if (!d3d11Texture) {
+		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");
 		return nullptr;
 	}
 
-	HANDLE sharedHandle = nullptr;
-
-	hr = dxgiResource->GetSharedHandle(&sharedHandle);
-	if (FAILED(hr)) {
-		logger::error("Renderer::ShareTexture - GetSharedHandle failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
-		return nullptr;
+	if (IsVulkan()) {
+		return WrapNativeTexture(d3d11Texture, std::format("{} [Vulkan Texture]", debugName).c_str());
 	}
+	else {
+		winrt::com_ptr<IDXGIResource1> dxgiResource;
+		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+		if (FAILED(hr)) {
+			logger::error("Renderer::ShareTexture - QueryInterface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
 
-	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
+		HANDLE sharedHandle = nullptr;
 
-	winrt::com_ptr<ID3D12Resource> d3d12Resource;
-	hr = nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+		if (FAILED(hr)) {
+			logger::error("Renderer::ShareTexture - GetSharedHandle failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
 
-	if (FAILED(hr) || !d3d12Resource) {
-		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
-		return nullptr;
+		auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
+
+		winrt::com_ptr<ID3D12Resource> d3d12Resource;
+		hr = nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
+
+		if (FAILED(hr) || !d3d12Resource) {
+			logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
+
+		return WrapNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str());
 	}
-
-	return CreateHandleForNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
 }
 
 const wchar_t* Renderer::GetShaderStage(ShaderStage a_Stage) const noexcept

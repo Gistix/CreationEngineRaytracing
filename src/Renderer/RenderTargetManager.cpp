@@ -16,7 +16,7 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 		desc.width = resolution.x;
 		desc.height = resolution.y;
 		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.initialState = nvrhi::ResourceStates::Common;
+		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
 		desc.isUAV = true;
 		desc.keepInitialState = true;
 
@@ -129,30 +129,8 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 		}
 
 		if (renderer->IsVulkan()) {
-			winrt::com_ptr<IDXGIVkInteropSurface> interopSurface;
-			hr = renderTarget.d3d11Texture->QueryInterface(__uuidof(IDXGIVkInteropSurface), interopSurface.put_void());
-			if (FAILED(hr)) {
-				logger::error("RenderTargetManager::GetSharedTexture - QueryInterface IDXGIVkInteropSurface failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
-				return sharedTexture;
-			}
-
-			VkImage vkImage = VK_NULL_HANDLE;
-			VkImageLayout vkLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			VkImageCreateInfo createInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
-
-			hr = interopSurface->GetVulkanImageInfo(&vkImage, &vkLayout, &createInfo);
-			if (FAILED(hr) || !vkImage) {
-				logger::error("RenderTargetManager::GetSharedTexture - GetVulkanImageInfo failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
-				return sharedTexture;
-			}
-
 			std::string sharedDebugName = std::format("{}_{}_VulkanShared", magic_enum::enum_name(texture), slot);
-			nvrhi::TextureDesc sharedDesc = internalDesc;
-			sharedDesc.setDebugName(sharedDebugName.c_str());
-			sharedDesc.setKeepInitialState(true);
-			sharedDesc.setInitialState(nvrhi::ResourceStates::Common);
-
-			renderTarget.sharedD3D12Handle = renderer->CreateHandleForNativeVulkanTexture(vkImage, sharedDebugName.c_str(), sharedDesc);
+			renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d11Texture.get(), sharedDebugName.c_str());
 		} else {
 			winrt::com_ptr<IDXGIResource> dxgiResource;
 			hr = renderTarget.d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
@@ -175,7 +153,7 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 			}
 
 			std::string sharedDebugName = std::format("{}_{}_D3D11Shared", magic_enum::enum_name(texture), slot);
-			renderTarget.sharedD3D12Handle = renderer->CreateHandleForNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str(), internalDesc.format, nvrhi::ResourceStates::Common);
+			renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str());
 		}
 	}
 

@@ -336,13 +336,11 @@ public:
 
 	void InitReSTIRGI();
 
-	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
+	void SetRenderTargets(void* albedo, void* normalRoughness, void* gnmao);
 
-	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
+	static nvrhi::TextureHandle WrapNativeTexture(void* nativeTexture, const char* debugName);
 
-	nvrhi::TextureHandle CreateHandleForNativeVulkanTexture(VkImage vkImage, const char* debugName, const nvrhi::TextureDesc& desc);
-
-	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
+	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName);
 
 	void InitDefaultTextures();
 
