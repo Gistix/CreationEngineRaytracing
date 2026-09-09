@@ -465,17 +465,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	//      discover more wide fan-outs.
 	//      - Leaves reached during this serial descent are routed directly into per-worker slot 0 (no
 	//        concurrent writers since the worker tasks haven't been dispatched yet).
-	//   2. After walk returns, forkedChildren is chunked into exactly `numWorkers` partitions and each
-	//      chunk is dispatched as one thread pool task. Each task iterates its chunk calling serialWalk
-	//      (which invokes Util::Traversal::ScenegraphTriShapes) on each child, pushing results into its
-	//      exclusive per-worker slot indexed by chunkIdx+1.
+	//   2. After walk returns, exactly `numWorkers` tasks are dispatched. Each claims the next subtree
+	//      from a shared atomic counter (dynamic load balancing) and calls ProcessSubtree on it, pushing
+	//      results into its exclusive per-worker slot (task ordinal + 1).
 	//   3. WaitAll, then serial concat into the final flat lists.
 	//
-	// Why chunked instead of per-child fork: the wide NiNode in a typical Skyrim frame has ~1,254 BSFadeNode
-	// children; each child subtree contains ~2 leaves (the typical fade-pair). Forking 1,254 tasks swamps
-	// the pool with mutex-protected Enqueue/TryPop churn and net regresses vs serial. Chunking to exactly
-	// numWorkers coarse tasks (~157 subtrees each) makes the per-pool-task cost negligible relative to
-	// per-subtree work, and sidesteps the slot-collision race that fine-grained forking caused.
+	// Why not per-child fork: the wide NiNode in a typical Skyrim frame has ~1,254 BSFadeNode children;
+	// each child subtree contains ~2 leaves (the typical fade-pair). Forking 1,254 tasks swamps the pool
+	// with mutex-protected Enqueue/TryPop churn and net regresses vs serial. Keeping numWorkers coarse
+	// tasks while claiming subtrees dynamically preserves load balance without that churn, and each task
+	// still owns its output slot so there is no push_back race.
 	//
 	// Safety: m_Meshes.find() is concurrent-read only (the map is mutated before A by DestroyMeshes
 	// and after A by Phase C2). All NiAVObject virtual calls performed by the visitor are read-only on
@@ -510,29 +509,25 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		ParallelTriShapeWalker walker{ this, &forkedChildren, firstPersonRoot };
 		walker.Walk(worldRootNode);
 
-		// Dispatch the accumulated wide-fan-out children as exactly numWorkers chunked tasks. Each task
-		// iterates its chunk calling ProcessSubtree on each subtree; per-worker output slot is chunkIdx+1
-		// (slot 0 is reserved for the main-thread walk above).
+		// Dispatch numWorkers tasks that dynamically claim the accumulated subtrees from a shared
+		// counter. Per-worker output slot is the task ordinal + 1 (slot 0 reserved for the main walk).
 		const size_t totalForked = forkedChildren.size();
 		if (totalForked > 0) {
-			const size_t chunkSize = (totalForked + numWorkers - 1) / numWorkers;
-			for (size_t chunkIdx = 0; chunkIdx < numWorkers; ++chunkIdx) {
-				const size_t start = chunkIdx * chunkSize;
-				const size_t end = std::min(start + chunkSize, totalForked);
-				if (start >= end)
-					continue;
+			std::atomic<size_t> nextFork{ 0 };
+			for (size_t taskIdx = 0; taskIdx < numWorkers; ++taskIdx) {
+				const size_t workerIdx = taskIdx + 1; // slots 1..numWorkers
 
-				const size_t workerIdx = chunkIdx + 1; // slots 1..numWorkers
-
-				m_ThreadPool->Enqueue([&, start, end, workerIdx]() {
-					for (size_t i = start; i < end; ++i) {
+				m_ThreadPool->Enqueue([&, workerIdx]() {
+					for (size_t i = nextFork.fetch_add(1, std::memory_order_relaxed);
+						i < totalForked;
+						i = nextFork.fetch_add(1, std::memory_order_relaxed)) {
 						auto& [child, refr] = forkedChildren[i];
 						walker.ProcessSubtree(child, refr, workerIdx);
 					}
 				});
 			}
 
-			// Drain all chunked tasks before concatenating per-worker output.
+			// Drain all tasks before concatenating per-worker output.
 			m_ThreadPool->WaitAll();
 		}
 
@@ -563,6 +558,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
 		const size_t totalWork = m_UpdateList.size();
 		const size_t totalCreate = m_CreateList.size();
+
+		std::atomic<size_t> nextUpdate{ 0 };
+		std::atomic<size_t> nextCreate{ 0 };
 
 		auto doUpdate = [&](auto& entry) {
 			auto& [mesh, refr] = entry;
@@ -667,39 +665,36 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		for (auto& candidates : m_PerWorkerCreateCandidates)
 			candidates.clear();
 
-		bool anyDispatched = false;
+		const bool hasUpdates = totalWork > 0;
+		const bool hasCreates = totalCreate > 0;
 
-		if (totalWork > 0) {
-			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
-
-			for (size_t start = 0; start < totalWork; start += chunkSize) {
-				size_t end = std::min(start + chunkSize, totalWork);
-
-				m_ThreadPool->Enqueue([&, start, end]() {
-					for (size_t i = start; i < end; ++i)
+		if (hasUpdates) {
+			// Each task claims the next mesh from a shared counter so uneven per-mesh cost stays balanced.
+			for (size_t t = 0; t < numWorkers; ++t) {
+				m_ThreadPool->Enqueue([&]() {
+					for (size_t i = nextUpdate.fetch_add(1, std::memory_order_relaxed);
+						i < totalWork;
+						i = nextUpdate.fetch_add(1, std::memory_order_relaxed)) {
 						doUpdate(m_UpdateList[i]);
+					}
 				});
 			}
-
-			anyDispatched = true;
 		}
 
-		if (totalCreate > 0) {
-			const size_t chunkSize = (totalCreate + numWorkers - 1) / numWorkers;
-
-			for (size_t start = 0; start < totalCreate; start += chunkSize) {
-				size_t end = std::min(start + chunkSize, totalCreate);
-				const size_t idx = start / chunkSize;
-
-				m_ThreadPool->Enqueue([&, start, end, idx]() {
-					doFilter(start, end, m_PerWorkerCreateCandidates[idx]);
+		if (hasCreates) {
+			for (size_t t = 0; t < numWorkers; ++t) {
+				const size_t workerIdx = t; // candidate slot 0..numWorkers-1
+				m_ThreadPool->Enqueue([&, workerIdx]() {
+					for (size_t i = nextCreate.fetch_add(1, std::memory_order_relaxed);
+						i < totalCreate;
+						i = nextCreate.fetch_add(1, std::memory_order_relaxed)) {
+						doFilter(i, i + 1, m_PerWorkerCreateCandidates[workerIdx]);
+					}
 				});
 			}
-
-			anyDispatched = true;
 		}
 
-		if (anyDispatched)
+		if (hasUpdates || hasCreates)
 			m_ThreadPool->WaitAll();
 
 		m_CreateCandidates.reserve(m_CreateList.size());
@@ -792,7 +787,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	// Phase G (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
+	// Phase G (parallel): per-cluster counts, a serial prefix-sum to assign offsets, then a parallel
+	// fill of the remap/instance data. No global lock is needed: offsets are assigned on the main
+	// thread between two lock-free parallel passes.
 	{
 		m_AllClusters.clear();
 		m_AllClusters.reserve(
@@ -809,81 +806,104 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		for (auto& [_, cluster] : m_SubIndexSegmentClusters)
 			m_AllClusters.push_back(cluster.get());
 
-		m_NumMeshes = 0;
-		m_NumInstances = 0;
-		bool reportedMeshLimit = false;
-		bool reportedInstanceLimit = false;
-
 		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
 		const size_t totalWork = m_AllClusters.size();
 
+		m_ClusterMeshCount.resize(totalWork);
+		m_ClusterInstanceCount.resize(totalWork);
+		m_ClusterFirstMesh.resize(totalWork);
+		m_ClusterFirstInstance.resize(totalWork);
+
 		if (totalWork > 0) {
-			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
-
-			for (size_t start = 0; start < totalWork; start += chunkSize) {
-				size_t end = std::min(start + chunkSize, totalWork);
-
-				m_ThreadPool->Enqueue([&, start, end]() {
-					for (size_t i = start; i < end; ++i) {
-						auto& cluster = m_AllClusters[i];
-
-						const uint32_t meshCount = cluster->Update();
-
-						if (meshCount == 0)
-							continue;
-
-						const uint32_t instCount = cluster->GetInstanceCount();
-						if (instCount == 0)
-							continue;
-
-						// Acquire indices and advance counts atomically
-						uint32_t firstMesh = 0;
-						uint32_t instanceIndex = 0;
-						{
-							std::scoped_lock mutex(m_BLASClusterUpdateMutex);
-
-							if (m_NumMeshes + meshCount > Constants::NUM_MESHES_MAX) {
-								cluster->SetValid(false);
-								if (!reportedMeshLimit) {
-									logger::critical("SceneGraph::Update - Mesh capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_MESHES_MAX, meshCount);
-									reportedMeshLimit = true;
-								}
-								continue;
-							}
-
-							if (m_NumInstances + instCount > Constants::NUM_INSTANCES_MAX) {
-								cluster->SetValid(false);
-								if (!reportedInstanceLimit) {
-									logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} instances.", Constants::NUM_INSTANCES_MAX, instCount);
-									reportedInstanceLimit = true;
-								}
-								continue;
-							}
-
-							firstMesh = m_NumMeshes;
-							m_NumMeshes += meshCount;
-
-							instanceIndex = m_NumInstances;
-							m_NumInstances += instCount;
+			// Pass 1 (parallel): each cluster computes its counts (transform/light data, desc counts).
+			{
+				std::atomic<size_t> nextCluster{ 0 };
+				for (size_t t = 0; t < numWorkers; ++t) {
+					m_ThreadPool->Enqueue([&]() {
+						for (size_t i = nextCluster.fetch_add(1, std::memory_order_relaxed);
+							i < totalWork;
+							i = nextCluster.fetch_add(1, std::memory_order_relaxed)) {
+							auto* cluster = m_AllClusters[i];
+							m_ClusterMeshCount[i] = cluster->Update();
+							m_ClusterInstanceCount[i] = m_ClusterMeshCount[i] ? cluster->GetInstanceCount() : 0;
 						}
-
-						// Write remap entries: packed (instanceID << 16) | geometrySlot into the ByteAddress remap buffer
-						const auto& geometrySlots = cluster->GetGeometrySlots();
-						for (uint32_t j = 0; j < meshCount; j++) {
-							const uint32_t remapIdx = firstMesh + j;
-							m_MeshSlotRemapData[remapIdx] = static_cast<uint32_t>(geometrySlots[j]) | (instanceIndex << 16);
-						}
-
-						// Set Instance Index
-						cluster->SetInstanceIndex(instanceIndex);
-
-						// Update Instance Data
-						cluster->WriteInstanceData(firstMesh, meshCount, &m_InstanceData[instanceIndex]);
-					}
-				});
+					});
+				}
+				m_ThreadPool->WaitAll();
 			}
 
-			m_ThreadPool->WaitAll();
+			// Pass 2 (serial): prefix-sum assigns each valid cluster its mesh/instance base offsets.
+			m_NumMeshes = 0;
+			m_NumInstances = 0;
+			bool reportedMeshLimit = false;
+			bool reportedInstanceLimit = false;
+
+			for (size_t i = 0; i < totalWork; ++i) {
+				auto* cluster = m_AllClusters[i];
+				const uint32_t meshCount = m_ClusterMeshCount[i];
+				const uint32_t instCount = m_ClusterInstanceCount[i];
+
+				if (meshCount == 0 || instCount == 0) {
+					m_ClusterFirstMesh[i] = UINT32_MAX;
+					continue;
+				}
+
+				if (m_NumMeshes + meshCount > Constants::NUM_MESHES_MAX) {
+					cluster->SetValid(false);
+					if (!reportedMeshLimit) {
+						logger::critical("SceneGraph::Update - Mesh capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_MESHES_MAX, meshCount);
+						reportedMeshLimit = true;
+					}
+					m_ClusterFirstMesh[i] = UINT32_MAX;
+					continue;
+				}
+
+				if (m_NumInstances + instCount > Constants::NUM_INSTANCES_MAX) {
+					cluster->SetValid(false);
+					if (!reportedInstanceLimit) {
+						logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} instances.", Constants::NUM_INSTANCES_MAX, instCount);
+						reportedInstanceLimit = true;
+					}
+					m_ClusterFirstMesh[i] = UINT32_MAX;
+					continue;
+				}
+
+				m_ClusterFirstMesh[i] = m_NumMeshes;
+				m_ClusterFirstInstance[i] = m_NumInstances;
+				m_NumMeshes += meshCount;
+				m_NumInstances += instCount;
+			}
+
+			// Pass 3 (parallel): write remap entries and instance data into the disjoint assigned ranges.
+			{
+				std::atomic<size_t> nextCluster{ 0 };
+				for (size_t t = 0; t < numWorkers; ++t) {
+					m_ThreadPool->Enqueue([&]() {
+						for (size_t i = nextCluster.fetch_add(1, std::memory_order_relaxed);
+							i < totalWork;
+							i = nextCluster.fetch_add(1, std::memory_order_relaxed)) {
+							const uint32_t firstMesh = m_ClusterFirstMesh[i];
+							if (firstMesh == UINT32_MAX)
+								continue;
+
+							auto* cluster = m_AllClusters[i];
+							const uint32_t meshCount = m_ClusterMeshCount[i];
+							const uint32_t instanceIndex = m_ClusterFirstInstance[i];
+
+							// Write remap entries: packed (instanceID << 16) | geometrySlot into the ByteAddress remap buffer
+							const auto& geometrySlots = cluster->GetGeometrySlots();
+							for (uint32_t j = 0; j < meshCount; j++) {
+								const uint32_t remapIdx = firstMesh + j;
+								m_MeshSlotRemapData[remapIdx] = static_cast<uint32_t>(geometrySlots[j]) | (instanceIndex << 16);
+							}
+
+							cluster->SetInstanceIndex(instanceIndex);
+							cluster->WriteInstanceData(firstMesh, meshCount, &m_InstanceData[instanceIndex]);
+						}
+					});
+				}
+				m_ThreadPool->WaitAll();
+			}
 		}
 	}
 
