@@ -1,6 +1,7 @@
 #include "Core/BLASInstanceCluster.h"
 #include "Scene.h"
 #include "SceneGraph.h"
+#include "Util.h"
 #include "Types/InstanceMask.h"
 
 #include <cassert>
@@ -57,7 +58,7 @@ void BLASInstanceCluster::AppendInstanceDescs(eastl::vector<nvrhi::rt::InstanceD
 	}
 }
 
-void BLASInstanceCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances) const
+void BLASInstanceCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances, float4* outBounds) const
 {
 	if (!outInstances)
 		return;
@@ -65,13 +66,19 @@ void BLASInstanceCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCou
 	const auto& instances = m_Members.front()->AsInstancedMesh()->GetInstances();
 	const uint32_t instCount = static_cast<uint32_t>(instances.size());
 
+	const float3 center = Util::Math::Float3(m_WorldBound.center);
+	const float4 bound(center.x, center.y, center.z, Util::Adapter::GetNiBoundRadius(m_WorldBound));
+
 	for (uint32_t i = 0; i < instCount; i++) {
 		InstanceData& data = outInstances[i];
 		data.Transform = instances[i].transform;
 		data.PrevTransform = instances[i].prevTransform;
-		data.LightData = m_InstanceLightData;
+		data.LightData = {};
 		data.FirstGeometryID = firstMesh;
 		data.NumGeometry = meshCount;
 		data.Alpha = instances[i].alpha;
+
+		if (outBounds)
+			outBounds[i] = bound;
 	}
 }

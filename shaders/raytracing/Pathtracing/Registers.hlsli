@@ -101,6 +101,7 @@ Texture2D<float4>                           SkinDetailNormal            : regist
 Texture2D<float4>                           WaterDisplacementMap        : register(t9);
 Texture2D<float4>                           ProjNoiseMap                : register(t10);
 StructuredBuffer<Transform>                 Transforms                  : register(t11);
+StructuredBuffer<uint>                      InstanceLightList           : register(t12);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 

@@ -30,7 +30,7 @@ namespace Pass
 	{
 		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-		uint8_t lightIndex = 0;
+		uint32_t lightIndex = 0;
 
 		for (auto& [bsLight, light] : sceneGraph->GetLights())
 		{
@@ -38,7 +38,7 @@ namespace Pass
 
 			if (light.m_DirtyBinding || light.m_Index)
 			{
-				light.m_Index = lightIndex;
+				light.m_Index = static_cast<uint16_t>(lightIndex);
 
 				auto bindingSet = nvrhi::BindingSetItem::RayTracingAccelStruct(lightIndex, light.m_TopLevelAS);
 				Renderer::GetSingleton()->GetDevice()->writeDescriptorTable(m_DescriptorTable, bindingSet);

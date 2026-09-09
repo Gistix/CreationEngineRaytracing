@@ -47,7 +47,10 @@ void SceneGraph::Initialize()
 	}
 
 
-	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer", true);
+	m_InstanceBoundBuffer = Util::CreateStructuredRingBuffer<float4>(device, Constants::NUM_INSTANCES_MAX, "Instance Bound Buffer");
+	m_InstanceLightList = Util::CreateStructuredRingBuffer<uint32_t>(device, Constants::INSTANCE_LIGHT_LIST_MAX, "Instance Light List", true);
+	m_InstanceLightCounter = Util::CreateStructuredRingBuffer<uint32_t>(device, 1, "Instance Light Counter", true);
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
 
 	m_MeshManager = eastl::make_unique<MeshManager>();
@@ -253,7 +256,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 	for (auto& [bsLight, light] : m_Lights)
 	{
 		light.m_Active = true;
-		light.m_Index = static_cast<uint8_t>(numLights);
+		light.m_Index = static_cast<uint16_t>(numLights);
 
 		auto niLight = bsLight->light.get();
 		if (!niLight)
@@ -352,6 +355,9 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 			if (flags & LightLimitFix::LightFlags::Linear)
 				lightData.Flags |= LightFlags::LinearLight;
 #endif
+
+			if (light.m_Active)
+				lightData.Flags |= LightFlags::Active;
 		}
 
 		numLights++;
@@ -872,7 +878,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				}
 
 				cluster->SetInstanceIndex(instanceIndex);
-				cluster->WriteInstanceData(work.firstMesh, meshCount, &m_InstanceData[instanceIndex]);
+				cluster->WriteInstanceData(work.firstMesh, meshCount, &m_InstanceData[instanceIndex], &m_InstanceBounds[instanceIndex]);
 			});
 		}
 	}
@@ -888,8 +894,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(m_MeshSlotRemapBuffer.current(), m_MeshSlotRemapData.data(), m_NumMeshes * 4ull, 0);
 	}
 
-	if (m_NumInstances > 0)
+	if (m_NumInstances > 0) {
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+		commandList->writeBuffer(GetInstanceBoundBuffer(), m_InstanceBounds.data(), m_NumInstances * sizeof(float4));
+	}
 
 	m_MeshManager->Flush(commandList);
 

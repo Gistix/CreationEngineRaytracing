@@ -72,18 +72,12 @@ protected:
 	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	mutable std::mutex m_DirtyMutex;
 
-	InstanceLightData m_InstanceLightData;
-
 	bool m_IsValid = false;
 
 	virtual void UpdateTransform();
 	BuildMode DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex);
 
 	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
-
-	void UpdateInstanceLightData(
-		const eastl::map<RE::BSLight*, Light>& lights,
-		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 
 	void SetValid(bool valid) { m_IsValid = valid; }
 public:
@@ -126,5 +120,5 @@ public:
 
 	const auto& GetGeometrySlots() const { return m_GeometrySlots; }
 
-	virtual void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances) const;
+	virtual void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances, float4* outBounds) const;
 };

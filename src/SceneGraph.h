@@ -95,6 +95,14 @@ class SceneGraph
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	RingBuffer m_InstanceBuffer;
 
+	// Per-instance world bounds (center.xyz, radius), consumed by the GPU light culling pass.
+	eastl::array<float4, Constants::NUM_INSTANCES_MAX> m_InstanceBounds;
+	RingBuffer m_InstanceBoundBuffer;
+
+	// Compacted per-instance light index list + global atomic write cursor, produced on the GPU.
+	RingBuffer m_InstanceLightList;
+	RingBuffer m_InstanceLightCounter;
+
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
@@ -175,6 +183,9 @@ public:
 	nvrhi::IBuffer* GetLightBuffer() const { return m_LightBuffer.current(); }
 	nvrhi::IBuffer* GetMeshBuffer() const { return m_MeshManager->GetMeshBuffer(); }
 	nvrhi::IBuffer* GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
+	nvrhi::IBuffer* GetInstanceBoundBuffer() const { return m_InstanceBoundBuffer.current(); }
+	nvrhi::IBuffer* GetInstanceLightList() const { return m_InstanceLightList.current(); }
+	nvrhi::IBuffer* GetInstanceLightCounter() const { return m_InstanceLightCounter.current(); }
 	nvrhi::IBuffer* GetTransformBuffer() const { return m_MeshManager->GetTransformBuffer(); }
 	nvrhi::IBuffer* GetMeshSlotRemapBuffer() const { return m_MeshSlotRemapBuffer.current(); }
 	nvrhi::IBuffer* GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }

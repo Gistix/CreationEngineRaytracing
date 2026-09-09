@@ -119,70 +119,6 @@ bool BLASCluster::Valid() const
 	return m_IsValid;
 }
 
-void BLASCluster::UpdateInstanceLightData(
-    const eastl::map<RE::BSLight*, Light>& lights,
-    const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData)
-{
-	uint8_t lightIds[Constants::INSTANCE_LIGHTS_MAX];
-	uint8_t numLights = 0;
-
-	for (const auto& [bsLight, light] : lights) {
-		if (!light.m_Active)
-			continue;
-
-		if (numLights >= Constants::INSTANCE_LIGHTS_MAX) {
-			logger::error("BLASCluster::GetInstanceLightData - Number of lights per instance of {} exceeds the maximum of {}, for light {} of {}",
-				numLights,
-				Constants::INSTANCE_LIGHTS_MAX,
-				light.m_Index,
-				Constants::LIGHTS_MAX);
-			break;
-		}
-
-		const auto& ld = lightData[light.m_Index];
-
-		if (ld.Type == LightType::Directional) {
-			lightIds[numLights] = light.m_Index;
-			numLights++;
-		}
-		else {
-			const auto& center = Util::Math::Float3(m_WorldBound.center);
-			const float boundRadius = Util::Adapter::GetNiBoundRadius(m_WorldBound);
-
-			const float3 toCenter = center - ld.Position;
-			const float dist = toCenter.Length();
-
-			// Sphere vs light radius
-			if (dist - boundRadius > ld.Radius)
-				continue;
-
-			// Sphere vs spot cone (conservative): the bound must reach the cone frustum.
-			// CosOuterAngle is the half-angle cosine, matching the shader's smoothstep.
-			if (ld.Type == LightType::Spot) {
-				const float distAlong = toCenter.Dot(ld.Direction);
-
-				// Entirely behind the light's apex plane
-				if (distAlong < -boundRadius)
-					continue;
-
-				// cosOuter <= 0 means the cone is a hemisphere or wider — nothing to cull
-				const float cosOuter = std::clamp(float(ld.CosOuterAngle), -1.0f, 1.0f);
-				if (cosOuter > 0.0f) {
-					const float perpDist = (toCenter - ld.Direction * distAlong).Length();
-					const float coneRadius = std::max(distAlong, 0.0f) * std::tan(std::acos(cosOuter));
-					if (perpDist - boundRadius > coneRadius)
-						continue;
-				}
-			}
-
-			lightIds[numLights] = light.m_Index;
-			numLights++;
-		}
-	}
-
-	m_InstanceLightData = InstanceLightData(lightIds, numLights);
-}
-
 void BLASCluster::UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags)
 {
 	std::scoped_lock lock(m_DirtyMutex);
@@ -193,10 +129,7 @@ uint32_t BLASCluster::Update()
 {
 	UpdateTransform();
 
-	auto scene = Scene::GetSingleton();
-	auto sceneGraph = scene->GetSceneGraph();
-
-	const bool skipInstanceLights = scene->m_Settings.ExperimentalSettings.GlobalLights;
+	auto sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	// Only those who affect geometry count or its flags
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh, DirtyFlags::Alpha)) {
@@ -264,11 +197,6 @@ uint32_t BLASCluster::Update()
 
 		const bool inFrustum = bypassFrustumCulling || camera->PointInFrustum(m_WorldBound.center, Util::Adapter::GetNiBoundRadius(m_WorldBound));
 		m_Flags.set(!inFrustum, Flags::FrustumCulled);
-
-		if (!skipInstanceLights) {
-			// TODO: Move this to the GPU - It doesn't scale well on CPU
-			UpdateInstanceLightData(sceneGraph->GetLights(), sceneGraph->GetLightData());
-		}
 	}
 
 	return meshCount;
@@ -279,15 +207,18 @@ void BLASCluster::AppendInstanceDescs(eastl::vector<nvrhi::rt::InstanceDesc>& ou
 	outDescs.push_back(MakeInstanceDesc());
 }
 
-void BLASCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances) const
+void BLASCluster::WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances, float4* outBounds) const
 {
 	InstanceData& instanceData = outInstances[0];
 	instanceData.Transform = m_Transform;
 	instanceData.PrevTransform = m_PrevTransform;
-	instanceData.LightData = m_InstanceLightData;
+	instanceData.LightData = {};
 	instanceData.FirstGeometryID = firstMesh;
 	instanceData.NumGeometry = meshCount;
 	instanceData.Alpha = 1.0f;
+
+	const float3 center = Util::Math::Float3(m_WorldBound.center);
+	outBounds[0] = float4(center.x, center.y, center.z, Util::Adapter::GetNiBoundRadius(m_WorldBound));
 }
 
 nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(BuildMode mode) const

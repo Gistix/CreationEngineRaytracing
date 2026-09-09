@@ -14,5 +14,5 @@ public:
 
 	void AppendInstanceDescs(eastl::vector<nvrhi::rt::InstanceDesc>& outDescs) const override;
 
-	void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances) const override;
+	void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances, float4* outBounds) const override;
 };

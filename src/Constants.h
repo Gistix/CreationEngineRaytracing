@@ -18,8 +18,11 @@ namespace Constants
 
 	static constexpr uint32_t PLAYER_REFR_FORMID = 0x00000014;
 
-	static constexpr uint32_t LIGHTS_MAX = 256;
-	static constexpr uint32_t INSTANCE_LIGHTS_MAX = 32;
+	static constexpr uint32_t LIGHTS_MAX = 1024;
+
+	// Global capacity of the per-instance light index list produced on the GPU.
+	// InstanceLightData::LightOffset is 16-bit, so the list index space is capped at 65535.
+	static constexpr uint32_t INSTANCE_LIGHT_LIST_MAX = 65535;
 
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
 	static constexpr uint32_t NUM_MESHES_MAX = 32 * 1024;

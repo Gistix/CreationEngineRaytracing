@@ -110,6 +110,7 @@ namespace Pass
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::Texture_SRV(10),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11), // Transforms
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12), // Instance light list
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0),
@@ -255,6 +256,7 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_SRV(9, GetRenderer()->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, sceneGraph->GetInstanceLightList()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_HashEntriesBuffer),

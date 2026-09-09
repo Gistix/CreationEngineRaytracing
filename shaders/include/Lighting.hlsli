@@ -228,7 +228,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #if defined(GLOBAL_LIGHTS)
     const uint lightCount = Raytracing.NumLights;
 #else
-    const uint lightCount = lightData.Count;
+    const uint lightCount = lightData.LightCount;
 #endif
     
     if (lightCount == 0)
@@ -259,7 +259,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #   if defined(GLOBAL_LIGHTS)    
         const uint lightID = lightIdx;
 #   else
-        const uint lightID = lightData.GetID(lightIdx);
+        const uint lightID = InstanceLightList[lightData.LightOffset + lightIdx];
 #   endif
     
         Light testLight = Lights[lightID];
@@ -296,7 +296,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #   if defined(GLOBAL_LIGHTS)    
     const uint lightID = lightIdx;
 #   else
-    const uint lightID = lightData.GetID(lightIdx);
+    const uint lightID = InstanceLightList[lightData.LightOffset + lightIdx];
 #   endif
     
     Light light = Lights[lightID];
@@ -442,7 +442,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
         }
 
         // --- Point Lights ---
-        if (instance.LightData.Count > 0)
+        if (instance.LightData.LightCount > 0)
         {
             // Evaluate delta lobe against each visible point light (using the same RIS selection as standard NEE)
             float3 lightIrradiance;

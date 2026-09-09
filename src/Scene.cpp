@@ -34,6 +34,7 @@
 #include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
 #include "Pass/Raytracing/Common/TransformComposition.h"
+#include "Pass/Raytracing/Common/InstanceLightCulling.h"
 #include "Pass/Raytracing/Common/PTComposite.h"
 
 Scene::Scene()
@@ -98,6 +99,8 @@ void Scene::UpdateMode(Mode mode)
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
 		auto* tlasPtr = sceneTLAS.get();
 
+		auto instanceLightCulling = eastl::make_unique<Pass::InstanceLightCulling>(renderer);
+
 		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
 		auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
@@ -113,6 +116,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
 
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
@@ -127,6 +131,8 @@ void Scene::UpdateMode(Mode mode)
 		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
 		auto* tlasPtr = sceneTLAS.get();
+
+		auto instanceLightCulling = eastl::make_unique<Pass::InstanceLightCulling>(renderer);
 
 		auto sharc = eastl::make_unique<Pass::SHaRC>(renderer, tlasPtr);
 		auto* sharcPtr = sharc.get();
@@ -143,6 +149,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "PathTracing", eastl::move(ptPass) });
 		renderGraph->AddNode({ true, "ReSTIRGI", eastl::move(restirGI) });
