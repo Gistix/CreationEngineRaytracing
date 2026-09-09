@@ -1,5 +1,6 @@
 #include "interop/CameraData.hlsli"
 #include "include/WaveSize.hlsli"
+#include "include/Vulkan.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
 
@@ -12,11 +13,7 @@ struct AccumulationConstants
     uint AccumulatedFrames;   // Number of frames already accumulated (0 = first frame)
 };
 
-#if defined(__spirv__)
-[[vk::push_constant]] ConstantBuffer<AccumulationConstants> PC : register(b1);
-#else
-ConstantBuffer<AccumulationConstants> PC : register(b1);
-#endif
+VK_PUSH_CONSTANT ConstantBuffer<AccumulationConstants> PC : register(b1);
 
 WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
