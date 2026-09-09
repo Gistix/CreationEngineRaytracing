@@ -156,7 +156,7 @@ namespace Util
 #endif
 		}
 
-		bool IsValidTriShape(RE::BSGeometry* a_geometry)
+		bool IsValidTriShape(RE::BSGeometry* a_geometry, bool allowInstancedTriShape)
 		{
 #if defined(SKYRIM)
 			auto type = a_geometry->GetType();
@@ -164,7 +164,7 @@ namespace Util
 				type == RE::BSGeometry::Type::kTriShape || 
 				type == RE::BSGeometry::Type::kDynamicTriShape || 
 				type == RE::BSGeometry::Type::kSubIndexTriShape ||          // Object LOD
-				type == RE::BSGeometry::Type::kMultiStreamInstanceTriShape; // DistantTree (LOD)
+				((type == RE::BSGeometry::Type::kMultiStreamInstanceTriShape) && allowInstancedTriShape); // DistantTree (LOD) and Grass
 #elif defined(FALLOUT4)
 			auto type = static_cast<RE::BSGeometryType>(a_geometry->type);
 			return 

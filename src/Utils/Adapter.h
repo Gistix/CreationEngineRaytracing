@@ -125,7 +125,7 @@ namespace Util
 
 		void UpdateDynamicData(DynamicMesh* dynamicMesh, RE::BSDynamicTriShape* bsDynamicTriShape);
 		void GetAlwaysRenderChildren(RE::NiNode* shadowSceneNode, eastl::vector<RE::NiAVObject*>& outChildren);
-		bool IsValidTriShape(RE::BSGeometry* a_geometry);
+		bool IsValidTriShape(RE::BSGeometry* a_geometry, bool allowInstancedTriShape);
 
 		RE::TESObjectREFR* AsReference(RE::TESForm* a_object);
 		RE::ExtraDataList* GetExtraDataList(RE::TESObjectREFR* a_refr);

@@ -537,19 +537,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			m_ThreadPool->WaitAll();
 		}
 
-		// [PhaseA-DBG] Inspect per-worker output for null bsTriShape entries that somehow landed in the
-		// create list. We log the slot, the index within the slot, and the paired refr so we can later
-		// match the source in the visitor log above.
-		for (size_t slot = 0; slot < m_PerWorkerCreateList.size(); ++slot) {
-			const auto& w = m_PerWorkerCreateList[slot];
-			for (size_t i = 0; i < w.size(); ++i) {
-				if (!w[i].first) {
-					logger::critical("[PhaseA-DBG] concat: m_PerWorkerCreateList[{0}][{1}] has NULL bsTriShape; refr={2:p}",
-					                 slot, i, static_cast<const void*>(w[i].second));
-				}
-			}
-		}
-
 		// Serial concat into the final flat lists, preserving within-worker DFS order. Phase B/D/G are all
 		// order-independent so worker concatenation order does not affect correctness.
 		for (auto& w : m_PerWorkerUpdateList) {
@@ -603,6 +590,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			mesh->CommitDirtyFlags();
 		};
 
+		const auto& settings = Scene::GetSingleton()->m_Settings;
+		const bool renderTreeLOD = settings.ExperimentalSettings.RenderTreeLOD;
+		const bool allowInstancedTriShape = renderTreeLOD;
+
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
 			for (size_t i = start; i < end; ++i) {
 				auto& [bsTriShape, refr] = m_CreateList[i];
@@ -610,7 +601,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!bsTriShape)
 					continue;
 
-				if (!Util::Adapter::IsValidTriShape(bsTriShape))
+				if (!Util::Adapter::IsValidTriShape(bsTriShape, allowInstancedTriShape))
 					continue;
 
 				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
