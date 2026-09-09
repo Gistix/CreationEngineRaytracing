@@ -21,28 +21,40 @@ BLASCluster::BLASCluster(RE::TESObjectREFR* owner) :
 
 void BLASCluster::AddMember(BaseMesh* mesh)
 {
-	std::scoped_lock lock(m_MemberMutex);
-	auto [it, inserted] = m_MemberSet.emplace(mesh);
-	if (!inserted)
-		return;
+	{
+		std::scoped_lock lock(m_MemberMutex);
+		auto [it, inserted] = m_MemberSet.emplace(mesh);
+		if (!inserted)
+			return;
 
-	m_Members.push_back(mesh);
+		m_Members.push_back(mesh);
+	}
 
 	mesh->SetCluster(this);
-	m_DirtyFlags.set(DirtyFlags::Mesh);
+
+	{
+		std::scoped_lock lock(m_DirtyMutex);		
+		m_DirtyFlags.set(DirtyFlags::Mesh);
+	}
 }
 
 void BLASCluster::RemoveMember(BaseMesh* mesh)
 {
-	std::scoped_lock lock(m_MemberMutex);
-	const bool removed = m_MemberSet.erase(mesh);
-	if (!removed)
-		return;
+	{
+		std::scoped_lock lock(m_MemberMutex);
+		const bool removed = m_MemberSet.erase(mesh);
+		if (!removed)
+			return;
 
-	m_Members.erase_last(mesh);
+		m_Members.erase_last(mesh);
+	}
 
 	mesh->SetCluster(nullptr);
-	m_DirtyFlags.set(DirtyFlags::Mesh);
+
+	{
+		std::scoped_lock lock(m_DirtyMutex);
+		m_DirtyFlags.set(DirtyFlags::Mesh);
+	}
 }
 
 void BLASCluster::UpdateTransform() {
