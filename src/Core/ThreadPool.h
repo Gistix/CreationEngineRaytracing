@@ -111,7 +111,13 @@ public:
 		if (count == 0)
 			return;
 
-		const size_t numTasks = std::min(GetThreadCount(), (count + grain - 1) / grain);
+		assert(grain > 0); // reject bad callers in debug builds
+		if (grain == 0)
+			return;
+
+		// Overflow-safe ceil(count / grain).
+		const size_t blockCount = count / grain + (count % grain != 0);
+		const size_t numTasks = std::min(GetThreadCount(), blockCount);
 		std::atomic<size_t> next{ 0 };
 
 		for (size_t t = 0; t < numTasks; ++t) {
@@ -120,7 +126,8 @@ public:
 					const size_t begin = next.fetch_add(grain, std::memory_order_relaxed);
 					if (begin >= count)
 						break;
-					const size_t end = std::min(begin + grain, count);
+					// end <= count, so begin + ... cannot wrap.
+					const size_t end = begin + std::min(grain, count - begin);
 					for (size_t i = begin; i < end; ++i)
 						a_fn(t, i);
 				}
