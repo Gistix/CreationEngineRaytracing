@@ -90,196 +90,162 @@ bool BaseMesh::ValidateCounts(uint32_t numTriangles, uint32_t numVertices)
 	return true;
 }
 
-BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape* triShape)
+BaseMesh::BufferDescriptor BaseMesh::CreateVulkanBuffer(
+	ID3D11Buffer* buffer11,
+	const char* debugName,
+	const char* logContext,
+	const char* resourceKind,
+	DescriptorTableManager* descriptorTable)
 {
-	BufferDescriptor indexBuffer{};
+	BufferDescriptor buffer{};
 
-	if (Renderer::GetSingleton()->IsVulkan()) {
-		auto* indexBuffer11 = Util::Adapter::GetD3D11IndexBuffer(triShape);
-		if (!indexBuffer11) {
-			logger::error("BaseMesh::CreateIndexBuffer - D3D11 index buffer is null");
-			return indexBuffer;
-		}
-
-		winrt::com_ptr<IDXGIVkInteropBuffer> interopBuffer;
-		auto hr = indexBuffer11->QueryInterface(IID_PPV_ARGS(interopBuffer.put()));
-		if (FAILED(hr)) {
-			logger::error("BaseMesh::CreateIndexBuffer - Failed to query IDXGIVkInteropBuffer: 0x{:08X}", static_cast<uint32_t>(hr));
-			return indexBuffer;
-		}
-
-		VkBuffer vkBuffer = VK_NULL_HANDLE;
-		VkDeviceSize sliceOffset = 0;
-		VkDeviceSize sliceLength = 0;
-		VkDeviceAddress gpuAddress = 0;
-		hr = interopBuffer->GetVulkanBufferInfo(&vkBuffer, &sliceOffset, &sliceLength, &gpuAddress);
-		if (FAILED(hr) || !vkBuffer) {
-			logger::error("BaseMesh::CreateIndexBuffer - GetVulkanBufferInfo failed: 0x{:08X}", static_cast<uint32_t>(hr));
-			return indexBuffer;
-		}
-
-		auto indexBufferDesc = nvrhi::BufferDesc()
-			.setByteSize(sliceOffset + sliceLength)
-			.setCanHaveRawViews(true)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
-			.setIsAccelStructBuildInput(true)
-			.setDebugName("Index Buffer (VK)");
-
-		auto device = Renderer::GetSingleton()->GetDevice();
-		indexBuffer.m_Buffer = device->createHandleForNativeBuffer(
-			nvrhi::ObjectTypes::VK_Buffer,
-			nvrhi::Object(vkBuffer),
-			indexBufferDesc);
-
-		if (indexBuffer.m_Buffer) {
-			auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable;
-			indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, indexBuffer.m_Buffer));
-		}
-		else {
-			logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native Vulkan buffer");
-		}
-
-		indexBuffer.m_Offset = sliceOffset;
-		return indexBuffer;
+	if (!buffer11) {
+		logger::error("{} - D3D11 {} buffer is null", logContext, resourceKind);
+		return buffer;
 	}
 
-	auto* indexBufferDX12 = Util::Adapter::GetIndexBufferDX12(triShape);
-	auto* indexBuffer11 = Util::Adapter::GetD3D11IndexBuffer(triShape);
-
-	auto indexDesc = indexBufferDX12->GetDesc();
-
-	D3D11_BUFFER_DESC indexDesc11;
-	indexBuffer11->GetDesc(&indexDesc11);
-
-	if (indexDesc.Width != indexDesc11.ByteWidth) {
-		logger::error("D3D11 ({}) and D3D12 ({}) index buffer size mismatch.", indexDesc11.ByteWidth, indexDesc.Width);
-		return indexBuffer;
+	winrt::com_ptr<IDXGIVkInteropBuffer> interopBuffer;
+	auto hr = buffer11->QueryInterface(IID_PPV_ARGS(interopBuffer.put()));
+	if (FAILED(hr)) {
+		logger::error("{} - Failed to query IDXGIVkInteropBuffer: 0x{:08X}", logContext, static_cast<uint32_t>(hr));
+		return buffer;
 	}
 
-	auto indexBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(indexDesc.Width)
+	VkBuffer vkBuffer = VK_NULL_HANDLE;
+	VkDeviceSize sliceOffset = 0;
+	VkDeviceSize sliceLength = 0;
+	VkDeviceAddress gpuAddress = 0;
+	hr = interopBuffer->GetVulkanBufferInfo(&vkBuffer, &sliceOffset, &sliceLength, &gpuAddress);
+	if (FAILED(hr) || !vkBuffer) {
+		logger::error("{} - GetVulkanBufferInfo failed: 0x{:08X}", logContext, static_cast<uint32_t>(hr));
+		return buffer;
+	}
+
+	auto bufferDesc = nvrhi::BufferDesc()
+		.setByteSize(sliceOffset + sliceLength)
 		.setCanHaveRawViews(true)
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
-		.setDebugName("Index Buffer");
+		.setDebugName(debugName);
 
 	auto device = Renderer::GetSingleton()->GetDevice();
-	indexBuffer.m_Buffer = device->createHandleForNativeBuffer(
-		nvrhi::ObjectTypes::D3D12_Resource, 
-		nvrhi::Object(indexBufferDX12), 
-		indexBufferDesc);
+	buffer.m_Buffer = device->createHandleForNativeBuffer(
+		nvrhi::ObjectTypes::VK_Buffer,
+		nvrhi::Object(vkBuffer),
+		bufferDesc);
 
-	if (indexBuffer.m_Buffer) {
-		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable;
-		indexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, indexBuffer.m_Buffer));
+	if (buffer.m_Buffer) {
+		buffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffer.m_Buffer));
 	}
 	else {
-		logger::error("BaseMesh::CreateIndexBuffer - Failed to create handle for native buffer;");
+		logger::error("{} - Failed to create handle for native Vulkan buffer", logContext);
+	}
+
+	buffer.m_Offset = sliceOffset;
+	return buffer;
+}
+
+BaseMesh::BufferDescriptor BaseMesh::CreateDX12Buffer(
+	ID3D12Resource* resourceDX12,
+	ID3D11Buffer* buffer11,
+	const char* debugName,
+	const char* logContext,
+	const char* resourceKind,
+	DescriptorTableManager* descriptorTable,
+	uint64_t offset)
+{
+	BufferDescriptor buffer{};
+
+	auto resourceDesc = resourceDX12->GetDesc();
+
+	D3D11_BUFFER_DESC resourceDesc11;
+	buffer11->GetDesc(&resourceDesc11);
+
+	if (resourceDesc.Width != resourceDesc11.ByteWidth) {
+		logger::error("D3D11 ({}) and D3D12 ({}) {} buffer size mismatch.", resourceDesc11.ByteWidth, resourceDesc.Width, resourceKind);
+		return buffer;
+	}
+
+	auto bufferDesc = nvrhi::BufferDesc()
+		.setByteSize(resourceDesc.Width)
+		.setCanHaveRawViews(true)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setIsAccelStructBuildInput(true)
+		.setDebugName(debugName);
+
+	auto device = Renderer::GetSingleton()->GetDevice();
+	buffer.m_Buffer = device->createHandleForNativeBuffer(
+		nvrhi::ObjectTypes::D3D12_Resource,
+		nvrhi::Object(resourceDX12),
+		bufferDesc);
+
+	if (buffer.m_Buffer) {
+		buffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffer.m_Buffer));
+	}
+	else {
+		logger::error("{} - Failed to create handle for native buffer;", logContext);
+	}
+
+	buffer.m_Offset = offset;
+	return buffer;
+}
+
+BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape* triShape)
+{
+	auto* descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTriangleDescriptors()->m_DescriptorTable.get();
+
+	if (Renderer::GetSingleton()->IsVulkan()) {
+		return CreateVulkanBuffer(
+			Util::Adapter::GetD3D11IndexBuffer(triShape),
+			"Index Buffer (VK)",
+			"BaseMesh::CreateIndexBuffer",
+			"index",
+			descriptorTable);
 	}
 
 #if defined(FALLOUT4)
-	indexBuffer.m_Offset = triShape->indexBuffer->dataOffset;
+	const uint64_t offset = triShape->indexBuffer->dataOffset;
 #else
-	indexBuffer.m_Offset = 0;
+	const uint64_t offset = 0;
 #endif
 
-	return indexBuffer;
+	return CreateDX12Buffer(
+		Util::Adapter::GetIndexBufferDX12(triShape),
+		Util::Adapter::GetD3D11IndexBuffer(triShape),
+		"Index Buffer",
+		"BaseMesh::CreateIndexBuffer",
+		"index",
+		descriptorTable,
+		offset);
 }
 
 BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape* triShape)
 {
-	BufferDescriptor vertexBuffer{};
+	auto* descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetVertexDescriptors()->m_DescriptorTable.get();
 
 	if (Renderer::GetSingleton()->IsVulkan()) {
-		auto* vertexBuffer11 = Util::Adapter::GetD3D11VertexBuffer(triShape);
-		if (!vertexBuffer11) {
-			logger::error("BaseMesh::CreateVertexBuffer - D3D11 vertex buffer is null");
-			return vertexBuffer;
-		}
-
-		winrt::com_ptr<IDXGIVkInteropBuffer> interopBuffer;
-		auto hr = vertexBuffer11->QueryInterface(IID_PPV_ARGS(interopBuffer.put()));
-		if (FAILED(hr)) {
-			logger::error("BaseMesh::CreateVertexBuffer - Failed to query IDXGIVkInteropBuffer: 0x{:08X}", static_cast<uint32_t>(hr));
-			return vertexBuffer;
-		}
-
-		VkBuffer vkBuffer = VK_NULL_HANDLE;
-		VkDeviceSize sliceOffset = 0;
-		VkDeviceSize sliceLength = 0;
-		VkDeviceAddress gpuAddress = 0;
-		hr = interopBuffer->GetVulkanBufferInfo(&vkBuffer, &sliceOffset, &sliceLength, &gpuAddress);
-		if (FAILED(hr) || !vkBuffer) {
-			logger::error("BaseMesh::CreateVertexBuffer - GetVulkanBufferInfo failed: 0x{:08X}", static_cast<uint32_t>(hr));
-			return vertexBuffer;
-		}
-
-		auto vertexBufferDesc = nvrhi::BufferDesc()
-			.setByteSize(sliceOffset + sliceLength)
-			.setCanHaveRawViews(true)
-			.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
-			.setIsAccelStructBuildInput(true)
-			.setDebugName("Vertex Buffer (VK)");
-
-		auto device = Renderer::GetSingleton()->GetDevice();
-		vertexBuffer.m_Buffer = device->createHandleForNativeBuffer(
-			nvrhi::ObjectTypes::VK_Buffer,
-			nvrhi::Object(vkBuffer),
-			vertexBufferDesc);
-
-		if (vertexBuffer.m_Buffer) {
-			auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetVertexDescriptors()->m_DescriptorTable;
-			vertexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, vertexBuffer.m_Buffer));
-		}
-		else {
-			logger::error("BaseMesh::CreateVertexBuffer - Failed to create handle for native Vulkan buffer");
-		}
-
-		vertexBuffer.m_Offset = sliceOffset;
-		return vertexBuffer;
-	}
-
-	auto* vertexBufferDX12 = Util::Adapter::GetVertexBufferDX12(triShape);
-	auto* vertexBuffer11 = Util::Adapter::GetD3D11VertexBuffer(triShape);
-
-	auto vertexDesc = vertexBufferDX12->GetDesc();
-
-	D3D11_BUFFER_DESC vertexDesc11;
-	vertexBuffer11->GetDesc(&vertexDesc11);
-
-	if (vertexDesc.Width != vertexDesc11.ByteWidth) {
-		logger::error("D3D11 ({}) and D3D12 ({}) vertex buffer size mismatch.", vertexDesc11.ByteWidth, vertexDesc.Width);
-		return vertexBuffer;
-	}
-
-	auto vertexBufferDesc = nvrhi::BufferDesc()
-		.setByteSize(vertexDesc.Width)
-		.setCanHaveRawViews(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
-		.setIsAccelStructBuildInput(true)
-		.setDebugName("Vertex Buffer");
-
-	auto device = Renderer::GetSingleton()->GetDevice();
-	vertexBuffer.m_Buffer = device->createHandleForNativeBuffer(
-		nvrhi::ObjectTypes::D3D12_Resource, 
-		nvrhi::Object(vertexBufferDX12), 
-		vertexBufferDesc);
-
-	if (vertexBuffer.m_Buffer) {
-		auto& descriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetVertexDescriptors()->m_DescriptorTable;
-		vertexBuffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, vertexBuffer.m_Buffer));
-	}
-	else {
-		logger::error("BaseMesh::CreateVertexBuffer - Failed to create handle for native buffer;");
+		return CreateVulkanBuffer(
+			Util::Adapter::GetD3D11VertexBuffer(triShape),
+			"Vertex Buffer (VK)",
+			"BaseMesh::CreateVertexBuffer",
+			"vertex",
+			descriptorTable);
 	}
 
 #if defined(FALLOUT4)
-	vertexBuffer.m_Offset = triShape->vertexBuffer->dataOffset;
+	const uint64_t offset = triShape->vertexBuffer->dataOffset;
 #else
-	vertexBuffer.m_Offset = 0;
+	const uint64_t offset = 0;
 #endif
 
-	return vertexBuffer;
+	return CreateDX12Buffer(
+		Util::Adapter::GetVertexBufferDX12(triShape),
+		Util::Adapter::GetD3D11VertexBuffer(triShape),
+		"Vertex Buffer",
+		"BaseMesh::CreateVertexBuffer",
+		"vertex",
+		descriptorTable,
+		offset);
 }
 
 void BaseMesh::Update([[ maybe_unused ]] nvrhi::ICommandList* commandList)

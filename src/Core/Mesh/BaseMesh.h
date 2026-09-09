@@ -163,6 +163,24 @@ protected:
 
 	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
+	// Wraps a DXVK-interop Vulkan buffer imported from a D3D11 buffer.
+	static BufferDescriptor CreateVulkanBuffer(
+		ID3D11Buffer* buffer11,
+		const char* debugName,
+		const char* logContext,
+		const char* resourceKind,
+		DescriptorTableManager* descriptorTable);
+
+	// Wraps a native D3D12 resource, validating it against the D3D11 description.
+	static BufferDescriptor CreateDX12Buffer(
+		ID3D12Resource* resourceDX12,
+		ID3D11Buffer* buffer11,
+		const char* debugName,
+		const char* logContext,
+		const char* resourceKind,
+		DescriptorTableManager* descriptorTable,
+		uint64_t offset);
+
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(
 		nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount,
 		nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount,
