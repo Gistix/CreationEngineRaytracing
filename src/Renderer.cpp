@@ -146,11 +146,12 @@ void Renderer::PostInitialize()
 
 	for (size_t i = 0; i < m_SupportedFeatures.size(); i++)
 	{
-		const bool supported = m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingPipeline);
+		const auto feature = static_cast<nvrhi::Feature>(i);
+		const bool supported = m_NVRHIDevice->queryFeatureSupport(feature);
 		m_SupportedFeatures[i] = supported;
 
 		if (supported)
-			features += fmt::format("{} ", magic_enum::enum_name(static_cast<nvrhi::Feature>(i)));
+			features += fmt::format("{} ", magic_enum::enum_name(feature));
 	}
 
 	logger::info("Supported Features: {}", features);
