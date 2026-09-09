@@ -86,7 +86,8 @@ namespace Pass::Raytracing
 		};
 
 #if defined(NVAPI)
-		if (!GetRenderer()->m_Settings.UseRayQuery)
+		// The NVAPI shader extension slot is D3D12-only; Vulkan uses SPIR-V SER intrinsics.
+		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
 			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
 #endif
 
@@ -259,7 +260,7 @@ namespace Pass::Raytracing
 
 		
 #if defined(NVAPI)
-		if (!renderer->m_Settings.UseRayQuery)
+		if (!renderer->IsVulkan() && !renderer->m_Settings.UseRayQuery)
 			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 

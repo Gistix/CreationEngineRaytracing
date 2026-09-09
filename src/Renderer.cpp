@@ -99,7 +99,8 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 		"VK_KHR_acceleration_structure",
 		"VK_KHR_deferred_host_operations",
 		"VK_KHR_ray_tracing_pipeline",
-		"VK_KHR_ray_query"
+		"VK_KHR_ray_query",
+		"VK_NV_ray_tracing_invocation_reorder"
 	};
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
@@ -155,6 +156,15 @@ void Renderer::PostInitialize()
 	}
 
 	logger::info("Supported Features: {}", features);
+
+	// Keep the ray tracing backend selection consistent with device support.
+	if (m_Settings.UseRayQuery && !SupportsFeature(nvrhi::Feature::RayQuery)) {
+		logger::warn("Device does not support ray queries; using the ray tracing pipeline instead.");
+		m_Settings.UseRayQuery = false;
+	} else if (!m_Settings.UseRayQuery && !SupportsFeature(nvrhi::Feature::RayTracingPipeline)) {
+		logger::warn("Device does not support the ray tracing pipeline; using ray queries instead.");
+		m_Settings.UseRayQuery = true;
+	}
 }
 
 void Renderer::InitDefaultTextures()
