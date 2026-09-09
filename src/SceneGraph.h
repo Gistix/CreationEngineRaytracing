@@ -59,12 +59,17 @@ class SceneGraph
 
 	eastl::vector<BLASCluster*> m_AllClusters;
 
-	// Phase G scratch (sized to m_AllClusters each frame): per-cluster counts and assigned
-	// mesh/instance base offsets. FirstMesh = UINT32_MAX marks an invalid (skipped/overflow) cluster.
-	eastl::vector<uint32_t> m_ClusterMeshCount;
-	eastl::vector<uint32_t> m_ClusterInstanceCount;
-	eastl::vector<uint32_t> m_ClusterFirstMesh;
-	eastl::vector<uint32_t> m_ClusterFirstInstance;
+	// Phase G scratch (sized to m_AllClusters each frame): one entry per cluster with its counts and
+	// assigned mesh/instance base offsets. firstMesh/firstInstance = UINT32_MAX mark an invalid
+	// (skipped/overflowed) cluster.
+	struct ClusterWork
+	{
+		uint32_t meshCount = 0;
+		uint32_t instanceCount = 0;
+		uint32_t firstMesh = UINT32_MAX;
+		uint32_t firstInstance = UINT32_MAX;
+	};
+	eastl::vector<ClusterWork> m_ClusterWork;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshesSwap;

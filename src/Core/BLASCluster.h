@@ -116,6 +116,12 @@ public:
 	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
 
 	// Updates the cluster and returns the number of visible geometry entries.
+	//
+	// Phase G worker contract: Update() may be invoked concurrently for DISTINCT clusters by the scene
+	// graph's thread pool. Implementations (and everything they reach) must therefore touch only
+	// cluster-local state and internally thread-safe managers (MeshManager, etc.); shared SceneGraph
+	// registries and light data are read-only for the duration of the phase. Membership is immutable
+	// while Update() runs. Do not add unsynchronized writes to shared SceneGraph state here.
 	virtual uint32_t Update();
 
 	const auto& GetGeometrySlots() const { return m_GeometrySlots; }

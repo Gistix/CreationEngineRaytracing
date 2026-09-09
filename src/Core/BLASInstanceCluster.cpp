@@ -3,6 +3,8 @@
 #include "SceneGraph.h"
 #include "Types/InstanceMask.h"
 
+#include <cassert>
+
 BLASInstanceCluster::BLASInstanceCluster(RE::TESObjectREFR* owner) : 
 	BLASCluster(owner)
 {
@@ -23,6 +25,8 @@ uint32_t BLASInstanceCluster::GetInstanceCount() const
 
 uint32_t BLASInstanceCluster::Update()
 {
+	assert(m_Members.size() == 1); // single multi-instance mesh per instance cluster
+
 	const uint32_t meshCount = BLASCluster::Update();
 
 	// Multi-instance geometry should not be frustum-culled as a single point at origin
