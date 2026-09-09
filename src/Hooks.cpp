@@ -92,9 +92,14 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
+			if (Renderer::GetSingleton()->IsVulkan())
+				return func(a_memoryManager, size, a_alignment, a_alignmentRequired);
+
 			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
+
 			if (triShape)
 				triShape->ownsDX12Buffers = true;
+
 			return triShape;
 		}
 
@@ -111,6 +116,9 @@ namespace Hooks
 			uint32_t a_indexCount)
 		{
 			auto triShape = func(a_renderer, a_bsStream, a_vertexDesc, a_vertexCount, a_indexCount);
+
+			if (Renderer::GetSingleton()->IsVulkan())
+				return triShape;
 
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
@@ -135,6 +143,9 @@ namespace Hooks
 			uint32_t numIndices)
 		{
 			auto triShape = func(a_renderer, vertexData, vertexDataSize, vertexDesc, indexData, numIndices);
+
+			if (Renderer::GetSingleton()->IsVulkan())
+				return triShape;
 
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
@@ -164,6 +175,9 @@ namespace Hooks
 			IndexRenderData* a_indexRenderData)
 		{
 			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a_indexRenderData);
+
+			if (Renderer::GetSingleton()->IsVulkan())
+				return triShape;
 
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
@@ -195,6 +209,9 @@ namespace Hooks
 			uint32_t a_numIndices)
 		{
 			auto triShape = func(a_renderer, a_vertexRenderData, vertexDesc, a_indexData, a_numIndices);
+
+			if (Renderer::GetSingleton()->IsVulkan())
+				return triShape;
 
 			// Share vertex buffer
 			// The original function utilizes 'BSGraphics::CopyTriShapeVertices' to copy from 'VertexRenderData' into 'RE::BSGraphics::TriShape'
@@ -250,6 +267,9 @@ namespace Hooks
 		{
 			auto result = func(src, tgt, weight);
 
+			if (Renderer::GetSingleton()->IsVulkan())
+				return result;
+
 			if (src) {
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
 				if (geomData.rendererData)
@@ -272,6 +292,9 @@ namespace Hooks
 		static bool thunk(RE::BSTriShape* src, RE::BSTriShape* tgt, float weight, uint32_t partitionMask)
 		{
 			auto result = func(src, tgt, weight, partitionMask);
+
+			if (Renderer::GetSingleton()->IsVulkan())
+				return result;
 
 			if (src) {
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
@@ -322,6 +345,11 @@ namespace Hooks
 	{
 		static void thunk([[ maybe_unused ]] void* a1, RE::BSGraphics::TriShape* a_triShape)
 		{
+			if (Renderer::GetSingleton()->IsVulkan()) {
+				func(a1, a_triShape);
+				return;
+			}
+
 			if (a_triShape && _InterlockedExchangeAdd(&a_triShape->refCount, 0xFFFFFFFF) == 1)
 			{
 				auto indexBuffer = reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer);
@@ -658,12 +686,10 @@ namespace Hooks
 
 		// Use a hook to update dynamic data, else we risk trying accessing dynamic data while the engine has already released it
 		stl::detour_thunk<BSDynamicTriShape_UpdateDynamicData>(REL::RelocationID(69570, 70954));
-		
+
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 
 		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
-		
-
 
 		// Terrain LOD
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));

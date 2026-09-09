@@ -4,6 +4,7 @@
 #include "Interop/Mesh.hlsli"
 #include "Interop/VertexDesc.hlsli"
 #include "include/WaveSize.hlsli"
+#include "include/Vulkan.hlsli"
 
 StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
 StructuredBuffer<RowMajorFloat3x4> BoneMatrices               : register(t1);
@@ -14,11 +15,11 @@ StructuredBuffer<float4> DynamicVertices[]             : register(t0, space1);
 ByteAddressBuffer OriginalVertices[]                   : register(t0, space2);
 
 // Live (output) vertices in native packed format; read by the RT path. Shared slot.
-RWByteAddressBuffer OutputVertices[]                   : register(u0);
+VK_BINDING(3, 0) RWByteAddressBuffer OutputVertices[]        : register(u0);
 // Previous skinned positions for motion vectors. Shared slot.
-RWStructuredBuffer<float3> PrevPositions[]             : register(u0, space1);
+VK_BINDING(4, 0) RWStructuredBuffer<float3> PrevPositions[]  : register(u0, space1);
 // Dynamic float4 positions (output). Lives in DynamicMesh, addressed by updateData.dynamicIndex.
-RWStructuredBuffer<float4> DynamicVerticesOut[]        : register(u0, space2);
+VK_BINDING(5, 0) RWStructuredBuffer<float4> DynamicVerticesOut[] : register(u0, space2);
 
 // Decodes a signed-normalized byte4 (ubyte4 * 2 - 1) from a raw uint.
 float4 UnpackByte4SNorm(uint packed)

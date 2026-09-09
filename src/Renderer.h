@@ -108,6 +108,10 @@ class Renderer
 	eastl::unique_ptr<TextureReference> m_DetailTexture;
 
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
+	inline static eastl::unordered_map<VkFormat, nvrhi::Format> m_VkFormatMapping;
+
+	static void BuildFormatMapping();
+	static void BuildVkFormatMapping();
 
 	void InitGBufferOutput();
 
@@ -187,7 +191,19 @@ public:
 	auto& GetExecutionMutex() const { return m_ExecutionMutex; };
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
-	static auto GetNativeD3D11Device() { return GetSingleton()->m_NativeD3D11Device; }
+	static auto GetNativeD3D11Device() {
+		auto* dev = GetSingleton()->m_NativeD3D11Device;
+#if defined(SKYRIM)
+		if (!dev) {
+			auto* bsRenderer = RE::BSGraphics::Renderer::GetSingleton();
+			if (bsRenderer) {
+				dev = reinterpret_cast<ID3D11Device5*>(bsRenderer->GetRuntimeData().forwarder);
+				GetSingleton()->m_NativeD3D11Device = dev;
+			}
+		}
+#endif
+		return dev;
+	}
 
 	nvrhi::CommandListHandle GetGraphicsCommandList() const {
 		return GetDevice()->createCommandList(
@@ -274,6 +290,17 @@ public:
 		return it->second;
 	}
 
+	static inline auto GetFormat(VkFormat nativeFormat)
+	{
+		auto it = m_VkFormatMapping.find(nativeFormat);
+
+		if (it == m_VkFormatMapping.end()) {
+			return nvrhi::Format::UNKNOWN;
+		}
+
+		return it->second;
+	}
+
 	static uint GetUpdateInterval(float distance)
 	{
 		float t = std::log2((distance - 25.0f) + 1.0f) * 0.3f;
@@ -312,11 +339,11 @@ public:
 
 	void InitReSTIRGI();
 
-	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
+	void SetRenderTargets(void* albedo, void* normalRoughness, void* gnmao);
 
-	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
+	static nvrhi::TextureHandle WrapNativeTexture(void* nativeTexture, const char* debugName);
 
-	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
+	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName);
 
 	void InitDefaultTextures();
 

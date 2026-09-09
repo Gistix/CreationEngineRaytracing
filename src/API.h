@@ -15,14 +15,14 @@ extern "C" {
 	CERT_API void GetResolution(uint32_t& width, uint32_t& height);
 	CERT_API uint32_t PostExecution();
 	CERT_API void UpdateFeatureData(void* data, uint32_t size);
-	CERT_API void SetSkyHemisphere(ID3D12Resource* skyHemi);
-	CERT_API void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal);
-	CERT_API void SetWaterFlowMap(ID3D12Resource* waterFlowMap);
+	CERT_API void SetSkyHemisphere(void* skyHemi);
+	CERT_API void SetSkinDetailNormal(void* skinDetailNormal);
+	CERT_API void SetWaterFlowMap(void* waterFlowMap);
 	CERT_API void GetPassTimings(eastl::vector<PassTiming>&);
 	CERT_API void GetSceneGraphCounters(uint32_t& textures, uint32_t& models, uint32_t& instances);
 	CERT_API void UpdateSettings(Settings);
 	CERT_API void GetRRInput(ID3D12Resource*& diffuseAlbedo, ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance);
-	CERT_API void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
+	CERT_API void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao);
 	CERT_API void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main);
 	CERT_API void UpdateJitter(float2 jitter);
 	CERT_API uint32_t GetAccumulatedFrameCount();

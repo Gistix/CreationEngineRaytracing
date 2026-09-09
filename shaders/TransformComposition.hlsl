@@ -3,6 +3,7 @@
 #include "interop/Transform.hlsli"
 #include "interop/RowMajorFloat3x4.hlsli"
 #include "include/WaveSize.hlsli"
+#include "include/Vulkan.hlsli"
 float4x4 ToFloat4x4(float3x4 m)
 {
     return float4x4(
@@ -68,7 +69,7 @@ struct PushConstants
     uint NumMeshes;
 };
 
-ConstantBuffer<PushConstants> PC : register(b0);
+VK_PUSH_CONSTANT ConstantBuffer<PushConstants> PC : register(b0);
 
 RWStructuredBuffer<Transform> TransformsOut    : register(u0);
 

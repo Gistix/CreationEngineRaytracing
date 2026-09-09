@@ -44,7 +44,12 @@ namespace ShaderUtils
 			args.insert(args.end(), {
 				L"-spirv",
 				L"-fspv-target-env=vulkan1.2",
-				L"-fvk-use-dx-layout"
+				L"-fvk-use-dx-layout",
+				L"-fvk-t-shift", L"0", L"all",
+				L"-fvk-s-shift", L"128", L"all",
+				L"-fvk-b-shift", L"256", L"all",
+				L"-fvk-u-shift", L"384", L"all",
+				L"-fvk-auto-shift-bindings"
 			});
 		}
 
@@ -150,7 +155,12 @@ namespace ShaderUtils
 			args.insert(args.end(), {
 				L"-spirv",
 				L"-fspv-target-env=vulkan1.2",
-				L"-fvk-use-dx-layout"
+				L"-fvk-use-dx-layout",
+				L"-fvk-t-shift", L"0", L"all",
+				L"-fvk-s-shift", L"128", L"all",
+				L"-fvk-b-shift", L"256", L"all",
+				L"-fvk-u-shift", L"384", L"all",
+				L"-fvk-auto-shift-bindings"
 			});
 		}
 
@@ -227,7 +237,12 @@ namespace ShaderUtils
 			args.insert(args.end(), {
 				L"-spirv",
 				L"-fspv-target-env=vulkan1.2",
-				L"-fvk-use-dx-layout"
+				L"-fvk-use-dx-layout",
+				L"-fvk-t-shift", L"0", L"all",
+				L"-fvk-s-shift", L"128", L"all",
+				L"-fvk-b-shift", L"256", L"all",
+				L"-fvk-u-shift", L"384", L"all",
+				L"-fvk-auto-shift-bindings"
 			});
 		}
 

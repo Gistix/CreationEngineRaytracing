@@ -17,7 +17,7 @@ namespace ShaderCache
 	std::mutex m_ShadersMutex;
 
 	static constexpr uint32_t kCacheFileMagic = 0x44485343;  // 'DHSC'
-	static constexpr uint32_t kCacheVersion = 2;
+	static constexpr uint32_t kCacheVersion = 5;
 
 	static uint64_t HashBuffer64(const void* data, size_t size)
 	{

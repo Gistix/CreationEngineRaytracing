@@ -1,10 +1,12 @@
 #include "interop/Mesh.hlsli"
 #include "include/WaveSize.hlsli"
+#include "include/Vulkan.hlsli"
 
-cbuffer ArgsConstants : register(b0)
+struct ArgsConstants
 {
     uint NumMeshes;
 };
+VK_PUSH_CONSTANT ConstantBuffer<ArgsConstants> PC : register(b0);
 
 ByteAddressBuffer MeshSlotRemap : register(t0);
 StructuredBuffer<Mesh> Meshes : register(t1);
@@ -26,7 +28,7 @@ void Main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
 	const uint i = dispatchThreadID.x;
 
-	if (i >= NumMeshes)
+	if (i >= PC.NumMeshes)
 		return;
 
 	const uint packed = MeshSlotRemap.Load(i * 4);
