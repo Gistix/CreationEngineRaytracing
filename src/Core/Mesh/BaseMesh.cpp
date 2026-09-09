@@ -74,8 +74,8 @@ void BaseMesh::MarkDirty(DirtyFlags flag) {
 	if (flag == DirtyFlags::None)
 		return;
 
+	// Mesh-local flags reach the cluster via CommitDirtyFlags(), which BuildClusters scans.
 	m_DirtyFlags.set(flag);
-	Scene::GetSingleton()->GetSceneGraph()->MarkClusterDirty(m_Cluster);
 }
 
 bool BaseMesh::ValidateCounts(uint32_t numTriangles, uint32_t numVertices)

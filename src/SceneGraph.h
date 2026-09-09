@@ -104,7 +104,6 @@ class SceneGraph
 
 	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
-	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
 	// Mesh/transform/properties buffer managed by MeshManager
 	eastl::unique_ptr<MeshManager> m_MeshManager;
@@ -112,8 +111,6 @@ class SceneGraph
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
 	std::shared_mutex m_SegmentClusterMutex;
-
-	mutable std::mutex m_ClusterDirtyMutex;
 
 	eastl::unique_ptr<ThreadPool> m_ThreadPool;
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
@@ -180,7 +177,6 @@ public:
 	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }
 	inline const auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
-	inline const auto& GetDirtyClusters() { return m_DirtyClusters; }
 	inline const auto& GetAllClusters() { return m_AllClusters; }
 	
 	// Per-segment cluster helper, called by SubIndexMesh when it creates a SubIndexSegmentMesh child
@@ -222,7 +218,6 @@ public:
 	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
-	void MarkClusterDirty(BLASCluster* cluster);
 
 	uint32_t AllocateMeshIndex();
 	uint32_t AllocateGeometryIndex();

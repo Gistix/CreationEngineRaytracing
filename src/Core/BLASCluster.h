@@ -69,7 +69,7 @@ protected:
 
 	CESEAdapter::REX::EnumSet<Flags> m_Flags = Flags::None;
 
-	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
+	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	mutable std::mutex m_DirtyMutex;
 
 	InstanceLightData m_InstanceLightData;

@@ -426,7 +426,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		if (auto* cluster = mesh->GetCluster()) {
 			cluster->RemoveMember(mesh);
-			MarkClusterDirty(cluster);
 		}
 
 		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
@@ -576,12 +575,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (ownerChanged || !cluster) {
 					if (cluster) {
 						cluster->RemoveMember(mesh);
-						MarkClusterDirty(cluster);
 					}
 
 					cluster = GetOrCreateCluster(refr, mesh->GetTriShape());
 					cluster->AddMember(mesh);
-					MarkClusterDirty(cluster);
 				}
 			}
 
@@ -729,7 +726,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!mesh->AsSubIndexMesh()) {
 					auto* cluster = GetOrCreateCluster(refr, bsTriShape);
 					cluster->AddMember(mesh);
-					MarkClusterDirty(cluster);
 				}
 
 				mesh->SetLastVisitedFrame(frameIndex);
@@ -753,7 +749,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 			if (auto* cluster = mesh->GetCluster()) {
 				cluster->RemoveMember(mesh);
-				MarkClusterDirty(cluster);
 			}
 
 			mesh->CommitDirtyFlags();
@@ -781,7 +776,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	auto removeEmptyClusters = [this](auto& clusters) {
 		for (auto it = clusters.begin(); it != clusters.end(); ) {
 			if (it->second->Empty()) {
-				m_DirtyClusters.erase(it->second.get());
 				it = clusters.erase(it);
 			} else {
 				++it;
@@ -950,7 +944,6 @@ BLASCluster* SceneGraph::GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a
 	}
 
 	BLASCluster* result = nullptr;
-	bool didInsert = false;
 	{
 		std::unique_lock lock(a_mutex);
 
@@ -967,11 +960,7 @@ BLASCluster* SceneGraph::GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a
 		}
 
 		result = it->second.get();
-		didInsert = inserted;
-	} // exclusive lock released here
-
-	if (didInsert)
-		MarkClusterDirty(result); // separate mutex, safe outside the cluster lock
+	}
 
 	return result;
 }
@@ -1007,22 +996,15 @@ BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment,
 	return result;
 }
 
-void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
-{
-	if (!cluster) 
-		return;
-
-	std::scoped_lock lock(m_ClusterDirtyMutex);
-	m_DirtyClusters.emplace(cluster);
-}
-
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 {
-	// Process only clusters that were marked dirty.
-	for (auto* cluster : m_DirtyClusters)
-		cluster->BuildUpdate(commandList, this);
-	
-	m_DirtyClusters.clear();
+	// Visit every cluster with pending dirty flags. Flags are set on membership changes (Mesh) and
+	// mesh flag commits, and only cleared inside BuildUpdate - so non-None always means a build is
+	// needed. m_AllClusters was rebuilt in Phase G after empty clusters were dropped. The scan runs
+	// on the render thread after Phase WaitAll, so flags are not being written.
+	for (auto* cluster : m_AllClusters)
+		if (cluster->m_DirtyFlags != DirtyFlags::None)
+			cluster->BuildUpdate(commandList, this);
 }
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
