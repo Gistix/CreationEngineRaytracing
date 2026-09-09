@@ -480,7 +480,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	// slots taskIdx + 1 (1..numWorkers). One slot == one writer for the whole phase.
 	//
 	// Safety: Phase A only reads the scene tree and m_Meshes (m_Meshes.find() concurrent-read; the map
-	// is mutated before A by DestroyMeshes and after A by Phase C2). No SceneGraph registry is mutated
+	// is mutated before A by DestroyMeshes and after A by Phase C). No SceneGraph registry is mutated
 	// during the phase, and the scene tree / ShadowSceneNode portalGraph are stable while Update() runs.
 	// The visitor passes child.get() raw pointers (no NiPointer<> copies, so no atomic refcount churn).
 	// All per-worker output vectors have a single writer.
@@ -541,7 +541,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	// Phase B + C1 (parallel): Update known meshes AND filter new meshes via thread pool
+	// Phase B (parallel): update known meshes AND filter new meshes via thread pool (the former C1
+	// candidate filtering is folded into this phase)
 	{
 		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
 		const size_t totalWork = m_UpdateList.size();
@@ -676,7 +677,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	// Phase C2 (serial): GPU resource creation for validated candidates
+	// Phase C (serial): GPU resource creation for validated candidates
 	for (auto& [bsTriShape, refr] : m_CreateCandidates) {
 		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 			created->SetOwner(refr);
@@ -701,7 +702,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	if (timings) {
 		const auto nowTp = std::chrono::high_resolution_clock::now();
-		m_UpdateTimings.push_back({"SG::PhaseC2-Create", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		m_UpdateTimings.push_back({"SG::PhaseC-Create", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
 		phaseStart = nowTp;
 	}
 
