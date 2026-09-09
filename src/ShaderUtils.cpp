@@ -7,6 +7,24 @@
 
 namespace ShaderUtils
 {
+	namespace
+	{
+		// DXC reports warnings and errors through DXC_OUT_ERRORS as text. Log the
+		// diagnostics under the shader that produced them so failures are
+		// traceable; the blob itself carries the file:line prefixes.
+		void LogShaderDiagnostics(IDxcBlobUtf8* diagnostics, const wchar_t* filePath, const wchar_t* entryPoint, const wchar_t* target)
+		{
+			if (!diagnostics || diagnostics->GetStringLength() == 0)
+				return;
+
+			logger::error("Shader '{}' ({}:{}) diagnostics:\n{}",
+				Util::WStringToString(filePath),
+				Util::WStringToString(entryPoint),
+				Util::WStringToString(target),
+				diagnostics->GetStringPointer());
+		}
+	}
+
 	bool PreprocessShader(winrt::com_ptr<IDxcBlobUtf8>& outPreprocessedText, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* EntryPoint)
 	{
 		const std::wstring target = Renderer::GetSingleton()->GetShaderTarget(stage);
@@ -70,15 +88,13 @@ namespace ShaderUtils
 
 		winrt::com_ptr<IDxcResult> result;
 		if (FAILED(dxc->compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), dxc->includeHandler.get(), IID_PPV_ARGS(&result)))) {
-			logger::error("PreprocessShader - Compile call failed");
+			logger::error("PreprocessShader - Compile call failed for {}", Util::WStringToString(FilePath));
 			return false;
 		}
 
 		winrt::com_ptr<IDxcBlobUtf8> errors;
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr))) {
-			if (errors && errors->GetStringLength() > 0) {
-				logger::error("Shader preprocess errors: {}", errors->GetStringPointer());
-			}
+			LogShaderDiagnostics(errors.get(), FilePath, EntryPoint, Target);
 		}
 
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(&outPreprocessedText), nullptr)) && outPreprocessedText && outPreprocessedText->GetStringLength() > 0) {
@@ -188,22 +204,20 @@ namespace ShaderUtils
 
 		winrt::com_ptr<IDxcResult> result;
 		if (FAILED(dxc->compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), dxc->includeHandler.get(), IID_PPV_ARGS(&result)))) {
-			logger::error("Compile call failed");
+			logger::error("Compile call failed for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		winrt::com_ptr<IDxcBlobUtf8> errors;
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr))) {
-			if (errors && errors->GetStringLength() > 0) {
-				logger::error("Shader compilation errors: {}", errors->GetStringPointer());
-			}
+			LogShaderDiagnostics(errors.get(), FilePath, EntryPoint, Target);
 		} else {
-			logger::error("Failed to get compilation errors");
+			logger::error("Failed to get compilation diagnostics for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		if (FAILED(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader), nullptr))) {
-			logger::error("Failed to get compiled shader");
+			logger::error("Failed to get compiled shader for {}", Util::WStringToString(FilePath));
 			return;
 		}
 	}
@@ -259,22 +273,20 @@ namespace ShaderUtils
 		// No defines or include handler needed — source is already fully preprocessed.
 		winrt::com_ptr<IDxcResult> result;
 		if (FAILED(dxc->compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), nullptr, IID_PPV_ARGS(&result)))) {
-			logger::error("CompilePreprocessedShader - Compile call failed");
+			logger::error("CompilePreprocessedShader - Compile call failed for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		winrt::com_ptr<IDxcBlobUtf8> errors;
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr))) {
-			if (errors && errors->GetStringLength() > 0) {
-				logger::error("Shader compilation errors: {}", errors->GetStringPointer());
-			}
+			LogShaderDiagnostics(errors.get(), FilePath, EntryPoint, Target);
 		} else {
-			logger::error("Failed to get compilation errors");
+			logger::error("Failed to get compilation diagnostics for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		if (FAILED(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader), nullptr))) {
-			logger::error("Failed to get compiled shader");
+			logger::error("Failed to get compiled shader for {}", Util::WStringToString(FilePath));
 			return;
 		}
 	}
