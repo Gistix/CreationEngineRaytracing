@@ -99,12 +99,22 @@ void UpdateSettings(Settings settings)
 	scene->UpdateSettings(settings);
 }
 
-void GetRRInput(ID3D12Resource*& diffuseAlbedo, ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance)
+void GetRRInput(void*& diffuseAlbedo, void*& specularAlbedo, void*& specularHitDistance)
 {
-	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
-	diffuseAlbedo = textureManager.GetTexture(RenderTarget::DiffuseAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
-	specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
-	specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+	auto* renderer = Renderer::GetSingleton();
+	auto& textureManager = renderer->RenderTargetManager();
+
+	if (renderer->IsVulkan()) {
+		// DXVK interop path: hand back the D3D11 shared textures the host wraps into VkImages.
+		const uint32_t slot = renderer->GetCurrentSlot();
+		diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo, slot).shared;
+		specularAlbedo = textureManager.GetSharedTexture(RenderTarget::RRSpecularAlbedo, slot).shared;
+		specularHitDistance = textureManager.GetSharedTexture(RenderTarget::RRSpecularHitDist, slot).shared;
+	} else {
+		diffuseAlbedo = textureManager.GetTexture(RenderTarget::DiffuseAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+	}
 }
 
 void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao)
