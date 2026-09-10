@@ -161,14 +161,17 @@ uint32_t BLASCluster::Update()
 			const auto meshIndex = mesh->GetMeshIndex();
 			const auto materialIndex = static_cast<uint32_t>(mesh->GetMaterial()->GetOffset());
 
-			for (size_t i = 0; i < entries.size(); i++) {
-				const auto& entry = entries[i];
-				m_GeometryDescs.push_back(entry.desc);
+			if (mesh->IsGroupedInstance()) {
+				// N geometry descs share a single mesh slot (one remap entry / TLAS span per group);
+				// the per-instance transform is resolved at hit time from the grass transform pool.
+				const auto& entry = entries[0];
+				for (const auto& geometryEntry : entries)
+					m_GeometryDescs.push_back(geometryEntry.desc);
 				m_GeometrySlots.push_back(entry.geometryIndex);
 
 				auto& geomTris = entry.desc.geometryData.triangles;
 				MeshData md(
-					mesh->GetIndexID(i),
+					mesh->GetIndexID(0),
 					vertexID,
 					vertexDesc,
 					static_cast<uint16_t>(geomTris.vertexCount),
@@ -179,10 +182,36 @@ uint32_t BLASCluster::Update()
 					0,
 					static_cast<uint32_t>(geomTris.indexOffset),
 					static_cast<uint32_t>(geomTris.vertexOffset),
-					materialIndex
-				);
+					materialIndex,
+					mesh->GetGrassTransformBase(),
+					mesh->GetGrassInstanceCount(),
+					0);
 
 				meshManager->WriteMeshData(entry.geometryIndex, md);
+			}
+			else {
+				for (size_t i = 0; i < entries.size(); i++) {
+					const auto& entry = entries[i];
+					m_GeometryDescs.push_back(entry.desc);
+					m_GeometrySlots.push_back(entry.geometryIndex);
+
+					auto& geomTris = entry.desc.geometryData.triangles;
+					MeshData md(
+						mesh->GetIndexID(i),
+						vertexID,
+						vertexDesc,
+						static_cast<uint16_t>(geomTris.vertexCount),
+						static_cast<uint16_t>(geomTris.indexCount / 3),
+						meshType,
+						dynamicIndex,
+						meshIndex,
+						0,
+						static_cast<uint32_t>(geomTris.indexOffset),
+						static_cast<uint32_t>(geomTris.vertexOffset),
+						materialIndex);
+
+					meshManager->WriteMeshData(entry.geometryIndex, md);
+				}
 			}
 		}
 	}

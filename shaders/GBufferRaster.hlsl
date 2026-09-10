@@ -25,6 +25,7 @@ StructuredBuffer<Mesh>            Meshes           : register(t1);
 StructuredBuffer<Transform>       Transforms       : register(t2);
 ByteAddressBuffer                 PropertiesBuffer : register(t3);
 ByteAddressBuffer                 MeshSlotRemap    : register(t4);
+StructuredBuffer<Transform>       GrassTransforms  : register(t9);
 
 Texture2D<float4>                 WaterFlowMap         : register(t5);
 Texture2D<float4>                 WaterDisplacementMap : register(t6);
@@ -215,7 +216,7 @@ struct VertexOut
     float4 PreviousClip : PREVCLIP;
 };
 
-VertexOut MainVS(in uint vertexID : SV_VertexID)
+VertexOut MainVS(in uint vertexID : SV_VertexID, in uint instanceID : SV_InstanceID)
 {
     VertexOut o;
 
@@ -227,7 +228,11 @@ VertexOut MainVS(in uint vertexID : SV_VertexID)
 
     Mesh mesh = Meshes[NonUniformResourceIndex(geometrySlot)];
     const uint meshSlot = mesh.MeshID;
-    Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
+    Transform meshTransform;
+    if (mesh.Type == MeshType::Grass)
+        meshTransform = GrassTransforms[NonUniformResourceIndex(mesh.GrassTransformBase + instanceID)];
+    else
+        meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
 
     Properties props = PropertiesBuffer.Load<Properties>(meshSlot * sizeof(Properties));
     

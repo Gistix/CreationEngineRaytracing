@@ -129,9 +129,9 @@ void Main()
     float3 uvw = GetBary(sourcePayload.Barycentrics());
     
     Instance sourceInstance;
-    Mesh sourceMesh = GetMesh(sourcePayload, sourceInstance);
-    uint sourceMeshSlot = GetMeshSlot(sourcePayload);
-    Transform sourceTransform = Transforms[NonUniformResourceIndex(sourceMeshSlot)];
+    Transform sourceTransform;
+    Mesh sourceMesh = GetMeshAndTransform(sourcePayload, sourceInstance, sourceTransform);
+    uint sourceMeshSlot = sourceMesh.MeshID;
     Properties sourceProps = GetMeshProperties(sourceMeshSlot);
     
     Vertex v0;

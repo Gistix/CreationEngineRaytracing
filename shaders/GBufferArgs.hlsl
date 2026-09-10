@@ -40,7 +40,7 @@ void Main(uint3 dispatchThreadID : SV_DispatchThreadID)
 	IndirectCommand cmd;
 	cmd.DrawIndex = i;
 	cmd.VertexCount = (uint)mesh.NumTriangles * 3u;
-	cmd.InstanceCount = 1u;
+	cmd.InstanceCount = (mesh.Type == MeshType::Grass) ? max(mesh.GrassInstanceCount, 1u) : 1u;
 	cmd.StartVertexLocation = 0u;
 	cmd.StartInstanceLocation = 0u;
 

@@ -8,6 +8,7 @@
 #include "CellAttachDetachEvent.h"
 #include "BSTHashMap.h"
 #include "GrassTypeKey.h"
+#include "GrassInstanceData.h"
 #endif
 
 #if defined(FALLOUT4)

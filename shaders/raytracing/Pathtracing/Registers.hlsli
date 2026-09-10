@@ -106,6 +106,7 @@ Texture2D<float4>                           WaterDisplacementMap        : regist
 Texture2D<float4>                           ProjNoiseMap                : register(t10);
 StructuredBuffer<Transform>                 Transforms                  : register(t11);
 StructuredBuffer<uint>                      InstanceLightList           : register(t12);
+StructuredBuffer<Transform>                 GrassTransforms             : register(t18);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 

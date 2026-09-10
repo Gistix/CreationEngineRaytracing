@@ -83,8 +83,47 @@ uint GetSafeMeshIndex(in Instance instance, uint geometryIndex)
 // Meshes[geometrySlot] has the per-geometry MeshData, access .MeshID for transforms/properties.
 uint GetMeshSlotFromRemap(in Instance instance, uint geometryIndex)
 {
-    uint remapIdx = GetSafeMeshIndex(instance, geometryIndex);
-    return MeshSlotRemap.Load(remapIdx * 4) & 0xFFFF;
+    // Grouped-instance meshes (grass) use a single remap entry per group; the per-instance
+    // transform is resolved from GrassTransforms by geometry index.
+    const uint baseRemap = min(instance.FirstGeometryID, Raytracing.NumMeshes);
+    const uint geometrySlot0 = MeshSlotRemap.Load(baseRemap * 4) & 0xFFFF;
+    const Mesh baseMesh = Meshes[NonUniformResourceIndex(geometrySlot0)];
+    if (baseMesh.Type == MeshType::Grass)
+        return geometrySlot0;
+
+    return MeshSlotRemap.Load(GetSafeMeshIndex(instance, geometryIndex) * 4) & 0xFFFF;
+}
+
+// Resolves both the mesh and the per-hit transform. Grass groups pull the transform from the grass
+// transform pool; everything else reads the composed transform buffer.
+Mesh GetMeshAndTransform(in Instance instance, uint geometryIndex, out Transform meshTransform)
+{
+    const uint baseRemap = min(instance.FirstGeometryID, Raytracing.NumMeshes);
+    const uint geometrySlot0 = MeshSlotRemap.Load(baseRemap * 4) & 0xFFFF;
+    const Mesh baseMesh = Meshes[NonUniformResourceIndex(geometrySlot0)];
+
+    if (baseMesh.Type == MeshType::Grass)
+    {
+        meshTransform = GrassTransforms[NonUniformResourceIndex(baseMesh.GrassTransformBase + geometryIndex)];
+        return baseMesh;
+    }
+
+    const uint geometrySlot = MeshSlotRemap.Load(GetSafeMeshIndex(instance, geometryIndex) * 4) & 0xFFFF;
+    const Mesh mesh = Meshes[NonUniformResourceIndex(geometrySlot)];
+    meshTransform = Transforms[NonUniformResourceIndex(mesh.MeshID)];
+    return mesh;
+}
+
+Mesh GetMeshAndTransform(in Payload payload, out Instance instance, out Transform meshTransform)
+{
+    instance = GetInstance(payload.GetInstanceIndex());
+    return GetMeshAndTransform(instance, payload.GetGeometryIndex(), meshTransform);
+}
+
+Mesh GetMeshAndTransform(in uint instanceIndex, uint geometryIndex, out Instance instance, out Transform meshTransform)
+{
+    instance = GetInstance(instanceIndex);
+    return GetMeshAndTransform(instance, geometryIndex, meshTransform);
 }
 
 uint GetMeshSlot(in Instance instance, uint geometryIndex)

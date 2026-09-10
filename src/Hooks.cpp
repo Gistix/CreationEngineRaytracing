@@ -571,6 +571,66 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 	
+	// -------------------------------------------------------------------------------------------
+	// Grass group dataflow diagnostics.
+	//
+	// Grass is generated on a worker task (AddCellGrassTask -> GrassManager::sub_1401B4B20), not
+	// the render thread. The live records are staged via BeginAddingInstances/AddInstances and
+	// finalized in DoneAddingInstances (a1->groupAlloc_188, a1->instanceCount_190 records of
+	// instanceSize_194 halfs each). Group creation then happens either in the AddGroup vfunc
+	// (slot 0x3C) or in a version-specific inlined creator, depending on the runtime. RemoveGroup
+	// (slot 0x3D) is used on cell teardown (GrassManager::sub_1401B6470).
+	//
+	// Enable the RenderTreeLOD experimental setting to produce logs.
+	// -------------------------------------------------------------------------------------------
+	struct GrassDiag
+	{
+		static bool Enabled()
+		{
+			return Scene::GetSingleton()->m_Settings.ExperimentalSettings.RenderTreeLOD;
+		}
+
+		static void LogInstances(const char* a_tag, void* a_shape, uint32_t a_count, const void* a_data, uint32_t a_extra)
+		{
+			if (!Enabled())
+				return;
+
+			float3 position{};
+			float height = 0.0f;
+			float colorScale = 0.0f;
+			if (a_data && a_count > 0) {
+				auto* record = reinterpret_cast<const RE::GrassInstanceData*>(a_data);
+				position = float3(record->position);
+				height = static_cast<float>(record->heightScale);
+				colorScale = static_cast<float>(record->colorScale);
+			}
+
+			logger::info("[GrassDiag] {} shape={:p} count={} extra={} first=({:.2f},{:.2f},{:.2f}) h={:.3f} cs={:.3f} frame={} tid={}",
+				a_tag, a_shape, a_count, a_extra, position.x, position.y, position.z, height, colorScale,
+				Renderer::GetSingleton()->GetFrameIndex(), GetCurrentThreadId());
+		}
+
+		// Dumps the first record verbatim (8x uint32 + 16x half) so the 0x20 layout can be verified.
+		static void LogRecordRaw(const char* a_tag, void* a_shape, uint32_t a_count, const void* a_data)
+		{
+			if (!Enabled() || !a_data || a_count == 0)
+				return;
+
+			auto* words = reinterpret_cast<const uint32_t*>(a_data);
+			auto* halfs = reinterpret_cast<const half*>(a_data);
+
+			logger::info("[GrassDiag] {} shape={:p} count={} data={:p} raw=[{:08X},{:08X},{:08X},{:08X},{:08X},{:08X},{:08X},{:08X}] "
+						 "halfs=[{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}] frame={} tid={}",
+				a_tag, a_shape, a_count, a_data,
+				words[0], words[1], words[2], words[3], words[4], words[5], words[6], words[7],
+				static_cast<float>(halfs[0]), static_cast<float>(halfs[1]), static_cast<float>(halfs[2]), static_cast<float>(halfs[3]),
+				static_cast<float>(halfs[4]), static_cast<float>(halfs[5]), static_cast<float>(halfs[6]), static_cast<float>(halfs[7]),
+				static_cast<float>(halfs[8]), static_cast<float>(halfs[9]), static_cast<float>(halfs[10]), static_cast<float>(halfs[11]),
+				static_cast<float>(halfs[12]), static_cast<float>(halfs[13]), static_cast<float>(halfs[14]), static_cast<float>(halfs[15]),
+				Renderer::GetSingleton()->GetFrameIndex(), GetCurrentThreadId());
+		}
+	};
+
 	// 1401B6AF0 SE/140203810 AE
 	struct GrassManager_CreateInstances
 	{
@@ -578,10 +638,101 @@ namespace Hooks
 		{
 			auto instances = func(a_grassManager, a_createGrassParams);
 
-			if (instances > 0) {
-			}
+			if (instances > 0)
+				GrassDiag::LogRecordRaw("CreateInstances", a_grassManager, instances, a_grassManager->instanceData);
 
 			return instances;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSMultiStreamInstanceTriShape_BeginAddingInstances
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_this, int32_t a_numFloatsPerInstance)
+		{
+			if (GrassDiag::Enabled())
+				logger::info("[GrassDiag] BeginAddingInstances shape={:p} floats={} frame={} tid={}",
+					static_cast<void*>(a_this), a_numFloatsPerInstance,
+					Renderer::GetSingleton()->GetFrameIndex(), GetCurrentThreadId());
+
+			func(a_this, a_numFloatsPerInstance);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSMultiStreamInstanceTriShape_AddInstances
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_this, uint32_t a_instanceCount, const void* a_instanceData)
+		{
+			GrassDiag::LogInstances("AddInstances", a_this, a_instanceCount, a_instanceData, 0);
+
+			func(a_this, a_instanceCount, a_instanceData);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSMultiStreamInstanceTriShape_DoneAddingInstances
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_this, void* a_instances)
+		{
+			if (GrassDiag::Enabled()) {
+				auto& runtimeData = a_this->GetMultiStreamTrishapeRuntimeData();
+				logger::info("[GrassDiag] DoneAddingInstances shape={:p} staged={} groupSize={} alloc={:p} out={:p} frame={} tid={}",
+					static_cast<void*>(a_this), runtimeData.instanceCount, runtimeData.unk17C, runtimeData.groupAlloc, a_instances,
+					Renderer::GetSingleton()->GetFrameIndex(), GetCurrentThreadId());
+
+				GrassDiag::LogRecordRaw("DoneStaged", a_this, runtimeData.instanceCount, runtimeData.groupAlloc);
+			}
+
+			func(a_this, a_instances);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// vfunc slot 0x3C - the streamed/loaded grass group creator; returns the engine group index.
+	struct BSMultiStreamInstanceTriShape_AddGroup
+	{
+		static uint32_t thunk(RE::BSMultiStreamInstanceTriShape* a_this, uint32_t a_numInstances, const void* a_instanceData, uint32_t a_stride, float a_arg4)
+		{
+			const uint32_t index = func(a_this, a_numInstances, a_instanceData, a_stride, a_arg4);
+
+			if (GrassDiag::Enabled() && a_instanceData && a_numInstances > 0 && a_stride > 0)
+				Scene::GetSingleton()->GetSceneGraph()->AddGrassGroup(a_this, index, a_instanceData, a_numInstances, a_stride);
+
+			return index;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// BSMultiStreamInstanceTriShape group creator - SE sub_140D46810 (REL 74598),
+	// AE sub_140E1DE60 (REL 76326). Called per group by DoneAddingInstances. `a_stride` is the
+	// shape's instanceSize in halfs, so each record is 2*a_stride bytes.
+	struct BSMultiStreamInstanceTriShape_AddGroupImpl
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_this, uint32_t a_numInstances, const void* a_instanceData, int32_t a_stride, void* a_out, float a_padding)
+		{
+			if (GrassDiag::Enabled() && a_instanceData && a_numInstances > 0 && a_stride > 0)
+				Scene::GetSingleton()->GetSceneGraph()->AddGrassGroup(a_this, UINT64_MAX, a_instanceData, a_numInstances, static_cast<uint32_t>(a_stride) * 2u);
+
+			func(a_this, a_numInstances, a_instanceData, a_stride, a_out, a_padding);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// vfunc slot 0x3D - removes a group on cell teardown.
+	struct BSMultiStreamInstanceTriShape_RemoveGroup
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_this, uint32_t a_groupIndex)
+		{
+			Scene::GetSingleton()->GetSceneGraph()->RemoveGrassGroup(a_this, a_groupIndex);
+
+			func(a_this, a_groupIndex);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -719,8 +870,15 @@ namespace Hooks
 		//stl::detour_thunk<TESWaterSystem_AddWater>(REL::RelocationID(31388, 32179));
 		//stl::detour_thunk<TESWaterSystem_RemoveWater>(REL::RelocationID(31391, 32182));
 
-		// Grass
-		//stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
+		// Grass diagnostics (see BSMultiStreamInstanceTriShape_* thunks above)
+		stl::detour_thunk<GrassManager_CreateInstances>(REL::RelocationID(15212, 15381));
+		stl::write_vfunc<0x38, BSMultiStreamInstanceTriShape_BeginAddingInstances>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::write_vfunc<0x39, BSMultiStreamInstanceTriShape_AddInstances>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::write_vfunc<0x3A, BSMultiStreamInstanceTriShape_DoneAddingInstances>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::write_vfunc<0x3C, BSMultiStreamInstanceTriShape_AddGroup>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::write_vfunc<0x3D, BSMultiStreamInstanceTriShape_RemoveGroup>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+
+		stl::detour_thunk<BSMultiStreamInstanceTriShape_AddGroupImpl>(REL::RelocationID(74598, 76326));
 
 		/*stl::detour_thunk<NiCullingProcess_AppendVirtual>(REL::RelocationID(26533, 27130));
 		stl::detour_thunk<BSCullingProcess_AppendVirtual>(REL::RelocationID(74807, 76556));*/

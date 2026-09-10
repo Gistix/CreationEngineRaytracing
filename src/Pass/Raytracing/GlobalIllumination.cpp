@@ -78,6 +78,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(17), // Instance light list
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(18), // Grass transforms
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
@@ -277,6 +278,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(17, sceneGraph->GetInstanceLightList()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(18, sceneGraph->GetMeshManager()->GetGrassTransformBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)

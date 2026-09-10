@@ -5,6 +5,7 @@
 #include "Core/Mesh/DynamicMesh.h"
 #include "Core/Mesh/SubIndexMesh.h"
 #include "Core/Mesh/InstancedMesh.h"
+#include "Core/Mesh/GrassMesh.h"
 #include "Renderer.h"
 #include "Utils/DXVKInterop.h"
 #include "Scene.h"
@@ -17,7 +18,8 @@ BaseMesh::~BaseMesh()
 	auto& meshManager = Scene::GetSingleton()->GetSceneGraph()->GetMeshManager();
 
 	for (const auto& entry : m_GeometryEntries)
-		meshManager->ReleaseGeometryIndex(entry.geometryIndex);
+		if (entry.geometryIndex != UINT16_MAX)
+			meshManager->ReleaseGeometryIndex(entry.geometryIndex);
 
 	if (m_MeshIndex != UINT16_MAX)
 		meshManager->ReleaseMeshIndex(m_MeshIndex);
@@ -37,7 +39,16 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
 
 		if (auto* multiStreamTriShape = Util::Adapter::AsMultiStreamInstanceTriShape(bsTriShape))
+		{
+#if defined(SKYRIM)
+			// Grass is a multi-stream shape like tree LOD; it carries an owned parent so its
+			// per-group merged meshes follow the normal mesh lifecycle.
+			auto* shaderProperty = geometryData.shaderProperty;
+			if (shaderProperty && shaderProperty->GetRTTI() == Constants::rtti::BSGrassShaderProperty.get())
+				return eastl::make_unique<GrassMesh>(bsTriShape, commandList);
+#endif
 			return eastl::make_unique<InstancedMesh>(multiStreamTriShape, commandList);
+		}
 
 #if defined(FALLOUT4)
 		// Does this mean DynamicMesh has rendererData in Fallout4?
@@ -328,6 +339,19 @@ void BaseMesh::CommitDirtyFlags()
 
 nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount, uint32_t transformIndex, nvrhi::Format vertexFormat)
 {
+	if (transformIndex == UINT32_MAX)
+		logger::critical("Mesh has unitialized transform index");
+
+	return MakeGeometryDesc(
+		indexBuffer, indexOffset, indexCount,
+		vertexBuffer, vertexOffset, vertexStride, vertexCount,
+		Scene::GetSingleton()->GetSceneGraph()->GetTransformBuffer(),
+		static_cast<uint64_t>(transformIndex) * sizeof(TransformData),
+		vertexFormat);
+}
+
+nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount, nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount, nvrhi::IBuffer* transformBuffer, uint64_t transformOffset, nvrhi::Format vertexFormat)
+{
 	nvrhi::rt::GeometryDesc geometryDesc;
 
 	auto& geometryTriangles = geometryDesc.geometryData.triangles;
@@ -343,12 +367,7 @@ nvrhi::rt::GeometryDesc BaseMesh::MakeGeometryDesc(nvrhi::IBuffer* indexBuffer, 
 	geometryTriangles.vertexStride = vertexStride;
 	geometryTriangles.vertexCount = vertexCount;
 
-	if (transformIndex == UINT32_MAX)
-		logger::critical("Mesh has unitialized transform index");
-
-	geometryDesc.setTransformBuffer(
-		Scene::GetSingleton()->GetSceneGraph()->GetTransformBuffer(),
-		transformIndex * sizeof(TransformData));
+	geometryDesc.setTransformBuffer(transformBuffer, transformOffset);
 
 	geometryDesc.flags = nvrhi::rt::GeometryFlags::Opaque;
 

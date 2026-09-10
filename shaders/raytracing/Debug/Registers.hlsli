@@ -26,6 +26,7 @@ StructuredBuffer<Light> Lights : register(t2);
 StructuredBuffer<Instance> Instances : register(t4);
 StructuredBuffer<Mesh> Meshes : register(t5);
 StructuredBuffer<Transform> Transforms : register(t6);
+StructuredBuffer<Transform> GrassTransforms : register(t18);
 ByteAddressBuffer MeshSlotRemap : register(t19);
 ByteAddressBuffer PropertiesBuffer : register(t20);
 

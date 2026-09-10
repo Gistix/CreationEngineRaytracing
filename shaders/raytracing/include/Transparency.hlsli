@@ -140,10 +140,10 @@ void ApplyFresnelTransmittance(
 bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed, in float3 direction, float hitDistance, inout float3 transmitanceInOut)
 {
     Instance instance;
-    Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
-    uint meshSlot = GetMeshSlot(instance, geometryIndex);
+    Transform meshTransform;
+    Mesh mesh = GetMeshAndTransform(instanceIndex, geometryIndex, instance, meshTransform);
+    uint meshSlot = mesh.MeshID;
     Properties props = GetMeshProperties(meshSlot);
-    Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
     
     Vertex v0, v1, v2;
     GetVertices(mesh, props, primitiveIndex, v0, v1, v2);

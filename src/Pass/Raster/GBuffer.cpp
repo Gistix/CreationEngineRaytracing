@@ -67,6 +67,7 @@ namespace Pass::Raster
 			nvrhi::BindingLayoutItem::Texture_SRV(6),
 			nvrhi::BindingLayoutItem::Texture_SRV(7),
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(9),
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
 			nvrhi::BindingLayoutItem::Sampler(2)
@@ -134,6 +135,7 @@ namespace Pass::Raster
 			nvrhi::BindingSetItem::Texture_SRV(6, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(7, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(8, scene->GetSkinDetailNormalTexture()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(9, sceneGraph->GetMeshManager()->GetGrassTransformBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
 			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler)

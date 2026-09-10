@@ -75,6 +75,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // Transforms
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(18), // Grass transforms
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
 			nvrhi::BindingLayoutItem::Sampler(2),
@@ -248,6 +249,7 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(1, sceneGraph->GetInstanceBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(2, sceneGraph->GetMeshBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(3, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(18, sceneGraph->GetMeshManager()->GetGrassTransformBuffer()),
 			nvrhi::BindingSetItem::Sampler(0, m_LinearWrapSampler),
 			nvrhi::BindingSetItem::Sampler(1, m_LinearClampSampler),
 			nvrhi::BindingSetItem::Sampler(2, m_PointWrapSampler),

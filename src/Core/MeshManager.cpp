@@ -7,7 +7,8 @@ MeshManager::MeshManager()
 	m_GeometrySlots(sizeof(MeshData), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX),
 	m_TransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX),
 	m_PrevTransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX),
-	m_PropertiesSlots(sizeof(PropertiesData), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX)
+	m_PropertiesSlots(sizeof(PropertiesData), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX),
+	m_GrassTransformSlots(sizeof(TransformData), Constants::NUM_GRASS_INSTANCES_MAX)
 {
 	CreateBuffers();
 }
@@ -50,6 +51,16 @@ void MeshManager::CreateBuffers()
 		.setDebugName("Properties Buffer");
 
 	m_PropertiesBuffer = device->createBuffer(propsDesc);
+
+	auto grassDesc = nvrhi::BufferDesc()
+		.setByteSize(Constants::NUM_GRASS_INSTANCES_MAX * sizeof(TransformData))
+		.setStructStride(sizeof(TransformData))
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setCanHaveUAVs(false)
+		.setIsAccelStructBuildInput(Renderer::GetSingleton()->IsVulkan())
+		.setDebugName("Grass Transform Buffer");
+
+	m_GrassTransformBuffer = device->createBuffer(grassDesc);
 }
 
 uint32_t MeshManager::AllocateMeshIndex()
@@ -90,6 +101,72 @@ void MeshManager::WritePropertiesData(uint32_t index, const PropertiesData& data
 	m_PropertiesSlots.Write(index * sizeof(PropertiesData), &data, sizeof(PropertiesData));
 }
 
+uint32_t MeshManager::AllocateGrassTransforms(uint32_t count)
+{
+	if (count == 0)
+		return UINT32_MAX;
+
+	std::scoped_lock lock(m_GrassTransformMutex);
+
+	for (auto it = m_FreeGrassRanges.begin(); it != m_FreeGrassRanges.end(); ++it) {
+		if (it->count >= count) {
+			const uint32_t base = it->base;
+			if (it->count == count) {
+				m_FreeGrassRanges.erase(it);
+			}
+			else {
+				it->base += count;
+				it->count -= count;
+			}
+			return base;
+		}
+	}
+
+	if (m_GrassTransformNext + count > Constants::NUM_GRASS_INSTANCES_MAX)
+		return UINT32_MAX;
+
+	const uint32_t base = m_GrassTransformNext;
+	m_GrassTransformNext += count;
+	return base;
+}
+
+void MeshManager::ReleaseGrassTransforms(uint32_t base, uint32_t count)
+{
+	if (count == 0 || base == UINT32_MAX)
+		return;
+
+	std::scoped_lock lock(m_GrassTransformMutex);
+
+	// Insert sorted by base and coalesce adjacent ranges.
+	GrassRange merged{ base, count };
+	auto it = m_FreeGrassRanges.begin();
+	while (it != m_FreeGrassRanges.end() && it->base < merged.base)
+		++it;
+
+	it = m_FreeGrassRanges.insert(it, merged);
+
+	if (it != m_FreeGrassRanges.begin()) {
+		auto prev = it - 1;
+		if (prev->base + prev->count == it->base) {
+			prev->count += it->count;
+			it = m_FreeGrassRanges.erase(it);
+			it = prev;
+		}
+	}
+
+	auto next = it + 1;
+	if (next != m_FreeGrassRanges.end() && it->base + it->count == next->base) {
+		it->count += next->count;
+		m_FreeGrassRanges.erase(next);
+	}
+}
+
+void MeshManager::WriteGrassTransform(uint32_t index, const float3x4& transform, const float3x4& prevTransform)
+{
+	TransformData data{ transform, prevTransform };
+	m_GrassTransformSlots.Write(index * sizeof(TransformData), &data, sizeof(TransformData));
+}
+
 void MeshManager::Flush(nvrhi::ICommandList* commandList)
 {
 	// Upload dirty mesh data
@@ -121,5 +198,12 @@ void MeshManager::Flush(nvrhi::ICommandList* commandList)
 		const uint8_t* mirror = static_cast<const uint8_t*>(m_PrevTransformSlots.GetMirror());
 		for (const auto& [offset, size] : dirtyRanges)
 			commandList->writeBuffer(m_PrevBuffer, mirror + offset, size, offset);
+	}
+
+	{
+		auto dirtyRanges = m_GrassTransformSlots.ConsumeDirtyRanges();
+		const uint8_t* mirror = static_cast<const uint8_t*>(m_GrassTransformSlots.GetMirror());
+		for (const auto& [offset, size] : dirtyRanges)
+			commandList->writeBuffer(m_GrassTransformBuffer, mirror + offset, size, offset);
 	}
 }

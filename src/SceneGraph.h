@@ -164,6 +164,36 @@ class SceneGraph
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::vector<RE::BGSDistantTreeBlock::InstanceData>> m_DistantTree;
 	std::mutex m_DistantTreeMutex;
+
+	// Captured grass groups, keyed by the shared BSMultiStreamInstanceTriShape. Records are stored
+	// verbatim (raw bytes) because the generated and streamed paths use different layouts. The map
+	// is guarded because capture runs on grass worker threads (AddCellGrassTask) while the render
+	// thread consumes it.
+	struct GrassGroup
+	{
+		eastl::vector<uint8_t> records;
+		uint32_t               count = 0;
+		uint16_t               recordSize = 0;
+		uint64_t               engineIndex = UINT64_MAX;  // AddGroup index when known
+		uint64_t               serial = 0;                // globally unique key for the baked mesh
+	};
+
+	struct GrassShapeState
+	{
+		eastl::unordered_map<uint64_t, GrassGroup> groups;
+		uint64_t nextGroupKey = 0;
+		uint64_t version = 0;
+	};
+
+	eastl::unordered_map<RE::BSTriShape*, GrassShapeState> m_GrassShapes;
+	mutable std::mutex m_GrassMutex;
+
+	// One baked mesh + orphan BLAS cluster per captured group. Render-thread only.
+	eastl::unordered_map<uint64_t, eastl::unique_ptr<BaseMesh>> m_GrassGroupMeshes;
+	eastl::unordered_map<uint64_t, eastl::unique_ptr<BLASCluster>> m_GrassGroupClusters;
+	uint64_t m_NextGrassGroupSerial = 1;
+
+	BLASCluster* GetOrCreateGrassCluster(uint64_t a_serial);
 public:
 	void Initialize();
 
@@ -250,8 +280,19 @@ public:
 	void RegisterBlock(RE::BGSDistantTreeBlock* block);
 	void ReleaseBlock(RE::BGSDistantTreeBlock* block);
 	eastl::vector<RE::BGSDistantTreeBlock::InstanceData> GetBlockInstanceData(RE::BSTriShape* triShape);
+
+	// Grass group capture. Called from the BSMultiStreamInstanceTriShape hooks, which may run on
+	// grass worker threads; records are copied and the shape pointer is only used as a key.
+	void AddGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex, const void* records, uint32_t count, uint32_t recordSize);
+	void RemoveGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex);
+
+	// Snapshot of captured groups for a shape (records copied) plus the capture version.
+	eastl::vector<GrassGroup> GetGrassGroups(RE::BSTriShape* bsTriShape, uint64_t& outVersion) const;
 private:
 	eastl::vector<PassTiming> m_UpdateTimings;
+
+	// Creates baked meshes/clusters for new captured groups and destroys removed ones.
+	void UpdateGrassMeshes(nvrhi::ICommandList* commandList);
 
 	struct PendingDestroy
 	{

@@ -21,6 +21,7 @@ RaytracingAccelerationStructure             Scene                       : regist
 StructuredBuffer<Instance>                  Instances                   : register(t1);
 StructuredBuffer<Mesh>                      Meshes                      : register(t2);
 StructuredBuffer<Transform>             Transforms                  : register(t3);
+StructuredBuffer<Transform>             GrassTransforms             : register(t18);
 
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);

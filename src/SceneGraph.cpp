@@ -20,6 +20,7 @@
 #include "Core/Mesh/SubIndexMesh.h"
 #include "Core/Mesh/SubIndexSegmentMesh.h"
 #include "Core/Mesh/InstancedMesh.h"
+#include "Core/Mesh/MergedInstanceMesh.h"
 #include "Core/BLASInstanceCluster.h"
 #include "Core/ParallelTriShapeWalker.h"
 
@@ -373,6 +374,11 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
+	{
+		std::scoped_lock lock(m_GrassMutex);
+		m_GrassShapes.erase(bsTriShape);
+	}
+
 	auto it = m_Meshes.find(bsTriShape);
 	if (it == m_Meshes.end())
 		return;
@@ -629,9 +635,12 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 					continue;
 
 				if (isBase) {
-					// We're only interested in Tree LOD
+					// We're only interested in Tree LOD and Grass
 					const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-					if (shaderPropertyRTTI != Constants::rtti::BSDistantTreeShaderProperty.get())
+					const bool isDistantTree = shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get();
+					const bool isGrass = shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get();
+
+					if (!isDistantTree && !isGrass)
 						continue;
 				}
 
@@ -693,7 +702,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				// SubIndexMesh: not a member of any cluster itself; the K SubIndexSegmentMesh
 				// children will be added to their own clusters by SubIndexMesh::Update.
-				if (!mesh->AsSubIndexMesh()) {
+				// GrassMesh: the per-group children carry the BLASes.
+				if (!mesh->AsSubIndexMesh() && !mesh->AsGrassMesh()) {
 					auto* cluster = GetOrCreateCluster(refr, bsTriShape);
 					cluster->AddMember(mesh);
 				}
@@ -705,6 +715,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			}
 		}
 	}
+
+	// Baked per-group grass meshes (not part of the traversal).
+	UpdateGrassMeshes(commandList);
 
 	if (timings) {
 		const auto nowTp = std::chrono::high_resolution_clock::now();
@@ -755,6 +768,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	removeEmptyClusters(m_OwnerClusters);
 	removeEmptyClusters(m_OrphanClusters);
 	removeEmptyClusters(m_SubIndexSegmentClusters);
+	removeEmptyClusters(m_GrassGroupClusters);
 
 	if (timings) {
 		const auto nowTp = std::chrono::high_resolution_clock::now();
@@ -770,7 +784,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		m_AllClusters.reserve(
 			m_OwnerClusters.size() +
 			m_OrphanClusters.size() +
-			m_SubIndexSegmentClusters.size());
+			m_SubIndexSegmentClusters.size() +
+			m_GrassGroupClusters.size());
 
 		for (auto& [_, cluster] : m_OwnerClusters)
 			m_AllClusters.push_back(cluster.get());
@@ -779,6 +794,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			m_AllClusters.push_back(cluster.get());
 
 		for (auto& [_, cluster] : m_SubIndexSegmentClusters)
+			m_AllClusters.push_back(cluster.get());
+
+		for (auto& [_, cluster] : m_GrassGroupClusters)
 			m_AllClusters.push_back(cluster.get());
 
 		const size_t totalWork = m_AllClusters.size();
@@ -1083,4 +1101,172 @@ eastl::vector<RE::BGSDistantTreeBlock::InstanceData> SceneGraph::GetBlockInstanc
 		return {};
 
 	return it->second;
+}
+
+void SceneGraph::AddGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex, const void* records, uint32_t count, uint32_t recordSize)
+{
+	if (!bsTriShape || !records || count == 0 || recordSize == 0)
+		return;
+
+	size_t groupCount = 0;
+	uint64_t version = 0;
+	{
+		std::scoped_lock lock(m_GrassMutex);
+
+		auto& state = m_GrassShapes[bsTriShape];
+		auto& group = state.groups[state.nextGroupKey++];
+
+		group.engineIndex = engineIndex;
+		group.count = count;
+		group.recordSize = static_cast<uint16_t>(recordSize);
+		group.serial = m_NextGrassGroupSerial++;
+		group.records.resize(static_cast<size_t>(count) * recordSize);
+		std::memcpy(group.records.data(), records, group.records.size());
+
+		groupCount = state.groups.size();
+		version = ++state.version;
+	}
+
+	logger::info("[GrassCapture] add shape={:p} engine={} count={} recordSize={} groups={} version={}",
+		static_cast<void*>(bsTriShape), engineIndex, count, recordSize, groupCount, version);
+}
+
+void SceneGraph::RemoveGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex)
+{
+	size_t groupCount = 0;
+	uint64_t version = 0;
+	bool removed = false;
+	{
+		std::scoped_lock lock(m_GrassMutex);
+
+		auto it = m_GrassShapes.find(bsTriShape);
+		if (it == m_GrassShapes.end())
+			return;
+
+		for (auto groupIt = it->second.groups.begin(); groupIt != it->second.groups.end(); ) {
+			if (groupIt->second.engineIndex == engineIndex) {
+				groupIt = it->second.groups.erase(groupIt);
+				removed = true;
+			}
+			else {
+				++groupIt;
+			}
+		}
+
+		if (removed) {
+			groupCount = it->second.groups.size();
+			version = ++it->second.version;
+		}
+	}
+
+	if (removed)
+		logger::info("[GrassCapture] remove shape={:p} engine={} groups={} version={}",
+			static_cast<void*>(bsTriShape), engineIndex, groupCount, version);
+}
+
+eastl::vector<SceneGraph::GrassGroup> SceneGraph::GetGrassGroups(RE::BSTriShape* bsTriShape, uint64_t& outVersion) const
+{
+	std::scoped_lock lock(m_GrassMutex);
+
+	auto it = m_GrassShapes.find(bsTriShape);
+	if (it == m_GrassShapes.end()) {
+		outVersion = 0;
+		return {};
+	}
+
+	outVersion = it->second.version;
+
+	eastl::vector<GrassGroup> result;
+	result.reserve(it->second.groups.size());
+	for (const auto& [key, group] : it->second.groups)
+		result.push_back(group);
+
+	return result;
+}
+
+BLASCluster* SceneGraph::GetOrCreateGrassCluster(uint64_t a_serial)
+{
+	auto [it, inserted] = m_GrassGroupClusters.try_emplace(a_serial, nullptr);
+	if (inserted)
+		it->second = eastl::make_unique<BLASCluster>(nullptr);
+
+	return it->second.get();
+}
+
+void SceneGraph::UpdateGrassMeshes(nvrhi::ICommandList* commandList)
+{
+	struct PendingBuild
+	{
+		uint64_t serial;
+		RE::BSTriShape* shape;
+		GrassGroup group;
+	};
+
+	eastl::vector<PendingBuild> toBuild;
+	eastl::unordered_set<uint64_t> live;
+
+	// Snapshot under the capture mutex; meshes/groups are otherwise render-thread only.
+	// Groups are only baked for shapes whose GrassMesh parent was created by the traversal.
+	{
+		std::scoped_lock lock(m_GrassMutex);
+
+		for (auto& [shape, state] : m_GrassShapes) {
+			const auto parentIt = m_Meshes.find(shape);
+			const bool hasParent = (parentIt != m_Meshes.end()) && parentIt->second->AsGrassMesh();
+
+			for (auto& [key, group] : state.groups) {
+				live.insert(group.serial);
+
+				if (hasParent && !m_GrassGroupMeshes.contains(group.serial))
+					toBuild.push_back({ group.serial, shape, group });
+			}
+		}
+	}
+
+	// Destroy meshes whose source group no longer exists.
+	for (auto it = m_GrassGroupMeshes.begin(); it != m_GrassGroupMeshes.end(); ) {
+		if (!live.contains(it->first)) {
+			if (auto* cluster = it->second->GetCluster())
+				cluster->RemoveMember(it->second.get());
+
+			it->second->OnDestroy();
+			m_PendingMeshDestroy.push_back({ eastl::move(it->second), Renderer::GetSingleton()->GetLastSubmittedFence() });
+			m_GrassGroupClusters.erase(it->first);
+			it = m_GrassGroupMeshes.erase(it);
+		}
+		else {
+			++it;
+		}
+	}
+
+	// Bake newly captured groups into world-space meshes.
+	for (auto& build : toBuild)
+	{
+		if (!build.shape)
+			continue;
+
+		// Only the 32-byte generated layout is decoded for now.
+		if (build.group.recordSize != sizeof(RE::GrassInstanceData))
+			continue;
+
+		const auto* records = reinterpret_cast<const RE::GrassInstanceData*>(build.group.records.data());
+		eastl::vector<RE::GrassInstanceData> instances(records, records + build.group.count);
+
+		const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(build.shape);
+		auto* shaderProperty = geometryData.shaderProperty;
+		const bool uniformScale = shaderProperty && shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kUniformScale);
+
+		auto mesh = eastl::make_unique<MergedInstanceMesh>(build.shape, instances, uniformScale, commandList);
+		if (mesh->GetGeometryEntries().empty())
+			continue;
+
+		auto* rawMesh = mesh.get();
+		auto* cluster = GetOrCreateGrassCluster(build.serial);
+		cluster->AddMember(rawMesh);
+
+		rawMesh->Update(commandList);
+		rawMesh->CommitDirtyFlags();
+
+		m_GrassGroupMeshes.emplace(build.serial, eastl::move(mesh));
+	}
 }
