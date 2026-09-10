@@ -616,17 +616,26 @@ void Renderer::EndExecution()
 
 uint32_t Renderer::PostExecution()
 {
-	auto& slot = m_FrameSlots[m_CurrentSlot];
+	auto device = GetDevice();
 
-	if (!slot.inFlight)
-		return m_LastCompletedSlot;
+	// Poll every in-flight slot so completion is detected as soon as the GPU finishes,
+	// rather than only when the slot is reused MAX_FRAMES_IN_FLIGHT frames later.
+	for (uint32_t slot = 0; slot < Constants::MAX_FRAMES_IN_FLIGHT; slot++) {
+		auto& frameSlot = m_FrameSlots[slot];
 
-	if (GetDevice()->pollEventQuery(slot.eventQuery)) {
-		RunPostExecutionForSlot(m_CurrentSlot);
-		slot.inFlight = false;
+		if (!frameSlot.inFlight)
+			continue;
+
+		if (device->pollEventQuery(frameSlot.eventQuery)) {
+			RunPostExecutionForSlot(slot);
+			device->resetEventQuery(frameSlot.eventQuery);
+			frameSlot.inFlight = false;
+		}
 	}
 
-	return m_LastCompletedSlot;
+	// Return the slot written by the preceding Execute(). The caller consumes it this frame
+	// and is responsible for synchronizing (queue ordering or an explicit fence) before reading.
+	return m_CurrentSlot;
 }
 
 void Renderer::RunPostExecutionForSlot(uint32_t slot)
@@ -661,8 +670,6 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 		}
 #endif
 	}
-
-	m_LastCompletedSlot = slot;
 
 	device->runGarbageCollection();
 

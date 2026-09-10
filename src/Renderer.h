@@ -70,7 +70,6 @@ class Renderer
 	eastl::array<FrameSlot, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameSlots;
 	uint32_t m_CurrentSlot = 0;
 	uint32_t m_NextSlot = 0;
-	uint32_t m_LastCompletedSlot = 0;
 
 	uint64_t m_LastSubmittedInstance = 0;
 
@@ -252,7 +251,6 @@ public:
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
 
 	inline auto GetCurrentSlot() const { return m_CurrentSlot; }
-	inline auto GetCompletedSlot() const { return m_LastCompletedSlot; }
 
 	inline auto& GetFrameTimerQuery(uint32_t slot) { return m_FrameTimerQueries[slot]; }
 	inline void SetFrameCpuTime(uint32_t slot, float ms) { m_FrameCpuTimes[slot] = ms; }
