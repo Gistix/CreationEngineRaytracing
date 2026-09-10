@@ -20,6 +20,10 @@ void ParallelTriShapeWalker::VisitLeaf(RE::BSTriShape* bsTriShape, RE::TESObject
 		return;
 	}
 
+	auto* shaderProperty = Util::Adapter::GetGeometryRuntimeData(bsTriShape).shaderProperty;
+	if (shaderProperty && shaderProperty->alpha <= std::numeric_limits<float>::epsilon())
+		return;
+
 	auto it = m_SceneGraph->m_Meshes.find(bsTriShape);
 	if (it != m_SceneGraph->m_Meshes.end()) {
 		auto mesh = it->second.get();
@@ -35,11 +39,6 @@ void ParallelTriShapeWalker::ProcessSubtree(RE::NiAVObject* object, RE::TESObjec
 	Util::Traversal::SceneGraphTriShapes<false>(
 		object,
 		[this, workerIdx](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) {
-			if (!bsTriShape) {
-				logger::critical("[PhaseA-DBG] ProcessSubtree[{0} visitor] received NULL bsTriShape from AsTriShape; refr={1:p}",
-					workerIdx, static_cast<const void*>(refr));
-				return;
-			}
 			VisitLeaf(bsTriShape, refr, workerIdx);
 		},
 		parentRefr,
