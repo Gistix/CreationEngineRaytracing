@@ -26,6 +26,9 @@ public:
 		nvrhi::BufferHandle m_Buffer = nullptr;
 		DescriptorHandle m_Descriptor;
 		uint64_t m_Offset;
+
+		// Keeps the source D3D11 buffer (and its DXVK VkBuffer) alive; the Vulkan handle is non-owning.
+		winrt::com_ptr<ID3D11Buffer> m_SourceBuffer;
 	};
 
 	enum class State : uint8_t

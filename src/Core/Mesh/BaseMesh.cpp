@@ -139,6 +139,8 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVulkanBuffer(
 		bufferDesc);
 
 	if (buffer.m_Buffer) {
+		buffer.m_SourceBuffer.copy_from(buffer11);
+
 		buffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffer.m_Buffer));
 	}
 	else {
