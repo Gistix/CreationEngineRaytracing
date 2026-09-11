@@ -182,7 +182,7 @@ void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, u
 		copyTexture(Texture::Main);
 
 	if (pt) {
-		copyTexture(Texture::ViewDepth);
+		copyTexture(Texture::ClipDepth);
 		copyTexture(Texture::MotionVectors3D);
 	}
 
