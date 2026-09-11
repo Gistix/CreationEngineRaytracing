@@ -163,8 +163,9 @@ namespace Util
 			return 
 				type == RE::BSGeometry::Type::kTriShape || 
 				type == RE::BSGeometry::Type::kDynamicTriShape || 
-				type == RE::BSGeometry::Type::kSubIndexTriShape ||          // Object LOD
-				((type == RE::BSGeometry::Type::kMultiStreamInstanceTriShape) && allowInstancedTriShape); // DistantTree (LOD) and Grass
+				type == RE::BSGeometry::Type::kSubIndexTriShape ||  // Object LOD
+				type == RE::BSGeometry::Type::kMultiIndexTriShape ||  // Should have its own mesh type but falls back to standard 'Mesh' for now
+				((type == RE::BSGeometry::Type::kMultiStreamInstanceTriShape) && allowInstancedTriShape);  // DistantTree (LOD) and Grass
 #elif defined(FALLOUT4)
 			auto type = static_cast<RE::BSGeometryType>(a_geometry->type);
 			return 
