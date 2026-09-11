@@ -39,40 +39,62 @@ InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi:
 
 	CreateMaterial();
 
-	if (bsTriShape->GetType() == RE::BSGeometry::Type::kMultiStreamInstanceTriShape)
+	// The engine's first AddGroup fires during block Attach, before this mesh is created. The
+	// SceneGraph owns the parsed instance data; keep a stable pointer to it for the mesh's lifetime.
+	m_InstancedData = Scene::GetSingleton()->GetSceneGraph()->GetOrCreateInstancedData(bsTriShape);
+}
+
+void InstancedMesh::OnDestroy()
+{
+	m_InstancedData = nullptr;
+	BaseMesh::OnDestroy();
+}
+
+void InstancedMesh::RebuildInstances()
+{
+	if (!m_InstancedData)
+		return;
+
+	const auto& instances = m_InstancedData->instances;
+
+	const uint32_t oldCount = static_cast<uint32_t>(m_InstanceData.size());
+	const float3x4 oldFront = m_InstanceData.empty() ? Constants::kIdentityTransform : m_InstanceData.front().transform;
+
+	m_InstanceData.clear();
+	m_InstanceData.reserve(instances.size());
+
+	for (const auto& instance : instances)
 	{
-		auto instanceData = Scene::GetSingleton()->GetSceneGraph()->GetBlockInstanceData(bsTriShape);
+		// The engine encodes hidden instances as zero scale.
+		if (instance.scale == 0.0f || instance.alpha == 0.0f)
+			continue;
 
-		if (instanceData.empty()) {
-			logger::warn("Failed to find instance data for {} {}", magic_enum::enum_name(bsTriShape->GetType().get()), GetName().c_str());
-			return;
-		}
+		const float c = instance.cosZ;
+		const float s = instance.sinZ;
 
-		m_InstanceData.reserve(instanceData.size());
-		for (auto& data : instanceData)
-		{
-			half3 position;
-			std::memcpy(&position, &data.x, sizeof(half3));
+		RE::NiMatrix3 rotate;
+		rotate.entry[0][0] = c;   rotate.entry[0][1] = s;   rotate.entry[0][2] = 0.0f;
+		rotate.entry[1][0] = -s;  rotate.entry[1][1] = c;   rotate.entry[1][2] = 0.0f;
+		rotate.entry[2][0] = 0.0f; rotate.entry[2][1] = 0.0f; rotate.entry[2][2] = 1.0f;
 
-			half rotZ;
-			std::memcpy(&rotZ, &data.rotZ, sizeof(half));
+		auto instanceTransform = RE::NiTransform();
+		instanceTransform.rotate = rotate;
+		instanceTransform.translate = RE::NiPoint3(instance.position.x, instance.position.y, instance.position.z);
+		instanceTransform.scale = instance.scale;
 
-			half scale;
-			std::memcpy(&scale, &data.scale, sizeof(half));
+		auto worldTransform = m_BSTriShape->local * instanceTransform;
 
-			auto instanceTransform = RE::NiTransform();
-			instanceTransform.rotate = RE::NiMatrix3(0.0f, 0.0f, rotZ * (180.0f / std::numbers::pi_v<float>));
-			instanceTransform.translate = RE::NiPoint3(position.x, position.y, position.z);
-			instanceTransform.scale = scale;
+		float3x4 xf;
+		XMStoreFloat3x4(&xf, Util::Math::GetXMFromNiTransform(worldTransform));
 
-			auto worldTransform = m_BSTriShape->local * instanceTransform;
-
-			float3x4 xf;
-			XMStoreFloat3x4(&xf, Util::Math::GetXMFromNiTransform(worldTransform));
-
-			m_InstanceData.push_back({ xf, xf, 1.0f });
-		}
+		m_InstanceData.push_back({ xf, xf, instance.alpha });
 	}
+
+	const uint32_t newCount = static_cast<uint32_t>(m_InstanceData.size());
+	if (newCount != oldCount)
+		MarkDirty(DirtyFlags::Mesh);
+	else if (!m_InstanceData.empty() && std::memcmp(&m_InstanceData.front().transform, &oldFront, sizeof(float3x4)) != 0)
+		MarkDirty(DirtyFlags::Transform);
 }
 
 void InstancedMesh::Update([[maybe_unused]] nvrhi::ICommandList* commandList)
@@ -81,6 +103,12 @@ void InstancedMesh::Update([[maybe_unused]] nvrhi::ICommandList* commandList)
 	WriteProperties();
 
 	m_WorldBound = m_BSTriShape->worldBound;
+
+	if (m_InstancedData && m_InstancedData->changed)
+	{
+		RebuildInstances();
+		m_InstancedData->changed = false;
+	}
 
 	// Template mesh local transform: match first instance's transform so GPU TransformComposition
 	// (InverseAffine(Instances[remapInstance].Transform) * CurrentTransforms[meshID]) evaluates to identity.

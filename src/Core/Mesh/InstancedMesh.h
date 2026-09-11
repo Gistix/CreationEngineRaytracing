@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Mesh/BaseMesh.h"
+#include "Types/InstancedData.h"
 
 class InstancedMesh : public BaseMesh
 {
@@ -18,6 +19,12 @@ private:
 
 	eastl::vector<InstanceEntry> m_InstanceData;
 
+	// Parsed per-instance data owned by the SceneGraph. Stable for the mesh's lifetime; the mesh
+	// reads it on Update whenever the data's changed flag is set.
+	InstancedData* m_InstancedData = nullptr;
+
+	void RebuildInstances();
+
 public:
 	InstancedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList);
 
@@ -28,6 +35,8 @@ public:
 
 	uint32_t GetInstanceCount() const { return static_cast<uint32_t>(m_InstanceData.size()); }
 	const eastl::vector<InstanceEntry>& GetInstances() const { return m_InstanceData; }
+
+	void OnDestroy() override;
 
 	void Update(nvrhi::ICommandList* commandList) override;
 };

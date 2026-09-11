@@ -512,60 +512,25 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSDistantTreeBlock_AttachSE
+	struct BSMultiStreamInstanceTriShape_AddGroup
 	{
-		static void thunk(RE::BGSDistantTreeBlock* a_block, float a2)
+		static int64_t thunk(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_instanceCount, const uint16_t* a_instanceData, int a_strideBytes, float a_boundsPadding)
 		{
-			const bool wasAttached = a_block->attached;
+			Scene::GetSingleton()->GetSceneGraph()->UpdateInstancedData(
+				a_geometry, a_instanceCount, a_instanceData, 2u * static_cast<uint32_t>(a_strideBytes));
 
-			func(a_block, a2);
-
-			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			if (a_block->doneLoading && valid)
-				Scene::GetSingleton()->GetSceneGraph()->RegisterBlock(a_block);
+			return func(a_geometry, a_instanceCount, a_instanceData, a_strideBytes, a_boundsPadding);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSDistantTreeBlock_AttachAE
+	struct BSMultiStreamInstanceTriShape_RemoveGroup
 	{
-		static void thunk(RE::BGSDistantTreeBlock* a_block)
+		static int64_t thunk(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_index)
 		{
-			const bool wasAttached = a_block->attached;
-
-			func(a_block);
-
-			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			if (a_block->doneLoading && valid)
-				Scene::GetSingleton()->GetSceneGraph()->RegisterBlock(a_block);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSDistantTreeBlock_DtorSE
-	{
-		static void thunk(RE::BGSDistantTreeBlock* a_block)
-		{
-			Scene::GetSingleton()->GetSceneGraph()->ReleaseBlock(a_block);
-			func(a_block);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSDistantTreeBlock_DtorAE
-	{
-		static_assert(sizeof(RE::BGSTerrainNode::Layer<RE::BGSDistantTreeBlock>) == 0x30);
-
-		static void thunk(RE::BSResource::IEntryDB* a_entryDB, RE::BGSTerrainNode::Layer<RE::BGSDistantTreeBlock>* a2, int a3, void* a4)
-		{
-			// This function being called does not guarantee the block will be released
-			if (a2 && a2->block)
-				Scene::GetSingleton()->GetSceneGraph()->ReleaseBlock(a2->block);
-
-			func(a_entryDB, a2, a3, a4);
+			Scene::GetSingleton()->GetSceneGraph()->ClearInstancedData(a_geometry);
+			return func(a_geometry, a_index);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -701,15 +666,9 @@ namespace Hooks
 		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree
 		//stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
-		// Tree LOD
-		if (REL::Module::IsSE()) {
-			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
-			stl::detour_thunk<BGSDistantTreeBlock_DtorSE>(REL::RelocationID(30821, 0));
-		}
-		else {
-			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
-			stl::detour_thunk<BGSDistantTreeBlock_DtorAE>(REL::RelocationID(0, 31717));
-		}
+		// Tree LOD instanced geometry
+		stl::detour_thunk<BSMultiStreamInstanceTriShape_AddGroup>(REL::RelocationID(74595, 76323));
+		stl::detour_thunk<BSMultiStreamInstanceTriShape_RemoveGroup>(REL::RelocationID(74600, 76328));
 		
 		// Landscape
 		//stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));

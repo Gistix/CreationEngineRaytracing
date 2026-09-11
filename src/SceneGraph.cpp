@@ -374,20 +374,23 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
 	auto it = m_Meshes.find(bsTriShape);
-	if (it == m_Meshes.end())
-		return;
-
-	it->second->OnDestroy();
-
+	if (it != m_Meshes.end())
 	{
-		std::scoped_lock lock(m_MeshDestroyMutex);
-		m_DestroyedMeshes.push_back(bsTriShape);
+		it->second->OnDestroy();
+
+		{
+			std::scoped_lock lock(m_MeshDestroyMutex);
+			m_DestroyedMeshes.push_back(bsTriShape);
+		}
 	}
+
+	// Erase after the mesh dropped its raw pointer to the entry.
+	m_InstancedData.erase(bsTriShape);
 }
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 {
-	auto it = m_Meshes.find(reinterpret_cast<RE::BSTriShape*>(bsDynamicTriShape));
+	auto it = m_Meshes.find(bsDynamicTriShape);
 	if (it == m_Meshes.end())
 		return;
 
@@ -1033,54 +1036,67 @@ void SceneGraph::WriteTransformData(uint32_t index, const float3x4& transform, c
 	m_MeshManager->WriteTransformData(index, transform, prevTransform);
 }
 
-void SceneGraph::RegisterBlock(RE::BGSDistantTreeBlock* block)
+InstancedData* SceneGraph::GetOrCreateInstancedData(RE::BSTriShape* a_geometry)
 {
-	if (block->treeGroups.empty())
-		return;
+	auto& entry = m_InstancedData[a_geometry];
+	if (!entry)
+		entry = eastl::make_unique<InstancedData>();
+	return entry.get();
+}
 
-	for (auto& group: block->treeGroups)
+void SceneGraph::UpdateInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_count, const void* a_data, uint32_t a_strideBytes)
+{
+	auto* data = GetOrCreateInstancedData(a_geometry);
+
+	eastl::vector<InstancedData::Instance> parsed;
+	if (a_data && a_count > 0 && a_strideBytes > 0)
 	{
-		if (!group->geometry)
-			continue;
+		parsed.reserve(a_count);
 
-		auto* geometry = group->geometry.get();
-
-		std::scoped_lock lock(m_DistantTreeMutex);
-
-		auto [it, emplaced] = m_DistantTree.try_emplace(geometry);
-
-		for (auto& instanceData : group->instances)
+		for (uint32_t i = 0; i < a_count; ++i)
 		{
-			it->second.push_back(instanceData);
+			const auto* instance = static_cast<const uint8_t*>(a_data) + static_cast<size_t>(i) * a_strideBytes;
+
+			half3 position;
+			std::memcpy(&position, instance + 0, sizeof(half3));
+
+			half scale;
+			std::memcpy(&scale, instance + 6, sizeof(half));
+
+			half cosZ;
+			std::memcpy(&cosZ, instance + 8, sizeof(half));
+
+			half sinZ;
+			std::memcpy(&sinZ, instance + 10, sizeof(half));
+
+			half alpha;
+			std::memcpy(&alpha, instance + 12, sizeof(half));
+
+			parsed.push_back({
+				float3(static_cast<float>(position.x), static_cast<float>(position.y), static_cast<float>(position.z)),
+				static_cast<float>(scale),
+				static_cast<float>(cosZ),
+				static_cast<float>(sinZ),
+				static_cast<float>(alpha)
+			});
 		}
 	}
-}
 
-void SceneGraph::ReleaseBlock(RE::BGSDistantTreeBlock* block)
-{
-	if (block->treeGroups.empty())
-		return;
-
-	for (auto& group : block->treeGroups)
+	if (parsed != data->instances)
 	{
-		if (!group->geometry)
-			continue;
-
-		auto* geometry = group->geometry.get();
-
-		std::scoped_lock lock(m_DistantTreeMutex);
-
-		m_DistantTree.erase(geometry);
+		data->instances = eastl::move(parsed);
+		data->changed = true;
 	}
 }
 
-eastl::vector<RE::BGSDistantTreeBlock::InstanceData> SceneGraph::GetBlockInstanceData(RE::BSTriShape* triShape)
+void SceneGraph::ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry)
 {
-	std::scoped_lock lock(m_DistantTreeMutex);
+	auto it = m_InstancedData.find(a_geometry);
+	if (it == m_InstancedData.end())
+		return;
 
-	auto it = m_DistantTree.find(triShape);
-	if (it == m_DistantTree.end())
-		return {};
-
-	return it->second;
+	// Keep the entry allocated: the owning InstancedMesh holds a raw pointer to it. Clearing the
+	// vector and flagging the change lets the mesh rebuild to empty on its next Update.
+	it->second->instances.clear();
+	it->second->changed = true;
 }

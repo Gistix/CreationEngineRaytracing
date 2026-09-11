@@ -28,6 +28,7 @@
 #include <eastl/unordered_set.h>
 
 #include "Types/PassTiming.h"
+#include "Types/InstancedData.h"
 
 #include <shared_mutex>
 
@@ -162,8 +163,8 @@ class SceneGraph
 		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
 	};
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::vector<RE::BGSDistantTreeBlock::InstanceData>> m_DistantTree;
-	std::mutex m_DistantTreeMutex;
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<InstancedData>> m_InstancedData;
+
 public:
 	void Initialize();
 
@@ -247,9 +248,9 @@ public:
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
 
-	void RegisterBlock(RE::BGSDistantTreeBlock* block);
-	void ReleaseBlock(RE::BGSDistantTreeBlock* block);
-	eastl::vector<RE::BGSDistantTreeBlock::InstanceData> GetBlockInstanceData(RE::BSTriShape* triShape);
+	void UpdateInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_count, const void* a_data, uint32_t a_strideBytes);
+	void ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry);
+	InstancedData* GetOrCreateInstancedData(RE::BSTriShape* a_geometry);
 private:
 	eastl::vector<PassTiming> m_UpdateTimings;
 
