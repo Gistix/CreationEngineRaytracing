@@ -1,5 +1,6 @@
 #include "interop/Light.hlsli"
 #include "interop/Instance.hlsli"
+#include "include/Vulkan.hlsli"
 
 // Builds the compacted per-instance light index list on the GPU.
 //
@@ -16,7 +17,7 @@ struct PushConstants
     uint Pad;
 };
 
-ConstantBuffer<PushConstants> PC : register(b0);
+VK_PUSH_CONSTANT ConstantBuffer<PushConstants> PC : register(b0);
 
 StructuredBuffer<Light>       Lights           : register(t0);
 StructuredBuffer<float4>      InstanceBounds   : register(t1);
