@@ -39,7 +39,7 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
 		case RenderTarget::DiffuseAlbedo:
-			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			desc.format = nvrhi::Format::R11G11B10_FLOAT;
 			break;
 		case RenderTarget::DiffuseRadiance:
 		case RenderTarget::SpecularRadiance:
