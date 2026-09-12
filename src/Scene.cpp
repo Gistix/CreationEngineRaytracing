@@ -55,12 +55,23 @@ void Scene::Load()
 
 void Scene::PostPostLoad()
 {
+#if defined(SKYRIM)
+	if (auto* s = RE::GetINISetting("bReflectLODLand:Water")) s->data.b = false;
+	if (auto* s = RE::GetINISetting("bReflectLODObjects:Water")) s->data.b = false;
+	if (auto* s = RE::GetINISetting("bReflectLODTrees:Water")) s->data.b = false;
+	if (auto* s = RE::GetINISetting("bReflectSky:Water")) s->data.b = true;
+#elif defined(FALLOUT4)
+	if (auto* s = RE::GetINISetting("bUseWaterReflections:Water")) s->SetBinary(true);
+#endif
+
+	SetupWaterReflections();
 	Hooks::Install();
 }
 
 void Scene::DataLoaded()
 {
 	m_INISettings.Initialize();
+	Hooks::BGSActorCellEventHandler::Register();
 }
 
 void Scene::SetLogLevel(spdlog::level::level_enum a_level)
@@ -434,6 +445,15 @@ void Scene::SetWaterFlowMap(void* waterFlowMap)
 	m_WaterFlowMapResource = waterFlowMap;
 
 	m_WaterFlowMapTexture = Renderer::WrapNativeTexture(waterFlowMap, "NVRHI Water FlowMap Texture");
+}
+
+void Scene::SetupWaterReflections()
+{
+	m_WaterReflections = RE::NiPointer(new RE::TESWaterReflections());
+	m_WaterReflections->flags.set(true, RE::TESWaterReflections::Flags::kDirty, RE::TESWaterReflections::Flags::kDynamicCubemap, RE::TESWaterReflections::Flags::kWorldOrigin);
+	for (uint32_t i = 0; i < 6; i++) {
+		m_WaterReflections->cubeMapSides[i] = RE::TESWaterReflections::CubeMapSide(i, 0.0f);
+	}
 }
 
 void Scene::UpdateSettings(Settings settings)

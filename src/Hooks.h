@@ -68,9 +68,30 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-#elif defined(FALLOUT4)
+	struct Main_RenderWaterEffects
+	{
+		static void thunk();
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
+#elif defined(FALLOUT4)
+	struct DrawWorld_UpdateWater
+	{
+		static void thunk();
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 #endif
+
+	class BGSActorCellEventHandler : public RE::BSTEventSink<RE::BGSActorCellEvent>
+	{
+	public:
+#if defined(SKYRIM)
+		virtual RE::BSEventNotifyControl ProcessEvent(const RE::BGSActorCellEvent* a_event, RE::BSTEventSource<RE::BGSActorCellEvent>*) override;
+#elif defined(FALLOUT4)
+		virtual RE::BSEventNotifyControl ProcessEvent(const RE::BGSActorCellEvent& a_event, RE::BSTEventSource<RE::BGSActorCellEvent>*) override;
+#endif
+		static bool Register();
+	};
 
 	void InstallEarly();
 	void Install();

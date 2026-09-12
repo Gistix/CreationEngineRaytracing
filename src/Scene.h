@@ -42,6 +42,8 @@ struct Scene
 	void* m_WaterFlowMapResource = nullptr;
 	nvrhi::TextureHandle m_WaterFlowMapTexture;
 
+	RE::NiPointer<RE::TESWaterReflections> m_WaterReflections = nullptr;
+
 	int32_t* g_FlowMapSize = nullptr;
 	float4* g_DisplacementCellTexCoordOffset = nullptr;
 	RE::NiPoint2* g_DisplacementMeshPos = nullptr;
@@ -152,6 +154,7 @@ struct Scene
 	void SetSkyHemisphere(void* skyHemi);
 	void SetSkinDetailNormal(void* skinDetailNormal);
 	void SetWaterFlowMap(void* skyHemi);
+	void SetupWaterReflections();
 
 	float GetResolutionScale() const;
 

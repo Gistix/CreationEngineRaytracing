@@ -18,3 +18,5 @@
 #include "Types/RE/FO4/TESObjectLIGH.h"
 #include "NiAlphaProperty.h"
 #include "BSGeometry.h"
+#include "TESWaterReflections.h"
+#include "TESWaterSystem.h"

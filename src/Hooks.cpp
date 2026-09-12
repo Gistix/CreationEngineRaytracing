@@ -481,6 +481,14 @@ namespace Hooks
 		return func();
 	}
 
+	void Main_RenderWaterEffects::thunk()
+	{
+		auto* scene = Scene::GetSingleton();
+		scene->m_WaterReflections->flags.set(true, RE::TESWaterReflections::Flags::kDirty);
+
+		func();
+	}
+
 	struct BGSTerrainBlock_Dtor
 	{
 		static void thunk(RE::BGSTerrainBlock* a_block)
@@ -612,6 +620,20 @@ namespace Hooks
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+
+	void DrawWorld_UpdateWater::thunk()
+	{
+		auto* tes = RE::TES::GetSingleton();
+		if (tes->interiorCell) {
+			if (tes->interiorCell->cellFlags.none(RE::TESObjectCELL::Flag::kHasWater))
+				tes->interiorCell->cellFlags.set(true, RE::TESObjectCELL::Flag::kHasWater);
+		}
+
+		auto* scene = Scene::GetSingleton();
+		scene->m_WaterReflections->flags.set(true, RE::TESWaterReflections::Flags::kDirty);
+
+		func();
+	}
 #endif
 
 	void InstallEarly()
@@ -692,6 +714,8 @@ namespace Hooks
 
 		stl::detour_thunk<DrawWorld_BuildSceneLists>(REL::RelocationID(35630, 36643));
 
+		stl::detour_thunk<Main_RenderWaterEffects>(REL::RelocationID(35561, 36560));
+
 		auto* scene = Scene::GetSingleton();
 		scene->g_FlowMapSize = reinterpret_cast<int32_t*>(REL::RelocationID(527644, 414596).address());
 		scene->g_DisplacementCellTexCoordOffset = reinterpret_cast<float4*>(REL::RelocationID(528184, 415129).address());
@@ -711,6 +735,8 @@ namespace Hooks
 		stl::detour_thunk<BSD3DResourceCreator_PoolBucket_Dtor>(REL::ID(2277467));
 
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::ID(2213536));
+
+		stl::detour_thunk<DrawWorld_UpdateWater>(REL::ID(2318288));
 #endif
 
 		logger::info("[Raytracing] Installed hooks");
@@ -721,4 +747,76 @@ namespace Hooks
 		stl::detour_vfunc<3, ID3D11Device_CreateBuffer>(a_device);
 		stl::detour_vfunc<5, ID3D11Device_CreateTexture2D>(a_device);
 	}
+
+#if defined(SKYRIM)
+	RE::BSEventNotifyControl BGSActorCellEventHandler::ProcessEvent(const RE::BGSActorCellEvent* a_event, RE::BSTEventSource<RE::BGSActorCellEvent>*)
+	{
+		if (a_event->flags.underlying() != static_cast<uint32_t>(RE::BGSActorCellEvent::CellFlag::kEnter))
+			return RE::BSEventNotifyControl::kContinue;
+
+		auto* tesWaterSystem = RE::TESWaterSystem::GetSingleton();
+
+		if (tesWaterSystem->waterReflections.empty()) {
+			tesWaterSystem->waterReflections.push_back(Scene::GetSingleton()->m_WaterReflections);
+		}
+
+		tesWaterSystem->Enable();
+
+		return RE::BSEventNotifyControl::kContinue;
+	}
+
+	bool BGSActorCellEventHandler::Register()
+	{
+		static BGSActorCellEventHandler singleton;
+
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		player->AsBGSActorCellEventSource()->AddEventSink(&singleton);
+
+		logger::info("Registered {}", typeid(singleton).name());
+
+		return true;
+	}
+#elif defined(FALLOUT4)
+	RE::BSEventNotifyControl BGSActorCellEventHandler::ProcessEvent(const RE::BGSActorCellEvent& a_event, RE::BSTEventSource<RE::BGSActorCellEvent>*)
+	{
+		if (a_event.flags.underlying() != static_cast<uint32_t>(RE::BGSActorCellEvent::CellFlag::kEnter))
+			return RE::BSEventNotifyControl::kContinue;
+
+		auto* tesWaterSystem = RE::TESWaterSystem::GetSingleton();
+
+		if (tesWaterSystem) {
+			auto& waterRefl = Scene::GetSingleton()->m_WaterReflections;
+
+			bool attach = true;
+
+			// Fallout 4 seems to always have an TESWaterReflection
+			if (!tesWaterSystem->waterReflections.empty()) {
+				for (auto& item : tesWaterSystem->waterReflections) {
+					if (item == waterRefl) {
+						attach = false;
+						break;
+					}
+				}
+			}
+
+			if (attach)
+				tesWaterSystem->waterReflections.push_back(waterRefl);
+
+			tesWaterSystem->Enable();
+		}
+
+		return RE::BSEventNotifyControl::kContinue;
+	}
+
+	bool BGSActorCellEventHandler::Register()
+	{
+		static BGSActorCellEventHandler singleton;
+
+		auto* player = RE::PlayerCharacter::GetSingleton();
+		static_cast<RE::BSTEventSource<RE::BGSActorCellEvent>*>(player)->RegisterSink(&singleton);
+		logger::info("Registered {}", typeid(singleton).name());
+
+		return true;
+	}
+#endif
 }
