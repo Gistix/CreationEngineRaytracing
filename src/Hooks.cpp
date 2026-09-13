@@ -647,7 +647,15 @@ namespace Hooks
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSTriShape>>(RE::VTABLE_BSTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSDynamicTriShape>>(RE::VTABLE_BSDynamicTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSubIndexTriShape>>(RE::VTABLE_BSSubIndexTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSInstanceTriShape>>(RE::VTABLE_BSInstanceTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSMultiStreamInstanceTriShape>>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSMultiIndexTriShape>>(RE::VTABLE_BSMultiIndexTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSkinnedDecalTriShape>>(RE::VTABLE_BSSkinnedDecalTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSLODTriShape>>(RE::VTABLE_BSLODTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSegmentedTriShape>>(RE::VTABLE_BSSegmentedTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSMeshLODTriShape>>(RE::VTABLE_BSMeshLODTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSLODMultiIndexTriShape>>(RE::VTABLE_BSLODMultiIndexTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSubIndexLandTriShape>>(RE::VTABLE_BSSubIndexLandTriShape[0]);
 
 		// Use a hook to update dynamic data, else we risk trying accessing dynamic data while the engine has already released it
 		stl::detour_thunk<BSDynamicTriShape_UpdateDynamicData>(REL::RelocationID(69570, 70954));

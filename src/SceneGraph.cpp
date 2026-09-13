@@ -373,19 +373,8 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
-	auto it = m_Meshes.find(bsTriShape);
-	if (it != m_Meshes.end())
-	{
-		it->second->OnDestroy();
-
-		{
-			std::scoped_lock lock(m_MeshDestroyMutex);
-			m_DestroyedMeshes.push_back(bsTriShape);
-		}
-	}
-
-	// Erase after the mesh dropped its raw pointer to the entry.
-	m_InstancedData.erase(bsTriShape);
+	std::scoped_lock lock(m_MeshDestroyMutex);
+	m_DestroyedMeshes.push_back(bsTriShape);
 }
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
@@ -429,17 +418,20 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto destroyedMesh: m_DestroyedMeshesSwap)
 	{
 		auto it = m_Meshes.find(destroyedMesh);
-		if (it == m_Meshes.end())
-			continue;
+		if (it != m_Meshes.end())
+		{
+			auto* mesh = it->second.get();
+			mesh->OnDestroy();
 
-		auto* mesh = it->second.get();
+			if (auto* cluster = mesh->GetCluster()) {
+				cluster->RemoveMember(mesh);
+			}
 
-		if (auto* cluster = mesh->GetCluster()) {
-			cluster->RemoveMember(mesh);
+			m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
+			m_Meshes.erase(it);
 		}
 
-		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
-		m_Meshes.erase(it);
+		m_InstancedData.erase(destroyedMesh);
 	}
 
 	m_DestroyedMeshesSwap.clear();
