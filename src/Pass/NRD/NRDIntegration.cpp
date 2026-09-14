@@ -485,13 +485,7 @@ namespace Pass::NRD
 			m_ReblurSettings.lobeAngleFraction = eastl::clamp(commonSettings.lobeAngleFraction, 0.0f, 1.0f);
 			m_ReblurSettings.roughnessFraction = eastl::clamp(commonSettings.roughnessFraction, 0.0f, 1.0f);
 			m_ReblurSettings.planeDistanceSensitivity = eastl::max(reblurSettings.planeDistanceSensitivity, 0.0f);
-			m_ReblurSettings.specularProbabilityThresholdsForMvModification[0] =
-				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[0], 0.0f, 1.0f);
-			m_ReblurSettings.specularProbabilityThresholdsForMvModification[1] =
-				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[1],
-					m_ReblurSettings.specularProbabilityThresholdsForMvModification[0], 1.0f);
-			m_ReblurSettings.fireflySuppressorMinRelativeScale =
-				eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
+			m_ReblurSettings.fireflySuppressorMinRelativeScale = eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
 			m_ReblurSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
 			m_ReblurSettings.usePrepassOnlyForSpecularMotionEstimation = reblurSettings.usePrepassOnlyForSpecularMotionEstimation;
 			m_ReblurSettings.returnHistoryLengthInsteadOfOcclusion = reblurSettings.returnHistoryLengthInsteadOfOcclusion;

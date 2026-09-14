@@ -96,11 +96,21 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 	m_Settings = *rendererSettings;
 
 	const char* deviceExtensions[] = {
-		"VK_KHR_acceleration_structure",
-		"VK_KHR_deferred_host_operations",
-		"VK_KHR_ray_tracing_pipeline",
-		"VK_KHR_ray_query",
-		"VK_NV_ray_tracing_invocation_reorder"
+		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,				// "VK_KHR_acceleration_structure"
+		VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,				// "VK_KHR_deferred_host_operations"
+		VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,						// "VK_KHR_pipeline_library" (required by RT pipeline)
+		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,					// "VK_KHR_ray_tracing_pipeline"
+		VK_KHR_RAY_QUERY_EXTENSION_NAME,							// "VK_KHR_ray_query"
+		VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME,		// "VK_NV_ray_tracing_invocation_reorder"
+		VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_KHR_compute_shader_derivatives" (for NRD Reblur quads)
+		VK_NV_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_NV_compute_shader_derivatives" ditto
+
+		// High performance & stability additions (enabled by DXVK):
+		VK_NV_RAW_ACCESS_CHAINS_EXTENSION_NAME,						// "VK_NV_raw_access_chains" (boosts ByteAddressBuffer loads)
+		VK_KHR_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_EXTENSION_NAME, // "VK_KHR_shader_subgroup_uniform_control_flow"
+		VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,				// "VK_EXT_mutable_descriptor_type"
+		VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,						// "VK_EXT_memory_budget"
+		VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,						// "VK_EXT_memory_priority"
 	};
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
