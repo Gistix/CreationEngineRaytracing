@@ -21,8 +21,13 @@ void ParallelTriShapeWalker::VisitLeaf(RE::BSTriShape* bsTriShape, RE::TESObject
 	}
 
 	auto* shaderProperty = Util::Adapter::GetGeometryRuntimeData(bsTriShape).shaderProperty;
-	if (shaderProperty && shaderProperty->alpha <= std::numeric_limits<float>::epsilon())
-		return;
+	if (shaderProperty) {
+		if (shaderProperty->alpha <= std::numeric_limits<float>::epsilon())
+			return;
+
+		if (shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kRefraction))
+			return;
+	}
 
 	auto it = m_SceneGraph->m_Meshes.find(bsTriShape);
 	if (it != m_SceneGraph->m_Meshes.end()) {
