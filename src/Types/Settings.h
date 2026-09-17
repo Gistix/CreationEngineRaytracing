@@ -19,7 +19,7 @@ enum class Denoiser
 
 struct GeneralSettings
 {
-	Denoiser Denoiser = Denoiser::None;
+	Denoiser Denoiser = Denoiser::NRD_Reblur;
 	Mode Mode = Mode::None;
 	bool RaytracedShadows = false;
 };
@@ -92,9 +92,6 @@ struct NRDReblurSettings
 
 	// (normalized %) - represents maximum allowed deviation from the local tangent plane
 	float planeDistanceSensitivity = 0.02f;
-
-	// "IN_MV = lerp(IN_MV, specularMotion, smoothstep(this[0], this[1], specularProbability))"
-	std::array<float, 2> specularProbabilityThresholdsForMvModification = { 0.5f, 0.9f };
 
 	// [1; 3] - undesired sporadic outliers suppression to keep output stable (smaller values reduce aberration in exchange of bias)
 	float fireflySuppressorMinRelativeScale = 2.0f;
