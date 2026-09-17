@@ -491,13 +491,18 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		// serial descent. Total slots = numWorkers + 1.
 		const size_t numSlots = numWorkers + 1;
 
-		m_PerWorkerUpdateList.assign(numSlots, {});
-		m_PerWorkerCreateList.assign(numSlots, {});
-		m_PerWorkerCurrentVisible.assign(numSlots, {});
-
-		for (auto& v : m_PerWorkerUpdateList) v.reserve(256);
-		for (auto& v : m_PerWorkerCreateList) v.reserve(64);
-		for (auto& v : m_PerWorkerCurrentVisible) v.reserve(256);
+		if (m_PerWorkerUpdateList.size() != numSlots) {
+			m_PerWorkerUpdateList.resize(numSlots);
+			for (auto& v : m_PerWorkerUpdateList) v.reserve(256);
+		}
+		if (m_PerWorkerCreateList.size() != numSlots) {
+			m_PerWorkerCreateList.resize(numSlots);
+			for (auto& v : m_PerWorkerCreateList) v.reserve(64);
+		}
+		if (m_PerWorkerCurrentVisible.size() != numSlots) {
+			m_PerWorkerCurrentVisible.resize(numSlots);
+			for (auto& v : m_PerWorkerCurrentVisible) v.reserve(256);
+		}
 
 		auto worldRootNode = Util::Adapter::GetWorldRootNode();
 
@@ -507,16 +512,16 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 		// Flat accumulator of wide-NiNode children to be chunked across workers post-descent.
 		// Each entry is a (child object, propagated parentRefr) ready to be handed to ProcessSubtree.
-		eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> forkedChildren;
+		m_ForkedChildren.clear();
 
-		ParallelTriShapeWalker walker{ this, &forkedChildren, firstPersonRoot };
+		ParallelTriShapeWalker walker{ this, &m_ForkedChildren, firstPersonRoot };
 		walker.Walk(worldRootNode);
 
 		// Traversal cost per subtree varies, so use a small grain. Output slot = taskIdx + 1 (slot 0
 		// reserved for the serial walk above).
-		const size_t totalForked = forkedChildren.size();
+		const size_t totalForked = m_ForkedChildren.size();
 		m_ThreadPool->ParallelFor(totalForked, 16, [&](size_t taskIdx, size_t i) {
-			auto& [child, refr] = forkedChildren[i];
+			auto& [child, refr] = m_ForkedChildren[i];
 			walker.ProcessSubtree(child, refr, taskIdx + 1);
 		});
 

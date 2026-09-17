@@ -55,6 +55,7 @@ find_package(cppwinrt CONFIG REQUIRED)
 find_package(directx-dxc CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(mikktspace CONFIG REQUIRED)
+find_package(unordered_dense CONFIG REQUIRED)
 
 include(detours)
 
@@ -64,6 +65,7 @@ target_link_libraries(
 	Microsoft::DirectXTK
 	Microsoft::DirectX-Headers
     EASTL
+	unordered_dense::unordered_dense
 	d3d12.lib
 	magic_enum::magic_enum
     xbyak::xbyak
@@ -113,6 +115,10 @@ target_compile_definitions(
 )
 
 if(AUTO_DEPLOYMENT)
+    if(NOT DEFINED DEPLOY_DIR OR DEPLOY_DIR STREQUAL "")
+        message(FATAL_ERROR "AUTO_DEPLOYMENT is enabled but DEPLOY_DIR is not set. Please set the DEPLOY_DIR environment variable or use a preset that defines it.")
+    endif()
+
     message(STATUS "Auto deployment enabled. Build output and addons will be copied to ${DEPLOY_DIR}")
 
     install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins)
@@ -140,4 +146,9 @@ if(AUTO_DEPLOYMENT)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/Shaders)
 
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/interop/ DESTINATION ${DEPLOY_DIR}/Shaders/Interop)
+endif()
+
+option(BUILD_BENCHMARKS "Build microbenchmarks" ON)
+if(BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()

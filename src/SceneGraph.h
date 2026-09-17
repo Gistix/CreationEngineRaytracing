@@ -26,6 +26,7 @@
 #include <eastl/array.h>
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
+#include <ankerl/unordered_dense.h>
 
 #include "Types/PassTiming.h"
 #include "Types/InstancedData.h"
@@ -44,7 +45,7 @@ class SceneGraph
 	bool m_DrawFirstPerson = false;
 	RE::NiPoint3 m_FirstPersonPosition = Util::Adapter::GetNiPoint3Zero();
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_Meshes;
+	ankerl::unordered_dense::map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_Meshes;
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
@@ -141,6 +142,7 @@ class SceneGraph
 	eastl::vector<eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>>> m_PerWorkerUpdateList;
 	eastl::vector<eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>>> m_PerWorkerCreateList;
 	eastl::vector<eastl::vector<BaseMesh*>> m_PerWorkerCurrentVisible;
+	eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> m_ForkedChildren;
 
 	struct MeshCreateCandidate {
 		RE::BSTriShape* bsTriShape;

@@ -25,7 +25,8 @@
 		{
 			"name": "spdlog",
 			"features": [ "wchar" ]
-		}
+		},
+		"unordered-dense"
 	],
 	"overrides": [
 		{
