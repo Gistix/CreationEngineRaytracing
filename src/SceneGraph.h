@@ -50,14 +50,14 @@ class SceneGraph
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
 	// One BLAS instance per owner reference
-	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
+	ankerl::unordered_dense::map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
 
 	// Meshes without an owner get a degenerate per-mesh cluster
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
+	ankerl::unordered_dense::map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
 
 	// One BLAS instance per SubIndexMesh segment
 	// Each SubIndexSegmentMesh lives in its own cluster so it gets its own BLAS
-	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
+	ankerl::unordered_dense::map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
 
 	eastl::vector<BLASCluster*> m_AllClusters;
 
