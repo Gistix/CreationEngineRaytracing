@@ -24,14 +24,14 @@ namespace Util
 		GeometryRuntimeData GetGeometryRuntimeData(RE::BSGeometry* a_geometry)
 		{
 			GeometryRuntimeData runtimeData{};
+
 #if defined(SKYRIM)
-			auto& data = a_geometry->GetGeometryRuntimeData();
-			runtimeData.alphaProperty = data.alphaProperty.get();
-			runtimeData.shaderProperty = data.shaderProperty.get();
-			runtimeData.skinInstance = data.skinInstance.get();
-			runtimeData.rendererData = data.rendererData;
-			runtimeData.vertexDesc = data.vertexDesc;
-#elif (FALLOUT4)
+			runtimeData.alphaProperty = a_geometry->alphaProperty.get();
+			runtimeData.shaderProperty = a_geometry->shaderProperty.get();
+			runtimeData.skinInstance = a_geometry->skinInstance.get();
+			runtimeData.rendererData = a_geometry->rendererData;
+			runtimeData.vertexDesc = a_geometry->vertexDesc;
+#elif defined(FALLOUT4)
 			runtimeData.alphaProperty = reinterpret_cast<RE::NiAlphaProperty*>(a_geometry->properties[0].get());
 			runtimeData.shaderProperty = reinterpret_cast<RE::BSShaderProperty*>(a_geometry->properties[1].get());
 			runtimeData.skinInstance = a_geometry->skinInstance.get();
@@ -81,7 +81,6 @@ namespace Util
 
 		bool GetAlphaBlending(RE::NiAlphaProperty* a_property)
 		{
-			if (!a_property) return false;
 #if defined(SKYRIM)
 			return a_property->GetAlphaBlending();
 #elif defined(FALLOUT4)
@@ -195,48 +194,6 @@ namespace Util
 #endif		
 		}
 
-		RE::BSGeometry* AsGeometry(RE::NiAVObject* a_object) {
-#if defined(SKYRIM)
-			return a_object->AsGeometry();
-#elif defined(FALLOUT4)
-			return a_object->IsGeometry();
-#endif
-		}
-
-		RE::BSTriShape* AsTriShape(RE::NiAVObject* a_object)
-		{
-#if defined(SKYRIM)
-			return a_object->AsTriShape();
-#elif defined(FALLOUT4)
-			return a_object->IsTriShape();
-#endif
-		}
-
-		RE::NiNode* AsNode(RE::NiAVObject* a_object) {
-#if defined(SKYRIM)
-			return a_object->AsNode();
-#elif defined(FALLOUT4)
-			return a_object->IsNode();
-#endif		
-		}
-
-		RE::BSFadeNode* AsFadeNode(RE::NiAVObject* a_object) {
-#if defined(SKYRIM)
-			return a_object->AsFadeNode();
-#elif defined(FALLOUT4)
-			return a_object->IsFadeNode();
-#endif		
-		}
-
-		RE::BSSubIndexTriShape* AsSubIndexTriShape(RE::BSGeometry* a_geometry)
-		{
-#if defined(SKYRIM)
-			return a_geometry->AsSubIndexTriShape();
-#elif defined(FALLOUT4)
-			return a_geometry->IsSubIndexTriShape();
-#endif	
-		}
-
 		RE::BSMultiStreamInstanceTriShape* AsMultiStreamInstanceTriShape(RE::BSGeometry* a_geometry)
 		{
 #if defined(SKYRIM)
@@ -249,29 +206,8 @@ namespace Util
 			return nullptr;
 		}
 
-		RE::BSDynamicTriShape* AsDynamicTriShape(RE::BSTriShape* a_geometry)
-		{
-#if defined(SKYRIM)
-			return a_geometry->AsDynamicTriShape();
-#elif defined(FALLOUT4)
-			return a_geometry->IsDynamicTriShape();
-#endif
-		}
-
-		RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object)
-		{
-#if defined(SKYRIM)
-			return REL::RelocateMember<RE::TESObjectREFR*>(a_object, 0x0F8, 0x110);
-#elif defined(FALLOUT4)
-			return a_object ? reinterpret_cast<RE::TESObjectREFR*>(a_object->userData) : nullptr;
-#endif	
-		}
-
 		RE::NiNode* GetFirstPerson3D(RE::PlayerCharacter* a_player)
 		{
-			if (!a_player)
-				return nullptr;
-
 #if defined(SKYRIM)
 			return a_player->GetInfoRuntimeData().firstPerson3D.get();
 #elif defined(FALLOUT4)
@@ -372,29 +308,6 @@ namespace Util
 #endif
 		}
 		
-		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node) {
-#if defined(SKYRIM)
-			return a_node->GetChildren();
-#elif defined(FALLOUT4)
-			return a_node->children;
-#endif		
-		}
-
-		RE::NiAVObject* GetChildAt(RE::NiNode* a_node, uint16_t a_index) {
-			if (!a_node) return nullptr;
-#if defined(SKYRIM)
-			auto& children = a_node->GetChildren();
-			if (a_index < children.size()) {
-				return children[a_index].get();
-			}
-#elif defined(FALLOUT4)
-			auto& children = a_node->children;
-			if (a_index < children.size()) {
-				return children.data()[a_index].get();
-			}
-#endif
-			return nullptr;
-		}
 
 		uint8_t* GetVertexData(RE::BSGraphics::TriShape* rendererData)
 		{
@@ -480,7 +393,7 @@ namespace Util
 		{
 			SkinData result = { false, 0, nullptr, 0 };
 #if defined(SKYRIM)
-			auto* skinInstance = geometry->GetGeometryRuntimeData().skinInstance.get();
+			auto* skinInstance = geometry->skinInstance.get();
 			if (skinInstance) {
 				result.hasSkin = true;
 				auto* skinData = skinInstance->skinData.get();
@@ -504,11 +417,8 @@ namespace Util
 
 		const RE::NiTransform* GetSkinToBoneTransform(RE::BSGeometry* geometry, uint32_t a_boneIndex)
 		{
-			if (!geometry)
-				return nullptr;
-
 #if defined(SKYRIM)
-			auto* skinInstance = geometry->GetGeometryRuntimeData().skinInstance.get();
+			auto* skinInstance = geometry->skinInstance.get();
 			if (!skinInstance || !skinInstance->skinData || a_boneIndex >= skinInstance->skinData->bones)
 				return nullptr;
 			return &skinInstance->skinData->boneData[a_boneIndex].skinToBone;
@@ -720,14 +630,6 @@ namespace Util
 #endif
 		}
 
-		bool IsNiAVObjectHidden(const RE::NiAVObject* a_object)
-		{
-#if defined(SKYRIM)
-			return a_object->GetFlags().all(RE::NiAVObject::Flag::kHidden);
-#elif defined(FALLOUT4)
-			return (a_object->GetFlags() & 1) != 0;
-#endif
-		}
 
 		bool IsMultiBoundNodeAllFail(const RE::BSMultiBoundNode* a_node)
 		{

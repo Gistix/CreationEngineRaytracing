@@ -600,7 +600,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 				// Skip alpha blended effects (particles and effects)
 				auto* alphaProperty = geometryData.alphaProperty;
-				const bool isAlphaBlend = Util::Adapter::GetAlphaBlending(alphaProperty);
+				const bool isAlphaBlend = alphaProperty && Util::Adapter::GetAlphaBlending(alphaProperty);
 				bool validEffect = isEffectShader && !isAlphaBlend;
 
 #if defined(FALLOUT4)

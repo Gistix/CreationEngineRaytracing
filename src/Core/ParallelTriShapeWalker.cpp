@@ -20,7 +20,7 @@ void ParallelTriShapeWalker::VisitLeaf(RE::BSTriShape* bsTriShape, RE::TESObject
 		return;
 	}
 
-	auto* shaderProperty = Util::Adapter::GetGeometryRuntimeData(bsTriShape).shaderProperty;
+	auto* shaderProperty = Util::Adapter::GetShaderProperty(bsTriShape);
 	if (shaderProperty) {
 		if (shaderProperty->alpha <= std::numeric_limits<float>::epsilon())
 			return;

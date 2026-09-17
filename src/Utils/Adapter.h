@@ -42,16 +42,80 @@ namespace Util
 		RE::TESForm* GetBipedObjectItem(const RE::BIPOBJECT& a_bipObject);
 		RE::TESBoundObject* GetBaseObject(RE::TESObjectREFR* a_refr);
 
-		RE::BSGeometry* AsGeometry(RE::NiAVObject* a_object);
-		RE::BSTriShape* AsTriShape(RE::NiAVObject* a_object);
-		RE::NiNode* AsNode(RE::NiAVObject* a_object);
-		RE::BSFadeNode* AsFadeNode(RE::NiAVObject* a_object);
-		RE::BSSubIndexTriShape* AsSubIndexTriShape(RE::BSGeometry* a_geometry);
+		inline RE::BSGeometry* AsGeometry(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->AsGeometry();
+#elif defined(FALLOUT4)
+			return a_object->IsGeometry();
+#endif
+		}
+
+		inline RE::BSTriShape* AsTriShape(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->AsTriShape();
+#elif defined(FALLOUT4)
+			return a_object->IsTriShape();
+#endif
+		}
+
+		inline RE::NiNode* AsNode(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->AsNode();
+#elif defined(FALLOUT4)
+			return a_object->IsNode();
+#endif
+		}
+
+		inline RE::BSFadeNode* AsFadeNode(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->AsFadeNode();
+#elif defined(FALLOUT4)
+			return a_object->IsFadeNode();
+#endif
+		}
+
+		inline RE::BSSubIndexTriShape* AsSubIndexTriShape(RE::BSGeometry* a_geometry)
+		{
+#if defined(SKYRIM)
+			return a_geometry->AsSubIndexTriShape();
+#elif defined(FALLOUT4)
+			return a_geometry->IsSubIndexTriShape();
+#endif
+		}
+
 		RE::BSMultiStreamInstanceTriShape* AsMultiStreamInstanceTriShape(RE::BSGeometry* a_geometry);
-		RE::BSDynamicTriShape* AsDynamicTriShape(RE::BSTriShape* a_geometry);
+
+		inline RE::BSDynamicTriShape* AsDynamicTriShape(RE::BSTriShape* a_geometry)
+		{
+#if defined(SKYRIM)
+			return a_geometry->AsDynamicTriShape();
+#elif defined(FALLOUT4)
+			return a_geometry->IsDynamicTriShape();
+#endif
+		}
 
 		// This version mimics direct pointer retrieval rather than CommonLib's implementation, which iterates up the parent hierarchy to find a valid owner
-		RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object);
+		inline RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->userData;
+#elif defined(FALLOUT4)
+			return reinterpret_cast<RE::TESObjectREFR*>(a_object->userData);
+#endif
+		}
+
+		inline RE::BSShaderProperty* GetShaderProperty(const RE::BSGeometry* a_geometry)
+		{
+#if defined(SKYRIM)
+			return a_geometry->shaderProperty.get();
+#elif defined(FALLOUT4)
+			return reinterpret_cast<RE::BSShaderProperty*>(a_geometry->properties[1].get());
+#endif
+		}
 
 		// Returns the first-person skeleton root (RE::PlayerCharacter::firstPerson3D), or nullptr
 		RE::NiNode* GetFirstPerson3D(RE::PlayerCharacter* a_player);
@@ -64,8 +128,30 @@ namespace Util
 		bool IsInFirstPerson(RE::PlayerCharacter* a_player, RE::PlayerCamera* a_camera);
 		RE::NiPoint3 GetFirstPersonNodePosition(RE::PlayerCamera* a_camera);
 
-		RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node);
-		RE::NiAVObject* GetChildAt(RE::NiNode* a_node, uint16_t a_index);
+		inline RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node)
+		{
+#if defined(SKYRIM)
+			return a_node->children;
+#elif defined(FALLOUT4)
+			return a_node->children;
+#endif
+		}
+
+		inline RE::NiAVObject* GetChildAt(RE::NiNode* a_node, uint16_t a_index)
+		{
+#if defined(SKYRIM)
+			auto& children = a_node->children;
+			if (a_index < children.size()) {
+				return children[a_index].get();
+			}
+#elif defined(FALLOUT4)
+			auto& children = a_node->children;
+			if (a_index < children.size()) {
+				return children.data()[a_index].get();
+			}
+#endif
+			return nullptr;
+		}
 
 		uint8_t* GetVertexData(RE::BSGraphics::TriShape* rendererData);
 		uint16_t* GetIndexData(RE::BSGraphics::TriShape* rendererData);
@@ -155,7 +241,14 @@ namespace Util
 
 		RE::SceneGraph* GetWorldRootNode();
 
-		bool IsNiAVObjectHidden(const RE::NiAVObject* a_object);
+		inline bool IsNiAVObjectHidden(const RE::NiAVObject* a_object)
+		{
+#if defined(SKYRIM)
+			return a_object->flags.all(RE::NiAVObject::Flag::kHidden);
+#elif defined(FALLOUT4)
+			return (a_object->GetFlags() & 1) != 0;
+#endif
+		}
 
 		bool IsMultiBoundNodeAllFail(const RE::BSMultiBoundNode* a_node);
 
