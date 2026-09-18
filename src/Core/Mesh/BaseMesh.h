@@ -14,6 +14,10 @@ class SkinnedMesh;
 class DynamicMesh;
 class BLASCluster;
 
+namespace CERT {
+	struct OmmResource;
+}
+
 struct GeometryEntry {
 	nvrhi::rt::GeometryDesc desc;
 	uint16_t geometryIndex;
@@ -157,6 +161,8 @@ public:
 		return i < m_GeometryEntries.size() ? m_GeometryEntries[i].geometryIndex : UINT16_MAX;
 	}
 
+	const std::shared_ptr<CERT::OmmResource>& GetOmmResource() const { return m_OmmResource; }
+
 protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
@@ -244,4 +250,7 @@ protected:
 	Properties m_Properties;
 
 	eastl::shared_ptr<MaterialBase> m_Material;
+	std::shared_ptr<CERT::OmmResource> m_OmmResource;
+
+	void SetupOpacityMicromap(nvrhi::ICommandList* commandList);
 };

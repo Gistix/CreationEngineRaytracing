@@ -117,6 +117,15 @@ namespace Util
 #endif
 		}
 
+		inline RE::NiAlphaProperty* GetAlphaProperty(const RE::BSGeometry* a_geometry)
+		{
+#if defined(SKYRIM)
+			return a_geometry->alphaProperty.get();
+#elif defined(FALLOUT4)
+			return reinterpret_cast<RE::NiAlphaProperty*>(a_geometry->properties[0].get());
+#endif
+		}
+
 		// Returns the first-person skeleton root (RE::PlayerCharacter::firstPerson3D), or nullptr
 		RE::NiNode* GetFirstPerson3D(RE::PlayerCharacter* a_player);
 		RE::NiPoint3 GetZeroNiPoint3();
@@ -263,6 +272,7 @@ namespace Util
 		RE::ShadowSceneNode* GetShadowSceneNode(uint32_t index = 0);
 
 		RE::NiIntegersExtraData* GetIntegersExtraData(RE::BSTriShape* a_triShape, const char* a_name);
+		RE::NiBinaryExtraData* GetBinaryExtraData(RE::BSTriShape* a_triShape, const char* a_name);
 
 		RE::TESObjectREFR* GetUserData(RE::NiAVObject* object);
 		bool IsSpotLight(const RE::TESObjectLIGH* a_light);

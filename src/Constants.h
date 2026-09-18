@@ -66,6 +66,7 @@ namespace Constants
 	{
 		static constexpr auto LandLOD = "CERT::LandLOD";
 		static constexpr auto FO4PBR_Modulators = "FO4PBR_Modulators";
+		static constexpr auto OMMData = "OMM_DATA";
 	}
 
 	static constexpr uint32_t PT_DISPATCH_THREADS = 8;

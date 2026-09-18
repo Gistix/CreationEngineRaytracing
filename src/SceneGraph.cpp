@@ -55,6 +55,8 @@ void SceneGraph::Initialize()
 
 	m_MeshManager = eastl::make_unique<MeshManager>();
 
+	m_OmmManager = eastl::make_unique<CERT::OmmManager>();
+
 	m_MaterialManager = eastl::make_shared<MaterialManager>();
 
 	// Triangle bindless descriptor table

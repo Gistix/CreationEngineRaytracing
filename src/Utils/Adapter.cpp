@@ -726,6 +726,15 @@ namespace Util
 #endif
 		}
 
+		RE::NiBinaryExtraData* GetBinaryExtraData(RE::BSTriShape* a_triShape, const char* a_name)
+		{
+#if defined(SKYRIM)
+			return a_triShape->GetExtraData<RE::NiBinaryExtraData>(a_name);
+#elif defined(FALLOUT4)
+			return reinterpret_cast<RE::NiBinaryExtraData*>(a_triShape->GetExtraData(a_name));
+#endif
+		}
+
 		RE::TESObjectREFR* GetUserData(RE::NiAVObject* object)
 		{
 #if defined(SKYRIM)

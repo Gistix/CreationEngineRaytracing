@@ -104,6 +104,7 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 		VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME,		// "VK_NV_ray_tracing_invocation_reorder"
 		VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_KHR_compute_shader_derivatives" (for NRD Reblur quads)
 		VK_NV_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_NV_compute_shader_derivatives" ditto
+		VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME,						// "VK_EXT_opacity_micromap"
 
 		// High performance & stability additions (enabled by DXVK):
 		VK_NV_RAW_ACCESS_CHAINS_EXTENSION_NAME,						// "VK_NV_raw_access_chains" (boosts ByteAddressBuffer loads)

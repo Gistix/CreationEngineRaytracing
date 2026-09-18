@@ -5,7 +5,7 @@
 #include "Util.h"
 #include "Types/RE/RE.h"
 
-Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList)
+Mesh::Mesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
 	m_BSTriShape = bsTriShape;
@@ -41,6 +41,8 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* com
 	const nvrhi::Format vertexFormat = Util::Geometry::GetVertexPositionFormat(rendererData->vertexDesc);
 
 	m_GeometryEntries.push_back({ MakeGeometryDesc(m_IndexBuffer.m_Buffer, m_IndexBuffer.m_Offset, indexCount, m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, vertexStride, triShapeData.vertexCount, GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
+
+	SetupOpacityMicromap(commandList);
 
 	CreateMaterial();
 }

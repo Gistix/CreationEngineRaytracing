@@ -132,6 +132,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 
 	CreateMaterial();
 
+	SetupOpacityMicromap(commandList);
+
 	InitSkinToBones(bsDynamicTriShape);
 
 	InitDismemberSkin(Util::Adapter::GetGeometryRuntimeData(bsDynamicTriShape).skinInstance);
