@@ -90,6 +90,8 @@ public:
 
 	inline bool IsPlayer() const { return m_Flags.all(Flags::Player); }
 
+	bool ShouldUpdateSkinning(uint64_t frameIndex, const float3& cameraPosition) const;
+
 	void UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags);
 
 	// No live members remain.

@@ -119,6 +119,32 @@ bool BLASCluster::Valid() const
 	return m_IsValid;
 }
 
+bool BLASCluster::ShouldUpdateSkinning(uint64_t frameIndex, const float3& cameraPosition) const
+{
+	const auto& advancedSettings = Scene::GetSingleton()->m_Settings.AdvancedSettings;
+	if (!advancedSettings.VariableUpdateRate)
+		return true;
+
+	if (IsPlayer())
+		return true;
+
+	if (m_LastBuildFrame == Constants::INVALID_FRAME_INDEX)
+		return true;
+
+	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh))
+		return true;
+
+	const float3 clusterCenter = Util::Math::Float3(m_WorldBound.center);
+	const float distanceMeters = Util::Units::GameUnitsToMeters(float3::Distance(cameraPosition, clusterCenter));
+
+	const uint32_t interval = Util::Game::GetUpdateInterval(distanceMeters);
+	if (interval <= 1)
+		return true;
+
+	const uint32_t phase = m_Owner ? m_Owner->GetFormID() : static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this) >> 4);
+	return ((frameIndex + phase) % interval == 0);
+}
+
 void BLASCluster::UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags)
 {
 	std::scoped_lock lock(m_DirtyMutex);

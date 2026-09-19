@@ -15,6 +15,15 @@ namespace Util
 		bool IsHidden(RE::NiAVObject* object, RE::NiAVObject* root = nullptr);
 
 		RE::NiCamera* FindNiCamera(RE::NiAVObject* object);
+
+		inline uint32_t GetUpdateInterval(float distanceMeters)
+		{
+			if (distanceMeters <= 25.0f)
+				return 0;
+
+			const float t = std::log2((distanceMeters - 25.0f) + 1.0f) * 0.3f;
+			return std::clamp(static_cast<uint32_t>(t), 0u, 30u);
+		}
 	}
 
 	namespace Units

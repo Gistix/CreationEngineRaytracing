@@ -1,4 +1,5 @@
 #include "Core/Mesh/SkinnedMesh.h"
+#include "Core/BLASCluster.h"
 #include "Renderer.h"
 #include "Util.h"
 #include "Constants.h"
@@ -303,10 +304,17 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 		if (isForceCulled)
 			isVisible = m_Flags.all(Flags::FirstPerson) || scene->GetSceneGraph()->GetCamera()->NodeInFrustum(m_BSTriShape);
 
+		bool shouldUpdate = true;
+		if (m_Cluster) {
+			const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+			const float3 cameraPosition = scene->GetCameraData()->Position;
+			shouldUpdate = m_Cluster->ShouldUpdateSkinning(frameIndex, cameraPosition);
+		}
+
 		// Only recompute when the game advanced the animation this frame.
 		const auto frameID = skinData.frameID;
 
-		if (isVisible || m_SkinFrameID != frameID) {
+		if (shouldUpdate && (isVisible || m_SkinFrameID != frameID)) {
 			m_SkinFrameID = frameID;
 
 			if (skinData.numBones != 0) {
