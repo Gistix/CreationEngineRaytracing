@@ -92,7 +92,8 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
-			if (Renderer::GetSingleton()->IsVulkan())
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
 				return func(a_memoryManager, size, a_alignment, a_alignmentRequired);
 
 			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
@@ -117,7 +118,8 @@ namespace Hooks
 		{
 			auto triShape = func(a_renderer, a_bsStream, a_vertexDesc, a_vertexCount, a_indexCount);
 
-			if (Renderer::GetSingleton()->IsVulkan())
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -144,7 +146,8 @@ namespace Hooks
 		{
 			auto triShape = func(a_renderer, vertexData, vertexDataSize, vertexDesc, indexData, numIndices);
 
-			if (Renderer::GetSingleton()->IsVulkan())
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -176,7 +179,8 @@ namespace Hooks
 		{
 			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a_indexRenderData);
 
-			if (Renderer::GetSingleton()->IsVulkan())
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -210,7 +214,8 @@ namespace Hooks
 		{
 			auto triShape = func(a_renderer, a_vertexRenderData, vertexDesc, a_indexData, a_numIndices);
 
-			if (Renderer::GetSingleton()->IsVulkan())
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -267,7 +272,8 @@ namespace Hooks
 		{
 			auto result = func(src, tgt, weight);
 
-			if (Renderer::GetSingleton()->IsVulkan())
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
 				return result;
 
 			if (src) {
@@ -293,7 +299,8 @@ namespace Hooks
 		{
 			auto result = func(src, tgt, weight, partitionMask);
 
-			if (Renderer::GetSingleton()->IsVulkan())
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
 				return result;
 
 			if (src) {
@@ -345,7 +352,8 @@ namespace Hooks
 	{
 		static void thunk([[ maybe_unused ]] void* a1, RE::BSGraphics::TriShape* a_triShape)
 		{
-			if (Renderer::GetSingleton()->IsVulkan()) {
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized()) {
 				func(a1, a_triShape);
 				return;
 			}
@@ -392,6 +400,11 @@ namespace Hooks
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
+		if (!Renderer::GetSingleton()->IsInitialized()) {
+			func(oThis);
+			return;
+		}
+
 		if (oThis && oThis->rendererTexture) {
 			auto scene = Scene::GetSingleton();
 			auto sceneGraph = scene->GetSceneGraph();

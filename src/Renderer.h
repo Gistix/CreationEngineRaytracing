@@ -48,6 +48,8 @@ class Renderer
 {
 	bool m_IsVulkan = false;
 
+	bool m_IsInitialized = false;
+
 	ID3D12Device5* m_NativeD3D12Device;
 	ID3D11Device5* m_NativeD3D11Device;
 
@@ -181,6 +183,8 @@ public:
 	bool Initialize(RendererSettings* rendererSettings, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
 
 	bool IsVulkan() const { return m_IsVulkan; }
+
+	bool IsInitialized() const { return m_IsInitialized; }
 
 	bool SupportsFeature(nvrhi::Feature a_Feature) const {
 		return m_SupportedFeatures[static_cast<size_t>(a_Feature)];
