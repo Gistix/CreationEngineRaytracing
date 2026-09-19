@@ -31,9 +31,7 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 	auto alphaProperty = runtimeData.alphaProperty;
 	if (alphaProperty) {
 		if (alphaProperty->GetAlphaBlending()) {
-			using AlphaFunction = RE::NiAlphaProperty::AlphaFunction;
-
-			if (alphaProperty->GetDestBlendMode() == AlphaFunction::kOne)
+			if (alphaProperty->GetDestBlendMode() == RE::NiAlphaProperty::AlphaFunction::kOne)
 				alphaFlags |= AlphaFlags::Additive | AlphaFlags::Transmission;
 			else
 				alphaFlags |= AlphaFlags::Blend;

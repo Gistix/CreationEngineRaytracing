@@ -2,6 +2,7 @@
 
 #include "Types/InstanceMask.h"
 #include "Constants.h"
+#include "Renderer.h"
 
 namespace Util
 {
@@ -18,7 +19,6 @@ namespace Util
 				{ L"SHARC_UPDATE", sharcUpdate ? L"1" : L"0" },
 				{ L"SHARC_RESOLVE", L"0" },
 				{ L"SHARC_DEBUG", L"0" },
-				{ L"SKIN_DETAIL_NORMAL", L"1" },
 				{ L"DEBUG_TRACE_HEATMAP", L"0" }
 			};
 
@@ -35,6 +35,18 @@ namespace Util
 			if (settings.ExperimentalSettings.GlobalLights)
 				defines.emplace_back(L"GLOBAL_LIGHTS", L"1");
 
+			if (settings.AdvancedSettings.ShaderExecutionReordering &&
+				Renderer::GetSingleton()->SupportsFeature(nvrhi::Feature::ShaderExecutionReordering))
+			{
+				if (Renderer::GetSingleton()->IsVulkan())
+					defines.emplace_back(L"ENABLE_SER", L"1");
+#if defined(NVAPI)
+				// D3D12 goes through the NVAPI hit object API, which needs SM 6.9.
+				else if (Renderer::GetSingleton()->m_ShaderModel >= D3D_SHADER_MODEL_6_9)
+					defines.emplace_back(L"ENABLE_SER", L"1");
+#endif
+			}
+
 			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
 
@@ -45,6 +57,7 @@ namespace Util
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
 
+			defines.emplace_back(L"PATHTRACING", L"1");
 			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::PT_DISPATCH_THREADS);
 
 			defines.emplace_back(L"HAS_PREV_POSITIONS", L"1");
@@ -58,9 +71,13 @@ namespace Util
 				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_REBLUR", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_RELAX", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
 
@@ -78,6 +95,7 @@ namespace Util
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, sharc, sharcUpdate);
 
+			defines.emplace_back(L"GLOBAL_ILLUMINATION", L"1");
 			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::GI_DISPATCH_THREADS);
 
 			// No water in GI
@@ -89,10 +107,14 @@ namespace Util
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_REBLUR", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 					defines.emplace_back(L"RAW_RADIANCE", L"1");
 					defines.emplace_back(L"NRD", L"1");
 					defines.emplace_back(L"NRD_RELAX", L"1");
+					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
 			}

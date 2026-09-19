@@ -47,7 +47,8 @@ struct Properties
 		kLODLandscape = 1 << 21,
 		kLODObjects = 1 << 22,
 		kHDLODObjects = 1 << 23,
-		kSnow = 1 << 24
+		kSnow = 1 << 24,
+		kOwnEmit = 1 << 24
 	};
 
 	// Water shader flags (mirrors interop/Properties.hlsli WaterShaderFlags namespace).

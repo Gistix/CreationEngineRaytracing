@@ -152,7 +152,6 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 	auto sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 	auto* cluster = sceneGraph->GetOrCreateSegmentCluster(rawSeg, m_Owner);
 	cluster->AddMember(rawSeg);
-	sceneGraph->MarkClusterDirty(cluster);
 
 	// Copy world state from the manager (SyncSegments already cleared old segments
 	// before the visibility loop; new segments get their world state here).

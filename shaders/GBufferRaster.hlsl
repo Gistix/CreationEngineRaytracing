@@ -8,6 +8,7 @@
 #include "interop/Properties.hlsli"
 #include "interop/Instance.hlsli"
 #include "interop/Transform.hlsli"
+#include "include/Vulkan.hlsli"
 
 ConstantBuffer<CameraData>        Camera           : register(b0);
 ConstantBuffer<RaytracingData>    Raytracing       : register(b1);
@@ -17,7 +18,7 @@ struct DrawConstants
 {
     uint DrawIndex;
 };
-ConstantBuffer<DrawConstants>     Draw             : register(b3);
+VK_PUSH_CONSTANT ConstantBuffer<DrawConstants> Draw : register(b3);
 
 StructuredBuffer<Instance>        Instances        : register(t0);
 StructuredBuffer<Mesh>            Meshes           : register(t1);
@@ -34,9 +35,9 @@ ByteAddressBuffer                 Indices[]        : register(t0, space1);
 ByteAddressBuffer                 Vertices[]       : register(t0, space2);
 ByteAddressBuffer                 Materials[]      : register(t0, space3);
 Texture2D<float4>                 Textures[]       : register(t0, space4);
-TextureCube<float4>               CubeTextures[]   : register(t0, space7);
-StructuredBuffer<float4>          DynamicPositions[] : register(t0, space8);
-StructuredBuffer<float3>          PrevPositions[]    : register(t0, space6);
+VK_BINDING(5, 0) StructuredBuffer<float3> PrevPositions[]    : register(t0, space6);
+VK_BINDING(6, 0) TextureCube<float4>      CubeTextures[]     : register(t0, space7);
+VK_BINDING(7, 0) StructuredBuffer<float4> DynamicPositions[] : register(t0, space8);
 
 SamplerState                      DefaultSampler   : register(s0);
 SamplerState                      ClampSampler     : register(s1);

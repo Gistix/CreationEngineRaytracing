@@ -109,62 +109,95 @@ namespace Pass::NRD
 	void NRDIntegration::CreateBindingLayouts()
 	{
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
+		const bool isVulkan = GetRenderer()->IsVulkan();
+		const nrd::LibraryDesc& libraryDesc = *nrd::GetLibraryDesc();
 
 		nvrhi::BindingLayoutDesc globalLayoutDesc;
 		globalLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		globalLayoutDesc.registerSpace = instanceDesc.constantBufferAndSamplersSpaceIndex;
 		globalLayoutDesc.registerSpaceIsDescriptorSet = true;
+
+		if (isVulkan) {
+			globalLayoutDesc.bindingOffsets.constantBuffer = libraryDesc.spirvBindingOffsets.constantBufferOffset;
+			globalLayoutDesc.bindingOffsets.sampler = libraryDesc.spirvBindingOffsets.samplerOffset;
+		}
+
 		globalLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::ConstantBuffer(instanceDesc.constantBufferRegisterIndex),
 		};
 
-		if (instanceDesc.samplersNum > 0) {
-			auto samplers = nvrhi::BindingLayoutItem::Sampler(instanceDesc.samplersBaseRegisterIndex);
-			samplers.setSize(instanceDesc.samplersNum);
-			globalLayoutDesc.bindings.push_back(samplers);
+		if (isVulkan) {
+			for (uint32_t i = 0; i < instanceDesc.samplersNum; ++i) {
+				globalLayoutDesc.bindings.push_back(
+					nvrhi::BindingLayoutItem::Sampler(instanceDesc.samplersBaseRegisterIndex + i));
+			}
+		} else {
+			if (instanceDesc.samplersNum > 0) {
+				auto samplers = nvrhi::BindingLayoutItem::Sampler(instanceDesc.samplersBaseRegisterIndex);
+				samplers.setSize(instanceDesc.samplersNum);
+				globalLayoutDesc.bindings.push_back(samplers);
+			}
 		}
 
 		m_GlobalBindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalLayoutDesc);
+		if (!m_GlobalBindingLayout) {
+			logger::error("NRDIntegration: failed to create global binding layout!");
+		}
 
 		nvrhi::BindingLayoutDesc resourceLayoutDesc;
 		resourceLayoutDesc.visibility = nvrhi::ShaderType::Compute;
 		resourceLayoutDesc.registerSpace = instanceDesc.resourcesSpaceIndex;
 		resourceLayoutDesc.registerSpaceIsDescriptorSet = true;
 
+		if (isVulkan) {
+			resourceLayoutDesc.bindingOffsets.shaderResource = libraryDesc.spirvBindingOffsets.textureOffset;
+			resourceLayoutDesc.bindingOffsets.unorderedAccess = libraryDesc.spirvBindingOffsets.storageTextureAndBufferOffset;
+		}
+
 		const uint32_t maxTextures = GetMaxResourceCount(nrd::DescriptorType::TEXTURE);
 		const uint32_t maxStorageTextures = GetMaxResourceCount(nrd::DescriptorType::STORAGE_TEXTURE);
 
-		if (maxTextures > 0) {
-			auto textures = nvrhi::BindingLayoutItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex);
-			textures.setSize(maxTextures);
-			resourceLayoutDesc.bindings.push_back(textures);
-		}
+		if (isVulkan) {
+			for (uint32_t i = 0; i < maxTextures; ++i) {
+				resourceLayoutDesc.bindings.push_back(
+					nvrhi::BindingLayoutItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex + i));
+			}
+			for (uint32_t i = 0; i < maxStorageTextures; ++i) {
+				resourceLayoutDesc.bindings.push_back(
+					nvrhi::BindingLayoutItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex + i));
+			}
+		} else {
+			if (maxTextures > 0) {
+				auto textures = nvrhi::BindingLayoutItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex);
+				textures.setSize(maxTextures);
+				resourceLayoutDesc.bindings.push_back(textures);
+			}
 
-		if (maxStorageTextures > 0) {
-			auto storageTextures = nvrhi::BindingLayoutItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex);
-			storageTextures.setSize(maxStorageTextures);
-			resourceLayoutDesc.bindings.push_back(storageTextures);
+			if (maxStorageTextures > 0) {
+				auto storageTextures = nvrhi::BindingLayoutItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex);
+				storageTextures.setSize(maxStorageTextures);
+				resourceLayoutDesc.bindings.push_back(storageTextures);
+			}
 		}
 
 		m_ResourceBindingLayout = GetRenderer()->GetDevice()->createBindingLayout(resourceLayoutDesc);
+		if (!m_ResourceBindingLayout) {
+			logger::error("NRDIntegration: failed to create resource binding layout!");
+		}
 	}
 
 	uint32_t NRDIntegration::GetMaxResourceCount(nrd::DescriptorType type) const
 	{
+		if (!m_NRD)
+			return 0;
+
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
-		uint32_t maxCount = 0;
+		if (type == nrd::DescriptorType::TEXTURE)
+			return instanceDesc.descriptorPoolDesc.perSetTexturesMaxNum;
+		if (type == nrd::DescriptorType::STORAGE_TEXTURE)
+			return instanceDesc.descriptorPoolDesc.perSetStorageTexturesMaxNum;
 
-		for (uint32_t pipelineIndex = 0; pipelineIndex < instanceDesc.pipelinesNum; ++pipelineIndex) {
-			const nrd::PipelineDesc& pipelineDesc = instanceDesc.pipelines[pipelineIndex];
-
-			for (uint32_t rangeIndex = 0; rangeIndex < pipelineDesc.resourceRangesNum; ++rangeIndex) {
-				const nrd::ResourceRangeDesc& rangeDesc = pipelineDesc.resourceRanges[rangeIndex];
-				if (rangeDesc.descriptorType == type)
-					maxCount = eastl::max(maxCount, rangeDesc.descriptorsNum);
-			}
-		}
-
-		return maxCount;
+		return 0;
 	}
 
 	void NRDIntegration::CreatePipelines()
@@ -181,11 +214,15 @@ namespace Pass::NRD
 			pipeline.debugName = pipelineDesc.shaderIdentifier;
 
 			winrt::com_ptr<IDxcBlob> shaderBlob;
-			if (pipelineDesc.computeShaderDXIL.bytecode && pipelineDesc.computeShaderDXIL.size > 0) {
+			const auto& computeDesc = GetRenderer()->IsVulkan()
+				? pipelineDesc.computeShaderSPIRV
+				: pipelineDesc.computeShaderDXIL;
+
+			if (computeDesc.bytecode && computeDesc.size > 0) {
 				pipeline.shader = device->createShader(
 					{ nvrhi::ShaderType::Compute, pipeline.debugName.c_str(), instanceDesc.shaderEntryPoint },
-					pipelineDesc.computeShaderDXIL.bytecode,
-					size_t(pipelineDesc.computeShaderDXIL.size));
+					computeDesc.bytecode,
+					size_t(computeDesc.size));
 			}
 			else {
 				std::string shaderIdentifier = pipelineDesc.shaderIdentifier;
@@ -226,7 +263,7 @@ namespace Pass::NRD
 
 				const std::wstring shaderPath = L"extern/NRD/Shaders/" + Util::StringToWString(tokens[0]);
 				const std::wstring entryPoint = Util::StringToWString(std::string{ instanceDesc.shaderEntryPoint });
-				ShaderUtils::CompileShader(shaderBlob, shaderPath.c_str(), defines, L"cs_6_5", entryPoint.c_str());
+				ShaderUtils::CompileShader(shaderBlob, shaderPath.c_str(), defines, ShaderStage::Compute, entryPoint.c_str());
 
 				if (shaderBlob) {
 					pipeline.shader = device->createShader(
@@ -237,7 +274,8 @@ namespace Pass::NRD
 			}
 
 			if (!pipeline.shader) {
-				logger::error("NRDIntegration: failed to create shader for pipeline {}", pipelineIndex);
+				logger::error("NRDIntegration: failed to create shader for pipeline {} ('{}', isVulkan: {}, bytecodeSize: {})",
+					pipelineIndex, pipeline.debugName, GetRenderer()->IsVulkan(), computeDesc.size);
 				continue;
 			}
 
@@ -247,6 +285,9 @@ namespace Pass::NRD
 			computePipelineDesc.addBindingLayout(m_ResourceBindingLayout);
 
 			pipeline.pipeline = device->createComputePipeline(computePipelineDesc);
+			if (!pipeline.pipeline) {
+				logger::error("NRDIntegration: failed to create compute pipeline {} ('{}')", pipelineIndex, pipeline.debugName);
+			}
 		}
 	}
 
@@ -347,23 +388,38 @@ namespace Pass::NRD
 
 		const nrd::InstanceDesc& instanceDesc = *nrd::GetInstanceDesc(*m_NRD);
 
+		const bool isVulkan = GetRenderer()->IsVulkan();
+
 		nvrhi::BindingSetDesc bindingSetDesc;
 		bindingSetDesc.bindings.push_back(
 			nvrhi::BindingSetItem::ConstantBuffer(instanceDesc.constantBufferRegisterIndex, m_ConstantBuffer));
 
 		if (instanceDesc.samplersNum > 0) {
-			auto nearestSampler = nvrhi::BindingSetItem::Sampler(instanceDesc.samplersBaseRegisterIndex, m_NearestClampSampler);
-			nearestSampler.arrayElement = uint32_t(nrd::Sampler::NEAREST_CLAMP);
-			bindingSetDesc.bindings.push_back(nearestSampler);
+			if (isVulkan) {
+				bindingSetDesc.bindings.push_back(
+					nvrhi::BindingSetItem::Sampler(instanceDesc.samplersBaseRegisterIndex + uint32_t(nrd::Sampler::NEAREST_CLAMP), m_NearestClampSampler));
 
-			if (instanceDesc.samplersNum > uint32_t(nrd::Sampler::LINEAR_CLAMP)) {
-				auto linearSampler = nvrhi::BindingSetItem::Sampler(instanceDesc.samplersBaseRegisterIndex, m_LinearClampSampler);
-				linearSampler.arrayElement = uint32_t(nrd::Sampler::LINEAR_CLAMP);
-				bindingSetDesc.bindings.push_back(linearSampler);
+				if (instanceDesc.samplersNum > uint32_t(nrd::Sampler::LINEAR_CLAMP)) {
+					bindingSetDesc.bindings.push_back(
+						nvrhi::BindingSetItem::Sampler(instanceDesc.samplersBaseRegisterIndex + uint32_t(nrd::Sampler::LINEAR_CLAMP), m_LinearClampSampler));
+				}
+			} else {
+				auto nearestSampler = nvrhi::BindingSetItem::Sampler(instanceDesc.samplersBaseRegisterIndex, m_NearestClampSampler);
+				nearestSampler.arrayElement = uint32_t(nrd::Sampler::NEAREST_CLAMP);
+				bindingSetDesc.bindings.push_back(nearestSampler);
+
+				if (instanceDesc.samplersNum > uint32_t(nrd::Sampler::LINEAR_CLAMP)) {
+					auto linearSampler = nvrhi::BindingSetItem::Sampler(instanceDesc.samplersBaseRegisterIndex, m_LinearClampSampler);
+					linearSampler.arrayElement = uint32_t(nrd::Sampler::LINEAR_CLAMP);
+					bindingSetDesc.bindings.push_back(linearSampler);
+				}
 			}
 		}
 
 		m_GlobalBindingSet = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_GlobalBindingLayout);
+		if (!m_GlobalBindingSet) {
+			logger::error("NRDIntegration: failed to create global binding set!");
+		}
 	}
 
 	void NRDIntegration::SettingsChanged(const Settings& settings)
@@ -429,13 +485,7 @@ namespace Pass::NRD
 			m_ReblurSettings.lobeAngleFraction = eastl::clamp(commonSettings.lobeAngleFraction, 0.0f, 1.0f);
 			m_ReblurSettings.roughnessFraction = eastl::clamp(commonSettings.roughnessFraction, 0.0f, 1.0f);
 			m_ReblurSettings.planeDistanceSensitivity = eastl::max(reblurSettings.planeDistanceSensitivity, 0.0f);
-			m_ReblurSettings.specularProbabilityThresholdsForMvModification[0] =
-				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[0], 0.0f, 1.0f);
-			m_ReblurSettings.specularProbabilityThresholdsForMvModification[1] =
-				eastl::clamp(reblurSettings.specularProbabilityThresholdsForMvModification[1],
-					m_ReblurSettings.specularProbabilityThresholdsForMvModification[0], 1.0f);
-			m_ReblurSettings.fireflySuppressorMinRelativeScale =
-				eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
+			m_ReblurSettings.fireflySuppressorMinRelativeScale = eastl::clamp(reblurSettings.fireflySuppressorMinRelativeScale, 1.0f, 3.0f);
 			m_ReblurSettings.enableAntiFirefly = commonSettings.enableAntiFirefly;
 			m_ReblurSettings.usePrepassOnlyForSpecularMotionEstimation = reblurSettings.usePrepassOnlyForSpecularMotionEstimation;
 			m_ReblurSettings.returnHistoryLengthInsteadOfOcclusion = reblurSettings.returnHistoryLengthInsteadOfOcclusion;
@@ -647,8 +697,10 @@ namespace Pass::NRD
 				continue;
 
 			const Pipeline& pipeline = m_Pipelines[dispatchDesc.pipelineIndex];
-			if (!pipeline.pipeline)
+			if (!pipeline.pipeline) {
+				logger::warn("NRDIntegration: skipping dispatch {} ('{}') - pipeline is null", dispatchIndex, dispatchDesc.name ? dispatchDesc.name : "");
 				continue;
+			}
 
 			commandList->beginMarker(dispatchDesc.name);
 
@@ -723,20 +775,37 @@ namespace Pass::NRD
 
 			if (!cacheValid) {
 				nvrhi::BindingSetDesc resourceBindingDesc;
+				const bool isVulkan = renderer->IsVulkan();
 
 				for (uint32_t textureIndex = 0; textureIndex < srvTextures.size(); ++textureIndex) {
-					auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
-					item.arrayElement = textureIndex;
-					resourceBindingDesc.bindings.push_back(item);
+					if (isVulkan) {
+						resourceBindingDesc.bindings.push_back(
+							nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex + textureIndex, srvTextures[textureIndex]));
+					} else {
+						auto item = nvrhi::BindingSetItem::Texture_SRV(instanceDesc.resourcesBaseRegisterIndex, srvTextures[textureIndex]);
+						item.arrayElement = textureIndex;
+						resourceBindingDesc.bindings.push_back(item);
+					}
 				}
 
 				for (uint32_t storageTextureIndex = 0; storageTextureIndex < uavTextures.size(); ++storageTextureIndex) {
-					auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
-					item.arrayElement = storageTextureIndex;
-					resourceBindingDesc.bindings.push_back(item);
+					if (isVulkan) {
+						resourceBindingDesc.bindings.push_back(
+							nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex + storageTextureIndex, uavTextures[storageTextureIndex]));
+					} else {
+						auto item = nvrhi::BindingSetItem::Texture_UAV(instanceDesc.resourcesBaseRegisterIndex, uavTextures[storageTextureIndex]);
+						item.arrayElement = storageTextureIndex;
+						resourceBindingDesc.bindings.push_back(item);
+					}
 				}
 
 				cache.bindingSet = renderer->GetDevice()->createBindingSet(resourceBindingDesc, m_ResourceBindingLayout);
+				if (!cache.bindingSet) {
+					logger::error("NRDIntegration: failed to create dispatch binding set for {} (dispatch: {})",
+						dispatchDesc.name ? dispatchDesc.name : "", dispatchIndex);
+					commandList->endMarker();
+					continue;
+				}
 				cache.textures.clear();
 				cache.textures.insert(cache.textures.end(), srvTextures.begin(), srvTextures.end());
 				cache.textures.insert(cache.textures.end(), uavTextures.begin(), uavTextures.end());

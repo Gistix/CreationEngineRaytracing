@@ -88,14 +88,17 @@ namespace Pass::Raster
 		eastl::vector<DxcDefine> defines = { { L"RASTER", L"" } };
 
 		winrt::com_ptr<IDxcBlob> vertexBlob, pixelBlob;
-		ShaderUtils::CompileShader(vertexBlob, L"data/shaders/GBufferRaster.hlsl", defines, L"vs_6_5", L"MainVS");
-		ShaderUtils::CompileShader(pixelBlob, L"data/shaders/GBufferRaster.hlsl", defines, L"ps_6_5", L"MainPS");
+		ShaderUtils::CompileShader(vertexBlob, L"data/shaders/GBufferRaster.hlsl", defines, ShaderStage::Vertex, L"MainVS");
+		ShaderUtils::CompileShader(pixelBlob, L"data/shaders/GBufferRaster.hlsl", defines, ShaderStage::Pixel, L"MainPS");
+
+		if (!vertexBlob || !pixelBlob)
+			return;
 
 		m_VertexShader = device->createShader({ nvrhi::ShaderType::Vertex, "", "MainVS" }, vertexBlob->GetBufferPointer(), vertexBlob->GetBufferSize());
 		m_PixelShader = device->createShader({ nvrhi::ShaderType::Pixel, "", "MainPS" }, pixelBlob->GetBufferPointer(), pixelBlob->GetBufferSize());
 
 		winrt::com_ptr<IDxcBlob> argsBlob;
-		ShaderUtils::CompileShader(argsBlob, L"data/shaders/GBufferArgs.hlsl", {}, L"cs_6_5", L"Main");
+		ShaderUtils::CompileShader(argsBlob, L"data/shaders/GBufferArgs.hlsl", {}, ShaderStage::Compute, L"Main");
 		m_ArgsShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, argsBlob->GetBufferPointer(), argsBlob->GetBufferSize());
 
 		m_ArgsPipeline = device->createComputePipeline(

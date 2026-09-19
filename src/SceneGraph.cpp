@@ -19,7 +19,11 @@
 #include "Core/Mesh/DynamicMesh.h"
 #include "Core/Mesh/SubIndexMesh.h"
 #include "Core/Mesh/SubIndexSegmentMesh.h"
+#include "Core/Mesh/InstancedMesh.h"
+#include "Core/BLASInstanceCluster.h"
+#include "Core/ParallelTriShapeWalker.h"
 
+#include <cassert>
 #include <chrono>
 #include <numbers>
 
@@ -43,7 +47,10 @@ void SceneGraph::Initialize()
 	}
 
 
-	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer");
+	m_InstanceBuffer = Util::CreateStructuredRingBuffer<InstanceData>(device, Constants::NUM_INSTANCES_MAX, "Instance Buffer", true);
+	m_InstanceBoundBuffer = Util::CreateStructuredRingBuffer<float4>(device, Constants::NUM_INSTANCES_MAX, "Instance Bound Buffer");
+	m_InstanceLightList = Util::CreateStructuredRingBuffer<uint32_t>(device, Constants::INSTANCE_LIGHT_LIST_MAX, "Instance Light List", true);
+	m_InstanceLightCounter = Util::CreateStructuredRingBuffer<uint32_t>(device, 1, "Instance Light Counter", true);
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
 
 	m_MeshManager = eastl::make_unique<MeshManager>();
@@ -249,7 +256,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 	for (auto& [bsLight, light] : m_Lights)
 	{
 		light.m_Active = true;
-		light.m_Index = static_cast<uint8_t>(numLights);
+		light.m_Index = static_cast<uint16_t>(numLights);
 
 		auto niLight = bsLight->light.get();
 		if (!niLight)
@@ -348,6 +355,9 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 			if (flags & LightLimitFix::LightFlags::Linear)
 				lightData.Flags |= LightFlags::LinearLight;
 #endif
+
+			if (light.m_Active)
+				lightData.Flags |= LightFlags::Active;
 		}
 
 		numLights++;
@@ -363,21 +373,13 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 void SceneGraph::OnDestroy(RE::BSTriShape* bsTriShape)
 {
-	auto it = m_Meshes.find(bsTriShape);
-	if (it == m_Meshes.end())
-		return;
-
-	it->second->OnDestroy();
-
-	{
-		std::scoped_lock lock(m_MeshDestroyMutex);
-		m_DestroyedMeshes.push_back(bsTriShape);
-	}
+	std::scoped_lock lock(m_MeshDestroyMutex);
+	m_DestroyedMeshes.push_back(bsTriShape);
 }
 
 void SceneGraph::UpdateDynamicData(RE::BSDynamicTriShape* bsDynamicTriShape)
 {
-	auto it = m_Meshes.find(reinterpret_cast<RE::BSTriShape*>(bsDynamicTriShape));
+	auto it = m_Meshes.find(bsDynamicTriShape);
 	if (it == m_Meshes.end())
 		return;
 
@@ -416,18 +418,20 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	for (auto destroyedMesh: m_DestroyedMeshesSwap)
 	{
 		auto it = m_Meshes.find(destroyedMesh);
-		if (it == m_Meshes.end())
-			continue;
+		if (it != m_Meshes.end())
+		{
+			auto* mesh = it->second.get();
+			mesh->OnDestroy();
 
-		auto* mesh = it->second.get();
+			if (auto* cluster = mesh->GetCluster()) {
+				cluster->RemoveMember(mesh);
+			}
 
-		if (auto* cluster = mesh->GetCluster()) {
-			cluster->RemoveMember(mesh);
-			MarkClusterDirty(cluster);
+			m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
+			m_Meshes.erase(it);
 		}
 
-		m_PendingMeshDestroy.push_back({ eastl::move(it->second), fence });
-		m_Meshes.erase(it);
+		m_InstancedData.erase(destroyedMesh);
 	}
 
 	m_DestroyedMeshesSwap.clear();
@@ -463,37 +467,42 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	//      discover more wide fan-outs.
 	//      - Leaves reached during this serial descent are routed directly into per-worker slot 0 (no
 	//        concurrent writers since the worker tasks haven't been dispatched yet).
-	//   2. After walk returns, forkedChildren is chunked into exactly `numWorkers` partitions and each
-	//      chunk is dispatched as one thread pool task. Each task iterates its chunk calling serialWalk
-	//      (which invokes Util::Traversal::ScenegraphTriShapes) on each child, pushing results into its
-	//      exclusive per-worker slot indexed by chunkIdx+1.
-	//   3. WaitAll, then serial concat into the final flat lists.
+	//   2. After walk returns, ParallelFor claims the accumulated subtrees in blocks (dynamic load
+	//      balancing) and calls ProcessSubtree on each, pushing results into the task's own slot.
+	//   3. WaitAll (inside ParallelFor), then serial concat into the final flat lists.
 	//
-	// Why chunked instead of per-child fork: the wide NiNode in a typical Skyrim frame has ~1,254 BSFadeNode
-	// children; each child subtree contains ~2 leaves (the typical fade-pair). Forking 1,254 tasks swamps
-	// the pool with mutex-protected Enqueue/TryPop churn and net regresses vs serial. Chunking to exactly
-	// numWorkers coarse tasks (~157 subtrees each) makes the per-pool-task cost negligible relative to
-	// per-subtree work, and sidesteps the slot-collision race that fine-grained forking caused.
+	// Why not per-child fork: the wide NiNode in a typical Skyrim frame has ~1,254 BSFadeNode children;
+	// each child subtree contains ~2 leaves (the typical fade-pair). Forking 1,254 tasks swamps the pool
+	// with mutex-protected Enqueue/TryPop churn and net regresses vs serial. Claiming subtrees in blocks
+	// from a few coarse tasks preserves load balance without that churn, and each task owns its output
+	// slot, so there is no push_back race.
 	//
-	// Safety: m_Meshes.find() is concurrent-read only (the map is mutated before A by DestroyMeshes
-	// and after A by Phase C2). All NiAVObject virtual calls performed by the visitor are read-only on
-	// stable per-frame tree nodes; no NiPointer<> smart-pointer copies occur inside the visitor (it passes
-	// child.get() raw pointers), so no atomic refcount churn. The ShadowSceneNode portalGraph read is stable
-	// by the time Update() runs. Each forked chunk writes to an exclusive per-worker slot, so per-worker
-	// vectors have exactly one writer — no push_back race.
+	// Slot ownership: slot 0 is permanently owned by the serial descent above; ParallelFor tasks use
+	// slots taskIdx + 1 (1..numWorkers). One slot == one writer for the whole phase.
+	//
+	// Safety: Phase A only reads the scene tree and m_Meshes (m_Meshes.find() concurrent-read; the map
+	// is mutated before A by DestroyMeshes and after A by Phase C). No SceneGraph registry is mutated
+	// during the phase, and the scene tree / ShadowSceneNode portalGraph are stable while Update() runs.
+	// The visitor passes child.get() raw pointers (no NiPointer<> copies, so no atomic refcount churn).
+	// All per-worker output vectors have a single writer.
 	{
 		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
-		// One slot per forked chunk task (slots 1..numWorkers) plus slot 0 reserved for the main-thread
+		// One slot per ParallelFor task (slots 1..numWorkers) plus slot 0 reserved for the main-thread
 		// serial descent. Total slots = numWorkers + 1.
 		const size_t numSlots = numWorkers + 1;
 
-		m_PerWorkerUpdateList.assign(numSlots, {});
-		m_PerWorkerCreateList.assign(numSlots, {});
-		m_PerWorkerCurrentVisible.assign(numSlots, {});
-
-		for (auto& v : m_PerWorkerUpdateList) v.reserve(256);
-		for (auto& v : m_PerWorkerCreateList) v.reserve(64);
-		for (auto& v : m_PerWorkerCurrentVisible) v.reserve(256);
+		if (m_PerWorkerUpdateList.size() != numSlots) {
+			m_PerWorkerUpdateList.resize(numSlots);
+			for (auto& v : m_PerWorkerUpdateList) v.reserve(256);
+		}
+		if (m_PerWorkerCreateList.size() != numSlots) {
+			m_PerWorkerCreateList.resize(numSlots);
+			for (auto& v : m_PerWorkerCreateList) v.reserve(64);
+		}
+		if (m_PerWorkerCurrentVisible.size() != numSlots) {
+			m_PerWorkerCurrentVisible.resize(numSlots);
+			for (auto& v : m_PerWorkerCurrentVisible) v.reserve(256);
+		}
 
 		auto worldRootNode = Util::Adapter::GetWorldRootNode();
 
@@ -502,161 +511,19 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		RE::NiAVObject* firstPersonRoot = m_DrawFirstPerson ? Util::Adapter::GetFirstPerson3D(RE::PlayerCharacter::GetSingleton()) : nullptr;
 
 		// Flat accumulator of wide-NiNode children to be chunked across workers post-descent.
-		// Each entry is a (child object, propagated parentRefr) ready to be handed to serialWalk.
-		eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> forkedChildren;
+		// Each entry is a (child object, propagated parentRefr) ready to be handed to ProcessSubtree.
+		m_ForkedChildren.clear();
 
-		struct ParallelTriShapeWalker
-		{
-			SceneGraph* self;
-			eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>>* forkedChildren;
-			RE::NiAVObject* firstPersonRoot;
+		ParallelTriShapeWalker walker{ this, &m_ForkedChildren, firstPersonRoot };
+		walker.Walk(worldRootNode);
 
-			// Routes a leaf into the per-worker buffer [workerIdx].
-			void visitLeaf(RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr, size_t workerIdx)
-			{
-				if (!bsTriShape) {
-					logger::critical("[PhaseA-DBG] visitLeaf[{0}] was passed a NULL bsTriShape (refr={1:p})", workerIdx, static_cast<const void*>(refr));
-					return;
-				}
-
-				auto it = self->m_Meshes.find(bsTriShape);
-				if (it != self->m_Meshes.end()) {
-					auto mesh = it->second.get();
-					self->m_PerWorkerUpdateList[workerIdx].push_back({ mesh, refr });
-					self->m_PerWorkerCurrentVisible[workerIdx].push_back(mesh);
-				} else {
-					self->m_PerWorkerCreateList[workerIdx].push_back({ bsTriShape, refr });
-				}
-			}
-
-			// Walks a single subtree serially via the existing Util::Traversal::ScenegraphTriShapes,
-			// routing leaves into per-worker buffer [workerIdx].
-			void serialWalk(RE::NiAVObject* object, RE::TESObjectREFR* parentRefr, size_t workerIdx)
-			{
-				Util::Traversal::ScenegraphTriShapes(object, [this, workerIdx](RE::BSTriShape* bsTriShape, RE::TESObjectREFR* refr) -> CESEAdapter::RE::BSVisitControl {
-					if (!bsTriShape) {
-						logger::critical("[PhaseA-DBG] serialWalk[{0} visitor] received NULL bsTriShape from AsTriShape (object ptr inside ScenegraphTriShapes passed us null); refr={1:p}",
-						                 workerIdx, static_cast<const void*>(refr));
-						return CESEAdapter::RE::BSVisitControl::kContinue;
-					}
-					visitLeaf(bsTriShape, refr, workerIdx);
-					return CESEAdapter::RE::BSVisitControl::kContinue;
-				}, parentRefr, firstPersonRoot);
-			}
-
-			// Recursive serial descent. parentRefr is propagated to children exactly as in
-			// Util::Traversal::ScenegraphTriShapes so that BSFadeNode ownership resolves identically.
-			// When we hit a wide NiNode we record its children in forkedChildren instead of recursing.
-			void walk(RE::NiAVObject* object, RE::TESObjectREFR* parentRefr = nullptr)
-			{
-				if (!object)
-					return;
-
-				const bool isVisibleFP = (object == firstPersonRoot);
-				if (!isVisibleFP && Util::Adapter::IsNiAVObjectHidden(object))
-					return;
-
-				if (auto geom = Util::Adapter::AsTriShape(object)) {
-					// Leaves reached during the serial descent route to slot 0 (no concurrent writers;
-					// the worker tasks haven't been dispatched yet).
-					visitLeaf(geom, parentRefr, 0);
-					return;
-				}
-
-				auto rtti = object->GetRTTI();
-				if (rtti == Constants::rtti::NiBillboardNode.get() || rtti == Constants::rtti::BSOrderedNode.get())
-					return;
-
-				auto node = Util::Adapter::AsNode(object);
-				if (!node)
-					return;
-
-				auto& children = Util::Adapter::GetChildren(node);
-
-				if (auto* switchNode = Util::Adapter::AsSwitchNode(node)) {
-					auto index = static_cast<uint16_t>(switchNode->index);
-					auto childAt = Util::Adapter::GetChildAt(node, index);
-					if (childAt)
-						walk(childAt, parentRefr);
-					return;
-				}
-
-				// Resolve refr for this node, mirroring ScenegraphTriShapes.
-				auto refr = parentRefr;
-				if (rtti == Constants::rtti::BSFadeNode.get()) {
-					if (auto owner = Util::Adapter::GetOwner(object))
-						refr = owner;
-				}
-
-				// ShadowSceneNode: collect portalGraph->alwaysRenderChildren (nodes outside the regular
-				// scene graph that are nonetheless rendered this frame). We visit them in addition to the
-				// regular children, matching ScenegraphTriShapes behavior.
-				eastl::vector<RE::NiAVObject*> portalChildren;
-				if (rtti == Constants::rtti::ShadowSceneNode.get()) {
-					Util::Adapter::GetAlwaysRenderChildren(node, portalChildren);
-				}
-
-				if (children.size() >= Constants::ParallelTraversalFanoutThreshold) {
-					// Wide fan-out: record children for post-descent chunked parallel processing instead
-					// of recursing. This is the deliberate granularity decision: forking 1:1 per child
-					// (1,254 tasks in a typical frame) swamps the pool with mutex overhead; chunking here
-					// keeps total pool tasks at exactly numWorkers, matching the existing Phase B pattern.
-					for (auto& child : children)
-						if (child)
-							forkedChildren->push_back({ child.get(), refr });
-					for (auto* child : portalChildren)
-						forkedChildren->push_back({ child, refr });
-				} else {
-					for (auto& child : children) {
-						if (child)
-							walk(child.get(), refr);
-					}
-					for (auto* child : portalChildren)
-						walk(child, refr);
-				}
-			}
-		} walker{ this, &forkedChildren, firstPersonRoot };
-
-		walker.walk(worldRootNode);
-
-		// Dispatch the accumulated wide-fan-out children as exactly numWorkers chunked tasks. Each task
-		// iterates its chunk calling serialWalk on each subtree; per-worker output slot is chunkIdx+1
-		// (slot 0 is reserved for the main-thread walk above).
-		const size_t totalForked = forkedChildren.size();
-		if (totalForked > 0) {
-			const size_t chunkSize = (totalForked + numWorkers - 1) / numWorkers;
-			for (size_t chunkIdx = 0; chunkIdx < numWorkers; ++chunkIdx) {
-				const size_t start = chunkIdx * chunkSize;
-				const size_t end = std::min(start + chunkSize, totalForked);
-				if (start >= end)
-					continue;
-
-				const size_t workerIdx = chunkIdx + 1; // slots 1..numWorkers
-
-				m_ThreadPool->Enqueue([&, start, end, workerIdx]() {
-					for (size_t i = start; i < end; ++i) {
-						auto& [child, refr] = forkedChildren[i];
-						walker.serialWalk(child, refr, workerIdx);
-					}
-				});
-			}
-
-			// Drain all chunked tasks before concatenating per-worker output.
-			m_ThreadPool->WaitAll();
-		}
-
-		// [PhaseA-DBG] Inspect per-worker output for null bsTriShape entries that somehow landed in the
-		// create list. We log the slot, the index within the slot, and the paired refr so we can later
-		// match the source in the visitor log above.
-		for (size_t slot = 0; slot < m_PerWorkerCreateList.size(); ++slot) {
-			const auto& w = m_PerWorkerCreateList[slot];
-			for (size_t i = 0; i < w.size(); ++i) {
-				if (!w[i].first) {
-					logger::critical("[PhaseA-DBG] concat: m_PerWorkerCreateList[{0}][{1}] has NULL bsTriShape; refr={2:p}",
-					                 slot, i, static_cast<const void*>(w[i].second));
-				}
-			}
-		}
+		// Traversal cost per subtree varies, so use a small grain. Output slot = taskIdx + 1 (slot 0
+		// reserved for the serial walk above).
+		const size_t totalForked = m_ForkedChildren.size();
+		m_ThreadPool->ParallelFor(totalForked, 16, [&](size_t taskIdx, size_t i) {
+			auto& [child, refr] = m_ForkedChildren[i];
+			walker.ProcessSubtree(child, refr, taskIdx + 1);
+		});
 
 		// Serial concat into the final flat lists, preserving within-worker DFS order. Phase B/D/G are all
 		// order-independent so worker concatenation order does not affect correctness.
@@ -680,7 +547,8 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	// Phase B + C1 (parallel): Update known meshes AND filter new meshes via thread pool
+	// Phase B (parallel): update known meshes AND filter new meshes via thread pool (the former C1
+	// candidate filtering is folded into this phase)
 	{
 		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
 		const size_t totalWork = m_UpdateList.size();
@@ -697,12 +565,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (ownerChanged || !cluster) {
 					if (cluster) {
 						cluster->RemoveMember(mesh);
-						MarkClusterDirty(cluster);
 					}
 
 					cluster = GetOrCreateCluster(refr, mesh->GetTriShape());
 					cluster->AddMember(mesh);
-					MarkClusterDirty(cluster);
 				}
 			}
 
@@ -711,17 +577,18 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			mesh->CommitDirtyFlags();
 		};
 
+		const auto& settings = Scene::GetSingleton()->m_Settings;
+		const bool renderTreeLOD = settings.ExperimentalSettings.RenderTreeLOD;
+		const bool allowInstancedTriShape = renderTreeLOD;
+
 		auto doFilter = [&](size_t start, size_t end, eastl::vector<MeshCreateCandidate>& out) {
 			for (size_t i = start; i < end; ++i) {
 				auto& [bsTriShape, refr] = m_CreateList[i];
 
-				if (!bsTriShape) {
-					logger::critical("[PhaseB-DBG] doFilter[{0},{1}) at i={2} found NULL bsTriShape; refr={3:p}; m_CreateList.size()={4}",
-					                 start, end, i, static_cast<const void*>(refr), m_CreateList.size());
+				if (!bsTriShape)
 					continue;
-				}
 
-				if (!Util::Adapter::IsValidTriShape(bsTriShape))
+				if (!Util::Adapter::IsValidTriShape(bsTriShape, allowInstancedTriShape))
 					continue;
 
 				const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
@@ -729,34 +596,44 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!shaderProperty)
 					continue;
 
-				const auto materialType = static_cast<uint32_t>(shaderProperty->GetMaterialType());
-				const bool isLightingShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kLighting));
-				const bool isEffectShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kEffect));
-				const bool isWaterShader = (materialType == static_cast<uint32_t>(RE::BSShaderMaterial::Type::kWater));
+				const auto materialType = static_cast<RE::BSShaderMaterial::Type>(shaderProperty->GetMaterialType());
 
+				const bool isBase = (materialType == RE::BSShaderMaterial::Type::kBase);
+				const bool isLightingShader = (materialType == RE::BSShaderMaterial::Type::kLighting);
+				const bool isEffectShader = (materialType == RE::BSShaderMaterial::Type::kEffect);
+				const bool isWaterShader = (materialType == RE::BSShaderMaterial::Type::kWater);
+
+				// Skip alpha blended effects (particles and effects)
 				auto* alphaProperty = geometryData.alphaProperty;
-				const bool isAlphaBlend = Util::Adapter::GetAlphaBlending(alphaProperty);
-				const bool validEffect = isEffectShader && !isAlphaBlend;
+				const bool isAlphaBlend = alphaProperty && Util::Adapter::GetAlphaBlending(alphaProperty);
+				bool validEffect = isEffectShader && !isAlphaBlend;
 
+#if defined(FALLOUT4)
+				// Glass
+				validEffect |= isEffectShader && shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kEnvMap);
+#endif
+
+#if defined(SKYRIM)
 				// Exclude procedural and displacement water
 				if (isWaterShader) {
-#if defined(SKYRIM)
 					auto waterShaderProperty = reinterpret_cast<RE::BSWaterShaderProperty*>(shaderProperty);
 					const auto waterFlags = waterShaderProperty->waterFlags.underlying();
 
 					if (waterFlags & WaterFlags::kProcedural || waterFlags & WaterFlags::kDisplacement)
 						continue;
-#endif
 				}
+#endif
 
-				if (!isLightingShader && !validEffect && !isWaterShader)
+				// Let base pass, we'll filter below
+				if (!isBase && !isLightingShader && !validEffect && !isWaterShader)
 					continue;
 
-				// Exclude tree lod and grass for now
-				const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
-				if (shaderPropertyRTTI == Constants::rtti::BSDistantTreeShaderProperty.get() ||
-				    shaderPropertyRTTI == Constants::rtti::BSGrassShaderProperty.get())
-					continue;
+				if (isBase) {
+					// We're only interested in Tree LOD
+					const auto shaderPropertyRTTI = shaderProperty->GetRTTI();
+					if (shaderPropertyRTTI != Constants::rtti::BSDistantTreeShaderProperty.get())
+						continue;
+				}
 
 				if (Util::Geometry::IsBlocklisted(bsTriShape->name.c_str()))
 					continue;
@@ -780,40 +657,20 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		for (auto& candidates : m_PerWorkerCreateCandidates)
 			candidates.clear();
 
-		bool anyDispatched = false;
-
 		if (totalWork > 0) {
-			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
-
-			for (size_t start = 0; start < totalWork; start += chunkSize) {
-				size_t end = std::min(start + chunkSize, totalWork);
-
-				m_ThreadPool->Enqueue([&, start, end]() {
-					for (size_t i = start; i < end; ++i)
-						doUpdate(m_UpdateList[i]);
-				});
-			}
-
-			anyDispatched = true;
+			// Mesh work is roughly uniform per item, so a moderate grain is fine.
+			m_ThreadPool->ParallelFor(totalWork, 32, [&](size_t, size_t i) {
+				doUpdate(m_UpdateList[i]);
+			});
 		}
 
 		if (totalCreate > 0) {
-			const size_t chunkSize = (totalCreate + numWorkers - 1) / numWorkers;
-
-			for (size_t start = 0; start < totalCreate; start += chunkSize) {
-				size_t end = std::min(start + chunkSize, totalCreate);
-				const size_t idx = start / chunkSize;
-
-				m_ThreadPool->Enqueue([&, start, end, idx]() {
-					doFilter(start, end, m_PerWorkerCreateCandidates[idx]);
-				});
-			}
-
-			anyDispatched = true;
+			// Each task owns one candidate slot (single writer per slot); taskIdx is a scratch-slot
+			// index, not a range of inputs.
+			m_ThreadPool->ParallelFor(totalCreate, 32, [&](size_t taskIdx, size_t i) {
+				doFilter(i, i + 1, m_PerWorkerCreateCandidates[taskIdx]);
+			});
 		}
-
-		if (anyDispatched)
-			m_ThreadPool->WaitAll();
 
 		m_CreateCandidates.reserve(m_CreateList.size());
 		for (auto& wc : m_PerWorkerCreateCandidates)
@@ -826,7 +683,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	// Phase C2 (serial): GPU resource creation for validated candidates
+	// Phase C (serial): GPU resource creation for validated candidates
 	for (auto& [bsTriShape, refr] : m_CreateCandidates) {
 		if (auto created = BaseMesh::Create(bsTriShape, commandList)) {
 			created->SetOwner(refr);
@@ -839,7 +696,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 				if (!mesh->AsSubIndexMesh()) {
 					auto* cluster = GetOrCreateCluster(refr, bsTriShape);
 					cluster->AddMember(mesh);
-					MarkClusterDirty(cluster);
 				}
 
 				mesh->SetLastVisitedFrame(frameIndex);
@@ -852,7 +708,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 	if (timings) {
 		const auto nowTp = std::chrono::high_resolution_clock::now();
-		m_UpdateTimings.push_back({"SG::PhaseC2-Create", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
+		m_UpdateTimings.push_back({"SG::PhaseC-Create", 0.0f, std::chrono::duration<float, std::milli>(nowTp - phaseStart).count()});
 		phaseStart = nowTp;
 	}
 
@@ -863,7 +719,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 
 			if (auto* cluster = mesh->GetCluster()) {
 				cluster->RemoveMember(mesh);
-				MarkClusterDirty(cluster);
 			}
 
 			mesh->CommitDirtyFlags();
@@ -891,7 +746,6 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 	auto removeEmptyClusters = [this](auto& clusters) {
 		for (auto it = clusters.begin(); it != clusters.end(); ) {
 			if (it->second->Empty()) {
-				m_DirtyClusters.erase(it->second.get());
 				it = clusters.erase(it);
 			} else {
 				++it;
@@ -908,7 +762,9 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		phaseStart = nowTp;
 	}
 
-	// Phase G (parallel): each cluster atomically reserves its own offsets in MeshData / InstanceData.
+	// Phase G (parallel): per-cluster counts, a serial prefix-sum to assign offsets, then a parallel
+	// fill of the remap/instance data. No global lock is needed: offsets are assigned on the main
+	// thread between two lock-free parallel passes.
 	{
 		m_AllClusters.clear();
 		m_AllClusters.reserve(
@@ -925,76 +781,105 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		for (auto& [_, cluster] : m_SubIndexSegmentClusters)
 			m_AllClusters.push_back(cluster.get());
 
-		m_NumMeshes = 0;
-		m_NumInstances = 0;
-		bool reportedMeshLimit = false;
-		bool reportedInstanceLimit = false;
-
-		const size_t numWorkers = std::max<size_t>(1, m_ThreadPool->GetThreadCount());
 		const size_t totalWork = m_AllClusters.size();
+		m_ClusterWork.resize(totalWork);
 
 		if (totalWork > 0) {
-			const size_t chunkSize = (totalWork + numWorkers - 1) / numWorkers;
+			// Pass 1 (parallel): each cluster computes its counts (transform/light data, desc counts).
+			// cluster->Update() runs concurrently for distinct clusters; it may only touch cluster-local
+			// state and thread-safe managers (see the contract on BLASCluster::Update()).
+			m_ThreadPool->ParallelFor(totalWork, 32, [&](size_t, size_t i) {
+				auto* cluster = m_AllClusters[i];
+				auto& work = m_ClusterWork[i];
+				work.meshCount = cluster->Update();
+				work.instanceCount = work.meshCount ? cluster->GetInstanceCount() : 0;
+			});
 
-			for (size_t start = 0; start < totalWork; start += chunkSize) {
-				size_t end = std::min(start + chunkSize, totalWork);
+			// Pass 2 (serial): prefix-sum assigns each valid cluster its mesh/instance base offsets.
+			m_NumMeshes = 0;
+			m_NumInstances = 0;
+			bool reportedMeshLimit = false;
+			bool reportedInstanceLimit = false;
 
-				m_ThreadPool->Enqueue([&, start, end]() {
-					for (size_t i = start; i < end; ++i) {
-						auto& cluster = m_AllClusters[i];
+			for (size_t i = 0; i < totalWork; ++i) {
+				auto* cluster = m_AllClusters[i];
+				auto& work = m_ClusterWork[i];
+				const uint32_t meshCount = work.meshCount;
+				const uint32_t instCount = work.instanceCount;
 
-						const uint32_t meshCount = cluster->Update();
+				if (meshCount == 0 || instCount == 0) {
+					work.firstMesh = UINT32_MAX;
+					work.firstInstance = UINT32_MAX;
+					continue;
+				}
 
-						if (meshCount == 0)
-							continue;
-
-						// Acdquire indices and advance counts atomically
-						uint32_t firstMesh = 0;
-						uint32_t instanceIndex = 0;
-						{
-							std::scoped_lock mutex(m_BLASClusterUpdateMutex);
-
-							if (m_NumMeshes + meshCount > Constants::NUM_MESHES_MAX) {
-								cluster->SetValid(false);
-								if (!reportedMeshLimit) {
-									logger::critical("SceneGraph::Update - Mesh capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_MESHES_MAX, meshCount);
-									reportedMeshLimit = true;
-								}
-								continue;
-							}
-
-							if (m_NumInstances + 1 > Constants::NUM_INSTANCES_MAX) {
-								cluster->SetValid(false);
-								if (!reportedInstanceLimit) {
-									logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_INSTANCES_MAX, meshCount);
-									reportedInstanceLimit = true;
-								}
-								continue;
-							}
-
-							firstMesh = m_NumMeshes;
-							m_NumMeshes += meshCount;
-
-							instanceIndex = m_NumInstances++;
-						}
-
-						// Write remap entries: packed (instanceID << 16) | geometrySlot into the ByteAddress remap buffer
-						const auto& geometrySlots = cluster->GetGeometrySlots();
-						for (uint32_t j = 0; j < meshCount; j++) {
-							const uint32_t remapIdx = firstMesh + j;
-							m_MeshSlotRemapData[remapIdx] = static_cast<uint32_t>(geometrySlots[j]) | (instanceIndex << 16);
-						}
-
-						// Set Instance Index
-						cluster->SetInstanceIndex(instanceIndex);
-
-						// Update Instance Data
-						cluster->WriteInstanceData(firstMesh, meshCount, m_InstanceData[instanceIndex]);
+				if (m_NumMeshes + meshCount > Constants::NUM_MESHES_MAX) {
+					cluster->SetValid(false);
+					if (!reportedMeshLimit) {
+						logger::critical("SceneGraph::Update - Mesh capacity ({}) reached; omitting a cluster with {} mesh entries.", Constants::NUM_MESHES_MAX, meshCount);
+						reportedMeshLimit = true;
 					}
-				});
+					work.firstMesh = UINT32_MAX;
+					work.firstInstance = UINT32_MAX;
+					continue;
+				}
+
+				if (m_NumInstances + instCount > Constants::NUM_INSTANCES_MAX) {
+					cluster->SetValid(false);
+					if (!reportedInstanceLimit) {
+						logger::critical("SceneGraph::Update - Instance capacity ({}) reached; omitting a cluster with {} instances.", Constants::NUM_INSTANCES_MAX, instCount);
+						reportedInstanceLimit = true;
+					}
+					work.firstMesh = UINT32_MAX;
+					work.firstInstance = UINT32_MAX;
+					continue;
+				}
+
+				work.firstMesh = m_NumMeshes;
+				work.firstInstance = m_NumInstances;
+				m_NumMeshes += meshCount;
+				m_NumInstances += instCount;
 			}
 
-			m_ThreadPool->WaitAll();
+#if !defined(NDEBUG)
+			// Debug: assigned ranges must be contiguous, non-overlapping, and cover the totals exactly.
+			// This is the invariant that replaced the reservation mutex, so make it easy to diagnose.
+			{
+				uint32_t meshCursor = 0;
+				uint32_t instCursor = 0;
+				for (const auto& w : m_ClusterWork) {
+					if (w.firstMesh == UINT32_MAX)
+						continue;
+					assert(w.firstMesh == meshCursor);
+					assert(w.firstInstance == instCursor);
+					meshCursor += w.meshCount;
+					instCursor += w.instanceCount;
+				}
+				assert(meshCursor == m_NumMeshes);
+				assert(instCursor == m_NumInstances);
+			}
+#endif
+
+			// Pass 3 (parallel): write remap entries and instance data into the disjoint assigned ranges.
+			m_ThreadPool->ParallelFor(totalWork, 32, [&](size_t, size_t i) {
+				auto& work = m_ClusterWork[i];
+				if (work.firstMesh == UINT32_MAX)
+					return;
+
+				auto* cluster = m_AllClusters[i];
+				const uint32_t meshCount = work.meshCount;
+				const uint32_t instanceIndex = work.firstInstance;
+
+				// Write remap entries: packed (instanceID << 16) | geometrySlot into the ByteAddress remap buffer
+				const auto& geometrySlots = cluster->GetGeometrySlots();
+				for (uint32_t j = 0; j < meshCount; j++) {
+					const uint32_t remapIdx = work.firstMesh + j;
+					m_MeshSlotRemapData[remapIdx] = static_cast<uint32_t>(geometrySlots[j]) | (instanceIndex << 16);
+				}
+
+				cluster->SetInstanceIndex(instanceIndex);
+				cluster->WriteInstanceData(work.firstMesh, meshCount, &m_InstanceData[instanceIndex], &m_InstanceBounds[instanceIndex]);
+			});
 		}
 	}
 
@@ -1009,8 +894,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(m_MeshSlotRemapBuffer.current(), m_MeshSlotRemapData.data(), m_NumMeshes * 4ull, 0);
 	}
 
-	if (m_NumInstances > 0)
+	if (m_NumInstances > 0) {
 		commandList->writeBuffer(GetInstanceBuffer(), m_InstanceData.data(), m_NumInstances * sizeof(InstanceData));
+		commandList->writeBuffer(GetInstanceBoundBuffer(), m_InstanceBounds.data(), m_NumInstances * sizeof(float4));
+	}
 
 	m_MeshManager->Flush(commandList);
 
@@ -1021,6 +908,10 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 		const auto totalEnd = std::chrono::high_resolution_clock::now();
 		m_UpdateTimings.push_back({"SG::Total", 0.0f, std::chrono::duration<float, std::milli>(totalEnd - updateStart).count()});
 	}
+
+#if defined(FALLOUT4)
+	logger::info("Cluster: {}, Orphan Clusters: {}, SubIndexSegment Clusters: {}", m_OwnerClusters.size(), m_OrphanClusters.size(), m_SubIndexSegmentClusters.size());
+#endif
 }
 
 bool SceneGraph::TryMaintenanceRebuild(uint64_t frameIndex)
@@ -1043,24 +934,31 @@ BLASCluster* SceneGraph::GetOrCreateClusterImpl(Map& a_map, std::shared_mutex& a
 {
 	{
 		std::shared_lock lock(a_mutex);
+
 		auto it = a_map.find(a_key);
+
 		if (it != a_map.end())
 			return it->second.get();
 	}
 
 	BLASCluster* result = nullptr;
-	bool didInsert = false;
 	{
 		std::unique_lock lock(a_mutex);
-		auto [it, inserted] = a_map.try_emplace(a_key, nullptr);
-		if (inserted)
-			it->second = eastl::make_unique<BLASCluster>(a_owner);
-		result = it->second.get();
-		didInsert = inserted;
-	} // exclusive lock released here
 
-	if (didInsert)
-		MarkClusterDirty(result); // separate mutex, safe outside the cluster lock
+		auto [it, inserted] = a_map.try_emplace(a_key, nullptr);
+
+		if (inserted) {
+			if constexpr (std::is_same_v<Key, RE::BSTriShape*>) {
+				if (Util::Adapter::AsMultiStreamInstanceTriShape(a_key))
+					it->second = eastl::make_unique<BLASInstanceCluster>(a_owner);
+				else
+					it->second = eastl::make_unique<BLASCluster>(a_owner);
+			} else
+				it->second = eastl::make_unique<BLASCluster>(a_owner);
+		}
+
+		result = it->second.get();
+	}
 
 	return result;
 }
@@ -1096,22 +994,15 @@ BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment,
 	return result;
 }
 
-void SceneGraph::MarkClusterDirty(BLASCluster* cluster)
-{
-	if (!cluster) 
-		return;
-
-	std::scoped_lock lock(m_ClusterDirtyMutex);
-	m_DirtyClusters.emplace(cluster);
-}
-
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 {
-	// Process only clusters that were marked dirty.
-	for (auto* cluster : m_DirtyClusters)
-		cluster->BuildUpdate(commandList, this);
-	
-	m_DirtyClusters.clear();
+	// Visit every cluster with pending dirty flags. Flags are set on membership changes (Mesh) and
+	// mesh flag commits, and only cleared inside BuildUpdate - so non-None always means a build is
+	// needed. m_AllClusters was rebuilt in Phase G after empty clusters were dropped. The scan runs
+	// on the render thread after Phase WaitAll, so flags are not being written.
+	for (auto* cluster : m_AllClusters)
+		if (cluster->m_DirtyFlags != DirtyFlags::None)
+			cluster->BuildUpdate(commandList, this);
 }
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
@@ -1140,4 +1031,69 @@ uint32_t SceneGraph::AllocateGeometryIndex()
 void SceneGraph::WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform)
 {
 	m_MeshManager->WriteTransformData(index, transform, prevTransform);
+}
+
+InstancedData* SceneGraph::GetOrCreateInstancedData(RE::BSTriShape* a_geometry)
+{
+	auto& entry = m_InstancedData[a_geometry];
+	if (!entry)
+		entry = eastl::make_unique<InstancedData>();
+	return entry.get();
+}
+
+void SceneGraph::UpdateInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_count, const void* a_data, uint32_t a_strideBytes)
+{
+	auto* data = GetOrCreateInstancedData(a_geometry);
+
+	eastl::vector<InstancedData::Instance> parsed;
+	if (a_data && a_count > 0 && a_strideBytes > 0)
+	{
+		parsed.reserve(a_count);
+
+		for (uint32_t i = 0; i < a_count; ++i)
+		{
+			const auto* instance = static_cast<const uint8_t*>(a_data) + static_cast<size_t>(i) * a_strideBytes;
+
+			half3 position;
+			std::memcpy(&position, instance + 0, sizeof(half3));
+
+			half scale;
+			std::memcpy(&scale, instance + 6, sizeof(half));
+
+			half cosZ;
+			std::memcpy(&cosZ, instance + 8, sizeof(half));
+
+			half sinZ;
+			std::memcpy(&sinZ, instance + 10, sizeof(half));
+
+			half alpha;
+			std::memcpy(&alpha, instance + 12, sizeof(half));
+
+			parsed.push_back({
+				float3(static_cast<float>(position.x), static_cast<float>(position.y), static_cast<float>(position.z)),
+				static_cast<float>(scale),
+				static_cast<float>(cosZ),
+				static_cast<float>(sinZ),
+				static_cast<float>(alpha)
+			});
+		}
+	}
+
+	if (parsed != data->instances)
+	{
+		data->instances = eastl::move(parsed);
+		data->changed = true;
+	}
+}
+
+void SceneGraph::ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry)
+{
+	auto it = m_InstancedData.find(a_geometry);
+	if (it == m_InstancedData.end())
+		return;
+
+	// Keep the entry allocated: the owning InstancedMesh holds a raw pointer to it. Clearing the
+	// vector and flagging the change lets the mesh rebuild to empty on its next Update.
+	it->second->instances.clear();
+	it->second->changed = true;
 }

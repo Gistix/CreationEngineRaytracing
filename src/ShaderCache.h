@@ -3,26 +3,25 @@
 #include <dxcapi.h>
 
 #include "Types/ShaderDefine.h"
+#include "Types/ShaderStage.h"
 
 namespace ShaderCache
 {
-	struct ShaderKey {
-		eastl::wstring filePath; 
-		eastl::vector<ShaderDefine> defines; 
+	struct ShaderKey
+	{
+		eastl::wstring filePath;
 		eastl::wstring target;
 		eastl::wstring entryPoint;
-		bool isVulkan = false;
+		bool isVulkan;
+		eastl::vector<ShaderDefine> defines;
 
-		ShaderKey(const wchar_t* a_filePath, eastl::vector<DxcDefine> a_defines, const wchar_t* a_target, const wchar_t* a_entryPoint, bool a_isVulkan = false) 
-			: filePath(a_filePath), target(a_target), entryPoint(a_entryPoint), isVulkan(a_isVulkan)
+		ShaderKey(const wchar_t* fp, const eastl::vector<DxcDefine>& a_defines, const wchar_t* tgt, const wchar_t* ep, bool vk)
+			: filePath(fp), target(tgt), entryPoint(ep), isVulkan(vk)
 		{
 			defines.reserve(a_defines.size());
-
-			for (auto& define: a_defines)
-			{
-				defines.emplace_back(define.Name, define.Value);
+			for (auto& define : a_defines) {
+				defines.emplace_back(define.Name ? define.Name : L"", define.Value ? define.Value : L"");
 			}
-
 			eastl::sort(defines.begin(), defines.end(), [](const auto& a, const auto& b) {
 				return a.name < b.name;
 			});
@@ -63,5 +62,6 @@ namespace ShaderCache
 		}
 	};
 
-	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* FilePath, eastl::vector<DxcDefine> defines = {}, const wchar_t* Target = L"lib_6_5", const wchar_t* EntryPoint = L"Main");
+	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* FilePath, eastl::vector<DxcDefine> defines = {}, ShaderStage stage = ShaderStage::Library, const wchar_t* EntryPoint = L"Main");
+	winrt::com_ptr<IDxcBlob> GetShader(const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint = L"Main");
 };

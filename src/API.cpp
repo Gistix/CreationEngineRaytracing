@@ -3,14 +3,15 @@
 #include "Renderer.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
 
-bool InitializeRenderer(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
+bool InitializeRenderer(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
-	return Renderer::GetSingleton()->Initialize(d3d11Device, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue);
+	return Renderer::GetSingleton()->Initialize(rendererSettings, d3d11Device, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue);
 }
 
-bool InitializeVulkanRenderer(void* instance, void* physicalDevice, void* device, void* graphicsQueue, int graphicsQueueIndex, void* transferQueue, int transferQueueIndex, void* computeQueue, int computeQueueIndex)
+bool InitializeVulkanRenderer(RendererSettings* rendererSettings, void* instance, void* physicalDevice, void* device, void* graphicsQueue, int graphicsQueueIndex, void* transferQueue, int transferQueueIndex, void* computeQueue, int computeQueueIndex)
 {
 	return Renderer::GetSingleton()->Initialize(
+		rendererSettings,
 		reinterpret_cast<VkInstance>(instance),
 		reinterpret_cast<VkPhysicalDevice>(physicalDevice), reinterpret_cast<VkDevice>(device),
 		reinterpret_cast<VkQueue>(graphicsQueue), graphicsQueueIndex,
@@ -59,19 +60,19 @@ void UpdateFeatureData(void* data, uint32_t size)
 	scene->UpdateFeatureData(data, size);
 }
 
-void SetSkyHemisphere(ID3D12Resource* skyHemi)
+void SetSkyHemisphere(void* skyHemi)
 {
 	auto* scene = Scene::GetSingleton();
 	scene->SetSkyHemisphere(skyHemi);
 }
 
-void SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
+void SetSkinDetailNormal(void* skinDetailNormal)
 {
 	auto* scene = Scene::GetSingleton();
 	scene->SetSkinDetailNormal(skinDetailNormal);
 }
 
-void SetWaterFlowMap(ID3D12Resource* waterFlowMap)
+void SetWaterFlowMap(void* waterFlowMap)
 {
 	auto* scene = Scene::GetSingleton();
 	scene->SetWaterFlowMap(waterFlowMap);
@@ -98,20 +99,31 @@ void UpdateSettings(Settings settings)
 	scene->UpdateSettings(settings);
 }
 
-void GetRRInput(ID3D12Resource*& specularAlbedo, ID3D12Resource*& specularHitDistance)
+void GetRRInput(void*& diffuseAlbedo, void*& specularAlbedo, void*& specularHitDistance)
 {
-	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
-	specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
-	specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+	auto* renderer = Renderer::GetSingleton();
+	auto& textureManager = renderer->RenderTargetManager();
+
+	if (renderer->IsVulkan()) {
+		// DXVK interop path: hand back the D3D11 shared textures the host wraps into VkImages.
+		const uint32_t slot = renderer->GetCurrentSlot();
+		diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo, slot).shared;
+		specularAlbedo = textureManager.GetSharedTexture(RenderTarget::RRSpecularAlbedo, slot).shared;
+		specularHitDistance = textureManager.GetSharedTexture(RenderTarget::RRSpecularHitDist, slot).shared;
+	} else {
+		diffuseAlbedo = textureManager.GetTexture(RenderTarget::DiffuseAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		specularHitDistance = textureManager.GetTexture(RenderTarget::RRSpecularHitDist)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+	}
 }
 
-void SetSharedTextures(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao)
+void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao)
 {
 	auto* renderer = Renderer::GetSingleton();
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
 }
 
-void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main, SharedTexture* diffuseAlbedo)
+void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
 
@@ -119,7 +131,6 @@ void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, Shared
 		depth[i] = textureManager.GetSharedTexture(RenderTarget::ClipDepth, i);
 		motionVector[i] = textureManager.GetSharedTexture(RenderTarget::MotionVectors3D, i);
 		main[i] = textureManager.GetSharedTexture(RenderTarget::Main, i);
-		diffuseAlbedo[i] = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo, i);
 	}
 }
 
@@ -150,4 +161,9 @@ uint64_t GetFakeDoubledVRAMUsage()
 		return 0;
 
 	return textureManager->GetFakeDoubledVRAMUsage();
+}
+
+void ReloadShaders()
+{
+	Scene::GetSingleton()->ReloadShaders();
 }

@@ -26,37 +26,52 @@
 #include <eastl/array.h>
 #include <eastl/vector_set.h>
 #include <eastl/unordered_set.h>
+#include <ankerl/unordered_dense.h>
 
 #include "Types/PassTiming.h"
+#include "Types/InstancedData.h"
 
 #include <shared_mutex>
 
 class LandLODMesh;
 class SubIndexSegmentMesh;
+class ParallelTriShapeWalker;
 
 class SceneGraph
 {
+	friend class ParallelTriShapeWalker;
+
 	RE::NiCamera* m_Camera = nullptr;
 	bool m_DrawFirstPerson = false;
 	RE::NiPoint3 m_FirstPersonPosition = Util::Adapter::GetNiPoint3Zero();
 
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_Meshes;
+	ankerl::unordered_dense::map<RE::BSTriShape*, eastl::unique_ptr<BaseMesh>> m_Meshes;
 	eastl::vector<BaseMesh*> m_CurrentVisible;
 	eastl::vector<BaseMesh*> m_PreviousVisible;
 
 	// One BLAS instance per owner reference
-	eastl::unordered_map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
+	ankerl::unordered_dense::map<RE::TESObjectREFR*, eastl::unique_ptr<BLASCluster>> m_OwnerClusters;
 
 	// Meshes without an owner get a degenerate per-mesh cluster
-	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
+	ankerl::unordered_dense::map<RE::BSTriShape*, eastl::unique_ptr<BLASCluster>> m_OrphanClusters;
 
 	// One BLAS instance per SubIndexMesh segment
 	// Each SubIndexSegmentMesh lives in its own cluster so it gets its own BLAS
-	eastl::unordered_map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
+	ankerl::unordered_dense::map<SubIndexSegmentMesh*, eastl::unique_ptr<BLASCluster>> m_SubIndexSegmentClusters;
 
 	eastl::vector<BLASCluster*> m_AllClusters;
 
-	std::mutex m_BLASClusterUpdateMutex;
+	// Phase G scratch (sized to m_AllClusters each frame): one entry per cluster with its counts and
+	// assigned mesh/instance base offsets. firstMesh/firstInstance = UINT32_MAX mark an invalid
+	// (skipped/overflowed) cluster.
+	struct ClusterWork
+	{
+		uint32_t meshCount = 0;
+		uint32_t instanceCount = 0;
+		uint32_t firstMesh = UINT32_MAX;
+		uint32_t firstInstance = UINT32_MAX;
+	};
+	eastl::vector<ClusterWork> m_ClusterWork;
 
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshes;
 	eastl::vector<RE::BSTriShape*> m_DestroyedMeshesSwap;
@@ -82,6 +97,14 @@ class SceneGraph
 	eastl::array<InstanceData, Constants::NUM_INSTANCES_MAX> m_InstanceData;
 	RingBuffer m_InstanceBuffer;
 
+	// Per-instance world bounds (center.xyz, radius), consumed by the GPU light culling pass.
+	eastl::array<float4, Constants::NUM_INSTANCES_MAX> m_InstanceBounds;
+	RingBuffer m_InstanceBoundBuffer;
+
+	// Compacted per-instance light index list + global atomic write cursor, produced on the GPU.
+	RingBuffer m_InstanceLightList;
+	RingBuffer m_InstanceLightCounter;
+
 	eastl::unique_ptr<TextureManager> m_TextureManager;
 
 	eastl::unique_ptr<BindlessTableManager> m_TriangleDescriptors;
@@ -101,7 +124,6 @@ class SceneGraph
 
 	uint64_t m_LastMaintenanceFrame = Constants::INVALID_FRAME_INDEX;
 	uint32_t m_MaintenanceRebuildsThisFrame = 0;
-	eastl::hash_set<BLASCluster*> m_DirtyClusters;
 
 	// Mesh/transform/properties buffer managed by MeshManager
 	eastl::unique_ptr<MeshManager> m_MeshManager;
@@ -109,8 +131,6 @@ class SceneGraph
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
 	std::shared_mutex m_SegmentClusterMutex;
-
-	mutable std::mutex m_ClusterDirtyMutex;
 
 	eastl::unique_ptr<ThreadPool> m_ThreadPool;
 	eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>> m_UpdateList;
@@ -122,6 +142,7 @@ class SceneGraph
 	eastl::vector<eastl::vector<eastl::pair<BaseMesh*, RE::TESObjectREFR*>>> m_PerWorkerUpdateList;
 	eastl::vector<eastl::vector<eastl::pair<RE::BSTriShape*, RE::TESObjectREFR*>>> m_PerWorkerCreateList;
 	eastl::vector<eastl::vector<BaseMesh*>> m_PerWorkerCurrentVisible;
+	eastl::vector<eastl::pair<RE::NiAVObject*, RE::TESObjectREFR*>> m_ForkedChildren;
 
 	struct MeshCreateCandidate {
 		RE::BSTriShape* bsTriShape;
@@ -143,6 +164,9 @@ class SceneGraph
 		eastl::vector<eastl::pair<MeshData, RE::BSTriShape*>> meshes;
 		eastl::vector<eastl::pair<InstanceData, RE::TESObjectREFR*>> instances;
 	};
+
+	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<InstancedData>> m_InstancedData;
+
 public:
 	void Initialize();
 
@@ -162,6 +186,9 @@ public:
 	nvrhi::IBuffer* GetLightBuffer() const { return m_LightBuffer.current(); }
 	nvrhi::IBuffer* GetMeshBuffer() const { return m_MeshManager->GetMeshBuffer(); }
 	nvrhi::IBuffer* GetInstanceBuffer() const { return m_InstanceBuffer.current(); }
+	nvrhi::IBuffer* GetInstanceBoundBuffer() const { return m_InstanceBoundBuffer.current(); }
+	nvrhi::IBuffer* GetInstanceLightList() const { return m_InstanceLightList.current(); }
+	nvrhi::IBuffer* GetInstanceLightCounter() const { return m_InstanceLightCounter.current(); }
 	nvrhi::IBuffer* GetTransformBuffer() const { return m_MeshManager->GetTransformBuffer(); }
 	nvrhi::IBuffer* GetMeshSlotRemapBuffer() const { return m_MeshSlotRemapBuffer.current(); }
 	nvrhi::IBuffer* GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }
@@ -174,7 +201,6 @@ public:
 	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }
 	inline const auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
-	inline const auto& GetDirtyClusters() { return m_DirtyClusters; }
 	inline const auto& GetAllClusters() { return m_AllClusters; }
 	
 	// Per-segment cluster helper, called by SubIndexMesh when it creates a SubIndexSegmentMesh child
@@ -184,7 +210,7 @@ public:
 	// Builds/refits the per-owner BLAS clusters; called from the SceneTLAS pass before the TLAS build.
 	void BuildClusters(nvrhi::ICommandList* commandList);
 
-	auto GetMaterial(RE::BSShaderMaterial* shaderMaterial) { return m_MaterialManager->Get(shaderMaterial); }
+	auto GetMaterial(RE::BSShaderProperty* shaderProperty) { return m_MaterialManager->Get(shaderProperty); }
 
 	inline auto& GetLandLODMeshUpdates() { return m_LandLODMeshUpdates; }
 
@@ -216,7 +242,6 @@ public:
 	bool TryMaintenanceRebuild(uint64_t frameIndex);
 
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
-	void MarkClusterDirty(BLASCluster* cluster);
 
 	uint32_t AllocateMeshIndex();
 	uint32_t AllocateGeometryIndex();
@@ -225,6 +250,9 @@ public:
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
 
+	void UpdateInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_count, const void* a_data, uint32_t a_strideBytes);
+	void ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry);
+	InstancedData* GetOrCreateInstancedData(RE::BSTriShape* a_geometry);
 private:
 	eastl::vector<PassTiming> m_UpdateTimings;
 

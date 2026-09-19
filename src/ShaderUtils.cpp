@@ -7,6 +7,30 @@
 
 namespace ShaderUtils
 {
+	namespace
+	{
+		// DXC reports warnings and errors through DXC_OUT_ERRORS as text. Log the
+		// diagnostics under the shader that produced them so failures are
+		// traceable; the blob itself carries the file:line prefixes.
+		void LogShaderDiagnostics(IDxcBlobUtf8* diagnostics, const wchar_t* filePath, const wchar_t* entryPoint, const wchar_t* target)
+		{
+			if (!diagnostics || diagnostics->GetStringLength() == 0)
+				return;
+
+			logger::error("Shader '{}' ({}:{}) diagnostics:\n{}",
+				Util::WStringToString(filePath),
+				Util::WStringToString(entryPoint),
+				Util::WStringToString(target),
+				diagnostics->GetStringPointer());
+		}
+	}
+
+	bool PreprocessShader(winrt::com_ptr<IDxcBlobUtf8>& outPreprocessedText, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		const std::wstring target = Renderer::GetSingleton()->GetShaderTarget(stage);
+		return PreprocessShader(outPreprocessedText, FilePath, std::move(defines), target.c_str(), EntryPoint);
+	}
+
 	bool PreprocessShader(winrt::com_ptr<IDxcBlobUtf8>& outPreprocessedText, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
 	{
 		auto dxc = DirectXShaderCompiler::GetSingleton();
@@ -28,6 +52,7 @@ namespace ShaderUtils
 			L"-P",
 			L"-E",  EntryPoint,
 			L"-enable-16bit-types",
+			L"-disable-payload-qualifiers",
 			L"-T", Target,
 			L"-I", L"Data/shaders",
 			L"-I", L"extern/RTXDI-Library/Include"
@@ -37,7 +62,12 @@ namespace ShaderUtils
 			args.insert(args.end(), {
 				L"-spirv",
 				L"-fspv-target-env=vulkan1.2",
-				L"-fvk-use-dx-layout"
+				L"-fvk-use-dx-layout",
+				L"-fvk-t-shift", L"0", L"all",
+				L"-fvk-s-shift", L"128", L"all",
+				L"-fvk-b-shift", L"256", L"all",
+				L"-fvk-u-shift", L"384", L"all",
+				L"-fvk-auto-shift-bindings"
 			});
 		}
 
@@ -58,15 +88,13 @@ namespace ShaderUtils
 
 		winrt::com_ptr<IDxcResult> result;
 		if (FAILED(dxc->compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), dxc->includeHandler.get(), IID_PPV_ARGS(&result)))) {
-			logger::error("PreprocessShader - Compile call failed");
+			logger::error("PreprocessShader - Compile call failed for {}", Util::WStringToString(FilePath));
 			return false;
 		}
 
 		winrt::com_ptr<IDxcBlobUtf8> errors;
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr))) {
-			if (errors && errors->GetStringLength() > 0) {
-				logger::error("Shader preprocess errors: {}", errors->GetStringPointer());
-			}
+			LogShaderDiagnostics(errors.get(), FilePath, EntryPoint, Target);
 		}
 
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(&outPreprocessedText), nullptr)) && outPreprocessedText && outPreprocessedText->GetStringLength() > 0) {
@@ -89,6 +117,12 @@ namespace ShaderUtils
 		return false;
 	}
 
+	void CompileShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		const std::wstring target = Renderer::GetSingleton()->GetShaderTarget(stage);
+		CompileShader(shader, FilePath, std::move(defines), target.c_str(), EntryPoint);
+	}
+
 	void CompileShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
 	{
 		winrt::com_ptr<IDxcBlob> blob = ShaderCache::GetShader(FilePath, std::move(defines), Target, EntryPoint);
@@ -97,6 +131,12 @@ namespace ShaderUtils
 		} else {
 			shader = nullptr;
 		}
+	}
+
+	void CompileRawShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		const std::wstring target = Renderer::GetSingleton()->GetShaderTarget(stage);
+		CompileRawShader(shader, FilePath, std::move(defines), target.c_str(), EntryPoint);
 	}
 
 	void CompileRawShader(winrt::com_ptr<IDxcBlob>& shader, const wchar_t* FilePath, eastl::vector<DxcDefine> defines, const wchar_t* Target, const wchar_t* EntryPoint)
@@ -119,6 +159,8 @@ namespace ShaderUtils
 			FilePath,
 			L"-E",  EntryPoint,
 			L"-enable-16bit-types",
+			L"-disable-payload-qualifiers",
+			L"-all-resources-bound",
 			L"-T", Target,
 			L"-I", L"Data/shaders",
 			L"-I", L"extern/RTXDI-Library/Include",
@@ -129,7 +171,12 @@ namespace ShaderUtils
 			args.insert(args.end(), {
 				L"-spirv",
 				L"-fspv-target-env=vulkan1.2",
-				L"-fvk-use-dx-layout"
+				L"-fvk-use-dx-layout",
+				L"-fvk-t-shift", L"0", L"all",
+				L"-fvk-s-shift", L"128", L"all",
+				L"-fvk-b-shift", L"256", L"all",
+				L"-fvk-u-shift", L"384", L"all",
+				L"-fvk-auto-shift-bindings"
 			});
 		}
 
@@ -157,24 +204,28 @@ namespace ShaderUtils
 
 		winrt::com_ptr<IDxcResult> result;
 		if (FAILED(dxc->compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), dxc->includeHandler.get(), IID_PPV_ARGS(&result)))) {
-			logger::error("Compile call failed");
+			logger::error("Compile call failed for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		winrt::com_ptr<IDxcBlobUtf8> errors;
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr))) {
-			if (errors && errors->GetStringLength() > 0) {
-				logger::error("Shader compilation errors: {}", errors->GetStringPointer());
-			}
+			LogShaderDiagnostics(errors.get(), FilePath, EntryPoint, Target);
 		} else {
-			logger::error("Failed to get compilation errors");
+			logger::error("Failed to get compilation diagnostics for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		if (FAILED(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader), nullptr))) {
-			logger::error("Failed to get compiled shader");
+			logger::error("Failed to get compiled shader for {}", Util::WStringToString(FilePath));
 			return;
 		}
+	}
+
+	void CompilePreprocessedShader(winrt::com_ptr<IDxcBlob>& shader, const char* sourceData, size_t sourceSize, const wchar_t* FilePath, ShaderStage stage, const wchar_t* EntryPoint)
+	{
+		const std::wstring target = Renderer::GetSingleton()->GetShaderTarget(stage);
+		CompilePreprocessedShader(shader, sourceData, sourceSize, FilePath, target.c_str(), EntryPoint);
 	}
 
 	void CompilePreprocessedShader(winrt::com_ptr<IDxcBlob>& shader, const char* sourceData, size_t sourceSize, const wchar_t* FilePath, const wchar_t* Target, const wchar_t* EntryPoint)
@@ -190,6 +241,8 @@ namespace ShaderUtils
 			FilePath,   // Filename used for diagnostics only
 			L"-E",  EntryPoint,
 			L"-enable-16bit-types",
+			L"-disable-payload-qualifiers",
+			L"-all-resources-bound",
 			L"-T", Target,
 			L"-O3"
 		};
@@ -198,7 +251,12 @@ namespace ShaderUtils
 			args.insert(args.end(), {
 				L"-spirv",
 				L"-fspv-target-env=vulkan1.2",
-				L"-fvk-use-dx-layout"
+				L"-fvk-use-dx-layout",
+				L"-fvk-t-shift", L"0", L"all",
+				L"-fvk-s-shift", L"128", L"all",
+				L"-fvk-b-shift", L"256", L"all",
+				L"-fvk-u-shift", L"384", L"all",
+				L"-fvk-auto-shift-bindings"
 			});
 		}
 
@@ -215,22 +273,20 @@ namespace ShaderUtils
 		// No defines or include handler needed — source is already fully preprocessed.
 		winrt::com_ptr<IDxcResult> result;
 		if (FAILED(dxc->compiler->Compile(&sourceBuffer, compilerArgs->GetArguments(), compilerArgs->GetCount(), nullptr, IID_PPV_ARGS(&result)))) {
-			logger::error("CompilePreprocessedShader - Compile call failed");
+			logger::error("CompilePreprocessedShader - Compile call failed for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		winrt::com_ptr<IDxcBlobUtf8> errors;
 		if (SUCCEEDED(result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr))) {
-			if (errors && errors->GetStringLength() > 0) {
-				logger::error("Shader compilation errors: {}", errors->GetStringPointer());
-			}
+			LogShaderDiagnostics(errors.get(), FilePath, EntryPoint, Target);
 		} else {
-			logger::error("Failed to get compilation errors");
+			logger::error("Failed to get compilation diagnostics for {}", Util::WStringToString(FilePath));
 			return;
 		}
 
 		if (FAILED(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&shader), nullptr))) {
-			logger::error("Failed to get compiled shader");
+			logger::error("Failed to get compiled shader for {}", Util::WStringToString(FilePath));
 			return;
 		}
 	}

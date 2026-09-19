@@ -14,6 +14,7 @@
 #include "interop/SHaRCData.hlsli"
 
 #include "interop/SharcTypes.h"
+#include "include/Vulkan.hlsli"
 
 ConstantBuffer<CameraData>                  Camera                      : register(b0);
 ConstantBuffer<RaytracingData>              Raytracing                  : register(b1);
@@ -63,16 +64,17 @@ Texture2D<float4>                           WaterDisplacementMap        : regist
 Texture2D<float4>                           SkinDetailNormal            : register(t14);
 Texture2D<float4>                           ProjNoiseMap                : register(t15);
 StructuredBuffer<Transform>                 Transforms                  : register(t16);
+StructuredBuffer<uint>                      InstanceLightList           : register(t17);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
 ByteAddressBuffer                           Materials[]                 : register(t0, space3);
-
 Texture2D<float4>                           Textures[]                  : register(t0, space4);
-TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
-StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
+
+VK_BINDING(5, 0) TextureCube<float4>      CubeTextures[]     : register(t0, space7);
+VK_BINDING(6, 0) StructuredBuffer<float4> DynamicPositions[] : register(t0, space8);
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);

@@ -7,6 +7,7 @@ ConstantBuffer<RaytracingData> Raytracing : register(b1);
 ConstantBuffer<FeatureData> Features    : register(b2);
 
 #include "include/Common.hlsli"
+#include "include/WaveSize.hlsli"
 
 SamplerState PointClampSampler          : register(s0);
 
@@ -34,6 +35,7 @@ RWTexture2D<float>  OutViewDepth             : register(u2);
 RWTexture2D<float3> OutSpecularAlbedo        : register(u2);
 #endif
 
+WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {

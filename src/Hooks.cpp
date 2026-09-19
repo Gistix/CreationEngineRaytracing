@@ -92,12 +92,15 @@ namespace Hooks
 	{
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
+				return func(a_memoryManager, size, a_alignment, a_alignmentRequired);
+
 			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
-			if (triShape) {
-				triShape->vertexBufferDX12 = nullptr;
-				triShape->indexBufferDX12 = nullptr;
+
+			if (triShape)
 				triShape->ownsDX12Buffers = true;
-			}
+
 			return triShape;
 		}
 
@@ -114,6 +117,10 @@ namespace Hooks
 			uint32_t a_indexCount)
 		{
 			auto triShape = func(a_renderer, a_bsStream, a_vertexDesc, a_vertexCount, a_indexCount);
+
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
+				return triShape;
 
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
@@ -138,6 +145,10 @@ namespace Hooks
 			uint32_t numIndices)
 		{
 			auto triShape = func(a_renderer, vertexData, vertexDataSize, vertexDesc, indexData, numIndices);
+
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
+				return triShape;
 
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
@@ -167,6 +178,10 @@ namespace Hooks
 			IndexRenderData* a_indexRenderData)
 		{
 			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a_indexRenderData);
+
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
+				return triShape;
 
 			// Share vertex buffer
 			Util::CreateSharedBuffer(triShape->vertexBuffer, &triShape->vertexBufferDX12);
@@ -198,6 +213,10 @@ namespace Hooks
 			uint32_t a_numIndices)
 		{
 			auto triShape = func(a_renderer, a_vertexRenderData, vertexDesc, a_indexData, a_numIndices);
+
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
+				return triShape;
 
 			// Share vertex buffer
 			// The original function utilizes 'BSGraphics::CopyTriShapeVertices' to copy from 'VertexRenderData' into 'RE::BSGraphics::TriShape'
@@ -253,6 +272,10 @@ namespace Hooks
 		{
 			auto result = func(src, tgt, weight);
 
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
+				return result;
+
 			if (src) {
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
 				if (geomData.rendererData)
@@ -275,6 +298,10 @@ namespace Hooks
 		static bool thunk(RE::BSTriShape* src, RE::BSTriShape* tgt, float weight, uint32_t partitionMask)
 		{
 			auto result = func(src, tgt, weight, partitionMask);
+
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized())
+				return result;
 
 			if (src) {
 				auto geomData = Util::Adapter::GetGeometryRuntimeData(src);
@@ -325,6 +352,12 @@ namespace Hooks
 	{
 		static void thunk([[ maybe_unused ]] void* a1, RE::BSGraphics::TriShape* a_triShape)
 		{
+			const auto& renderer = Renderer::GetSingleton();
+			if (renderer->IsVulkan() || !renderer->IsInitialized()) {
+				func(a1, a_triShape);
+				return;
+			}
+
 			if (a_triShape && _InterlockedExchangeAdd(&a_triShape->refCount, 0xFFFFFFFF) == 1)
 			{
 				auto indexBuffer = reinterpret_cast<ID3D11Buffer*>(a_triShape->indexBuffer);
@@ -367,6 +400,11 @@ namespace Hooks
 
 	void NiSourceTexture_Destructor::thunk(RE::NiSourceTexture* oThis)
 	{
+		if (!Renderer::GetSingleton()->IsInitialized()) {
+			func(oThis);
+			return;
+		}
+
 		if (oThis && oThis->rendererTexture) {
 			auto scene = Scene::GetSingleton();
 			auto sceneGraph = scene->GetSceneGraph();
@@ -487,70 +525,25 @@ namespace Hooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSDistantTreeBlock_AttachSE
+	struct BSMultiStreamInstanceTriShape_AddGroup
 	{
-		static void thunk(RE::BGSDistantTreeBlock* a_block, float a2)
+		static int64_t thunk(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_instanceCount, const uint16_t* a_instanceData, int a_strideBytes, float a_boundsPadding)
 		{
-			const bool wasAttached = a_block->attached;
+			Scene::GetSingleton()->GetSceneGraph()->UpdateInstancedData(
+				a_geometry, a_instanceCount, a_instanceData, 2u * static_cast<uint32_t>(a_strideBytes));
 
-			func(a_block, a2);
-
-			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			if (a_block->doneLoading && valid) {
-				if (!a_block->treeGroups.empty()) {
-				}
-			}
+			return func(a_geometry, a_instanceCount, a_instanceData, a_strideBytes, a_boundsPadding);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct BGSDistantTreeBlock_AttachAE
+	struct BSMultiStreamInstanceTriShape_RemoveGroup
 	{
-		static void thunk(RE::BGSDistantTreeBlock* a_block)
+		static int64_t thunk(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_index)
 		{
-			const bool wasAttached = a_block->attached;
-
-			func(a_block);
-
-			const bool valid = a_block->node && a_block->attached && !wasAttached && !a_block->node->mapTerrain;
-			if (a_block->doneLoading && valid) {
-				if (!a_block->treeGroups.empty()) {
-
-				}
-			}
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSDistantTreeBlock_DtorSE
-	{
-		static void thunk(RE::BGSDistantTreeBlock* a_block)
-		{
-			func(a_block);
-		}
-
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct BGSDistantTreeBlock_DtorAE
-	{
-		static_assert(sizeof(RE::BGSTerrainNode::Layer<RE::BGSDistantTreeBlock>) == 0x30);
-
-		static void thunk(RE::BSResource::IEntryDB* a_entryDB, RE::BGSTerrainNode::Layer<RE::BGSDistantTreeBlock>* a2, int a3, void* a4)
-		{
-			RE::BGSDistantTreeBlock* block = nullptr;
-
-			if (a2)
-				block = a2->block;
-
-			func(a_entryDB, a2, a3, a4);
-
-			if (a2 && block) {
-				if (block != a2->block) {
-				}
-			}
+			Scene::GetSingleton()->GetSceneGraph()->ClearInstancedData(a_geometry);
+			return func(a_geometry, a_index);
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -667,16 +660,22 @@ namespace Hooks
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSTriShape>>(RE::VTABLE_BSTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSDynamicTriShape>>(RE::VTABLE_BSDynamicTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSubIndexTriShape>>(RE::VTABLE_BSSubIndexTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSInstanceTriShape>>(RE::VTABLE_BSInstanceTriShape[0]);
 		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSMultiStreamInstanceTriShape>>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSMultiIndexTriShape>>(RE::VTABLE_BSMultiIndexTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSkinnedDecalTriShape>>(RE::VTABLE_BSSkinnedDecalTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSLODTriShape>>(RE::VTABLE_BSLODTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSegmentedTriShape>>(RE::VTABLE_BSSegmentedTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSMeshLODTriShape>>(RE::VTABLE_BSMeshLODTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSLODMultiIndexTriShape>>(RE::VTABLE_BSLODMultiIndexTriShape[0]);
+		stl::write_vfunc<0x0, BSTriShape_Dtor<RE::BSSubIndexLandTriShape>>(RE::VTABLE_BSSubIndexLandTriShape[0]);
 
 		// Use a hook to update dynamic data, else we risk trying accessing dynamic data while the engine has already released it
 		stl::detour_thunk<BSDynamicTriShape_UpdateDynamicData>(REL::RelocationID(69570, 70954));
-		
+
 		stl::detour_thunk<TriShape_Dtor>(REL::RelocationID(75480, 77267));
 
 		stl::detour_thunk<BSTextureSet_SetTexture>(REL::RelocationID(20907, 0));
-		
-
 
 		// Terrain LOD
 		stl::detour_thunk<BGSTerrainBlock_Load>(REL::RelocationID(30932, 31735));
@@ -688,15 +687,9 @@ namespace Hooks
 		// Two completely different functions for SE and AE, however the end hook address for both is NiMemFree
 		//stl::write_thunk_call<BGSObjectBlock_Dtor>(REL::RelocationID(30730, 31634).address() + REL::Relocate(0x6D, 0x11A));
 
-		// Tree LOD
-		/*if (REL::Module::IsSE()) {
-			stl::detour_thunk<BGSDistantTreeBlock_AttachSE>(REL::RelocationID(30832, 0));
-			stl::detour_thunk<BGSDistantTreeBlock_DtorSE>(REL::RelocationID(30821, 0));
-		}
-		else {
-			stl::detour_thunk<BGSDistantTreeBlock_AttachAE>(REL::RelocationID(0, 31653));
-			stl::detour_thunk<BGSDistantTreeBlock_DtorAE>(REL::RelocationID(0, 31717));
-		}*/
+		// Tree LOD instanced geometry
+		stl::detour_thunk<BSMultiStreamInstanceTriShape_AddGroup>(REL::RelocationID(74595, 76323));
+		stl::detour_thunk<BSMultiStreamInstanceTriShape_RemoveGroup>(REL::RelocationID(74600, 76328));
 		
 		// Landscape
 		//stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));

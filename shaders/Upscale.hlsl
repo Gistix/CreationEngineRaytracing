@@ -1,5 +1,6 @@
 #include "interop/CameraData.hlsli"
 #include "interop/RaytracingData.hlsli"
+#include "include/WaveSize.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
 ConstantBuffer<RaytracingData> Raytracing : register(b1);
@@ -9,6 +10,7 @@ RWTexture2D<float4> OutputTexture       : register(u0);
 
 SamplerState LinearClampSampler         : register(s0);
 
+WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {

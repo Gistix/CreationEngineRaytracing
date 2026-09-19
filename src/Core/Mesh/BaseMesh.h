@@ -21,12 +21,14 @@ struct GeometryEntry {
 
 class BaseMesh
 {
-	void UpdateMaterial();
 public:
 	struct BufferDescriptor {
 		nvrhi::BufferHandle m_Buffer = nullptr;
 		DescriptorHandle m_Descriptor;
 		uint64_t m_Offset;
+
+		// Keeps the source D3D11 buffer (and its DXVK VkBuffer) alive; the Vulkan handle is non-owning.
+		winrt::com_ptr<ID3D11Buffer> m_SourceBuffer;
 	};
 
 	enum class State : uint8_t
@@ -45,7 +47,8 @@ public:
 		Default,
 		Skinned,
 		Dynamic,
-		SubIndex
+		SubIndex,
+		Instanced
 	};
 
 	enum class Flags : uint8_t
@@ -75,6 +78,7 @@ public:
 	virtual DynamicMesh* AsDynamicMesh() { return nullptr; }
 
 	virtual class SubIndexMesh* AsSubIndexMesh() { return nullptr; }
+	virtual class InstancedMesh* AsInstancedMesh() { return nullptr; }
 
 	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
 	virtual uint32_t GetDynamicIndex() const { return 0; }
@@ -163,12 +167,31 @@ protected:
 
 	static BufferDescriptor CreateVertexBuffer(RE::BSGraphics::TriShape* triShape);
 
+	// Wraps a DXVK-interop Vulkan buffer imported from a D3D11 buffer.
+	static BufferDescriptor CreateVulkanBuffer(
+		ID3D11Buffer* buffer11,
+		const char* debugName,
+		const char* logContext,
+		const char* resourceKind,
+		DescriptorTableManager* descriptorTable);
+
+	// Wraps a native D3D12 resource, validating it against the D3D11 description.
+	static BufferDescriptor CreateDX12Buffer(
+		ID3D12Resource* resourceDX12,
+		ID3D11Buffer* buffer11,
+		const char* debugName,
+		const char* logContext,
+		const char* resourceKind,
+		DescriptorTableManager* descriptorTable,
+		uint64_t offset);
+
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(
 		nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount,
 		nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount,
 		uint32_t transformIndex, nvrhi::Format vertexFormat = nvrhi::Format::RGB32_FLOAT);
 
 	void CreateMaterial();
+	void UpdateMaterial();
 
 	void AllocateMeshIndex();
 

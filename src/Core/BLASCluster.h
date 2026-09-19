@@ -21,6 +21,7 @@ struct Light;
 // and the instance (owner-world) transform is cached here via SetInstanceTransform.
 class BLASCluster
 {
+protected:
 	enum class BuildMode
 	{
 		Skip,
@@ -68,21 +69,15 @@ class BLASCluster
 
 	CESEAdapter::REX::EnumSet<Flags> m_Flags = Flags::None;
 
-	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::Visibility;
+	CESEAdapter::REX::EnumSet<DirtyFlags> m_DirtyFlags = DirtyFlags::None;
 	mutable std::mutex m_DirtyMutex;
-
-	InstanceLightData m_InstanceLightData;
 
 	bool m_IsValid = false;
 
-	void UpdateTransform();
+	virtual void UpdateTransform();
 	BuildMode DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex);
 
 	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
-
-	void UpdateInstanceLightData(
-		const eastl::map<RE::BSLight*, Light>& lights,
-		const eastl::array<LightData, Constants::LIGHTS_MAX>& lightData);
 
 	void SetValid(bool valid) { m_IsValid = valid; }
 public:
@@ -108,12 +103,22 @@ public:
 
 	nvrhi::rt::InstanceDesc MakeInstanceDesc() const;
 
+	virtual uint32_t GetInstanceCount() const { return Valid() ? 1u : 0u; }
+
+	virtual void AppendInstanceDescs(eastl::vector<nvrhi::rt::InstanceDesc>& outDescs) const;
+
 	void SetInstanceIndex(uint32_t index) { m_InstanceIndex = index; }
 
 	// Updates the cluster and returns the number of visible geometry entries.
-	uint32_t Update();
+	//
+	// Phase G worker contract: Update() may be invoked concurrently for DISTINCT clusters by the scene
+	// graph's thread pool. Implementations (and everything they reach) must therefore touch only
+	// cluster-local state and internally thread-safe managers (MeshManager, etc.); shared SceneGraph
+	// registries and light data are read-only for the duration of the phase. Membership is immutable
+	// while Update() runs. Do not add unsynchronized writes to shared SceneGraph state here.
+	virtual uint32_t Update();
 
 	const auto& GetGeometrySlots() const { return m_GeometrySlots; }
 
-	void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData& instanceData) const;
+	virtual void WriteInstanceData(uint32_t firstMesh, uint32_t meshCount, InstanceData* outInstances, float4* outBounds) const;
 };

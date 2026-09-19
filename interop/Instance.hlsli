@@ -3,49 +3,13 @@
 
 #include "Interop.h"
 
+// Per-instance light list range, written by the GPU InstanceLightCulling pass.
+// LightOffset indexes into the global InstanceLightList buffer; both fields are
+// 16-bit to keep the per-instance payload compact.
 struct InstanceLightData
 {
-	uint Count;
-	uint Data[8];
-
-    uint GetGroup(uint index)
-    {
-        return index >> 2;
-    }
-
-    uint GetOffset(uint index)
-    {
-        return (index & 3) << 3;
-    }
-
-    uint GetID(uint index)
-    {
-        uint group = GetGroup(index);
-        uint offset = GetOffset(index);
-
-        return (Data[group] >> offset) & 0xFFu;
-    }
-
-#ifdef __cplusplus
-	InstanceLightData() = default;
-
-	InstanceLightData(uint8_t* ids, uint8_t numLights)
-	{
-		Count = numLights;
-
-		for (uint8_t i = 0; i < numLights; ++i) {
-			SetID(i, ids[i]);
-		}
-	}
-
-	void SetID(uint index, uint val)
-	{
-		uint group = GetGroup(index);
-		uint offset = GetOffset(index);
-		uint mask = ~(0xFFu << offset);
-		Data[group] = (Data[group] & mask) | ((val & 0xFFu) << offset);
-	}
-#endif
+	uint16_t LightOffset;
+	uint16_t LightCount;
 };
 
 INTEROP_DATA_STRUCT(Instance, 4)
@@ -60,4 +24,4 @@ INTEROP_DATA_STRUCT(Instance, 4)
 VALIDATE_TRIVIAL(InstanceData);
 VALIDATE_ALIGNMENT(InstanceData, 4);
 
-#endif
+#endif // INSTANCE_HLSL

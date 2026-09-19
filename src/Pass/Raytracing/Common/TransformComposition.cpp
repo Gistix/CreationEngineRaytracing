@@ -39,7 +39,7 @@ namespace Pass
 		auto device = GetRenderer()->GetDevice();
 
 		winrt::com_ptr<IDxcBlob> shaderBlob;
-		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/TransformComposition.hlsl", {}, L"cs_6_5");
+		ShaderUtils::CompileShader(shaderBlob, L"data/shaders/TransformComposition.hlsl", {}, ShaderStage::Compute);
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize());
 
 		if (!m_ComputeShader)

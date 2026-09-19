@@ -22,10 +22,13 @@ struct PackedSurfaceData
     uint32_t roughMetallic;     // 4  (fp16 roughness | fp16 metallic)
     uint32_t materialData;      // 4  (low 16: material feature, high 16: surface flags)
     float    viewDepth;         // 4  (negative = empty)
+    uint32_t pad0;              // 4
+    uint32_t pad1;              // 4
+    uint32_t pad2;              // 4 -> 64 bytes total
 };
 
-static_assert(sizeof(PackedSurfaceData) == 52, "PackedSurfaceData must be 52 bytes");
-static constexpr uint32_t PACKED_SURFACE_DATA_STRIDE = 52;
+static_assert(sizeof(PackedSurfaceData) == 64, "PackedSurfaceData must be 64 bytes");
+static constexpr uint32_t PACKED_SURFACE_DATA_STRIDE = 64;
 
 #else // HLSL
 
@@ -42,6 +45,9 @@ struct PackedSurfaceData
     uint   roughMetallic;
     uint   materialData;
     float  viewDepth;           // negative = empty surface
+    uint   pad0;
+    uint   pad1;
+    uint   pad2;
 };
 
 // ---------------------------------------------------------------------------

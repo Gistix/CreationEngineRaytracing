@@ -16,11 +16,13 @@ Texture2D<float3> SpecularFactor        : register(t4);
 RWTexture2D<float4> Output              : register(u0);
 
 #include "include/ColorConversions.hlsli"
+#include "include/WaveSize.hlsli"
 
 #if defined(NRD_REBLUR)
 #include "include/NRD.hlsli"
 #endif
 
+WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
 {

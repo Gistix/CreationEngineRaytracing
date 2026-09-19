@@ -85,7 +85,7 @@ namespace Pass::Raytracing
 			pipeline = nullptr;
 
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, shaderPath, defines, L"cs_6_5");
+			ShaderUtils::CompileShader(blob, shaderPath, defines, ShaderStage::Compute);
 			if (!blob) {
 				logger::error("ReSTIRGIPass::CreatePipeline - Failed to compile {} shader.", stageName);
 				return;

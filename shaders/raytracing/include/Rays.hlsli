@@ -1,6 +1,7 @@
 #ifndef RAYS_HLSL
 #define RAYS_HLSL
 
+#include "raytracing/include/SER.hlsli"
 #include "raytracing/include/RayOffset.hlsli"
 
 #include "include/Surface.hlsli"
@@ -55,8 +56,14 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
             rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(Scene, RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
- #endif
+#   if SER_ENABLED
+    NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    SER_ReorderHitObject(hitObj);
+    NvInvokeHitObject(scene, hitObj, payload);
+#   else
+    TraceRay(scene, RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+#   endif
+#endif
     
     randomSeed = payload.randomSeed;
     
@@ -101,8 +108,22 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
             rayQuery.CommittedGeometryIndex());
     }
 #else // !USE_RAY_QUERY    
-    TraceRay(Scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
- #endif
+#   if SER_ENABLED
+    if (!primaryRay)
+    {
+        SER_ReorderThread(SER_CalculateRayCoherenceHint(ray.Direction), 8);
+        NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+        SER_ReorderHitObject(hitObj);
+        NvInvokeHitObject(scene, hitObj, payload);
+    }
+    else
+    {
+        TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    }
+#   else
+    TraceRay(scene, RAY_FLAGS, instanceInclusionMask, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+#   endif
+#endif
     
     randomSeed = payload.randomSeed;
     
@@ -156,7 +177,7 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
     }
 #else // !USE_RAY_QUERY    
     TraceRay(scene, RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER, INSTANCE_MASK, SHADOW_RAY_HITGROUP_IDX, 0, SHADOW_RAY_MISS_IDX, ray, shadowPayload);
- #endif
+#endif
     
     randomSeed = shadowPayload.randomSeed;
     
@@ -206,12 +227,17 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
             rayQuery.CommittedTriangleBarycentrics(),
             rayQuery.CommittedInstanceID(),
             rayQuery.CommittedGeometryIndex());    
-       
     }
     
 #else // !USE_RAY_QUERY    
+#   if SER_ENABLED
+    NvHitObject hitObj = NvTraceRayHitObject(scene, RAY_FLAGS | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    SER_ReorderHitObject(hitObj);
+    NvInvokeHitObject(scene, hitObj, payload);
+#   else
     TraceRay(scene, RAY_FLAGS | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
- #endif   
+#   endif
+#endif
     
     randomSeed = payload.randomSeed;
 

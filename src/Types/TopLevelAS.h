@@ -46,7 +46,7 @@ public:
 			if (!cluster->Valid())
 				continue;
 
-			m_InstanceDescs.push_back(cluster->MakeInstanceDesc());
+			cluster->AppendInstanceDescs(m_InstanceDescs);
 		}
 
 		auto* scene = Scene::GetSingleton();

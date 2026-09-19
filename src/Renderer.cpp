@@ -5,15 +5,56 @@
 
 #include <Rtxdi/RtxdiUtils.h>
 
+#include "Utils/DXVKInterop.h"
 #include "Renderer/RenderNode.h"
+#include "interop/PackedSurfaceData.hlsli"
 
 Renderer::Renderer()
 {
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
 }
 
-bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
+void Renderer::BuildFormatMapping()
 {
+	// Map DXGI_FORMAT to NVRHI formats
+	if (!m_FormatMapping.empty())
+		return;
+
+	for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+	{
+		auto format = (nvrhi::Format)i;
+
+		// This gets the SRV format, but I guess it should work
+		auto nativeFormat = nvrhi::d3d12::convertFormat(format);
+
+		m_FormatMapping.emplace(nativeFormat, format);
+	}
+
+	// Depth SRV format
+	m_FormatMapping.emplace(DXGI_FORMAT_R24G8_TYPELESS, nvrhi::Format::D24S8);
+}
+
+void Renderer::BuildVkFormatMapping()
+{
+	// Map VkFormat to NVRHI formats
+	if (!m_VkFormatMapping.empty())
+		return;
+
+	for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
+	{
+		auto format = (nvrhi::Format)i;
+		auto nativeFormat = nvrhi::vulkan::convertFormat(format);
+		m_VkFormatMapping.emplace(nativeFormat, format);
+	}
+
+	// Depth SRV format - unecessary?
+	m_VkFormatMapping.emplace(VK_FORMAT_D24_UNORM_S8_UINT, nvrhi::Format::D24S8);
+}
+
+bool Renderer::Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
+{
+	m_Settings = *rendererSettings;
+
 	Hooks::InstallD3D11(d3d11Device);
 
 	// NVRHI Device
@@ -37,32 +78,39 @@ bool Renderer::Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device
 	m_NativeD3D11Device = d3d11Device;
 	m_NativeD3D12Device = d3d12Device;
 
-	m_NativeD3D12Device->QueryInterface(m_CompatDevice.put());
+	D3D12_FEATURE_DATA_SHADER_MODEL smFeature{ D3D_SHADER_MODEL_6_9 };
+	if (SUCCEEDED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &smFeature, sizeof(smFeature))))
+		m_ShaderModel = smFeature.HighestShaderModel;
 
-	// Map DXGI_FORMAT to NVRHI formats
-	if (m_FormatMapping.empty())
-		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
-		{
-			auto format = (nvrhi::Format)i;
+	logger::info("Shader Model: {}", magic_enum::enum_name(m_ShaderModel));
 
-			// This gets the SRV format, but I guess it should work
-			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
-
-			m_FormatMapping.emplace(nativeFormat, format);
-		}
+	BuildFormatMapping();
 
 	PostInitialize();
 
 	return true;
 }
 
-bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
+bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex)
 {
+	m_Settings = *rendererSettings;
+
 	const char* deviceExtensions[] = {
-		"VK_KHR_acceleration_structure",
-		"VK_KHR_deferred_host_operations",
-		"VK_KHR_ray_tracing_pipeline",
-		// list the extensions that were requested when the device was created
+		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,				// "VK_KHR_acceleration_structure"
+		VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,				// "VK_KHR_deferred_host_operations"
+		VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,						// "VK_KHR_pipeline_library" (required by RT pipeline)
+		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,					// "VK_KHR_ray_tracing_pipeline"
+		VK_KHR_RAY_QUERY_EXTENSION_NAME,							// "VK_KHR_ray_query"
+		VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME,		// "VK_NV_ray_tracing_invocation_reorder"
+		VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_KHR_compute_shader_derivatives" (for NRD Reblur quads)
+		VK_NV_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_NV_compute_shader_derivatives" ditto
+
+		// High performance & stability additions (enabled by DXVK):
+		VK_NV_RAW_ACCESS_CHAINS_EXTENSION_NAME,						// "VK_NV_raw_access_chains" (boosts ByteAddressBuffer loads)
+		VK_KHR_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_EXTENSION_NAME, // "VK_KHR_shader_subgroup_uniform_control_flow"
+		VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,				// "VK_EXT_mutable_descriptor_type"
+		VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,						// "VK_EXT_memory_budget"
+		VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,						// "VK_EXT_memory_priority"
 	};
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
@@ -78,6 +126,7 @@ bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, 
 	deviceDesc.computeQueueIndex = computeQueueIndex;
 	deviceDesc.deviceExtensions = deviceExtensions;
 	deviceDesc.numDeviceExtensions = std::size(deviceExtensions);
+	deviceDesc.bufferDeviceAddressSupported = true;
 
 	m_NVRHIDevice = nvrhi::vulkan::createDevice(deviceDesc);
 
@@ -86,17 +135,8 @@ bool Renderer::Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, 
 
 	m_IsVulkan = true;
 
-	// Map DXGI_FORMAT to NVRHI formats
-	if (m_FormatMapping.empty())
-		for (int i = 0; i < (int)nvrhi::Format::COUNT; ++i)
-		{
-			auto format = (nvrhi::Format)i;
-
-			// This gets the SRV format, but I guess it should work
-			auto nativeFormat = nvrhi::d3d12::convertFormat(format);
-
-			m_FormatMapping.emplace(nativeFormat, format);
-		}
+	BuildFormatMapping();
+	BuildVkFormatMapping();
 
 	PostInitialize();
 
@@ -117,14 +157,26 @@ void Renderer::PostInitialize()
 
 	for (size_t i = 0; i < m_SupportedFeatures.size(); i++)
 	{
-		const bool supported = m_NVRHIDevice->queryFeatureSupport(nvrhi::Feature::RayTracingPipeline);
+		const auto feature = static_cast<nvrhi::Feature>(i);
+		const bool supported = m_NVRHIDevice->queryFeatureSupport(feature);
 		m_SupportedFeatures[i] = supported;
 
 		if (supported)
-			features += fmt::format("{} ", magic_enum::enum_name(static_cast<nvrhi::Feature>(i)));
+			features += fmt::format("{} ", magic_enum::enum_name(feature));
 	}
 
 	logger::info("Supported Features: {}", features);
+
+	// Keep the ray tracing backend selection consistent with device support.
+	if (m_Settings.UseRayQuery && !SupportsFeature(nvrhi::Feature::RayQuery)) {
+		logger::warn("Device does not support ray queries; using the ray tracing pipeline instead.");
+		m_Settings.UseRayQuery = false;
+	} else if (!m_Settings.UseRayQuery && !SupportsFeature(nvrhi::Feature::RayTracingPipeline)) {
+		logger::warn("Device does not support the ray tracing pipeline; using ray queries instead.");
+		m_Settings.UseRayQuery = true;
+	}
+
+	m_IsInitialized = true;
 }
 
 void Renderer::InitDefaultTextures()
@@ -189,7 +241,7 @@ void Renderer::InitDefaultTextures()
 nvrhi::ITexture* Renderer::GetDepthTexture() {
 	if (!m_DepthTexture) {
 		auto* d3d11Texture = Util::Adapter::GetMainDepthStencilTexture();
-		m_DepthTexture = ShareTexture(d3d11Texture, "Depth", nvrhi::Format::D24S8, nvrhi::ResourceStates::Common);
+		m_DepthTexture = ShareTexture(d3d11Texture, "Depth");
 	}
 
 	return m_DepthTexture;
@@ -199,7 +251,7 @@ nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
 #if defined(SKYRIM)
 	if (!m_MotionVectorTexture) {
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
-		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector", nvrhi::Format::RG16_FLOAT, nvrhi::ResourceStates::ShaderResource);
+		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector");
 	}
 #endif
 	return m_MotionVectorTexture;
@@ -209,7 +261,7 @@ nvrhi::ITexture* Renderer::GetWaterDisplacementTexture() {
 	if (!m_WaterDisplacementTexture) {
 #if defined(SKYRIM)
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
-		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement", nvrhi::Format::RGBA16_FLOAT, nvrhi::ResourceStates::ShaderResource);
+		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement");
 #elif defined(FALLOUT4)
 		m_WaterDisplacementTexture = m_GrayTexture->texture;
 #endif
@@ -368,9 +420,9 @@ void Renderer::InitReSTIRGI()
 		m_ReSTIRGIResources->needsNeighborOffsetUpload = true;
 	}
 
-	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 52 bytes)
+	// Packed primary surface data: ping-pong StructuredBuffer (2 planes × width × height × 64 bytes)
 	{
-		constexpr uint surfaceDataStride = 52; // sizeof(PackedSurfaceData)
+		constexpr uint surfaceDataStride = sizeof(PackedSurfaceData);
 		nvrhi::BufferDesc desc;
 		desc.byteSize = 2u * width * height * surfaceDataStride;
 		desc.structStride = surfaceDataStride;
@@ -462,15 +514,15 @@ void Renderer::InitReSTIRGI()
 	logger::info("ReSTIR GI resources created ({}x{})", width, height);
 }
 
-void Renderer::SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, [[maybe_unused]] ID3D12Resource* gnmao)
+void Renderer::SetRenderTargets(void* albedo, void* normalRoughness, [[maybe_unused]] void* gnmao)
 {
 	if (!m_RenderTargets)
 		m_RenderTargets = eastl::make_unique<RenderTargets>();
 
-	m_RenderTargets->albedo = CreateHandleForNativeTexture(albedo, "Albedo RenderTarget");
-	m_RenderTargets->normalRoughness = CreateHandleForNativeTexture(normalRoughness, "Normal Roughness RenderTarget", nvrhi::Format::UNKNOWN, nvrhi::ResourceStates::UnorderedAccess);
+	m_RenderTargets->albedo = WrapNativeTexture(albedo, "Albedo RenderTarget");
+	m_RenderTargets->normalRoughness = WrapNativeTexture(normalRoughness, "Normal Roughness RenderTarget");
 #if defined(SKYRIM)
-	m_RenderTargets->gnmao = CreateHandleForNativeTexture(gnmao, "GNMAO RenderTarget");
+	m_RenderTargets->gnmao = WrapNativeTexture(gnmao, "GNMAO RenderTarget");
 #endif
 }
 
@@ -576,17 +628,26 @@ void Renderer::EndExecution()
 
 uint32_t Renderer::PostExecution()
 {
-	auto& slot = m_FrameSlots[m_CurrentSlot];
+	auto device = GetDevice();
 
-	if (!slot.inFlight)
-		return m_LastCompletedSlot;
+	// Poll every in-flight slot so completion is detected as soon as the GPU finishes,
+	// rather than only when the slot is reused MAX_FRAMES_IN_FLIGHT frames later.
+	for (uint32_t slot = 0; slot < Constants::MAX_FRAMES_IN_FLIGHT; slot++) {
+		auto& frameSlot = m_FrameSlots[slot];
 
-	if (GetDevice()->pollEventQuery(slot.eventQuery)) {
-		RunPostExecutionForSlot(m_CurrentSlot);
-		slot.inFlight = false;
+		if (!frameSlot.inFlight)
+			continue;
+
+		if (device->pollEventQuery(frameSlot.eventQuery)) {
+			RunPostExecutionForSlot(slot);
+			device->resetEventQuery(frameSlot.eventQuery);
+			frameSlot.inFlight = false;
+		}
 	}
 
-	return m_LastCompletedSlot;
+	// Return the slot written by the preceding Execute(). The caller consumes it this frame
+	// and is responsible for synchronizing (queue ordering or an explicit fence) before reading.
+	return m_CurrentSlot;
 }
 
 void Renderer::RunPostExecutionForSlot(uint32_t slot)
@@ -622,76 +683,154 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 #endif
 	}
 
-	m_LastCompletedSlot = slot;
-
 	device->runGarbageCollection();
 
 	logger::trace("Renderer::RunPostExecutionForSlot - Slot {} completed", slot);
 }
 
-nvrhi::TextureHandle Renderer::CreateHandleForNativeTexture(ID3D12Resource* nativeResource, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
+nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char* name)
 {
-	D3D12_RESOURCE_DESC nativeTexDesc = nativeResource->GetDesc();
+	auto* renderer = Renderer::GetSingleton();
 
-	if (format == nvrhi::Format::UNKNOWN)
-	{
-		format = Renderer::GetFormat(nativeTexDesc.Format);
-		if (format == nvrhi::Format::UNKNOWN) {
-			logger::error("Renderer::CreateHandleForNativeTexture - Unmapped format {}", magic_enum::enum_name(nativeTexDesc.Format));
+	nvrhi::TextureDesc desc{};
+	desc.dimension = nvrhi::TextureDimension::Texture2D;
+	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.keepInitialState = true;
+	desc.debugName = name;
+
+	if (renderer->IsVulkan()) {
+		auto d3d11Resource = reinterpret_cast<ID3D11Texture2D*>(nativeTexture);
+
+		D3D11_TEXTURE2D_DESC targetDesc;
+		d3d11Resource->GetDesc(&targetDesc);
+
+		desc.width = static_cast<uint32_t>(targetDesc.Width);
+		desc.height = targetDesc.Height;
+		desc.mipLevels = targetDesc.MipLevels;
+		desc.arraySize = targetDesc.ArraySize;
+
+		winrt::com_ptr<IDXGIVkInteropSurface> interopSurface;
+		HRESULT hr = d3d11Resource->QueryInterface(__uuidof(IDXGIVkInteropSurface), interopSurface.put_void());
+		if (FAILED(hr)) {
+			logger::error("Scene::SetTexture - QueryInterface IDXGIVkInteropSurface failed.");
 			return nullptr;
 		}
+
+		VkImage vkImage = VK_NULL_HANDLE;
+		VkImageLayout vkLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		VkImageCreateInfo createInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+
+		hr = interopSurface->GetVulkanImageInfo(&vkImage, &vkLayout, &createInfo);
+		if (FAILED(hr) || !vkImage) {
+			logger::error("Scene::SetTexture - GetVulkanImageInfo failed.");
+			return nullptr;
+		}
+
+		desc.format = GetFormat(createInfo.format);
+
+		if (desc.format == nvrhi::Format::UNKNOWN) {
+			logger::error("Renderer::WrapNativeTexture - Unmapped format {} for {}", magic_enum::enum_name(createInfo.format), desc.debugName);
+			return nullptr;
+		}
+
+		if (targetDesc.BindFlags & D3D11_BIND_UNORDERED_ACCESS) {
+			desc.isUAV = true;
+			//desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		}
+
+		return renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, vkImage, desc);
 	}
+	else {
+		auto targetDesc = reinterpret_cast<ID3D12Resource*>(nativeTexture)->GetDesc();
 
-	auto textureDesc = nvrhi::TextureDesc()
-		.setWidth(static_cast<uint32_t>(nativeTexDesc.Width))
-		.setHeight(nativeTexDesc.Height)
-		.setFormat(format)
-		.setKeepInitialState(true)
-		.setDebugName(debugName);
+		desc.width = static_cast<uint32_t>(targetDesc.Width);
+		desc.height = targetDesc.Height;
+		desc.format = renderer->GetFormat(targetDesc.Format);
+		desc.mipLevels = targetDesc.MipLevels;
+		desc.arraySize = targetDesc.DepthOrArraySize;
 
-	if (resourceState == nvrhi::ResourceStates::Unknown)
-		textureDesc.setInitialState(nvrhi::ResourceStates::ShaderResource);
-	else if (resourceState == nvrhi::ResourceStates::UnorderedAccess) {
-		textureDesc.
-			setInitialState(nvrhi::ResourceStates::UnorderedAccess).
-			setIsUAV(true);
-	} else
-		textureDesc.setInitialState(resourceState);
+		if (targetDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+			desc.isUAV = true;
+			//desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
+		}
 
-	return GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeResource, textureDesc);
+		if (desc.format == nvrhi::Format::UNKNOWN) {
+			logger::error("Renderer::WrapNativeTexture - Unmapped format {} for {}", magic_enum::enum_name(targetDesc.Format), desc.debugName);
+			return nullptr;
+		}
+
+		return renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nativeTexture, desc);
+	}
 }
 
-nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format, nvrhi::ResourceStates resourceState)
+nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName)
 {
 	if (!d3d11Texture) {
 		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");
 		return nullptr;
 	}
 
-	winrt::com_ptr<IDXGIResource1> dxgiResource;
-	HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
-	if (FAILED(hr)) {
-		logger::error("Renderer::ShareTexture - QueryInterface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
-		return nullptr;
+	if (IsVulkan()) {
+		return WrapNativeTexture(d3d11Texture, std::format("{} [Vulkan Texture]", debugName).c_str());
 	}
+	else {
+		winrt::com_ptr<IDXGIResource1> dxgiResource;
+		HRESULT hr = d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+		if (FAILED(hr)) {
+			logger::error("Renderer::ShareTexture - QueryInterface failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
 
-	HANDLE sharedHandle = nullptr;
+		HANDLE sharedHandle = nullptr;
 
-	hr = dxgiResource->GetSharedHandle(&sharedHandle);
-	if (FAILED(hr)) {
-		logger::error("Renderer::ShareTexture - GetSharedHandle failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
-		return nullptr;
+		hr = dxgiResource->GetSharedHandle(&sharedHandle);
+		if (FAILED(hr)) {
+			logger::error("Renderer::ShareTexture - GetSharedHandle failed for {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
+
+		auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
+
+		winrt::com_ptr<ID3D12Resource> d3d12Resource;
+		hr = nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
+
+		if (FAILED(hr) || !d3d12Resource) {
+			logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
+			return nullptr;
+		}
+
+		return WrapNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str());
 	}
+}
 
-	auto* nativeDevice = Renderer::GetSingleton()->GetNativeD3D12Device();
-
-	winrt::com_ptr<ID3D12Resource> d3d12Resource;
-	hr = nativeDevice->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(d3d12Resource.put()));
-
-	if (FAILED(hr) || !d3d12Resource) {
-		logger::error("Renderer::ShareTexture - Failed to open shared handle for D3D12 resource: {}. HR: 0x{:08X}", debugName, static_cast<uint32_t>(hr));
-		return nullptr;
+const wchar_t* Renderer::GetShaderStage(ShaderStage a_Stage) const noexcept
+{
+	switch (a_Stage) {
+	case ShaderStage::Compute:
+		return L"cs";
+	case ShaderStage::Vertex:
+		return L"vs";
+	case ShaderStage::Pixel:
+		return L"ps";
+	case ShaderStage::Geometry:
+		return L"gs";
+	case ShaderStage::Hull:
+		return L"hs";
+	case ShaderStage::Domain:
+		return L"ds";
+	case ShaderStage::Mesh:
+		return L"ms";
+	case ShaderStage::Amplification:
+		return L"as";
+	case ShaderStage::Library:
+	default:
+		return L"lib";
 	}
+}
 
-	return CreateHandleForNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str(), format, resourceState);
+std::wstring Renderer::GetShaderTarget(ShaderStage a_Stage) const noexcept
+{
+	const uint32_t major = (static_cast<uint32_t>(m_ShaderModel) >> 4) & 0xF;
+	const uint32_t minor = static_cast<uint32_t>(m_ShaderModel) & 0xF;
+	return std::format(L"{}_{}_{}", GetShaderStage(a_Stage), major, minor);
 }

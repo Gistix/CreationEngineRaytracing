@@ -18,7 +18,7 @@ void EffectMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
     auto* mat = static_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
 	data->Type = MaterialBase::Type::Effect;
-	data->BaseColor.x = mat->baseColor.r; data->BaseColor.y = mat->baseColor.g; data->BaseColor.z = mat->baseColor.b;
+	data->BaseColor = Util::Math::Float4(mat->baseColor); 
 	data->BaseColorScale = mat->baseColorScale;
 }
 
@@ -30,8 +30,15 @@ void EffectMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	if (m_SourceTexture.Update(mat->sourceTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->SourceTexture = m_SourceTexture.texture.GetDescriptorIndex();
+
 	if (m_EffectTexture.Update(mat->greyscaleTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->EffectTexture = m_EffectTexture.texture.GetDescriptorIndex();
+
+	if (m_NormalTexture.Update(mat->normalTexture.get(), renderer->GetNormalTextureDescriptor()))
+		data->NormalTexture = m_NormalTexture.texture.GetDescriptorIndex();
+
+	if (m_EnvMaskTexture.Update(mat->envMaskTexture.get(), renderer->GetBlackTextureDescriptor()))
+		data->EnvMaskTexture = m_EnvMaskTexture.texture.GetDescriptorIndex();
 }
 
 #endif

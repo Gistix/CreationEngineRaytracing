@@ -29,6 +29,9 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint IndexOffset;
     uint VertexOffset;
     uint MaterialOffset;
+    uint Pad0;
+    uint Pad1;
+    uint Pad2;
 
     uint GetIndexOffset()
     {
@@ -47,5 +50,6 @@ INTEROP_DATA_STRUCT(Mesh, 4)
 };
 VALIDATE_TRIVIAL(MeshData);
 VALIDATE_ALIGNMENT(MeshData, 4);
+VALIDATE_SIZE(MeshData, 48);
 
 #endif

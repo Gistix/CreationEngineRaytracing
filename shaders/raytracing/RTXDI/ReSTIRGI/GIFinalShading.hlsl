@@ -4,6 +4,7 @@
 #include "../RtxdiApplicationBridge.hlsli"
 #include <Rtxdi/GI/Reservoir.hlsli>
 #include "include/ColorConversions.hlsli"
+#include "include/WaveSize.hlsli"
 
 static const float kMaxBrdfValue = 1e4;
 static const float kMISRoughness = 0.2;
@@ -16,6 +17,7 @@ float GetMISWeight(float3 roughBrdf, float3 trueBrdf)
     return initWeight * initWeight * initWeight;
 }
 
+WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void Main(uint2 GlobalIndex : SV_DispatchThreadID)
 {

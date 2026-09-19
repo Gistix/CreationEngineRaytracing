@@ -14,6 +14,7 @@ namespace LightFlags
 {
 	static const uint16_t ISL = (1 << 0);
 	static const uint16_t LinearLight = (1 << 1);
+	static const uint16_t Active = (1 << 2);
 }
 
 INTEROP_DATA_STRUCT(Light, 16)

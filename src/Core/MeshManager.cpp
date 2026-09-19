@@ -30,6 +30,7 @@ void MeshManager::CreateBuffers()
 		.setStructStride(sizeof(TransformData))
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setCanHaveUAVs(true)
+		.setIsAccelStructBuildInput(Renderer::GetSingleton()->IsVulkan())
 		.setDebugName("Transform Buffer");
 
 	m_Buffer = device->createBuffer(outDesc);

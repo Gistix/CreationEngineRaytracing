@@ -34,7 +34,10 @@
 #include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
 #include "Pass/Raytracing/Common/TransformComposition.h"
+#include "Pass/Raytracing/Common/InstanceLightCulling.h"
 #include "Pass/Raytracing/Common/PTComposite.h"
+
+#include "Utils/DXVKInterop.h"
 
 Scene::Scene()
 {
@@ -98,6 +101,8 @@ void Scene::UpdateMode(Mode mode)
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
 		auto* tlasPtr = sceneTLAS.get();
 
+		auto instanceLightCulling = eastl::make_unique<Pass::InstanceLightCulling>(renderer);
+
 		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
 		auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
@@ -113,6 +118,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
 
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
@@ -127,6 +133,8 @@ void Scene::UpdateMode(Mode mode)
 		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
 		auto* tlasPtr = sceneTLAS.get();
+
+		auto instanceLightCulling = eastl::make_unique<Pass::InstanceLightCulling>(renderer);
 
 		auto sharc = eastl::make_unique<Pass::SHaRC>(renderer, tlasPtr);
 		auto* sharcPtr = sharc.get();
@@ -143,6 +151,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
+		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "PathTracing", eastl::move(ptPass) });
 		renderGraph->AddNode({ true, "ReSTIRGI", eastl::move(restirGI) });
@@ -218,6 +227,8 @@ void Scene::Execute()
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
 
+		renderer->RenderTargetManager().CopySharedTextures(commandList, currentSlot);
+
 		commandList->endTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
 
 		auto cpuEnd = std::chrono::high_resolution_clock::now();
@@ -231,6 +242,8 @@ void Scene::Execute()
 
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
+
+		renderer->RenderTargetManager().CopySharedTextures(commandList, currentSlot);
 	}
 
 	renderer->EndExecution();
@@ -371,35 +384,21 @@ void Scene::UpdateFeatureData(void* data, uint32_t size)
 	m_DirtyFeatureData = true;
 }
 
-void Scene::SetSkyHemisphere(ID3D12Resource* skyHemi)
+void Scene::SetSkyHemisphere(void* skyHemi)
 {
 	if (skyHemi == m_SkyHemisphereResource)
 		return;
 
 	m_SkyHemisphereResource = skyHemi;
 
-	auto* renderer = Renderer::GetSingleton();
-
-	auto targetDesc = skyHemi->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = renderer->GetFormat(targetDesc.Format);
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "NVRHI Sky Hemisphere Texture";
-
-	m_SkyHemisphereTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skyHemi, desc);
+	m_SkyHemisphereTexture = Renderer::WrapNativeTexture(skyHemi, "NVRHI Sky Hemisphere Texture");
 }
 
 nvrhi::ITexture* Scene::GetSkinDetailNormalTexture() const
 {
 	if (m_SkinDetailNormalTexture)
 		return m_SkinDetailNormalTexture;
+
 	return Renderer::GetSingleton()->GetNormalTexture();
 }
 
@@ -412,68 +411,29 @@ nvrhi::ITexture* Scene::GetProjNoiseTexture() const
 	if (!projNoiseMap)
 		return nullptr;
 
-	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(
-		Util::Adapter::GetTextureResource(projNoiseMap),
-		"Projection Noise Map", 
-		nvrhi::Format::UNKNOWN, 
-		nvrhi::ResourceStates::ShaderResource);
+	m_ProjNoiseTexture = Renderer::GetSingleton()->ShareTexture(Util::Adapter::GetTextureResource(projNoiseMap), "Projection Noise Map");
 
 	return m_ProjNoiseTexture;
 }
 
-void Scene::SetSkinDetailNormal(ID3D12Resource* skinDetailNormal)
+void Scene::SetSkinDetailNormal(void* skinDetailNormal)
 {
 	if (skinDetailNormal == m_SkinDetailNormalResource)
 		return;
 
 	m_SkinDetailNormalResource = skinDetailNormal;
 
-	if (!skinDetailNormal) {
-		m_SkinDetailNormalTexture = nullptr;
-		return;
-	}
-
-	auto* renderer = Renderer::GetSingleton();
-
-	auto targetDesc = skinDetailNormal->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = renderer->GetFormat(targetDesc.Format);
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "Skin Detail Normal Texture";
-
-	m_SkinDetailNormalTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, skinDetailNormal, desc);
+	m_SkinDetailNormalTexture = Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture");
 }
 
-void Scene::SetWaterFlowMap(ID3D12Resource* waterFlowMap)
+void Scene::SetWaterFlowMap(void* waterFlowMap)
 {
 	if (waterFlowMap == m_WaterFlowMapResource)
 		return;
 
 	m_WaterFlowMapResource = waterFlowMap;
 
-	auto* renderer = Renderer::GetSingleton();
-
-	auto targetDesc = waterFlowMap->GetDesc();
-
-	nvrhi::TextureDesc desc{};
-	desc.width = static_cast<uint32_t>(targetDesc.Width);
-	desc.height = targetDesc.Height;
-	desc.format = renderer->GetFormat(targetDesc.Format);
-	desc.mipLevels = targetDesc.MipLevels;
-	desc.arraySize = targetDesc.DepthOrArraySize;
-	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
-	desc.keepInitialState = true;
-	desc.debugName = "NVRHI Water FlowMap Texture";
-
-	m_WaterFlowMapTexture = renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, waterFlowMap, desc);
+	m_WaterFlowMapTexture = Renderer::WrapNativeTexture(waterFlowMap, "NVRHI Water FlowMap Texture");
 }
 
 void Scene::UpdateSettings(Settings settings)
@@ -515,6 +475,20 @@ float Scene::GetResolutionScale() const
 		return 1.0f;
 
 	return m_Settings.RaytracingSettings.ResolutionScale;
+}
+
+void Scene::ReloadShaders()
+{
+	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
+
+	for (auto& node: renderGraph->GetNodes())
+	{
+		auto* renderPass = node.GetPass<RenderPass>();
+		if (!renderPass)
+			continue;
+
+		renderPass->ReloadShaders();
+	}
 }
 
 #if defined(FALLOUT4)

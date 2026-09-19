@@ -85,8 +85,22 @@ float3 EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface 
     return EvalDiffuse(l, surface, brdfContext);
 #else
     float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
-    float4 bsdfEval = bsdf.Eval(brdfContext, feature, surface, l) * shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingCompensation * PBRLightingScale);
+    float4 bsdfEval = bsdf.Eval(brdfContext, feature, surface, l) * shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingScaleCompensation);
     return bsdfEval.xyz;
+#endif
+}
+
+void EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, out float3 outDiffuse, out float3 outSpecular)
+{
+#if LIGHTEVAL_MODE == LIGHTEVAL_MODE_DIFFUSE
+    outDiffuse = EvalDiffuse(l, surface, brdfContext);
+    outSpecular = 0.0f;
+#else
+    float shadowTerminator = dot(surface.FaceNormal, l) > 0.0f ? ShadowTerminatorTerm(l, surface.Normal, surface.GeomNormal) : 1.0f;
+    float scale = shadowTerminator * (type == Type::TruePBR ? 1.0f : PBRLightingScaleCompensation);
+    bsdf.EvalDiffuseAndSpecular(brdfContext, feature, surface, l, outDiffuse, outSpecular);
+    outDiffuse *= scale;
+    outSpecular *= scale;
 #endif
 }
 
@@ -120,6 +134,28 @@ float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface su
     }
 
     return direct;
+}
+
+void EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed, out float3 outDiffuse, out float3 outSpecular)
+{
+    float3 irradiance;
+    float3 lr;
+    GetDirectionalLightIrradiance(irradiance, lr, randomSeed);
+    EvalLight(lr, type, feature, surface, brdfContext, bsdf, outDiffuse, outSpecular);
+    outDiffuse *= irradiance;
+    outSpecular *= irradiance;
+    [branch]
+    if (any((outDiffuse + outSpecular) > MIN_DIFFUSE_SHADOW))
+    {
+        float3 shadow = TraceRayShadow(Scene, surface, lr, randomSeed);
+        outDiffuse *= shadow;
+        outSpecular *= shadow;
+    }
+    else
+    {
+        outDiffuse = 0.0f;
+        outSpecular = 0.0f;
+    }
 }
 
 float GetPointAttenuation(Light light, float dist, inout float lightSourceAngle)
@@ -192,7 +228,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #if defined(GLOBAL_LIGHTS)
     const uint lightCount = Raytracing.NumLights;
 #else
-    const uint lightCount = lightData.Count;
+    const uint lightCount = lightData.LightCount;
 #endif
     
     if (lightCount == 0)
@@ -223,7 +259,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #   if defined(GLOBAL_LIGHTS)    
         const uint lightID = lightIdx;
 #   else
-        const uint lightID = lightData.GetID(lightIdx);
+        const uint lightID = InstanceLightList[lightData.LightOffset + lightIdx];
 #   endif
     
         Light testLight = Lights[lightID];
@@ -260,7 +296,7 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #   if defined(GLOBAL_LIGHTS)    
     const uint lightID = lightIdx;
 #   else
-    const uint lightID = lightData.GetID(lightIdx);
+    const uint lightID = InstanceLightList[lightData.LightOffset + lightIdx];
 #   endif
     
     Light light = Lights[lightID];
@@ -319,6 +355,44 @@ float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface,
     return direct;
 }
 
+void EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed, out float3 outDiffuse, out float3 outSpecular)
+{
+    float3 lightIrradiance;
+    float3 lr;
+    float dist;
+    
+    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
+
+    if (lightIndex < 0)
+    {
+        outDiffuse = 0.0f;
+        outSpecular = 0.0f;
+        return;
+    }
+    
+    EvalLight(lr, type, feature, surface, brdfContext, bsdf, outDiffuse, outSpecular);
+    outDiffuse *= lightIrradiance;
+    outSpecular *= lightIrradiance;
+
+    [branch]
+    if (any((outDiffuse + outSpecular) > MIN_DIFFUSE_SHADOW))
+    {
+#if USE_LIGHT_TLAS    
+#   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
+#else
+#   define LIGHT_TLAS Scene     
+#endif
+        float3 shadow = TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
+        outDiffuse *= shadow;
+        outSpecular *= shadow;
+    }
+    else
+    {
+        outDiffuse = 0.0f;
+        outSpecular = 0.0f;
+    }
+}
+
 // Evaluate analytical lights for delta lobes specifically.
 // For delta (perfect mirror/glass) surfaces, the standard bsdf.Eval() returns 0 for any light direction.
 // Instead, we use EvalDeltaLobes to get the exact reflection/refraction directions and check whether
@@ -368,7 +442,7 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
         }
 
         // --- Point Lights ---
-        if (instance.LightData.Count > 0)
+        if (instance.LightData.LightCount > 0)
         {
             // Evaluate delta lobe against each visible point light (using the same RIS selection as standard NEE)
             float3 lightIrradiance;
@@ -414,6 +488,21 @@ float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface 
     radiance += EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
 
     return radiance;
+}
+
+void EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary, out float3 outDiffuse, out float3 outSpecular)
+{
+    float3 dirDiff, dirSpec;
+    EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed, dirDiff, dirSpec);
+    float dirScale = (isPrimary ? 1.0f : Raytracing.Directional);
+    outDiffuse = dirDiff * dirScale;
+    outSpecular = dirSpec * dirScale;
+
+    float3 ptDiff, ptSpec;
+    EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed, ptDiff, ptSpec);
+    float ptScale = (isPrimary ? 1.0f : Raytracing.Point);
+    outDiffuse += ptDiff * ptScale;
+    outSpecular += ptSpec * ptScale;
 }
 
 void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 irradiance, out float3 lr, out float distance, inout uint randomSeed)

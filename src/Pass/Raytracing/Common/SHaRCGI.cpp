@@ -110,6 +110,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(10),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(17), // Instance light list
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_SRV(13),
@@ -128,7 +129,7 @@ namespace Pass::Raytracing::Common
 
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
-		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, ShaderStage::Compute);
 		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		auto* sceneGraph = scene->GetSceneGraph();
@@ -176,7 +177,7 @@ namespace Pass::Raytracing::Common
 		};
 
 		winrt::com_ptr<IDxcBlob> rayGenBlob;
-		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/SharcResolve.hlsl", defines, L"cs_6_5");
+		ShaderUtils::CompileShader(rayGenBlob, L"data/shaders/SharcResolve.hlsl", defines, ShaderStage::Compute);
 		m_ResolvePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Resolve Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
@@ -239,6 +240,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_ResolveBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(17, sceneGraph->GetInstanceLightList()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),

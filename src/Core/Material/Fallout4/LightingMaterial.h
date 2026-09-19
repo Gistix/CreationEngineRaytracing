@@ -14,6 +14,8 @@ struct LightingMaterial : public MaterialBase
 
 	void UpdateData(RE::BSShaderMaterial* shaderMaterial) override;
 
+	void UpdatePBR(RE::BSShaderProperty* shaderProperty) override;
+
 	void UpdateTextures(RE::BSShaderMaterial* shaderMaterial) override;
 
 	virtual MaterialBase::Data* GetData() override { return m_Data.get(); }

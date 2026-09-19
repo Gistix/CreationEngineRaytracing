@@ -55,9 +55,9 @@ find_package(cppwinrt CONFIG REQUIRED)
 find_package(directx-dxc CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(mikktspace CONFIG REQUIRED)
+find_package(unordered_dense CONFIG REQUIRED)
 
-find_path(DETOURS_INCLUDE_DIRS "detours/detours.h")
-find_library(DETOURS_LIBRARY detours REQUIRED)
+include(detours)
 
 target_link_libraries(
 	${PROJECT_NAME}
@@ -65,12 +65,13 @@ target_link_libraries(
 	Microsoft::DirectXTK
 	Microsoft::DirectX-Headers
     EASTL
+	unordered_dense::unordered_dense
 	d3d12.lib
 	magic_enum::magic_enum
     xbyak::xbyak
     mikktspace::mikktspace
 	d3dcompiler.lib
-    ${DETOURS_LIBRARY}
+	${DETOURS_LIBRARIES}
 )
 
 if(BUILD_FALLOUT4)
@@ -114,6 +115,10 @@ target_compile_definitions(
 )
 
 if(AUTO_DEPLOYMENT)
+    if(NOT DEFINED DEPLOY_DIR OR DEPLOY_DIR STREQUAL "")
+        message(FATAL_ERROR "AUTO_DEPLOYMENT is enabled but DEPLOY_DIR is not set. Please set the DEPLOY_DIR environment variable or use a preset that defines it.")
+    endif()
+
     message(STATUS "Auto deployment enabled. Build output and addons will be copied to ${DEPLOY_DIR}")
 
     install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${DEPLOY_DIR}/${ScriptExtenderName}/Plugins)
@@ -132,7 +137,18 @@ if(AUTO_DEPLOYMENT)
         install(FILES ${D3D12_CORE_DLL_FIRST} DESTINATION "${DEPLOY_DIR}/${ScriptExtenderName}/Plugins")
     endif()
 
+    file(GLOB_RECURSE D3D12_SDK_LAYERS "${CMAKE_BINARY_DIR}/vcpkg_installed/*/bin/d3d12SDKLayers.dll")
+    if(D3D12_SDK_LAYERS)
+        list(GET D3D12_SDK_LAYERS 0 D3D12_SDK_LAYERS_FIRST)
+        install(FILES ${D3D12_SDK_LAYERS_FIRST} DESTINATION "${DEPLOY_DIR}/${ScriptExtenderName}/Plugins")
+    endif()
+
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/shaders/ DESTINATION ${DEPLOY_DIR}/Shaders)
 
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/interop/ DESTINATION ${DEPLOY_DIR}/Shaders/Interop)
+endif()
+
+option(BUILD_BENCHMARKS "Build microbenchmarks" ON)
+if(BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()

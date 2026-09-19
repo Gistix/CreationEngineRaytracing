@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "Util.h"
 #include "Plugin.h"
+#include "AgilitySDK.h"
 
 #define DLLEXPORT __declspec(dllexport)
 
@@ -113,6 +114,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 #endif
 	InitializeLog();
 	logger::info("Loaded {} {}", Plugin::NAME, Plugin::VERSION.string());
+	AgilitySDK::Initialize();
 	SKSE::Init(a_skse);
 	return Load();
 }
@@ -142,6 +144,7 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 #endif
 	InitializeLog();
 	logger::info("Loaded {} {}", Plugin::NAME, Plugin::VERSION.string());
+	AgilitySDK::Initialize();
 	F4SE::Init(a_f4se);
 	return Load();
 }

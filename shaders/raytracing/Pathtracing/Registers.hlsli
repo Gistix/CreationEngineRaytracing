@@ -17,6 +17,7 @@
 #include "interop/SHaRCData.hlsli"
 
 #include "interop/SharcTypes.h"
+#include "include/Vulkan.hlsli"
 
 ConstantBuffer<CameraData>                  Camera                      : register(b0);
 ConstantBuffer<RaytracingData>              Raytracing                  : register(b1);
@@ -91,16 +92,20 @@ StructuredBuffer<uint64_t>                  SharcHashEntriesBuffer      : regist
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
 ByteAddressBuffer                           Materials[]                 : register(t0, space3);
-
 Texture2D<float4>                           Textures[]                  : register(t0, space4);
+
+#if defined(USE_LIGHT_TLAS)
 RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space5);
-StructuredBuffer<float3>                    PrevPositions[]             : register(t0, space6);
-TextureCube<float4>                         CubeTextures[]              : register(t0, space7);
-StructuredBuffer<float4>                    DynamicPositions[]          : register(t0, space8);
+#endif
+
+VK_BINDING(5, 0) StructuredBuffer<float3> PrevPositions[]    : register(t0, space6);
+VK_BINDING(6, 0) TextureCube<float4>      CubeTextures[]     : register(t0, space7);
+VK_BINDING(7, 0) StructuredBuffer<float4> DynamicPositions[] : register(t0, space8);
 Texture2D<float4>                           SkinDetailNormal            : register(t8);
 Texture2D<float4>                           WaterDisplacementMap        : register(t9);
 Texture2D<float4>                           ProjNoiseMap                : register(t10);
 StructuredBuffer<Transform>                 Transforms                  : register(t11);
+StructuredBuffer<uint>                      InstanceLightList           : register(t12);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
 

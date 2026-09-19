@@ -39,7 +39,7 @@ namespace Pass::Utility
 			auto device = GetRenderer()->GetDevice();
 
 			winrt::com_ptr<IDxcBlob> blob;
-			ShaderUtils::CompileShader(blob, L"data/shaders/FaceNormals.hlsl", {}, L"cs_6_5", L"Main");
+			ShaderUtils::CompileShader(blob, L"data/shaders/FaceNormals.hlsl", {}, ShaderStage::Compute, L"Main");
 			m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, blob->GetBufferPointer(), blob->GetBufferSize());
 
 			auto pipelineDesc = nvrhi::ComputePipelineDesc()

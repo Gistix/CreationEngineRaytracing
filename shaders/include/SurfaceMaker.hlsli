@@ -162,7 +162,18 @@ struct SurfaceMaker
         float3 bitangentWS = float3(1.0f, 0.0f, 0.0f);
 
         const bool hasNormal = mesh.VertexDesc.HasFlag(VertexFlags::Normal);
-        if (hasNormal)
+
+        float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+        {
+            normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
+            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
+            
+            // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
+            boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
+            boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
+        }
+        else if (hasNormal)
         {
             normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
             tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
@@ -171,21 +182,12 @@ struct SurfaceMaker
         else
         {
             normalWS = mul(objectToWorld3x3, objectSpaceFlatNormal);
-            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);         
-        }
- 
-        float4 boneRotation = float4(0.0f, 0.0f, 0.0f, 1.0f);
-        if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
-        {
-            // Bone rotation transform is provided as a quaternion in Normal.xyz and Tangent.x
-            boneRotation = InterpolateQuaternion(half4(v0.Normal, v0.Tangent.x), half4(v1.Normal, v1.Tangent.x), half4(v2.Normal, v2.Tangent.x), uvw);
-            boneRotation = QuaternionMultiplyLocal(MatrixToQuaternionLocal(objectToWorld3x3), boneRotation);
+            CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);
         }
         
         float4 vertexColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
         if (props.ShaderFlags & ShaderFlags::kVertexColors)
-            vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);
-       
+            vertexColor = Interpolate(v0.Color.unpack(), v1.Color.unpack(), v2.Color.unpack(), uvw);      
             
 #if !USE_SIA_INTERPOLATION
         // Standard path: compute face normal from object-space cross product
@@ -226,7 +228,6 @@ struct SurfaceMaker
         surface.FuzzColor = float3(0.0f, 0.0f, 0.0f);
         surface.FuzzWeight = 0.0f;
     
-#   if defined(SKYRIM)
         if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
         {
             float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
@@ -254,34 +255,6 @@ struct SurfaceMaker
         {
             LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, -rayDir, payload.hitDistance);
         }
-#   elif defined(FALLOUT4)
-        if (material.Type == Type::Water)
-        {
-            WaterMaterial(surface, texCoord0, tangentWS, bitangentWS, mesh, props);
-        }
-        else if (material.Type == Type::Effect)
-        {
-            EffectMaterial(surface, texCoord0, vertexColor, mesh, props);
-        }
-        else if (material.Type == Type::DistantTree)
-        {
-            DistantTreeMaterial(surface, texCoord0, mesh, props);
-        }
-        else if (material.Type == Type::Grass)
-        {
-            GrassMaterial(surface, texCoord0, mesh, props);
-        }
-        else if (material.Feature == Feature::kMultiTexLand || material.Feature == Feature::kMultiTexLandLODBlend)
-        {
-            float4 landBlend0 = Interpolate(v0.LandBlend0.unpack(), v1.LandBlend0.unpack(), v2.LandBlend0.unpack(), uvw);
-            float4 landBlend1 = Interpolate(v0.LandBlend1.unpack(), v1.LandBlend1.unpack(), v2.LandBlend1.unpack(), uvw);
-            LandMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, landBlend0, landBlend1, mesh, -rayDir, payload.hitDistance);
-        }
-        else
-        {
-            LightingMaterial(surface, texCoord0, vertexColor, normalWS, tangentWS, bitangentWS, mesh, props, boneRotation, -rayDir, payload.hitDistance);        
-        }
-#   endif
         
         surface.Roughness = PBR::Roughness(surface.Roughness, Raytracing.Roughness.x, Raytracing.Roughness.y);
         surface.Metallic = Remap(surface.Metallic, Raytracing.Metalness.x, Raytracing.Metalness.y);

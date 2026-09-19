@@ -19,7 +19,7 @@ enum class Denoiser
 
 struct GeneralSettings
 {
-	Denoiser Denoiser = Denoiser::None;
+	Denoiser Denoiser = Denoiser::NRD_Reblur;
 	Mode Mode = Mode::None;
 	bool RaytracedShadows = false;
 };
@@ -92,9 +92,6 @@ struct NRDReblurSettings
 
 	// (normalized %) - represents maximum allowed deviation from the local tangent plane
 	float planeDistanceSensitivity = 0.02f;
-
-	// "IN_MV = lerp(IN_MV, specularMotion, smoothstep(this[0], this[1], specularProbability))"
-	std::array<float, 2> specularProbabilityThresholdsForMvModification = { 0.5f, 0.9f };
 
 	// [1; 3] - undesired sporadic outliers suppression to keep output stable (smaller values reduce aberration in exchange of bias)
 	float fireflySuppressorMinRelativeScale = 2.0f;
@@ -207,6 +204,7 @@ struct AdvancedSettings
 	bool VariableUpdateRate = true;
 	bool GGXEnergyConservation = true;
 	bool PerLightTLAS = false;
+	bool ShaderExecutionReordering = true;
 	RISSettings RIS;
 	HairBSDF HairBSDF = HairBSDF::FarFieldBCSDF;
 	DiffuseBRDF DiffuseBRDF = DiffuseBRDF::Burley;
@@ -284,6 +282,7 @@ struct ExperimentalSettings
 	TextureMode TextureMode = TextureMode::Share;
 	uint32_t TextureCutOff = 0;
 	bool GlobalLights = false;
+	bool RenderTreeLOD = false;
 };
 
 enum struct TimingMode
@@ -315,4 +314,10 @@ struct Settings
 	ExperimentalSettings ExperimentalSettings;
 	ReSTIRGISettings ReSTIRGI;
 	DebugSettings DebugSettings;
+};
+
+struct RendererSettings
+{
+	bool UseRayQuery = true;
+	bool ValidationLayer = false;
 };

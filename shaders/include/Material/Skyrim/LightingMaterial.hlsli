@@ -21,6 +21,7 @@
 #include "include/Common/Triplanar.hlsli"
 #include "include/Common/ExtendedMaterials.hlsli"
 
+#include "include/Material/Common.hlsli"
 #include "include/Material/Skyrim/Common.hlsli"
 
 void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, in float3 normalWS, in float3 tangentWS, in float3 bitangentWS, in Mesh mesh, Properties props, float4 boneRotation, float3 viewDir, float dist)
@@ -57,60 +58,54 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
     }
     
     // Parallax
-    if (isPBRParallax || isVanillaParallax || isVanillaParallaxOcc)
+    [branch]
+    if (surface.Primary)
     {
-        uint16_t displacementTextureIdx = 0;
-        float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
-        float noise = 0;
-        float pixelOffset;
+        if (isPBRParallax || isVanillaParallax || isVanillaParallaxOcc)
+        {
+            uint16_t displacementTextureIdx = 0;
+            float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
+            float noise = 0;
+            float pixelOffset;
         
-        DisplacementParams displacementParams;
-        displacementParams.DisplacementScale = 1.f;
-        displacementParams.DisplacementOffset = 0.f;
-        displacementParams.HeightScale = 1;
-        displacementParams.FlattenAmount = 0;
+            DisplacementParams displacementParams;
+            displacementParams.DisplacementScale = 1.f;
+            displacementParams.DisplacementOffset = 0.f;
+            displacementParams.HeightScale = 1;
+            displacementParams.FlattenAmount = 0;
         
-        bool interlayer = false;
+            bool interlayer = false;
         
         [branch]
-        if (isPBRParallax)
-        {
-            displacementTextureIdx = pbr.DisplacementTexture;
-            displacementParams.HeightScale *= pbr.DisplacementScale;
+            if (isPBRParallax)
+            {
+                displacementTextureIdx = pbr.DisplacementTexture;
+                displacementParams.HeightScale *= pbr.DisplacementScale;
                     
-            interlayer = (pbr.PBRFlags & PBR::Flags::InterlayerParallax) != 0;
-        }
-        else if (isVanillaParallax || isVanillaParallaxOcc)
-        {
+                interlayer = (pbr.PBRFlags & PBR::Flags::InterlayerParallax) != 0;
+            }
+            else if (isVanillaParallax || isVanillaParallaxOcc)
+            {
             // Load ParallaxOcc for Parallax as well
-            ParallaxOccMaterialData parallaxOccMaterial = Materials[0].Load<ParallaxOccMaterialData>(mesh.GetMaterialOffset());
+                ParallaxOccMaterialData parallaxOccMaterial = Materials[0].Load < ParallaxOccMaterialData > (mesh.GetMaterialOffset());
            
-            displacementTextureIdx = parallaxOccMaterial.HeightTexture;
+                displacementTextureIdx = parallaxOccMaterial.HeightTexture;
 
             // Only valid if material is ParallaxOcc
-            if (isVanillaParallaxOcc)
-                displacementParams.HeightScale *= parallaxOccMaterial.Scale;
-        }
+                if (isVanillaParallaxOcc)
+                    displacementParams.HeightScale *= parallaxOccMaterial.Scale;
+            }
         
-        Texture2D displacementTexture = Textures[NonUniformResourceIndex(displacementTextureIdx)];
-        texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, viewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, interlayer, pixelOffset);
+            Texture2D displacementTexture = Textures[NonUniformResourceIndex(displacementTextureIdx)];
+            texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, viewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, interlayer, pixelOffset);
+        }
     }
     
     float3 normal = clampSampler ? 
         normalTexture.SampleLevel(ClampSampler, texCoord0, mipLevel).xyz : 
         normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
 
-#if SKIN_DETAIL_NORMAL
     [branch]
-    if (SKINSETTINGS.skinDetailParams.w > 0.0f && skinEnabled)
-    {
-        float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
-        float3 detailNormal = float3(SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy, 0.5f);
-        detailNormal = (detailNormal * 2.0 - 1.0) * SKINSETTINGS.skinDetailParams.z;
-        normal = normalize(float3(ReorientNormal(detailNormal, (normal * 2 - 1)).xy, normal.z)) * 0.5f + 0.5f;
-    }
-#endif
-
     if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
     {
         // Swizzle matches vanilla shaders        
@@ -119,12 +114,13 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
         {
             surface.Normal = RotateByQuaternion(normal, boneRotation);
-            CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
         }
         else
         {
             surface.Normal = normal;
         }
+      
+        CreateOrthonormalBasis(surface.Normal, surface.Tangent, surface.Bitangent);
         
         // Use shading values since the geometry ones aren't available
         surface.GeomNormal = surface.Normal;
@@ -139,6 +135,27 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         );
     }
 
+    [branch]
+    if (SKINSETTINGS.skinDetailParams.w > 0.0f && skinEnabled)
+    {
+        const float2 detailUV = texCoord0 * SKINSETTINGS.skinDetailParams.x * (material.Feature == Feature::kFaceGen ? 1.0f : SKINSETTINGS.skinDetailParams.y);
+        
+        // Tangent space normal map with invalid .z channel
+        const float2 detailNormalXY = (SkinDetailNormal.SampleLevel(DefaultSampler, detailUV, mipLevel).xy * 2.0f - 1.0f) * SKINSETTINGS.skinDetailParams.z;
+        const float3 detailNormal = float3(detailNormalXY, sqrt(saturate(1.0f - dot(detailNormalXY, detailNormalXY))));
+
+        // This method works for both model space and tangent space normal maps
+        surface.Normal = normalize(
+            detailNormal.x * surface.Tangent +
+            detailNormal.y * surface.Bitangent +
+            detailNormal.z * surface.Normal
+        );
+        
+        // Re-orthogonalize basis for downstream shading / BSDF
+        surface.Tangent = normalize(surface.Tangent - surface.Normal * dot(surface.Tangent, surface.Normal));
+        surface.Bitangent = cross(surface.Normal, surface.Tangent);
+    }
+    
     vertexColor.rgb = saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
     
     const bool isWindows = material.Feature == Feature::kGlowMap && props.ShaderFlags & ShaderFlags::kAssumeShadowmask;
@@ -574,51 +591,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
     }
     
-    [branch]
-    if (props.AlphaFlags != AlphaFlags::None)
-    {
-        alpha *= material.MaterialAlpha * props.Alpha;
-        
-        [branch]
-        if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
-            alpha *= vertexColor.a;
-
-        [branch]
-        if (props.AlphaFlags & AlphaFlags::Transmission)
-        {
-            surface.TransmissionColor = lerp(float3(1.0f, 1.0f, 1.0f), surface.Albedo, alpha);
-            surface.Albedo *= alpha;
-            surface.Metallic *= alpha;
-            surface.SpecTrans = 1.0f;
-            surface.IsThinSurface |= (props.ShaderFlags & ShaderFlags::kTwoSided) != 0;
-            if (material.Type != Type::TruePBR)
-            {
-                surface.Roughness = 0.0f;
-            }
-        }
-
-        [branch]
-        if (props.AlphaFlags & AlphaFlags::Additive)
-        {
-            surface.Albedo = 0.0f;
-            surface.Metallic = 0.0f;
-            surface.Roughness = 0.0f;
-            surface.TransmissionColor = 1.0f;
-            surface.SpecTrans = 1.0f;
-            surface.F0 = 0.04f;
-
-            surface.SubsurfaceData.HasSubsurface = 0;
-            surface.SubsurfaceData.TransmissionColor = 0.0f;
-            surface.SubsurfaceData.ScatteringColor = 0.0f;
-            surface.SubsurfaceData.Scale = 0.0f;
-            surface.SubsurfaceData.Anisotropy = 0.0f;
-
-            surface.CoatColor = 1.0f;
-            surface.CoatStrength = 0.0f;
-            surface.CoatRoughness = 0.0f;
-            surface.CoatF0 = 0.0f;
-        }
-    }
+    MaterialAlpha(props, alpha, material.MaterialAlpha, vertexColor.a, surface);
 
     [branch]
     if (isWindows)

@@ -11,9 +11,11 @@
 #include "Renderer/RenderGraph.h"
 #include "Renderer/RenderTargetManager.h"
 
+#include "Types/ShaderStage.h"
+
 #include "Constants.h"
 
-#include <d3d12compatibility.h>
+#include "Types/Settings.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback
 {
@@ -46,9 +48,10 @@ class Renderer
 {
 	bool m_IsVulkan = false;
 
+	bool m_IsInitialized = false;
+
 	ID3D12Device5* m_NativeD3D12Device;
 	ID3D11Device5* m_NativeD3D11Device;
-	winrt::com_ptr<ID3D12CompatibilityDevice> m_CompatDevice;
 
 	nvrhi::DeviceHandle m_NVRHIDevice;
 
@@ -69,7 +72,6 @@ class Renderer
 	eastl::array<FrameSlot, Constants::MAX_FRAMES_IN_FLIGHT> m_FrameSlots;
 	uint32_t m_CurrentSlot = 0;
 	uint32_t m_NextSlot = 0;
-	uint32_t m_LastCompletedSlot = 0;
 
 	uint64_t m_LastSubmittedInstance = 0;
 
@@ -107,6 +109,10 @@ class Renderer
 	eastl::unique_ptr<TextureReference> m_DetailTexture;
 
 	inline static eastl::unordered_map<DXGI_FORMAT, nvrhi::Format> m_FormatMapping;
+	inline static eastl::unordered_map<VkFormat, nvrhi::Format> m_VkFormatMapping;
+
+	static void BuildFormatMapping();
+	static void BuildVkFormatMapping();
 
 	void InitGBufferOutput();
 
@@ -160,11 +166,9 @@ public:
 
 	eastl::unique_ptr<RenderTargets> m_RenderTargets;
 
-	struct RendererSettings
-	{
-		bool UseRayQuery = true;
-		bool ValidationLayer = true;
-	} m_Settings;
+	D3D_SHADER_MODEL m_ShaderModel = D3D_SHADER_MODEL_6_5;
+
+	RendererSettings m_Settings;
 
 	static Renderer* GetSingleton()
 	{
@@ -174,27 +178,47 @@ public:
 
 	Renderer();
 
-	bool Initialize(ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
+	bool Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 
-	bool Initialize(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
+	bool Initialize(RendererSettings* rendererSettings, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
 
 	bool IsVulkan() const { return m_IsVulkan; }
+
+	bool IsInitialized() const { return m_IsInitialized; }
+
+	bool SupportsFeature(nvrhi::Feature a_Feature) const {
+		return m_SupportedFeatures[static_cast<size_t>(a_Feature)];
+	}
+
+	[[nodiscard]] const wchar_t* GetShaderStage(ShaderStage a_Stage) const noexcept;
+	[[nodiscard]] std::wstring GetShaderTarget(ShaderStage a_Stage) const noexcept;
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 
 	auto& GetExecutionMutex() const { return m_ExecutionMutex; };
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
-	static auto GetNativeD3D11Device() { return GetSingleton()->m_NativeD3D11Device; }
-
-	static auto GetCompatDevice() { return GetSingleton()->m_CompatDevice.get(); }
+	static auto GetNativeD3D11Device() {
+		auto* dev = GetSingleton()->m_NativeD3D11Device;
+#if defined(SKYRIM)
+		if (!dev) {
+			auto* bsRenderer = RE::BSGraphics::Renderer::GetSingleton();
+			if (bsRenderer) {
+				dev = reinterpret_cast<ID3D11Device5*>(bsRenderer->GetRuntimeData().forwarder);
+				GetSingleton()->m_NativeD3D11Device = dev;
+			}
+		}
+#endif
+		return dev;
+	}
 
 	nvrhi::CommandListHandle GetGraphicsCommandList() const {
 		return GetDevice()->createCommandList(
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Graphics)
 			.setEnableImmediateExecution(false)
-			.setScratchChunkSize(16 * 1024 * 1024)
+			.setUploadChunkSize(Constants::NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE)
+			.setScratchChunkSize(Constants::NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE)
 		);
 	}
 
@@ -203,7 +227,8 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Compute)
 			.setEnableImmediateExecution(false)
-			.setScratchChunkSize(16 * 1024 * 1024)
+			.setUploadChunkSize(Constants::NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE)
+			.setScratchChunkSize(Constants::NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE)
 		);
 	}
 
@@ -212,7 +237,8 @@ public:
 			nvrhi::CommandListParameters()
 			.setQueueType(nvrhi::CommandQueue::Copy)
 			.setEnableImmediateExecution(false)
-			.setScratchChunkSize(16 * 1024 * 1024)
+			.setUploadChunkSize(Constants::NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE)
+			.setScratchChunkSize(Constants::NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE)
 		);
 	}
 
@@ -229,7 +255,6 @@ public:
 	inline auto GetFrameIndex() const { return m_FrameIndex; }
 
 	inline auto GetCurrentSlot() const { return m_CurrentSlot; }
-	inline auto GetCompletedSlot() const { return m_LastCompletedSlot; }
 
 	inline auto& GetFrameTimerQuery(uint32_t slot) { return m_FrameTimerQueries[slot]; }
 	inline void SetFrameCpuTime(uint32_t slot, float ms) { m_FrameCpuTimes[slot] = ms; }
@@ -265,6 +290,17 @@ public:
 		auto it = m_FormatMapping.find(nativeFormat);
 
 		if (it == m_FormatMapping.end()) {
+			return nvrhi::Format::UNKNOWN;
+		}
+
+		return it->second;
+	}
+
+	static inline auto GetFormat(VkFormat nativeFormat)
+	{
+		auto it = m_VkFormatMapping.find(nativeFormat);
+
+		if (it == m_VkFormatMapping.end()) {
 			return nvrhi::Format::UNKNOWN;
 		}
 
@@ -309,11 +345,11 @@ public:
 
 	void InitReSTIRGI();
 
-	void SetRenderTargets(ID3D12Resource* albedo, ID3D12Resource* normalRoughness, ID3D12Resource* gnmao);
+	void SetRenderTargets(void* albedo, void* normalRoughness, void* gnmao);
 
-	nvrhi::TextureHandle CreateHandleForNativeTexture(ID3D12Resource* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
+	static nvrhi::TextureHandle WrapNativeTexture(void* nativeTexture, const char* debugName);
 
-	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::Format format = nvrhi::Format::UNKNOWN, nvrhi::ResourceStates resourceState = nvrhi::ResourceStates::Unknown);
+	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName);
 
 	void InitDefaultTextures();
 

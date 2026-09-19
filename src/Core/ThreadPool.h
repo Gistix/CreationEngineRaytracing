@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <condition_variable>
@@ -94,6 +95,46 @@ public:
 	{
 		std::unique_lock lock(m_DoneMutex);
 		m_DoneCV.wait(lock, [this] { return m_Pending.load(std::memory_order_acquire) == 0; });
+	}
+
+	// Dispatches `count` items for parallel processing, claiming them in `grain`-sized blocks from a
+	// shared atomic. Spawns exactly min(numWorkers, ceil(count / grain)) tasks and blocks until all
+	// work completes (WaitAll). fn(taskIdx, itemIndex) is invoked once per item.
+	//
+	// NOTE: taskIdx identifies the spawned worker task, NOT a partition of the input - a task may claim
+	// non-contiguous blocks (0, 4, 8, ...), so taskIdx is only suitable as a single-writer scratch /
+	// output-slot index owned by that task. The counter is relaxed on purpose: payload visibility is
+	// provided by WaitAll().
+	template <class Fn>
+	void ParallelFor(size_t count, size_t grain, Fn&& a_fn)
+	{
+		if (count == 0)
+			return;
+
+		assert(grain > 0); // reject bad callers in debug builds
+		if (grain == 0)
+			return;
+
+		// Overflow-safe ceil(count / grain).
+		const size_t blockCount = count / grain + (count % grain != 0);
+		const size_t numTasks = std::min(GetThreadCount(), blockCount);
+		std::atomic<size_t> next{ 0 };
+
+		for (size_t t = 0; t < numTasks; ++t) {
+			Enqueue([this, &next, &a_fn, count, grain, t]() {
+				for (;;) {
+					const size_t begin = next.fetch_add(grain, std::memory_order_relaxed);
+					if (begin >= count)
+						break;
+					// end <= count, so begin + ... cannot wrap.
+					const size_t end = begin + std::min(grain, count - begin);
+					for (size_t i = begin; i < end; ++i)
+						a_fn(t, i);
+				}
+			});
+		}
+
+		WaitAll();
 	}
 
 private:

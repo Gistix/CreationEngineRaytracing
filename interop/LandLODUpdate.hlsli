@@ -9,7 +9,9 @@ INTEROP_STRUCT(LandLODUpdate, 4)
     uint VertexCount;
     uint VertexStride;
     INTEROP_ROW_MAJOR(float3x4) Transform;
+    uint Pad;
 };
 VALIDATE_ALIGNMENT(LandLODUpdate, 4);
+VALIDATE_SIZE(LandLODUpdate, 64);
 
 #endif

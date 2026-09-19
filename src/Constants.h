@@ -9,14 +9,20 @@ namespace Constants
 		static constexpr uint32_t NORMALMAP_TEXTURE = 1;
 	}
 
+	static constexpr uint32_t NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024;
+	static constexpr uint32_t NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE = NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE;
+
 	static constexpr uint32_t MAX_CB_VERSIONS = 16;
 
 	static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
 	static constexpr uint32_t PLAYER_REFR_FORMID = 0x00000014;
 
-	static constexpr uint32_t LIGHTS_MAX = 256;
-	static constexpr uint32_t INSTANCE_LIGHTS_MAX = 32;
+	static constexpr uint32_t LIGHTS_MAX = 1024;
+
+	// Global capacity of the per-instance light index list produced on the GPU.
+	// InstanceLightData::LightOffset is 16-bit, so the list index space is capped at 65535.
+	static constexpr uint32_t INSTANCE_LIGHT_LIST_MAX = 65535;
 
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
 	static constexpr uint32_t NUM_MESHES_MAX = 32 * 1024;
@@ -59,6 +65,7 @@ namespace Constants
 	namespace ExtraData
 	{
 		static constexpr auto LandLOD = "CERT::LandLOD";
+		static constexpr auto FO4PBR_Modulators = "FO4PBR_Modulators";
 	}
 
 	static constexpr uint32_t PT_DISPATCH_THREADS = 8;

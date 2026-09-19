@@ -3,6 +3,8 @@
 #include "Interop/Material/MaterialBaseData.hlsli"
 #include "Constants.h"
 
+#include <mutex>
+
 class MaterialManager;
 
 struct MaterialBase
@@ -46,6 +48,10 @@ struct MaterialBase
 
 	void Update(RE::BSShaderMaterial* shaderMaterial);
 
+#if defined(FALLOUT4)
+	virtual void UpdatePBR([[maybe_unused]] RE::BSShaderProperty* shaderProperty) {};
+#endif
+
 	protected:
 	void Initialize(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
 	{
@@ -63,4 +69,7 @@ struct MaterialBase
 	uint32_t m_HashKey = std::numeric_limits<uint32_t>::max();
 
 	uint64_t m_LastUpdate = Constants::INVALID_FRAME_INDEX;
+
+	// Serializes Update() across workers when meshes share this material within a frame.
+	std::mutex m_UpdateMutex;
 };

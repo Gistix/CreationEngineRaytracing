@@ -11,7 +11,7 @@ struct Light
 	bool m_Active;
 
 	// Light data index
-	uint8_t m_Index;
+	uint16_t m_Index;
 
 	// Instances that are affected by the light, calculated from instance node worldBound center + radius and light position + radius
 	eastl::hash_set<BLASCluster*> m_Instances;

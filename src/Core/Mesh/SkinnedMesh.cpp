@@ -140,7 +140,8 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	const uint32_t slot = m_VertexBuffer.m_Descriptor.Get();
-	size_t vertexBufferSize = m_VertexBuffer.m_Buffer->getDesc().byteSize;
+	const size_t meshVertexSize = static_cast<size_t>(vertexCount) * vertexStride;
+	size_t vertexBufferSize = meshVertexSize;
 
 	// Model space normal maps require that we store the skinning TBN so they are transformed properly into world space
 	if (Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kModelSpaceNormals)) {
@@ -155,7 +156,7 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 		.setByteSize(vertexBufferSize)
 		.setCanHaveRawViews(true)
 		.setCanHaveUAVs(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName(std::format("{} (Live Vertex Buffer)", m_Name.c_str()).c_str());
 
@@ -171,7 +172,7 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 		.setByteSize(sizeof(float3) * vertexCount)
 		.setStructStride(sizeof(float3))
 		.setCanHaveUAVs(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()).c_str());
 
 	m_PrevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
@@ -182,7 +183,7 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 
 	// Skinning reads the original (native) buffer.
 	device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
-		nvrhi::BindingSetItem::RawBuffer_SRV(slot, m_VertexBuffer.m_Buffer));
+		nvrhi::BindingSetItem::RawBuffer_SRV(slot, m_VertexBuffer.m_Buffer, nvrhi::BufferRange(m_VertexBuffer.m_Offset, meshVertexSize)));
 
 	// Skinning writes the live buffer.
 	device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,

@@ -8,6 +8,7 @@ class LandLODMesh : public Mesh
 	nvrhi::BufferHandle m_LiveVertexBuffer;
 	bool m_Intersecting = false;
 	bool m_PrevIntersecting = false;
+	RE::BSMultiBoundNode* m_MultiBoundNode;
 	float2 m_AABBCenter;
 	float2 m_AABBSize;
 public:

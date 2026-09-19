@@ -54,7 +54,7 @@ namespace Pass::Raytracing
 	void GlobalIllumination::CreateBindingLayout()
 	{
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
-		globalBindingLayoutDesc.visibility = nvrhi::ShaderType::All;
+		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
@@ -73,12 +73,11 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_SRV(9),
 			nvrhi::BindingLayoutItem::Texture_SRV(10),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
-			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12),
 			nvrhi::BindingLayoutItem::Texture_SRV(13),           // Water displacement
 			nvrhi::BindingLayoutItem::Texture_SRV(14),
 			nvrhi::BindingLayoutItem::Texture_SRV(15),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(17), // Instance light list
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
@@ -86,13 +85,22 @@ namespace Pass::Raytracing
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
-		if (settings.SHaRCSettings.Enabled)
+		if (settings.SHaRCSettings.Enabled) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12));
+		}
 
-if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
 		}
+
+#if defined(NVAPI)
+		// The NVAPI shader extension slot is D3D12-only; Vulkan uses SPIR-V SER intrinsics.
+		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
+			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
+#endif
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
@@ -120,9 +128,9 @@ if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines);
 		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", commonDefines);
 		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", commonDefines);
-		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", commonDefines);
+		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", defines);
 		auto shadowMissLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowMiss.hlsl", commonDefines);
-		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", commonDefines);
+		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", defines);
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
 
@@ -167,6 +175,10 @@ if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 		// When enabled causes: D3D12 ERROR: ID3D12Device::CreateStateObject: Invalid D3D12_RAYTRACING_PIPELINE_CONFIG1.Flags: 0x1024 specified
 		pipelineDesc.allowOpacityMicromaps = false;
 
+#if defined(NVAPI)
+		pipelineDesc.hlslExtensionsUAV = 127;
+#endif
+
 		m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
 		if (!m_RayPipeline)
 			return;
@@ -194,7 +206,7 @@ if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 
 		auto device = GetRenderer()->GetDevice();
 
-		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, ShaderStage::Compute);
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
@@ -260,24 +272,31 @@ if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			nvrhi::BindingSetItem::Texture_SRV(8, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(9, renderTargets->gnmao),
 			nvrhi::BindingSetItem::Texture_SRV(10, textureManager.GetTexture(RenderTarget::FaceNormals)),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()),
-			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(14, scene->GetSkinDetailNormalTexture()),
 			nvrhi::BindingSetItem::Texture_SRV(15, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(17, sceneGraph->GetInstanceLightList()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
 
-		if (settings.SHaRCSettings.Enabled)
+		if (settings.SHaRCSettings.Enabled) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_SHaRC->GetResolveBuffer()));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::StructuredBuffer_SRV(12, m_SHaRC->GetHashEntriesBuffer()));
+		}
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
 		}
+
+#if defined(NVAPI)
+		if (!renderer->IsVulkan() && !renderer->m_Settings.UseRayQuery)
+			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
+#endif
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 

@@ -40,7 +40,7 @@ namespace Pass::Utility
 
 		auto device = GetRenderer()->GetDevice();
 
-		auto shaderBlob = ShaderCache::GetShader(L"data/shaders/Upscale.hlsl", {}, L"cs_6_5");
+		auto shaderBlob = ShaderCache::GetShader(L"data/shaders/Upscale.hlsl", {}, ShaderStage::Compute);
 		if (!shaderBlob)
 			return;
 

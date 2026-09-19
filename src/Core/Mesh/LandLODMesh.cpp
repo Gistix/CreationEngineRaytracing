@@ -24,7 +24,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 		.setByteSize(byteSize)
 		.setCanHaveRawViews(true)
 		.setCanHaveUAVs(true)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName(std::format("{} - LandLOD", m_Name.c_str()));
 		
@@ -47,7 +47,7 @@ LandLODMesh::LandLODMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	// LandLODOccluder input
 	device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
-		nvrhi::BindingSetItem::RawBuffer_SRV(slotIndex, m_VertexBuffer.m_Buffer));
+		nvrhi::BindingSetItem::RawBuffer_SRV(slotIndex, m_VertexBuffer.m_Buffer, nvrhi::BufferRange(m_VertexBuffer.m_Offset, byteSize)));
 
 	// LandLODOccluder output
 	device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
@@ -58,22 +58,16 @@ void LandLODMesh::Update(nvrhi::ICommandList* commandList)
 {
 	Mesh::Update(commandList);
 
-	for (auto* node = static_cast<RE::NiAVObject*>(m_BSTriShape->parent); node; node = node->parent) {
-		if (auto* multiBoundNode = netimmerse_cast<RE::BSMultiBoundNode*>(node)) {
-			auto* multiBound = Util::Adapter::GetMultiBound(multiBoundNode);
-			auto* aabb = Util::Adapter::GetMultiBoundAABB(multiBound);
-			if (!aabb)
-				break;
+	auto multiBoundNode = Util::Adapter::AsMultiBoundNode(m_BSTriShape->parent);
+	auto* multiBound = Util::Adapter::GetMultiBound(multiBoundNode);
+	auto* aabb = Util::Adapter::GetMultiBoundAABB(multiBound);
 
-			m_AABBCenter = { aabb->center.x, aabb->center.y };
+	m_AABBCenter = { aabb->center.x, aabb->center.y };
 #if defined(SKYRIM)
-			m_AABBSize = { aabb->size.x, aabb->size.y };
+	m_AABBSize = { aabb->size.x, aabb->size.y };
 #elif defined(FALLOUT4)
-			m_AABBSize = { aabb->halfExtents.x * 2.0f, aabb->halfExtents.y * 2.0f };
+	m_AABBSize = { aabb->halfExtents.x * 2.0f, aabb->halfExtents.y * 2.0f };
 #endif
-			break;
-		}
-	}
 
 	const float4 loadedRange = Util::Adapter::GetShaderManagerLoadedRange();
 

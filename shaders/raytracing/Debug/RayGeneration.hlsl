@@ -1,7 +1,10 @@
 #if !(defined(SHARC) && SHARC_UPDATE) && DEBUG_TRACE_HEATMAP
-#   define NV_SHADER_EXTN_SLOT u127
-#   define NV_SHADER_EXTN_REGISTER_SPACE space0
-#   include "include/nvapi/nvHLSLExtns.h"
+#   ifndef NV_HLSL_EXTNS_INCLUDED
+#       define NV_HLSL_EXTNS_INCLUDED 1
+#       define NV_SHADER_EXTN_SLOT u127
+#       define NV_SHADER_EXTN_REGISTER_SPACE space0
+#       include "include/nvapi/nvHLSLExtns.h"
+#   endif
 
 #   include "include/nvapi/Profiling.hlsli"
 #endif
@@ -10,6 +13,7 @@
 
 #include "include/Common.hlsli"
 #include "raytracing/include/Common.hlsli"
+#include "include/WaveSize.hlsli"
 
 #include "raytracing/include/Payload.hlsli"
 #include "raytracing/include/Geometry.hlsli"
@@ -77,6 +81,7 @@ Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout
 #endif
 
 #if USE_RAY_QUERY
+WAVE_SIZE(32)
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 #   if defined(GROUP_TILING)
 void Main(uint2 GTid : SV_GroupThreadID, uint2 Gid : SV_GroupID)

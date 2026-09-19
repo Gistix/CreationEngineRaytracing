@@ -78,7 +78,9 @@ namespace Pass
 		};
 
 #if defined(NVAPI)
-		globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
+		// The NVAPI shader extension slot is D3D12-only; Vulkan uses SPIR-V SER intrinsics.
+		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
+			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
 #endif
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
@@ -173,7 +175,7 @@ namespace Pass
 
 		auto device = GetRenderer()->GetDevice();
 
-		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, L"cs_6_5");
+		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/Debug/RayGeneration.hlsl", defines, ShaderStage::Compute);
 		m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
 
 		if (!m_ComputeShader)
@@ -225,7 +227,8 @@ namespace Pass
 		};
 
 #if defined(NVAPI)
-		bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
+		if (!renderer->IsVulkan() && !renderer->m_Settings.UseRayQuery)
+			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);

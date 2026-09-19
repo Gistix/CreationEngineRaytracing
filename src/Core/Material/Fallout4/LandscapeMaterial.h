@@ -21,6 +21,7 @@ struct LandscapeMaterial : public LightingMaterial
 
 	MaterialTexture m_DiffuseTextures[3];
 	MaterialTexture m_NormalTextures[3];
+	MaterialTexture m_SmoothSpecTextures[3];
 	MaterialTexture m_OverlayTexture;
 	MaterialTexture m_NoiseTexture;
 };

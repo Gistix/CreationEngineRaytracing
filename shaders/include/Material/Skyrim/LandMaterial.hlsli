@@ -12,8 +12,8 @@
 #include "interop/Material/Skyrim/LandscapeMaterialData.hlsli"
 #include "include/Wetness.hlsli"
 
+#include "include/Material/Common.hlsli"
 #include "include/Material/Skyrim/Common.hlsli"
-#include "include/Material/Skyrim/BlendLandTexture.hlsli"
 #include "include/Common/ExtendedMaterials.hlsli"
 
 void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh, float3 viewDir, float dist)
@@ -129,7 +129,7 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
 
     // Parallax — select dominant tile's displacement texture for raymarch
     [branch]
-    if (Features.ExtendedMaterial.EnableParallax && material.Type == Type::TruePBR)
+    if (surface.Primary && Features.ExtendedMaterial.EnableParallax && material.Type == Type::TruePBR)
     {
         float weights[6] = { landBlend0.x, landBlend0.y, landBlend0.z, landBlend0.w, landBlend1.x, landBlend1.y };
         uint16_t dispTextures[6] = { dispTex0, dispTex1, dispTex2, dispTex3, dispTex4, dispTex5 };
