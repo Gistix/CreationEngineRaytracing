@@ -225,6 +225,9 @@ void StablePlanesHandleMiss(
     {
         MotionVectors[pixelPos] = float4(skyMV, 0);
         Depth[pixelPos] = skyDepth;
+#if defined(NRD)
+        ViewDepth[pixelPos] = ScreenToViewDepth(skyDepth, Camera.CameraData);
+#endif
     }
 
     ctx.AccumulateStableRadiance(pixelPos, skyRadiance * throughput);
@@ -317,6 +320,9 @@ StablePlanesHitResult StablePlanesHandleHit(
         {
             MotionVectors[pixelPos] = float4(psrMV, 0);
             Depth[pixelPos] = psrDepth;
+#if defined(NRD)
+            ViewDepth[pixelPos] = ScreenToViewDepth(psrDepth, Camera.CameraData);
+#endif
         }
         return result;
     }
@@ -385,6 +391,9 @@ StablePlanesHitResult StablePlanesHandleHit(
         {
             MotionVectors[pixelPos] = float4(psrMV, 0);
             Depth[pixelPos] = psrDepth;
+#if defined(NRD)
+            ViewDepth[pixelPos] = ScreenToViewDepth(psrDepth, Camera.CameraData);
+#endif
         }
         return result;
     }
@@ -483,6 +492,9 @@ StablePlanesHitResult StablePlanesHandleHit(
         {
             MotionVectors[pixelPos] = float4(psrMV, 0);
             Depth[pixelPos] = psrDepth;
+#if defined(NRD)
+            ViewDepth[pixelPos] = ScreenToViewDepth(psrDepth, Camera.CameraData);
+#endif
         }
     }
 
