@@ -87,6 +87,11 @@ namespace Pass::Raytracing::Common
 	{
 		auto device = GetRenderer()->GetDevice();
 
+		m_UpdatePass.m_ComputeShader = nullptr;
+		m_UpdatePass.m_ComputePipeline = nullptr;
+		m_UpdatePass.m_RayPipeline = nullptr;
+		m_UpdatePass.m_ShaderTable = nullptr;
+
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
 		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
 		globalBindingLayoutDesc.bindings = {
@@ -121,18 +126,39 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(2)
 		};
 
-		m_UpdatePass.m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
+#if defined(NVAPI)
+		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
+			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
+#endif
 
+		m_UpdatePass.m_BindingLayout = device->createBindingLayout(globalBindingLayoutDesc);
+
+		if (GetRenderer()->m_Settings.UseRayQuery)
+			CreateUpdateComputePipeline();
+		else
+			CreateUpdateRayTracingPipeline();
+	}
+
+	void SHaRCGI::CreateUpdateComputePipeline()
+	{
+		auto device = GetRenderer()->GetDevice();
 		auto* scene = Scene::GetSingleton();
+		auto* sceneGraph = scene->GetSceneGraph();
 
 		auto defines = Util::Shader::GetDXCDefines(m_Defines);
-
 		defines.emplace_back(L"USE_RAY_QUERY", L"1");
 
 		auto rayGenBlob = ShaderCache::GetShader(L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines, ShaderStage::Compute);
-		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
+		if (!rayGenBlob) {
+			logger::error("SHaRCGI::CreateUpdateComputePipeline - Failed to compile update shader.");
+			return;
+		}
 
-		auto* sceneGraph = scene->GetSceneGraph();
+		m_UpdatePass.m_ComputeShader = device->createShader({ nvrhi::ShaderType::Compute, "SHaRC GI Update Shader", "Main" }, rayGenBlob->GetBufferPointer(), rayGenBlob->GetBufferSize());
+		if (!m_UpdatePass.m_ComputeShader) {
+			logger::error("SHaRCGI::CreateUpdateComputePipeline - Failed to create update shader.");
+			return;
+		}
 
 		auto pipelineDesc = nvrhi::ComputePipelineDesc()
 			.setComputeShader(m_UpdatePass.m_ComputeShader)
@@ -141,11 +167,101 @@ namespace Pass::Raytracing::Common
 			.addBindingLayout(sceneGraph->GetVertexDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetMaterialDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetTextureDescriptors()->m_Layout)
-			.addBindingLayout(sceneGraph->GetPrevPositionDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetCubemapDescriptors()->m_Layout)
 			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
-		m_UpdatePass.m_ComputePipeline = GetRenderer()->GetDevice()->createComputePipeline(pipelineDesc);
+		m_UpdatePass.m_ComputePipeline = device->createComputePipeline(pipelineDesc);
+		if (!m_UpdatePass.m_ComputePipeline) {
+			logger::error("SHaRCGI::CreateUpdateComputePipeline - Failed to create update pipeline.");
+			return;
+		}
+	}
+
+	void SHaRCGI::CreateUpdateRayTracingPipeline()
+	{
+		auto defines = Util::Shader::GetDXCDefines(m_Defines);
+		defines.emplace_back(L"USE_RAY_QUERY", L"0");
+		eastl::vector<DxcDefine> commonDefines;
+
+		auto device = GetRenderer()->GetDevice();
+
+		auto rayGenLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/GlobalIllumination/RayGeneration.hlsl", defines);
+		if (!rayGenLib) {
+			logger::error("SHaRCGI::CreateUpdateRayTracingPipeline - Failed to compile ray gen library.");
+			return;
+		}
+
+		auto missLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/Miss.hlsl", commonDefines);
+		auto hitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ClosestHit.hlsl", commonDefines);
+		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", defines);
+		auto shadowMissLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowMiss.hlsl", commonDefines);
+		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", defines);
+
+		nvrhi::rt::PipelineDesc pipelineDesc;
+
+		pipelineDesc.shaders = {
+			{ "RayGen", rayGenLib->getShader("Main", nvrhi::ShaderType::RayGeneration), nullptr },
+			{ "Miss", missLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr },
+			{ "ShadowMiss", shadowMissLib->getShader("Main", nvrhi::ShaderType::Miss), nullptr }
+		};
+
+		pipelineDesc.hitGroups = {
+			{
+				"HitGroup",
+				hitLib->getShader("Main", nvrhi::ShaderType::ClosestHit),
+				anyHitLib->getShader("Main", nvrhi::ShaderType::AnyHit),
+				nullptr,  // intersection
+				nullptr,  // binding layout
+				false     // isProceduralPrimitive
+			},
+			{
+				"ShadowHitGroup",
+				nullptr,
+				shadowAnyHitLib->getShader("Main", nvrhi::ShaderType::AnyHit),
+				nullptr, nullptr, false
+			}
+		};
+
+		auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+		pipelineDesc.globalBindingLayouts = {
+			m_UpdatePass.m_BindingLayout,
+			sceneGraph->GetTriangleDescriptors()->m_Layout,
+			sceneGraph->GetVertexDescriptors()->m_Layout,
+			sceneGraph->GetMaterialDescriptors()->m_Layout,
+			sceneGraph->GetTextureDescriptors()->m_Layout,
+			sceneGraph->GetCubemapDescriptors()->m_Layout,
+			sceneGraph->GetDynamicVertexDescriptors()->m_Layout
+		};
+
+		pipelineDesc.maxPayloadSize = 20;
+		pipelineDesc.allowOpacityMicromaps = false;
+
+#if defined(NVAPI)
+		pipelineDesc.hlslExtensionsUAV = 127;
+#endif
+
+		m_UpdatePass.m_RayPipeline = device->createRayTracingPipeline(pipelineDesc);
+		if (!m_UpdatePass.m_RayPipeline) {
+			logger::error("SHaRCGI::CreateUpdateRayTracingPipeline - Failed to create ray tracing pipeline.");
+			return;
+		}
+
+		auto shaderTableDesc = nvrhi::rt::ShaderTableDesc()
+			.enableCaching(5)
+			.setDebugName("SHaRC GI Update Shader Table");
+
+		m_UpdatePass.m_ShaderTable = m_UpdatePass.m_RayPipeline->createShaderTable(shaderTableDesc);
+		if (!m_UpdatePass.m_ShaderTable) {
+			logger::error("SHaRCGI::CreateUpdateRayTracingPipeline - Failed to create shader table.");
+			return;
+		}
+
+		m_UpdatePass.m_ShaderTable->setRayGenerationShader("RayGen");
+		m_UpdatePass.m_ShaderTable->addMissShader("Miss");
+		m_UpdatePass.m_ShaderTable->addMissShader("ShadowMiss");
+		m_UpdatePass.m_ShaderTable->addHitGroup("HitGroup");
+		m_UpdatePass.m_ShaderTable->addHitGroup("ShadowHitGroup");
 	}
 
 	void SHaRCGI::SetupResolve()
@@ -251,7 +367,17 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_AccumulationBuffer)
 		};
 
+#if defined(NVAPI)
+		if (!renderer->IsVulkan() && !renderer->m_Settings.UseRayQuery)
+			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
+#endif
+
 		m_UpdatePass.m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_UpdatePass.m_BindingLayout);
+		if (!m_UpdatePass.m_BindingSets[currentSlot]) {
+			for (const auto& binding : bindingSetDesc.bindings) {
+				logger::info("SHaRCGI::CheckBindings - {}, {}, 0x{:08X}", magic_enum::enum_name(binding.type), binding.slot, reinterpret_cast<uintptr_t>(binding.resourceHandle));
+			}
+		}
 
 		m_BindingSetDirty[currentSlot] = false;
 	}
@@ -284,22 +410,20 @@ namespace Pass::Raytracing::Common
 		{
 			auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
-			nvrhi::ComputeState state;
-			state.pipeline = m_UpdatePass.m_ComputePipeline;
+			if (!m_UpdatePass.m_ComputePipeline && !m_UpdatePass.m_RayPipeline)
+				return;
 
 			CheckBindings();
 
-			state.bindings = {
+			nvrhi::BindingSetVector bindings = {
 				m_UpdatePass.m_BindingSets[currentSlot],
 				sceneGraph->GetTriangleDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetMaterialDescriptors()->m_DescriptorTable,
 				sceneGraph->GetTextureDescriptors()->m_DescriptorTable->GetDescriptorTable(),
-				sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
 				sceneGraph->GetCubemapDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 				sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable
 			};
-			commandList->setComputeState(state);
 
 			uint2 resolution = Renderer::GetSingleton()->GetResolution();
 
@@ -308,8 +432,28 @@ namespace Pass::Raytracing::Common
 				Util::Math::DivideRoundUp(resolution.y, 5u)
 			};
 
-			auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, Constants::GI_DISPATCH_THREADS);
-			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
+			if (m_UpdatePass.m_RayPipeline)
+			{
+				nvrhi::rt::State state;
+				state.shaderTable = m_UpdatePass.m_ShaderTable;
+				state.bindings = bindings;
+				commandList->setRayTracingState(state);
+
+				nvrhi::rt::DispatchRaysArguments args;
+				args.width = sharcRes.x;
+				args.height = sharcRes.y;
+				commandList->dispatchRays(args);
+			}
+			else if (m_UpdatePass.m_ComputePipeline)
+			{
+				nvrhi::ComputeState state;
+				state.pipeline = m_UpdatePass.m_ComputePipeline;
+				state.bindings = bindings;
+				commandList->setComputeState(state);
+
+				auto threadGroupSize = Util::Math::GetDispatchCount(sharcRes, Constants::GI_DISPATCH_THREADS);
+				commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
+			}
 		}
 
 		// Resolve Pass
