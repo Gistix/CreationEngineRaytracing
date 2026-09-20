@@ -54,6 +54,9 @@ namespace Pass::NRD
 
 		eastl::vector<DispatchBindingCache> m_DispatchBindingCaches;
 
+		std::chrono::high_resolution_clock::time_point m_LastFrameTime = std::chrono::high_resolution_clock::now();
+		float m_SmoothedFrameTime = 16.667f;
+
 		bool m_ResourcesDirty = true;
 		bool m_SettingsDirty = true;
 

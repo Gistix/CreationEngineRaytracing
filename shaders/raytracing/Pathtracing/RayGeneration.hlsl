@@ -162,8 +162,13 @@ void Main()
 #       if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
         
+#           if defined(NRD_REBLUR)
         DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#           else
+        DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+        SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+#           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
         SpecularHitDistance[idx] = 0;
@@ -179,8 +184,13 @@ void Main()
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f); 
         
 #       if defined(NRD)
+#           if defined(NRD_REBLUR)
         DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+#           else
+        DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+        SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+#           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;                
@@ -1370,7 +1380,7 @@ void Main()
 #   if defined(NRD_REBLUR)
         float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
 #   else
-        float normHitDist = accumulatedHitDist;
+        float normHitDist = NRD_FrontEnd_TrimHitDistance(accumulatedHitDist, 0.05f);
 #   endif
         
         if (isSpecularSample) {
