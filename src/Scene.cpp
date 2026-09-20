@@ -30,6 +30,7 @@
 #include "Pass/Raytracing/Debug.h"
 #include "Pass/Raster/GBuffer.h"
 #include "Pass/NRD/NRDIntegration.h"
+#include "Pass/Denoiser/ASVGF.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
@@ -109,6 +110,7 @@ void Scene::UpdateMode(Mode mode)
 
 		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
+		auto asvgfPass = eastl::make_unique<Pass::Denoiser::ASVGF>(renderer, Mode::GlobalIllumination);
 		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
@@ -123,6 +125,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
+		renderGraph->AddNode({ true, "ASVGF", eastl::move(asvgfPass) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
 		renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
@@ -142,6 +145,7 @@ void Scene::UpdateMode(Mode mode)
 		auto ptPass = eastl::make_unique<Pass::PathTracing>(renderer, tlasPtr, sharcPtr);
 		auto restirGI = eastl::make_unique<Pass::Raytracing::ReSTIRGIPass>(renderer, tlasPtr);
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::PathTracing, tlasPtr);
+		auto asvgfPass = eastl::make_unique<Pass::Denoiser::ASVGF>(renderer, Mode::PathTracing);
 		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
 		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::PathTracing);
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
@@ -156,6 +160,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "PathTracing", eastl::move(ptPass) });
 		renderGraph->AddNode({ true, "ReSTIRGI", eastl::move(restirGI) });
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
+		renderGraph->AddNode({ true, "ASVGF", eastl::move(asvgfPass) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
 		renderGraph->AddNode({ true, "PT Composite", eastl::move(ptComposite) });
@@ -451,15 +456,16 @@ void Scene::UpdateSettings(Settings settings)
 
 	const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 		settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+	const bool asvgf = (settings.GeneralSettings.Denoiser == Denoiser::ASVGF);
 
 	if (currentMode == Mode::GlobalIllumination) {
-		// NRDIntegration nodes gate themselves per denoiser variant in SettingsChanged
+		// NRDIntegration and ASVGF nodes gate themselves per denoiser variant in SettingsChanged
 	}
 	else if (currentMode == Mode::PathTracing) {
 		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
 		const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
 		renderGraph->SetEnabled<Pass::Common::Accumulation>(accumulation);
-		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd);
+		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd || asvgf);
 	}
 
 	renderGraph->SettingsChanged(settings); 
@@ -471,7 +477,8 @@ float Scene::GetResolutionScale() const
 		return 1.0f;
 
 	if (m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Reblur &&
-		m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Relax)
+		m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Relax &&
+		m_Settings.GeneralSettings.Denoiser != Denoiser::ASVGF)
 		return 1.0f;
 
 	return m_Settings.RaytracingSettings.ResolutionScale;

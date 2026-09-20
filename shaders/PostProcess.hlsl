@@ -23,7 +23,7 @@ Texture2D<float3> GNMAOTexture          : register(t4);
 RWTexture2D<float4> OutNormalRoughness       : register(u0);
 RWTexture2D<float2> OutMotionVectors         : register(u1);
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
 RWTexture2D<float>  OutViewDepth             : register(u2);
 #endif
 
@@ -60,12 +60,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     OutNormalRoughness[pixelPos] = normalRoughness;
     OutMotionVectors[pixelPos] = PrimaryMotionVectors.SampleLevel(PointClampSampler, sourceUV, 0).xy;
 
-#if defined(NRD) || defined(DLSS_RR)
+#if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)
     const float depth = DepthTexture.SampleLevel(PointClampSampler, sourceUV, 0);
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 #endif
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
     OutViewDepth[pixelPos] = depthVS;
 #endif
 

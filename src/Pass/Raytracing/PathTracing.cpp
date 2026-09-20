@@ -102,11 +102,12 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool asvgf = (settings.GeneralSettings.Denoiser == Denoiser::ASVGF);
 
-		if (nrd || dlssrr) {
+		if (nrd || dlssrr || asvgf) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Diffuse Albedo
 
-			if (nrd) {
+			if (nrd || asvgf) {
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // ViewZ
 
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Diffuse Radiance
@@ -346,11 +347,12 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool asvgf = (settings.GeneralSettings.Denoiser == Denoiser::ASVGF);
 
-		if (nrd || dlssrr) {
+		if (nrd || dlssrr || asvgf) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::DiffuseAlbedo)));
 
-			if (nrd) {
+			if (nrd || asvgf) {
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::ViewDepth)));
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::DiffuseRadiance)));
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, textureManager.GetTexture(RenderTarget::SpecularRadiance)));

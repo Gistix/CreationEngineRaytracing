@@ -29,7 +29,7 @@
 #   include "include/ThreadGroupTilingX.hlsli"
 #endif
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
 #   include "include/NRD.hlsli"
 #endif
 
@@ -163,7 +163,7 @@ void Main()
 #endif
 
     float3 direction;
-#if defined(RAW_RADIANCE) && !defined(NRD)
+#if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
     MonteCarlo::BRDFWeight brdfWeight;
 #endif
 
@@ -192,10 +192,14 @@ void Main()
     SharcHitData sharcHitData;
 #endif    
     
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
      float diffHitDist = 0.0f;
      uint diffPathNum = 0;
+#   if defined(NRD)
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+#   else
+     float specHitDist = 0.0f;
+#   endif
 #endif
     
     [loop]
@@ -210,7 +214,7 @@ void Main()
         bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
         float accumulatedHitDist = 0;
 #endif
 
@@ -229,7 +233,7 @@ void Main()
         float3 waterVolumeAbsorption = float3(0.0f, 0.0f, 0.0f);    
         
         // Throughput difference of demodulated first bounce
-#if defined(RAW_RADIANCE) && !defined(NRD)
+#if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
         float3 originalThroughput = float3(1.0f, 1.0f, 1.0f);
 #endif            
         
@@ -250,7 +254,7 @@ void Main()
                 isSpecularSample = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
 #endif
             
-#if defined(RAW_RADIANCE) && !defined(NRD)
+#if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
             const bool demodulatedThroughput = (j == 0 && !isSpecularSample);
 #endif
             
@@ -266,7 +270,7 @@ void Main()
                 waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
             }
 
-#if defined(RAW_RADIANCE) && !defined(NRD)
+#if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.specular = (bsdfSample.isLobe(LobeType::SpecularReflection) || bsdfSample.isLobe(LobeType::DeltaReflection)) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
             brdfWeight.transmission = bsdfSample.isLobe(LobeType::Transmission) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
@@ -290,7 +294,7 @@ void Main()
             SharcSetThroughput(sharcState, throughput);
 #else
 #   if RUSSIAN_ROULETTE != 0          
-#       if defined(RAW_RADIANCE) && !defined(NRD)
+#       if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
         // Apply russian roulette based on the original throughput
         float3 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
 #       else
@@ -318,7 +322,7 @@ void Main()
 
             throughput /= (1.0f - rrProb);
                 
-#       if defined(RAW_RADIANCE) && !defined(NRD)
+#       if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
             if (demodulatedThroughput)
                 originalThroughput /= (1.0f - rrProb);
 #       endif                
@@ -356,7 +360,7 @@ void Main()
             {
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
                 
-#   if defined(RAW_RADIANCE) && !defined(NRD)
+#   if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
                 if (demodulatedThroughput)
                     originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
 #   endif
@@ -374,7 +378,7 @@ void Main()
                 break;
             }
             
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
 #endif                      
@@ -471,7 +475,7 @@ void Main()
             sampleRadiance += surface.Emissive * throughput;
 #endif
             
-#   if defined(RAW_RADIANCE) && !defined(NRD)
+#   if defined(RAW_RADIANCE) && !defined(NRD) && !defined(ASVGF)
             // After throughput is applied to radiance, restore original throughput so that subsequent bounces is not increased due to missing diffuse albedo multiplication
             // This ensures first bounce has low frequency, allowing denoisers and linear upscaling to work with less per-pixel data
             // Diffuse albedo is re-applied during compositing (DiffuseRadiance * DiffuseAlbedo + SpecularRadiance)            
@@ -481,7 +485,7 @@ void Main()
         
         }
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
 #   if defined(NRD_REBLUR)
         float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, sourceSurface.Roughness);
 #   else
@@ -489,7 +493,11 @@ void Main()
 #   endif
         
         if (isSpecularSample) {
+#   if defined(NRD)
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
+#   else
+            specHitDist += normHitDist;
+#   endif
         } else {
             diffHitDist += normHitDist;
             diffPathNum++;
@@ -510,8 +518,10 @@ void Main()
 #endif
     }
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
+#   if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+#   endif
     diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
 #endif
     
@@ -524,7 +534,7 @@ void Main()
        
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
-#       if defined(NRD)
+#       if defined(NRD) || defined(ASVGF)
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
 
@@ -534,9 +544,12 @@ void Main()
 #   if defined(NRD_REBLUR)
     DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
-#   else
+#   elif defined(NRD_RELAX)
     DiffuseOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
     SpecularOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+#   else
+    DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);
+    SpecularOutput[idx] = float4(specularRadiance, specHitDist);
 #   endif  
     
 

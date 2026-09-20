@@ -156,14 +156,22 @@ void Main()
         MotionVectors[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
         
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
         
-#       if defined(NRD) 
+#       if defined(NRD) || defined(ASVGF)
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
         
+#           if defined(NRD_REBLUR)
         DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
-        SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+        SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
+#           elif defined(NRD_RELAX)
+        DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+        SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+#           else
+        DiffuseRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        SpecularRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
         SpecularHitDistance[idx] = 0;
@@ -175,12 +183,20 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f); 
         
-#       if defined(NRD)
+#       if defined(NRD) || defined(ASVGF)
+#           if defined(NRD_REBLUR)
         DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
-        SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);          
+        SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
+#           elif defined(NRD_RELAX)
+        DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+        SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+#           else
+        DiffuseRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        SpecularRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;                
@@ -194,7 +210,7 @@ void Main()
             skyVirtualPos,
             skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)    
-#   if defined(NRD) 
+#   if defined(NRD) || defined(ASVGF)
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
 #   endif        
 #endif
@@ -268,9 +284,9 @@ void Main()
             skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
         Depth[idx] = 1;
     
-#       if defined(NRD) | defined(DLSS_RR)   
+#       if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)   
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
-#           if defined(NRD) 
+#           if defined(NRD) || defined(ASVGF) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
 #           else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
@@ -303,7 +319,7 @@ void Main()
     // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
     const bool useCoat = sourceSurface.CoatStrength > 0;
   
-#   if defined(NRD) | defined(DLSS_RR)    
+#   if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)    
     const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
     DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
 #   endif   
@@ -334,7 +350,7 @@ void Main()
     );
 #endif
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
     float depthVS = 0.0f;
 #endif
 
@@ -347,7 +363,7 @@ void Main()
     const float depth = computeClipDepthCameraRelative(sourceSurface.CameraRelativePosition);
     Depth[idx] = depth;
     
-#   if defined(NRD) 
+#   if defined(NRD) || defined(ASVGF) 
     depthVS = ScreenToViewDepth(depth, Camera.CameraData);
     ViewDepth[idx] = depthVS;
 #   endif
@@ -606,14 +622,17 @@ void Main()
         if (fillTMinMax.x < 0)
         {
             // VBuffer indicated a miss — output stable radiance only
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
             Output[idx] = float4(spCtx.GetAllRadiance(idx, true), 1.0f);
 #   if defined(NRD_REBLUR)
             DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
             SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
-#   else
+#   elif defined(NRD_RELAX)
             DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
             SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+#   else
+            DiffuseRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            SpecularRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
 #   endif
             DiffuseFactor[idx] = float3(1.0f, 1.0f, 1.0f);
             SpecularFactor[idx] = float3(1.0f, 1.0f, 1.0f);
@@ -634,14 +653,17 @@ void Main()
 
         if (!fillPayload.Hit())
         {
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
             Output[idx] = float4(spCtx.GetAllRadiance(idx, true), 1.0f);
 #   if defined(NRD_REBLUR)
             DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
             SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(0.0f, 0.0f, false);
-#   else
+#   elif defined(NRD_RELAX)
             DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
             SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+#   else
+            DiffuseRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            SpecularRadiance[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
 #   endif
             DiffuseFactor[idx] = float3(1.0f, 1.0f, 1.0f);
             SpecularFactor[idx] = float3(1.0f, 1.0f, 1.0f);
@@ -665,7 +687,7 @@ void Main()
         AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);
         sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
         fillPlaneThp = fillThp;
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
         depthVS = ScreenToViewDepth(computeClipDepthCameraRelative(sourceSurface.CameraRelativePosition), Camera.CameraData);
 #endif
 
@@ -686,7 +708,7 @@ void Main()
         float3 domNormal = domSP.GetNormal();
         float3 domDiffEst, domSpecEst;
         UnpackTwoFp32ToFp16(domSP.DenoiserPackedBSDFEstimate, domDiffEst, domSpecEst);
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)
         DiffuseAlbedo[idx] = domDiffEst;
 #   endif
         NormalRoughness[idx] = float4(domNormal, domRoughness);
@@ -696,7 +718,7 @@ void Main()
         if (sourceSurface.CoatStrength > 0)
         {
             float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
 #   endif
 #   if defined(NRD)
@@ -707,7 +729,7 @@ void Main()
         }
         else
         {
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
 #   endif
 #   if defined(NRD)
@@ -747,7 +769,7 @@ void Main()
     // For non-delta lobes: standard NEE (EvaluateDirectRadiance) evaluates BSDF at sampled light directions.
     // For delta lobes: EvalDeltaLobeLighting checks if delta reflection/refraction directions fall within
     // each light source's solid angle, providing correct mirror reflections of analytical lights.
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
     float3 directDiffuse = 0.0f;
     float3 directSpecular = 0.0f;
 
@@ -826,7 +848,7 @@ void Main()
     MonteCarlo::BRDFWeight brdfWeight;
 #endif
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     float3 diffuseRadiance = directDiffuse * fillPlaneThp;
     float3 specularRadiance = directSpecular * fillPlaneThp;
@@ -839,10 +861,14 @@ void Main()
 #endif
     bool isSpecular = false;
     
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
      float diffHitDist = 0;     
      uint diffPathNum = 0;
+#   if defined(NRD)
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+#   else
+     float specHitDist = 0.0f;
+#   endif
 #elif defined(DLSS_RR)
     float specHitDist = 0.0f;
 #endif
@@ -877,7 +903,7 @@ void Main()
         bsdf = sourceBSDF;
         rayCone = sourceRayCone; 
         
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
         float accumulatedHitDist = 0;
 #endif        
         
@@ -1075,7 +1101,7 @@ void Main()
                 throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
             }
             
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
 #elif defined(DLSS_RR)
@@ -1366,7 +1392,7 @@ void Main()
 #   endif
 #endif        
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
 #   if defined(NRD_REBLUR)
         float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, isSpecularSample ? sourceSurface.Roughness : 1.0);
 #   else
@@ -1374,14 +1400,18 @@ void Main()
 #   endif
         
         if (isSpecularSample) {
+#       if defined(NRD)
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
+#       else
+            specHitDist += normHitDist;
+#       endif
         } else {
             diffHitDist += normHitDist;
             diffPathNum++;
         }
 #endif        
         
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
         if (isSpecularSample)
             specularRadiance += sampleRadiance;
         else
@@ -1395,8 +1425,10 @@ void Main()
 #endif
     }
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
+#   if defined(NRD)
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
+#   endif
     diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
     diffuseRadiance /= MAX_SAMPLES;
     specularRadiance /= MAX_SAMPLES;
@@ -1406,7 +1438,7 @@ void Main()
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     // FILL mode output
-#   if defined(NRD)
+#   if defined(NRD) || defined(ASVGF)
     float3 baseRadiance = spCtx.LoadStableRadiance(idx);
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
@@ -1418,9 +1450,12 @@ void Main()
 #       if defined(NRD_REBLUR)
     DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
-#       else
+#       elif defined(NRD_RELAX)
     DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+#       else
+    DiffuseRadiance[idx] = float4(diffuseRadiance, diffHitDist);
+    SpecularRadiance[idx] = float4(specularRadiance, specHitDist);
 #       endif  
     
     DiffuseFactor[idx] = diffFactor;
@@ -1443,7 +1478,7 @@ void Main()
         float3 primaryWaterAttenuation = exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
         primaryEmissive *= primaryWaterAttenuation;
         direct *= primaryWaterAttenuation;
-#   if defined(NRD)
+#   if defined(NRD) || defined(ASVGF)
         diffuseRadiance *= primaryWaterAttenuation;
         specularRadiance *= primaryWaterAttenuation;
 #   else
@@ -1451,7 +1486,7 @@ void Main()
 #   endif
     }
     
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
 
@@ -1462,9 +1497,12 @@ void Main()
 #   if defined(NRD_REBLUR)
     DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
-#   else
+#   elif defined(NRD_RELAX)
     DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+#   else
+    DiffuseRadiance[idx] = float4(diffuseRadiance, diffHitDist);
+    SpecularRadiance[idx] = float4(specularRadiance, specHitDist);
 #   endif  
     
     DiffuseFactor[idx] = diffFactor;

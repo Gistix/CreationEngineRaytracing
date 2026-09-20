@@ -8,7 +8,7 @@ Texture2D<float3> DiffuseAlbedo         : register(t0);
 Texture2D<float4> DiffuseRadiance       : register(t1);
 Texture2D<float4> SpecularRadiance      : register(t2);
 
-#if defined(NRD)
+#if defined(NRD) || defined(ASVGF)
 Texture2D<float3> DiffuseFactor         : register(t3);
 Texture2D<float3> SpecularFactor        : register(t4);
 #endif
@@ -41,6 +41,9 @@ void Main(uint2 idx : SV_DispatchThreadID)
     specularRadiance = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularRadiance); 
 #   endif
     
+     diffuseRadiance *= float4(DiffuseFactor[idx], 1.0f);
+     specularRadiance *= float4(SpecularFactor[idx], 1.0f);
+#elif defined(ASVGF)
      diffuseRadiance *= float4(DiffuseFactor[idx], 1.0f);
      specularRadiance *= float4(SpecularFactor[idx], 1.0f);
 #else   

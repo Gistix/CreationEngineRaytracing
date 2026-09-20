@@ -14,8 +14,23 @@ enum class Denoiser
 	NRD_Reblur,
 	NRD_Relax,
 	DLSS_RR,
-	Accumulation
+	Accumulation,
+	ASVGF
 };
+
+struct ASVGFSettings
+{
+	int AtrousIterations = 4;
+	float TemporalAlphaMin = 0.05f;
+	float TemporalAlphaMax = 1.0f;
+	float GradientSensitivity = 1.5f;
+	float DepthSigma = 1.0f;
+	float NormalSigma = 16.0f;
+	float LuminanceSigma = 4.0f;
+	int MaxHistoryLength = 32;
+	bool DenoiseSpecular = true;
+};
+
 
 struct GeneralSettings
 {
@@ -313,6 +328,7 @@ struct Settings
 	WaterSettings WaterSettings;
 	ExperimentalSettings ExperimentalSettings;
 	ReSTIRGISettings ReSTIRGI;
+	ASVGFSettings ASVGFSettings;
 	DebugSettings DebugSettings;
 };
 

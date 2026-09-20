@@ -39,10 +39,10 @@ RWTexture2D<float4>                         NormalRoughness             : regist
 RWTexture2D<float4>                         MotionVectors               : register(u2); // PT Motion Vectors output (written by BUILD/REFERENCE pass)
 RWTexture2D<float>                          Depth                       : register(u3); // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
 
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(ASVGF)
 RWTexture2D<float3>                         DiffuseAlbedo               : register(u4);
 
-#       if defined(NRD)
+#       if defined(NRD) || defined(ASVGF)
 RWTexture2D<float>                          ViewDepth                   : register(u5);
 RWTexture2D<float4>                         DiffuseRadiance             : register(u6);
 RWTexture2D<float4>                         SpecularRadiance            : register(u7);

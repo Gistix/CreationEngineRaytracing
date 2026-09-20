@@ -14,6 +14,8 @@ namespace
 		} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			defines.emplace_back(L"NRD", L"1");
 			defines.emplace_back(L"NRD_RELAX", L"1");
+		} else if (settings.GeneralSettings.Denoiser == Denoiser::ASVGF) {
+			defines.emplace_back(L"ASVGF", L"1");
 		}
 
 		return defines;
@@ -104,7 +106,8 @@ namespace Pass::Common
 		}
 
 		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
-					 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
+					 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax ||
+					 settings.GeneralSettings.Denoiser == Denoiser::ASVGF);
 	}
 
 	void GIComposite::CheckBindings()
