@@ -26,11 +26,12 @@ namespace Util
 			GeometryRuntimeData runtimeData{};
 
 #if defined(SKYRIM)
-			runtimeData.alphaProperty = a_geometry->alphaProperty.get();
-			runtimeData.shaderProperty = a_geometry->shaderProperty.get();
-			runtimeData.skinInstance = a_geometry->skinInstance.get();
-			runtimeData.rendererData = a_geometry->rendererData;
-			runtimeData.vertexDesc = a_geometry->vertexDesc;
+			const auto& geometryData = a_geometry->GetGeometryRuntimeData();
+			runtimeData.alphaProperty = geometryData.alphaProperty.get();
+			runtimeData.shaderProperty = geometryData.shaderProperty.get();
+			runtimeData.skinInstance = geometryData.skinInstance.get();
+			runtimeData.rendererData = geometryData.rendererData;
+			runtimeData.vertexDesc = geometryData.vertexDesc;
 #elif defined(FALLOUT4)
 			runtimeData.alphaProperty = reinterpret_cast<RE::NiAlphaProperty*>(a_geometry->properties[0].get());
 			runtimeData.shaderProperty = reinterpret_cast<RE::BSShaderProperty*>(a_geometry->properties[1].get());
@@ -393,7 +394,7 @@ namespace Util
 		{
 			SkinData result = { false, 0, nullptr, 0 };
 #if defined(SKYRIM)
-			auto* skinInstance = geometry->skinInstance.get();
+			auto* skinInstance = geometry->GetGeometryRuntimeData().skinInstance.get();
 			if (skinInstance) {
 				result.hasSkin = true;
 				auto* skinData = skinInstance->skinData.get();
@@ -418,7 +419,7 @@ namespace Util
 		const RE::NiTransform* GetSkinToBoneTransform(RE::BSGeometry* geometry, uint32_t a_boneIndex)
 		{
 #if defined(SKYRIM)
-			auto* skinInstance = geometry->skinInstance.get();
+			auto* skinInstance = geometry->GetGeometryRuntimeData().skinInstance.get();
 			if (!skinInstance || !skinInstance->skinData || a_boneIndex >= skinInstance->skinData->bones)
 				return nullptr;
 			return &skinInstance->skinData->boneData[a_boneIndex].skinToBone;

@@ -102,7 +102,7 @@ namespace Util
 		inline RE::TESObjectREFR* GetOwner(RE::NiAVObject* a_object)
 		{
 #if defined(SKYRIM)
-			return a_object->userData;
+			return REL::RelocateMember<RE::TESObjectREFR*>(a_object, 0x0F8, 0x110);
 #elif defined(FALLOUT4)
 			return reinterpret_cast<RE::TESObjectREFR*>(a_object->userData);
 #endif
@@ -111,7 +111,7 @@ namespace Util
 		inline RE::BSShaderProperty* GetShaderProperty(const RE::BSGeometry* a_geometry)
 		{
 #if defined(SKYRIM)
-			return a_geometry->shaderProperty.get();
+			return a_geometry->GetGeometryRuntimeData().shaderProperty.get();
 #elif defined(FALLOUT4)
 			return reinterpret_cast<RE::BSShaderProperty*>(a_geometry->properties[1].get());
 #endif
@@ -131,7 +131,7 @@ namespace Util
 		inline RE::NiTObjectArray<RE::NiPointer<RE::NiAVObject>>& GetChildren(RE::NiNode* a_node)
 		{
 #if defined(SKYRIM)
-			return a_node->children;
+			return a_node->GetChildren();
 #elif defined(FALLOUT4)
 			return a_node->children;
 #endif
@@ -140,7 +140,7 @@ namespace Util
 		inline RE::NiAVObject* GetChildAt(RE::NiNode* a_node, uint16_t a_index)
 		{
 #if defined(SKYRIM)
-			auto& children = a_node->children;
+			auto& children = a_node->GetChildren();
 			if (a_index < children.size()) {
 				return children[a_index].get();
 			}
@@ -244,7 +244,7 @@ namespace Util
 		inline bool IsNiAVObjectHidden(const RE::NiAVObject* a_object)
 		{
 #if defined(SKYRIM)
-			return a_object->flags.all(RE::NiAVObject::Flag::kHidden);
+			return a_object->GetFlags().all(RE::NiAVObject::Flag::kHidden);
 #elif defined(FALLOUT4)
 			return (a_object->GetFlags() & 1) != 0;
 #endif

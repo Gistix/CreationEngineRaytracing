@@ -44,6 +44,16 @@
 
 #include "include/NRD.hlsli"
 
+float3 GetUnderwaterAbsorption()
+{
+#if defined(SKYRIM)
+    float3 waterColor = saturate(SRGBColorToLinear(Camera.UnderwaterColor));
+    return -log(max(waterColor, 1e-4f)) / 600.0f * Raytracing.WaterAbsorptionScale;
+#else
+    return 0.0f;
+#endif
+}
+
 #if USE_RAY_QUERY
 WAVE_SIZE(32)
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
@@ -68,6 +78,8 @@ void Main()
     uint2 idx = DispatchRaysIndex().xy;
     uint2 size = DispatchRaysDimensions().xy;
 #endif
+
+    float3 underwaterAbsorption = GetUnderwaterAbsorption();
 
 #if defined(SHARC)
     SharcParameters sharcParameters = GetSharcParameters();
@@ -142,8 +154,8 @@ void Main()
         float3x3 identityMat = float3x3(1,0,0, 0,1,0, 0,0,1);
         // Attenuate sky by water absorption when camera is underwater
         float3 buildMissThp = float3(1,1,1);
-        if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
-            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
+        if (Camera.IsUnderwater != 0 && any(underwaterAbsorption > 0.0f))
+            buildMissThp *= exp(-underwaterAbsorption * kEnvironmentMapSceneDistance);
         StablePlanesHandleMiss(spCtx, idx, 0, 1, 1 /* sentinel branchID */,
             Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
             identityMat, skyRad, true);
@@ -247,8 +259,8 @@ void Main()
         spCtx.StartPixel(idx);
         float3x3 identityMat = float3x3(1,0,0, 0,1,0, 0,0,1);
         float3 buildMissThp = float3(1,1,1);
-        if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
-            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
+        if (Camera.IsUnderwater != 0 && any(underwaterAbsorption > 0.0f))
+            buildMissThp *= exp(-underwaterAbsorption * kEnvironmentMapSceneDistance);
         StablePlanesHandleMiss(spCtx, idx, 0, 1, 1,
             Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
             identityMat, skyRadiance, true);
@@ -401,7 +413,7 @@ void Main()
 
         // Water volume tracking for BUILD pass (Beer-Lambert absorption along delta paths)
         bool buildInsideWater = Camera.IsUnderwater != 0;
-        float3 buildWaterAbsorption = buildInsideWater ? Camera.UnderwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
+        float3 buildWaterAbsorption = buildInsideWater ? underwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
 
         // Apply primary ray water absorption
         if (buildInsideWater)
@@ -921,7 +933,7 @@ void Main()
         float3 waterVolumeAbsorption = fillWaterAbsorption;
 #else
         bool insideWaterVolume = Camera.IsUnderwater != 0;
-        float3 waterVolumeAbsorption = insideWaterVolume ? Camera.UnderwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
+        float3 waterVolumeAbsorption = insideWaterVolume ? underwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
 #endif
         
 #if defined(RAW_RADIANCE)
@@ -1451,9 +1463,9 @@ void Main()
 #elif !(defined(SHARC) && SHARC_UPDATE)
     // REFERENCE mode output
     // Apply primary ray water absorption when camera is underwater
-    if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
+    if (Camera.IsUnderwater != 0 && any(underwaterAbsorption > 0.0f))
     {
-        float3 primaryWaterAttenuation = exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
+        float3 primaryWaterAttenuation = exp(-underwaterAbsorption * sourcePayload.hitDistance);
         primaryEmissive *= primaryWaterAttenuation;
         direct *= primaryWaterAttenuation;
 #   if defined(NRD)

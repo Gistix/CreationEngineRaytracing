@@ -70,7 +70,45 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 			magic_enum::enum_name(desc.format), 
 			desc.debugName);
 
-		renderTarget.handle = device->createTexture(desc);
+		const bool sharedOutput = texture == Texture::Main || texture == Texture::ClipDepth ||
+			texture == Texture::MotionVectors3D || texture == Texture::DiffuseAlbedo ||
+			texture == Texture::RRSpecularAlbedo || texture == Texture::RRSpecularHitDist;
+		if (renderer->IsVulkan() && sharedOutput) {
+			D3D11_TEXTURE2D_DESC desc11{};
+			desc11.Width = desc.width;
+			desc11.Height = desc.height;
+			desc11.MipLevels = 1;
+			desc11.ArraySize = 1;
+			desc11.Format = nvrhi::d3d12::convertFormat(desc.format);
+			desc11.SampleDesc.Count = 1;
+			desc11.Usage = D3D11_USAGE_DEFAULT;
+			desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+
+			auto* nativeDevice = renderer->GetNativeD3D11Device();
+			winrt::com_ptr<IDXGIVkInteropDevice> interopDevice;
+			HRESULT hr = nativeDevice ? nativeDevice->QueryInterface(__uuidof(IDXGIVkInteropDevice), interopDevice.put_void()) : E_POINTER;
+			if (SUCCEEDED(hr))
+				hr = nativeDevice->CreateTexture2D(&desc11, nullptr, renderTarget.d3d11Texture.put());
+			if (SUCCEEDED(hr)) {
+				renderTarget.handle = Renderer::WrapNativeTexture(renderTarget.d3d11Texture.get(), debugName.c_str(),
+					nvrhi::ResourceStates::UnorderedAccess);
+				if (renderTarget.handle) {
+					interopDevice->FlushRenderingCommands();
+					renderTarget.sharedD3D12Handle = renderTarget.handle;
+				}
+			}
+			if (!renderTarget.handle) {
+				renderTarget.d3d11Texture = nullptr;
+				logger::warn("RenderTargetManager::GetTexture - Direct sharing failed for {} (0x{:08X}), using a copy", debugName, static_cast<uint32_t>(hr));
+			}
+		}
+
+		if (!renderTarget.handle)
+			renderTarget.handle = device->createTexture(desc);
+		if (renderTarget.handle)
+			logger::info("[VRAM] Render target {}: {:.1f} MiB, direct sharing={}", debugName,
+				device->getTextureMemoryRequirements(renderTarget.handle).size / 1048576.0,
+				renderTarget.sharedD3D12Handle == renderTarget.handle);
 	}
 
 	return renderTarget.handle;
@@ -155,6 +193,9 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 			std::string sharedDebugName = std::format("{}_{}_D3D11Shared", magic_enum::enum_name(texture), slot);
 			renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str());
 		}
+		if (renderTarget.sharedD3D12Handle)
+			logger::info("[VRAM] Shared copy {}_{}: {:.1f} MiB", magic_enum::enum_name(texture), slot,
+				renderer->GetDevice()->getTextureMemoryRequirements(renderTarget.sharedD3D12Handle).size / 1048576.0);
 	}
 
 	sharedTexture.native = renderTarget.d3d12Resource.get();
@@ -174,7 +215,7 @@ void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, u
 	auto copyTexture = [&](Texture texture){
 		auto& rt = m_Textures[slot][static_cast<size_t>(texture)];
 
-		if (rt.sharedD3D12Handle && rt.handle)
+		if (rt.sharedD3D12Handle && rt.handle && rt.sharedD3D12Handle != rt.handle)
 			commandList->copyTexture(rt.sharedD3D12Handle, nvrhi::TextureSlice(), rt.handle, nvrhi::TextureSlice());
 	};
 

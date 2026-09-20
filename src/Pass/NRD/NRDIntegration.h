@@ -56,6 +56,7 @@ namespace Pass::NRD
 
 		bool m_ResourcesDirty = true;
 		bool m_SettingsDirty = true;
+		uint64_t m_LightingRevision = UINT64_MAX;
 
 		void Setup();
 		void DestroyInstance();

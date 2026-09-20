@@ -329,8 +329,9 @@ void Renderer::InitStablePlanes()
 	m_StablePlanes = eastl::make_unique<StablePlanesResources>();
 
 	auto device = GetDevice();
-	const uint width = m_RenderSize.x;
-	const uint height = m_RenderSize.y;
+	const auto resolution = GetDynamicResolution();
+	const uint width = resolution.x;
+	const uint height = resolution.y;
 	constexpr uint stablePlaneCount = 3;
 
 	// StablePlanesHeader: R32_UINT, 2DArray with 4 slices
@@ -352,7 +353,7 @@ void Renderer::InitStablePlanes()
 	// StablePlanesBuffer: StructuredBuffer<StablePlane>, stride=80 bytes, count=3*W*H
 	{
 		nvrhi::BufferDesc desc;
-		desc.byteSize = stablePlaneCount * width * height * 80;
+		desc.byteSize = uint64_t(stablePlaneCount) * width * height * 80;
 		desc.structStride = 80;
 		desc.canHaveUAVs = true;
 		desc.keepInitialState = true;
@@ -374,7 +375,8 @@ void Renderer::InitStablePlanes()
 		m_StablePlanes->stableRadiance = device->createTexture(desc);
 	}
 
-	logger::info("Stable Planes resources created ({}x{}, {} planes)", width, height, stablePlaneCount);
+	logger::info("[VRAM] Stable Planes: {}x{}, {} planes, {:.1f} MiB payload", width, height, stablePlaneCount,
+		(uint64_t(width) * height * (stablePlaneCount * 80 + 4 * 4 + 8)) / 1048576.0);
 }
 
 void Renderer::InitReSTIRGI()
@@ -565,6 +567,12 @@ uint2 Renderer::GetScaledDynamicResolution()
 void Renderer::SettingsChanged(const Settings& settings)
 {
 	m_RenderGraph->SettingsChanged(settings);
+
+	const bool pathTracing = settings.GeneralSettings.Mode == Mode::PathTracing;
+	if (!pathTracing || !settings.AdvancedSettings.StablePlanes)
+		m_StablePlanes.reset();
+	if (!pathTracing || !settings.ReSTIRGI.Enabled)
+		m_ReSTIRGIResources.reset();
 }
 
 nvrhi::ICommandList* Renderer::StartExecution()
@@ -688,13 +696,13 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 	logger::trace("Renderer::RunPostExecutionForSlot - Slot {} completed", slot);
 }
 
-nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char* name)
+nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char* name, nvrhi::ResourceStates initialState)
 {
 	auto* renderer = Renderer::GetSingleton();
 
 	nvrhi::TextureDesc desc{};
 	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.initialState = initialState;
 	desc.keepInitialState = true;
 	desc.debugName = name;
 

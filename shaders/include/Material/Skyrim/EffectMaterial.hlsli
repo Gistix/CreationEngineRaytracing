@@ -17,10 +17,8 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
     Texture2D baseTexture = Textures[NonUniformResourceIndex(effect.SourceTexture)];
 
     float4 baseTexColor = baseTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-    baseTexColor.xyz = baseTexColor.xyz;
     
     float4 baseColorMul = effect.BaseColor;
-    baseColorMul.xyz = baseColorMul.xyz;
     
     [branch]
     if ((props.ShaderFlags & ShaderFlags::kVertexColors) && !(props.ShaderFlags & ShaderFlags::kProjectedUV))
@@ -38,15 +36,29 @@ void EffectMaterial(inout Surface surface, in float2 texCoord0, in float4 vertex
 
         float2 grayscaleToColorUv = float2(baseTexColor.y, baseColorMul.x);
 
-        baseColor.xyz = baseColorScale * effectTexture.SampleLevel(ClampSampler, grayscaleToColorUv, mipLevel).xyz;
+        baseColor.xyz = baseColorScale * ColorToLinear(effectTexture.SampleLevel(ClampSampler, grayscaleToColorUv, mipLevel).xyz);
     }
     else
     {
-        baseColor = baseTexColor * baseColorMul;
+        baseColor = float4(ColorToLinear(baseTexColor.rgb) * SRGBColorToLinear(effect.BaseColor.rgb) * baseColorScale, baseTexColor.a * baseColorMul.a);
+        if ((props.ShaderFlags & ShaderFlags::kVertexColors) && !(props.ShaderFlags & ShaderFlags::kProjectedUV))
+            baseColor.rgb *= SRGBColorToLinear(vertexColor.rgb);
+    }
+
+    if (!(props.ShaderFlags & ShaderFlags::kGrayscaleToPaletteColor))
+        baseColor.rgb *= SRGBColorToLinear(props.EmissiveColor.rgb);
+
+    float effectMult = 1.0f;
+    if (LLON)
+    {
+        effectMult = (props.ShaderFlags & ShaderFlags::kWeaponBlood) ? LLSETTINGS.bloodEffectMult :
+            ((props.ShaderFlags & ShaderFlags::kProjectedUV) ? LLSETTINGS.projectedEffectMult : LLSETTINGS.otherEffectMult);
+        if (props.ShaderFlags & ShaderFlags::kEffectLighting)
+            effectMult *= LLSETTINGS.effectLightingMult;
     }
 
     surface.Albedo = 0;
-    surface.Emissive = EffectToLinear(baseColor.xyz) * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
+    surface.Emissive = baseColor.xyz * effectMult * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Effect);
 }
 
 #endif // EFFECT_MATERIAL_FUNC_HLSL

@@ -29,6 +29,7 @@ struct Scene
 
 	eastl::unique_ptr<FeatureData> m_FeatureData;
 	bool m_DirtyFeatureData = true;
+	uint64_t m_LightingRevision = 0;
 	nvrhi::BufferHandle m_FeatureBuffer;
 
 	void* m_SkyHemisphereResource = nullptr;
@@ -99,6 +100,7 @@ struct Scene
 	inline auto GetCameraBuffer() const { return m_CameraBuffer; }
 
 	inline auto GetFeatureBuffer() const { return m_FeatureBuffer; }
+	uint64_t GetLightingRevision() const { return m_LightingRevision; }
 
 	auto GetMenuState()
 	{

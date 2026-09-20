@@ -176,6 +176,9 @@ float3 evalSingleScatteringTransmission(
     return radiance;
 }
 
+#if defined(__spirv__) && USE_RAY_QUERY
+[noinline]
+#endif
 float3 EvaluateSubsurfaceDiffuseNEE(
     const Surface surface,
     const Instance instance,
@@ -191,8 +194,8 @@ float3 EvaluateSubsurfaceDiffuseNEE(
     subsurfaceMaterialData.g = surface.SubsurfaceData.Anisotropy;
 
     if (SSS_SETTINGS.MaterialOverride) {
-        subsurfaceMaterialData.transmissionColor = SSS_SETTINGS.TransmissionColorOverride;
-        subsurfaceMaterialData.scatteringColor = SSS_SETTINGS.ScatteringColorOverride;
+        subsurfaceMaterialData.transmissionColor = LinearSRGBToWorking(SSS_SETTINGS.TransmissionColorOverride);
+        subsurfaceMaterialData.scatteringColor = LinearSRGBToWorking(SSS_SETTINGS.ScatteringColorOverride);
         subsurfaceMaterialData.scale = SSS_SETTINGS.ScaleOverride;
         subsurfaceMaterialData.g = SSS_SETTINGS.AnisotropyOverride;
     }
