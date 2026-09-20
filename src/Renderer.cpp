@@ -596,6 +596,7 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 	// Release meshes whose recorded fence has been passed by the GPU.
 	Scene::GetSingleton()->GetSceneGraph()->ProcessPendingMeshDestroys(slot.fenceValue);
+	Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->ProcessPendingReleases(slot.fenceValue, m_LastSubmittedInstance);
 
 	if (!slot.eventQuery)
 		slot.eventQuery = device->createEventQuery();

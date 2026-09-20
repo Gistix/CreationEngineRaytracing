@@ -5,15 +5,13 @@
 
 struct Texture
 {
-	eastl::weak_ptr<DescriptorHandle> texture;
+	eastl::shared_ptr<DescriptorHandle> texture;
 	DescriptorHandle* defaultTexture;
 
 	uint16_t GetDescriptorIndex() const
 	{
-		auto locked = texture.lock();
-
-		if (locked)
-			return static_cast<uint16_t>(locked->Get());
+		if (texture)
+			return static_cast<uint16_t>(texture->Get());
 		else
 			return static_cast<uint16_t>(defaultTexture->Get());
 	}
