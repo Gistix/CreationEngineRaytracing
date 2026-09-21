@@ -16,6 +16,10 @@ namespace Pass::Raytracing::PathTracing
 {
 	class ReorderedIndirectLighting : public RenderPass, ITLASUpdateListener
 	{
+	public:
+		static constexpr uint32_t kNumBins = 4096;
+
+	private:
 		// 1. Generate Bounce
 		nvrhi::ShaderHandle m_GenerateShader;
 		nvrhi::ComputePipelineHandle m_GeneratePipeline;

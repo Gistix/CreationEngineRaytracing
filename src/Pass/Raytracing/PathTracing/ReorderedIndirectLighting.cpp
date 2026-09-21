@@ -65,9 +65,9 @@ namespace Pass::Raytracing::PathTracing
 
 		if (!m_CounterBuffer) {
 			m_CounterBuffer = Util::CreateStructuredBuffer<uint32_t>(device, 1, "Indirect Counter Buffer", true);
-			m_BinHistogramBuffer = Util::CreateStructuredBuffer<uint32_t>(device, 256, "Indirect BinHistogram Buffer", true);
-			m_BinOffsetBuffer = Util::CreateStructuredBuffer<uint32_t>(device, 256, "Indirect BinOffset Buffer", true);
-			m_BinCounterBuffer = Util::CreateStructuredBuffer<uint32_t>(device, 256, "Indirect BinCounter Buffer", true);
+			m_BinHistogramBuffer = Util::CreateStructuredBuffer<uint32_t>(device, kNumBins, "Indirect BinHistogram Buffer", true);
+			m_BinOffsetBuffer = Util::CreateStructuredBuffer<uint32_t>(device, kNumBins, "Indirect BinOffset Buffer", true);
+			m_BinCounterBuffer = Util::CreateStructuredBuffer<uint32_t>(device, kNumBins, "Indirect BinCounter Buffer", true);
 		}
 
 		m_GenerateBindingSetDirty.fill(true);

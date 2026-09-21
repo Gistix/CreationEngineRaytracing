@@ -22,6 +22,7 @@ ConstantBuffer<FeatureData>    Features         : register(b2);
 #include "raytracing/include/Materials/BSDF.hlsli"
 #include "raytracing/include/RayOffset.hlsli"
 #include "raytracing/include/SER.hlsli"
+#include "raytracing/Pathtracing/ReorderedIndirect/WaveAggregation.hlsli"
 
 Texture2D<float>               Depth            : register(t0);
 Texture2D<float4>              Albedo           : register(t1);
@@ -182,10 +183,19 @@ void Main(uint2 idx : SV_DispatchThreadID)
 #endif
     float3 rayDirection = (float3)firstSample.wo;
 
-    uint rayKey = SER_CalculateRayCoherenceHint(rayDirection);
+    uint rayKey = SER_CalculateSpatialDirectionalKey12bit(idx, size, rayDirection);
 
-    uint rayIdx;
-    InterlockedAdd(CounterBuffer[0], 1, rayIdx);
+    // Wave-level contiguous index allocation for CounterBuffer[0]
+    uint waveActiveCount = WaveActiveCountBits(true);
+    uint wavePrefix = WavePrefixCountBits(true);
+    uint waveBaseIdx = 0;
+    bool isFirstActiveLane = (WaveGetLaneIndex() == WaveReadLaneFirst(WaveGetLaneIndex()));
+    if (isFirstActiveLane)
+    {
+        InterlockedAdd(CounterBuffer[0], waveActiveCount, waveBaseIdx);
+    }
+    waveBaseIdx = WaveReadLaneFirst(waveBaseIdx);
+    uint rayIdx = waveBaseIdx + wavePrefix;
 
     RayRecord record;
     record.Origin = rayOrigin;
@@ -198,5 +208,10 @@ void Main(uint2 idx : SV_DispatchThreadID)
     RayRecords[rayIdx] = record;
     RayKeys[rayIdx] = rayKey;
 
-    InterlockedAdd(BinHistogram[rayKey], 1);
+    // Wave-level key aggregation for BinHistogram
+    WaveKeyMatch match = WaveMatchKey(rayKey);
+    if (match.isLeader)
+    {
+        InterlockedAdd(BinHistogram[rayKey], match.matchCount);
+    }
 }

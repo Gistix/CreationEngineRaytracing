@@ -7,6 +7,54 @@
 #   define SER_ENABLED 0
 #endif
 
+// Interleave bits of two 3-bit integers into a 6-bit Morton (Z-order) integer (0..63)
+inline uint Morton2D_3bit(uint x, uint y)
+{
+    x = (x | (x << 2)) & 0x09; // 001001
+    x = (x | (x << 1)) & 0x15; // 010101
+    y = (y | (y << 2)) & 0x09;
+    y = (y | (y << 1)) & 0x15;
+    return (y << 1) | x;
+}
+
+// Interleave bits of two 4-bit integers into an 8-bit Morton (Z-order) integer (0..255)
+inline uint Morton2D_4bit(uint x, uint y)
+{
+    x = (x | (x << 2)) & 0x33; // 00110011
+    x = (x | (x << 1)) & 0x55; // 01010101
+    y = (y | (y << 2)) & 0x33;
+    y = (y | (y << 1)) & 0x55;
+    return (y << 1) | x;
+}
+
+// Octahedron map projection to a 6-bit Morton key (8x8 directional grid = 64 buckets)
+inline uint SER_CalculateDirectionKeyMorton6bit(float3 dir)
+{
+    float l1 = abs(dir.x) + abs(dir.y) + abs(dir.z);
+    float3 p = (l1 > 1e-6f) ? (dir / l1) : float3(0.0f, 0.0f, 1.0f);
+    float2 s = select(p.xy >= 0.0f, float2(1.0f, 1.0f), float2(-1.0f, -1.0f));
+    float2 oct = (p.z >= 0.0f) ? p.xy : ((1.0f - abs(p.yx)) * s);
+    uint2 grid = clamp((uint2)round((oct * 0.5f + 0.5f) * 7.0f), 0u, 7u);
+    return Morton2D_3bit(grid.x, grid.y);
+}
+
+// Screen macro-tile key (8x8 screen grid = 64 macro-tiles) in Morton Z-order (6-bit, 0..63)
+inline uint SER_CalculateScreenTileKey6bit(uint2 pixelCoord, uint2 screenSize)
+{
+    uint2 tileCoord = clamp(uint2(pixelCoord * 8u / max(screenSize, 1u)), 0u, 7u);
+    return Morton2D_3bit(tileCoord.x, tileCoord.y);
+}
+
+// Composite spatial + directional key (12-bit, 0..4095)
+// High 6 bits: 8x8 Screen Macro-Tile (Morton Z-order)
+// Low 6 bits:  8x8 Octahedral Ray Direction (Morton Z-order)
+inline uint SER_CalculateSpatialDirectionalKey12bit(uint2 pixelCoord, uint2 screenSize, float3 dir)
+{
+    uint tileKey = SER_CalculateScreenTileKey6bit(pixelCoord, screenSize);
+    uint dirKey = SER_CalculateDirectionKeyMorton6bit(dir);
+    return (tileKey << 6) | dirKey;
+}
+
 // Octahedron map projection to an 8-bit key for ray direction coherence.
 // Pack four bits per axis so all eight hint bits contribute to the key.
 inline uint SER_CalculateRayCoherenceHint(float3 dir)
@@ -16,7 +64,7 @@ inline uint SER_CalculateRayCoherenceHint(float3 dir)
     float2 s = select(p.xy >= 0.0f, float2(1.0f, 1.0f), float2(-1.0f, -1.0f));
     float2 oct = (p.z >= 0.0f) ? p.xy : ((1.0f - abs(p.yx)) * s);
     uint2 grid = clamp((uint2)round((oct * 0.5f + 0.5f) * 15.0f), 0u, 15u);
-    return (grid.y << 4) | grid.x;
+    return Morton2D_4bit(grid.x, grid.y);
 }
 
 inline uint SER_CalculateHitCoherenceHint(bool isHit, uint instanceID, uint materialType = 0)
