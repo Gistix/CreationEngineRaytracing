@@ -70,6 +70,10 @@ namespace Pass::Raytracing::PathTracing
 		bool m_ReorderBindingSetsDirty = true;
 		uint2 m_AllocatedResolution = { 0, 0 };
 
+		eastl::array<nvrhi::TimerQueryHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_TimerGenerate = {};
+		eastl::array<nvrhi::TimerQueryHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_TimerSort = {};
+		eastl::array<nvrhi::TimerQueryHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_TimerTrace = {};
+
 	public:
 		ReorderedIndirectLighting(Renderer* renderer, SceneTLAS* sceneTLAS);
 

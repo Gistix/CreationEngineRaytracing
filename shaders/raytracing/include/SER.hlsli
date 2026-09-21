@@ -7,16 +7,6 @@
 #   define SER_ENABLED 0
 #endif
 
-// Interleave bits of two 3-bit integers into a 6-bit Morton (Z-order) integer (0..63)
-inline uint Morton2D_3bit(uint x, uint y)
-{
-    x = (x | (x << 2)) & 0x09; // 001001
-    x = (x | (x << 1)) & 0x15; // 010101
-    y = (y | (y << 2)) & 0x09;
-    y = (y | (y << 1)) & 0x15;
-    return (y << 1) | x;
-}
-
 // Interleave bits of two 4-bit integers into an 8-bit Morton (Z-order) integer (0..255)
 inline uint Morton2D_4bit(uint x, uint y)
 {
@@ -25,6 +15,12 @@ inline uint Morton2D_4bit(uint x, uint y)
     y = (y | (y << 2)) & 0x33;
     y = (y | (y << 1)) & 0x55;
     return (y << 1) | x;
+}
+
+// Interleave bits of two 3-bit integers into a 6-bit Morton (Z-order) integer (0..63)
+inline uint Morton2D_3bit(uint x, uint y)
+{
+    return Morton2D_4bit(x, y);
 }
 
 // Octahedron map projection to a 6-bit Morton key (8x8 directional grid = 64 buckets)

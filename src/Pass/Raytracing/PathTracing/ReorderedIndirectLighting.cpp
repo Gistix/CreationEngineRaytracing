@@ -8,11 +8,11 @@ namespace Pass::Raytracing::PathTracing
 	struct GpuRayRecord
 	{
 		float Origin[3];
-		uint32_t PixelCoord;
-		float Direction[3];
+		uint16_t PixelCoord[2];
+		uint16_t OctahedralDirection[2];
 		uint32_t RandomSeed;
-		float Throughput[3];
-		float Pad;
+		uint16_t Throughput[3];
+		uint16_t Pad;
 	};
 
 	ReorderedIndirectLighting::ReorderedIndirectLighting(Renderer* renderer, SceneTLAS* sceneTLAS)
@@ -468,6 +468,31 @@ namespace Pass::Raytracing::PathTracing
 			resolution = Renderer::GetSingleton()->GetResolution();
 		uint32_t totalPixels = resolution.x * resolution.y;
 
+		auto* device = GetRenderer()->GetDevice();
+		if (!m_TimerGenerate[currentSlot])
+		{
+			m_TimerGenerate[currentSlot] = device->createTimerQuery();
+			m_TimerSort[currentSlot] = device->createTimerQuery();
+			m_TimerTrace[currentSlot] = device->createTimerQuery();
+		}
+
+		if (m_TimerGenerate[currentSlot] && device->pollTimerQuery(m_TimerGenerate[currentSlot]) &&
+			m_TimerSort[currentSlot] && device->pollTimerQuery(m_TimerSort[currentSlot]) &&
+			m_TimerTrace[currentSlot] && device->pollTimerQuery(m_TimerTrace[currentSlot]))
+		{
+			static uint32_t s_LogCounter = 0;
+			if (++s_LogCounter % 120 == 0)
+			{
+				float tGen = device->getTimerQueryTime(m_TimerGenerate[currentSlot]) * 1000.0f;
+				float tSort = device->getTimerQueryTime(m_TimerSort[currentSlot]) * 1000.0f;
+				float tTrace = device->getTimerQueryTime(m_TimerTrace[currentSlot]) * 1000.0f;
+				logger::info("[Indirect Timing] Total: {:.2f}ms (Gen: {:.2f}ms, Sort: {:.2f}ms, Trace: {:.2f}ms)",
+					tGen + tSort + tTrace, tGen, tSort, tTrace);
+			}
+		}
+
+		commandList->beginTimerQuery(m_TimerGenerate[currentSlot]);
+
 		// Clear counters
 		commandList->clearBufferUInt(m_CounterBuffer, 0);
 		commandList->clearBufferUInt(m_BinHistogramBuffer, 0);
@@ -485,6 +510,10 @@ namespace Pass::Raytracing::PathTracing
 			commandList->dispatch(threadGroupSize.x, threadGroupSize.y);
 			commandList->commitBarriers();
 		}
+
+		commandList->endTimerQuery(m_TimerGenerate[currentSlot]);
+
+		commandList->beginTimerQuery(m_TimerSort[currentSlot]);
 
 		// Step 2: Prefix Sum Bins (1 threadgroup of 256 threads)
 		{
@@ -506,6 +535,10 @@ namespace Pass::Raytracing::PathTracing
 			commandList->commitBarriers();
 		}
 
+		commandList->endTimerQuery(m_TimerSort[currentSlot]);
+
+		commandList->beginTimerQuery(m_TimerTrace[currentSlot]);
+
 		// Step 4: Trace Bounce
 		nvrhi::BindingSetVector traceBindings = {
 			m_TraceBindingSets[currentSlot],
@@ -526,8 +559,8 @@ namespace Pass::Raytracing::PathTracing
 			commandList->setRayTracingState(state);
 
 			nvrhi::rt::DispatchRaysArguments args;
-			args.width = resolution.x;
-			args.height = resolution.y;
+			args.width = totalPixels;
+			args.height = 1;
 			commandList->dispatchRays(args);
 		}
 		else if (m_ComputeTracePipeline)
@@ -539,5 +572,7 @@ namespace Pass::Raytracing::PathTracing
 
 			commandList->dispatch(Util::Math::DivideRoundUp(totalPixels, 64u), 1, 1);
 		}
+
+		commandList->endTimerQuery(m_TimerTrace[currentSlot]);
 	}
 }

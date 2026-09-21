@@ -199,11 +199,11 @@ void Main(uint2 idx : SV_DispatchThreadID)
 
     RayRecord record;
     record.Origin = rayOrigin;
-    record.PixelCoord = (idx.y << 16) | (idx.x & 0xFFFF);
-    record.Direction = rayDirection;
+    record.PixelCoord = (uint16_t2)idx;
+    record.OctahedralDirection = PackDirectionOctahedral(rayDirection);
     record.RandomSeed = randomSeed;
-    record.Throughput = (float3)throughput;
-    record.Pad = 0.0f;
+    record.Throughput = (half3)throughput;
+    record.Pad = 0.0h;
 
     RayRecords[rayIdx] = record;
     RayKeys[rayIdx] = rayKey;

@@ -25,9 +25,7 @@ void Main()
 #if USE_RAY_QUERY
     uint dispatchIdx = idx;
 #else
-    uint2 dims = DispatchRaysDimensions().xy;
-    uint2 index2D = DispatchRaysIndex().xy;
-    uint dispatchIdx = index2D.y * dims.x + index2D.x;
+    uint dispatchIdx = DispatchRaysIndex().x;
 #endif
 
     uint activeCount = CounterBuffer[0];
@@ -37,25 +35,35 @@ void Main()
     // Direct sequential streaming read of sorted ray records across the wave
     RayRecord record = RayRecords[dispatchIdx];
 
-    uint2 pixelCoord = uint2(record.PixelCoord & 0xFFFF, record.PixelCoord >> 16);
+    uint2 pixelCoord = (uint2)record.PixelCoord;
     if (any(pixelCoord >= Camera.RenderSize))
         return;
 
+    float3 rayDirection = UnpackDirectionOctahedral(record.OctahedralDirection);
+    half3 throughput = record.Throughput;
+
     RayDesc ray;
     ray.Origin = record.Origin;
-    ray.Direction = record.Direction;
+    ray.Direction = rayDirection;
     ray.TMin = 0.0f;
     ray.TMax = RAY_TMAX;
 
     uint randomSeed = record.RandomSeed;
+#if USE_RAY_QUERY
     Payload payload = TraceRayStandard(Scene, ray, randomSeed);
+#else
+    Payload payload;
+    payload.Init(randomSeed);
+    TraceRay(Scene, RAY_FLAGS, INSTANCE_MASK, DIFFUSE_RAY_HITGROUP_IDX, 0, DIFFUSE_RAY_MISS_IDX, ray, payload);
+    randomSeed = payload.randomSeed;
+#endif
 
     half3 sampleRadiance = half3(0.0h, 0.0h, 0.0h);
 
     if (!payload.Hit())
     {
         half3 skyIrradiance = (half3)(SampleSky(SkyHemisphere, ray.Direction) * Raytracing.Sky);
-        sampleRadiance = skyIrradiance * (half3)record.Throughput;
+        sampleRadiance = skyIrradiance * throughput;
     }
     else
     {
@@ -79,7 +87,7 @@ void Main()
         StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
         const half3 directRadiance = (half3)EvaluateDirectRadiance(materialData.Type, materialData.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
-        sampleRadiance = (directRadiance + (half3)surface.Emissive) * (half3)record.Throughput;
+        sampleRadiance = (directRadiance + (half3)surface.Emissive) * throughput;
     }
 
     sampleRadiance = clamp(sampleRadiance, 0.0h, 65504.0h);
