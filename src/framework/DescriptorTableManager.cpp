@@ -21,6 +21,7 @@
 */
 
 #include "framework/DescriptorTableManager.h"
+#include "Renderer.h"
 
 DescriptorHandle::DescriptorHandle()
     : m_DescriptorIndex(-1)
@@ -64,6 +65,7 @@ DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IB
 
     // Ensure descriptor table is sized to layout desc max capacity
     auto bindlessDesc = layout->getBindlessDesc();
+    m_MaxCapacity = bindlessDesc->maxCapacity;
 
     auto capacity = m_DescriptorTable->getCapacity();
 
@@ -115,8 +117,25 @@ DescriptorIndex DescriptorTableManager::CreateDescriptor(nvrhi::BindingSetItem i
 
     if (!foundFreeSlot)
     {
-        uint32_t newCapacity = std::max(64u, capacity * 2); // handle the initial case when capacity == 0
+        if (capacity >= m_MaxCapacity)
+        {
+            if (!m_CapacityReported)
+            {
+                logger::error("DescriptorTableManager::CreateDescriptor - Table capacity exhausted ({} slots)", capacity);
+                m_CapacityReported = true;
+            }
+            return -1;
+        }
+
+        Renderer::GetSingleton()->WaitForPendingExecution();
+        uint32_t newCapacity = static_cast<uint32_t>(std::min<uint64_t>(m_MaxCapacity, std::max<uint64_t>(64u, uint64_t(capacity) * 2)));
         m_Device->resizeDescriptorTable(m_DescriptorTable, newCapacity);
+        newCapacity = m_DescriptorTable->getCapacity();
+        if (newCapacity <= capacity)
+        {
+            logger::error("DescriptorTableManager::CreateDescriptor - Failed to grow table from {} slots", capacity);
+            return -1;
+        }
         m_AllocatedDescriptors.resize(newCapacity);
         m_Descriptors.resize(newCapacity);
 
@@ -128,11 +147,15 @@ DescriptorIndex DescriptorTableManager::CreateDescriptor(nvrhi::BindingSetItem i
     }
 
     item.slot = index;
+    if (!Renderer::GetSingleton()->WriteDescriptorTable(m_DescriptorTable, item))
+    {
+        logger::error("DescriptorTableManager::CreateDescriptor - Failed to write slot {}", index);
+        return -1;
+    }
     m_SearchStart = index + 1;
     m_AllocatedDescriptors[index] = true;
     m_Descriptors[index] = item;
     m_DescriptorIndexMap[item] = index;
-    m_Device->writeDescriptorTable(m_DescriptorTable, item);
 
     if (item.resourceHandle)
         item.resourceHandle->AddRef();
@@ -172,7 +195,7 @@ void DescriptorTableManager::ReleaseDescriptor(DescriptorIndex index)
 
     descriptor = nvrhi::BindingSetItem::None(index);
 
-    m_Device->writeDescriptorTable(m_DescriptorTable, descriptor);
+    Renderer::GetSingleton()->WriteDescriptorTable(m_DescriptorTable, descriptor);
 
     m_AllocatedDescriptors[index] = false;
     m_SearchStart = std::min(m_SearchStart, index);

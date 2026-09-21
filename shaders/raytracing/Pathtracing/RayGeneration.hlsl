@@ -296,6 +296,10 @@ void Main()
     }
 #endif
     
+#if defined(SUBSURFACE_SCATTERING)
+    PrepareSubsurfaceSurface(sourceSurface);
+#endif
+
     float primarySceneDistance = length(sourcePosition - Camera.Position.xyz);
 
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
@@ -377,9 +381,6 @@ void Main()
 #   endif   
 #endif   
     
-#ifdef SUBSURFACE_SCATTERING
-    bool isSssPath = false;
-#endif
     
     float3 primaryEmissive = sourceSurface.Emissive + primaryEffectEmissive;
     float3 direct = primaryEmissive;
@@ -668,6 +669,12 @@ void Main()
         sourcePayload = fillPayload;
         sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * fillSceneLength, Raytracing.PixelConeSpreadAngle);
         sourceSurface = SurfaceMaker::make(fillHitPos, fillPayload, fillRayDir, sourceRayCone, sourceInstance, sourceMaterial, true);
+#if defined(SUBSURFACE_SCATTERING)
+        if (fillVertexIndex == 1)
+            PrepareSubsurfaceSurface(sourceSurface);
+        else
+            sourceSurface.SubsurfaceData.HasSubsurface = 0;
+#endif
         sourceBRDFContext = BRDFContext::make(sourceSurface, -fillRayDir);
         sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
         if (!sourceIsEnter) {
@@ -773,7 +780,6 @@ void Main()
 #if defined(SUBSURFACE_SCATTERING)
             if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
                 directDiffuse += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
-                isSssPath = true;
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
@@ -804,8 +810,7 @@ void Main()
         {
 #if defined(SUBSURFACE_SCATTERING)
             if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
-                    direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
-                isSssPath = true;
+                direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
@@ -1316,21 +1321,7 @@ void Main()
             
             if (bounceHasNonDeltaLobes)
             {
-#ifdef SUBSURFACE_SCATTERING
-                if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, instance, payload, rayCone, randomSeed, surface.Primary);
-                    isSssPath = true;
-                    // Specular uses the standard path with diffuse suppressed
-                    Surface specSurface = surface;
-                    specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
-                }
-                else
-#endif
-                { 
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
-                }
+                directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
             }
             
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
@@ -1425,6 +1416,8 @@ void Main()
     diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
     diffuseRadiance /= MAX_SAMPLES;
     specularRadiance /= MAX_SAMPLES;
+    diffHitDist = max(diffHitDist, 1e-6f);
+    specHitDist = max(specHitDist, 1e-6f);
 #else
     radiance /= MAX_SAMPLES;
 #endif        

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+* Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 *
 * Permission is hereby granted, free of charge, to any person obtaining a
 * copy of this software and associated documentation files (the "Software"),
@@ -30,14 +30,456 @@
 
 #include "Include/Utils/MathHelpers.hlsli"
 
-// tighten the R lobe (or not) with phi - [d'Eon et al. 2014 SIGGRAPH talk]
-#define R_TERM_AZIMUTHAL_SQUEEZE max(0.01f, cos(0.5f * phi))
+struct FarFieldTrtFit
+{
+    float peak;
+    float weight1;
+    float weight2;
+    float width1;
+    float width2;
+};
+
+float FarFieldWrapAngle(const float angle)
+{
+    float wrapped = fmod(angle + K_PI, K_2PI);
+    if (wrapped < 0.0f)
+    {
+        wrapped += K_2PI;
+    }
+    return wrapped - K_PI;
+}
+
+// A normal distribution wrapped onto [-pi, pi).  Spatial aliases converge
+// quickly for narrow lobes; the Fourier form is stable for broad lobes.
+float FarFieldWrappedGaussian(const float angle, const float stddev)
+{
+    const float sigma = max(stddev, 1e-4f);
+    const float delta = FarFieldWrapAngle(angle);
+
+    if (sigma < 1.0f)
+    {
+        return Gaussian1D(delta - K_2PI, sigma) +
+               Gaussian1D(delta, sigma) +
+               Gaussian1D(delta + K_2PI, sigma);
+    }
+
+    float result = 1.0f;
+    [unroll]
+    for (uint harmonic = 1; harmonic <= 6; ++harmonic)
+    {
+        const float n = float(harmonic);
+        result += 2.0f * exp(-0.5f * sigma * sigma * n * n) * cos(n * delta);
+    }
+    return max(result * K_1_2PI, 0.0f);
+}
+
+void FarFieldComputeTrtFit(const float thetaI,
+                                 const float roughness,
+                                 out FarFieldTrtFit fit)
+{
+    // TRT lobe: custom 3-Gaussian lobe based on fitting to MC simulation
+    // The elliptic-hair fit is parameterized by |theta_i|, not theta_d.
+    const float ti = abs(thetaI);
+    float variance1;
+    float variance2;
+
+    if (ti < 0.525f)
+    {
+        fit.peak = cos(ti) - 0.733f;
+        fit.weight1 = (-0.000111282f) * (-0.103125f + ti) * ti + pow(ti, 15.7265f) + 0.00023939f;
+        fit.weight2 = 0.000322755f * ((ti - pow(1.80972f * ti, 16.7669f)) * tan(ti) + 0.991977f);
+        variance1 = 0.00597578f + 0.000428897f * cos(5.41149f * ti);
+        variance2 = 0.0181f * tan(cos(2.121f * ti));
+    }
+    else if (ti < 1.1f)
+    {
+        fit.peak = max(0.0f, 0.00493f + 0.579f * ti - 0.775f * ti * ti);
+        fit.weight1 = 0.00108f - 0.0014f * ti + 0.0003937f * ti * ti;
+        fit.weight2 = -0.00119f + 0.00219f * ti;
+        variance1 = 0.0391f - 0.0888f * ti + 0.0581f * ti * ti;
+        variance2 = 0.384f - 1.14f * ti + 0.942f * ti * ti;
+    }
+    else
+    {
+        fit.peak = 0.0f;
+        fit.weight1 = 0.0f;
+        fit.weight2 = 0.000239f + 0.00139f * ti * ti * ti - 0.00053124f * ti * ti * ti * ti * ti;
+        variance1 = 1.0f;
+        variance2 = -1.86f + 2.73f * ti - 0.7437f * ti * ti;
+    }
+
+    fit.weight1 = max(fit.weight1, 0.0f);
+    fit.weight2 = max(fit.weight2, 0.0f);
+    const float widthScale = max(roughness, 1e-4f) / 0.06f;
+    fit.width1 = max(widthScale * sqrt(max(variance1, 0.0f)), 1e-4f);
+    fit.width2 = max(widthScale * sqrt(max(variance2, 0.0f)), 1e-4f);
+}
+
+float FarFieldTrtAzimuth(const float phi,
+                               const FarFieldTrtFit fit)
+{
+    return fit.weight1 * FarFieldWrappedGaussian(phi - fit.peak, fit.width1) +
+           fit.weight1 * FarFieldWrappedGaussian(phi + fit.peak, fit.width1) +
+           fit.weight2 * FarFieldWrappedGaussian(phi, fit.width2);
+}
+
+float FarFieldVariance(const float beta)
+{
+    // Very large v is already indistinguishable from a uniform elevation
+    // distribution, and clamping avoids loss of precision in sinh(1 / v).
+    return clamp(beta * beta, 1e-6f, 100.0f);
+}
+
+float FarFieldLongitudinal(const float thetaOp,
+                                 const float sinThetaI,
+                                 const float cosThetaI,
+                                 const float beta)
+{
+    const float sinThetaOp = sin(thetaOp);
+    const float cosThetaOp = abs(cos(thetaOp));
+    return MP(cosThetaOp, cosThetaI, sinThetaOp, sinThetaI, FarFieldVariance(beta));
+}
+
+void FarFieldSampleLongitudinal(const float thetaOp,
+                                      const float beta,
+                                      const float2 random,
+                                      out float sinThetaI,
+                                      out float cosThetaI)
+{
+    const float v = FarFieldVariance(beta);
+    const float u = max(random.x, 1e-5f);
+    const float cosTheta = clamp(1.0f + v * log(u + (1.0f - u) * exp(-2.0f / v)), -1.0f, 1.0f);
+    const float sinTheta = sqrt(max(1.0f - cosTheta * cosTheta, 0.0f));
+    const float sinThetaOp = sin(thetaOp);
+    const float cosThetaOp = abs(cos(thetaOp));
+
+    sinThetaI = clamp(-cosTheta * sinThetaOp + sinTheta * cos(K_2PI * random.y) * cosThetaOp, -1.0f, 1.0f);
+    cosThetaI = sqrt(max(1.0f - sinThetaI * sinThetaI, 0.0f));
+}
+
+void FarFieldCoordinateFrame(in const HairInteractionSurface hairInteractionSurface,
+                                   in const float3 wo,
+                                   out float3 tangent,
+                                   out float3 azimuthOrigin,
+                                   out float3 azimuthBitangent,
+                                   out float sinThetaO,
+                                   out float cosThetaO)
+{
+    tangent = normalize(hairInteractionSurface.tangent); // tangent of hair
+    sinThetaO = clamp(dot(wo, tangent), -1.0f, 1.0f);
+    cosThetaO = sqrt(max(1.0f - sinThetaO * sinThetaO, 0.0f));
+
+    float3 projectedWo = wo - sinThetaO * tangent;
+    if (dot(projectedWo, projectedWo) < 1e-10f)
+    {
+        projectedWo = hairInteractionSurface.shadingNormal -
+                      dot(hairInteractionSurface.shadingNormal, tangent) * tangent;
+        if (dot(projectedWo, projectedWo) < 1e-10f)
+        {
+            const float3 fallbackAxis = abs(tangent.z) < 0.9f ?
+                                        float3(0.0f, 0.0f, 1.0f) :
+                                        float3(0.0f, 1.0f, 0.0f);
+            projectedWo = fallbackAxis - dot(fallbackAxis, tangent) * tangent;
+        }
+    }
+
+    azimuthOrigin = normalize(projectedWo);
+    azimuthBitangent = normalize(cross(azimuthOrigin, tangent));
+}
+
+void FarFieldDirectionCoordinates(in const float3 wi,
+                                        in const float3 tangent,
+                                        in const float3 azimuthOrigin,
+                                        in const float3 azimuthBitangent,
+                                        out float sinThetaI,
+                                        out float cosThetaI,
+                                        out float phi,
+                                        out float cosPhi)
+{
+    sinThetaI = clamp(dot(wi, tangent), -1.0f, 1.0f);
+    cosThetaI = sqrt(max(1.0f - sinThetaI * sinThetaI, 0.0f));
+
+    const float3 projectedWi = wi - sinThetaI * tangent;
+    const float invCosThetaI = 1.0f / max(cosThetaI, 1e-7f);
+    cosPhi = clamp(dot(projectedWi, azimuthOrigin) * invCosThetaI, -1.0f, 1.0f);
+    const float sinPhi = clamp(dot(projectedWi, azimuthBitangent) * invCosThetaI, -1.0f, 1.0f);
+    phi = abs(Atan2safe(sinPhi, cosPhi));
+}
+
+float FarFieldTtAzimuthPdf(const float phi,
+                                 const float cosPhi,
+                                 const float etaPrimeInverse,
+                                 out float hTT)
+{
+    const float a = clamp(etaPrimeInverse, 0.0f, 1.0f);
+    const float supportStart = 2.0f * asin(a);
+    if (phi < supportStart)
+    {
+        hTT = 1.0f;
+        return 0.0f;
+    }
+
+    // hTT: root of phi(h) for p = 1
+    const float numerator = 0.5f + 0.5f * cosPhi;
+    const float denominator = 1.0f + a * a -
+                              2.0f * a * sqrt(max(0.5f - 0.5f * cosPhi, 0.0f));
+    hTT = sqrt(saturate(numerator / max(denominator, 1e-7f)));
+
+    const float dhR = sqrt(max(1.0f - hTT * hTT, 1e-7f));
+    const float dhT = sqrt(max(1.0f - a * a * hTT * hTT, 1e-7f));
+    const float derivative = abs(-2.0f / dhR + 2.0f * a / dhT);
+    return derivative > 1e-7f ? 0.5f / derivative : 0.0f;
+}
+
+float4 FarFieldLobeProbabilities(in const HairMaterialInteractionBcsdf material,
+                                       const float sinThetaO,
+                                       const float cosThetaO)
+{
+    const float diffuseProbability = saturate(material.diffuseReflectionWeight);
+    const float ior = max(material.ior, 1.0001f);
+    const float f0 = CalculateBaseReflectivity(1.0f, ior);
+    const float fresnel = evalFresnelSchlick(f0, 1.0f, cosThetaO);
+    const float cosThetaT = sqrt(max(1.0f - sinThetaO * sinThetaO / (ior * ior), 1e-7f));
+    const float3 transmittance = exp(-2.0f * max(material.absorptionCoefficient, 0.0f) / cosThetaT);
+
+    const float energyR = fresnel;
+    const float energyTT = (1.0f - fresnel) * (1.0f - fresnel) * Luminance(transmittance);
+
+    // A2 at h = 0 is a conservative, inexpensive proxy for the fitted TRT
+    // lobe.  Unlike the fit itself, it responds correctly to runtime IOR.
+    const float energyTRT = (1.0f - fresnel) * (1.0f - fresnel) * fresnel *
+                            Luminance(transmittance * transmittance);
+
+    // Keep every non-zero scattering component represented in the proposal.
+    float3 specularEnergy = max(float3(energyR, energyTT, energyTRT), 1e-4f.xxx);
+    specularEnergy /= specularEnergy.x + specularEnergy.y + specularEnergy.z;
+    return float4(diffuseProbability, (1.0f - diffuseProbability) * specularEnergy);
+}
 
 // Essential interface functions invoked in generated material code
 // Custom far-field BCSDF eval() [Eugene d'Eon - 2022]
 //  R lobe: [d'Eon et al. 2014 - SIGGRAPH talk]
 //  TT lobe: [Marschner et al. 2003]
 //  TRT lobe: custom 3-Gaussian lobe based on fitting to MC simulation
+// Returns the CRCF (including the hair integration measure) and
+// the full solid-angle PDF used by SampleFarFieldBcsdf.
+void HairFarFieldBcsdfEval(in const HairInteractionSurface hairInteractionSurface,
+                                 in const HairMaterialInteractionBcsdf hairMaterialInteractionBcsdf,
+                                 in const float3 wi,     // pointing to light
+                                 in const float3 wo,     // pointing to camera
+                                 out float3 bsdf,        // Far-field CRCF for hair lobes (R, TT, TRT)
+                                 out float3 bsdfDiffuse, // [optional] The extension hair diffuse CRCF for artificial hair, set diffuseReflectionWeight to 0 to disable this feature
+                                 out float pdf)          // PDF for the current sample (used for indirect pass)
+{
+    float3 tangent;
+    float3 azimuthOrigin;
+    float3 azimuthBitangent;
+    float sinThetaO;
+    float cosThetaO;
+    FarFieldCoordinateFrame(hairInteractionSurface, wo, tangent,
+                                  azimuthOrigin, azimuthBitangent,
+                                  sinThetaO, cosThetaO);
+
+    // determine cylindrical coordinates (theta/phi) [Marschner et al. 2003]
+    float sinThetaI;
+    float cosThetaI;
+    float phi;
+    float cosPhi;
+    FarFieldDirectionCoordinates(wi, tangent, azimuthOrigin, azimuthBitangent, sinThetaI, cosThetaI, phi, cosPhi);
+
+    const float thetaI = asin(sinThetaI);
+    const float thetaO = asin(sinThetaO);
+    const float thetaD = 0.5f * (thetaO - thetaI);
+    const float sinThetaD = sin(thetaD);
+    const float cosThetaD = cos(thetaD);
+
+    // load fiber properties
+    const float roughness = max(hairMaterialInteractionBcsdf.roughness, 1e-4f);
+    const float alpha = hairMaterialInteractionBcsdf.cuticleAngle;
+    const float ior = max(hairMaterialInteractionBcsdf.ior, 1.0001f);
+    const float iorSqr = ior * ior;
+    const float f0 = CalculateBaseReflectivity(1.0f, ior);
+    const float3 mua = max(hairMaterialInteractionBcsdf.absorptionCoefficient, 0.0f);
+
+    // Compute R lobe - smooth azimuthal N term, normalized longitudinal M term
+    // p(phi) = cos(phi / 2) / 4 is normalized on [-pi, pi].
+    const float azimuthR = 0.25f * max(cos(0.5f * phi), 0.0f);
+    // tighten the R lobe (or not) with phi - [d'Eon et al. 2014 SIGGRAPH talk]
+    const float betaR = sqrt(2.0f) * roughness * max(0.01f, cos(0.5f * phi));
+    const float longitudinalR = FarFieldLongitudinal(thetaO + 2.0f * alpha, sinThetaI, cosThetaI, betaR);
+    // Attenuation is parameterized by the outgoing ray and cylinder offset,
+    // as in Ap.  Keeping it independent of the normalized longitudinal term
+    // is what makes the lobe's directional integral conservative.
+    // [d'Eon et al. 2011 - (12)], using the outgoing-ray approximation.
+    const float fresnelR = evalFresnelSchlick(f0, 1.0f, saturate(cosThetaO * cos(0.5f * phi)));
+
+    // Compute TT lobe - exact azimuthal Jacobian N term, normalized longitudinal M term
+    // Sample/evaluate the exact Jacobian of uniform cylinder offset h.
+    const float betaTT = 0.5f * roughness * sqrt(max((iorSqr - 1.0f) / max(cosThetaO * cosThetaO, 1e-7f), 0.0f));
+    const float longitudinalTT = FarFieldLongitudinal(thetaO - alpha,
+                                                            sinThetaI, cosThetaI, betaTT);
+    const float etaPrimeInverse = cosThetaD / // 1.0 / eta_prime
+                                  sqrt(max(iorSqr - sinThetaD * sinThetaD, 1e-7f));
+    float hTT;
+    const float azimuthTT = FarFieldTtAzimuthPdf(phi, cosPhi, etaPrimeInverse, hTT);
+    const float cosGammaI = sqrt(max(1.0f - hTT * hTT, 0.0f));
+    // [d'Eon et al. 2011 - (14)], using the outgoing-ray approximation.
+    const float fresnelTT = evalFresnelSchlick(f0, 1.0f, saturate(cosThetaO * cosGammaI));
+    const float cosThetaT = sqrt(max(1.0f - sinThetaO * sinThetaO / iorSqr, 1e-7f));
+    const float etaPrimeInverseO = cosThetaO / sqrt(max(iorSqr - sinThetaO * sinThetaO, 1e-7f));
+    const float cosGammaT = sqrt(max(1.0f - hTT * hTT * etaPrimeInverseO * etaPrimeInverseO, 0.0f));
+    const float3 attenuationTT = (1.0f - fresnelTT) * (1.0f - fresnelTT) * exp(-2.0f * mua * cosGammaT / cosThetaT); // TODO: absorption with Medulla
+
+    // compute TRT lobe as sum of 3 Gaussians
+    // The Gaussians are wrapped periodically and their fit parameters are functions of theta_i.
+    const float betaTRT = roughness * (2.0f + pow(abs(thetaO), 1.5f));
+    const float longitudinalTRT = FarFieldLongitudinal(thetaO - 3.0f * alpha,
+                                                             sinThetaI, cosThetaI, betaTRT);
+    FarFieldTrtFit trtFit;
+    FarFieldComputeTrtFit(thetaI, roughness, trtFit);
+    const float trtAzimuthUnnormalized = FarFieldTrtAzimuth(phi, trtFit);
+    const float trtAzimuthIntegral = max(2.0f * trtFit.weight1 + trtFit.weight2, 1e-7f);
+    // assume h = 0 for absorption
+    const float fresnelSpec = evalFresnelSchlick(f0, 1.0f, cosThetaO);
+    const float3 transmittanceSpec = exp(-2.0f * mua / cosThetaT);
+    // The fitted weights define the TRT azimuthal shape.  Give that normalized
+    // shape the physical A2 energy at h = 0 so IOR and absorption affect TRT,
+    // instead of accidentally counting the fit amplitude as extra energy.
+    const float3 attenuationTRT = (1.0f - fresnelSpec) * (1.0f - fresnelSpec) *
+                                  fresnelSpec * transmittanceSpec * transmittanceSpec;
+
+    const float diffuseWeight = saturate(hairMaterialInteractionBcsdf.diffuseReflectionWeight);
+    const float diffuseAzimuth = max((K_PI - phi) * cosPhi + sin(phi), 0.0f);
+    const float diffusePdf = cosThetaI * (0.25f / K_PI) * diffuseAzimuth;
+
+    // eval:
+    bsdf = max((1.0f - diffuseWeight) *
+               (longitudinalR * azimuthR * fresnelR +
+                longitudinalTT * azimuthTT * attenuationTT +
+                longitudinalTRT * trtAzimuthUnnormalized / trtAzimuthIntegral * attenuationTRT),
+               0.0f);
+    bsdfDiffuse = diffuseWeight * diffusePdf * saturate(hairMaterialInteractionBcsdf.diffuseReflectionTint);
+
+    // PDF is the complete normalized mixture used by the sampling function.
+    const float4 lobeProbability = FarFieldLobeProbabilities(hairMaterialInteractionBcsdf, sinThetaO, cosThetaO);
+    const float proposalR = longitudinalR * azimuthR;
+    const float proposalTT = longitudinalTT * azimuthTT;
+    const float proposalTRT = longitudinalTRT * trtAzimuthUnnormalized / trtAzimuthIntegral;
+    pdf = dot(lobeProbability, float4(diffusePdf, proposalR, proposalTT, proposalTRT));
+}
+
+bool SampleFarFieldBcsdf(in const HairInteractionSurface hairInteractionSurface,
+                               in const HairMaterialInteractionBcsdf hairMaterialInteractionBcsdf,
+                               in const float3 wo,
+                               in const float h,
+                               in const float3 rand2[2],
+                               out float3 wi,
+                               out float3 bsdf,
+                               out float3 bsdfDiffuse,
+                               out float pdf)
+{
+    float3 tangent;
+    float3 azimuthOrigin;
+    float3 azimuthBitangent;
+    float sinThetaO;
+    float cosThetaO;
+    FarFieldCoordinateFrame(hairInteractionSurface, wo, tangent,
+                                  azimuthOrigin, azimuthBitangent,
+                                  sinThetaO, cosThetaO);
+
+    const float thetaO = asin(sinThetaO);
+    const float roughness = max(hairMaterialInteractionBcsdf.roughness, 1e-4f);
+    const float alpha = hairMaterialInteractionBcsdf.cuticleAngle;
+    const float ior = max(hairMaterialInteractionBcsdf.ior, 1.0001f);
+    // Select a lobe using outgoing-direction energy proxies at h = 0, then
+    // sample its normalized longitudinal and azimuthal proposal.
+    const float4 lobeProbability = FarFieldLobeProbabilities(
+        hairMaterialInteractionBcsdf, sinThetaO, cosThetaO);
+
+    float sinThetaI;
+    float cosThetaI;
+
+    if (rand2[0].z < lobeProbability.x)
+    {
+        // sample diffuse
+        // The marginal of cosine hemispheres over uniformly sampled cylinder
+        // offsets is exactly the analytic diffuse BCSDF above.
+        const float clampedH = clamp(h, -1.0f, 1.0f);
+        const float3 cylinderNormal = sqrt(max(1.0f - clampedH * clampedH, 0.0f)) * azimuthOrigin +
+                                      clampedH * azimuthBitangent;
+        const float3 cylinderBitangent = normalize(cross(cylinderNormal, tangent));
+        const float radius = sqrt(rand2[0].x);
+        const float azimuth = K_2PI * rand2[0].y;
+        const float3 localWi = float3(radius * cos(azimuth), radius * sin(azimuth), sqrt(1.0f - rand2[0].x));
+        wi = localWi.x * tangent + localWi.y * cylinderBitangent +
+             localWi.z * cylinderNormal;
+    }
+    else if (rand2[0].z < lobeProbability.x + lobeProbability.y)
+    {
+        // sample R
+        const float phi = PhiR(clamp(h, -1.0f, 1.0f));
+        const float betaR = sqrt(2.0f) * roughness * max(0.01f, cos(0.5f * phi));
+        FarFieldSampleLongitudinal(thetaO + 2.0f * alpha, betaR,
+                                         rand2[0].xy, sinThetaI, cosThetaI);
+        wi = cosThetaI * (cos(phi) * azimuthOrigin + sin(phi) * azimuthBitangent) +
+             sinThetaI * tangent;
+    }
+    else if (rand2[0].z < lobeProbability.x + lobeProbability.y + lobeProbability.z)
+    {
+        // sample TT
+        const float betaTT = 0.5f * roughness * sqrt(max((ior * ior - 1.0f) / max(cosThetaO * cosThetaO, 1e-7f), 0.0f));
+        FarFieldSampleLongitudinal(thetaO - alpha, betaTT, rand2[0].xy, sinThetaI, cosThetaI);
+        const float thetaI = asin(sinThetaI);
+        const float thetaD = 0.5f * (thetaO - thetaI);
+        const float etaPrimeInverse = cos(thetaD) / // 1.0 / eta_prime
+                                      sqrt(max(ior * ior - sin(thetaD) * sin(thetaD), 1e-7f));
+        const float phi = FarFieldWrapAngle(
+            PhiTT(clamp(h, -1.0f, 1.0f), etaPrimeInverse));
+        wi = cosThetaI * (cos(phi) * azimuthOrigin + sin(phi) * azimuthBitangent) +
+             sinThetaI * tangent;
+    }
+    else
+    {
+        // sample TRT
+        const float betaTRT = roughness * (2.0f + pow(abs(thetaO), 1.5f));
+        FarFieldSampleLongitudinal(thetaO - 3.0f * alpha, betaTRT,
+                                         rand2[0].xy, sinThetaI, cosThetaI);
+
+        FarFieldTrtFit trtFit;
+        FarFieldComputeTrtFit(asin(sinThetaI), roughness, trtFit);
+        const float integral = max(2.0f * trtFit.weight1 + trtFit.weight2, 1e-7f);
+        const float selector = saturate(0.5f * h + 0.5f) * integral;
+        float center;
+        float width;
+        if (selector < trtFit.weight1)
+        {
+            center = trtFit.peak;
+            width = trtFit.width1;
+        }
+        else if (selector < 2.0f * trtFit.weight1)
+        {
+            center = -trtFit.peak;
+            width = trtFit.width1;
+        }
+        else
+        {
+            center = 0.0f;
+            width = trtFit.width2;
+        }
+
+        const float gaussian = RandomGaussian1D(rand2[1].x, min(rand2[1].y, 1.0f - 1e-7f));
+        const float phi = FarFieldWrapAngle(center + width * gaussian);
+        wi = cosThetaI * (cos(phi) * azimuthOrigin + sin(phi) * azimuthBitangent) +
+             sinThetaI * tangent;
+    }
+
+    HairFarFieldBcsdfEval(hairInteractionSurface,
+                                hairMaterialInteractionBcsdf,
+                                wi, wo, bsdf, bsdfDiffuse, pdf);
+    return pdf > 0.0f;
+}
+
+
 struct HairFarFieldBCSDF
 {
     HairMaterialData hairMaterialData;
@@ -70,233 +512,33 @@ struct HairFarFieldBCSDF
         return bcsdf;
     }
 
-    static uint getLobes(Surface surface)
+    float4 Eval(const float3 viewDirection, const float3 lightDirection)
     {
-        uint lobes = (uint)LobeType::DiffuseReflection | (uint)LobeType::DiffuseTransmission;
-
-        return lobes;
+        float3 specular, diffuse;
+        float pdf;
+        HairFarFieldBcsdfEval(hairInteractionSurface, hairMaterialInteractionBcsdf,
+                             lightDirection, viewDirection, specular, diffuse, pdf);
+        return float4(specular + diffuse, pdf);
     }
 
-    float4 Eval(const float3 wi, const float3 wo) // for hair, wi = light dir, wo = view dir
+    bool SampleBSDF(const float3 wo, const float h, out float3 wi, out float pdf,
+                    out float3 weight, out uint lobe, out float lobeP,
+                    const float lobeRandom, const float4 samples)
     {
-        const float3 tangentU = hairInteractionSurface.tangent; // tangent of hair
-
-        // determine cylindrical coordinates (theta/phi) [Marschner et al. 2003]
-        const float sinThetaI = dot(wi, tangentU);
-        const float sinThetaO = dot(wo, tangentU);
-        const float thetaI = asin(sinThetaI);
-        const float thetaO = asin(sinThetaO);
-        const float thetaH = 0.5f * (thetaO + thetaI);
-        const float thetaD = 0.5f * (thetaO - thetaI);
-        const float3 N = normalize(wi - sinThetaI * tangentU);
-        const float3 tpo = normalize(wo - sinThetaO * tangentU);
-        const float cosPhi = clamp(dot(N, tpo), -1.0f, 1.0f);
-        const float phi = acos(cosPhi);
-
-        // load fiber properties
-        const float roughness = hairMaterialInteractionBcsdf.roughness;
-        const float ior = hairMaterialInteractionBcsdf.ior;
-        const float iorSqr = ior * ior;
-        const float f0 = CalculateBaseReflectivity(1.0f, ior);
-        const float3 mua = hairMaterialInteractionBcsdf.absorptionCoefficient;
-
-        // Compute R lobe - smooth N term, Gaussian M term
-        const float fresCosR = cos(0.5f * acos(clamp(dot(wi, wo), -1.0f, 1.0f))); // [d'Eon et al. 2011 - (12)]
-        const float fresnelTermR = evalFresnelSchlick(f0, fresCosR).x;
-        const float betaR = sqrt(2.0f) * roughness * R_TERM_AZIMUTHAL_SQUEEZE;
-        const float M_R = Gaussian1D(thetaH + hairMaterialInteractionBcsdf.cuticleAngle, betaR * 0.5f);
-        const float N_R = fresnelTermR * 0.25f * cos(0.5f * phi);
-
-        // Compute TT lobe - smooth N term, Gaussian M term
-        const float betaTT = (sinThetaI < 1.0f) ? 0.25f * roughness * Sqrt0(-((-1.0f + iorSqr) / (-1.0f + sinThetaI * sinThetaI))) : 100000.0f;
-        const float M_TT = max((sinThetaI < 1.0f) ? Gaussian1D(thetaH - 0.5f * hairMaterialInteractionBcsdf.cuticleAngle, betaTT) : 0.0f, 0.0f);
-        const float sinThetaD = sin(thetaD);
-        const float etaPrmInv = cos(thetaD) / Sqrt0(iorSqr - sinThetaD * sinThetaD); // 1.0 / eta_prime
-        const float etaPrmInvSqr = etaPrmInv * etaPrmInv;
-        // hTT: root of phi(h) for p = 1
-        const float hTT = clamp(Sqrt01((0.5f + 0.5f * cosPhi) / (1.0f + etaPrmInvSqr - 2.0f * etaPrmInv * Sqrt01(0.5f - 0.5f * cosPhi))), -1.0f, 1.0f);
-        const float TTfresnelDot = cos(thetaD) * cos(asin(hTT));
-        const float TT_f = evalFresnelSchlick(f0, TTfresnelDot).x; // [d'Eon et al. 2011 - (14)]
-        const float fresnelTermTT = (1.0f - TT_f) * (1.0f - TT_f);
-        const float N_TT =
-            -1.0f / (2.0f * (-2.0f / Sqrt01(1.0f - hTT * hTT) + (2.0f * etaPrmInv) / Sqrt01(1.0f - etaPrmInvSqr * hTT * hTT)));
-        const float cosThetaT = cos(thetaD) / (etaPrmInv * ior);
-        const float gammaT = asin(hTT * etaPrmInv);
-        const float3 absorptionTT = exp(-mua * 2.0f * cos(gammaT) / cosThetaT); // TODO: absorption with Medulla
-        const float TTClamp = phi < 2.001f * acos(Sqrt01(1.0f - etaPrmInvSqr)) ? 0.0f : 1.0f;
-        const float3 A_TT = fresnelTermTT * absorptionTT * TTClamp;
-
-        // compute TRT lobe as sum of 3 Gaussians
-        const float betaTRT = roughness * (2.0f + pow(abs(thetaI), 1.5f));
-        const float M_TRT = Gaussian1D(thetaH - 1.5f * hairMaterialInteractionBcsdf.cuticleAngle, betaTRT * 0.5f);
-        const float clampTT = (phi < 2.001f * acos(Sqrt01(1.0f - etaPrmInvSqr))) ? 0.0f : 1.0f;
-
-        const float ti = abs(thetaD);
-
-        float p1, w1, w2, v1, v2;
-
-        if (ti < 0.525f)
-        {
-            p1 = cos(ti) - 0.733f;
-            w1 = (-0.000111282f) * (-0.103125f + ti) * ti + pow(ti, 15.7265f) + 0.00023939f;
-            w2 = 0.000322755f * ((ti - pow(1.80972f * ti, 16.7669f)) * tan(ti) + 0.991977f);
-            v1 = 0.00597578f - (-0.000428897f * cos((5.41149f * ti)));
-            v2 = 0.0181f * tan(cos(2.121f * ti));
-        }
-        else if (ti < 1.1f)
-        {
-            p1 = max(0.0f, 0.00493f + 0.579f * ti - 0.775f * ti * ti);
-            w1 = 0.00108f - 0.0014f * ti + 0.0003937f * ti * ti;
-            w2 = -0.00119f + 0.00219f * ti;
-            v1 = 0.0391f - 0.0888f * ti + 0.0581f * ti * ti;
-            v2 = 0.384f - 1.14f * ti + 0.942f * ti * ti;
-        }
-        else
-        {
-            p1 = 0.0f;
-            w1 = 0.0f;
-            w2 = 0.000239f + 0.00139f * ti * ti * ti - 0.00053124f * ti * ti * ti * ti * ti;
-            v1 = 1.0f;
-            v2 = -1.86f + 2.73f * ti - 0.7437f * ti * ti;
-        }
-
-        const float TRTwidth1 = roughness / 0.06f * Sqrt0(float(v1));
-        const float TRTwidth2 = roughness / 0.06f * Sqrt0(float(v2));
-        const float N_TRT = float((200.0f / K_PI) * (w1 * Gaussian1D(phi - float(p1), TRTwidth1) + w1 * Gaussian1D(phi + float(p1), TRTwidth1) +
-                            w2 * Gaussian1D(phi, TRTwidth2)));
-
-        // assume h = 0 for absorption
-        const float3 absorptionTRT = exp(-mua * 3.75f / cosThetaT);
-        const float3 A_TRT = absorptionTRT;
-
-        // eval:
-        float3 bsdf = max(0.5f * (M_R * N_R + M_TT * N_TT * A_TT * clampTT + M_TRT * N_TRT * A_TRT) / (cos(thetaD) * cos(thetaD)) * cos(thetaI), 0.0f);
-
-        // pdf is just eval() without the absorption terms applied
-        float pdf = 0.5f * (M_R * N_R + M_TT * N_TT * fresnelTermTT * TTClamp + M_TRT * N_TRT) / cos(thetaD) / cos(thetaD) * cos(thetaI);
-
-        return float4(bsdf, pdf);
-    }
-
-    bool SampleBSDF(const float3 wo, const float h, out float3 wi, out float pdf, out float3 weight, out uint lobe, out float lobeP, const float lobeRandom, const float4 preGeneratedSample)
-    {
-        const float2 rand2[2] = { preGeneratedSample.xy, preGeneratedSample.zw };
-
-        const float3 T = hairInteractionSurface.tangent;
-        const float3 N = hairInteractionSurface.shadingNormal;
-        const float3 B = cross(N, T);
-
-        const float sinThetaO = clamp(dot(T, wo), -1.0f, 1.0f);
-        const float cosThetaO = Sqrt01(1.0f - sinThetaO * sinThetaO);
-        const float thetaO = asin(sinThetaO);
-
-        const float f0 = CalculateBaseReflectivity(1.0f, hairMaterialInteractionBcsdf.ior);
-        const float mua = Luminance(hairMaterialInteractionBcsdf.absorptionCoefficient);
-        const float ior = hairMaterialInteractionBcsdf.ior;
-        const float roughness = hairMaterialInteractionBcsdf.roughness;
-
-        // sample lobe using specular cone propagation at selected h offset
-        // equivalent to assuming thetaI = thetaO
-        const float aSpec = cosThetaO / Sqrt0(pow(ior, 2.0f) - pow(sinThetaO, 2.0f));
-        const float fSpecR = evalFresnelSchlick(f0, cosThetaO * Sqrt01(1.0 - h * h)).x;
-        const float fSpecT = 1.0 - fSpecR;
-        const float cosThetaTSpec = cosThetaO / (aSpec * ior);
-        const float gammaTSpec = asin(h * aSpec);
-        const float absorptionSpec = exp(-2.0f * mua * (1.0f + cos(2.0f * gammaTSpec)) / cosThetaTSpec);
-
-        const float hAlbedoR = fSpecR;
-        const float hAlbedoTT = fSpecT * absorptionSpec * fSpecT;
-        const float hAlbedoTRT = fSpecT * absorptionSpec * fSpecR * absorptionSpec * fSpecT;
-        const float hAlbedoNorm = hAlbedoR + hAlbedoTT + hAlbedoTRT;
-
-        const float wR = hAlbedoR / hAlbedoNorm;
-        const float wTT = hAlbedoTT / hAlbedoNorm;
-        const float wTRT = hAlbedoTRT / hAlbedoNorm;
-
-        const float weightSum = wR + wTT + wTRT;
-        const float pdfLobeR = wR / weightSum;
-        const float pdfLobeTT= wTT / weightSum;
-        const float pdfLobeTRT = wTRT / weightSum;
-
-        float sampleWeight = 0.0f;
-        float lobeWeight = 0.0f;
-        if (lobeRandom < pdfLobeR)
-        {
-            // sample R
-            const float phi = PhiR(h);
-            const float betaR = sqrt(2.0f) * roughness * R_TERM_AZIMUTHAL_SQUEEZE;
-            const float thetaI = -thetaO + RandomGaussian1D(rand2[0].x, rand2[0].y) * betaR;
-
-            wi = cos(phi) * cos(thetaI) * N + sin(phi) * cos(thetaI) * B + sin(thetaI) * T;
-
-            const float fresnelTermR = evalFresnelSchlick(f0, cos(0.5f * acos(dot(wi, wo)))).x;
-
-            sampleWeight = clamp(fresnelTermR / wR, 0.0f, 2.0f);
-
-            lobe = (uint)LobeType::DiffuseReflection;
-            lobeP = pdfLobeR;
-        }
-        else if (lobeRandom < pdfLobeR + pdfLobeTT)
-        {
-            // sample TT
-            const float betaTT = (roughness * Sqrt0(-((-1.0f + pow(ior, 2.0f)) / (-1.0f + pow(sinThetaO, 2.0f))))) / 2.0f;
-            const float thetaI = -thetaO + RandomGaussian1D(rand2[0].x, rand2[0].y) * betaTT;
-            const float thetaD = 0.5f * (thetaI - thetaO);
-
-            const float a = cos(thetaD) / Sqrt0(pow(ior, 2.0f) - pow(sin(thetaD), 2.0f)); // 1.0 / eta_prime
-            const float phi = PhiTT(h, a);
-
-            wi = cos(phi) * cos(thetaI) * N + sin(phi) * cos(thetaI) * B + sin(thetaI) * T;
-
-            const float f = evalFresnelSchlick(f0, cos(thetaD) * cos(asin(h))).x; // [d'Eon et al. 2011 - (14)]
-
-            const float cosThetaT = cos(thetaD) / (a * ior);
-            const float gammaT = asin(h * a);
-            const float absorption = exp(-mua * (1.0f + cos(2.0f * gammaT)) / cosThetaT);
-
-            sampleWeight = clamp((1.0 - f) * (1.0 - f) * absorption / wTT, 0.0f, 2.0f);
-
-            lobe = (uint)LobeType::DiffuseTransmission;
-            lobeP = pdfLobeTT;
-        }
-        else
-        {
-            // sample TRT
-            const float betaTRT = roughness * (2.0f + pow(abs(thetaO), 1.5f));
-            const float thetaI = -thetaO + RandomGaussian1D(rand2[0].x, rand2[0].y) * betaTRT;
-            const float thetaD = 0.5f * (thetaI - thetaO);
-
-            const float a = cos(thetaD) / Sqrt0(pow(ior, 2.0f) - pow(sin(thetaD), 2.0f)); // 1.0 / eta_prime
-            const float phi = PhiTRT(h, a) + RandomGaussian1D(rand2[1].x, rand2[1].y) * roughness;
-
-            wi = cos(phi) * cos(thetaI) * N + sin(phi) * cos(thetaI) * B + sin(thetaI) * T;
-
-            const float f = evalFresnelSchlick(f0, cos(thetaD) * cos(asin(h))).x; // [d'Eon et al. 2011 - (14)]
-
-            const float cosThetaT = cos(thetaD) / (a * ior);
-            const float gammaT = asin(h * a);
-            const float absorption = exp(-2.3f * mua * (1.0f + cos(2.0f * gammaT)) / cosThetaT);
-
-            sampleWeight = clamp((1.0f - f) * (1.0f - f) * f * absorption / wTRT, 0.0f, 2.0f);
-
-            lobe = (uint)(LobeType::DiffuseReflection);
-            lobeP = pdfLobeTRT;
-        }
-
-        float4 evalResult = Eval(wi, wo);
-        float3 bsdfValue = evalResult.xyz;
-        pdf = evalResult.w;
-
-        if (pdf < 1e-6f)
-        {
-            weight = float3(0.0f, 0.0f, 0.0f);
-            lobe = 0;
-            lobeP = 0.0f;
+        const float3 random[2] = { float3(samples.xy, lobeRandom), float3(samples.zw, 0.0f) };
+        float3 specular, diffuse;
+        const bool valid = SampleFarFieldBcsdf(hairInteractionSurface, hairMaterialInteractionBcsdf,
+                                              wo, h, random, wi, specular, diffuse, pdf);
+        weight = 0.0f;
+        lobe = 0;
+        lobeP = 0.0f;
+        if (!valid || !isfinite(pdf) || pdf < 1e-6f)
             return false;
-        }
 
-        weight = max(bsdfValue * sampleWeight / pdf, 0.0f);
-        return true;
+        weight = max((specular + diffuse) / pdf, 0.0f);
+        lobe = (uint)(wi.z * wo.z < 0.0f ? LobeType::SpecularTransmission : LobeType::SpecularReflection);
+        lobeP = 1.0f;
+        return all(isfinite(weight));
     }
 };
 

@@ -11,6 +11,7 @@
 #include "interop/Material/Skyrim/PBRMaterialData.hlsli"
 #include "interop/Material/Skyrim/HairTintMaterialData.hlsli"
 #include "interop/Material/Skyrim/EnvmapMaterialData.hlsli"
+#include "interop/Material/Skyrim/MultiLayerParallaxMaterialData.hlsli"
 #include "interop/Material/Skyrim/GlowmapMaterialData.hlsli"
 #include "interop/Material/Skyrim/FacegenMaterialData.hlsli"
 #include "interop/Material/Skyrim/FacegenTintMaterialData.hlsli"
@@ -363,7 +364,9 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
          
         [branch]
-        if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
+        if ((props.ShaderFlags & (ShaderFlags::kEnvMap | ShaderFlags::kEyeReflect)) != 0 &&
+            (material.Feature == Feature::kEnvironmentMap || material.Feature == Feature::kEye ||
+             material.Feature == Feature::kMultilayerParallax))
         {
             uint16_t envMaskTexIndex;
             uint16_t envTexIndex;
@@ -372,6 +375,11 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                 EyeMaterialDataExtra eye = Materials[0].Load<EyeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
                 envMaskTexIndex = eye.EnvironmentMaskTexture;
                 envTexIndex = eye.EnvironmentTexture;
+            }
+            else if (material.Feature == Feature::kMultilayerParallax) {
+                MultiLayerParallaxMaterialDataExtra layer = Materials[0].Load<MultiLayerParallaxMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+                envMaskTexIndex = layer.EnvironmentMaskTexture;
+                envTexIndex = layer.EnvironmentTexture;
             }
             else {
                 EnvmapMaterialDataExtra envMap = Materials[0].Load<EnvmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);

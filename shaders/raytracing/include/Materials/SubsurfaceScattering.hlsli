@@ -98,7 +98,7 @@ void EvalBurleyDiffusionProfile(
     in const float maxSampleRadius,
     in const bool enableTransmission,
     in const float2 rand2,
-    inout SubsurfaceSample sssSample)
+    out SubsurfaceSample sssSample)
 {
     const float4 burleyProfileMisSample = SampleBurleyProfileMIS(rand2.x,
                                                                 sssMaterialCoefficients.sigma_t,

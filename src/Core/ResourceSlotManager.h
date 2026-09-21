@@ -7,6 +7,7 @@ class ResourceSlotManager : public DirtyRangeTracker
 public:
 	using OffsetType = DirtyRangeTracker::OffsetType;
 	using SizeType = DirtyRangeTracker::SizeType;
+	static constexpr OffsetType INVALID_OFFSET = UINT64_MAX;
 
 	ResourceSlotManager(size_t slotSize, size_t initialSlotCount, size_t growStepSlots)
 		: DirtyRangeTracker(slotSize, initialSlotCount)
@@ -25,6 +26,13 @@ public:
 		}
 
 		if (m_NextOffset + m_SlotSize > m_Size) {
+			if (m_GrowStepSlots == 0) {
+				if (!m_CapacityReported) {
+					logger::error("ResourceSlotManager::Allocate - Fixed capacity exhausted ({} slots, {} bytes per slot)", m_Size / m_SlotSize, m_SlotSize);
+					m_CapacityReported = true;
+				}
+				return INVALID_OFFSET;
+			}
 			m_Size += m_SlotSize * m_GrowStepSlots;
 			m_Data.resize(m_Size);
 			m_DidGrow = true;
@@ -60,4 +68,5 @@ private:
 	SizeType m_NextOffset = 0;
 	eastl::vector<OffsetType> m_FreeOffsets;
 	bool m_DidGrow = false;
+	bool m_CapacityReported = false;
 };

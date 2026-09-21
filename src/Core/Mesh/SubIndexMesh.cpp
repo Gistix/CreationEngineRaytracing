@@ -37,9 +37,11 @@ SubIndexMesh::SubIndexMesh(RE::BSSubIndexTriShape* triShape)
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateMeshIndex();
+	if (!AllocateMeshIndex())
+		return;
 
 	CreateMaterial();
+	m_IsReady = m_Material != nullptr;
 }
 
 void SubIndexMesh::SetHidden(bool hidden)
@@ -87,8 +89,8 @@ void SubIndexMesh::Update(nvrhi::ICommandList* commandList)
 		if (numTris == 0)
 			continue;
 
-		const uint32_t end = start + numTris * 3u;
-		if (end > triShapeData.triangleCount * 3u) {
+		const uint64_t end = uint64_t(start) + uint64_t(numTris) * 3u;
+		if (end > uint64_t(triShapeData.triangleCount) * 3u) {
 			logger::warn("SubIndexMesh::Update - Segment {} index {} exceeds the maximum of {}", i, end, triShapeData.triangleCount * 3u);
 			continue;
 		}
@@ -141,6 +143,8 @@ void SubIndexMesh::CreateSegment(uint32_t start, uint32_t numTris)
 	// SubIndexSegmentMesh via unique_ptr in m_Segments, so the segment is destroyed
 	// before the manager.
 	auto segMesh = eastl::make_unique<SubIndexSegmentMesh>(this, subIndexShape, start, numTris);
+	if (!segMesh->IsReady())
+		return;
 
 	auto* rawSeg = segMesh.get();
 

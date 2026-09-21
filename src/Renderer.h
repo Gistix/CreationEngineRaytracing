@@ -16,6 +16,7 @@
 #include "Constants.h"
 
 #include "Types/Settings.h"
+#include "Utils/DXVKInterop.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback
 {
@@ -54,6 +55,7 @@ class Renderer
 	ID3D11Device5* m_NativeD3D11Device;
 
 	nvrhi::DeviceHandle m_NVRHIDevice;
+	winrt::com_ptr<IDXGIVkInteropDevice> m_VulkanInteropDevice;
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
 
@@ -74,6 +76,11 @@ class Renderer
 	uint32_t m_NextSlot = 0;
 
 	uint64_t m_LastSubmittedInstance = 0;
+	uint64_t m_DescriptorCompletedInstance = 0;
+	nvrhi::EventQueryHandle m_DescriptorUpdateQuery;
+
+	void WaitForDescriptorUsers();
+	uint64_t SubmitCommandList(nvrhi::ICommandList* commandList);
 
 	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
@@ -103,6 +110,7 @@ class Renderer
 	eastl::unique_ptr<TextureReference> m_GrayTexture;
 	eastl::unique_ptr<TextureReference> m_NormalTexture;
 	eastl::unique_ptr<TextureReference> m_BlackTexture;
+	eastl::unique_ptr<TextureReference> m_BlackCubemap;
 #if defined(SKYRIM)
 	eastl::unique_ptr<TextureReference> m_RMAOSTexture;
 #endif
@@ -195,6 +203,9 @@ public:
 
 	nvrhi::IDevice* GetDevice() const { return m_NVRHIDevice; }
 
+	void WaitForPendingExecution();
+	bool WriteDescriptorTable(nvrhi::IDescriptorTable* table, const nvrhi::BindingSetItem& item);
+
 	auto& GetExecutionMutex() const { return m_ExecutionMutex; };
 
 	static auto GetNativeD3D12Device() { return GetSingleton()->m_NativeD3D12Device; }
@@ -278,6 +289,7 @@ public:
 	inline auto& GetNormalTextureDescriptor() const { return m_NormalTexture->descriptorHandle; }
 	inline nvrhi::ITexture* GetNormalTexture() const { return m_NormalTexture->texture; }
 	inline auto& GetBlackTextureDescriptor() const { return m_BlackTexture->descriptorHandle; }
+	inline auto& GetBlackCubemapDescriptor() const { return m_BlackCubemap->descriptorHandle; }
 #if defined(SKYRIM)
 	inline auto& GetRMAOSTextureDescriptor() const { return m_RMAOSTexture->descriptorHandle; }
 #endif

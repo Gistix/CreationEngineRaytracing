@@ -61,6 +61,7 @@ namespace Pass
 		void ClearCache(nvrhi::ICommandList* commandList);
 
 	public:
+		void SceneTexturesChanged() override { m_BindingSetDirty.fill(true); }
 		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS);
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override

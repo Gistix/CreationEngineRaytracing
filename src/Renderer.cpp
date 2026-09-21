@@ -9,6 +9,30 @@
 #include "Renderer/RenderNode.h"
 #include "interop/PackedSurfaceData.hlsli"
 
+namespace
+{
+	class SubmissionQueueLock
+	{
+		IDXGIVkInteropDevice* m_Device;
+
+	public:
+		explicit SubmissionQueueLock(IDXGIVkInteropDevice* device) : m_Device(device)
+		{
+			if (m_Device)
+				m_Device->LockSubmissionQueue();
+		}
+
+		~SubmissionQueueLock()
+		{
+			if (m_Device)
+				m_Device->ReleaseSubmissionQueue();
+		}
+
+		SubmissionQueueLock(const SubmissionQueueLock&) = delete;
+		SubmissionQueueLock& operator=(const SubmissionQueueLock&) = delete;
+	};
+}
+
 Renderer::Renderer()
 {
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
@@ -95,6 +119,18 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 {
 	m_Settings = *rendererSettings;
 
+	winrt::com_ptr<ID3D11Device> nativeDevice;
+	if (auto* device11 = GetNativeD3D11Device())
+		nativeDevice.copy_from(device11);
+	else if (auto* depth = Util::Adapter::GetMainDepthStencilTexture())
+		depth->GetDevice(nativeDevice.put());
+
+	winrt::com_ptr<IDXGIVkInteropDevice> interopDevice;
+	if (!nativeDevice || FAILED(nativeDevice->QueryInterface(__uuidof(IDXGIVkInteropDevice), interopDevice.put_void()))) {
+		logger::error("Renderer::Initialize - Vulkan submission queue interop is unavailable.");
+		return false;
+	}
+
 	const char* deviceExtensions[] = {
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,				// "VK_KHR_acceleration_structure"
 		VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,				// "VK_KHR_deferred_host_operations"
@@ -134,6 +170,7 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 		return false;
 
 	m_IsVulkan = true;
+	m_VulkanInteropDevice = std::move(interopDevice);
 
 	BuildFormatMapping();
 	BuildVkFormatMapping();
@@ -193,7 +230,7 @@ void Renderer::InitDefaultTextures()
 		.setHeight(1)
 		.setMipLevels(1)
 		.setFormat(nvrhi::Format::RGBA8_UNORM)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::Common);
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
 
 	auto* textureDescriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptors()->m_DescriptorTable.get();
 
@@ -217,6 +254,10 @@ void Renderer::InitDefaultTextures()
 	desc.debugName = "Default Detail Texture";
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
+	auto* cubemapDescriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetCubemapDescriptors()->m_DescriptorTable.get();
+	desc.setDimension(nvrhi::TextureDimension::TextureCube).setArraySize(6).setDebugName("Default Black Cubemap");
+	m_BlackCubemap = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), cubemapDescriptorTable);
+
 	// Write the textures using a temporary CL
 	nvrhi::CommandListHandle commandList = GetGraphicsCommandList();
 	commandList->open();
@@ -229,13 +270,12 @@ void Renderer::InitDefaultTextures()
 	commandList->writeTexture(m_RMAOSTexture->texture, 0, 0, rmaos, 4);
 #endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
+	for (uint32_t face = 0; face < 6; ++face)
+		commandList->writeTexture(m_BlackCubemap->texture, face, 0, black, 4);
 
 	commandList->close();
 
-	{
-		std::scoped_lock lock(m_ExecutionMutex);
-		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
-	}
+	SubmitCommandList(commandList);
 }
 
 nvrhi::ITexture* Renderer::GetDepthTexture() {
@@ -612,18 +652,54 @@ nvrhi::ICommandList* Renderer::StartExecution()
 	return m_CommandList;
 }
 
+void Renderer::WaitForDescriptorUsers()
+{
+	// Bindless descriptor sets are shared across frame slots.
+	if (m_DescriptorCompletedInstance >= m_LastSubmittedInstance)
+		return;
+
+	auto* device = GetDevice();
+	if (!m_DescriptorUpdateQuery)
+		m_DescriptorUpdateQuery = device->createEventQuery();
+
+	device->resetEventQuery(m_DescriptorUpdateQuery);
+	device->setEventQuery(m_DescriptorUpdateQuery, nvrhi::CommandQueue::Graphics, m_LastSubmittedInstance);
+	device->waitEventQuery(m_DescriptorUpdateQuery);
+	m_DescriptorCompletedInstance = m_LastSubmittedInstance;
+}
+
+void Renderer::WaitForPendingExecution()
+{
+	std::scoped_lock lock(m_ExecutionMutex);
+	WaitForDescriptorUsers();
+}
+
+bool Renderer::WriteDescriptorTable(nvrhi::IDescriptorTable* table, const nvrhi::BindingSetItem& item)
+{
+	std::scoped_lock lock(m_ExecutionMutex);
+	if (!IsVulkan() || item.type != nvrhi::ResourceType::None)
+		WaitForDescriptorUsers();
+	return GetDevice()->writeDescriptorTable(table, item);
+}
+
+uint64_t Renderer::SubmitCommandList(nvrhi::ICommandList* commandList)
+{
+	if (m_VulkanInteropDevice)
+		m_VulkanInteropDevice->FlushRenderingCommands();
+
+	std::scoped_lock lock(m_ExecutionMutex);
+	SubmissionQueueLock queueLock(m_VulkanInteropDevice.get());
+	m_LastSubmittedInstance = GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
+	return m_LastSubmittedInstance;
+}
+
 void Renderer::EndExecution()
 {
 	m_CommandList->close();
 
 	auto device = GetDevice();
 
-	uint64_t fenceValue;
-	{
-		std::scoped_lock lock(m_ExecutionMutex);
-		fenceValue = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
-		m_LastSubmittedInstance = fenceValue;
-	}
+	const uint64_t fenceValue = SubmitCommandList(m_CommandList);
 
 	auto& slot = m_FrameSlots[m_CurrentSlot];
 	slot.fenceValue = fenceValue;

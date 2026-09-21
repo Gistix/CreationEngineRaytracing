@@ -24,6 +24,7 @@ public:
 	// Copies raw boneWorld transforms from the game skin instance (no matrix math — that moves to GPU).
 	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
 	void Update(nvrhi::ICommandList* commandList) override;
+	virtual void SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool writing);
 
 	uint32_t GetBoneCount() const { return static_cast<uint32_t>(m_BoneWorlds.size()); }
 
@@ -72,7 +73,7 @@ protected:
 	// Builds the per-partition index buffers + geometry descs using the supplied vertex buffer.
 	// requireSharedNativeVertexBuffer enforces that every partition references the same native vertex buffer (static skins);
 	// dynamic meshes supply their own buffer and pass false.
-	void BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer);
+	bool BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer);
 
 	// Populates m_SkinToBones from the static skin data, called once during construction.
 	void InitSkinToBones(RE::BSGeometry* geometry);
@@ -82,8 +83,8 @@ protected:
 
 	// Creates the live (skinning output) byte-address UAV buffer seeded from the CPU rest-pose data, plus
 	// the prev-position buffer, and registers original/live/prev-position at the shared slot. Repoints the RT
-	// read (VertexDescriptors) to the live buffer. Returns the live buffer for the BLAS geometry desc.
-	void CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride);
+	// read (VertexDescriptors) to the live buffer.
+	bool CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride);
 
 	void RefreshVisibleGeometryCache();
 

@@ -65,6 +65,7 @@ MaterialManager::MaterialManager()
 
 void MaterialManager::CreateBuffer()
 {
+	Renderer::GetSingleton()->WaitForPendingExecution();
 	auto device = Renderer::GetSingleton()->GetDevice();
 
 	auto bufferDesc = nvrhi::BufferDesc()
@@ -80,8 +81,7 @@ void MaterialManager::CreateBuffer()
 
 void MaterialManager::BindBuffer()
 {
-	auto device = Renderer::GetSingleton()->GetDevice();
-	device->writeDescriptorTable(m_Descriptors->m_DescriptorTable, nvrhi::BindingSetItem::RawBuffer_SRV(0, m_Buffer));
+	Renderer::GetSingleton()->WriteDescriptorTable(m_Descriptors->m_DescriptorTable, nvrhi::BindingSetItem::RawBuffer_SRV(0, m_Buffer));
 }
 
 void MaterialManager::Grow()
@@ -286,6 +286,11 @@ void MaterialManager::Flush(nvrhi::ICommandList* commandList)
 		}
 
 		commandList->writeBuffer(m_Buffer, static_cast<const uint8_t*>(m_Slots.GetMirror()) + offset, size, offset);
+	}
+
+	if (!dirtyRanges.empty()) {
+		commandList->setBufferState(m_Buffer, nvrhi::ResourceStates::ShaderResource);
+		commandList->commitBarriers();
 	}
 }
 
