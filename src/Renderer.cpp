@@ -176,6 +176,8 @@ void Renderer::PostInitialize()
 		logger::warn("Device does not support the ray tracing pipeline; using ray queries instead.");
 		m_Settings.UseRayQuery = true;
 	}
+
+	m_IsInitialized = true;
 }
 
 void Renderer::InitDefaultTextures()

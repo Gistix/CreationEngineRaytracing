@@ -31,6 +31,9 @@ namespace Pass
 			nvrhi::ShaderHandle m_ComputeShader;
 			nvrhi::ComputePipelineHandle m_ComputePipeline;
 
+			nvrhi::rt::PipelineHandle m_RayPipeline;
+			nvrhi::rt::ShaderTableHandle m_ShaderTable;
+
 			nvrhi::BindingLayoutHandle m_BindingLayout;
 			eastl::array<nvrhi::BindingSetHandle, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSets;
 		};
@@ -58,6 +61,8 @@ namespace Pass
 		uint32_t m_FrameCounter = 0;
 
 		void ClearCache(nvrhi::ICommandList* commandList);
+		void CreateUpdateComputePipeline();
+		void CreateUpdateRayTracingPipeline();
 
 	public:
 		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS);

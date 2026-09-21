@@ -1,5 +1,7 @@
 #include "NRDIntegration.h"
 
+#include <chrono>
+
 #include "Renderer.h"
 #include "Scene.h"
 #include "ShaderUtils.h"
@@ -439,12 +441,33 @@ namespace Pass::NRD
 		if (IsRelax()) {
 			auto& relaxSettings = settings.NRDRelaxSettings;
 
-			m_RelaxSettings.diffuseMaxAccumulatedFrameNum = eastl::min(relaxSettings.diffuseMaxAccumulatedFrameNum, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
-			m_RelaxSettings.specularMaxAccumulatedFrameNum = eastl::min(relaxSettings.specularMaxAccumulatedFrameNum, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+			const float smoothedFPS = 1000.0f / eastl::max(m_SmoothedFrameTime, 1.0f);
+			const uint32_t diffuseMaxFrames = eastl::clamp(
+				nrd::GetMaxAccumulatedFrameNum(relaxSettings.diffuseAccumulationSeconds, smoothedFPS),
+				4u, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+			const uint32_t specularMaxFrames = eastl::clamp(
+				nrd::GetMaxAccumulatedFrameNum(relaxSettings.specularAccumulationSeconds, smoothedFPS),
+				4u, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+
+			m_RelaxSettings.diffuseMaxAccumulatedFrameNum = diffuseMaxFrames;
+			m_RelaxSettings.specularMaxAccumulatedFrameNum = specularMaxFrames;
 			m_RelaxSettings.diffuseMaxFastAccumulatedFrameNum =
-				eastl::min(relaxSettings.diffuseMaxFastAccumulatedFrameNum, m_RelaxSettings.diffuseMaxAccumulatedFrameNum);
+				eastl::clamp(diffuseMaxFrames / 6, 2u, diffuseMaxFrames - 1);
 			m_RelaxSettings.specularMaxFastAccumulatedFrameNum =
-				eastl::min(relaxSettings.specularMaxFastAccumulatedFrameNum, m_RelaxSettings.specularMaxAccumulatedFrameNum);
+				eastl::clamp(specularMaxFrames / 6, 2u, specularMaxFrames - 1);
+
+			m_RelaxSettings.antilagSettings.accelerationAmount = eastl::clamp(relaxSettings.antilagAccelerationAmount, 0.0f, 1.0f);
+			m_RelaxSettings.antilagSettings.spatialSigmaScale = eastl::max(relaxSettings.antilagSpatialSigmaScale, 0.0f);
+			m_RelaxSettings.antilagSettings.temporalSigmaScale = eastl::max(relaxSettings.antilagTemporalSigmaScale, 0.0f);
+			m_RelaxSettings.antilagSettings.resetAmount = eastl::clamp(relaxSettings.antilagResetAmount, 0.0f, 1.0f);
+
+			m_RelaxSettings.confidenceDrivenRelaxationMultiplier = eastl::max(relaxSettings.confidenceDrivenRelaxationMultiplier, 0.0f);
+			m_RelaxSettings.confidenceDrivenLuminanceEdgeStoppingRelaxation = eastl::max(relaxSettings.confidenceDrivenLuminanceEdgeStoppingRelaxation, 0.0f);
+			m_RelaxSettings.confidenceDrivenNormalEdgeStoppingRelaxation = eastl::max(relaxSettings.confidenceDrivenNormalEdgeStoppingRelaxation, 0.0f);
+			m_RelaxSettings.luminanceEdgeStoppingRelaxation = eastl::max(relaxSettings.luminanceEdgeStoppingRelaxation, 0.0f);
+			m_RelaxSettings.normalEdgeStoppingRelaxation = eastl::max(relaxSettings.normalEdgeStoppingRelaxation, 0.0f);
+			m_RelaxSettings.roughnessEdgeStoppingRelaxation = eastl::max(relaxSettings.roughnessEdgeStoppingRelaxation, 0.0f);
+
 			m_RelaxSettings.historyFixFrameNum = eastl::min(commonSettings.historyFixFrameNum, 3u);
 			m_RelaxSettings.historyFixBasePixelStride = eastl::max(commonSettings.historyFixBasePixelStride, 1u);
 			m_RelaxSettings.historyFixAlternatePixelStride = eastl::max(commonSettings.historyFixAlternatePixelStride, 1u);
@@ -503,6 +526,36 @@ namespace Pass::NRD
 	{
 		auto* renderer = Renderer::GetSingleton();
 		const auto& cameraRuntimeData = Scene::GetSingleton()->GetCameraRuntimeData();
+
+		const auto now = std::chrono::high_resolution_clock::now();
+		float frameDeltaMs = std::chrono::duration<float, std::milli>(now - m_LastFrameTime).count();
+		m_LastFrameTime = now;
+		frameDeltaMs = eastl::clamp(frameDeltaMs, 1.0f, 100.0f);
+		m_SmoothedFrameTime += (frameDeltaMs - m_SmoothedFrameTime) * 0.1f;
+		const float smoothedFPS = 1000.0f / eastl::max(m_SmoothedFrameTime, 1.0f);
+
+		m_CommonSettings.timeDeltaBetweenFrames = frameDeltaMs;
+
+		if (IsRelax()) {
+			const auto& relaxSettings = Scene::GetSingleton()->m_Settings.NRDRelaxSettings;
+			const uint32_t diffuseMaxFrames = eastl::clamp(
+				nrd::GetMaxAccumulatedFrameNum(relaxSettings.diffuseAccumulationSeconds, smoothedFPS),
+				4u, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+			const uint32_t specularMaxFrames = eastl::clamp(
+				nrd::GetMaxAccumulatedFrameNum(relaxSettings.specularAccumulationSeconds, smoothedFPS),
+				4u, nrd::RELAX_MAX_HISTORY_FRAME_NUM);
+
+			if (m_RelaxSettings.diffuseMaxAccumulatedFrameNum != diffuseMaxFrames ||
+				m_RelaxSettings.specularMaxAccumulatedFrameNum != specularMaxFrames) {
+				m_RelaxSettings.diffuseMaxAccumulatedFrameNum = diffuseMaxFrames;
+				m_RelaxSettings.specularMaxAccumulatedFrameNum = specularMaxFrames;
+				m_RelaxSettings.diffuseMaxFastAccumulatedFrameNum =
+					eastl::clamp(diffuseMaxFrames / 6, 2u, diffuseMaxFrames - 1);
+				m_RelaxSettings.specularMaxFastAccumulatedFrameNum =
+					eastl::clamp(specularMaxFrames / 6, 2u, specularMaxFrames - 1);
+				m_SettingsDirty = true;
+			}
+		}
 
 		std::memcpy(m_CommonSettings.worldToViewMatrixPrev, m_CommonSettings.worldToViewMatrix, sizeof(float4x4));
 		std::memcpy(m_CommonSettings.viewToClipMatrixPrev, m_CommonSettings.viewToClipMatrix, sizeof(float4x4));
@@ -656,6 +709,8 @@ namespace Pass::NRD
 			}
 		}
 
+		UpdateCommonSettings();
+
 		if (m_SettingsDirty) {
 			if (IsRelax())
 				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_RelaxSettings);
@@ -663,8 +718,6 @@ namespace Pass::NRD
 				nrd::SetDenoiserSettings(*m_NRD, kDenoiserIdentifier, &m_ReblurSettings);
 			m_SettingsDirty = false;
 		}
-
-		UpdateCommonSettings();
 
 		const nrd::Result commonSettingsResult = nrd::SetCommonSettings(*m_NRD, m_CommonSettings);
 		if (commonSettingsResult != nrd::Result::SUCCESS) {
