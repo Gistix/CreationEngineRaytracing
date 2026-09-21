@@ -190,6 +190,10 @@ public:
 		return m_SupportedFeatures[static_cast<size_t>(a_Feature)];
 	}
 
+	bool IsFeatureSupported(nvrhi::Feature a_Feature) const {
+		return SupportsFeature(a_Feature);
+	}
+
 	[[nodiscard]] const wchar_t* GetShaderStage(ShaderStage a_Stage) const noexcept;
 	[[nodiscard]] std::wstring GetShaderTarget(ShaderStage a_Stage) const noexcept;
 
