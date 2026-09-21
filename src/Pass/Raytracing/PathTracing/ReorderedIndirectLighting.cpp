@@ -61,7 +61,7 @@ namespace Pass::Raytracing::PathTracing
 
 		m_RayRecordBuffer = Util::CreateStructuredBuffer<GpuRayRecord>(device, pixelCount, "Indirect RayRecord Buffer", true);
 		m_RayKeyBuffer = Util::CreateStructuredBuffer<uint32_t>(device, pixelCount, "Indirect RayKey Buffer", true);
-		m_SortedIndexBuffer = Util::CreateStructuredBuffer<uint32_t>(device, pixelCount, "Indirect SortedIndex Buffer", true);
+		m_SortedRayRecordBuffer = Util::CreateStructuredBuffer<GpuRayRecord>(device, pixelCount, "Indirect SortedRayRecord Buffer", true);
 
 		if (!m_CounterBuffer) {
 			m_CounterBuffer = Util::CreateStructuredBuffer<uint32_t>(device, 1, "Indirect Counter Buffer", true);
@@ -140,7 +140,8 @@ namespace Pass::Raytracing::PathTracing
 				nvrhi::BindingLayoutItem::StructuredBuffer_SRV(0), // CounterBuffer
 				nvrhi::BindingLayoutItem::StructuredBuffer_SRV(1), // BinOffsets
 				nvrhi::BindingLayoutItem::StructuredBuffer_SRV(2), // RayKeys
-				nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0), // SortedRayIndices
+				nvrhi::BindingLayoutItem::StructuredBuffer_SRV(3), // RayRecords (unordered)
+				nvrhi::BindingLayoutItem::StructuredBuffer_UAV(0), // SortedRayRecords (sorted)
 				nvrhi::BindingLayoutItem::StructuredBuffer_UAV(1)  // BinCounters
 			};
 			m_ScatterBindingLayout = device->createBindingLayout(desc);
@@ -410,7 +411,8 @@ namespace Pass::Raytracing::PathTracing
 					nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_CounterBuffer),
 					nvrhi::BindingSetItem::StructuredBuffer_SRV(1, m_BinOffsetBuffer),
 					nvrhi::BindingSetItem::StructuredBuffer_SRV(2, m_RayKeyBuffer),
-					nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_SortedIndexBuffer),
+					nvrhi::BindingSetItem::StructuredBuffer_SRV(3, m_RayRecordBuffer),
+					nvrhi::BindingSetItem::StructuredBuffer_UAV(0, m_SortedRayRecordBuffer),
 					nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_BinCounterBuffer)
 				};
 				m_ScatterBindingSet = device->createBindingSet(desc, m_ScatterBindingLayout);
@@ -440,8 +442,8 @@ namespace Pass::Raytracing::PathTracing
 				nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
 				nvrhi::BindingSetItem::StructuredBuffer_SRV(11, sceneGraph->GetTransformBuffer()),
 				nvrhi::BindingSetItem::StructuredBuffer_SRV(12, sceneGraph->GetInstanceLightList()),
-				nvrhi::BindingSetItem::StructuredBuffer_SRV(13, m_RayRecordBuffer),
-				nvrhi::BindingSetItem::StructuredBuffer_SRV(14, m_SortedIndexBuffer),
+				nvrhi::BindingSetItem::StructuredBuffer_SRV(13, m_SortedRayRecordBuffer),
+				nvrhi::BindingSetItem::StructuredBuffer_SRV(14, m_CounterBuffer),
 				nvrhi::BindingSetItem::StructuredBuffer_SRV(15, m_CounterBuffer),
 				nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 				nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),

@@ -34,8 +34,8 @@ void Main()
     if (activeCount == 0 || dispatchIdx >= activeCount)
         return;
 
-    uint rayIdx = SortedRayIndices[dispatchIdx];
-    RayRecord record = RayRecords[rayIdx];
+    // Direct sequential streaming read of sorted ray records across the wave
+    RayRecord record = RayRecords[dispatchIdx];
 
     uint2 pixelCoord = uint2(record.PixelCoord & 0xFFFF, record.PixelCoord >> 16);
     if (any(pixelCoord >= Camera.RenderSize))

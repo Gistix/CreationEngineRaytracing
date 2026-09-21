@@ -50,7 +50,7 @@ namespace Pass::Raytracing::PathTracing
 		// Buffers
 		nvrhi::BufferHandle m_RayRecordBuffer;
 		nvrhi::BufferHandle m_RayKeyBuffer;
-		nvrhi::BufferHandle m_SortedIndexBuffer;
+		nvrhi::BufferHandle m_SortedRayRecordBuffer;
 		nvrhi::BufferHandle m_CounterBuffer;
 		nvrhi::BufferHandle m_BinHistogramBuffer;
 		nvrhi::BufferHandle m_BinOffsetBuffer;
