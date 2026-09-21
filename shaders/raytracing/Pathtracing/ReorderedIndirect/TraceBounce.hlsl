@@ -87,7 +87,7 @@ void Main()
         AdjustShadingNormal(surface, brdfContext, true, false);
         StandardBSDF bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
-        const half3 directRadiance = (half3)EvaluateDirectRadiance(materialData.Type, materialData.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+        const half3 directRadiance = (half3)EvaluateDirectRadianceMIS(materialData.Type, materialData.Feature, surface, brdfContext, instance, bsdf, randomSeed);
         sampleRadiance = (directRadiance + (half3)surface.Emissive) * throughput;
     }
 
