@@ -1,0 +1,60 @@
+#ifndef REORDERED_INDIRECT_REGISTERS_HLSLI
+#define REORDERED_INDIRECT_REGISTERS_HLSLI
+
+#include "interop/CameraData.hlsli"
+#include "interop/RaytracingData.hlsli"
+#include "interop/SharedData.hlsli"
+
+#include "interop/Vertex.hlsli"
+#include "interop/Triangle.hlsli"
+#include "interop/Mesh.hlsli"
+#include "interop/Instance.hlsli"
+#include "interop/Transform.hlsli"
+#include "interop/Light.hlsli"
+#include "interop/RayRecord.hlsli"
+#include "include/Vulkan.hlsli"
+
+ConstantBuffer<CameraData>                  Camera                      : register(b0);
+ConstantBuffer<RaytracingData>              Raytracing                  : register(b1);
+ConstantBuffer<FeatureData>                 Features                    : register(b2);
+
+RWTexture2D<float4>                         Output                      : register(u0);
+
+RaytracingAccelerationStructure             Scene                       : register(t0);
+Texture2D<float4>                           SkyHemisphere               : register(t1);
+Texture2D<float4>                           WaterFlowMap                : register(t2);
+StructuredBuffer<Light>                     Lights                      : register(t3);
+StructuredBuffer<Instance>                  Instances                   : register(t4);
+StructuredBuffer<Mesh>                      Meshes                      : register(t5);
+
+Texture2D<float4>                           SkinDetailNormal            : register(t8);
+Texture2D<float4>                           WaterDisplacementMap        : register(t9);
+Texture2D<float4>                           ProjNoiseMap                : register(t10);
+StructuredBuffer<Transform>                 Transforms                  : register(t11);
+StructuredBuffer<uint>                      InstanceLightList           : register(t12);
+
+StructuredBuffer<RayRecord>                 RayRecords                  : register(t13);
+StructuredBuffer<uint>                      SortedRayIndices            : register(t14);
+StructuredBuffer<uint>                      CounterBuffer               : register(t15);
+
+ByteAddressBuffer                           MeshSlotRemap               : register(t19);
+ByteAddressBuffer                           PropertiesBuffer            : register(t20);
+
+ByteAddressBuffer                           Indices[]                   : register(t0, space1);
+ByteAddressBuffer                           Vertices[]                  : register(t0, space2);
+ByteAddressBuffer                           Materials[]                 : register(t0, space3);
+Texture2D<float4>                           Textures[]                  : register(t0, space4);
+
+#if defined(USE_LIGHT_TLAS)
+RaytracingAccelerationStructure             LightTLAS[]                 : register(t0, space5);
+#endif
+
+VK_BINDING(5, 0) StructuredBuffer<float3>   PrevPositions[]             : register(t0, space6);
+VK_BINDING(6, 0) TextureCube<float4>        CubeTextures[]              : register(t0, space7);
+VK_BINDING(7, 0) StructuredBuffer<float4>   DynamicPositions[]          : register(t0, space8);
+
+SamplerState                                DefaultSampler              : register(s0);
+SamplerState                                ClampSampler                : register(s1);
+SamplerState                                PointWrapSampler            : register(s2);
+
+#endif // REORDERED_INDIRECT_REGISTERS_HLSLI
