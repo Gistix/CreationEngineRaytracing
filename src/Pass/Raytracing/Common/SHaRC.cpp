@@ -227,7 +227,7 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		pipelineDesc.maxPayloadSize = 20;
-		pipelineDesc.allowOpacityMicromaps = false;
+		pipelineDesc.allowOpacityMicromaps = GetRenderer()->SupportsFeature(nvrhi::Feature::RayTracingOpacityMicromap);
 
 #if defined(NVAPI)
 		pipelineDesc.hlslExtensionsUAV = 127;

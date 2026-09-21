@@ -235,7 +235,7 @@ namespace Pass::Raytracing::Common
 		};
 
 		pipelineDesc.maxPayloadSize = 20;
-		pipelineDesc.allowOpacityMicromaps = false;
+		pipelineDesc.allowOpacityMicromaps = GetRenderer()->SupportsFeature(nvrhi::Feature::RayTracingOpacityMicromap);
 
 #if defined(NVAPI)
 		pipelineDesc.hlslExtensionsUAV = 127;

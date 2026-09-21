@@ -47,6 +47,12 @@ namespace Util
 #endif
 			}
 
+			if (Renderer::GetSingleton()->SupportsFeature(nvrhi::Feature::RayTracingOpacityMicromap))
+			{
+				if (!Renderer::GetSingleton()->IsVulkan())
+					defines.emplace_back(L"ENABLE_OMM", L"1");
+			}
+
 			if (sharcEnabled)
 				defines.emplace_back(L"SHARC");
 

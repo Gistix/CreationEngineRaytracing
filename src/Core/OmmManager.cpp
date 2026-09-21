@@ -257,8 +257,10 @@ namespace CERT
 			m_Cache[header.contentHash] = res;
 		}
 
-		logger::info("OmmManager: Built OMM for {} (hash 0x{:016X}, {} OMMs, {} tris)",
-			triShape->name.c_str(), header.contentHash, descArray.size(), triangleIndices.size());
+		logger::info("OmmManager: Built OMM for {} (hash 0x{:016X}, format {} ({}), {} OMMs, {} tris)",
+			triShape->name.c_str(), header.contentHash, header.format,
+			(header.format == 2 ? "4-State" : (header.format == 1 ? "2-State" : "Unknown")),
+			descArray.size(), triangleIndices.size());
 
 		return res;
 	}

@@ -479,7 +479,7 @@ void BaseMesh::SetupOpacityMicromap(nvrhi::ICommandList* commandList)
 
 	m_OmmResource = ommManager->GetOrCreate(m_BSTriShape, commandList);
 	if (!m_OmmResource) {
-		logger::warn("BaseMesh::SetupOpacityMicromap - OMM Resource not found for {}.", GetName().c_str());
+		logger::debug("BaseMesh::SetupOpacityMicromap - OMM Resource not found for {}.", GetName().c_str());
 		return;
 	}
 
