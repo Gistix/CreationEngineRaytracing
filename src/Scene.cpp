@@ -192,6 +192,86 @@ void Scene::Initialize()
 	m_FeatureData = eastl::make_unique<FeatureData>();
 	m_FeatureBuffer = renderer->GetDevice()->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
 		sizeof(FeatureData), "Feature Data", Constants::MAX_CB_VERSIONS));
+
+	CreateSobolBuffer();
+}
+
+void Scene::CreateSobolBuffer()
+{
+	static constexpr uint32_t directions[4][32] = {
+		// Dimension 1
+		{
+			0x80000000u, 0xC0000000u, 0xA0000000u, 0xF0000000u,
+			0x88000000u, 0xCC000000u, 0xAA000000u, 0xFF000000u,
+			0x80800000u, 0xC0C00000u, 0xA0A00000u, 0xF0F00000u,
+			0x88880000u, 0xCCCC0000u, 0xAAAA0000u, 0xFFFF0000u,
+			0x80008000u, 0xC000C000u, 0xA000A000u, 0xF000F000u,
+			0x88008800u, 0xCC00CC00u, 0xAA00AA00u, 0xFF00FF00u,
+			0x80808080u, 0xC0C0C0C0u, 0xA0A0A0A0u, 0xF0F0F0F0u,
+			0x88888888u, 0xCCCCCCCCu, 0xAAAAAAAAu, 0xFFFFFFFFu
+		},
+		// Dimension 2
+		{
+			0x80000000u, 0xC0000000u, 0x60000000u, 0x90000000u,
+			0xE8000000u, 0x5C000000u, 0x8E000000u, 0xC5000000u,
+			0x68800000u, 0x9CC00000u, 0xEE600000u, 0x55900000u,
+			0x80680000u, 0xC09C0000u, 0x60EE0000u, 0x90550000u,
+			0xE8808000u, 0x5CC0C000u, 0x8E606000u, 0xC5909000u,
+			0x6868E800u, 0x9C9C5C00u, 0xEEEE8E00u, 0x5555C500u,
+			0x8000E880u, 0xC0005CC0u, 0x60008E60u, 0x9000C590u,
+			0xE8006868u, 0x5C009C9Cu, 0x8E00EEEEu, 0xC5005555u
+		},
+		// Dimension 3
+		{
+			0x80000000u, 0xC0000000u, 0x20000000u, 0x50000000u,
+			0xF8000000u, 0x74000000u, 0xA2000000u, 0x93000000u,
+			0xD8800000u, 0x25400000u, 0x59E00000u, 0xE6D00000u,
+			0x78080000u, 0xB40C0000u, 0x82020000u, 0xC3050000u,
+			0x208F8000u, 0x51474000u, 0xFBEA2000u, 0x75D93000u,
+			0xA0858800u, 0x914E5400u, 0xDBE79E00u, 0x25DB6D00u,
+			0x58800080u, 0xE54000C0u, 0x79E00020u, 0xB6D00050u,
+			0x800800F8u, 0xC00C0074u, 0x200200A2u, 0x50050093u
+		},
+		// Dimension 4
+		{
+			0x80000000u, 0x40000000u, 0x20000000u, 0xB0000000u,
+			0xF8000000u, 0xDC000000u, 0x7A000000u, 0x9D000000u,
+			0x5A800000u, 0x2FC00000u, 0xA1600000u, 0xF0B00000u,
+			0xDA880000u, 0x6FC40000u, 0x81620000u, 0x40BB0000u,
+			0x22878000u, 0xB3C9C000u, 0xFB65A000u, 0xDDB2D000u,
+			0x78022800u, 0x9C0B3C00u, 0x5A0FB600u, 0x2D0DDB00u,
+			0xA2878080u, 0xF3C9C040u, 0xDB65A020u, 0x6DB2D0B0u,
+			0x800228F8u, 0x400B3CDCu, 0x200FB67Au, 0xB00DDB9Du
+		}
+	};
+
+	constexpr uint32_t numIndices = 65536;
+	constexpr uint32_t numDims = 4;
+	m_SobolData.resize(numIndices * numDims);
+
+	for (uint32_t d = 0; d < numDims; d++) {
+		for (uint32_t i = 0; i < numIndices; i++) {
+			uint32_t val = 0;
+			for (uint32_t bit = 0; bit < 32; bit++) {
+				if ((i >> bit) & 1u)
+					val ^= directions[d][bit];
+			}
+			m_SobolData[i + numIndices * d] = val;
+		}
+	}
+
+	nvrhi::BufferDesc desc;
+	desc.byteSize = numIndices * numDims * sizeof(uint32_t);
+	desc.structStride = sizeof(uint32_t);
+	desc.canHaveRawViews = false;
+	desc.canHaveTypedViews = false;
+	desc.canHaveUAVs = false;
+	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.keepInitialState = true;
+	desc.debugName = "Precomputed Sobol Buffer";
+
+	m_SobolBuffer = Renderer::GetSingleton()->GetDevice()->createBuffer(desc);
+	m_NeedsSobolUpload = true;
 }
 
 void Scene::Execute()
@@ -207,6 +287,15 @@ void Scene::Execute()
 
 	auto* commandList = renderer->StartExecution();
 	m_CameraData->RenderSize = renderer->GetDynamicResolution();
+
+	if (m_NeedsSobolUpload) {
+		commandList->beginTrackingBufferState(m_SobolBuffer, nvrhi::ResourceStates::Common);
+		commandList->writeBuffer(m_SobolBuffer, m_SobolData.data(), m_SobolData.size() * sizeof(uint32_t));
+		commandList->setPermanentBufferState(m_SobolBuffer, nvrhi::ResourceStates::ShaderResource);
+		m_NeedsSobolUpload = false;
+		m_SobolData.clear();
+		m_SobolData.shrink_to_fit();
+	}
 
 	const auto currentSlot = renderer->GetCurrentSlot();
 	const auto& timings = m_Settings.DebugSettings.Timings;

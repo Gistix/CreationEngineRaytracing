@@ -134,6 +134,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(17), // Instance light list
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(18), // Precomputed Sobol Buffer
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_SRV(13),
@@ -375,6 +376,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_ResolveBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(17, sceneGraph->GetInstanceLightList()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(18, scene->GetSobolBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),

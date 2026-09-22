@@ -65,8 +65,11 @@ Texture2D<float4>                           SkinDetailNormal            : regist
 Texture2D<float4>                           ProjNoiseMap                : register(t15);
 StructuredBuffer<Transform>                 Transforms                  : register(t16);
 StructuredBuffer<uint>                      InstanceLightList           : register(t17);
+StructuredBuffer<uint>                      PrecomputedSobolBuffer      : register(t18);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
+
+#define SOBOL_PRECOMPUTED_BUFFER PrecomputedSobolBuffer
 
 ByteAddressBuffer                           Indices[]                   : register(t0, space1);
 ByteAddressBuffer                           Vertices[]                  : register(t0, space2);

@@ -41,6 +41,11 @@ struct Scene
 
 	mutable nvrhi::TextureHandle m_ProjNoiseTexture;
 
+	nvrhi::BufferHandle m_SobolBuffer;
+	bool m_NeedsSobolUpload = false;
+	eastl::vector<uint32_t> m_SobolData;
+	void CreateSobolBuffer();
+
 	void* m_WaterFlowMapResource = nullptr;
 	nvrhi::TextureHandle m_WaterFlowMapTexture;
 
@@ -139,6 +144,7 @@ struct Scene
 	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
 
 	nvrhi::ITexture* GetProjNoiseTexture() const;
+	inline nvrhi::IBuffer* GetSobolBuffer() const { return m_SobolBuffer; }
 
 	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 
