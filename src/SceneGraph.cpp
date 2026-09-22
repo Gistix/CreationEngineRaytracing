@@ -297,7 +297,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 #if defined(SKYRIM)
 		auto flags = std::bit_cast<LightLimitFix::LightFlags>(runtimeData.ambient.red);
 
-		if (flags & LightLimitFix::LightFlags::Disabled)
+		if (flags & (LightLimitFix::LightFlags::Disabled | LightLimitFix::LightFlags::EditorDisabled))
 			light.m_Active = false;
 #endif
 
@@ -309,7 +309,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Radius = runtimeData.radius;
 
-			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) <= 1e-4 || lightData.Radius <= 1e-4)
+			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) <= 1e-4 || lightData.Radius <= 1e-4 || runtimeData.fade <= 0.0f)
 				light.m_Active = false;
 
 			// Clear instances
