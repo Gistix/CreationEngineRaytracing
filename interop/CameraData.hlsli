@@ -21,7 +21,7 @@ INTEROP_STRUCT(CameraData, 16)
     float2 Jitter;
     uint IsUnderwater;
     uint Pad1;
-    float3 UnderwaterAbsorption;
+    float3 UnderwaterColor;
     uint Pad2;
     float4 WaterData[25];  // 5x5 grid of per-cell water data (rgb: water color, w: water height relative to camera)
 };

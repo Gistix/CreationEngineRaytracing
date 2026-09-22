@@ -13,10 +13,6 @@
 
 #include "include/Lighting.hlsli"
 
-#ifdef SUBSURFACE_SCATTERING
-#include "raytracing/include/SubsurfaceLighting.hlsli"
-#endif
-
 #include "raytracing/include/Transparency.hlsli"
 
 #if defined(SHARC)
@@ -158,9 +154,6 @@ void Main()
     
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
     
-#ifdef SUBSURFACE_SCATTERING
-    bool isSssPath = false;
-#endif
 
     float3 direction;
 #if defined(RAW_RADIANCE) && !defined(NRD)
@@ -201,6 +194,9 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
+        const uint sampleIndex = Camera.FrameIndex * MAX_SAMPLES + i;
+        randomSeed = InitRandomSeed(idx, size, sampleIndex);
+
 #if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif
@@ -223,6 +219,7 @@ void Main()
 #endif
         bool isEnter = true;
         bool isSpecularSample = false;
+        uint diffuseBounceCount = 0;
 
         // Water volume tracking for Beer-Lambert absorption
         bool insideWaterVolume = false;
@@ -240,7 +237,10 @@ void Main()
                               
             float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
        
-            if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed))
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples))
                 direction = bsdfSample.wo;
             else
                 break;            
@@ -249,6 +249,8 @@ void Main()
             if (j == 0)
                 isSpecularSample = bsdfSample.isLobe(LobeType::Specular) || bsdfSample.isLobe(LobeType::Delta);
 #endif
+            if (bsdfSample.isLobe(LobeType::Diffuse))
+                diffuseBounceCount++;
             
 #if defined(RAW_RADIANCE) && !defined(NRD)
             const bool demodulatedThroughput = (j == 0 && !isSpecularSample);
@@ -435,21 +437,7 @@ void Main()
             
             if (bounceHasNonDeltaLobes)
             {
-#ifdef SUBSURFACE_SCATTERING
-                if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, instance, payload, rayCone, randomSeed, false);
-                    isSssPath = true;
-                    // Specular uses the standard path with diffuse suppressed
-                    Surface specSurface = surface;
-                    specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, false);
-                }
-                else
-#endif
-                { 
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, false);
-                }
+                directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, false);
             }
             
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights

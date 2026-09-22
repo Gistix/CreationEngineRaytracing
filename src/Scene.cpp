@@ -303,16 +303,11 @@ void Scene::UpdateCameraData() const
 	// Actually "cameraUnderwater"?
 	m_CameraData->IsUnderwater = RE::TESWaterSystem::GetSingleton()->playerUnderwater;
 
-	// Compute underwater absorption from the current water type
-	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
+	m_CameraData->UnderwaterColor = float3(1.0f, 1.0f, 1.0f);
 	if (m_CameraData->IsUnderwater) {
 		auto* waterSystem = RE::TESWaterSystem::GetSingleton();
 		if (waterSystem && waterSystem->currentWaterType) {
-			float3 waterColor = Util::Math::Float3(waterSystem->currentWaterType->data.shallowWaterColor) / 255.0f;
-			m_CameraData->UnderwaterAbsorption = float3(
-				-std::log(std::max(waterColor.x, 1e-4f)),
-				-std::log(std::max(waterColor.y, 1e-4f)),
-				-std::log(std::max(waterColor.z, 1e-4f))) / Constants::WATER_ABSORPTION_REFERENCE_DEPTH * m_Settings.WaterSettings.AbsorptionScale;
+			m_CameraData->UnderwaterColor = Util::Math::Float3(waterSystem->currentWaterType->data.shallowWaterColor) / 255.0f;
 		}
 	}
 
@@ -365,7 +360,7 @@ void Scene::UpdateCameraData() const
 	}
 #elif defined(FALLOUT4)
 	m_CameraData->IsUnderwater = false; // TODO: Fetch from FO4 water system
-	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
+	m_CameraData->UnderwaterColor = float3(1.0f, 1.0f, 1.0f);
 #endif
 }
 
