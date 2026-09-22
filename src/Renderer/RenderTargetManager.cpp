@@ -70,7 +70,34 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 			magic_enum::enum_name(desc.format), 
 			desc.debugName);
 
-		renderTarget.handle = device->createTexture(desc);
+		// Vulkan runs under DXVK, which runs emulates D3D11
+		if (renderer->IsVulkan()) {
+			D3D11_TEXTURE2D_DESC desc11{};
+			desc11.Width = desc.width;
+			desc11.Height = desc.height;
+			desc11.MipLevels = 1;
+			desc11.ArraySize = 1;
+			desc11.Format = nvrhi::d3d12::convertFormat(desc.format);
+			desc11.SampleDesc.Count = 1;
+			desc11.Usage = D3D11_USAGE_DEFAULT;
+			desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+
+			auto* nativeDevice = renderer->GetNativeD3D11Device();
+			winrt::com_ptr<IDXGIVkInteropDevice> interopDevice;
+			HRESULT hr = nativeDevice->QueryInterface(__uuidof(IDXGIVkInteropDevice), interopDevice.put_void());
+
+			if (SUCCEEDED(hr))
+				hr = nativeDevice->CreateTexture2D(&desc11, nullptr, renderTarget.d3d11Texture.put());
+
+			if (SUCCEEDED(hr))
+				renderTarget.handle = Renderer::WrapNativeTexture(renderTarget.d3d11Texture.get(), debugName.c_str(), nvrhi::ResourceStates::UnorderedAccess);
+
+			if (!renderTarget.handle) {
+				renderTarget.d3d11Texture = nullptr;
+				logger::error("RenderTargetManager::GetTexture - Direct sharing failed for {} (0x{:08X})", debugName, static_cast<uint32_t>(hr));
+			}
+		} else
+			renderTarget.handle = device->createTexture(desc);
 	}
 
 	return renderTarget.handle;
@@ -91,47 +118,44 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 
 	auto& renderTarget = m_Textures[slot][static_cast<size_t>(texture)];
 
-	if (!renderTarget.d3d11Texture) {
-		auto* renderer = Renderer::GetSingleton();
-		auto* nativeD3D11Device = renderer->GetNativeD3D11Device();
-		auto* nativeD3D12Device = renderer->GetNativeD3D12Device();
+	if (!Renderer::GetSingleton()->IsVulkan()) {
+		if (!renderTarget.d3d11Texture) {
+			auto* renderer = Renderer::GetSingleton();
+			auto* nativeD3D11Device = renderer->GetNativeD3D11Device();
+			auto* nativeD3D12Device = renderer->GetNativeD3D12Device();
 
-		if (!nativeD3D11Device || (!renderer->IsVulkan() && !nativeD3D12Device)) {
-			logger::error("RenderTargetManager::GetSharedTexture - Required device is null");
-			return sharedTexture;
-		}
-
-		const auto& internalDesc = internalTexture->getDesc();
-		DXGI_FORMAT nativeFormat = nvrhi::d3d12::convertFormat(internalDesc.format);
-
-		D3D11_TEXTURE2D_DESC desc11{};
-		desc11.Width = internalDesc.width;
-		desc11.Height = internalDesc.height;
-		desc11.MipLevels = 1;
-		desc11.ArraySize = 1;
-		desc11.Format = nativeFormat;
-		desc11.SampleDesc.Count = 1;
-		desc11.SampleDesc.Quality = 0;
-		desc11.Usage = D3D11_USAGE_DEFAULT;
-		desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-		desc11.CPUAccessFlags = 0;
-		desc11.MiscFlags = renderer->IsVulkan() ? 0 : D3D11_RESOURCE_MISC_SHARED;
-
-		HRESULT hr = nativeD3D11Device->CreateTexture2D(&desc11, nullptr, renderTarget.d3d11Texture.put());
-		if (FAILED(hr)) {
-			// If RTV is not supported for this format, retry with only SHADER_RESOURCE
-			desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-			hr = nativeD3D11Device->CreateTexture2D(&desc11, nullptr, renderTarget.d3d11Texture.put());
-			if (FAILED(hr)) {
-				logger::error("RenderTargetManager::GetSharedTexture - CreateTexture2D failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
+			if (!nativeD3D11Device || (!renderer->IsVulkan() && !nativeD3D12Device)) {
+				logger::error("RenderTargetManager::GetSharedTexture - Required device is null");
 				return sharedTexture;
 			}
-		}
 
-		if (renderer->IsVulkan()) {
-			std::string sharedDebugName = std::format("{}_{}_VulkanShared", magic_enum::enum_name(texture), slot);
-			renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d11Texture.get(), sharedDebugName.c_str());
-		} else {
+			const auto& internalDesc = internalTexture->getDesc();
+			DXGI_FORMAT nativeFormat = nvrhi::d3d12::convertFormat(internalDesc.format);
+
+			D3D11_TEXTURE2D_DESC desc11{};
+			desc11.Width = internalDesc.width;
+			desc11.Height = internalDesc.height;
+			desc11.MipLevels = 1;
+			desc11.ArraySize = 1;
+			desc11.Format = nativeFormat;
+			desc11.SampleDesc.Count = 1;
+			desc11.SampleDesc.Quality = 0;
+			desc11.Usage = D3D11_USAGE_DEFAULT;
+			desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+			desc11.CPUAccessFlags = 0;
+			desc11.MiscFlags = renderer->IsVulkan() ? 0 : D3D11_RESOURCE_MISC_SHARED;
+
+			HRESULT hr = nativeD3D11Device->CreateTexture2D(&desc11, nullptr, renderTarget.d3d11Texture.put());
+			if (FAILED(hr)) {
+				// If RTV is not supported for this format, retry with only SHADER_RESOURCE
+				desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+				hr = nativeD3D11Device->CreateTexture2D(&desc11, nullptr, renderTarget.d3d11Texture.put());
+				if (FAILED(hr)) {
+					logger::error("RenderTargetManager::GetSharedTexture - CreateTexture2D failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
+					return sharedTexture;
+				}
+			}
+
 			winrt::com_ptr<IDXGIResource> dxgiResource;
 			hr = renderTarget.d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
 			if (FAILED(hr)) {
@@ -155,14 +179,20 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 			std::string sharedDebugName = std::format("{}_{}_D3D11Shared", magic_enum::enum_name(texture), slot);
 			renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str());
 		}
-	}
 
-	sharedTexture.native = renderTarget.d3d12Resource.get();
+		sharedTexture.native = renderTarget.d3d12Resource.get();
+	}
+	else
+		sharedTexture.native = nullptr;
+
 	sharedTexture.shared = renderTarget.d3d11Texture.get();
 	return sharedTexture;
 }
 
 void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, uint32_t slot) {
+	if (Renderer::GetSingleton()->IsVulkan())
+		return;
+
 	auto currentMode = Scene::GetSingleton()->m_Settings.GeneralSettings.Mode;
 
 	const bool gi = (currentMode == Mode::GlobalIllumination);
@@ -186,10 +216,8 @@ void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, u
 		copyTexture(Texture::MotionVectors3D);
 	}
 
-	// DLSS Ray Reconstruction consumes diffuse/specular albedo and specular hit distance
-	// through the host's Vulkan Streamline backend. Ensure the shared textures exist (so the
-	// host can wrap them) and keep them populated every frame.
 	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
+		// Ensure they exist before copy
 		GetSharedTexture(Texture::DiffuseAlbedo, slot);
 		GetSharedTexture(Texture::RRSpecularAlbedo, slot);
 		GetSharedTexture(Texture::RRSpecularHitDist, slot);
