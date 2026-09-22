@@ -55,6 +55,7 @@ namespace Pass
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
+			m_BindingSets.fill(nullptr);
 			CreateBindingLayout();
 			CreatePipeline();
 			m_BindingSetDirty.fill(true);
@@ -448,6 +449,17 @@ namespace Pass
 
 	void PathTracing::Execute(nvrhi::ICommandList* commandList)
 	{
+		if (m_UseStablePlanes) {
+			auto* renderer = GetRenderer();
+			const auto resolution = renderer->GetDynamicResolution();
+			const auto& desc = renderer->GetStablePlanes()->header->getDesc();
+			if (desc.width != resolution.x || desc.height != resolution.y) {
+				m_BindingSets.fill(nullptr);
+				m_BindingSetDirty.fill(true);
+				renderer->InitStablePlanes();
+			}
+		}
+
 		CheckBindings();
 
 		if (m_UseStablePlanes)

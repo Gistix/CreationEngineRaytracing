@@ -144,8 +144,10 @@ namespace Pass::Common
 			return;
 
 		// Detect camera changes and reset if needed
-		if (DetectCameraChange())
+		const auto revision = Scene::GetSingleton()->GetLightingRevision();
+		if (DetectCameraChange() || m_LightingRevision != revision)
 			m_AccumulatedFrames = 0;
+		m_LightingRevision = revision;
 
 		// Dispatch compute shader
 		auto resolution = GetRenderer()->GetDynamicResolution();
