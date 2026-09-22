@@ -78,8 +78,11 @@ namespace Util
 					defines.emplace_back(L"NRD_RELAX", L"1");
 					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
 					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
-				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
 					defines.emplace_back(L"DLSS_RR", L"1");
+				} else if (settings.GeneralSettings.Denoiser == Denoiser::OIDN) {
+					defines.emplace_back(L"OIDN", L"1");
+				}
 
 				if (settings.AdvancedSettings.StablePlanes)
 					defines.emplace_back(L"STABLE_PLANES");
@@ -115,8 +118,11 @@ namespace Util
 					defines.emplace_back(L"NRD_RELAX", L"1");
 					defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
 					defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
-				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
 					defines.emplace_back(L"DLSS_RR", L"1");
+				} else if (settings.GeneralSettings.Denoiser == Denoiser::OIDN) {
+					defines.emplace_back(L"OIDN", L"1");
+				}
 			}
 
 			return defines;

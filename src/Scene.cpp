@@ -36,6 +36,7 @@
 #include "Pass/Raytracing/Common/TransformComposition.h"
 #include "Pass/Raytracing/Common/InstanceLightCulling.h"
 #include "Pass/Raytracing/Common/PTComposite.h"
+#include "Pass/OIDN/OIDNIntegration.h"
 
 #include "Utils/DXVKInterop.h"
 
@@ -145,6 +146,7 @@ void Scene::UpdateMode(Mode mode)
 		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::PathTracing);
 		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::PathTracing);
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
+		auto oidnPass = eastl::make_unique<Pass::OIDN::OIDNIntegration>(renderer);
 		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);
 
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
@@ -159,6 +161,7 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
 		renderGraph->AddNode({ true, "PT Composite", eastl::move(ptComposite) });
+		renderGraph->AddNode({ false, "OIDN Denoise", eastl::move(oidnPass) });
 		renderGraph->AddNode({ false, "Accumulation", eastl::move(accumulation) });
 	}
 	else if (mode == Mode::Debug) {
@@ -458,8 +461,10 @@ void Scene::UpdateSettings(Settings settings)
 	else if (currentMode == Mode::PathTracing) {
 		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)
 		const bool accumulation = settings.GeneralSettings.Denoiser == Denoiser::Accumulation;
+		const bool oidn = settings.GeneralSettings.Denoiser == Denoiser::OIDN;
 		renderGraph->SetEnabled<Pass::Common::Accumulation>(accumulation);
 		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd);
+		renderGraph->SetEnabled<Pass::OIDN::OIDNIntegration>(oidn);
 	}
 
 	renderGraph->SettingsChanged(settings); 

@@ -94,6 +94,7 @@ struct Scene
 	SceneGraph* GetSceneGraph() const;
 
 	inline auto GetCameraData() const { return m_CameraData.get(); }
+	inline auto GetFeatureData() const { return m_FeatureData.get(); }
 	inline const CameraRuntimeData& GetCameraRuntimeData() const { return m_CameraRuntimeData; }
 
 	inline auto GetCameraBuffer() const { return m_CameraBuffer; }

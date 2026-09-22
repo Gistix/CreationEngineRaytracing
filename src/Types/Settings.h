@@ -14,7 +14,8 @@ enum class Denoiser
 	NRD_Reblur,
 	NRD_Relax,
 	DLSS_RR,
-	Accumulation
+	Accumulation,
+	OIDN
 };
 
 struct GeneralSettings
@@ -317,6 +318,20 @@ struct DebugSettings
 	TimingMode Timings = TimingMode::Disabled;
 };
 
+struct OIDNSettings
+{
+	enum class Quality
+	{
+		Fast,
+		Balanced,
+		High
+	};
+
+	Quality Quality = Quality::Balanced;
+	bool CleanAux = true;
+	int MemoryLimitMB = 1024;
+};
+
 struct Settings
 {
 	bool Enabled = true;
@@ -326,6 +341,7 @@ struct Settings
 	NRDSettings NRDSettings;
 	NRDReblurSettings NRDReblurSettings;
 	NRDRelaxSettings NRDRelaxSettings;
+	OIDNSettings OIDNSettings;
 	MaterialSettings MaterialSettings;
 	SHaRCSettings SHaRCSettings;
 	AdvancedSettings AdvancedSettings;

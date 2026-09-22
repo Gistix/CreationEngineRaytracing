@@ -111,6 +111,11 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 		VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,				// "VK_EXT_mutable_descriptor_type"
 		VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,						// "VK_EXT_memory_budget"
 		VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,						// "VK_EXT_memory_priority"
+#ifdef _WIN32
+		VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,				// "VK_KHR_external_memory_win32"
+		VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,					// "VK_KHR_external_semaphore"
+		VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,			// "VK_KHR_external_semaphore_win32"
+#endif
 	};
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;

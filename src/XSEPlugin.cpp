@@ -106,11 +106,26 @@ bool Load()
 	return true;
 }
 
+#if defined(ENABLE_OIDN)
+BOOL APIENTRY DllMain(HMODULE, DWORD ul_reason_for_call, LPVOID)
+{
+	if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
+		SetDllDirectoryW(PLUGIN_FOLDER_W);
+	}
+	return TRUE;
+}
+#endif
+
 #if defined(SKYRIM)
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
 #ifndef NDEBUG
 	while (!REX::W32::IsDebuggerPresent()) {};
+#endif
+#if defined(ENABLE_OIDN)
+	SetDllDirectoryW(PLUGIN_FOLDER_W);
+	LoadLibraryW(PLUGIN_FOLDER_W L"/OpenImageDenoise_core.dll");
+	LoadLibraryW(PLUGIN_FOLDER_W L"/OpenImageDenoise.dll");
 #endif
 	InitializeLog();
 	logger::info("Loaded {} {}", Plugin::NAME, Plugin::VERSION.string());
@@ -141,6 +156,11 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 {
 #ifndef NDEBUG
 	while (!REX::W32::IsDebuggerPresent()) {};
+#endif
+#if defined(ENABLE_OIDN)
+	SetDllDirectoryW(PLUGIN_FOLDER_W);
+	LoadLibraryW(PLUGIN_FOLDER_W L"/OpenImageDenoise_core.dll");
+	LoadLibraryW(PLUGIN_FOLDER_W L"/OpenImageDenoise.dll");
 #endif
 	InitializeLog();
 	logger::info("Loaded {} {}", Plugin::NAME, Plugin::VERSION.string());

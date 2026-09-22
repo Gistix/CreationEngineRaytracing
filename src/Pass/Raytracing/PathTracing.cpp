@@ -102,8 +102,9 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool oidn = (settings.GeneralSettings.Denoiser == Denoiser::OIDN);
 
-		if (nrd || dlssrr) {
+		if (nrd || dlssrr || oidn) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Diffuse Albedo
 
 			if (nrd) {
@@ -115,7 +116,7 @@ namespace Pass
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(8)); // Diffuse Factor
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9)); // Specular Factor
 			}
-			else {
+			else if (dlssrr) {
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // Specular Albedo (EnvBRDF)
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Specular Hit Distance
 			}
@@ -172,6 +173,11 @@ namespace Pass
 		auto anyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/AnyHit.hlsl", commonDefines);
 		auto shadowMissLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowMiss.hlsl", commonDefines);
 		auto shadowAnyHitLib = ShaderUtils::CompileShaderLibrary(device, L"data/shaders/raytracing/Common/ShadowAnyHit.hlsl", commonDefines);
+
+		if (!rayGenLib || !missLib || !hitLib || !anyHitLib || !shadowMissLib || !shadowAnyHitLib) {
+			logger::error("PathTracing::CreateRayTracingPipelineForMode: failed to compile one or more shaders");
+			return;
+		}
 
 		nvrhi::rt::PipelineDesc pipelineDesc;
 		pipelineDesc.shaders = {
@@ -346,8 +352,9 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool oidn = (settings.GeneralSettings.Denoiser == Denoiser::OIDN);
 
-		if (nrd || dlssrr) {
+		if (nrd || dlssrr || oidn) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::DiffuseAlbedo)));
 
 			if (nrd) {
@@ -357,7 +364,7 @@ namespace Pass
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(8, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, textureManager.GetTexture(RenderTarget::SpecularFactor)));
 			}
-			else {
+			else if (dlssrr) {
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
 			}

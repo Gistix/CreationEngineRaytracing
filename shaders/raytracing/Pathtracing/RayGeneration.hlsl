@@ -156,7 +156,7 @@ void Main()
         MotionVectors[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
         
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
         
 #       if defined(NRD) 
@@ -169,7 +169,7 @@ void Main()
         DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
 #           endif
-#       else
+#       elif defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
         SpecularHitDistance[idx] = 0;
 #       endif
@@ -180,7 +180,7 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f); 
         
 #       if defined(NRD)
@@ -191,7 +191,7 @@ void Main()
         DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
 #           endif
-#       else
+#       elif defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;                
 #       endif              
@@ -278,11 +278,11 @@ void Main()
             skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
         Depth[idx] = 1;
     
-#       if defined(NRD) | defined(DLSS_RR)   
+#       if defined(NRD) || defined(DLSS_RR) || defined(OIDN)   
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
 #           if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
-#           else
+#           elif defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;
 #           endif  
@@ -313,7 +313,7 @@ void Main()
     // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
     const bool useCoat = sourceSurface.CoatStrength > 0;
   
-#   if defined(NRD) | defined(DLSS_RR)    
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)    
     const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
     DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
 #   endif   
@@ -696,7 +696,7 @@ void Main()
         float3 domNormal = domSP.GetNormal();
         float3 domDiffEst, domSpecEst;
         UnpackTwoFp32ToFp16(domSP.DenoiserPackedBSDFEstimate, domDiffEst, domSpecEst);
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
         DiffuseAlbedo[idx] = domDiffEst;
 #   endif
         NormalRoughness[idx] = float4(domNormal, domRoughness);
@@ -706,7 +706,7 @@ void Main()
         if (sourceSurface.CoatStrength > 0)
         {
             float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
 #   endif
 #   if defined(NRD)
@@ -717,7 +717,7 @@ void Main()
         }
         else
         {
-#   if defined(NRD) | defined(DLSS_RR)
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
 #   endif
 #   if defined(NRD)
@@ -1439,7 +1439,11 @@ void Main()
     // combine stable radiance (noise-free) with all planes' noisy radiance
     {
         float3 totalRadiance = spCtx.GetAllRadiance(idx, true);
+#       if defined(OIDN)
+        Output[idx] = float4(totalRadiance, 1.0f);
+#       else
         Output[idx] = float4(LLTrueLinearToGamma(totalRadiance), 1.0f);
+#       endif
 #       if defined(DLSS_RR)    
         SpecularHitDistance[idx] = specHitDist;
 #       endif
@@ -1479,6 +1483,8 @@ void Main()
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;    
+#elif defined(OIDN)
+    Output[idx] = float4(direct + radiance, 1.0f);
 #else    
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
 

@@ -106,6 +106,9 @@ include(NRD)
 # RTXDI library (ReSTIR DI / GI / PT)
 include(RTXDI)
 
+# Intel Open Image Denoise (OIDN)
+include(OIDN)
+
 target_compile_definitions(
     ${PROJECT_NAME}
     PRIVATE 
