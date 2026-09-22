@@ -18,4 +18,5 @@ public:
 
 	void Update(nvrhi::ICommandList* commandList) override;
 	void UpdateOcclusion();
+	void SetOcclusionBufferStates(nvrhi::ICommandList* commandList, bool writing);
 };

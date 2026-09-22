@@ -25,23 +25,31 @@ InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi:
 	m_VertexDesc = rendererData->vertexDesc;
 	m_IndexBuffer = CreateIndexBuffer(rendererData);
 	m_VertexBuffer = CreateVertexBuffer(rendererData);
+	if (!m_IndexBuffer.m_Buffer || !m_VertexBuffer.m_Buffer)
+		return;
 
-	AllocateMeshIndex();
+	if (!AllocateMeshIndex())
+		return;
 
 	const uint32_t indexCount = static_cast<uint32_t>(triShapeData.triangleCount) * 3;
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 	const nvrhi::Format vertexFormat = Util::Geometry::GetVertexPositionFormat(rendererData->vertexDesc);
 
+	const auto geometryIndex = AllocateGeometryIndex();
+	if (geometryIndex == UINT16_MAX)
+		return;
+
 	m_GeometryEntries.push_back({ MakeGeometryDesc(
 		m_IndexBuffer.m_Buffer, m_IndexBuffer.m_Offset, indexCount,
 		m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, vertexStride, triShapeData.vertexCount,
-		GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
+		GetMeshIndex(), vertexFormat), geometryIndex });
 
 	CreateMaterial();
 
 	// The engine's first AddGroup fires during block Attach, before this mesh is created. The
 	// SceneGraph owns the parsed instance data; keep a stable pointer to it for the mesh's lifetime.
 	m_InstancedData = Scene::GetSingleton()->GetSceneGraph()->GetOrCreateInstancedData(bsTriShape);
+	m_IsReady = m_Material != nullptr;
 }
 
 void InstancedMesh::OnDestroy()
