@@ -4,8 +4,6 @@
 #include "Include/Utils/MathConstants.hlsli"
 #include "Interop/SharedData.hlsli"
 
-#define ENABLE_LL SharedData::linearLightingSettings.enableLinearLighting
-
 namespace Color
 {
     static float GammaCorrectionValue = 2.2;
@@ -27,6 +25,10 @@ namespace Color
 
     float RGBToLuminance(float3 color)
     {
+#if defined(SKYRIM)
+        if (Features.LinearLighting.enableLinearLighting && Features.LinearLighting.enableACEScg)
+            return dot(color, float3(0.2722287168, 0.6740817658, 0.0536895174));
+#endif
         return dot(color, float3(0.2125, 0.7154, 0.0721));
     }
 

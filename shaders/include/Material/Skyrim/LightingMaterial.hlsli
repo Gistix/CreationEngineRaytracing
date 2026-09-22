@@ -11,6 +11,7 @@
 #include "interop/Material/Skyrim/PBRMaterialData.hlsli"
 #include "interop/Material/Skyrim/HairTintMaterialData.hlsli"
 #include "interop/Material/Skyrim/EnvmapMaterialData.hlsli"
+#include "interop/Material/Skyrim/MultiLayerParallaxMaterialData.hlsli"
 #include "interop/Material/Skyrim/GlowmapMaterialData.hlsli"
 #include "interop/Material/Skyrim/FacegenMaterialData.hlsli"
 #include "interop/Material/Skyrim/FacegenTintMaterialData.hlsli"
@@ -156,7 +157,9 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         surface.Bitangent = cross(surface.Normal, surface.Tangent);
     }
     
-    vertexColor.rgb = saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
+    float3 linearVertexColor = TransferFunctions::SRGBToLinear(vertexColor.rgb);
+    float vertexAO = max(max(linearVertexColor.r, linearVertexColor.g), linearVertexColor.b);
+    const float3 workingVertexColor = LinearSRGBToWorking(vertexAO > 0.0f ? linearVertexColor / vertexAO : 1.0f);
     
     const bool isWindows = material.Feature == Feature::kGlowMap && props.ShaderFlags & ShaderFlags::kAssumeShadowmask;
     float3 windowAlpha = float3(0.0f, 0.0f, 0.0f);
@@ -181,8 +184,8 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             windowAlpha = emissive;
         }
 
-        surface.Albedo = albedo.rgb * vertexColor.rgb;
-        surface.Emissive = emissive * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
+        surface.Albedo = albedo.rgb * workingVertexColor;
+        surface.Emissive = LinearSRGBToWorking(emissive) * (LLON ? LLSETTINGS.glowmapMult : 1.0f) * EmitColorToLinear(props.EmissiveColor.rgb) * props.EmissiveColor.a * EmitColorMult() * (surface.Primary ? 1.0f : LIGHTINGSETTINGS.Emissive);
         surface.Roughness = saturate(rmaos.x * pbr.RoughnessScale);
         surface.Metallic = saturate(rmaos.y);
         surface.AO = rmaos.z;
@@ -199,7 +202,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
 
             if (!(props.ShaderFlags & ShaderFlags::kTwoSided))
             {
-                surface.SubsurfaceData.ScatteringColor = subsurfaceColor.rgb * pbr.FeatureColor.rgb;
+                surface.SubsurfaceData.ScatteringColor = LinearSRGBToWorking(subsurfaceColor.rgb) * LinearSRGBToWorking(pbr.FeatureColor.rgb);
                 surface.SubsurfaceData.TransmissionColor = surface.Albedo;
 
                 surface.SubsurfaceData.Scale = 40.0f;
@@ -213,7 +216,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (pbr.PBRFlags & PBR::Flags::TwoLayer)
         {
             half4 coatColorParam = pbr.FeatureColor;
-            surface.CoatColor = coatColorParam.rgb;
+            surface.CoatColor = LinearSRGBToWorking(coatColorParam.rgb);
             surface.CoatStrength = coatColorParam.a;
             surface.CoatRoughness = pbr.FeatureScalar;
             surface.CoatF0 = float3(0.04, 0.04, 0.04);
@@ -222,7 +225,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             {
                 Texture2D coatColorTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture0)];
                 float4 sampledCoat = coatColorTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-                surface.CoatColor *= sampledCoat.rgb;
+                surface.CoatColor *= LinearSRGBToWorking(sampledCoat.rgb);
                 surface.CoatStrength *= sampledCoat.a;
             }
 
@@ -247,14 +250,14 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (pbr.PBRFlags & PBR::Flags::Fuzz)
         {
             half4 fuzzColorWeight = pbr.FeatureColor;
-            surface.FuzzColor = fuzzColorWeight.rgb;
+            surface.FuzzColor = LinearSRGBToWorking(fuzzColorWeight.rgb);
             surface.FuzzWeight = fuzzColorWeight.a;
 
             if (pbr.PBRFlags & PBR::Flags::HasFeatureTexture1)
             {
                 Texture2D fuzzTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture1)];
                 float4 sampledFuzz = fuzzTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
-                surface.FuzzColor *= sampledFuzz.rgb;
+                surface.FuzzColor *= LinearSRGBToWorking(sampledFuzz.rgb);
                 surface.FuzzWeight *= sampledFuzz.a;
             }
         }
@@ -288,7 +291,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         
         alpha = diffuse.a;
         
-        float3 albedo = diffuse.rgb * vertexColor.rgb;
+        float3 albedo = diffuse.rgb;
         
         [branch]
         if (props.ShaderFlags & ShaderFlags::kLODLandscape)
@@ -301,19 +304,43 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             albedo = pow(albedo, Features.LODBlending.LODObjectGamma) * Features.LODBlending.LODObjectBrightness;
         }
         
-        surface.Albedo = VanillaDiffuseColor(albedo);
+        [branch]
+        if (material.Feature == Feature::kFaceGen)
+        {
+            FacegenMaterialDataExtra facegen = Materials[0].Load<FacegenMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+
+            Texture2D detailTexture = Textures[NonUniformResourceIndex(facegen.DetailTexture)];
+            float3 detailColor = detailTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
+            detailColor = float3(3.984375, 3.984375, 3.984375) * (float3(0.00392156886, 0, 0.00392156886) + detailColor);
+
+            Texture2D tintTexture = Textures[NonUniformResourceIndex(facegen.TintTexture)];
+            float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
+            tintColor = tintColor * albedo * 2.0f;
+            tintColor = tintColor - tintColor * albedo;
+            albedo = (albedo * albedo + tintColor) * detailColor;
+        }
+        else if (material.Feature == Feature::kSkinTint)
+        {
+            FacegenTintMaterialDataExtra tintData = Materials[0].Load<FacegenTintMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+
+            float3 tintColor = tintData.TintColor * albedo * 2.0f;
+            tintColor = tintColor - tintColor * albedo;
+            albedo = float3(1.01171875f, 0.99609375f, 1.01171875f) * (albedo * albedo + tintColor);
+        }
+
+        surface.Albedo = VanillaDiffuseColor(albedo) * workingVertexColor;
 
         [branch]
         if (material.Feature == Feature::kHairTint)
         {
             HairTintMaterialDataExtra hair = Materials[0].Load<HairTintMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            surface.Albedo *= VanillaDiffuseColor(hair.TintColor);
+            surface.Albedo *= SRGBColorToLinear(hair.TintColor);
         }
     
         [branch]
         if (props.ShaderFlags & ShaderFlags::kSpecular)
         {
-            float3 specularColor = material.SpecularColor;
+            float3 specularColor = SRGBColorToLinear(material.SpecularColor);
             float specularStrength = 0;
             
             [branch]
@@ -337,7 +364,9 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
          
         [branch]
-        if (props.ShaderFlags & ShaderFlags::kEnvMap || props.ShaderFlags & ShaderFlags::kEyeReflect)
+        if ((props.ShaderFlags & (ShaderFlags::kEnvMap | ShaderFlags::kEyeReflect)) != 0 &&
+            (material.Feature == Feature::kEnvironmentMap || material.Feature == Feature::kEye ||
+             material.Feature == Feature::kMultilayerParallax))
         {
             uint16_t envMaskTexIndex;
             uint16_t envTexIndex;
@@ -346,6 +375,11 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                 EyeMaterialDataExtra eye = Materials[0].Load<EyeMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
                 envMaskTexIndex = eye.EnvironmentMaskTexture;
                 envTexIndex = eye.EnvironmentTexture;
+            }
+            else if (material.Feature == Feature::kMultilayerParallax) {
+                MultiLayerParallaxMaterialDataExtra layer = Materials[0].Load<MultiLayerParallaxMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+                envMaskTexIndex = layer.EnvironmentMaskTexture;
+                envTexIndex = layer.EnvironmentTexture;
             }
             else {
                 EnvmapMaterialDataExtra envMap = Materials[0].Load<EnvmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
@@ -428,33 +462,6 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
 
         [branch]
-        if (material.Feature == Feature::kFaceGen)
-        {
-            FacegenMaterialDataExtra facegen = Materials[0].Load<FacegenMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
-            
-            Texture2D detailTexture = Textures[NonUniformResourceIndex(facegen.DetailTexture)];
-            float3 detailColor = detailTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
-            detailColor = float3(3.984375, 3.984375, 3.984375) * (float3(0.00392156886, 0, 0.00392156886) + detailColor);
-               
-            Texture2D tintTexture = Textures[NonUniformResourceIndex(facegen.TintTexture)];
-            float3 tintColor = tintTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb;
-            tintColor = tintColor * gammaAlbedo * 2.0f;
-            tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor((gammaAlbedo * gammaAlbedo + tintColor) * detailColor);
-                
-        }
-        else if (material.Feature == Feature::kSkinTint)
-        {
-            FacegenTintMaterialDataExtra tintData = Materials[0].Load<FacegenTintMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-            float3 gammaAlbedo = VanillaDiffuseColorGamma(surface.Albedo);
-            
-            float3 tintColor = tintData.TintColor * gammaAlbedo * 2.0f;
-            tintColor = tintColor - tintColor * gammaAlbedo;
-            surface.Albedo = VanillaDiffuseColor(float3(1.01171875f, 0.99609375f, 1.01171875f) * (gammaAlbedo * gammaAlbedo + tintColor));
-        }
-        
-        [branch]
         if (material.Feature == Feature::kFaceGen || material.Feature == Feature::kSkinTint)
         {
             surface.F0 = 0.02776f;
@@ -463,7 +470,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.SubsurfaceData.Anisotropy = -0.5f;
 
             // Typical skin values
-            surface.SubsurfaceData.ScatteringColor = float3(4.820f, 1.690f, 1.090f);
+            surface.SubsurfaceData.ScatteringColor = LinearSRGBToWorking(float3(4.820f, 1.690f, 1.090f));
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
 
@@ -580,7 +587,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
         else
         {
-            float3 projBaseColor = VanillaDiffuseColor(projectedUVParams2.xyz);
+            float3 projBaseColor = isTruePBR ? LinearSRGBToWorking(projectedUVParams2.xyz) : SRGBColorToLinear(projectedUVParams2.xyz);
             
             if ((props.ShaderFlags & ShaderFlags::kLODObjects) || (props.ShaderFlags & ShaderFlags::kHDLODObjects))
             {
