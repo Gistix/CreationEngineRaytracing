@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
+#include "Core/Mesh/LandLODMesh.h"
 
 namespace Pass
 {
@@ -55,6 +56,7 @@ namespace Pass
 	{
 		auto& updates = Scene::GetSingleton()->GetSceneGraph()->GetLandLODMeshUpdates();
 		for (auto& [mesh, update] : updates) {
+			mesh->SetOcclusionBufferStates(commandList, true);
 			m_VertexUpdateData[numMeshes++] = update;
 
 			numVertices = std::max(numVertices, update.VertexCount);
@@ -64,7 +66,6 @@ namespace Pass
 				break;
 			}
 		}
-		updates.clear();
 
 		if (numMeshes == 0)
 			return false;
@@ -129,5 +130,15 @@ namespace Pass
 
 		auto vertexGroups = Util::Math::DivideRoundUp(vertexCount, 32u);
 		commandList->dispatch(numMeshes, vertexGroups);
+
+		auto& updates = sceneGraph->GetLandLODMeshUpdates();
+		uint32_t meshIndex = 0;
+		for (auto& [mesh, update] : updates) {
+			if (meshIndex++ >= numMeshes)
+				break;
+			mesh->SetOcclusionBufferStates(commandList, false);
+		}
+		commandList->commitBarriers();
+		updates.clear();
 	}
 }

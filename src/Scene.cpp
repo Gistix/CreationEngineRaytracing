@@ -206,6 +206,7 @@ void Scene::Execute()
 	auto* renderer = Renderer::GetSingleton();
 
 	auto* commandList = renderer->StartExecution();
+	m_CameraData->RenderSize = renderer->GetDynamicResolution();
 
 	const auto currentSlot = renderer->GetCurrentSlot();
 	const auto& timings = m_Settings.DebugSettings.Timings;
@@ -303,16 +304,11 @@ void Scene::UpdateCameraData() const
 	// Actually "cameraUnderwater"?
 	m_CameraData->IsUnderwater = RE::TESWaterSystem::GetSingleton()->playerUnderwater;
 
-	// Compute underwater absorption from the current water type
-	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
+	m_CameraData->UnderwaterColor = float3(1.0f, 1.0f, 1.0f);
 	if (m_CameraData->IsUnderwater) {
 		auto* waterSystem = RE::TESWaterSystem::GetSingleton();
 		if (waterSystem && waterSystem->currentWaterType) {
-			float3 waterColor = Util::Math::Float3(waterSystem->currentWaterType->data.shallowWaterColor) / 255.0f;
-			m_CameraData->UnderwaterAbsorption = float3(
-				-std::log(std::max(waterColor.x, 1e-4f)),
-				-std::log(std::max(waterColor.y, 1e-4f)),
-				-std::log(std::max(waterColor.z, 1e-4f))) / Constants::WATER_ABSORPTION_REFERENCE_DEPTH * m_Settings.WaterSettings.AbsorptionScale;
+			m_CameraData->UnderwaterColor = Util::Math::Float3(waterSystem->currentWaterType->data.shallowWaterColor) / 255.0f;
 		}
 	}
 
@@ -365,22 +361,33 @@ void Scene::UpdateCameraData() const
 	}
 #elif defined(FALLOUT4)
 	m_CameraData->IsUnderwater = false; // TODO: Fetch from FO4 water system
-	m_CameraData->UnderwaterAbsorption = float3(0.0f, 0.0f, 0.0f);
+	m_CameraData->UnderwaterColor = float3(1.0f, 1.0f, 1.0f);
 #endif
 }
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)
 {
-	if (size != sizeof(FeatureData))
-	{
-		logger::error("Feature data incoming and actual struct size mismatch.");
+	if (!data || size != sizeof(FeatureData)) {
+		logger::error("Feature data incoming and actual struct size mismatch: received {}, expected {}.", size, sizeof(FeatureData));
 		return;
 	}
+
+	FeatureData incoming;
+	std::memcpy(&incoming, data, sizeof(incoming));
+	const auto& previous = m_FeatureData->LinearLighting;
+	const auto& current = incoming.LinearLighting;
+	if (current.resetHistory ||
+		current.enableLinearLighting != previous.enableLinearLighting ||
+		current.enableACEScg != previous.enableACEScg ||
+		current.isMainOrLoadingMenu != previous.isMainOrLoadingMenu ||
+		std::memcmp(&current.vanillaDiffuseColorMult, &previous.vanillaDiffuseColorMult,
+			offsetof(LinearLightingSettings, directionalLightColor) - offsetof(LinearLightingSettings, vanillaDiffuseColorMult)) != 0)
+		++m_LightingRevision;
 
 	if (std::memcmp(m_FeatureData.get(), data, sizeof(FeatureData)) == 0)
 		return;
 
-	std::memcpy(m_FeatureData.get(), data, sizeof(FeatureData));
+	*m_FeatureData = incoming;
 	m_DirtyFeatureData = true;
 }
 
@@ -421,9 +428,21 @@ void Scene::SetSkinDetailNormal(void* skinDetailNormal)
 	if (skinDetailNormal == m_SkinDetailNormalResource)
 		return;
 
-	m_SkinDetailNormalResource = skinDetailNormal;
+	auto* renderer = Renderer::GetSingleton();
+	auto texture = skinDetailNormal ? Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture") : nullptr;
+	if (skinDetailNormal && !texture)
+		return;
 
-	m_SkinDetailNormalTexture = Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture");
+	if (m_SkinDetailNormalTexture && !renderer->GetDevice()->waitForIdle())
+		return;
+
+	m_SkinDetailNormalTexture = texture;
+	m_SkinDetailNormalOwner.copy_from(static_cast<IUnknown*>(skinDetailNormal));
+	m_SkinDetailNormalResource = skinDetailNormal;
+	for (auto& node : renderer->GetRenderGraph()->GetNodes()) {
+		if (node.m_RenderPass)
+			node.m_RenderPass->SceneTexturesChanged();
+	}
 }
 
 void Scene::SetWaterFlowMap(void* waterFlowMap)
@@ -462,7 +481,7 @@ void Scene::UpdateSettings(Settings settings)
 		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd);
 	}
 
-	renderGraph->SettingsChanged(settings); 
+	Renderer::GetSingleton()->SettingsChanged(settings);
 }
 
 float Scene::GetResolutionScale() const

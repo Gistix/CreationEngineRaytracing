@@ -29,12 +29,14 @@ struct Scene
 
 	eastl::unique_ptr<FeatureData> m_FeatureData;
 	bool m_DirtyFeatureData = true;
+	uint64_t m_LightingRevision = 0;
 	nvrhi::BufferHandle m_FeatureBuffer;
 
 	void* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
 
 	void* m_SkinDetailNormalResource = nullptr;
+	winrt::com_ptr<IUnknown> m_SkinDetailNormalOwner;
 	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
 	mutable nvrhi::TextureHandle m_ProjNoiseTexture;
@@ -99,6 +101,7 @@ struct Scene
 	inline auto GetCameraBuffer() const { return m_CameraBuffer; }
 
 	inline auto GetFeatureBuffer() const { return m_FeatureBuffer; }
+	uint64_t GetLightingRevision() const { return m_LightingRevision; }
 
 	auto GetMenuState()
 	{

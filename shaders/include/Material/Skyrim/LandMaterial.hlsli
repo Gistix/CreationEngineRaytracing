@@ -16,6 +16,16 @@
 #include "include/Material/Skyrim/Common.hlsli"
 #include "include/Common/ExtendedMaterials.hlsli"
 
+float4 BlendLandColor(uint16_t textureIndex, float2 texcoord, float weight, float mipLevel, bool pbr)
+{
+    if (weight <= LAND_MIN_WEIGHT)
+        return 0.0f;
+
+    Texture2D texture = Textures[NonUniformResourceIndex(textureIndex)];
+    float4 color = texture.SampleLevel(DefaultSampler, texcoord, mipLevel);
+    return (pbr ? PBRColorScale(color) : VanillaDiffuseColor(color)) * weight;
+}
+
 void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexColor, float3 normalWS, float3 tangentWS, float3 bitangentWS, float4 landBlend0, float4 landBlend1, in Mesh mesh, float3 viewDir, float dist)
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
@@ -173,26 +183,23 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
 
     float specularStrength = blendedNormal.a;
 
-    float4 land1 = BlendLandTexture(diffTex0, texCoord0, landBlend0.x, mipLevel);
-    float4 land2 = BlendLandTexture(diffTex1, texCoord0, landBlend0.y, mipLevel);
-    float4 land3 = BlendLandTexture(diffTex2, texCoord0, landBlend0.z, mipLevel);
-    float4 land4 = BlendLandTexture(diffTex3, texCoord0, landBlend0.w, mipLevel);
-    float4 land5 = BlendLandTexture(diffTex4, texCoord0, landBlend1.x, mipLevel);
-    float4 land6 = BlendLandTexture(diffTex5, texCoord0, landBlend1.y, mipLevel);
+    float4 land1 = BlendLandColor(diffTex0, texCoord0, landBlend0.x, mipLevel, (pbrFlags & PBR::TerrainFlags::LandTile0PBR) != 0);
+    float4 land2 = BlendLandColor(diffTex1, texCoord0, landBlend0.y, mipLevel, (pbrFlags & PBR::TerrainFlags::LandTile1PBR) != 0);
+    float4 land3 = BlendLandColor(diffTex2, texCoord0, landBlend0.z, mipLevel, (pbrFlags & PBR::TerrainFlags::LandTile2PBR) != 0);
+    float4 land4 = BlendLandColor(diffTex3, texCoord0, landBlend0.w, mipLevel, (pbrFlags & PBR::TerrainFlags::LandTile3PBR) != 0);
+    float4 land5 = BlendLandColor(diffTex4, texCoord0, landBlend1.x, mipLevel, (pbrFlags & PBR::TerrainFlags::LandTile4PBR) != 0);
+    float4 land6 = BlendLandColor(diffTex5, texCoord0, landBlend1.y, mipLevel, (pbrFlags & PBR::TerrainFlags::LandTile5PBR) != 0);
 
     float4 blendedLand = float4(0, 0, 0, 0);
 
     [branch]
     if (material.Type == Type::TruePBR)
     {
-        blendedLand += (pbrFlags & PBR::TerrainFlags::LandTile0PBR) ? PBRColorScale(land1) : VanillaDiffuseColor(land1);
-        blendedLand += (pbrFlags & PBR::TerrainFlags::LandTile1PBR) ? PBRColorScale(land2) : VanillaDiffuseColor(land2);
-        blendedLand += (pbrFlags & PBR::TerrainFlags::LandTile2PBR) ? PBRColorScale(land3) : VanillaDiffuseColor(land3);
-        blendedLand += (pbrFlags & PBR::TerrainFlags::LandTile3PBR) ? PBRColorScale(land4) : VanillaDiffuseColor(land4);
-        blendedLand += (pbrFlags & PBR::TerrainFlags::LandTile4PBR) ? PBRColorScale(land5) : VanillaDiffuseColor(land5);
-        blendedLand += (pbrFlags & PBR::TerrainFlags::LandTile5PBR) ? PBRColorScale(land6) : VanillaDiffuseColor(land6);
+        blendedLand = land1 + land2 + land3 + land4 + land5 + land6;
 
-        blendedLand.rgb *= saturate(vertexColor.rgb / max(max(vertexColor.r, vertexColor.g), vertexColor.b));
+        float3 linearVertexColor = TransferFunctions::SRGBToLinear(vertexColor.rgb);
+        float vertexAO = max(max(linearVertexColor.r, linearVertexColor.g), linearVertexColor.b);
+        blendedLand.rgb *= LinearSRGBToWorking(vertexAO > 0.0f ? linearVertexColor / vertexAO : 1.0f);
 
         float4 rmaos = float4(0, 0, 0, 0);
         rmaos += BlendLandTexture(rmaosTex0, texCoord0, landBlend0.x, mipLevel) * float4(roughness0, 1.0f, 1.0f, specular0);
@@ -209,10 +216,10 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     }
     else if (material.Type == Type::Lighting)
     {
-        blendedLand = VanillaDiffuseColor(land1 + land2 + land3 + land4 + land5 + land6);
-        blendedLand.rgb *= VanillaDiffuseColor(vertexColor.rgb);
+        blendedLand = land1 + land2 + land3 + land4 + land5 + land6;
+        blendedLand.rgb *= SRGBColorToLinear(vertexColor.rgb);
 
-        float3 specularColor = material.SpecularColor * specularStrength;
+        float3 specularColor = SRGBColorToLinear(material.SpecularColor) * specularStrength;
 
         float roughnessFromShininess = 
             roughness0 * landBlend0.x + roughness1 * landBlend0.y +

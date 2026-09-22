@@ -47,6 +47,7 @@ namespace Pass::Raytracing
 		if (defines != m_Defines) {
 			m_Defines = defines;
 			CreatePipeline();
+			m_BindingSets.fill(nullptr);
 			m_BindingSetDirty.fill(true);
 		}
 	}

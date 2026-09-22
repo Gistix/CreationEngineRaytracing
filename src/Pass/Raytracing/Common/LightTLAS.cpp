@@ -41,7 +41,7 @@ namespace Pass
 				light.m_Index = static_cast<uint16_t>(lightIndex);
 
 				auto bindingSet = nvrhi::BindingSetItem::RayTracingAccelStruct(lightIndex, light.m_TopLevelAS);
-				Renderer::GetSingleton()->GetDevice()->writeDescriptorTable(m_DescriptorTable, bindingSet);
+				Renderer::GetSingleton()->WriteDescriptorTable(m_DescriptorTable, bindingSet);
 			}
 
 			lightIndex++;

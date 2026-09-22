@@ -195,7 +195,34 @@ struct SurfaceMaker
 #endif
 
         surface.MipLevel = rayCone.computeLOD(coneTexLODValue, rayDir, normalWS, true) + Raytracing.TexLODBias;
-        Texture2D baseTextureForLod = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
+        uint16_t lodTextureIndex = 0;
+        if (material.Type == Type::Water)
+        {
+            WaterMaterialData water = Materials[0].Load<WaterMaterialData>(mesh.GetMaterialOffset());
+            lodTextureIndex = (props.WaterFlags & WaterFlags::kEnableFlowmap) != 0
+                ? water.NormalsTexture4 : water.NormalsTexture1;
+        }
+        else if (material.Type == Type::Effect)
+        {
+            EffectMaterialData effect = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
+            lodTextureIndex = effect.SourceTexture;
+        }
+#if defined(SKYRIM)
+        else if (material.Type == Type::DistantTree)
+        {
+            DistantTreeMaterialData tree = Materials[0].Load<DistantTreeMaterialData>(mesh.GetMaterialOffset());
+            lodTextureIndex = tree.TreeLODAtlas;
+        }
+#endif
+        else if (material.Type == Type::Lighting || material.Type == Type::TruePBR || material.Type == Type::Grass
+#if defined(FALLOUT4)
+            || material.Type == Type::DistantTree
+#endif
+        )
+        {
+            lodTextureIndex = material.DiffuseTexture;
+        }
+        Texture2D baseTextureForLod = Textures[NonUniformResourceIndex(lodTextureIndex)];
         uint baseTexWidth, baseTexHeight;
         baseTextureForLod.GetDimensions(baseTexWidth, baseTexHeight);
         surface.MipLevel += 0.5f * SafeLog2(max(1.0f, (float)baseTexWidth * (float)baseTexHeight));

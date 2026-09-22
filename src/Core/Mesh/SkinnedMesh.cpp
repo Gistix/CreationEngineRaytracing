@@ -47,7 +47,8 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateMeshIndex();
+	if (!AllocateMeshIndex())
+		return;
 
 	m_VertexCount = vertexCount;
 
@@ -55,9 +56,11 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	// Create the live (output) buffer + prev positions and register everything at the shared slot.
 	// The BLAS reads the live buffer (skinning output), not the native original.
-	CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
+	if (!CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride))
+		return;
 
-	BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true);
+	if (!BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true))
+		return;
 #elif defined(FALLOUT4)
 	auto* rendererData = geometryData.rendererData;
 	if (!rendererData) {
@@ -75,15 +78,18 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateMeshIndex();
+	if (!AllocateMeshIndex())
+		return;
 
 	m_VertexCount = vertexCount;
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
-	CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride);
+	if (!CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride))
+		return;
 
-	BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true);
+	if (!BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true))
+		return;
 #endif
 
 	CreateMaterial();
@@ -91,6 +97,7 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	InitSkinToBones(bsTriShape);
 
 	InitDismemberSkin(geometryData.skinInstance);
+	m_IsReady = m_Material != nullptr;
 }
 
 void SkinnedMesh::InitSkinToBones(RE::BSGeometry* geometry)
@@ -134,7 +141,7 @@ void SkinnedMesh::InitDismemberSkin(RE::NiObject* skinInstance)
 	RefreshVisibleGeometryCache();
 }
 
-void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
+bool SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BSGraphics::TriShape* sourceTriShape, uint32_t vertexCount, uint16_t vertexStride)
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
@@ -161,11 +168,16 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 		.setDebugName(std::format("{} (Live Vertex Buffer)", m_Name.c_str()).c_str());
 
 	m_LiveVertexBuffer = device->createBuffer(liveBufferDesc);
+	if (!m_LiveVertexBuffer)
+		return false;
 
 	// Seed the live buffer from the CPU rest-pose data (carries UV/color/etc. that skinning never writes).
 	// Avoids barriering the shared native source buffer, which several meshes wrap independently.
 	const size_t seedSize = static_cast<size_t>(vertexCount) * vertexStride;
 	commandList->writeBuffer(m_LiveVertexBuffer, Util::Adapter::GetVertexData(sourceTriShape), seedSize);
+	commandList->setBufferState(m_LiveVertexBuffer,
+		nvrhi::ResourceStates::ShaderResource | nvrhi::ResourceStates::AccelStructBuildInput);
+	commandList->commitBarriers();
 
 	// Prev-position buffer (float3 per vertex) for per-vertex motion vectors.
 	auto prevPositionBufferDesc = nvrhi::BufferDesc()
@@ -176,38 +188,41 @@ void SkinnedMesh::CreateSkinningBuffers(nvrhi::ICommandList* commandList, RE::BS
 		.setDebugName(std::format("{} (Prev Position Buffer)", m_Name.c_str()).c_str());
 
 	m_PrevPositionBuffer = device->createBuffer(prevPositionBufferDesc);
+	if (!m_PrevPositionBuffer)
+		return false;
 
 	// RT reads the live buffer (repoint the slot previously set to the native buffer).
-	device->writeDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+	Renderer::GetSingleton()->WriteDescriptorTable(sceneGraph->GetVertexDescriptors()->m_DescriptorTable->GetDescriptorTable(),
 		nvrhi::BindingSetItem::RawBuffer_SRV(slot, m_LiveVertexBuffer));
 
 	// Skinning reads the original (native) buffer.
-	device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
+	Renderer::GetSingleton()->WriteDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::RawBuffer_SRV(slot, m_VertexBuffer.m_Buffer, nvrhi::BufferRange(m_VertexBuffer.m_Offset, meshVertexSize)));
 
 	// Skinning writes the live buffer.
-	device->writeDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
+	Renderer::GetSingleton()->WriteDescriptorTable(sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::RawBuffer_UAV(slot, m_LiveVertexBuffer));
 
 	// Prev positions: SRV (RT read) + UAV (skinning write).
-	device->writeDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
+	Renderer::GetSingleton()->WriteDescriptorTable(sceneGraph->GetPrevPositionDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_PrevPositionBuffer));
-	device->writeDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,
+	Renderer::GetSingleton()->WriteDescriptorTable(sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(slot, m_PrevPositionBuffer));
+	return true;
 }
 
-void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
+bool SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* vertexBuffer, uint16_t vertexStride, bool requireSharedNativeVertexBuffer)
 {
 	(void)requireSharedNativeVertexBuffer;
 #if defined(SKYRIM)
 	const auto& geometryData = bsTriShape->GetGeometryRuntimeData();
 	auto* skinInstance = geometryData.skinInstance.get();
 	if (!skinInstance)
-		return;
+		return false;
 
 	const auto& skinPartition = skinInstance->skinPartition;
 	if (!skinPartition || skinPartition->numPartitions == 0)
-		return;
+		return false;
 
 	auto* basePartitionBuffer = skinPartition->partitions[0].buffData;
 
@@ -237,23 +252,24 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 		// Enforce the single-vertex-buffer invariant: every partition must reference the same vertex buffer.
 		if (requireSharedNativeVertexBuffer && partitionBuffer->vertexBuffer != basePartitionBuffer->vertexBuffer) {
 			logger::warn("SkinnedMesh::BuildSkinned - Partition {} vertex buffer differs from partition 0 for {}, skipping mesh.", i, m_Name);
-			m_IndexBuffers.clear();
-			m_GeometryEntries.clear();
-			m_VertexBuffer = {};
-			return;
+			return false;
 		}
 
 		auto indexBuffer = CreateIndexBuffer(partitionBuffer);
 		if (!indexBuffer.m_Buffer) {
-			logger::warn("SkinnedMesh::BuildSkinned - Failed to create partition {} index buffer for {}, skipping partition.", i, m_Name);
-			continue;
+			logger::warn("SkinnedMesh::BuildSkinned - Failed to create partition {} index buffer for {}, skipping mesh.", i, m_Name);
+			return false;
 		}
 
 		const uint32_t indexCount = static_cast<uint32_t>(partition.triangles) * 3;
 
 		const nvrhi::Format vertexFormat = Util::Geometry::GetVertexPositionFormat(partitionBuffer->vertexDesc);
+		const auto geometryIndex = AllocateGeometryIndex();
+		if (geometryIndex == UINT16_MAX)
+			return false;
+
 		auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-		m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, emplacedIndexBuffer.m_Offset, indexCount, vertexBuffer, 0, vertexStride, vertexCount, GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
+		m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, emplacedIndexBuffer.m_Offset, indexCount, vertexBuffer, 0, vertexStride, vertexCount, GetMeshIndex(), vertexFormat), geometryIndex });
 		m_GeometryPartitionIndices.push_back(i);
 	}
 #elif defined(FALLOUT4)
@@ -265,7 +281,7 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 
 	auto* rendererData = Util::Adapter::GetGeometryRuntimeData(bsTriShape).rendererData;
 	if (!rendererData)
-		return;
+		return false;
 		
 	m_VertexDesc = rendererData->vertexDesc;
 
@@ -276,14 +292,32 @@ void SkinnedMesh::BuildSkinned(RE::BSTriShape* bsTriShape, nvrhi::IBuffer* verte
 	auto indexBuffer = CreateIndexBuffer(rendererData);
 	if (!indexBuffer.m_Buffer) {
 		logger::warn("SkinnedMesh::BuildSkinned - Failed to create index buffer for {}, skipping.", m_Name);
-		return;
+		return false;
 	}
 
 	const nvrhi::Format vertexFormat = Util::Geometry::GetVertexPositionFormat(rendererData->vertexDesc);
+	const auto geometryIndex = AllocateGeometryIndex();
+	if (geometryIndex == UINT16_MAX)
+		return false;
+
 	auto& emplacedIndexBuffer = m_IndexBuffers.emplace_back(std::move(indexBuffer));
-	m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, emplacedIndexBuffer.m_Offset, indexCount, vertexBuffer, 0, vertexStride, vertexCount, GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
+	m_GeometryEntries.push_back({ MakeGeometryDesc(emplacedIndexBuffer.m_Buffer, emplacedIndexBuffer.m_Offset, indexCount, vertexBuffer, 0, vertexStride, vertexCount, GetMeshIndex(), vertexFormat), geometryIndex });
 	m_GeometryPartitionIndices.push_back(0);
 #endif
+	return !m_GeometryEntries.empty();
+}
+
+void SkinnedMesh::SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool writing)
+{
+	if (writing)
+		commandList->setBufferState(m_VertexBuffer.m_Buffer, nvrhi::ResourceStates::ShaderResource);
+
+	commandList->setBufferState(m_LiveVertexBuffer, writing
+		? nvrhi::ResourceStates::UnorderedAccess
+		: nvrhi::ResourceStates::ShaderResource | nvrhi::ResourceStates::AccelStructBuildInput);
+	commandList->setBufferState(m_PrevPositionBuffer, writing
+		? nvrhi::ResourceStates::UnorderedAccess
+		: nvrhi::ResourceStates::ShaderResource);
 }
 
 void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
@@ -330,7 +364,7 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 			Util::Geometry::GetDismemberPartitionVisibility(geometryData.skinInstance, m_PartitionVisibility);
 
 			if (previousVisibility != m_PartitionVisibility)
-				MarkDirty(DirtyFlags::Visibility);
+				MarkDirty(DirtyFlags::Mesh);
 
 			RefreshVisibleGeometryCache();
 		}

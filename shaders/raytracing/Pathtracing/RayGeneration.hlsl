@@ -44,6 +44,16 @@
 
 #include "include/NRD.hlsli"
 
+float3 GetUnderwaterAbsorption()
+{
+#if defined(SKYRIM)
+    float3 waterColor = saturate(SRGBColorToLinear(Camera.UnderwaterColor));
+    return -log(max(waterColor, 1e-4f)) / 600.0f * Raytracing.WaterAbsorptionScale;
+#else
+    return 0.0f;
+#endif
+}
+
 #if USE_RAY_QUERY
 WAVE_SIZE(32)
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
@@ -68,6 +78,8 @@ void Main()
     uint2 idx = DispatchRaysIndex().xy;
     uint2 size = DispatchRaysDimensions().xy;
 #endif
+
+    float3 underwaterAbsorption = GetUnderwaterAbsorption();
 
 #if defined(SHARC)
     SharcParameters sharcParameters = GetSharcParameters();
@@ -142,8 +154,8 @@ void Main()
         float3x3 identityMat = float3x3(1,0,0, 0,1,0, 0,0,1);
         // Attenuate sky by water absorption when camera is underwater
         float3 buildMissThp = float3(1,1,1);
-        if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
-            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
+        if (Camera.IsUnderwater != 0 && any(underwaterAbsorption > 0.0f))
+            buildMissThp *= exp(-underwaterAbsorption * kEnvironmentMapSceneDistance);
         StablePlanesHandleMiss(spCtx, idx, 0, 1, 1 /* sentinel branchID */,
             Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
             identityMat, skyRad, true);
@@ -257,8 +269,8 @@ void Main()
         spCtx.StartPixel(idx);
         float3x3 identityMat = float3x3(1,0,0, 0,1,0, 0,0,1);
         float3 buildMissThp = float3(1,1,1);
-        if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
-            buildMissThp *= exp(-Camera.UnderwaterAbsorption * kEnvironmentMapSceneDistance);
+        if (Camera.IsUnderwater != 0 && any(underwaterAbsorption > 0.0f))
+            buildMissThp *= exp(-underwaterAbsorption * kEnvironmentMapSceneDistance);
         StablePlanesHandleMiss(spCtx, idx, 0, 1, 1,
             Camera.Position.xyz, sourceDirection, buildMissThp, float3(0,0,0),
             identityMat, skyRadiance, true);
@@ -294,6 +306,10 @@ void Main()
     }
 #endif
     
+#if defined(SUBSURFACE_SCATTERING)
+    PrepareSubsurfaceSurface(sourceSurface);
+#endif
+
     float primarySceneDistance = length(sourcePosition - Camera.Position.xyz);
 
     BRDFContext sourceBRDFContext = BRDFContext::make(sourceSurface, -sourceDirection);
@@ -375,9 +391,6 @@ void Main()
 #   endif   
 #endif   
     
-#ifdef SUBSURFACE_SCATTERING
-    bool isSssPath = false;
-#endif
     
     float3 primaryEmissive = sourceSurface.Emissive + primaryEffectEmissive;
     float3 direct = primaryEmissive;
@@ -411,7 +424,7 @@ void Main()
 
         // Water volume tracking for BUILD pass (Beer-Lambert absorption along delta paths)
         bool buildInsideWater = Camera.IsUnderwater != 0;
-        float3 buildWaterAbsorption = buildInsideWater ? Camera.UnderwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
+        float3 buildWaterAbsorption = buildInsideWater ? underwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
 
         // Apply primary ray water absorption
         if (buildInsideWater)
@@ -666,6 +679,12 @@ void Main()
         sourcePayload = fillPayload;
         sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * fillSceneLength, Raytracing.PixelConeSpreadAngle);
         sourceSurface = SurfaceMaker::make(fillHitPos, fillPayload, fillRayDir, sourceRayCone, sourceInstance, sourceMaterial, true);
+#if defined(SUBSURFACE_SCATTERING)
+        if (fillVertexIndex == 1)
+            PrepareSubsurfaceSurface(sourceSurface);
+        else
+            sourceSurface.SubsurfaceData.HasSubsurface = 0;
+#endif
         sourceBRDFContext = BRDFContext::make(sourceSurface, -fillRayDir);
         sourceIsEnter = dot(sourceSurface.FaceNormal, sourceBRDFContext.ViewDirection) >= 0.0f;
         if (!sourceIsEnter) {
@@ -771,7 +790,6 @@ void Main()
 #if defined(SUBSURFACE_SCATTERING)
             if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
                 directDiffuse += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
-                isSssPath = true;
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
@@ -802,8 +820,7 @@ void Main()
         {
 #if defined(SUBSURFACE_SCATTERING)
             if (sourceSurface.SubsurfaceData.HasSubsurface != 0) {
-                    direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
-                isSssPath = true;
+                direct += EvaluateSubsurfaceDiffuseNEE(sourceSurface, sourceInstance, sourcePayload, sourceRayCone, randomSeed, true);
                 // Specular uses the standard path with diffuse suppressed
                 Surface specSurface = sourceSurface;
                 specSurface.DiffuseAlbedo = 0;
@@ -878,6 +895,9 @@ void Main()
     [loop]
     for (uint i = 0; i < MAX_SAMPLES; i++)
     {
+        const uint sampleIndex = Camera.FrameIndex * MAX_SAMPLES + i;
+        randomSeed = InitRandomSeed(idx, size, sampleIndex);
+
 #if defined(SHARC) && SHARC_UPDATE
         SharcInit(sharcState);
 #endif
@@ -905,6 +925,7 @@ void Main()
         float materialRoughnessPrev = 0.0f;
         bool isEnter = sourceIsEnter;
         bool isSpecularSample = false;
+        uint diffuseBounceCount = 0;
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if defined(RESTIR_GI)
@@ -927,7 +948,7 @@ void Main()
         float3 waterVolumeAbsorption = fillWaterAbsorption;
 #else
         bool insideWaterVolume = Camera.IsUnderwater != 0;
-        float3 waterVolumeAbsorption = insideWaterVolume ? Camera.UnderwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
+        float3 waterVolumeAbsorption = insideWaterVolume ? underwaterAbsorption : float3(0.0f, 0.0f, 0.0f);
 #endif
         
 #if defined(RAW_RADIANCE)
@@ -959,14 +980,21 @@ void Main()
 #endif
 
 #if LIGHTING_MODE == LIGHTING_MODE_DIFFUSE
-            direction = surface.Mul(SampleCosineHemisphere(randomSeed));
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            direction = surface.Mul(SampleCosineHemisphere(scatterSamples.xy));
+            diffuseBounceCount++;
 
             throughput *= surface.AO;
             throughput *= surface.Albedo;
             
             const bool hasTransmission = false;
 #else            
-            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, randomSeed);
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples);
             
             if (isValid)
                 direction = bsdfSample.wo;
@@ -975,6 +1003,8 @@ void Main()
             
             bool isDelta = bsdfSample.isLobe(LobeType::Delta);
             isSpecular = bsdfSample.isLobe(LobeType::Specular) || isDelta;
+            if (bsdfSample.isLobe(LobeType::Diffuse))
+                diffuseBounceCount++;
             
             if (j == 0)
                 isSpecularSample = isSpecular;         
@@ -1301,21 +1331,7 @@ void Main()
             
             if (bounceHasNonDeltaLobes)
             {
-#ifdef SUBSURFACE_SCATTERING
-                if (surface.SubsurfaceData.HasSubsurface != 0 && !isSssPath) {
-                    directRadiance += EvaluateSubsurfaceDiffuseNEE(surface, instance, payload, rayCone, randomSeed, surface.Primary);
-                    isSssPath = true;
-                    // Specular uses the standard path with diffuse suppressed
-                    Surface specSurface = surface;
-                    specSurface.DiffuseAlbedo = 0;
-                    StandardBSDF specBsdf = StandardBSDF::make(specSurface, surface.Normal, brdfContext.ViewDirection, isEnter);
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, specSurface, brdfContext, instance, specBsdf, randomSeed, surface.Primary);
-                }
-                else
-#endif
-                { 
-                    directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
-                }
+                directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
             }
             
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
@@ -1410,6 +1426,8 @@ void Main()
     diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
     diffuseRadiance /= MAX_SAMPLES;
     specularRadiance /= MAX_SAMPLES;
+    diffHitDist = max(diffHitDist, 1e-6f);
+    specHitDist = max(specHitDist, 1e-6f);
 #else
     radiance /= MAX_SAMPLES;
 #endif        
@@ -1448,9 +1466,9 @@ void Main()
 #elif !(defined(SHARC) && SHARC_UPDATE)
     // REFERENCE mode output
     // Apply primary ray water absorption when camera is underwater
-    if (Camera.IsUnderwater != 0 && any(Camera.UnderwaterAbsorption > 0.0f))
+    if (Camera.IsUnderwater != 0 && any(underwaterAbsorption > 0.0f))
     {
-        float3 primaryWaterAttenuation = exp(-Camera.UnderwaterAbsorption * sourcePayload.hitDistance);
+        float3 primaryWaterAttenuation = exp(-underwaterAbsorption * sourcePayload.hitDistance);
         primaryEmissive *= primaryWaterAttenuation;
         direct *= primaryWaterAttenuation;
 #   if defined(NRD)

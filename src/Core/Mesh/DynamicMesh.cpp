@@ -51,13 +51,15 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateMeshIndex();
+	if (!AllocateMeshIndex())
+		return;
 
 	m_VertexCount = vertexCount;
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(basePartitionBuffer->vertexDesc);
 
-	CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride);
+	if (!CreateSkinningBuffers(commandList, basePartitionBuffer, vertexCount, vertexStride))
+		return;
 
 #elif defined(FALLOUT4)
 	auto* rendererData = geometryData.rendererData;
@@ -76,13 +78,15 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	if (!m_VertexBuffer.m_Buffer)
 		return;
 
-	AllocateMeshIndex();
+	if (!AllocateMeshIndex())
+		return;
 
 	m_VertexCount = vertexCount;
 
 	const uint16_t vertexStride = Util::Geometry::GetStoredVertexSize(rendererData->vertexDesc);
 
-	CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride);
+	if (!CreateSkinningBuffers(commandList, rendererData, vertexCount, vertexStride))
+		return;
 #endif
 
 	// Dynamic positions are float4 per vertex; the BLAS reads them as RGB32_FLOAT with a float4
@@ -102,6 +106,8 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		.setDebugName(std::format("{} - Dynamic (Live)", m_Name.c_str()));
 
 	m_DynamicBuffer = device->createBuffer(liveBufferDesc);
+	if (!m_DynamicBuffer)
+		return;
 
 	// Original (rest/morph) positions copied from the game each frame; skinning input.
 	auto originalBufferDesc = nvrhi::BufferDesc()
@@ -111,30 +117,36 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 		.setDebugName(std::format("{} - Dynamic (Original)", m_Name.c_str()));
 
 	m_OriginalDynamicBuffer = device->createBuffer(originalBufferDesc);
+	if (!m_OriginalDynamicBuffer)
+		return;
 
 	// Register at a shared dynamic slot: original -> SRV (input), live -> UAV (output).
 	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 
 	m_DynamicDescriptor = sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->CreateDescriptorHandle(
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_OriginalDynamicBuffer));
+	if (!m_DynamicDescriptor.IsValid())
+		return;
 
-	device->writeDescriptorTable(
+	Renderer::GetSingleton()->WriteDescriptorTable(
 		sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_UAV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
 	// Live (skinned) dynamic positions exposed as SRV so the RT shading path can reconstruct Vertex::Position.
-	device->writeDescriptorTable(
+	Renderer::GetSingleton()->WriteDescriptorTable(
 		sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable,
 		nvrhi::BindingSetItem::StructuredBuffer_SRV(m_DynamicDescriptor.Get(), m_DynamicBuffer));
 
 	// The BLAS reads the live dynamic positions (skinning output).
-	BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false);
+	if (!BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false))
+		return;
 
 	CreateMaterial();
 
 	InitSkinToBones(bsDynamicTriShape);
 
 	InitDismemberSkin(Util::Adapter::GetGeometryRuntimeData(bsDynamicTriShape).skinInstance);
+	m_IsReady = m_Material != nullptr;
 }
 
 void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)
@@ -145,6 +157,17 @@ void DynamicMesh::UpdateDynamicData(void* dynamicData, uint32_t dataSize)
 	std::memcpy(m_DynamicData.data(), dynamicData, dataSize);
 
 	m_NeedsUpload = true;
+}
+
+void DynamicMesh::SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool writing)
+{
+	SkinnedMesh::SetSkinningBufferStates(commandList, writing);
+	if (writing)
+		commandList->setBufferState(m_OriginalDynamicBuffer, nvrhi::ResourceStates::ShaderResource);
+
+	commandList->setBufferState(m_DynamicBuffer, writing
+		? nvrhi::ResourceStates::UnorderedAccess
+		: nvrhi::ResourceStates::ShaderResource | nvrhi::ResourceStates::AccelStructBuildInput);
 }
 
 void DynamicMesh::Update(nvrhi::ICommandList* commandList)

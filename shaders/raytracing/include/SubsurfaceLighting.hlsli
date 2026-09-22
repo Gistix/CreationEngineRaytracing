@@ -25,6 +25,16 @@
 
 #define SSS_SETTINGS Raytracing.SubSurfaceScattering
 
+void PrepareSubsurfaceSurface(inout Surface surface)
+{
+    if (surface.SubsurfaceData.HasSubsurface == 0)
+        return;
+
+    if (SSS_SETTINGS.MaterialOverride)
+        surface.DiffuseAlbedo = LinearSRGBToWorking(SSS_SETTINGS.TransmissionColorOverride);
+    surface.SubsurfaceData.TransmissionColor = surface.DiffuseAlbedo;
+}
+
 float3 evalSingleScatteringTransmission(
     const Surface sourceSurface,
     const SubsurfaceMaterialData subsurfaceMaterialData,
@@ -176,6 +186,9 @@ float3 evalSingleScatteringTransmission(
     return radiance;
 }
 
+#if defined(__spirv__) && USE_RAY_QUERY
+[noinline]
+#endif
 float3 EvaluateSubsurfaceDiffuseNEE(
     const Surface surface,
     const Instance instance,
@@ -191,8 +204,8 @@ float3 EvaluateSubsurfaceDiffuseNEE(
     subsurfaceMaterialData.g = surface.SubsurfaceData.Anisotropy;
 
     if (SSS_SETTINGS.MaterialOverride) {
-        subsurfaceMaterialData.transmissionColor = SSS_SETTINGS.TransmissionColorOverride;
-        subsurfaceMaterialData.scatteringColor = SSS_SETTINGS.ScatteringColorOverride;
+        subsurfaceMaterialData.transmissionColor = LinearSRGBToWorking(SSS_SETTINGS.TransmissionColorOverride);
+        subsurfaceMaterialData.scatteringColor = LinearSRGBToWorking(SSS_SETTINGS.ScatteringColorOverride);
         subsurfaceMaterialData.scale = SSS_SETTINGS.ScaleOverride;
         subsurfaceMaterialData.g = SSS_SETTINGS.AnisotropyOverride;
     }
@@ -218,9 +231,6 @@ float3 EvaluateSubsurfaceDiffuseNEE(
     const float3 vectorToLight = normalize(incidentVector);
     if (any(irradiance > MIN_DIFFUSE_SHADOW))
     {
-        const float3 diffuseAlbedo = surface.DiffuseAlbedo;
-        subsurfaceMaterialData.transmissionColor = SSS_SETTINGS.MaterialOverride ? subsurfaceMaterialData.transmissionColor : diffuseAlbedo;
-
         const float3 cameraUp = float3(
             Camera.ViewInverse[0][0],
             Camera.ViewInverse[1][0],

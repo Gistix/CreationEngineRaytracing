@@ -297,7 +297,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 #if defined(SKYRIM)
 		auto flags = std::bit_cast<LightLimitFix::LightFlags>(runtimeData.ambient.red);
 
-		if (flags & LightLimitFix::LightFlags::Disabled)
+		if (flags & (LightLimitFix::LightFlags::Disabled | LightLimitFix::LightFlags::EditorDisabled))
 			light.m_Active = false;
 #endif
 
@@ -309,7 +309,7 @@ void SceneGraph::UpdateLights(nvrhi::ICommandList* commandList)
 
 			lightData.Radius = runtimeData.radius;
 
-			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) <= 1e-4 || lightData.Radius <= 1e-4)
+			if ((lightData.Color.x + lightData.Color.y + lightData.Color.z) <= 1e-4 || lightData.Radius <= 1e-4 || runtimeData.fade <= 0.0f)
 				light.m_Active = false;
 
 			// Clear instances
@@ -1003,6 +1003,19 @@ void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 	for (auto* cluster : m_AllClusters)
 		if (cluster->m_DirtyFlags != DirtyFlags::None)
 			cluster->BuildUpdate(commandList, this);
+
+	const auto frameIndex = Renderer::GetSingleton()->GetFrameIndex();
+	if (frameIndex <= 2 || frameIndex % 600 == 0) {
+		uint64_t bytes = 0;
+		uint32_t count = 0;
+		for (const auto* cluster : m_AllClusters) {
+			if (cluster->m_BLAS) {
+				bytes += cluster->m_BLAS->getBufferSize();
+				++count;
+			}
+		}
+		logger::info("[VRAM] Scene BLAS: {} allocations, {:.1f} MiB (excluding scratch and retired resources)", count, bytes / 1048576.0);
+	}
 }
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)

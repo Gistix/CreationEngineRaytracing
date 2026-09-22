@@ -157,6 +157,9 @@ namespace Pass
 			data.numMatrices = boneCount;
 			std::memcpy(&data.VertexDesc, &vertexDescRaw, sizeof(uint64_t));
 
+			MeshBoneHeader& header = m_MeshBoneHeaderData[meshIndex];
+			header = {};
+
 			if (skinUpdate && boneCount > 0) {
 				// Copy raw boneWorld transforms to BoneCompute input buffer
 				std::memcpy(m_BoneWorldData.data() + boneIndex,
@@ -169,7 +172,6 @@ namespace Pass
 					sizeof(NiTransformPacked) * boneCount);
 
 				// Fill per-mesh bone compute header
-				MeshBoneHeader& header = m_MeshBoneHeaderData[meshIndex];
 				header.BoneCount = boneCount;
 				header.BoneWorldOffset = boneIndex;
 				header.SkinToBoneOffset = boneIndex;
@@ -182,6 +184,7 @@ namespace Pass
 				header.GeomInv_Translate  = geomInv.Translate;
 			}
 
+			mesh->SetSkinningBufferStates(commandList, true);
 			boneIndex += boneCount;
 			meshIndex++;
 		}
@@ -270,9 +273,8 @@ namespace Pass
 		commandList->setComputeState(boneState);
 
 		uint32_t totalBones = 0;
-		for (auto& [mesh, qm] : queuedMeshes)
-			if ((qm.updateFlags & DirtyFlags::Skin) != DirtyFlags::None)
-				totalBones += mesh->GetBoneCount();
+		for (uint32_t i = 0; i < numMeshes; ++i)
+			totalBones += m_VertexUpdateData[i].numMatrices;
 
 		if (totalBones > 0) {
 			auto boneGroups = Util::Math::DivideRoundUp(totalBones, 64u);
@@ -299,6 +301,14 @@ namespace Pass
 			auto vertexGroups = Util::Math::DivideRoundUp(vertexCount, 32u);
 			commandList->dispatch(numMeshes, vertexGroups);
 		}
+
+		uint32_t meshIndex = 0;
+		for (auto& [mesh, queuedMesh] : queuedMeshes) {
+			if (meshIndex++ >= numMeshes)
+				break;
+			mesh->SetSkinningBufferStates(commandList, false);
+		}
+		commandList->commitBarriers();
 
 		ClearQueue();
 	}
