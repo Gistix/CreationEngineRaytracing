@@ -34,7 +34,7 @@ void EnvmapMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto envData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_EnvironmentTexture.Update(envMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+	if (m_EnvironmentTexture.Update(envMaterial->envTexture, renderer->GetBlackCubemapDescriptor(), TextureType::CubeMap))
 		envData->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
 
 	if (m_EnvironmentMaskTexture.Update(envMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor()))

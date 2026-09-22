@@ -103,6 +103,7 @@ class Renderer
 	eastl::unique_ptr<TextureReference> m_GrayTexture;
 	eastl::unique_ptr<TextureReference> m_NormalTexture;
 	eastl::unique_ptr<TextureReference> m_BlackTexture;
+	eastl::unique_ptr<TextureReference> m_BlackCubemap;
 #if defined(SKYRIM)
 	eastl::unique_ptr<TextureReference> m_RMAOSTexture;
 #endif
@@ -278,6 +279,7 @@ public:
 	inline auto& GetNormalTextureDescriptor() const { return m_NormalTexture->descriptorHandle; }
 	inline nvrhi::ITexture* GetNormalTexture() const { return m_NormalTexture->texture; }
 	inline auto& GetBlackTextureDescriptor() const { return m_BlackTexture->descriptorHandle; }
+	inline auto& GetBlackCubemapDescriptor() const { return m_BlackCubemap->descriptorHandle; }
 #if defined(SKYRIM)
 	inline auto& GetRMAOSTextureDescriptor() const { return m_RMAOSTexture->descriptorHandle; }
 #endif
