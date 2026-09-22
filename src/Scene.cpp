@@ -421,9 +421,21 @@ void Scene::SetSkinDetailNormal(void* skinDetailNormal)
 	if (skinDetailNormal == m_SkinDetailNormalResource)
 		return;
 
-	m_SkinDetailNormalResource = skinDetailNormal;
+	auto* renderer = Renderer::GetSingleton();
+	auto texture = skinDetailNormal ? Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture") : nullptr;
+	if (skinDetailNormal && !texture)
+		return;
 
-	m_SkinDetailNormalTexture = Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture");
+	if (m_SkinDetailNormalTexture && !renderer->GetDevice()->waitForIdle())
+		return;
+
+	m_SkinDetailNormalTexture = texture;
+	m_SkinDetailNormalOwner.copy_from(static_cast<IUnknown*>(skinDetailNormal));
+	m_SkinDetailNormalResource = skinDetailNormal;
+	for (auto& node : renderer->GetRenderGraph()->GetNodes()) {
+		if (node.m_RenderPass)
+			node.m_RenderPass->SceneTexturesChanged();
+	}
 }
 
 void Scene::SetWaterFlowMap(void* waterFlowMap)

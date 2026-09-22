@@ -35,6 +35,7 @@ struct Scene
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
 
 	void* m_SkinDetailNormalResource = nullptr;
+	winrt::com_ptr<IUnknown> m_SkinDetailNormalOwner;
 	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
 	mutable nvrhi::TextureHandle m_ProjNoiseTexture;

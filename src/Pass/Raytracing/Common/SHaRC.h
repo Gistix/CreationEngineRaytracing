@@ -65,6 +65,7 @@ namespace Pass
 		void CreateUpdateRayTracingPipeline();
 
 	public:
+		void SceneTexturesChanged() override { m_BindingSetDirty.fill(true); }
 		SHaRC(Renderer* renderer, SceneTLAS* sceneTLAS);
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override

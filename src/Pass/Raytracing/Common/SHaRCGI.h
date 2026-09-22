@@ -65,6 +65,7 @@ namespace Pass::Raytracing::Common
 		void CreateUpdateRayTracingPipeline();
 
 	public:
+		void SceneTexturesChanged() override { m_BindingSetDirty.fill(true); }
 		SHaRCGI(Renderer* renderer, SceneTLAS* sceneTLAS);
 
 		void OnTLASResized([[maybe_unused]] TopLevelAS& tlas) override
