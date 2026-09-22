@@ -19,6 +19,7 @@ namespace Pass::Common
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 		uint32_t m_AccumulatedFrames = 0;
+		uint64_t m_LightingRevision = UINT64_MAX;
 
 		// Camera state for change detection
 		float4x4 m_PrevViewInverse = {};

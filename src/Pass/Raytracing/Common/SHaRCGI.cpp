@@ -32,11 +32,6 @@ namespace Pass::Raytracing::Common
 		m_SHaRCBuffer = device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
 			sizeof(SHaRCData), "SHaRC Data", Constants::MAX_CB_VERSIONS));
 
-		m_HashEntriesBuffer = Util::CreateStructuredBuffer<uint64_t>(device, MAX_CAPACITY, "SHaRC Hash Entries Buffer", true);
-		m_LockBuffer = Util::CreateStructuredBuffer<uint>(device, MAX_CAPACITY, "SHaRC Lock Buffer", true);
-		m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
-		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
-
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
@@ -72,6 +67,29 @@ namespace Pass::Raytracing::Common
 		const bool definesChanged = defines != m_Defines;
 
 		m_Defines = defines;
+
+		if (!m_Enabled) {
+			m_UpdatePass.m_BindingSets.fill(nullptr);
+			m_ResolvePass.m_BindingSets.fill(nullptr);
+			m_ResolvePass.m_Initialized = false;
+			m_HashEntriesBuffer = nullptr;
+			m_LockBuffer = nullptr;
+			m_AccumulationBuffer = nullptr;
+			m_ResolveBuffer = nullptr;
+			m_BindingSetDirty.fill(true);
+			m_ResetCache = true;
+			return;
+		}
+
+		if (!m_HashEntriesBuffer) {
+			auto device = GetRenderer()->GetDevice();
+			m_HashEntriesBuffer = Util::CreateStructuredBuffer<uint64_t>(device, MAX_CAPACITY, "SHaRC Hash Entries Buffer", true);
+			m_LockBuffer = Util::CreateStructuredBuffer<uint>(device, MAX_CAPACITY, "SHaRC Lock Buffer", true);
+			m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
+			m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
+			const size_t bytes = MAX_CAPACITY * (sizeof(uint64_t) + sizeof(uint) + sizeof(SharcAccumulationData) + sizeof(SharcPackedData));
+			logger::info("[VRAM] SHaRCGI cache: {:.1f} MiB", bytes / 1048576.0);
+		}
 
 		if (m_Enabled && (!wasEnabled || definesChanged)) {
 			SetupUpdate();
@@ -399,8 +417,11 @@ namespace Pass::Raytracing::Common
 		if (!m_Enabled)
 			return;
 
-		if (m_ResetCache)
+		const auto revision = Scene::GetSingleton()->GetLightingRevision();
+		if (m_ResetCache || m_LightingRevision != revision) {
 			ClearCache(commandList);
+			m_LightingRevision = revision;
+		}
 
 		m_SHaRCData->FrameIndex = m_FrameCounter++;
 

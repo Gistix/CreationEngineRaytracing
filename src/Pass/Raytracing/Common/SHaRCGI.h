@@ -58,6 +58,7 @@ namespace Pass::Raytracing::Common
 
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 		bool m_ResetCache = true;
+		uint64_t m_LightingRevision = UINT64_MAX;
 		uint32_t m_FrameCounter = 0;
 
 		void ClearCache(nvrhi::ICommandList* commandList);

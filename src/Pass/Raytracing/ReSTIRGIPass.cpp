@@ -135,8 +135,12 @@ namespace Pass::Raytracing
 
 		m_Enabled = settings.ReSTIRGI.Enabled;
 
-		if (!m_Enabled)
+		if (!m_Enabled) {
+			m_BindingSets.fill(nullptr);
+			m_BindingSetDirty.fill(true);
+			m_LightingRevision = UINT64_MAX;
 			return;
+		}
 
 		m_ResamplingMode = static_cast<rtxdi::ReSTIRGI_ResamplingMode>(settings.ReSTIRGI.ResamplingMode);
 		m_Context->SetResamplingMode(m_ResamplingMode);
@@ -289,6 +293,11 @@ namespace Pass::Raytracing
 
 		// Deferred neighbor offset upload (must happen on an open command list)
 		auto* giRes = GetRenderer()->GetReSTIRGIResources();
+		const auto revision = Scene::GetSingleton()->GetLightingRevision();
+		if (m_LightingRevision != revision) {
+			commandList->clearBufferUInt(giRes->reservoirBuffer, 0);
+			m_LightingRevision = revision;
+		}
 		if (giRes->needsNeighborOffsetUpload)
 		{
 			commandList->beginTrackingBufferState(giRes->neighborOffsetBuffer, nvrhi::ResourceStates::Common);

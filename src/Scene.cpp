@@ -206,6 +206,7 @@ void Scene::Execute()
 	auto* renderer = Renderer::GetSingleton();
 
 	auto* commandList = renderer->StartExecution();
+	m_CameraData->RenderSize = renderer->GetDynamicResolution();
 
 	const auto currentSlot = renderer->GetCurrentSlot();
 	const auto& timings = m_Settings.DebugSettings.Timings;
@@ -371,16 +372,27 @@ void Scene::UpdateCameraData() const
 
 void Scene::UpdateFeatureData(void* data, uint32_t size)
 {
-	if (size != sizeof(FeatureData))
-	{
-		logger::error("Feature data incoming and actual struct size mismatch.");
+	if (!data || size != sizeof(FeatureData)) {
+		logger::error("Feature data incoming and actual struct size mismatch: received {}, expected {}.", size, sizeof(FeatureData));
 		return;
 	}
+
+	FeatureData incoming;
+	std::memcpy(&incoming, data, sizeof(incoming));
+	const auto& previous = m_FeatureData->LinearLighting;
+	const auto& current = incoming.LinearLighting;
+	if (current.resetHistory ||
+		current.enableLinearLighting != previous.enableLinearLighting ||
+		current.enableACEScg != previous.enableACEScg ||
+		current.isMainOrLoadingMenu != previous.isMainOrLoadingMenu ||
+		std::memcmp(&current.vanillaDiffuseColorMult, &previous.vanillaDiffuseColorMult,
+			offsetof(LinearLightingSettings, directionalLightColor) - offsetof(LinearLightingSettings, vanillaDiffuseColorMult)) != 0)
+		++m_LightingRevision;
 
 	if (std::memcmp(m_FeatureData.get(), data, sizeof(FeatureData)) == 0)
 		return;
 
-	std::memcpy(m_FeatureData.get(), data, sizeof(FeatureData));
+	*m_FeatureData = incoming;
 	m_DirtyFeatureData = true;
 }
 
@@ -474,7 +486,7 @@ void Scene::UpdateSettings(Settings settings)
 		renderGraph->SetEnabled<Pass::Common::PTComposite>(nrd);
 	}
 
-	renderGraph->SettingsChanged(settings); 
+	Renderer::GetSingleton()->SettingsChanged(settings);
 }
 
 float Scene::GetResolutionScale() const
