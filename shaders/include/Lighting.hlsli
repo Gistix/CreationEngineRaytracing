@@ -173,7 +173,12 @@ float GetPointAttenuation(Light light, float dist, inout float lightSourceAngle)
     else
     {
         float intensityFactor = saturate(dist * light.InvRadius);
-        return 1.0f - intensityFactor * intensityFactor;
+        float attenuation = 1.0f - intensityFactor * intensityFactor;
+#if defined(SKYRIM)
+        if (LLON)
+            attenuation = pow(attenuation, TransferFunctions::GAME_GAMMA);
+#endif
+        return attenuation;
     }
 }
 
