@@ -156,7 +156,8 @@ void Main()
         MotionVectors[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)
         
-#   if defined(NRD) | defined(DLSS_RR)
+        // Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN).
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
         
 #       if defined(NRD) 
@@ -169,7 +170,7 @@ void Main()
         DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
 #           endif
-#       else
+#       elif defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
         SpecularHitDistance[idx] = 0;
 #       endif
@@ -180,7 +181,8 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         
-#   if defined(NRD) | defined(DLSS_RR)
+        // Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN).
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f); 
         
 #       if defined(NRD)
@@ -191,7 +193,7 @@ void Main()
         DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
 #           endif
-#       else
+#       elif defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;                
 #       endif              
@@ -278,11 +280,12 @@ void Main()
             skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
         Depth[idx] = 1;
     
-#       if defined(NRD) | defined(DLSS_RR)   
+        // Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN).
+#       if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
 #           if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
-#           else
+#           elif defined(DLSS_RR)
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;
 #           endif  
@@ -313,10 +316,11 @@ void Main()
     // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
     const bool useCoat = sourceSurface.CoatStrength > 0;
   
-#   if defined(NRD) | defined(DLSS_RR)    
+    // Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN).
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
     const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
     DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
-#   endif   
+#   endif
     
 #   if defined(DLSS_RR)    
     if (useCoat)
@@ -696,9 +700,10 @@ void Main()
         float3 domNormal = domSP.GetNormal();
         float3 domDiffEst, domSpecEst;
         UnpackTwoFp32ToFp16(domSP.DenoiserPackedBSDFEstimate, domDiffEst, domSpecEst);
-#   if defined(NRD) | defined(DLSS_RR)
+        // Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN).
+#       if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
         DiffuseAlbedo[idx] = domDiffEst;
-#   endif
+#       endif
         NormalRoughness[idx] = float4(domNormal, domRoughness);
     }
     else
@@ -706,9 +711,10 @@ void Main()
         if (sourceSurface.CoatStrength > 0)
         {
             float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
-#   if defined(NRD) | defined(DLSS_RR)
+            // Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN).
+#           if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
-#   endif
+#           endif
 #   if defined(NRD)
             NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.CoatNormal, sourceSurface.CoatRoughness, 0.0f);
 #   else
@@ -717,9 +723,10 @@ void Main()
         }
         else
         {
-#   if defined(NRD) | defined(DLSS_RR)
+            // Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN).
+#           if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
-#   endif
+#           endif
 #   if defined(NRD)
             NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.Normal, sourceSurface.Roughness, 0.0f);
 #   else

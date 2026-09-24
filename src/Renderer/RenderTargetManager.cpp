@@ -187,14 +187,21 @@ void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, u
 	}
 
 	// DLSS Ray Reconstruction consumes diffuse/specular albedo and specular hit distance
-	// through the host's Vulkan Streamline backend. Ensure the shared textures exist (so the
-	// host can wrap them) and keep them populated every frame.
-	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
+	// through the host's Vulkan Streamline backend. The CommunityShaders Intel OIDN
+	// denoiser likewise consumes the diffuse albedo through GetRRInput. Ensure the
+	// shared textures exist (so the host can wrap them) and keep them populated
+	// every frame; other denoisers (including None) pay no copy cost.
+	const auto oidnDenoiser = Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser == Denoiser::OIDN;
+	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR || oidnDenoiser) {
 		GetSharedTexture(Texture::DiffuseAlbedo, slot);
+
+		copyTexture(Texture::DiffuseAlbedo);
+	}
+
+	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
 		GetSharedTexture(Texture::RRSpecularAlbedo, slot);
 		GetSharedTexture(Texture::RRSpecularHitDist, slot);
 
-		copyTexture(Texture::DiffuseAlbedo);
 		copyTexture(Texture::RRSpecularAlbedo);
 		copyTexture(Texture::RRSpecularHitDist);
 	}

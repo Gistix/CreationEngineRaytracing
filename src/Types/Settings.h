@@ -14,7 +14,8 @@ enum class Denoiser
 	NRD_Reblur,
 	NRD_Relax,
 	DLSS_RR,
-	Accumulation
+	Accumulation,
+	OIDN
 };
 
 struct GeneralSettings

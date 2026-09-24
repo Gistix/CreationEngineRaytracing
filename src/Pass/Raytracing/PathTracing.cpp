@@ -102,23 +102,26 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool oidn = (settings.GeneralSettings.Denoiser == Denoiser::OIDN);
 
-		if (nrd || dlssrr) {
+		// Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN);
+		// Denoiser::None emits no auxiliary outputs.
+		if (nrd || dlssrr || oidn) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Diffuse Albedo
+		}
 
-			if (nrd) {
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // ViewZ
+		if (nrd) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // ViewZ
 
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Diffuse Radiance
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(7)); // Specular Radiance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Diffuse Radiance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(7)); // Specular Radiance
 
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(8)); // Diffuse Factor
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9)); // Specular Factor
-			}
-			else {
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // Specular Albedo (EnvBRDF)
-				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Specular Hit Distance
-			}
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(8)); // Diffuse Factor
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9)); // Specular Factor
+		}
+		else if (dlssrr) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // Specular Albedo (EnvBRDF)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Specular Hit Distance
 		}
 
 		if (m_UseStablePlanes) {
@@ -346,21 +349,24 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool oidn = (settings.GeneralSettings.Denoiser == Denoiser::OIDN);
 
-		if (nrd || dlssrr) {
+		// Diffuse albedo is emitted for NRD, DLSS-RR and host-side denoisers (Intel OIDN);
+		// Denoiser::None emits no auxiliary outputs.
+		if (nrd || dlssrr || oidn) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::DiffuseAlbedo)));
+		}
 
-			if (nrd) {
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::ViewDepth)));
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::DiffuseRadiance)));
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(8, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, textureManager.GetTexture(RenderTarget::SpecularFactor)));
-			}
-			else {
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
-				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
-			}
+		if (nrd) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::ViewDepth)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::DiffuseRadiance)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(8, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, textureManager.GetTexture(RenderTarget::SpecularFactor)));
+		}
+		else if (dlssrr) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::RRSpecularHitDist)));
 		}
 
 		if (m_UseStablePlanes) {

@@ -39,7 +39,9 @@ RWTexture2D<float4>                         NormalRoughness             : regist
 RWTexture2D<float4>                         MotionVectors               : register(u2); // PT Motion Vectors output (written by BUILD/REFERENCE pass)
 RWTexture2D<float>                          Depth                       : register(u3); // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
 
-#   if defined(NRD) | defined(DLSS_RR)
+// Diffuse albedo is written for NRD, DLSS-RR and host-side denoisers (Intel OIDN);
+// Denoiser::None emits no auxiliary outputs.
+#   if defined(NRD) || defined(DLSS_RR) || defined(OIDN)
 RWTexture2D<float3>                         DiffuseAlbedo               : register(u4);
 
 #       if defined(NRD)
@@ -48,7 +50,7 @@ RWTexture2D<float4>                         DiffuseRadiance             : regist
 RWTexture2D<float4>                         SpecularRadiance            : register(u7);
 RWTexture2D<float3>                         DiffuseFactor               : register(u8);
 RWTexture2D<float3>                         SpecularFactor              : register(u9);
-#       else
+#       elif defined(DLSS_RR)
 RWTexture2D<float3>                         SpecularAlbedo              : register(u5);
 RWTexture2D<float>                          SpecularHitDistance         : register(u6);
 #       endif
