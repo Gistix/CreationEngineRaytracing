@@ -54,9 +54,9 @@ void Main(uint2 GlobalIndex : SV_DispatchThreadID, uint2 LocalIndex : SV_GroupTh
         GlobalIndex,
         giParams.bufferIndices.secondarySurfaceReSTIRDIOutputBufferIndex);
 
-    // Read motion vector and convert from UV-space to pixel-space for RTXDI
-    float3 motionVector = MotionVectors[GlobalIndex].xyz;
-    motionVector.xy *= float2(Camera.RenderSize);
+    // Read motion vector: convert UV-space to pixel-space for RTXDI, and take depth delta from .w
+    float4 mvSample = MotionVectors[GlobalIndex];
+    float3 motionVector = float3(mvSample.xy * float2(Camera.RenderSize), mvSample.w);
 
     // Initialize random sampler
     RTXDI_RandomSamplerState rng = RTXDI_InitRandomSampler(GlobalIndex, runtimeParams.frameIndex, 0);

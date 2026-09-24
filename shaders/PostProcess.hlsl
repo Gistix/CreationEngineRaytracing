@@ -21,7 +21,7 @@ Texture2D<float3> GNMAOTexture          : register(t4);
 #endif
 
 RWTexture2D<float4> OutNormalRoughness       : register(u0);
-RWTexture2D<float2> OutMotionVectors         : register(u1);
+RWTexture2D<float4> OutMotionVectors         : register(u1);
 
 #if defined(NRD)
 RWTexture2D<float>  OutViewDepth             : register(u2);
@@ -58,7 +58,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     
     // Point-sample the G-buffer and motion vectors at the corresponding GI pixel.
     OutNormalRoughness[pixelPos] = normalRoughness;
-    OutMotionVectors[pixelPos] = PrimaryMotionVectors.SampleLevel(PointClampSampler, sourceUV, 0).xy;
+    OutMotionVectors[pixelPos] = PrimaryMotionVectors.SampleLevel(PointClampSampler, sourceUV, 0);
 
 #if defined(NRD) || defined(DLSS_RR)
     const float depth = DepthTexture.SampleLevel(PointClampSampler, sourceUV, 0);

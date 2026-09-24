@@ -592,7 +592,7 @@ namespace Pass::NRD
 
 		m_CommonSettings.motionVectorScale[0] = 1.0f;
 		m_CommonSettings.motionVectorScale[1] = 1.0f;
-		m_CommonSettings.motionVectorScale[2] = 0.0f;
+		m_CommonSettings.motionVectorScale[2] = (m_Mode == Mode::GlobalIllumination) ? 0.0f : 1.0f;
 		m_CommonSettings.isMotionVectorInWorldSpace = false;
 
 		m_CommonSettings.resourceSizePrev[0] = m_CommonSettings.resourceSize[0];

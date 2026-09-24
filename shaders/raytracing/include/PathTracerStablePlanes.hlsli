@@ -20,7 +20,7 @@ void computePSRMotionVectorsAndDepth(
     const float3x3 imageXform,
     const float3 surfaceCameraPosition,
     const float3 surfacePrevCameraPosition,
-    out float3 outMotionVectors,
+    out float4 outMotionVectors,
     out float outDepth)
 {
     float3 cameraRayDir = normalize(mul((float3x3)Camera.ViewInverse,
@@ -200,7 +200,7 @@ void StablePlanesHandleMiss(
     const float3 skyRadiance,
     const bool isDominant)
 {
-    float3 skyMV; float skyDepth;
+    float4 skyMV; float skyDepth;
     computePSRMotionVectorsAndDepth(pixelPos, kEnvironmentMapSceneDistance, imageXform,
         float3(0,0,0), Camera.Position - Camera.PositionPrev, skyMV, skyDepth);
 
@@ -211,7 +211,7 @@ void StablePlanesHandleMiss(
         rayOrigin, rayDir, stableBranchID,
         1.0 / 0.0,
         kEnvironmentMapSceneDistance,
-        throughput, skyMV,
+        throughput, skyMV.xyz,
         1.0,
         planeNormal,
         float3(1,1,1),
@@ -223,7 +223,7 @@ void StablePlanesHandleMiss(
 
     if (isDominant)
     {
-        MotionVectors[pixelPos] = float4(skyMV, 0);
+        MotionVectors[pixelPos] = skyMV;
         Depth[pixelPos] = skyDepth;
 #if defined(NRD)
         ViewDepth[pixelPos] = ScreenToViewDepth(skyDepth, Camera.CameraData);
@@ -304,21 +304,21 @@ StablePlanesHitResult StablePlanesHandleHit(
     if (vertexIndex >= ctx.maxStablePlaneVertexDepth)
     {
         float3 faceNormal = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0 ? surface.FaceNormal : -surface.FaceNormal;
-        float3 psrMV; float psrDepth;
+        float4 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
             surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, psrMV,
+            throughput, psrMV.xyz,
             gbufferRoughness, gbufferNormal,
             surface.DiffuseAlbedo.xxx * coatTint, hasCoat ? surface.CoatF0 : surface.F0,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
         {
-            MotionVectors[pixelPos] = float4(psrMV, 0);
+            MotionVectors[pixelPos] = psrMV;
             Depth[pixelPos] = psrDepth;
 #if defined(NRD)
             ViewDepth[pixelPos] = ScreenToViewDepth(psrDepth, Camera.CameraData);
@@ -375,21 +375,21 @@ StablePlanesHitResult StablePlanesHandleHit(
         float3 diffBSDFEstimate = max(surface.DiffuseAlbedo, 0.04) * coatTint;
         float3 specBSDFEstimate = max(hasCoat ? surface.CoatF0 : surface.F0, 0.04);
 
-        float3 psrMV; float psrDepth;
+        float4 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
             surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, psrMV,
+            throughput, psrMV.xyz,
             gbufferRoughness, gbufferNormal,
             diffBSDFEstimate, specBSDFEstimate,
             isDominant, waterFlags, waterCounters
         );
         if (isDominant)
         {
-            MotionVectors[pixelPos] = float4(psrMV, 0);
+            MotionVectors[pixelPos] = psrMV;
             Depth[pixelPos] = psrDepth;
 #if defined(NRD)
             ViewDepth[pixelPos] = ScreenToViewDepth(psrDepth, Camera.CameraData);
@@ -476,21 +476,21 @@ StablePlanesHitResult StablePlanesHandleHit(
     if (!result.continueTracing)
     {
         bool storeAsDominant = isDominant && canReuseCurrent;
-        float3 psrMV; float psrDepth;
+        float4 psrMV; float psrDepth;
         computePSRMotionVectorsAndDepth(pixelPos, totalSceneLength, imageXform,
             surface.CameraRelativePosition, surface.PrevCameraRelativePosition, psrMV, psrDepth);
         ctx.StoreStablePlane(
             pixelPos, planeIndex, vertexIndex,
             rayOrigin, rayDir, stableBranchID,
             totalSceneLength, hitDistance,
-            throughput, psrMV,
+            throughput, psrMV.xyz,
             gbufferRoughness, gbufferNormal,
             max(surface.DiffuseAlbedo, 0.04) * coatTint, max(hasCoat ? surface.CoatF0 : surface.F0, 0.04),
             storeAsDominant, waterFlags, waterCounters
         );
         if (storeAsDominant)
         {
-            MotionVectors[pixelPos] = float4(psrMV, 0);
+            MotionVectors[pixelPos] = psrMV;
             Depth[pixelPos] = psrDepth;
 #if defined(NRD)
             ViewDepth[pixelPos] = ScreenToViewDepth(psrDepth, Camera.CameraData);

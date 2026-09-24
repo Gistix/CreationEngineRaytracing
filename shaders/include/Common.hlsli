@@ -129,7 +129,7 @@ half3 DecodeNormal(half2 f)
 // Motion Vector Computation
 // ============================================================================
 
-float3 computeMotionVector(float3 posW, float3 prevPosW)
+float4 computeMotionVector(float3 posW, float3 prevPosW)
 {
     float4 currClip = mul(Camera.ViewProj, float4(posW - Camera.Position, 1.0));
     float4 prevClip = mul(Camera.PrevViewProj, float4(prevPosW - Camera.PositionPrev, 1.0));
@@ -137,8 +137,13 @@ float3 computeMotionVector(float3 posW, float3 prevPosW)
     float3 currNDC = currClip.xyz / currClip.w;
     float3 prevNDC = prevClip.xyz / prevClip.w;
 
-    float3 motion = prevNDC - currNDC;
-    return motion * float3(0.5f, -0.5f, 1.0f);
+    float2 motionUV = (prevNDC.xy - currNDC.xy) * float2(0.5f, -0.5f);
+    float currViewZ = ScreenToViewDepth(currNDC.z, Camera.CameraData);
+    float prevViewZ = ScreenToViewDepth(prevNDC.z, Camera.CameraData);
+    float viewZDelta = prevViewZ - currViewZ;
+    float restirDepthDelta = prevNDC.z - currNDC.z;
+
+    return float4(motionUV, viewZDelta, restirDepthDelta);
 }
 
 float2 compute2DMotionVector(float3 posW, float3 prevPosW)
@@ -153,7 +158,7 @@ float2 compute2DMotionVector(float3 posW, float3 prevPosW)
     return motion * float2(0.5f, -0.5f);
 }
 
-float3 computeMotionVectorCameraRelative(float3 posCamera, float3 prevPosCamera)
+float4 computeMotionVectorCameraRelative(float3 posCamera, float3 prevPosCamera)
 {
     float4 currClip = mul(Camera.ViewProj, float4(posCamera, 1.0));
     float4 prevClip = mul(Camera.PrevViewProj, float4(prevPosCamera, 1.0));
@@ -161,8 +166,13 @@ float3 computeMotionVectorCameraRelative(float3 posCamera, float3 prevPosCamera)
     float3 currNDC = currClip.xyz / currClip.w;
     float3 prevNDC = prevClip.xyz / prevClip.w;
 
-    float3 motion = prevNDC - currNDC;
-    return motion * float3(0.5f, -0.5f, 1.0f);
+    float2 motionUV = (prevNDC.xy - currNDC.xy) * float2(0.5f, -0.5f);
+    float currViewZ = ScreenToViewDepth(currNDC.z, Camera.CameraData);
+    float prevViewZ = ScreenToViewDepth(prevNDC.z, Camera.CameraData);
+    float viewZDelta = prevViewZ - currViewZ;
+    float restirDepthDelta = prevNDC.z - currNDC.z;
+
+    return float4(motionUV, viewZDelta, restirDepthDelta);
 }
 
 // ============================================================================

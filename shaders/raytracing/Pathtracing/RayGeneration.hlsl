@@ -200,9 +200,9 @@ void Main()
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
         float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
-        MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
+        MotionVectors[idx] = computeMotionVectorCameraRelative(
             skyVirtualPos,
-            skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
+            skyVirtualPos + (Camera.Position - Camera.PositionPrev));
         Depth[idx] = 1;  // sky → far plane (standard Z: 0=near, 1=far)    
 #   if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
@@ -273,9 +273,9 @@ void Main()
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
         
         float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
-        MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
+        MotionVectors[idx] = computeMotionVectorCameraRelative(
             skyVirtualPos,
-            skyVirtualPos + (Camera.Position - Camera.PositionPrev)), 0);
+            skyVirtualPos + (Camera.Position - Camera.PositionPrev));
         Depth[idx] = 1;
     
 #       if defined(NRD) | defined(DLSS_RR)   
@@ -350,9 +350,9 @@ void Main()
 
     // Write MV and Depth for REFERENCE mode (BUILD mode writes these in PathTracerStablePlanes)
 #   if PATH_TRACER_MODE == PATH_TRACER_MODE_REFERENCE
-    MotionVectors[idx] = float4(computeMotionVectorCameraRelative(
+    MotionVectors[idx] = computeMotionVectorCameraRelative(
         sourceSurface.CameraRelativePosition,
-        sourceSurface.PrevCameraRelativePosition), 0);
+        sourceSurface.PrevCameraRelativePosition);
     
     const float depth = computeClipDepthCameraRelative(sourceSurface.CameraRelativePosition);
     Depth[idx] = depth;
@@ -401,7 +401,7 @@ void Main()
         float3 buildThp = float3(1,1,1);
         // Base MV for the primary surface. Deeper stable planes compute PSR MV from
         // their virtual path-space surface in StablePlanesHandleHit/Miss.
-        float3 buildMVs = computeMotionVectorCameraRelative(
+        float4 buildMVs = computeMotionVectorCameraRelative(
             sourceSurface.CameraRelativePosition,
             sourceSurface.PrevCameraRelativePosition);
         float buildSceneLength = primarySceneDistance;
@@ -421,7 +421,7 @@ void Main()
         StablePlanesHitResult hitResult = StablePlanesHandleHit(
             spCtx, idx, buildPlaneIndex, buildVertexIndex, buildBranchID,
             Camera.Position.xyz, sourceDirection, sourcePayload.hitDistance,
-            buildSceneLength, buildThp, buildMVs, buildImageXform, buildRoughnessAccum,
+            buildSceneLength, buildThp, buildMVs.xyz, buildImageXform, buildRoughnessAccum,
             sourceSurface, sourceBRDFContext, sourceBSDF, buildIsDominant,
             sourceMaterial,
             sourceInstance, randomSeed,
