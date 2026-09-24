@@ -217,6 +217,10 @@ void Renderer::InitDefaultTextures()
 	desc.debugName = "Default Detail Texture";
 	m_DetailTexture = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), textureDescriptorTable);
 
+	auto* cubemapDescriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetCubemapDescriptors()->m_DescriptorTable.get();
+	desc.setDimension(nvrhi::TextureDimension::TextureCube).setArraySize(6).setDebugName("Default Black Cubemap");
+	m_BlackCubemap = eastl::make_unique<TextureReference>(m_NVRHIDevice->createTexture(desc), cubemapDescriptorTable);
+
 	// Write the textures using a temporary CL
 	nvrhi::CommandListHandle commandList = GetGraphicsCommandList();
 	commandList->open();
@@ -229,6 +233,8 @@ void Renderer::InitDefaultTextures()
 	commandList->writeTexture(m_RMAOSTexture->texture, 0, 0, rmaos, 4);
 #endif
 	commandList->writeTexture(m_DetailTexture->texture, 0, 0, detail, 4);
+	for (uint32_t face = 0; face < 6; ++face)
+		commandList->writeTexture(m_BlackCubemap->texture, face, 0, black, 4);
 
 	commandList->close();
 
