@@ -42,6 +42,7 @@ TextureManager::TextureManager()
 
 uint64_t TextureManager::GetFakeDoubledVRAMUsage()
 {
+	std::scoped_lock lock(m_TexturesMutex);
 	uint64_t vramUsage = 0;
 
 	for (const auto& [key, texture]: m_Textures)
@@ -62,6 +63,23 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 	m_Textures.erase(texture->texture);
 }
 
+void TextureManager::ProcessPendingReleases(uint64_t completedFence, uint64_t lastSubmittedFence)
+{
+	eastl::vector<eastl::unique_ptr<TextureReference>> released;
+	{
+		std::scoped_lock lock(m_ReleaseQueue->mutex);
+		auto& pending = m_ReleaseQueue->textures;
+		pending.erase(eastl::remove_if(pending.begin(), pending.end(), [&](PendingRelease& entry) {
+			if (entry.fence == UINT64_MAX)
+				entry.fence = lastSubmittedFence;
+			if (entry.fence > completedFence)
+				return false;
+			released.push_back(eastl::move(entry.texture));
+			return true;
+		}), pending.end());
+	}
+}
+
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType)
 {
 	ID3D11Resource* d3d11Resource = texture->texture;
@@ -71,7 +89,7 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 	{
 		std::scoped_lock lock(m_TexturesMutex);
 		if (auto refIt = m_Textures.find(d3d11Resource); refIt != m_Textures.end())
-			return refIt->second->descriptorHandle;
+			return eastl::shared_ptr<DescriptorHandle>(refIt->second, refIt->second->descriptorHandle.get());
 	}
 
 	nvrhi::TextureHandle textureHandle = nullptr;
@@ -190,20 +208,30 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 		textureHandle = Renderer::GetSingleton()->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, nvrhi::Object(d3d12Resource), textureDesc);
 	}
 
+	if (!textureHandle)
+		return nullptr;
+
 	{
 		std::scoped_lock lock(m_TexturesMutex);
 		auto [it, emplaced] = m_Textures.try_emplace(d3d11Resource, nullptr);
 
 		if (!emplaced) {
-			logger::error("TextureManager::GetDescriptor - TextureReference emplace failed.");
-			return nullptr;
+			return eastl::shared_ptr<DescriptorHandle>(it->second, it->second->descriptorHandle.get());
 		}
 
-		if (textureType == TextureType::Standard)		
-			it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
-		else
-			it->second = eastl::make_unique<TextureReference>(textureHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+		auto* table = textureType == TextureType::Standard ? m_TextureDescriptors->m_DescriptorTable.get() : m_CubemapDescriptors->m_DescriptorTable.get();
+		auto reference = eastl::make_unique<TextureReference>(textureHandle, table);
+		if (!reference->descriptorHandle->IsValid()) {
+			m_Textures.erase(it);
+			return nullptr;
+		}
+		reference->sourceTexture.copy_from(d3d11Resource);
+		it->second = eastl::shared_ptr<TextureReference>(reference.release(),
+			[queue = m_ReleaseQueue](TextureReference* reference) {
+				std::scoped_lock lock(queue->mutex);
+				queue->textures.push_back({ eastl::unique_ptr<TextureReference>(reference), UINT64_MAX });
+			});
 
-		return it->second->descriptorHandle;
+		return eastl::shared_ptr<DescriptorHandle>(it->second, it->second->descriptorHandle.get());
 	}
 }
