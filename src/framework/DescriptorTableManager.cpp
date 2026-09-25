@@ -64,6 +64,7 @@ DescriptorTableManager::DescriptorTableManager(nvrhi::IDevice* device, nvrhi::IB
 
     // Ensure descriptor table is sized to layout desc max capacity
     auto bindlessDesc = layout->getBindlessDesc();
+    m_MaxCapacity = bindlessDesc->maxCapacity;
 
     auto capacity = m_DescriptorTable->getCapacity();
 
@@ -115,8 +116,24 @@ DescriptorIndex DescriptorTableManager::CreateDescriptor(nvrhi::BindingSetItem i
 
     if (!foundFreeSlot)
     {
-        uint32_t newCapacity = std::max(64u, capacity * 2); // handle the initial case when capacity == 0
+        if (capacity >= m_MaxCapacity)
+        {
+            if (!m_CapacityReported)
+            {
+                logger::error("DescriptorTableManager::CreateDescriptor - Table capacity exhausted ({} slots)", capacity);
+                m_CapacityReported = true;
+            }
+            return -1;
+        }
+
+        uint32_t newCapacity = static_cast<uint32_t>(std::min<uint64_t>(m_MaxCapacity, std::max<uint64_t>(64u, uint64_t(capacity) * 2)));
         m_Device->resizeDescriptorTable(m_DescriptorTable, newCapacity);
+        newCapacity = m_DescriptorTable->getCapacity();
+        if (newCapacity <= capacity)
+        {
+            logger::error("DescriptorTableManager::CreateDescriptor - Failed to grow table from {} slots", capacity);
+            return -1;
+        }
         m_AllocatedDescriptors.resize(newCapacity);
         m_Descriptors.resize(newCapacity);
 
