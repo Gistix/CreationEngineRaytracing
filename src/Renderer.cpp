@@ -9,6 +9,30 @@
 #include "Renderer/RenderNode.h"
 #include "interop/PackedSurfaceData.hlsli"
 
+namespace
+{
+	class SubmissionQueueLock
+	{
+		IDXGIVkInteropDevice* m_Device;
+
+	public:
+		explicit SubmissionQueueLock(IDXGIVkInteropDevice* device) : m_Device(device)
+		{
+			if (m_Device)
+				m_Device->LockSubmissionQueue();
+		}
+
+		~SubmissionQueueLock()
+		{
+			if (m_Device)
+				m_Device->ReleaseSubmissionQueue();
+		}
+
+		SubmissionQueueLock(const SubmissionQueueLock&) = delete;
+		SubmissionQueueLock& operator=(const SubmissionQueueLock&) = delete;
+	};
+}
+
 Renderer::Renderer()
 {
 	m_RenderGraph = eastl::make_unique<RenderGraph>(this);
@@ -95,6 +119,18 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 {
 	m_Settings = *rendererSettings;
 
+	winrt::com_ptr<ID3D11Device> nativeDevice;
+	if (auto* device11 = GetNativeD3D11Device())
+		nativeDevice.copy_from(device11);
+	else if (auto* depth = Util::Adapter::GetMainDepthStencilTexture())
+		depth->GetDevice(nativeDevice.put());
+
+	winrt::com_ptr<IDXGIVkInteropDevice> interopDevice;
+	if (!nativeDevice || FAILED(nativeDevice->QueryInterface(__uuidof(IDXGIVkInteropDevice), interopDevice.put_void()))) {
+		logger::error("Renderer::Initialize - Vulkan submission queue interop is unavailable.");
+		return false;
+	}
+
 	const char* deviceExtensions[] = {
 		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,				// "VK_KHR_acceleration_structure"
 		VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,				// "VK_KHR_deferred_host_operations"
@@ -134,6 +170,7 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 		return false;
 
 	m_IsVulkan = true;
+	m_VulkanInteropDevice = std::move(interopDevice);
 
 	BuildFormatMapping();
 	BuildVkFormatMapping();
@@ -238,10 +275,7 @@ void Renderer::InitDefaultTextures()
 
 	commandList->close();
 
-	{
-		std::scoped_lock lock(m_ExecutionMutex);
-		GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
-	}
+	SubmitCommandList(commandList);
 }
 
 nvrhi::ITexture* Renderer::GetDepthTexture() {
@@ -618,18 +652,24 @@ nvrhi::ICommandList* Renderer::StartExecution()
 	return m_CommandList;
 }
 
+uint64_t Renderer::SubmitCommandList(nvrhi::ICommandList* commandList)
+{
+	if (m_VulkanInteropDevice)
+		m_VulkanInteropDevice->FlushRenderingCommands();
+
+	std::scoped_lock lock(m_ExecutionMutex);
+	SubmissionQueueLock queueLock(m_VulkanInteropDevice.get());
+	m_LastSubmittedInstance = GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
+	return m_LastSubmittedInstance;
+}
+
 void Renderer::EndExecution()
 {
 	m_CommandList->close();
 
 	auto device = GetDevice();
 
-	uint64_t fenceValue;
-	{
-		std::scoped_lock lock(m_ExecutionMutex);
-		fenceValue = device->executeCommandList(m_CommandList, nvrhi::CommandQueue::Graphics);
-		m_LastSubmittedInstance = fenceValue;
-	}
+	const uint64_t fenceValue = SubmitCommandList(m_CommandList);
 
 	auto& slot = m_FrameSlots[m_CurrentSlot];
 	slot.fenceValue = fenceValue;

@@ -16,6 +16,7 @@
 #include "Constants.h"
 
 #include "Types/Settings.h"
+#include "Utils/DXVKInterop.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback
 {
@@ -54,6 +55,7 @@ class Renderer
 	ID3D11Device5* m_NativeD3D11Device;
 
 	nvrhi::DeviceHandle m_NVRHIDevice;
+	winrt::com_ptr<IDXGIVkInteropDevice> m_VulkanInteropDevice;
 
 	nvrhi::CommandListHandle m_CommandList = nullptr;
 
@@ -74,6 +76,8 @@ class Renderer
 	uint32_t m_NextSlot = 0;
 
 	uint64_t m_LastSubmittedInstance = 0;
+
+	uint64_t SubmitCommandList(nvrhi::ICommandList* commandList);
 
 	// Original engine render targets (shared)
 	nvrhi::TextureHandle m_DepthTexture;
