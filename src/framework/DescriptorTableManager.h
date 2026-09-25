@@ -94,6 +94,8 @@ protected:
     eastl::unordered_map<nvrhi::BindingSetItem, DescriptorIndex, BindingSetItemHasher, BindingSetItemsEqual> m_DescriptorIndexMap;
     eastl::vector<bool> m_AllocatedDescriptors;
     int m_SearchStart = 0;
+    uint32_t m_MaxCapacity = 0;
+    bool m_CapacityReported = false;
 	mutable std::shared_mutex m_Mutex;
 
 public:
