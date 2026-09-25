@@ -193,7 +193,7 @@ void Renderer::InitDefaultTextures()
 		.setHeight(1)
 		.setMipLevels(1)
 		.setFormat(nvrhi::Format::RGBA8_UNORM)
-		.enableAutomaticStateTracking(nvrhi::ResourceStates::Common);
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource);
 
 	auto* textureDescriptorTable = Scene::GetSingleton()->GetSceneGraph()->GetTextureDescriptors()->m_DescriptorTable.get();
 
@@ -695,13 +695,13 @@ void Renderer::RunPostExecutionForSlot(uint32_t slot)
 	logger::trace("Renderer::RunPostExecutionForSlot - Slot {} completed", slot);
 }
 
-nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char* name)
+nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char* name, nvrhi::ResourceStates initialState)
 {
 	auto* renderer = Renderer::GetSingleton();
 
 	nvrhi::TextureDesc desc{};
 	desc.dimension = nvrhi::TextureDimension::Texture2D;
-	desc.initialState = nvrhi::ResourceStates::ShaderResource;
+	desc.initialState = initialState;
 	desc.keepInitialState = true;
 	desc.debugName = name;
 

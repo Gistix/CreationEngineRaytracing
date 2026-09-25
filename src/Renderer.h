@@ -349,7 +349,8 @@ public:
 
 	void SetRenderTargets(void* albedo, void* normalRoughness, void* gnmao);
 
-	static nvrhi::TextureHandle WrapNativeTexture(void* nativeTexture, const char* debugName);
+	static nvrhi::TextureHandle WrapNativeTexture(void* nativeTexture, const char* debugName,
+		nvrhi::ResourceStates initialState = nvrhi::ResourceStates::ShaderResource);
 
 	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName);
 
