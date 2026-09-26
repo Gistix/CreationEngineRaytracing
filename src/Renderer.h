@@ -16,6 +16,7 @@
 #include "Constants.h"
 
 #include "Types/Settings.h"
+#include "Utils/DXVKInterop.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback
 {
