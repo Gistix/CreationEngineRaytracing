@@ -73,17 +73,18 @@ float4 SampleBurleyProfileMIS(
 
     const float3 s = SSS_S(diffuseAlbedo);
     const float3 d = max(mfp * s, 1e-7f);
+    const float dChannel = (channel == 0) ? d.x : ((channel == 1) ? d.y : d.z);
 
     float r = 0.0f;
     if (rand < 0.25f)
     {
         rand *= 4.0f; // Reuse random var and map to [0, 1]
-        r = -log(rand) / d[channel]; // r = -log(rand) * l / s = -log(rand) / mfp * s = -log(rand) / d
+        r = -log(rand) / dChannel; // r = -log(rand) * l / s = -log(rand) / mfp * s = -log(rand) / d
     }
     else
     {
         rand = (rand - 0.25f) / 0.75f; // Reuse random var and map to [0, 1]
-        r = -3.0f * log(rand) / d[channel];
+        r = -3.0f * log(rand) / dChannel;
     }
 
     const float3 pdf3 = 0.25f * d * (exp(-r * d) + exp(-r * d / 3.0f));

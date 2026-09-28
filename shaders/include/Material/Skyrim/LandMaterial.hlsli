@@ -141,22 +141,46 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
     [branch]
     if (surface.Primary && Features.ExtendedMaterial.EnableParallax && material.Type == Type::TruePBR)
     {
-        float weights[6] = { landBlend0.x, landBlend0.y, landBlend0.z, landBlend0.w, landBlend1.x, landBlend1.y };
-        uint16_t dispTextures[6] = { dispTex0, dispTex1, dispTex2, dispTex3, dispTex4, dispTex5 };
-        float dispScales[6] = { dispScale0, dispScale1, dispScale2, dispScale3, dispScale4, dispScale5 };
+        float maxWeight = landBlend0.x;
+        uint16_t maxDispTex = dispTex0;
+        float maxDispScale = dispScale0;
 
-        float maxWeight = 0.0f;
-        int maxIdx = -1;
-        for (int i = 0; i < 6; i++)
+        if (landBlend0.y > maxWeight)
         {
-            if (weights[i] > maxWeight)
-            {
-                maxWeight = weights[i];
-                maxIdx = i;
-            }
+            maxWeight = landBlend0.y;
+            maxDispTex = dispTex1;
+            maxDispScale = dispScale1;
         }
 
-        if (maxIdx >= 0 && maxWeight > LAND_MIN_WEIGHT)
+        if (landBlend0.z > maxWeight)
+        {
+            maxWeight = landBlend0.z;
+            maxDispTex = dispTex2;
+            maxDispScale = dispScale2;
+        }
+
+        if (landBlend0.w > maxWeight)
+        {
+            maxWeight = landBlend0.w;
+            maxDispTex = dispTex3;
+            maxDispScale = dispScale3;
+        }
+
+        if (landBlend1.x > maxWeight)
+        {
+            maxWeight = landBlend1.x;
+            maxDispTex = dispTex4;
+            maxDispScale = dispScale4;
+        }
+
+        if (landBlend1.y > maxWeight)
+        {
+            maxWeight = landBlend1.y;
+            maxDispTex = dispTex5;
+            maxDispScale = dispScale5;
+        }
+
+        if (maxWeight > LAND_MIN_WEIGHT)
         {
             float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
             float noise = 0;
@@ -165,10 +189,10 @@ void LandMaterial(inout Surface surface, in float2 texCoord0, in float4 vertexCo
             DisplacementParams displacementParams;
             displacementParams.DisplacementScale = 1.f;
             displacementParams.DisplacementOffset = 0.f;
-            displacementParams.HeightScale = dispScales[maxIdx];
+            displacementParams.HeightScale = maxDispScale;
             displacementParams.FlattenAmount = 0;
 
-            Texture2D displacementTexture = Textures[NonUniformResourceIndex(dispTextures[maxIdx])];
+            Texture2D displacementTexture = Textures[NonUniformResourceIndex(maxDispTex)];
             texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, viewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, false, pixelOffset);
         }
     }
