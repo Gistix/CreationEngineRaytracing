@@ -973,8 +973,9 @@ struct DefaultBSDF
 
     void EvalDeltaLobes(const float3 wi, out DeltaLobe deltaLobes[cMaxDeltaLobes], out int deltaLobeCount, out float nonDeltaPart)  // wi is in local space
     {
-        deltaLobeCount = 3;
-        for (int i = 0; i < deltaLobeCount; i++)
+        deltaLobeCount = cMaxDeltaLobes;
+        [unroll]
+        for (uint i = 0; i < cMaxDeltaLobes; i++)
             deltaLobes[i] = DeltaLobe::make(); // init to zero
 
             nonDeltaPart = pDiffuseReflection+pDiffuseTransmission;
@@ -1220,7 +1221,8 @@ struct StandardBSDF
 
         defaultBSDF.EvalDeltaLobes(wiLocal, deltaLobes, deltaLobeCount, nonDeltaPart);
 
-        for (int i = 0; i < deltaLobeCount; i++)
+        [unroll]
+        for (uint i = 0; i < cMaxDeltaLobes; i++)
         {
             deltaLobes[i].dir = surface.FromLocal(deltaLobes[i].dir);
         }

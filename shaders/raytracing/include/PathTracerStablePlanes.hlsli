@@ -333,7 +333,8 @@ StablePlanesHitResult StablePlanesHandleHit(
     bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
 
     bool isInternalSpecularTransmission = surface.SpecTrans > 0.0f && !surface.IsThinSurface && !isEnterSurface;
-    for (int k = 0; k < deltaLobeCount; k++)
+    [unroll]
+    for (uint k = 0; k < cMaxDeltaLobes; k++)
     {
         // Internal reflection/TIR in refractive media is not stable enough for PSR reuse.
         if (isInternalSpecularTransmission && deltaLobes[k].transmission == 0)
@@ -345,11 +346,12 @@ StablePlanesHitResult StablePlanesHandleHit(
 
     int activeDeltaLobes = 0;
     int firstActiveLobe = -1;
-    for (int k2 = 0; k2 < deltaLobeCount; k2++)
+    [unroll]
+    for (uint k2 = 0; k2 < cMaxDeltaLobes; k2++)
     {
         if (any(deltaLobes[k2].thp > 0))
         {
-            if (firstActiveLobe < 0) firstActiveLobe = k2;
+            if (firstActiveLobe < 0) firstActiveLobe = (int)k2;
             activeDeltaLobes++;
         }
     }
@@ -358,11 +360,12 @@ StablePlanesHitResult StablePlanesHandleHit(
     // Underwater paths keep the default transmission-first order.
     if (material.Type == Type::Water && !insideWaterVolume)
     {
-        for (int k3 = 0; k3 < deltaLobeCount; k3++)
+        [unroll]
+        for (uint k3 = 0; k3 < cMaxDeltaLobes; k3++)
         {
             if (any(deltaLobes[k3].thp > 0) && deltaLobes[k3].transmission == 0)
             {
-                firstActiveLobe = k3;
+                firstActiveLobe = (int)k3;
                 break;
             }
         }

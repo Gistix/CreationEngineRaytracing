@@ -414,7 +414,8 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
 
     float3 totalRadiance = 0.0f;
 
-    for (int i = 0; i < deltaLobeCount; i++)
+    [unroll]
+    for (uint i = 0; i < cMaxDeltaLobes; i++)
     {
         if (deltaLobes[i].probability <= 0.0f)
             continue;
