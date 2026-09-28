@@ -25,19 +25,25 @@ BaseMesh::~BaseMesh()
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
+	auto validate = [](eastl::unique_ptr<BaseMesh> mesh) -> eastl::unique_ptr<BaseMesh> {
+		if (!mesh->IsReady())
+			return nullptr;
+		return mesh;
+	};
+
 	const auto& geometryData = Util::Adapter::GetGeometryRuntimeData(bsTriShape);
 
 	if (geometryData.rendererData) {
 		if (auto* extra = Util::Adapter::GetIntegersExtraData(bsTriShape, Constants::ExtraData::LandLOD)) {
 			if (extra->size > 0 && extra->value[0] == 4)
-				return eastl::make_unique<LandLODMesh>(bsTriShape, commandList);
+				return validate(eastl::make_unique<LandLODMesh>(bsTriShape, commandList));
 		}
 
 		if (auto* subIndexTriShape = Util::Adapter::AsSubIndexTriShape(bsTriShape))
-			return eastl::make_unique<SubIndexMesh>(subIndexTriShape);
+			return validate(eastl::make_unique<SubIndexMesh>(subIndexTriShape));
 
 		if (auto* multiStreamTriShape = Util::Adapter::AsMultiStreamInstanceTriShape(bsTriShape))
-			return eastl::make_unique<InstancedMesh>(multiStreamTriShape, commandList);
+			return validate(eastl::make_unique<InstancedMesh>(multiStreamTriShape, commandList));
 
 #if defined(FALLOUT4)
 		// Does this mean DynamicMesh has rendererData in Fallout4?
@@ -48,16 +54,16 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 		}
 #endif
 
-		return eastl::make_unique<Mesh>(bsTriShape, commandList);
+		return validate(eastl::make_unique<Mesh>(bsTriShape, commandList));
 	}
 
 #if !defined(FALLOUT4)
 	if (auto bsDynamicTriShape = Util::Adapter::AsDynamicTriShape(bsTriShape))
-		return eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList);
+		return validate(eastl::make_unique<DynamicMesh>(bsDynamicTriShape, commandList));
 #endif
 
 	if (geometryData.skinInstance)
-		return eastl::make_unique<SkinnedMesh>(bsTriShape, commandList);
+		return validate(eastl::make_unique<SkinnedMesh>(bsTriShape, commandList));
 
 	logger::warn("BaseMesh::Create - No renderer data or skin instance for {}", MakeDebugName(bsTriShape));
 	return nullptr;
@@ -142,6 +148,8 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVulkanBuffer(
 		buffer.m_SourceBuffer.copy_from(buffer11);
 
 		buffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffer.m_Buffer));
+		if (!buffer.m_Descriptor.IsValid())
+			return {};
 	}
 	else {
 		logger::error("{} - Failed to create handle for native Vulkan buffer", logContext);
@@ -187,6 +195,8 @@ BaseMesh::BufferDescriptor BaseMesh::CreateDX12Buffer(
 
 	if (buffer.m_Buffer) {
 		buffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffer.m_Buffer));
+		if (!buffer.m_Descriptor.IsValid())
+			return {};
 	}
 	else {
 		logger::error("{} - Failed to create handle for native buffer;", logContext);
@@ -443,9 +453,10 @@ void BaseMesh::UpdateMaterial()
 	m_Material->Update(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty->material);
 }
 
-void BaseMesh::AllocateMeshIndex()
+bool BaseMesh::AllocateMeshIndex()
 {
 	m_MeshIndex = static_cast<uint16_t>(Scene::GetSingleton()->GetSceneGraph()->AllocateMeshIndex());
+	return m_MeshIndex != UINT16_MAX;
 }
 
 uint16_t BaseMesh::AllocateGeometryIndex()

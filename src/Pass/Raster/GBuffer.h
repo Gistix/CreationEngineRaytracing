@@ -44,6 +44,7 @@ namespace Pass::Raster
 		void CheckArgsBindings();
 
 	public:
+		void SceneTexturesChanged() override { m_GraphicsBindingSetDirty.fill(true); }
 		GBuffer(Renderer* renderer);
 
 		virtual void Initialize() override;

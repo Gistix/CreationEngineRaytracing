@@ -55,6 +55,7 @@ namespace Pass
 		bool m_UseStablePlanes = false;  // Toggle for stable planes vs reference mode
 		bool m_UseRestirGI = false;
 	public:
+		void SceneTexturesChanged() override { m_BindingSetDirty.fill(true); }
 		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);
 
 		virtual void Initialize() override;

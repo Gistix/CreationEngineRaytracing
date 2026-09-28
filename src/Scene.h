@@ -29,15 +29,22 @@ struct Scene
 
 	eastl::unique_ptr<FeatureData> m_FeatureData;
 	bool m_DirtyFeatureData = true;
+	uint64_t m_LightingRevision = 0;
 	nvrhi::BufferHandle m_FeatureBuffer;
 
 	void* m_SkyHemisphereResource = nullptr;
 	nvrhi::TextureHandle m_SkyHemisphereTexture;
 
 	void* m_SkinDetailNormalResource = nullptr;
+	winrt::com_ptr<IUnknown> m_SkinDetailNormalOwner;
 	nvrhi::TextureHandle m_SkinDetailNormalTexture;
 
 	mutable nvrhi::TextureHandle m_ProjNoiseTexture;
+
+	nvrhi::BufferHandle m_SobolBuffer;
+	bool m_NeedsSobolUpload = false;
+	eastl::vector<uint32_t> m_SobolData;
+	void CreateSobolBuffer();
 
 	void* m_WaterFlowMapResource = nullptr;
 	nvrhi::TextureHandle m_WaterFlowMapTexture;
@@ -99,6 +106,7 @@ struct Scene
 	inline auto GetCameraBuffer() const { return m_CameraBuffer; }
 
 	inline auto GetFeatureBuffer() const { return m_FeatureBuffer; }
+	uint64_t GetLightingRevision() const { return m_LightingRevision; }
 
 	auto GetMenuState()
 	{
@@ -136,6 +144,7 @@ struct Scene
 	nvrhi::ITexture* GetSkinDetailNormalTexture() const;
 
 	nvrhi::ITexture* GetProjNoiseTexture() const;
+	inline nvrhi::IBuffer* GetSobolBuffer() const { return m_SobolBuffer; }
 
 	inline nvrhi::ITexture* GetFlowMapTexture() const { return m_WaterFlowMapTexture; }
 

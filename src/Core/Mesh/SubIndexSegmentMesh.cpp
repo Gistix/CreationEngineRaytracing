@@ -29,12 +29,17 @@ SubIndexSegmentMesh::SubIndexSegmentMesh(SubIndexMesh* manager, RE::BSSubIndexTr
 	const uint64_t indexOffset = indexBuffer.m_Offset + static_cast<uint64_t>(start) * sizeof(uint16_t);
 	const uint64_t vertexOffset = vertexBuffer.m_Offset;
 
+	const auto geometryIndex = AllocateGeometryIndex();
+	if (geometryIndex == UINT16_MAX)
+		return;
+
 	m_GeometryEntries.push_back({ MakeGeometryDesc(
 		indexBuffer.m_Buffer, indexOffset, numTris * 3u,
 		vertexBuffer.m_Buffer, vertexOffset, vertexStride, triShapeData.vertexCount,
-		manager->GetMeshIndex(), vertexFormat), AllocateGeometryIndex() });
+		manager->GetMeshIndex(), vertexFormat), geometryIndex });
 
 	m_Material = manager->GetMaterial();
+	m_IsReady = m_Material != nullptr;
 }
 
 SubIndexSegmentMesh::~SubIndexSegmentMesh()

@@ -41,7 +41,7 @@ void MultiLayerParallaxMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMate
 	if (m_LayerTexture.Update(layerMaterial->layerTexture, renderer->GetBlackTextureDescriptor()))
 		layerData->LayerTexture = m_LayerTexture.texture.GetDescriptorIndex();
 
-	if (m_EnvironmentTexture.Update(layerMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+	if (m_EnvironmentTexture.Update(layerMaterial->envTexture, renderer->GetBlackCubemapDescriptor(), TextureType::CubeMap))
 		layerData->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
 
 	if (m_EnvironmentMaskTexture.Update(layerMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor()))

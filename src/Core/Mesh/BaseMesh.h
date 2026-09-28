@@ -70,6 +70,7 @@ public:
 	virtual void SetHidden(bool hidden);
 
 	bool IsHidden() const;
+	bool IsReady() const { return m_IsReady; }
 
 	virtual void OnDestroy();
 
@@ -193,7 +194,7 @@ protected:
 	void CreateMaterial();
 	void UpdateMaterial();
 
-	void AllocateMeshIndex();
+	bool AllocateMeshIndex();
 
 	uint16_t AllocateGeometryIndex();
 
@@ -221,6 +222,7 @@ protected:
 	bool m_NeedsPrevInit = true;
 
 	uint16_t m_MeshIndex = UINT16_MAX;
+	bool m_IsReady = false;
 
 	RE::NiBound m_WorldBound;
 

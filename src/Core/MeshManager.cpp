@@ -3,11 +3,11 @@
 #include "Renderer.h"
 
 MeshManager::MeshManager()
-	: 	m_MeshSlots(sizeof(uint32_t), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX),
-	m_GeometrySlots(sizeof(MeshData), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX),
+	: 	m_MeshSlots(sizeof(uint32_t), Constants::NUM_MESHES_MAX, 0),
+	m_GeometrySlots(sizeof(MeshData), Constants::NUM_MESHES_MAX, 0),
 	m_TransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX),
 	m_PrevTransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX),
-	m_PropertiesSlots(sizeof(PropertiesData), Constants::NUM_MESHES_MAX, Constants::NUM_MESHES_MAX)
+	m_PropertiesSlots(sizeof(PropertiesData), Constants::NUM_MESHES_MAX, 0)
 {
 	CreateBuffers();
 }
@@ -55,6 +55,8 @@ void MeshManager::CreateBuffers()
 uint32_t MeshManager::AllocateMeshIndex()
 {
 	uint64_t offset = m_MeshSlots.Allocate();
+	if (offset == ResourceSlotManager::INVALID_OFFSET)
+		return UINT32_MAX;
 	return m_MeshSlots.GetIndexFromOffset(offset);
 }
 
@@ -66,6 +68,8 @@ void MeshManager::ReleaseMeshIndex(uint32_t index)
 uint32_t MeshManager::AllocateGeometryIndex()
 {
 	uint64_t offset = m_GeometrySlots.Allocate();
+	if (offset == ResourceSlotManager::INVALID_OFFSET)
+		return UINT32_MAX;
 	return m_GeometrySlots.GetIndexFromOffset(offset);
 }
 

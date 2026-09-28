@@ -150,7 +150,7 @@ void WaterMaterial(inout Surface surface, in float2 texCoord0, in float3 tangent
 
     // Distance-based absorption via Beer-Lambert law instead of flat surface tint.
     static const float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0;
-    float3 waterColor = saturate(water.ShallowColor.rgb);
+    float3 waterColor = saturate(SRGBColorToLinear(water.ShallowColor.rgb));
     surface.VolumeAbsorption = -log(max(waterColor, 1e-4)) / WATER_ABSORPTION_REFERENCE_DEPTH * Raytracing.WaterAbsorptionScale;
     surface.TransmissionColor = float3(1.0f, 1.0f, 1.0f);
     surface.SpecTrans = 1.0f;

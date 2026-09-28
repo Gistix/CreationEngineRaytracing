@@ -106,8 +106,11 @@ Texture2D<float4>                           WaterDisplacementMap        : regist
 Texture2D<float4>                           ProjNoiseMap                : register(t10);
 StructuredBuffer<Transform>                 Transforms                  : register(t11);
 StructuredBuffer<uint>                      InstanceLightList           : register(t12);
+StructuredBuffer<uint>                      PrecomputedSobolBuffer      : register(t13);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
+
+#define SOBOL_PRECOMPUTED_BUFFER PrecomputedSobolBuffer
 
 SamplerState                                DefaultSampler              : register(s0);
 SamplerState                                ClampSampler                : register(s1);

@@ -38,6 +38,7 @@ namespace Pass::Raytracing
 		nvrhi::SamplerHandle m_LinearWrapSampler;
 
 		SceneTLAS* m_SceneTLAS;
+		uint64_t m_LightingRevision = UINT64_MAX;
 
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 		rtxdi::ReSTIRGI_ResamplingMode m_ResamplingMode = rtxdi::ReSTIRGI_ResamplingMode::TemporalAndSpatial;

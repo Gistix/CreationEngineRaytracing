@@ -2,6 +2,9 @@
 #define __MATH_HELPERS_HLSLI__
 
 #include "include/Utils/MathConstants.hlsli"
+#if defined(SKYRIM)
+#include "include/Common/Color.hlsli"
+#endif
 
 inline float Square(float value)
 {
@@ -10,7 +13,11 @@ inline float Square(float value)
 
 inline float Luminance(float3 rgb)
 {
+#if defined(SKYRIM)
+    return Color::RGBToLuminance(rgb);
+#else
     return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f));
+#endif
 }
 
 inline float Average(float3 rgb)

@@ -244,10 +244,11 @@ BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, u
 	const bool firstBuild = (m_LastBuildFrame == Constants::INVALID_FRAME_INDEX);
 	const bool hasMesh = m_DirtyFlags.any(DirtyFlags::Mesh);
 	const bool hasVisibility = m_DirtyFlags.any(DirtyFlags::Visibility);
-	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform, DirtyFlags::Alpha);
+	const bool hasAlpha = m_DirtyFlags.any(DirtyFlags::Alpha);
+	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
 	const bool isOrphan = (m_Owner == nullptr);
 
-	if (firstBuild || !m_BLAS || hasMesh || (!isOrphan && hasVisibility))
+	if (firstBuild || !m_BLAS || hasMesh || hasAlpha || (!isOrphan && hasVisibility))
 		return BuildMode::Rebuild;
 
 	if (hasUpdate) {

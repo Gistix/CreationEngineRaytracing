@@ -32,11 +32,6 @@ namespace Pass::Raytracing::Common
 		m_SHaRCBuffer = device->createBuffer(nvrhi::utils::CreateVolatileConstantBufferDesc(
 			sizeof(SHaRCData), "SHaRC Data", Constants::MAX_CB_VERSIONS));
 
-		m_HashEntriesBuffer = Util::CreateStructuredBuffer<uint64_t>(device, MAX_CAPACITY, "SHaRC Hash Entries Buffer", true);
-		m_LockBuffer = Util::CreateStructuredBuffer<uint>(device, MAX_CAPACITY, "SHaRC Lock Buffer", true);
-		m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
-		m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
-
 		m_SceneTLAS->GetTopLevelAS().AddListener(this);
 
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
@@ -72,6 +67,29 @@ namespace Pass::Raytracing::Common
 		const bool definesChanged = defines != m_Defines;
 
 		m_Defines = defines;
+
+		if (!m_Enabled) {
+			m_UpdatePass.m_BindingSets.fill(nullptr);
+			m_ResolvePass.m_BindingSets.fill(nullptr);
+			m_ResolvePass.m_Initialized = false;
+			m_HashEntriesBuffer = nullptr;
+			m_LockBuffer = nullptr;
+			m_AccumulationBuffer = nullptr;
+			m_ResolveBuffer = nullptr;
+			m_BindingSetDirty.fill(true);
+			m_ResetCache = true;
+			return;
+		}
+
+		if (!m_HashEntriesBuffer) {
+			auto device = GetRenderer()->GetDevice();
+			m_HashEntriesBuffer = Util::CreateStructuredBuffer<uint64_t>(device, MAX_CAPACITY, "SHaRC Hash Entries Buffer", true);
+			m_LockBuffer = Util::CreateStructuredBuffer<uint>(device, MAX_CAPACITY, "SHaRC Lock Buffer", true);
+			m_AccumulationBuffer = Util::CreateStructuredBuffer<SharcAccumulationData>(device, MAX_CAPACITY, "SHaRC Accumulation Buffer", true);
+			m_ResolveBuffer = Util::CreateStructuredBuffer<SharcPackedData>(device, MAX_CAPACITY, "SHaRC Resolve Buffer", true);
+			const size_t bytes = MAX_CAPACITY * (sizeof(uint64_t) + sizeof(uint) + sizeof(SharcAccumulationData) + sizeof(SharcPackedData));
+			logger::info("[VRAM] SHaRCGI cache: {:.1f} MiB", bytes / 1048576.0);
+		}
 
 		if (m_Enabled && (!wasEnabled || definesChanged)) {
 			SetupUpdate();
@@ -116,6 +134,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11),
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(16), // Transforms
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(17), // Instance light list
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(18), // Precomputed Sobol Buffer
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_SRV(13),
@@ -357,6 +376,7 @@ namespace Pass::Raytracing::Common
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, m_ResolveBuffer),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(16, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(17, sceneGraph->GetInstanceLightList()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(18, scene->GetSobolBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_SRV(13, renderer->GetWaterDisplacementTexture()),
@@ -399,8 +419,11 @@ namespace Pass::Raytracing::Common
 		if (!m_Enabled)
 			return;
 
-		if (m_ResetCache)
+		const auto revision = Scene::GetSingleton()->GetLightingRevision();
+		if (m_ResetCache || m_LightingRevision != revision) {
 			ClearCache(commandList);
+			m_LightingRevision = revision;
+		}
 
 		m_SHaRCData->FrameIndex = m_FrameCounter++;
 

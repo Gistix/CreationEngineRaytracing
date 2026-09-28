@@ -32,6 +32,7 @@ public:
 	void UpdateDynamicData(void* dynamicData, uint32_t dataSize);
 
 	void Update(nvrhi::ICommandList* commandList) override;
+	void SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool writing) override;
 
 	bool IsUpdatable() const override { return true; }
 };

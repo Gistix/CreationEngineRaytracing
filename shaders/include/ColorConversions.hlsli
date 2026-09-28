@@ -3,6 +3,8 @@
 
 #include "interop/SharedData.hlsli"
 #include "Utils/MathConstants.hlsli"
+#include "include/Common/ColorSpaces.hlsli"
+#include "include/Common/TransferFunctions.hlsli"
 
 #define LLSETTINGS Features.LinearLighting
 #define LLON LLSETTINGS.enableLinearLighting
@@ -20,10 +22,37 @@ const static float PBRLightingScaleCompensation = PBRLightingScale * PBRLighting
 const static float PBRLightingScaleCompensation = 1.0f;
 #endif
 
+float3 LinearSRGBToWorking(float3 color)
+{
+#if defined(SKYRIM)
+    return LLON && LLSETTINGS.enableACEScg ? sRGBToAP1(color) : color;
+#else
+    return color;
+#endif
+}
+
+float3 WorkingToLinearSRGB(float3 color)
+{
+#if defined(SKYRIM)
+    return LLON && LLSETTINGS.enableACEScg ? AP1TosRGB(color) : color;
+#else
+    return color;
+#endif
+}
+
+float3 SRGBColorToLinear(float3 color)
+{
+#if defined(SKYRIM)
+    return LinearSRGBToWorking(TransferFunctions::SRGBToLinear(color));
+#else
+    return color;
+#endif
+}
+
 float3 PBRColorScale(float3 color)
 {
 #if defined (SKYRIM)   
-    return color * PBRLightingScale;
+    return LinearSRGBToWorking(color) * PBRLightingScale;
 #else
     return color;
 #endif   
@@ -37,7 +66,7 @@ float4 PBRColorScale(float4 color)
 float3 ColorToGamma(float3 color)
 {
 #if defined(SKYRIM)
-    return pow(abs(color), 1.0f / (LLON ? LLSETTINGS.colorGamma : 2.2f));
+    return TransferFunctions::LinearToGameGamma(WorkingToLinearSRGB(color));
 #else
     return color;
 #endif 
@@ -46,7 +75,7 @@ float3 ColorToGamma(float3 color)
 float3 ColorToLinear(float3 color)
 {
 #if defined(SKYRIM)    
-    return pow(abs(color), (LLON ? LLSETTINGS.colorGamma : 2.2f));
+    return LinearSRGBToWorking(TransferFunctions::GameGammaToLinear(color));
 #else
     return color;
 #endif    
@@ -55,7 +84,7 @@ float3 ColorToLinear(float3 color)
 float3 EffectToLinear(float3 color)
 {
 #if defined(SKYRIM)
-    return pow(abs(color), (LLON ? LLSETTINGS.effectGamma : 2.2f)) * (LLON ? LLSETTINGS.effectLightingMult : 1.0);
+    return ColorToLinear(color) * (LLON ? LLSETTINGS.effectLightingMult : 1.0f);
 #else
     return color;
 #endif 
@@ -64,7 +93,7 @@ float3 EffectToLinear(float3 color)
 float3 LightToLinear(float3 color)
 {
 #if defined(SKYRIM)
-    return pow(abs(color), (LLON ? LLSETTINGS.lightGamma : 2.2f));
+    return SRGBColorToLinear(color);
 #else
     return color;
 #endif 
@@ -73,8 +102,8 @@ float3 LightToLinear(float3 color)
 float3 PointLightToLinear(float3 color, bool isLinear)
 {
 #if defined(SKYRIM)    
-    float mult = LLON ? (isLinear ? 1.0f : LLSETTINGS.pointLightMult) : 1.0f;
-    float3 finalColor = isLinear ? color : LightToLinear(color);
+    float mult = LLON ? LLSETTINGS.pointLightMult : 1.0f;
+    float3 finalColor = isLinear ? LinearSRGBToWorking(color) : LightToLinear(color);
     return finalColor * mult;
 #else
     return color;
@@ -84,11 +113,9 @@ float3 PointLightToLinear(float3 color, bool isLinear)
 float3 DirLightToLinear(float3 color)
 {
 #if defined(SKYRIM)       
-    const bool isLinear = LLSETTINGS.isDirLightLinear;
-    
-    float mult = LLON ? (isLinear ? 1.0f : K_PI * LLSETTINGS.directionalLightMult * LLSETTINGS.dirLightMult) : K_PI;
-    float3 finalColor = isLinear ? color : LightToLinear(color * PBRLightingScaleRcp);
-    return finalColor * mult;
+    float4 light = LLSETTINGS.directionalLightColor;
+    float3 finalColor = LLON ? light.rgb : LightToLinear(light.rgb * PBRLightingScaleRcp);
+    return finalColor * light.a * (LLON ? LLSETTINGS.directionalLightMult : K_PI);
 #else
     return color * K_PI;
 #endif 
@@ -97,7 +124,7 @@ float3 DirLightToLinear(float3 color)
 float3 GlowToLinear(float3 color)
 {
 #if defined(SKYRIM)
-    return LLON ? pow(abs(color), LLSETTINGS.glowmapGamma) * LLSETTINGS.glowmapMult : color;
+    return ColorToLinear(color) * (LLON ? LLSETTINGS.glowmapMult : 1.0f);
 #else
     return color;
 #endif
@@ -124,13 +151,13 @@ float4 VanillaDiffuseColor(float4 color)
 
 float3 VanillaDiffuseColorGamma(float3 color)
 {
-    return ColorToGamma(color / VanillaDiffuseColorMult());
+    return ColorToGamma(color / max(VanillaDiffuseColorMult(), 1e-5f));
 }
 
 float3 LLGammaToTrueLinear(float3 color)
 {
 #if defined(SKYRIM)    
-    return LLON ? color : pow(abs(color), 2.2f);
+    return LLON ? color : TransferFunctions::GameGammaToLinear(color);
 #else
     return color;
 #endif    
@@ -139,7 +166,7 @@ float3 LLGammaToTrueLinear(float3 color)
 float3 LLTrueLinearToGamma(float3 color)
 {
 #if defined(SKYRIM)     
-    return LLON ? color : pow(abs(color), 1.0f / 2.2f);
+    return LLON ? color : TransferFunctions::LinearToGameGamma(color);
 #else
     return color;
 #endif    
@@ -148,7 +175,7 @@ float3 LLTrueLinearToGamma(float3 color)
 float3 EmitColorToLinear(float3 color)
 {
 #if defined(SKYRIM)      
-    return pow(abs(color), LLON ? LLSETTINGS.emitColorGamma : 2.2f);
+    return SRGBColorToLinear(color);
 #else
     return color;
 #endif  

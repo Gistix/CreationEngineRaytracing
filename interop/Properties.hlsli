@@ -31,6 +31,8 @@ namespace ShaderFlags
     static const uint kHDLODObjects = (1 << 23);
     static const uint kSnow = (1 << 24);
     static const uint kOwnEmit = (1 << 25);
+    static const uint kEffectLighting = (1 << 26);
+    static const uint kWeaponBlood = (1 << 27);
 }
 
 namespace AlphaFlags

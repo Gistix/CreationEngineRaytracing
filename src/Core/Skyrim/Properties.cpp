@@ -69,6 +69,11 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 			isWater = true;
 		}
 		else {
+			if (materialType == RE::BSShaderMaterial::Type::kEffect) {
+				auto* effect = static_cast<RE::BSEffectShaderProperty*>(shaderProperty);
+				const auto color = effect->unk88 ? *effect->unk88 : RE::NiColor{ 1.0f, 1.0f, 1.0f };
+				m_Data.EmissiveColor = float4(color.red, color.green, color.blue, 1.0f);
+			}
 			if (materialType == RE::BSShaderMaterial::Type::kLighting) {
 				auto lightingShaderProp = reinterpret_cast<RE::BSLightingShaderProperty*>(shaderProperty);
 
@@ -177,6 +182,8 @@ uint32_t Properties::MapShaderFlags(RE::BSShaderProperty* shaderProperty)
 	if (flags.any(EShaderPropertyFlag::kLODObjects)) result |= kLODObjects;
 	if (flags.any(EShaderPropertyFlag::kHDLODObjects)) result |= kHDLODObjects;
 	if (flags.any(EShaderPropertyFlag::kSnow)) result |= kSnow;
+	if (flags.any(EShaderPropertyFlag::kEffectLighting)) result |= kEffectLighting;
+	if (flags.any(EShaderPropertyFlag::kWeaponBlood)) result |= kWeaponBlood;
 
 	return result;
 }

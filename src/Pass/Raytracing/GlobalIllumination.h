@@ -37,6 +37,7 @@ namespace Pass::Raytracing
 		eastl::vector<ShaderDefine> m_Defines;
 
 	public:
+		void SceneTexturesChanged() override { m_BindingSetDirty.fill(true); }
 		GlobalIllumination(Renderer* renderer, SceneTLAS* sceneTLAS, Common::SHaRCGI* sharc);
 
 		virtual void Initialize() override;

@@ -122,37 +122,26 @@ static_assert(sizeof(ExtendedTranslucencySettings) % 16 == 0);
 
 struct LinearLightingSettings
 {
-	uint enableLinearLighting;
-	uint isDirLightLinear;
-	float dirLightMult;
-	float lightGamma;
-	float colorGamma;
-	float emitColorGamma;
-	float glowmapGamma;
-	float ambientGamma;
-	float fogGamma;
-	float fogAlphaGamma;
-	float effectGamma;
-	float effectAlphaGamma;
-	float skyGamma;
-	float waterGamma;
-	float vlGamma;
-	float vanillaDiffuseColorMult;
-	float directionalLightMult;
-	float pointLightMult;
-	float ambientMult;
-	float emitColorMult;
-	float glowmapMult;
-	float effectLightingMult;
-	float membraneEffectMult;
-	float bloodEffectMult;
-	float projectedEffectMult;
-	float deferredEffectMult;
-	float otherEffectMult;
-	uint pad0;
+    uint enableLinearLighting;
+    uint enableACEScg;
+    uint isMainOrLoadingMenu;
+    uint resetHistory;
+    float vanillaDiffuseColorMult;
+    float directionalLightMult;
+    float pointLightMult;
+    float ambientMult;
+    float glowmapMult;
+    float effectLightingMult;
+    float membraneEffectMult;
+    float bloodEffectMult;
+    float projectedEffectMult;
+    float deferredEffectMult;
+    float otherEffectMult;
+    float emitColorMult;
+    float4 directionalLightColor;
 };
 #ifdef __cplusplus
-static_assert(sizeof(LinearLightingSettings) % 16 == 0);
+static_assert(sizeof(LinearLightingSettings) == 80);
 #endif
 
 struct ExponentialHeightFogSettings

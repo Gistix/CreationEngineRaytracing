@@ -43,7 +43,6 @@ namespace Pass::NRD
 		m_RelaxSettings.hitDistanceReconstructionMode = nrd::HitDistanceReconstructionMode::AREA_3X3;
 
 		SettingsChanged(Scene::GetSingleton()->m_Settings);
-		Setup();
 	}
 
 	NRDIntegration::~NRDIntegration()
@@ -69,6 +68,11 @@ namespace Pass::NRD
 		m_MotionVectorsScratch = nullptr;
 		m_FallbackSrvTexture = nullptr;
 		m_FallbackUavTexture = nullptr;
+		m_Initialized = false;
+		m_ResourcesDirty = true;
+		m_SettingsDirty = true;
+		m_LightingRevision = UINT64_MAX;
+		m_CommonSettings = {};
 	}
 
 	void NRDIntegration::Setup()
@@ -102,6 +106,10 @@ namespace Pass::NRD
 
 	void NRDIntegration::Initialize()
 	{
+		Setup();
+		if (!m_NRD)
+			return;
+
 		CreateBindingLayouts();
 		CreatePipelines();
 		CreateResources();
@@ -380,6 +388,17 @@ namespace Pass::NRD
 			m_FallbackUavTexture = device->createTexture(desc);
 		}
 
+		uint64_t poolBytes = 0;
+		for (const auto& texture : m_PermanentPool)
+			if (texture)
+				poolBytes += device->getTextureMemoryRequirements(texture).size;
+		for (const auto& texture : m_TransientPool)
+			if (texture)
+				poolBytes += device->getTextureMemoryRequirements(texture).size;
+		if (m_MotionVectorsScratch)
+			poolBytes += device->getTextureMemoryRequirements(m_MotionVectorsScratch).size;
+		logger::info("[VRAM] NRD pools and motion vectors scratch: {:.1f} MiB", poolBytes / 1048576.0);
+
 		m_ResourcesDirty = false;
 	}
 
@@ -430,6 +449,9 @@ namespace Pass::NRD
 			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		else
 			m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur);
+
+		if (!m_Enabled)
+			DestroyInstance();
 
 		UpdateSettings(settings);
 	}
@@ -581,6 +603,9 @@ namespace Pass::NRD
 		auto dynamicResolution = renderer->GetScaledDynamicResolution();
 
 		m_CommonSettings.frameIndex = static_cast<uint32_t>(renderer->GetFrameIndex() % UINT32_MAX);
+		const auto revision = Scene::GetSingleton()->GetLightingRevision();
+		m_CommonSettings.accumulationMode = m_LightingRevision != revision ? nrd::AccumulationMode::CLEAR_AND_RESTART : nrd::AccumulationMode::CONTINUE;
+		m_LightingRevision = revision;
 
 		auto jitter = renderer->GetJitter();
 		m_CommonSettings.cameraJitter[0] = jitter.x;

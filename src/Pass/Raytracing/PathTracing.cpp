@@ -55,6 +55,7 @@ namespace Pass
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
+			m_BindingSets.fill(nullptr);
 			CreateBindingLayout();
 			CreatePipeline();
 			m_BindingSetDirty.fill(true);
@@ -83,6 +84,7 @@ namespace Pass
 			nvrhi::BindingLayoutItem::Texture_SRV(10),          // Projection noise
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(11), // Transforms
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(12), // Instance light list
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(13), // Precomputed Sobol Buffer
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
 			nvrhi::BindingLayoutItem::Texture_UAV(0),           // Color output
@@ -327,6 +329,7 @@ namespace Pass
 			nvrhi::BindingSetItem::Texture_SRV(10, scene->GetProjNoiseTexture()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(11, sceneGraph->GetTransformBuffer()),
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(12, sceneGraph->GetInstanceLightList()),
+			nvrhi::BindingSetItem::StructuredBuffer_SRV(13, scene->GetSobolBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture()),
@@ -448,6 +451,17 @@ namespace Pass
 
 	void PathTracing::Execute(nvrhi::ICommandList* commandList)
 	{
+		if (m_UseStablePlanes) {
+			auto* renderer = GetRenderer();
+			const auto resolution = renderer->GetDynamicResolution();
+			const auto& desc = renderer->GetStablePlanes()->header->getDesc();
+			if (desc.width != resolution.x || desc.height != resolution.y) {
+				m_BindingSets.fill(nullptr);
+				m_BindingSetDirty.fill(true);
+				renderer->InitStablePlanes();
+			}
+		}
+
 		CheckBindings();
 
 		if (m_UseStablePlanes)

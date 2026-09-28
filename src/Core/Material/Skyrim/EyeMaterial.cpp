@@ -34,7 +34,7 @@ void EyeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto eyeData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_EnvironmentTexture.Update(eyeMaterial->envTexture, renderer->GetBlackTextureDescriptor(), TextureType::CubeMap))
+	if (m_EnvironmentTexture.Update(eyeMaterial->envTexture, renderer->GetBlackCubemapDescriptor(), TextureType::CubeMap))
 		eyeData->EnvironmentTexture = m_EnvironmentTexture.texture.GetDescriptorIndex();
 
 	if (m_EnvironmentMaskTexture.Update(eyeMaterial->envMaskTexture, renderer->GetWhiteTextureDescriptor()))
