@@ -186,6 +186,7 @@ namespace Util
 		};
 
 		RE::BSGraphics::Texture* GetRendererTexture(RE::NiTexture* a_texture);
+		std::pair<uint32_t, uint32_t> GetTextureDimensions(RE::BSGraphics::Texture* a_texture);
 
 		RE::BSMultiBound* GetMultiBound(RE::BSMultiBoundNode* a_node);
 		RE::BSMultiBoundAABB* GetMultiBoundAABB(RE::BSMultiBound* a_multiBound);

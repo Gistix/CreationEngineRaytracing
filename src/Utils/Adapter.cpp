@@ -449,6 +449,15 @@ namespace Util
 #endif
 		}
 
+		std::pair<uint32_t, uint32_t> GetTextureDimensions(RE::BSGraphics::Texture* a_texture)
+		{
+#if defined(SKYRIM)
+			return { a_texture->width, a_texture->height };
+#elif defined(FALLOUT4)
+			return { a_texture->header.width, a_texture->header.height };
+#endif
+		}
+
 		RE::TESObjectREFR* AsReference(RE::TESForm* a_object)
 		{
 #if defined(SKYRIM)

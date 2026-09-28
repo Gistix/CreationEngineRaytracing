@@ -34,6 +34,8 @@ void DistantTreeMaterial::UpdateTextures([[ maybe_unused ]] RE::BSShaderMaterial
 	auto data = reinterpret_cast<Data*>(m_Data.get());
 
 	// TODO: Replace by a single MaterialTexture defined in Scene
-	if (m_TreeLODAtlasTexture.Update(Scene::GetSingleton()->g_TreeLODAtlasTex->get(), renderer->GetBlackTextureDescriptor()))
+	if (m_TreeLODAtlasTexture.Update(Scene::GetSingleton()->g_TreeLODAtlasTex->get(), renderer->GetBlackTextureDescriptor())) {
 		data->TreeLODAtlas = m_TreeLODAtlasTexture.texture.GetDescriptorIndex();
+		data->TexLODBias = m_TreeLODAtlasTexture.texture.GetLODBias();
+	}
 }

@@ -30,8 +30,11 @@ void LandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
     uint32_t landscapeTextureCount = std::min(mat->textureCount, 3u);
 
 	for (uint32_t i = 0; i < landscapeTextureCount; ++i) {
-		if (m_DiffuseTextures[i].Update(mat->landscapeDiffuseTexture[i].get(), renderer->GetGrayTextureDescriptor()))
+		if (m_DiffuseTextures[i].Update(mat->landscapeDiffuseTexture[i].get(), renderer->GetGrayTextureDescriptor())) {
 			(&data->DiffuseTexture1)[i] = m_DiffuseTextures[i].texture.GetDescriptorIndex();
+			if (i == 0)
+				data->TexLODBias = m_DiffuseTextures[0].texture.GetLODBias();
+		}
 
 		if (m_NormalTextures[i].Update(mat->landscapeNormalTexture[i].get(), renderer->GetNormalTextureDescriptor()))
 			(&data->NormalTexture1)[i] = m_NormalTextures[i].texture.GetDescriptorIndex();

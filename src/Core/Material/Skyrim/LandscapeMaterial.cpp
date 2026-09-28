@@ -29,8 +29,10 @@ void LandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto landData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_DiffuseTextures[0].Update(landMaterial->landscapeDiffuseTexture[0], renderer->GetGrayTextureDescriptor()))
+	if (m_DiffuseTextures[0].Update(landMaterial->landscapeDiffuseTexture[0], renderer->GetGrayTextureDescriptor())) {
 		landData->DiffuseTexture1 = m_DiffuseTextures[0].texture.GetDescriptorIndex();
+		landData->TexLODBias = m_DiffuseTextures[0].texture.GetLODBias();
+	}
 	if (m_DiffuseTextures[1].Update(landMaterial->landscapeDiffuseTexture[1], renderer->GetGrayTextureDescriptor()))
 		landData->DiffuseTexture2 = m_DiffuseTextures[1].texture.GetDescriptorIndex();
 	if (m_DiffuseTextures[2].Update(landMaterial->landscapeDiffuseTexture[2], renderer->GetGrayTextureDescriptor()))

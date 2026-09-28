@@ -45,8 +45,11 @@ void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
     RE::NiTexture* runtimeTextures[] = { water->normalMap01.get(), water->normalMap02.get(), water->normalMap03.get(), nullptr };
     
 	for (uint32_t i = 0; i < 4; ++i) {
-		if (textures[i]->Update(runtimeTextures[i], renderer->GetNormalTextureDescriptor()))
+		if (textures[i]->Update(runtimeTextures[i], renderer->GetNormalTextureDescriptor())) {
 			(&data->NormalsTexture1)[i] = textures[i]->texture.GetDescriptorIndex();
+			if (i == 0)
+				data->TexLODBias = textures[0]->texture.GetLODBias();
+		}
 	}
 }
 

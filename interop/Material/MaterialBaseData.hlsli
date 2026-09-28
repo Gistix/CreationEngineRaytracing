@@ -46,6 +46,7 @@ INTEROP_STRUCT(MaterialBaseData, 4)
     uint16_t Feature;
     half2 TexCoordOffset;
     half2 TexCoordScale;
+    float TexLODBias;
     
 #ifndef __cplusplus
     float2 TexCoord(float2 texCoord)

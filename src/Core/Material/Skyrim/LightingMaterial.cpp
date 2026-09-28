@@ -37,8 +37,10 @@ void LightingMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto lightingData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_DiffuseTexture.Update(lightingShaderMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor()))
+	if (m_DiffuseTexture.Update(lightingShaderMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor())) {
 		lightingData->DiffuseTexture = m_DiffuseTexture.texture.GetDescriptorIndex();
+		lightingData->TexLODBias = m_DiffuseTexture.texture.GetLODBias();
+	}
 
 	if (m_NormalTexture.Update(lightingShaderMaterial->normalTexture, renderer->GetNormalTextureDescriptor()))
 		lightingData->NormalTexture = m_NormalTexture.texture.GetDescriptorIndex();

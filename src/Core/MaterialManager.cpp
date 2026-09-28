@@ -297,11 +297,12 @@ Texture MaterialManager::GetTexture([[maybe_unused]] const RE::NiPointer<RE::NiS
 
 	auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
 
-	if (auto result = textureManager->GetDescriptor(niPointer->rendererTexture, textureType))
-		return Texture(result, defaultDescHandle.get());
+	if (auto result = textureManager->GetDescriptor(niPointer->rendererTexture, textureType)) {
+		auto [width, height] = Util::Adapter::GetTextureDimensions(niPointer->rendererTexture);
+		return Texture(result, defaultDescHandle.get(), width, height);
+	}
 
 	return Texture(defaultDescHandle, nullptr);
-
 }
 #endif
 
@@ -315,8 +316,10 @@ Texture MaterialManager::GetTexture(RE::NiTexture* a_texture, eastl::shared_ptr<
 		return Texture(defaultDescHandle, nullptr);
 
 	auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
-	if (auto result = textureManager->GetDescriptor(rendererTexture, textureType))
-		return Texture(result, defaultDescHandle.get());
+	if (auto result = textureManager->GetDescriptor(rendererTexture, textureType)) {
+		auto [width, height] = Util::Adapter::GetTextureDimensions(rendererTexture);
+		return Texture(result, defaultDescHandle.get(), width, height);
+	}
 
 	return Texture(defaultDescHandle, nullptr);
 }

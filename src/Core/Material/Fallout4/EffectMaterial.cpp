@@ -28,8 +28,10 @@ void EffectMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	auto* data = reinterpret_cast<Data*>(m_Data.get());
     auto* mat = static_cast<RE::BSEffectShaderMaterial*>(shaderMaterial);
 
-	if (m_SourceTexture.Update(mat->sourceTexture.get(), renderer->GetWhiteTextureDescriptor()))
+	if (m_SourceTexture.Update(mat->sourceTexture.get(), renderer->GetWhiteTextureDescriptor())) {
 		data->SourceTexture = m_SourceTexture.texture.GetDescriptorIndex();
+		data->TexLODBias = m_SourceTexture.texture.GetLODBias();
+	}
 
 	if (m_EffectTexture.Update(mat->greyscaleTexture.get(), renderer->GetWhiteTextureDescriptor()))
 		data->EffectTexture = m_EffectTexture.texture.GetDescriptorIndex();

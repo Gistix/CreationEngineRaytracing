@@ -53,8 +53,10 @@ void WaterMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	auto waterMaterial = reinterpret_cast<RE::BSWaterShaderMaterial*>(shaderMaterial);
 	auto waterData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_NormalTexture1.Update(waterMaterial->normalTexture1, defaultNormal))
+	if (m_NormalTexture1.Update(waterMaterial->normalTexture1, defaultNormal)) {
 		waterData->NormalsTexture1 = m_NormalTexture1.texture.GetDescriptorIndex();
+		waterData->TexLODBias = m_NormalTexture1.texture.GetLODBias();
+	}
 
 	if (m_NormalTexture2.Update(waterMaterial->normalTexture2, defaultNormal))
 		waterData->NormalsTexture2 = m_NormalTexture2.texture.GetDescriptorIndex();

@@ -66,8 +66,10 @@ void PBRLandscapeMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto landData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_DiffuseTexture.Update(landMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor()))
+	if (m_DiffuseTexture.Update(landMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor())) {
 		landData->DiffuseTexture = m_DiffuseTexture.texture.GetDescriptorIndex();
+		landData->TexLODBias = m_DiffuseTexture.texture.GetLODBias();
+	}
 
 	if (m_NormalTexture.Update(landMaterial->normalTexture, renderer->GetNormalTextureDescriptor()))
 		landData->NormalTexture = m_NormalTexture.texture.GetDescriptorIndex();

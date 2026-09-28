@@ -38,6 +38,7 @@ void MaterialBase::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 
 	data->TexCoordOffset = Util::Math::Float2(shaderMaterial->texCoordOffset[0]);
 	data->TexCoordScale = Util::Math::Float2(shaderMaterial->texCoordScale[0]);
+	data->TexLODBias = 0.0f;
 }
 
 void MaterialBase::UpdateTextures([[ maybe_unused ]] RE::BSShaderMaterial* shaderMaterial)

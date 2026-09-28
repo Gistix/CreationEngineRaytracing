@@ -68,8 +68,10 @@ void PBRMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto pbrData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_DiffuseTexture.Update(pbrMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor()))
+	if (m_DiffuseTexture.Update(pbrMaterial->diffuseTexture, renderer->GetGrayTextureDescriptor())) {
 		pbrData->DiffuseTexture = m_DiffuseTexture.texture.GetDescriptorIndex();
+		pbrData->TexLODBias = m_DiffuseTexture.texture.GetLODBias();
+	}
 
 	if (m_NormalTexture.Update(pbrMaterial->normalTexture, renderer->GetNormalTextureDescriptor()))
 		pbrData->NormalTexture = m_NormalTexture.texture.GetDescriptorIndex();

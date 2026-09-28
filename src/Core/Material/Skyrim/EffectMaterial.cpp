@@ -40,8 +40,10 @@ void EffectMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	auto effectData = reinterpret_cast<Data*>(m_Data.get());
 
-	if (m_SourceTexture.Update(effectMaterial->sourceTexture, renderer->GetBlackTextureDescriptor()))
+	if (m_SourceTexture.Update(effectMaterial->sourceTexture, renderer->GetBlackTextureDescriptor())) {
 		effectData->SourceTexture = m_SourceTexture.texture.GetDescriptorIndex();
+		effectData->TexLODBias = m_SourceTexture.texture.GetLODBias();
+	}
 
 	if (m_EffectTexture.Update(effectMaterial->greyscaleTexture, renderer->GetBlackTextureDescriptor()))
 		effectData->EffectTexture = m_EffectTexture.texture.GetDescriptorIndex();
