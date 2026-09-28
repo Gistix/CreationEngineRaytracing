@@ -363,7 +363,6 @@ void GenerateScatterBSDFSamples(
 {
     preGeneratedSamples = GenerateScatterBSDFSamples4D(pixelCoord, sampleIndex, vertexIndex, diffuseBounceCount);
 
-#if HAIR_MODE == HAIR_MODE_FARFIELD_BCSDF
 #   if ENABLE_LOW_DISCREPANCY_SAMPLER_FOR_BSDF
     if (diffuseBounceCount < DISABLE_LOW_DISCREPANCY_SAMPLING_AFTER_DIFFUSE_BOUNCE_COUNT)
     {
@@ -387,9 +386,6 @@ void GenerateScatterBSDFSamples(
     uint e1 = Hash32(h);
     uint e2 = Hash32(e1);
     extraSamples = float2(Hash32ToFloat(e1), Hash32ToFloat(e2));
-#else
-    extraSamples = float2(0.0f, 0.0f);
-#endif
 }
 
 #endif // SAMPLE_GENERATORS_HLSLI
