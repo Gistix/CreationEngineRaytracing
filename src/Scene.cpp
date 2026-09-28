@@ -317,7 +317,7 @@ void Scene::Execute()
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
 
-		renderer->RenderTargetManager().CopySharedTextures(commandList, currentSlot);
+		renderer->RenderTargetManager().CopySharedTextures(commandList);
 
 		commandList->endTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
 
@@ -333,7 +333,7 @@ void Scene::Execute()
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
 
-		renderer->RenderTargetManager().CopySharedTextures(commandList, currentSlot);
+		renderer->RenderTargetManager().CopySharedTextures(commandList);
 	}
 
 	renderer->EndExecution();

@@ -106,10 +106,9 @@ void GetRRInput(void*& diffuseAlbedo, void*& specularAlbedo, void*& specularHitD
 
 	if (renderer->IsVulkan()) {
 		// DXVK interop path: hand back the D3D11 shared textures the host wraps into VkImages.
-		const uint32_t slot = renderer->GetCurrentSlot();
-		diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo, slot).shared;
-		specularAlbedo = textureManager.GetSharedTexture(RenderTarget::RRSpecularAlbedo, slot).shared;
-		specularHitDistance = textureManager.GetSharedTexture(RenderTarget::RRSpecularHitDist, slot).shared;
+		diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::DiffuseAlbedo).shared;
+		specularAlbedo = textureManager.GetSharedTexture(RenderTarget::RRSpecularAlbedo).shared;
+		specularHitDistance = textureManager.GetSharedTexture(RenderTarget::RRSpecularHitDist).shared;
 	} else {
 		diffuseAlbedo = textureManager.GetTexture(RenderTarget::DiffuseAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
 		specularAlbedo = textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
@@ -123,15 +122,13 @@ void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao)
 	renderer->SetRenderTargets(albedo, normalRoughness, gnmao);
 }
 
-void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main)
+void GetSharedTextures(SharedTexture& depth, SharedTexture& motionVector, SharedTexture& main)
 {
 	auto& textureManager = Renderer::GetSingleton()->RenderTargetManager();
 
-	for (uint32_t i = 0; i < Constants::MAX_FRAMES_IN_FLIGHT; i++) {
-		depth[i] = textureManager.GetSharedTexture(RenderTarget::ClipDepth, i);
-		motionVector[i] = textureManager.GetSharedTexture(RenderTarget::MotionVectors3D, i);
-		main[i] = textureManager.GetSharedTexture(RenderTarget::Main, i);
-	}
+	depth = textureManager.GetSharedTexture(RenderTarget::ClipDepth);
+	motionVector = textureManager.GetSharedTexture(RenderTarget::MotionVectors3D);
+	main = textureManager.GetSharedTexture(RenderTarget::Main);
 }
 
 void UpdateJitter(float2 jitter)

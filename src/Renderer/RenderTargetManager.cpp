@@ -3,8 +3,8 @@
 #include "Scene.h"
 #include "Utils/DXVKInterop.h"
 
-nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot) {
-	auto& renderTarget = m_Textures[slot][static_cast<size_t>(texture)];
+nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
+	auto& renderTarget = m_Textures[static_cast<size_t>(texture)];
 
 	if (!renderTarget.handle) {
 		auto* renderer = Renderer::GetSingleton();
@@ -62,11 +62,11 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 			break;
 		}
 
-		std::string debugName = std::format("{}_{}", magic_enum::enum_name(texture), slot);
+		std::string debugName = std::string(magic_enum::enum_name(texture));
 		desc.debugName = debugName.c_str();
 
-		logger::debug("RenderTargetManager::GetTexture - Slot: {}, Dimensions: [{}, {}], Format: {} - {}", 
-			slot, desc.width, desc.height,
+		logger::debug("RenderTargetManager::GetTexture - Dimensions: [{}, {}], Format: {} - {}", 
+			desc.width, desc.height,
 			magic_enum::enum_name(desc.format), 
 			desc.debugName);
 
@@ -103,20 +103,16 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture, uint32_t slot)
 	return renderTarget.handle;
 }
 
-nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
-	return GetTexture(texture, Renderer::GetSingleton()->GetCurrentSlot());
-}
-
-SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t slot) {
+SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
 	SharedTexture sharedTexture;
 
-	auto* internalTexture = GetTexture(texture, slot);
+	auto* internalTexture = GetTexture(texture);
 	if (!internalTexture) {
 		logger::info("RenderTargetManager::GetSharedTexture - Invalid texture for {}", magic_enum::enum_name(texture));
 		return sharedTexture;
 	}
 
-	auto& renderTarget = m_Textures[slot][static_cast<size_t>(texture)];
+	auto& renderTarget = m_Textures[static_cast<size_t>(texture)];
 
 	if (!Renderer::GetSingleton()->IsVulkan()) {
 		if (!renderTarget.d3d11Texture) {
@@ -176,7 +172,7 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 				return sharedTexture;
 			}
 
-			std::string sharedDebugName = std::format("{}_{}_D3D11Shared", magic_enum::enum_name(texture), slot);
+			std::string sharedDebugName = std::format("{}_D3D11Shared", magic_enum::enum_name(texture));
 			renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str());
 		}
 
@@ -189,7 +185,7 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture, uint32_t sl
 	return sharedTexture;
 }
 
-void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, uint32_t slot) {
+void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList) {
 	if (Renderer::GetSingleton()->IsVulkan())
 		return;
 
@@ -202,7 +198,7 @@ void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, u
 		return;
 
 	auto copyTexture = [&](Texture texture){
-		auto& rt = m_Textures[slot][static_cast<size_t>(texture)];
+		auto& rt = m_Textures[static_cast<size_t>(texture)];
 
 		if (rt.sharedD3D12Handle && rt.handle)
 			commandList->copyTexture(rt.sharedD3D12Handle, nvrhi::TextureSlice(), rt.handle, nvrhi::TextureSlice());
@@ -218,9 +214,9 @@ void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList, u
 
 	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR) {
 		// Ensure they exist before copy
-		GetSharedTexture(Texture::DiffuseAlbedo, slot);
-		GetSharedTexture(Texture::RRSpecularAlbedo, slot);
-		GetSharedTexture(Texture::RRSpecularHitDist, slot);
+		GetSharedTexture(Texture::DiffuseAlbedo);
+		GetSharedTexture(Texture::RRSpecularAlbedo);
+		GetSharedTexture(Texture::RRSpecularHitDist);
 
 		copyTexture(Texture::DiffuseAlbedo);
 		copyTexture(Texture::RRSpecularAlbedo);

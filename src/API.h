@@ -23,7 +23,7 @@ extern "C" {
 	CERT_API void UpdateSettings(Settings);
 	CERT_API void GetRRInput(void*& diffuseAlbedo, void*& specularAlbedo, void*& specularHitDistance);
 	CERT_API void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao);
-	CERT_API void GetSharedTextures(SharedTexture* depth, SharedTexture* motionVector, SharedTexture* main);
+	CERT_API void GetSharedTextures(SharedTexture& depth, SharedTexture& motionVector, SharedTexture& main);
 	CERT_API void UpdateJitter(float2 jitter);
 	CERT_API uint32_t GetAccumulatedFrameCount();
 	CERT_API uint64_t GetFakeDoubledVRAMUsage();
