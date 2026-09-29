@@ -47,11 +47,13 @@ void MaterialAlpha(Properties props, float alpha, float materialAlpha, float ver
             surface.SpecTrans = 1.0f;
             surface.F0 = 0.04f;
 
+#if defined(SUBSURFACE_SCATTERING)
             surface.SubsurfaceData.HasSubsurface = 0;
             surface.SubsurfaceData.TransmissionColor = 0.0f;
             surface.SubsurfaceData.ScatteringColor = 0.0f;
             surface.SubsurfaceData.Scale = 0.0f;
             surface.SubsurfaceData.Anisotropy = 0.0f;
+#endif
 
             surface.CoatColor = 1.0f;
             surface.CoatStrength = 0.0f;

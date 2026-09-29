@@ -39,14 +39,15 @@ struct SurfaceMaker
         surface.Position = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
+#if defined(SUBSURFACE_SCATTERING)
         surface.SubsurfaceData = (Subsurface)0;
+#endif
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
-        Mesh mesh = GetMesh(payload, instance);
-
-        uint meshSlot = GetMeshSlot(payload);
+        uint meshSlot;
+        Mesh mesh = GetMesh(payload, instance, meshSlot);
         Properties props = GetMeshProperties(meshSlot);
         Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
 
@@ -273,7 +274,9 @@ struct SurfaceMaker
         surface.Position = position;
         surface.CameraRelativePosition = position - Camera.Position;
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
+#if defined(SUBSURFACE_SCATTERING)
         surface.SubsurfaceData = (Subsurface)0;
+#endif
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
@@ -377,7 +380,9 @@ struct SurfaceMaker
 
         surface.Primary = false;        
          
+#if defined(SUBSURFACE_SCATTERING)
         surface.SubsurfaceData = (Subsurface)0;
+#endif
         surface.DiffTrans = 0.0f;
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;

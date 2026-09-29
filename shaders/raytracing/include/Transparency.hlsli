@@ -30,7 +30,8 @@
 bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed)
 {
     Instance instance;
-    Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
+    uint meshSlot;
+    Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance, meshSlot);
 
     MaterialBaseData baseMaterial = Materials[0].Load<MaterialBaseData>(mesh.GetMaterialOffset());
     
@@ -39,27 +40,31 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     }
     else
     {
-        uint meshSlot = GetMeshSlot(instance, geometryIndex);
         Properties props = GetMeshProperties(meshSlot);
-    
-        Vertex v0, v1, v2;
-        GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
-    
+
         const float3 uvw = GetBary(barycentrics);
 
         float alpha = props.Alpha * instance.Alpha;
 
+        half2 texcoord0 = (half2)0, texcoord1 = (half2)0, texcoord2 = (half2)0;
+        half alpha0 = (half)0, alpha1 = (half)0, alpha2 = (half)0;
+
         [branch]
         if (alpha > 0.0f)
         {
-            if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
-                alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
+            // Slim fetch: only Texcoord0 (and rarely the vertex color alpha) is
+            // needed here; loading full Vertex structs costs ~5x the traffic.
+            const bool wantColorAlpha = (props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim);
+            GetTriangleTexcoords(mesh, primitiveIndex, wantColorAlpha, texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
+
+            if (wantColorAlpha)
+                alpha *= Interpolate(alpha0, alpha1, alpha2, uvw);
         }
         
         [branch]
         if (alpha > 0.0f)
         {
-            const float2 texCoord = baseMaterial.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
+            const float2 texCoord = baseMaterial.TexCoord(Interpolate(texcoord0, texcoord1, texcoord2, uvw));
             
             // Only Fallout 4 has alpha blended effect support
 #if defined(FALLOUT4)
@@ -106,6 +111,31 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
     return true;
 }
 
+// Distance-based mip selection for any-hit alpha lookups on shadow rays. Shadow
+// rays regularly traverse dense alpha-tested geometry (foliage, distant trees)
+// far from the shading point; sampling alpha at mip 0 there pays full texel
+// density and thrashes the texture cache for a heavily denoised, stochastic
+// signal. Close-range alpha (crisp silhouettes where it matters) is untouched
+// because the mip only grows beyond ANYHIT_SHADOW_ALPHA_MIP_REF_DIST.
+#ifndef ANYHIT_SHADOW_ALPHA_MIP
+#   define ANYHIT_SHADOW_ALPHA_MIP 1
+#endif
+#ifndef ANYHIT_SHADOW_ALPHA_MIP_REF_DIST
+#   define ANYHIT_SHADOW_ALPHA_MIP_REF_DIST 4.0
+#endif
+#ifndef ANYHIT_SHADOW_ALPHA_MIP_MAX
+#   define ANYHIT_SHADOW_ALPHA_MIP_MAX 3.0
+#endif
+
+float ComputeShadowAlphaMip(float rayT)
+{
+#if ANYHIT_SHADOW_ALPHA_MIP
+    return clamp(log2(max(rayT / ANYHIT_SHADOW_ALPHA_MIP_REF_DIST, 1.0)), 0.0, ANYHIT_SHADOW_ALPHA_MIP_MAX);
+#else
+    return 0.0;
+#endif
+}
+
 float3 ComputeShadowNormal(
     Instance instance, Mesh mesh, Transform meshTransform,
     Vertex v0, Vertex v1, Vertex v2, float3 uvw,
@@ -140,21 +170,34 @@ void ApplyFresnelTransmittance(
 bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed, in float3 direction, float hitDistance, inout float3 transmitanceInOut)
 {
     Instance instance;
-    Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance);
-    uint meshSlot = GetMeshSlot(instance, geometryIndex);
+    uint meshSlot;
+    Mesh mesh = GetMesh(instanceIndex, geometryIndex, instance, meshSlot);
     Properties props = GetMeshProperties(meshSlot);
-    Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
-    
-    Vertex v0, v1, v2;
-    GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
-    
-    const float3 uvw = GetBary(barycentrics);
 
     MaterialBaseData baseMaterial = Materials[0].Load<MaterialBaseData>(mesh.GetMaterialOffset());
-    const float2 texCoord = baseMaterial.TexCoord(Interpolate(v0.Texcoord0, v1.Texcoord0, v2.Texcoord0, uvw));
+
+    const float3 uvw = GetBary(barycentrics);
+
+    const bool wantColorAlpha = (props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim);
+
+    // Slim fetch: only Texcoord0 (and rarely the vertex color alpha) is needed
+    // for the alpha/transmittance lookups. The full vertex data is loaded lazily
+    // inside the water/glass/window branches that need normals; the common
+    // alpha-tested path (foliage) never touches it.
+    half2 texcoord0, texcoord1, texcoord2;
+    half alpha0, alpha1, alpha2;
+    GetTriangleTexcoords(mesh, primitiveIndex, wantColorAlpha, texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
+    const float2 texCoord = baseMaterial.TexCoord(Interpolate(texcoord0, texcoord1, texcoord2, uvw));
+
+    const float alphaMip = ComputeShadowAlphaMip(hitDistance);
 
     if (baseMaterial.Type == Type::Water)
     {
+        Vertex v0, v1, v2;
+        GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
+
+        Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
+
         float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
 
         float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));        
@@ -176,26 +219,26 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         if (baseMaterial.Type == Type::Effect)
         {
             EffectMaterialData material = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
-            alpha = Textures[NonUniformResourceIndex(material.SourceTexture)].SampleLevel(DefaultSampler, texCoord, 0).r;
+            alpha = Textures[NonUniformResourceIndex(material.SourceTexture)].SampleLevel(DefaultSampler, texCoord, alphaMip).r;
         }
         else
 #elif defined(SKYRIM)
         if (baseMaterial.Type == Type::DistantTree)
         {
             DistantTreeMaterialData material = Materials[0].Load<DistantTreeMaterialData>(mesh.GetMaterialOffset());
-            alpha = Textures[NonUniformResourceIndex(material.TreeLODAtlas)].SampleLevel(DefaultSampler, texCoord, 0).a;
+            alpha = Textures[NonUniformResourceIndex(material.TreeLODAtlas)].SampleLevel(DefaultSampler, texCoord, alphaMip).a;
         } 
         else
 #endif
         {
             LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-            alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
+            alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, alphaMip).a;
         }
     
         alpha *= props.Alpha * instance.Alpha;
-    
-        if ((props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim))
-            alpha *= Interpolate(v0.Color.unpack().a, v1.Color.unpack().a, v2.Color.unpack().a, uvw);
+        
+        if (wantColorAlpha)
+            alpha *= Interpolate(alpha0, alpha1, alpha2, uvw);
         
         [branch]
         if (props.AlphaFlags & AlphaFlags::Test)
@@ -224,6 +267,12 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
         if (!isTransmissive && !isWindow)
             return true;
+
+        // Only the glass/window paths need full vertex data (normals) and the
+        // transform; the cutout path above never reaches this.
+        Vertex v0, v1, v2;
+        GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
+        Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
 
         if (isTransmissive)
         {

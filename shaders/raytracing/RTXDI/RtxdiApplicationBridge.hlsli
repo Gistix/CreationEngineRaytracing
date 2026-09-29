@@ -96,7 +96,9 @@ Surface PSD_UnpackToSurface(PackedSurfaceData d)
     s.AO                 = 1.0;
     s.TransmissionColor  = 0;
     s.VolumeAbsorption   = 0;
+#if defined(SUBSURFACE_SCATTERING)
     s.SubsurfaceData     = (Subsurface)0;
+#endif
     s.DiffTrans          = 0;
     s.SpecTrans          = 0;
     s.IsThinSurface      = false;

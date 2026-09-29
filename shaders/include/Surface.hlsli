@@ -40,7 +40,9 @@ struct Surface
     float IOR;
     float3 TransmissionColor;
     float3 VolumeAbsorption;
+#if defined(SUBSURFACE_SCATTERING)
     Subsurface SubsurfaceData;
+#endif
     float DiffTrans;
     float SpecTrans;
     bool IsThinSurface;

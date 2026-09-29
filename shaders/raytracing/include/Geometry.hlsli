@@ -115,6 +115,26 @@ Mesh GetMesh(in Payload payload, out Instance instance)
     return Meshes[NonUniformResourceIndex(GetMeshSlotFromRemap(instance, payload.GetGeometryIndex()))];
 }
 
+Mesh GetMesh(in Instance instance, in uint geometryIndex, out uint meshSlot)
+{
+    const uint slot = GetMeshSlotFromRemap(instance, geometryIndex);
+    Mesh mesh = Meshes[NonUniformResourceIndex(slot)];
+    meshSlot = mesh.MeshID;
+    return mesh;
+}
+
+Mesh GetMesh(in uint instanceIndex, in uint geometryIndex, out Instance instance, out uint meshSlot)
+{
+    instance = GetInstance(instanceIndex);
+    return GetMesh(instance, geometryIndex, meshSlot);
+}
+
+Mesh GetMesh(in Payload payload, out Instance instance, out uint meshSlot)
+{
+    instance = GetInstance(payload.GetInstanceIndex());
+    return GetMesh(instance, payload.GetGeometryIndex(), meshSlot);
+}
+
 Properties GetMeshProperties(in Payload payload)
 {
     Instance instance = GetInstance(payload.GetInstanceIndex());
@@ -345,5 +365,60 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
     }
 }
 #endif
+
+half2 GetVertexTexcoord0(in ByteAddressBuffer vertices, in VertexDesc vertexDesc, uint vertexByteOffset, uint index)
+{
+    if (vertexDesc.HasFlag(VertexFlags::UV))
+    {
+        // Cast to 32-bit before multiplying: GetVertexSize() and index are uint16_t,
+        // a 16-bit multiply would overflow and corrupt high-index vertices.
+        const uint vertexOffset = vertexByteOffset + (uint)vertexDesc.GetVertexSize() * index;
+        const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Texcoord0);
+        const uint packed = vertices.Load(offset);
+        return half2(f16tof32(packed & 0xFFFF), f16tof32(packed >> 16));
+    }
+
+    return (half2)0;
+}
+
+half GetVertexColorAlpha(in ByteAddressBuffer vertices, in VertexDesc vertexDesc, uint vertexByteOffset, uint index)
+{
+    if (vertexDesc.HasFlag(VertexFlags::Colors))
+    {
+        const uint vertexOffset = vertexByteOffset + (uint)vertexDesc.GetVertexSize() * index;
+        const uint offset = vertexOffset + vertexDesc.GetAttributeOffset(VertexAttribute::Color);
+        const uint packed = vertices.Load(offset);
+        return half(((packed >> 24) & 0xFF) * BYTE_NORM_RCP);
+    }
+
+    return (half)0;
+}
+
+void GetTriangleTexcoords(
+    in Mesh mesh, in uint primitiveIndex, in bool wantColorAlpha,
+    out half2 texcoord0, out half2 texcoord1, out half2 texcoord2,
+    out half alpha0, out half alpha1, out half alpha2)
+{
+    const uint safePrimitiveIndex = min(primitiveIndex, (uint)max(0, (int)mesh.NumTriangles - 1));
+    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
+
+    const ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
+    texcoord0 = GetVertexTexcoord0(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.x);
+    texcoord1 = GetVertexTexcoord0(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.y);
+    texcoord2 = GetVertexTexcoord0(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.z);
+
+    if (wantColorAlpha)
+    {
+        alpha0 = GetVertexColorAlpha(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.x);
+        alpha1 = GetVertexColorAlpha(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.y);
+        alpha2 = GetVertexColorAlpha(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.z);
+    }
+    else
+    {
+        alpha0 = (half)0;
+        alpha1 = (half)0;
+        alpha2 = (half)0;
+    }
+}
 
 #endif // GEOMETRY_HLSL

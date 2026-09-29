@@ -202,6 +202,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
 
             if (!(props.ShaderFlags & ShaderFlags::kTwoSided))
             {
+#if defined(SUBSURFACE_SCATTERING)
                 surface.SubsurfaceData.ScatteringColor = LinearSRGBToWorking(subsurfaceColor.rgb) * LinearSRGBToWorking(pbr.FeatureColor.rgb);
                 surface.SubsurfaceData.TransmissionColor = surface.Albedo;
 
@@ -209,6 +210,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                 surface.SubsurfaceData.Anisotropy = 0.0f;
 
                 surface.SubsurfaceData.HasSubsurface = any(surface.SubsurfaceData.ScatteringColor) > 0.0f ? 1 : 0;
+#endif
             }
         }
 
@@ -466,6 +468,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         {
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
+#if defined(SUBSURFACE_SCATTERING)
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
 
@@ -473,6 +476,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.SubsurfaceData.ScatteringColor = LinearSRGBToWorking(float3(4.820f, 1.690f, 1.090f));
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 1.f;
+#endif
 
             if (skinEnabled)
             {
@@ -510,6 +514,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.Roughness = 0.2f;
             surface.F0 = 0.02776f;
             surface.Metallic = 0.0f;
+#if defined(SUBSURFACE_SCATTERING)
             surface.SubsurfaceData.HasSubsurface = 1;
             surface.SubsurfaceData.Anisotropy = -0.5f;
             
@@ -517,6 +522,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.SubsurfaceData.ScatteringColor = float3(0.482f, 0.169f, 0.109f);
             surface.SubsurfaceData.TransmissionColor = surface.Albedo;
             surface.SubsurfaceData.Scale = 10.f;
+#endif
 
             surface.CoatStrength = 1.f;
             surface.CoatRoughness = 0.0f;
@@ -529,6 +535,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             
             if (!(props.ShaderFlags & ShaderFlags::kTwoSided) && (props.ShaderFlags & ShaderFlags::kSoftLighting))
             {
+#if defined(SUBSURFACE_SCATTERING)
                 surface.SubsurfaceData.HasSubsurface = 1;
                 surface.SubsurfaceData.Anisotropy = -0.5f;
 
@@ -536,6 +543,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
                 surface.SubsurfaceData.ScatteringColor = scatterTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).rgb * K_PI;
                 surface.SubsurfaceData.TransmissionColor = surface.Albedo;
                 surface.SubsurfaceData.Scale = 1.f;
+#endif
             }
         }
 

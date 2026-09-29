@@ -47,6 +47,11 @@
 float3 GetUnderwaterAbsorption()
 {
 #if defined(SKYRIM)
+    // Skip the pow/log evaluation entirely on dry land; consumers treat 0 as
+    // "no absorption" and additionally gate on Camera.IsUnderwater.
+    if (Camera.IsUnderwater == 0)
+        return float3(0.0f, 0.0f, 0.0f);
+
     float3 waterColor = saturate(SRGBColorToLinear(Camera.UnderwaterColor));
     return -log(max(waterColor, 1e-4f)) / 600.0f * Raytracing.WaterAbsorptionScale;
 #else

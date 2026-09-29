@@ -315,6 +315,22 @@ float2 GenerateScatterBSDFSamples2D(
     return float2(Hash32ToFloat(s1), Hash32ToFloat(s2));
 }
 
+float4 GenerateScatterBSDFSamples4DFromBase(uint seed, uint shuffledIndex)
+{
+    uint x = reversebits(SampleGeneratorOwenHash(shuffledIndex, Hash32Combine(seed, 1u)));
+
+    uint y = SampleGeneratorSobolConst<1u>(shuffledIndex);
+    y = SampleGeneratorOwenScramble(y, Hash32Combine(seed, 2u));
+
+    uint z = SampleGeneratorSobolConst<2u>(shuffledIndex);
+    z = SampleGeneratorOwenScramble(z, Hash32Combine(seed, 3u));
+
+    uint w = SampleGeneratorSobolConst<3u>(shuffledIndex);
+    w = SampleGeneratorOwenScramble(w, Hash32Combine(seed, 4u));
+
+    return float4(Hash32ToFloat(x), Hash32ToFloat(y), Hash32ToFloat(z), Hash32ToFloat(w));
+}
+
 float4 GenerateScatterBSDFSamples4D(
     uint2 pixelCoord,
     uint sampleIndex,
@@ -330,18 +346,7 @@ float4 GenerateScatterBSDFSamples4D(
         uint shuffleSeed = Hash32Combine(seed, 0u);
         uint shuffledIndex = SampleGeneratorOwenScramble(base.sampleIndex, shuffleSeed);
 
-        uint x = reversebits(SampleGeneratorOwenHash(shuffledIndex, Hash32Combine(seed, 1u)));
-
-        uint y = SampleGeneratorSobolConst<1u>(shuffledIndex);
-        y = SampleGeneratorOwenScramble(y, Hash32Combine(seed, 2u));
-
-        uint z = SampleGeneratorSobolConst<2u>(shuffledIndex);
-        z = SampleGeneratorOwenScramble(z, Hash32Combine(seed, 3u));
-
-        uint w = SampleGeneratorSobolConst<3u>(shuffledIndex);
-        w = SampleGeneratorOwenScramble(w, Hash32Combine(seed, 4u));
-
-        return float4(Hash32ToFloat(x), Hash32ToFloat(y), Hash32ToFloat(z), Hash32ToFloat(w));
+        return GenerateScatterBSDFSamples4DFromBase(seed, shuffledIndex);
     }
 #endif
 
@@ -361,15 +366,16 @@ void GenerateScatterBSDFSamples(
     out float4 preGeneratedSamples,
     out float2 extraSamples)
 {
-    preGeneratedSamples = GenerateScatterBSDFSamples4D(pixelCoord, sampleIndex, vertexIndex, diffuseBounceCount);
+    SampleGeneratorVertexBase base = SampleGeneratorVertexBase::make(pixelCoord, vertexIndex, sampleIndex);
 
 #   if ENABLE_LOW_DISCREPANCY_SAMPLER_FOR_BSDF
     if (diffuseBounceCount < DISABLE_LOW_DISCREPANCY_SAMPLING_AFTER_DIFFUSE_BOUNCE_COUNT)
     {
-        SampleGeneratorVertexBase base = SampleGeneratorVertexBase::make(pixelCoord, vertexIndex, sampleIndex);
         uint seed = Hash32Combine(base.baseHash, SAMPLE_GENERATOR_EFFECT_SCATTER_BSDF);
         uint shuffleSeed = Hash32Combine(seed, 0u);
         uint shuffledIndex = SampleGeneratorOwenScramble(base.sampleIndex, shuffleSeed);
+
+        preGeneratedSamples = GenerateScatterBSDFSamples4DFromBase(seed, shuffledIndex);
 
         uint ex = SampleGeneratorSobolConst<4u>(shuffledIndex);
         ex = SampleGeneratorOwenScramble(ex, Hash32Combine(seed, 5u));
@@ -381,9 +387,16 @@ void GenerateScatterBSDFSamples(
         return;
     }
 #   endif
-    SampleGeneratorVertexBase base = SampleGeneratorVertexBase::make(pixelCoord, vertexIndex, sampleIndex);
-    uint h = Hash32Combine(base.baseHash, SAMPLE_GENERATOR_EFFECT_SCATTER_BSDF + 10u);
-    uint e1 = Hash32(h);
+
+    uint h = Hash32Combine(base.baseHash, SAMPLE_GENERATOR_EFFECT_SCATTER_BSDF);
+    uint s1 = Hash32(h);
+    uint s2 = Hash32(s1);
+    uint s3 = Hash32(s2);
+    uint s4 = Hash32(s3);
+    preGeneratedSamples = float4(Hash32ToFloat(s1), Hash32ToFloat(s2), Hash32ToFloat(s3), Hash32ToFloat(s4));
+
+    uint e0 = Hash32Combine(base.baseHash, SAMPLE_GENERATOR_EFFECT_SCATTER_BSDF + 10u);
+    uint e1 = Hash32(e0);
     uint e2 = Hash32(e1);
     extraSamples = float2(Hash32ToFloat(e1), Hash32ToFloat(e2));
 }
