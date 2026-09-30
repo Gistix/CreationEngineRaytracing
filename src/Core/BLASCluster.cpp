@@ -238,7 +238,7 @@ uint32_t BLASCluster::Update()
 		else if (m_Flags.all(Flags::Updatable) || m_Flags.all(Flags::MergedInstance)) {
 			std::vector<nvrhi::BufferHandle> bufferRefs;
 			const size_t refCount = m_Flags.all(Flags::MergedInstance) ? 1 : m_GeometryDescs.size();
-			bufferRefs.reserve(refCount * 3);
+			bufferRefs.reserve(refCount * 4);
 			for (size_t i = 0; i < refCount; ++i) {
 				const auto& d = m_GeometryDescs[i];
 				if (d.geometryType == nvrhi::rt::GeometryType::Triangles) {
@@ -247,6 +247,9 @@ uint32_t BLASCluster::Update()
 
 					if (d.geometryData.triangles.indexBuffer)
 						bufferRefs.push_back(d.geometryData.triangles.indexBuffer);
+
+					if (d.geometryData.triangles.ommIndexBuffer)
+						bufferRefs.push_back(d.geometryData.triangles.ommIndexBuffer);
 
 					if (d.transformBuffer)
 						bufferRefs.push_back(d.transformBuffer);
@@ -296,6 +299,8 @@ uint32_t BLASCluster::Update()
 						bufferRefs.push_back(geomTris.vertexBuffer);
 					if (geomTris.indexBuffer)
 						bufferRefs.push_back(geomTris.indexBuffer);
+					if (geomTris.ommIndexBuffer)
+						bufferRefs.push_back(geomTris.ommIndexBuffer);
 
 					if (hasRelTransform) {
 						const uint64_t transformOffset = blasManager->StageRelativeTransform(relTransform);
@@ -414,6 +419,8 @@ void BLASCluster::PromoteToDynamic(SceneGraph* sceneGraph)
 					bufferRefs.push_back(tris.vertexBuffer);
 				if (tris.indexBuffer)
 					bufferRefs.push_back(tris.indexBuffer);
+				if (tris.ommIndexBuffer)
+					bufferRefs.push_back(tris.ommIndexBuffer);
 			}
 		}
 	}
