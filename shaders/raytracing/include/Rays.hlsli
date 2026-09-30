@@ -21,13 +21,26 @@
 #   define INSTANCE_MASK (0xFF)
 #endif
 
+#if defined(ENABLE_OMM) && ENABLE_OMM && !defined(__spirv__)
+#   ifndef RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS
+#       define RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS 0x01
+#   endif
+#   define RAY_QUERY_OMM_FLAG RAYQUERY_FLAG_ALLOW_OPACITY_MICROMAPS
+#else
+#   define RAY_QUERY_OMM_FLAG 0
+#endif
+
 Payload TraceRayOpaque(RaytracingAccelerationStructure scene, RayDesc ray, inout uint randomSeed)
 {
     Payload payload;
     payload.Init(randomSeed);
 
 #if USE_RAY_QUERY
+#if RAY_QUERY_OMM_FLAG
+    RayQuery<RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE, RAY_QUERY_OMM_FLAG> rayQuery;
+#else
     RayQuery<RAY_FLAGS | RAY_FLAG_FORCE_OPAQUE> rayQuery;
+#endif
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
 
     while (rayQuery.Proceed())
@@ -79,7 +92,11 @@ Payload TraceRayStandard(RaytracingAccelerationStructure scene, RayDesc ray, ino
     const uint instanceInclusionMask = primaryRay ? INSTANCE_MASK & ~FRUSTUM_CULLED_MASK : INSTANCE_MASK;
     
 #if USE_RAY_QUERY
+#if RAY_QUERY_OMM_FLAG
+    RayQuery<RAY_FLAGS, RAY_QUERY_OMM_FLAG> rayQuery;
+#else
     RayQuery<RAY_FLAGS> rayQuery;
+#endif
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, instanceInclusionMask, ray);
 
     while (rayQuery.Proceed())
@@ -149,7 +166,11 @@ float3 TraceRayShadowFinite(RaytracingAccelerationStructure scene, Surface surfa
     shadowPayload.transmission = float3(1.0f, 1.0f, 1.0f);
 
 #if USE_RAY_QUERY
+#if RAY_QUERY_OMM_FLAG
+    RayQuery<RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, RAY_QUERY_OMM_FLAG> rayQuery;
+#else
     RayQuery<RAY_FLAGS | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> rayQuery;
+#endif
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
 
     while (rayQuery.Proceed())
@@ -200,7 +221,11 @@ Payload SampleSubsurface(RaytracingAccelerationStructure scene, const float3 sam
     Payload payload;
     payload.Init(randomSeed);
 #if USE_RAY_QUERY
+#if RAY_QUERY_OMM_FLAG
+    RayQuery<RAY_FLAGS | RAY_FLAG_CULL_BACK_FACING_TRIANGLES, RAY_QUERY_OMM_FLAG> rayQuery;
+#else
     RayQuery<RAY_FLAGS | RAY_FLAG_CULL_BACK_FACING_TRIANGLES> rayQuery;
+#endif
     rayQuery.TraceRayInline(scene, RAY_FLAG_NONE, INSTANCE_MASK, ray);
 
     while (rayQuery.Proceed())

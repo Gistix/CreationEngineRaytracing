@@ -13,6 +13,7 @@
 class SkinnedMesh;
 class DynamicMesh;
 class BLASCluster;
+struct OmmResource;
 
 struct GeometryEntry {
 	nvrhi::rt::GeometryDesc desc;
@@ -163,6 +164,8 @@ public:
 	uint64_t GetOmmHash() const noexcept { return m_OmmHash; }
 	void SetOmmHash(uint64_t hash) noexcept { m_OmmHash = hash; }
 
+	const std::shared_ptr<OmmResource>& GetOmmResource() const noexcept { return m_OmmResource; }
+
 protected:
 
 	static eastl::string MakeDebugName(RE::BSTriShape* bsTriShape);
@@ -251,5 +254,8 @@ protected:
 	Properties m_Properties;
 
 	eastl::shared_ptr<MaterialBase> m_Material;
+	std::shared_ptr<OmmResource> m_OmmResource;
 	uint64_t m_OmmHash = 0;
+
+	void SetupOpacityMicromap(nvrhi::ICommandList* commandList);
 };

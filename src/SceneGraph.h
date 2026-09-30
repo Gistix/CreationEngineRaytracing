@@ -6,6 +6,7 @@
 
 #include "Core/MeshManager.h"
 #include "Core/BLASManager.h"
+#include "Core/OmmManager.h"
 #include "core/Light.h"
 #include "core/MaterialManager.h"
 #include "Core/TextureManager.h"
@@ -129,6 +130,7 @@ class SceneGraph
 	// Mesh/transform/properties buffer managed by MeshManager
 	eastl::unique_ptr<MeshManager> m_MeshManager;
 	eastl::unique_ptr<BLASManager> m_BLASManager;
+	eastl::unique_ptr<OmmManager> m_OmmManager;
 
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
@@ -197,6 +199,7 @@ public:
 
 	inline auto& GetMeshManager() const { return m_MeshManager; }
 	inline auto& GetBLASManager() const noexcept { return m_BLASManager; }
+	inline auto& GetOmmManager() const noexcept { return m_OmmManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
 	inline const auto& GetDirectMeshes() { return m_Meshes; }

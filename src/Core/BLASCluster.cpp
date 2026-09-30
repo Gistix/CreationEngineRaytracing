@@ -208,6 +208,9 @@ uint32_t BLASCluster::Update()
 
 					if (d.geometryData.triangles.indexBuffer)
 						bufferRefs.push_back(d.geometryData.triangles.indexBuffer);
+
+					if (d.geometryData.triangles.ommIndexBuffer)
+						bufferRefs.push_back(d.geometryData.triangles.ommIndexBuffer);
 				}
 			}
 			auto buildFlags = MakeDesc(BuildMode::Rebuild).buildFlags;
@@ -254,6 +257,8 @@ uint32_t BLASCluster::Update()
 						bufferRefs.push_back(geomTris.vertexBuffer);
 					if (geomTris.indexBuffer)
 						bufferRefs.push_back(geomTris.indexBuffer);
+					if (geomTris.ommIndexBuffer)
+						bufferRefs.push_back(geomTris.ommIndexBuffer);
 
 					if (hasRelTransform) {
 						const uint64_t transformOffset = blasManager->StageRelativeTransform(relTransform);
