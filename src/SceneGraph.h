@@ -5,6 +5,7 @@
 #include "Core/ThreadPool.h"
 
 #include "Core/MeshManager.h"
+#include "Core/BLASManager.h"
 #include "core/Light.h"
 #include "core/MaterialManager.h"
 #include "Core/TextureManager.h"
@@ -127,6 +128,7 @@ class SceneGraph
 
 	// Mesh/transform/properties buffer managed by MeshManager
 	eastl::unique_ptr<MeshManager> m_MeshManager;
+	eastl::unique_ptr<BLASManager> m_BLASManager;
 
 	std::shared_mutex m_OwnerClusterMutex;
 	std::shared_mutex m_OrphanClusterMutex;
@@ -194,6 +196,7 @@ public:
 	nvrhi::IBuffer* GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }
 
 	inline auto& GetMeshManager() const { return m_MeshManager; }
+	inline auto& GetBLASManager() const noexcept { return m_BLASManager; }
 	inline auto& GetMaterialDescriptors() const { return m_MaterialManager->GetDescriptors(); }
 
 	inline const auto& GetDirectMeshes() { return m_Meshes; }

@@ -40,7 +40,8 @@ uint32_t BLASInstanceCluster::Update()
 
 void BLASInstanceCluster::AppendInstanceDescs(eastl::vector<nvrhi::rt::InstanceDesc>& outDescs) const
 {
-	if (!m_IsValid || !m_BLAS)
+	auto* blas = GetBLAS();
+	if (!m_IsValid || !blas)
 		return;
 
 	const auto& instances = m_Members.front()->AsInstancedMesh()->GetInstances();
@@ -52,7 +53,7 @@ void BLASInstanceCluster::AppendInstanceDescs(eastl::vector<nvrhi::rt::InstanceD
 			.setInstanceMask(InstanceMask::Default)
 			.setTransform(instances[i].transform.f)
 			.setFlags(nvrhi::rt::InstanceFlags::TriangleCullDisable)
-			.setBLAS(m_BLAS);
+			.setBLAS(blas);
 
 		outDescs.push_back(instanceDesc);
 	}

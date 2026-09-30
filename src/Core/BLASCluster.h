@@ -9,6 +9,7 @@
 #include <mutex>
 
 class SceneGraph;
+class BLASResource;
 
 struct Light;
 
@@ -35,7 +36,8 @@ protected:
 		Updatable = 1 << 0,
 		Player = 1 << 1,
 		TwoSided = 1 << 2,
-		FrustumCulled = 1 << 3
+		FrustumCulled = 1 << 3,
+		Dynamic = 1 << 4
 	};
 
 	RE::TESObjectREFR* m_Owner = nullptr; // null for orphan (no-owner) clusters; comparison key only
@@ -49,6 +51,7 @@ protected:
 	eastl::vector<uint16_t> m_GeometrySlots;
 
 	nvrhi::rt::AccelStructHandle m_BLAS;
+	eastl::shared_ptr<BLASResource> m_BLASResource;
 
 	eastl::string m_Name;
 
@@ -77,6 +80,8 @@ protected:
 	virtual void UpdateTransform();
 	BuildMode DetermineBuildMode(SceneGraph* sceneGraph, uint64_t frameIndex);
 
+	void PromoteToDynamic(SceneGraph* sceneGraph);
+
 	nvrhi::rt::AccelStructDesc MakeDesc(BuildMode mode) const;
 
 	void SetValid(bool valid) { m_IsValid = valid; }
@@ -87,6 +92,9 @@ public:
 	void RemoveMember(BaseMesh* mesh);
 
 	const auto& GetMembers() const { return m_Members; }
+
+	const eastl::shared_ptr<BLASResource>& GetBLASResource() const noexcept { return m_BLASResource; }
+	nvrhi::rt::IAccelStruct* GetBLAS() const;
 
 	inline bool IsPlayer() const { return m_Flags.all(Flags::Player); }
 
