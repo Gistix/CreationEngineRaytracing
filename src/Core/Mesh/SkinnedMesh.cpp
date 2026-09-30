@@ -94,6 +94,8 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 
 	CreateMaterial();
 
+	SetupOpacityMicromap(commandList);
+
 	InitSkinToBones(bsTriShape);
 
 	InitDismemberSkin(geometryData.skinInstance);

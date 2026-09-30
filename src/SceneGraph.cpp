@@ -55,6 +55,7 @@ void SceneGraph::Initialize()
 
 	m_MeshManager = eastl::make_unique<MeshManager>();
 	m_BLASManager = eastl::make_unique<BLASManager>(device);
+	m_OmmManager = eastl::make_unique<OmmManager>();
 
 	m_MaterialManager = eastl::make_shared<MaterialManager>();
 

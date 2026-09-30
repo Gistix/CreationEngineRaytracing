@@ -5,7 +5,7 @@
 #include "Util.h"
 #include "Types.h"
 
-InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi::ICommandList* commandList)
+InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 {
 	m_Name = MakeDebugName(bsTriShape);
 	m_BSTriShape = bsTriShape;
@@ -43,6 +43,8 @@ InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, [[maybe_unused]] nvrhi:
 		m_IndexBuffer.m_Buffer, m_IndexBuffer.m_Offset, indexCount,
 		m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, vertexStride, triShapeData.vertexCount,
 		GetMeshIndex(), vertexFormat), geometryIndex });
+
+	SetupOpacityMicromap(commandList);
 
 	CreateMaterial();
 

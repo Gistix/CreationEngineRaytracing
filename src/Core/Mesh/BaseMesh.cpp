@@ -9,6 +9,7 @@
 #include "Utils/DXVKInterop.h"
 #include "Scene.h"
 #include "SceneGraph.h"
+#include "Core/OmmManager.h"
 #include "Types/RE/RE.h"
 #include "interop/Triangle.hlsli"
 
@@ -475,4 +476,38 @@ void BaseMesh::WriteTransform() const
 {
 	const auto& sceneGraph = Scene::GetSingleton()->GetSceneGraph();
 	sceneGraph->WriteTransformData(m_MeshIndex, m_Transform, m_PrevTransform);
+}
+
+void BaseMesh::SetupOpacityMicromap(nvrhi::ICommandList* commandList)
+{
+	if (!Util::Adapter::GetAlphaProperty(m_BSTriShape))
+		return;
+
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+	const auto& ommManager = sceneGraph->GetOmmManager();
+	if (!ommManager || !ommManager->IsSupported())
+		return;
+
+	m_OmmResource = ommManager->GetOrCreate(m_BSTriShape, commandList);
+	if (!m_OmmResource) {
+		logger::debug("BaseMesh::SetupOpacityMicromap - OMM Resource not found for {}.", GetName().c_str());
+		return;
+	}
+
+	m_OmmHash = m_OmmResource->contentHash;
+
+	uint64_t triangleOffset = 0;
+	for (auto& entry : m_GeometryEntries) {
+		if (entry.desc.geometryType == nvrhi::rt::GeometryType::Triangles) {
+			auto& tris = entry.desc.geometryData.triangles;
+			tris.opacityMicromap = m_OmmResource->opacityMicromap;
+			tris.ommIndexBuffer = m_OmmResource->indexBuffer;
+			tris.ommIndexBufferOffset = triangleOffset * sizeof(uint16_t);
+			tris.ommIndexFormat = nvrhi::Format::R16_UINT;
+			tris.pOmmUsageCounts = m_OmmResource->indexHistogram.data();
+			tris.numOmmUsageCounts = static_cast<uint32_t>(m_OmmResource->indexHistogram.size());
+
+			triangleOffset += tris.indexCount / 3;
+		}
+	}
 }

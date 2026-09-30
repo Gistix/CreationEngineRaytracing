@@ -141,9 +141,7 @@ namespace Pass
 			.addBindingLayout(sceneGraph->GetDynamicVertexDescriptors()->m_Layout);
 
 		pipelineDesc.maxPayloadSize = 20;
-
-		// When enabled causes: D3D12 ERROR: ID3D12Device::CreateStateObject: Invalid D3D12_RAYTRACING_PIPELINE_CONFIG1.Flags: 0x1024 specified
-		pipelineDesc.allowOpacityMicromaps = false;
+		pipelineDesc.allowOpacityMicromaps = GetRenderer()->SupportsFeature(nvrhi::Feature::RayTracingOpacityMicromap);
 
 #if defined(NVAPI)
 		pipelineDesc.hlslExtensionsUAV = 127;
