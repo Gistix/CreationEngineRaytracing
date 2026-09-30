@@ -126,6 +126,8 @@ public:
 
 	const float3x4& GetPrevTransform() const { return m_PrevTransform; }
 
+	const RE::NiTransform& GetWorld() const noexcept { return m_World; }
+
 	uint16_t GetMeshIndex() const { return m_MeshIndex; }
 
 	const auto& GetWorldBound() const { return m_WorldBound; }
@@ -157,6 +159,9 @@ public:
 	virtual uint16_t GetGeometryIndex(size_t i) const {
 		return i < m_GeometryEntries.size() ? m_GeometryEntries[i].geometryIndex : UINT16_MAX;
 	}
+
+	uint64_t GetOmmHash() const noexcept { return m_OmmHash; }
+	void SetOmmHash(uint64_t hash) noexcept { m_OmmHash = hash; }
 
 protected:
 
@@ -246,4 +251,5 @@ protected:
 	Properties m_Properties;
 
 	eastl::shared_ptr<MaterialBase> m_Material;
+	uint64_t m_OmmHash = 0;
 };

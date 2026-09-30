@@ -9,6 +9,7 @@
 #include <mutex>
 
 class SceneGraph;
+class BLASResource;
 
 struct Light;
 
@@ -49,6 +50,7 @@ protected:
 	eastl::vector<uint16_t> m_GeometrySlots;
 
 	nvrhi::rt::AccelStructHandle m_BLAS;
+	eastl::shared_ptr<BLASResource> m_BLASResource;
 
 	eastl::string m_Name;
 
@@ -87,6 +89,9 @@ public:
 	void RemoveMember(BaseMesh* mesh);
 
 	const auto& GetMembers() const { return m_Members; }
+
+	const eastl::shared_ptr<BLASResource>& GetBLASResource() const noexcept { return m_BLASResource; }
+	nvrhi::rt::IAccelStruct* GetBLAS() const;
 
 	inline bool IsPlayer() const { return m_Flags.all(Flags::Player); }
 

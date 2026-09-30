@@ -1,4 +1,5 @@
 #include "Core/BLASCluster.h"
+#include "Core/BLASManager.h"
 #include "Scene.h"
 #include "SceneGraph.h"
 #include "Renderer.h"
@@ -119,6 +120,13 @@ bool BLASCluster::Valid() const
 	return m_IsValid;
 }
 
+nvrhi::rt::IAccelStruct* BLASCluster::GetBLAS() const
+{
+	if (m_BLASResource && m_BLASResource->m_BLAS)
+		return m_BLASResource->m_BLAS.Get();
+	return m_BLAS.Get();
+}
+
 void BLASCluster::UpdateDirtyFlags(const DirtyFlags& meshDirtyFlags)
 {
 	std::scoped_lock lock(m_DirtyMutex);
@@ -185,6 +193,104 @@ uint32_t BLASCluster::Update()
 				meshManager->WriteMeshData(entry.geometryIndex, md);
 			}
 		}
+
+		auto* blasManager = sceneGraph->GetBLASManager().get();
+		if (m_GeometryDescs.empty()) {
+			m_BLASResource = nullptr;
+			m_BLAS = nullptr;
+		}
+		else if (m_Flags.all(Flags::Updatable)) {
+			std::vector<nvrhi::BufferHandle> bufferRefs;
+			for (const auto& d : m_GeometryDescs) {
+				if (d.geometryType == nvrhi::rt::GeometryType::Triangles) {
+					if (d.geometryData.triangles.vertexBuffer)
+						bufferRefs.push_back(d.geometryData.triangles.vertexBuffer);
+
+					if (d.geometryData.triangles.indexBuffer)
+						bufferRefs.push_back(d.geometryData.triangles.indexBuffer);
+				}
+			}
+			auto buildFlags = MakeDesc(BuildMode::Rebuild).buildFlags;
+			m_BLASResource = blasManager->CreateDedicatedBLAS(m_GeometryDescs, buildFlags, bufferRefs, m_Name);
+			m_BLAS = m_BLASResource->m_BLAS;
+		}
+		else {
+			BLASKey key;
+			key.baseFormID = (m_Owner && m_Owner->GetObjectReference()) ? m_Owner->GetObjectReference()->GetFormID() : 0;
+			key.buildFlags = static_cast<uint32_t>(MakeDesc(BuildMode::Rebuild).buildFlags);
+
+			std::vector<nvrhi::BufferHandle> bufferRefs;
+			std::vector<nvrhi::rt::GeometryDesc> sharedDescs;
+			sharedDescs.reserve(m_GeometryDescs.size());
+
+			RE::NiTransform rootWorldInv;
+			bool hasRootWorldInv = false;
+			if (m_Owner) {
+				auto* object = m_Owner->Get3D(false);
+				if (object) {
+					rootWorldInv = object->world.Invert();
+					hasRootWorldInv = true;
+				}
+			}
+
+			for (const auto& mesh : m_Members) {
+				if (mesh->IsHidden())
+					continue;
+
+				float3x4 relTransform = Constants::kIdentityTransform;
+				bool hasRelTransform = false;
+
+				if (hasRootWorldInv) {
+					relTransform = Util::Math::ComputeLocalToRoot(rootWorldInv, mesh->GetWorld());
+					hasRelTransform = !Util::Math::MatrixNearEqual(relTransform, Constants::kIdentityTransform);
+				}
+
+				const auto& entries = mesh->GetGeometryEntries();
+				for (const auto& entry : entries) {
+					auto geomDesc = entry.desc;
+					const auto& geomTris = geomDesc.geometryData.triangles;
+
+					if (geomTris.vertexBuffer)
+						bufferRefs.push_back(geomTris.vertexBuffer);
+					if (geomTris.indexBuffer)
+						bufferRefs.push_back(geomTris.indexBuffer);
+
+					if (hasRelTransform) {
+						const uint64_t transformOffset = blasManager->StageRelativeTransform(relTransform);
+						geomDesc.setTransformBuffer(blasManager->GetSharedTransformBuffer(), transformOffset);
+						geomDesc.useTransform = true;
+					} else {
+						geomDesc.transformBuffer = nullptr;
+						geomDesc.transformBufferOffset = 0;
+						geomDesc.useTransform = false;
+					}
+
+					sharedDescs.push_back(geomDesc);
+
+					BLASGeometryKey geomKey;
+					geomKey.nativeIndexBuffer = GetNativeBufferPointer(geomTris.indexBuffer);
+					geomKey.indexOffset = geomTris.indexOffset;
+					geomKey.indexCount = geomTris.indexCount;
+					geomKey.nativeVertexBuffer = GetNativeBufferPointer(geomTris.vertexBuffer);
+					geomKey.vertexOffset = geomTris.vertexOffset;
+					geomKey.vertexCount = geomTris.vertexCount;
+					geomKey.vertexStride = geomTris.vertexStride;
+					geomKey.geometryFlags = static_cast<uint32_t>(geomDesc.flags);
+					geomKey.hasRelativeTransform = hasRelTransform;
+					geomKey.relativeTransform = hasRelTransform ? relTransform : Constants::kIdentityTransform;
+					geomKey.ommHash = mesh->GetOmmHash();
+
+					key.geometries.push_back(geomKey);
+				}
+			}
+
+			key.ComputeHash();
+
+			auto buildFlags = MakeDesc(BuildMode::Rebuild).buildFlags;
+			m_BLASResource = blasManager->GetOrCreateSharedBLAS(key, sharedDescs, buildFlags, bufferRefs, m_Name);
+			m_BLAS = m_BLASResource->m_BLAS;
+			m_GeometryDescs = sharedDescs;
+		}
 	}
 
 	const uint32_t meshCount = static_cast<uint32_t>(m_GeometrySlots.size());
@@ -248,15 +354,25 @@ BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, u
 	const bool hasUpdate = m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin, DirtyFlags::Transform);
 	const bool isOrphan = (m_Owner == nullptr);
 
-	if (firstBuild || !m_BLAS || hasMesh || hasAlpha || (!isOrphan && hasVisibility))
+	const bool isSharedAndBuilt = m_BLASResource && m_BLASResource->m_IsShared && m_BLASResource->IsValid() && !m_BLASResource->m_IsDirty;
+
+	if (!isSharedAndBuilt) {
+		if (firstBuild || !GetBLAS() || hasMesh || hasAlpha || (!isOrphan && hasVisibility))
+			return BuildMode::Rebuild;
+	} else if (!GetBLAS() || hasAlpha) {
 		return BuildMode::Rebuild;
+	}
 
 	if (hasUpdate) {
-		if (m_UpdateCount >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE &&
-			sceneGraph->TryMaintenanceRebuild(frameIndex))
-			return BuildMode::Rebuild;
+		if (m_Flags.all(Flags::Updatable)) {
+			if (m_UpdateCount >= Constants::MAX_BLAS_UPDATES_BEFORE_MAINTENANCE &&
+				sceneGraph->TryMaintenanceRebuild(frameIndex))
+				return BuildMode::Rebuild;
 
-		return BuildMode::Update;
+			return BuildMode::Update;
+		}
+
+		return BuildMode::Skip;
 	}
 
 	return BuildMode::Skip;
@@ -269,7 +385,7 @@ nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 		.setInstanceMask(m_Flags.all(Flags::FrustumCulled) ? InstanceMask::FrustumCulled : InstanceMask::Default)
 		.setTransform(m_Transform.f)
 		.setFlags(m_Flags.all(Flags::TwoSided) ? nvrhi::rt::InstanceFlags::TriangleCullDisable : nvrhi::rt::InstanceFlags::None)
-		.setBLAS(m_BLAS);
+		.setBLAS(GetBLAS());
 
 	return instanceDesc;
 }
@@ -277,31 +393,19 @@ nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph)
 {
 	auto* renderer = Renderer::GetSingleton();
-	auto* device = renderer->GetDevice();
 	const auto frameIndex = renderer->GetFrameIndex();
 
 	if (frameIndex == m_LastBuildFrame) {
-		logger::info("BLASCluster::BuildUpdate - {} already built this frame, skipping", m_Name);
 		return;
 	}
 
 	const auto buildMode = DetermineBuildMode(sceneGraph, frameIndex);
-	if (buildMode == BuildMode::Skip && m_Owner == nullptr && m_DirtyFlags == DirtyFlags::Visibility) {
-		// Orphan clusters contain one mesh and are excluded from the TLAS while hidden.
-		// Their BLAS remains valid and can be reused when the mesh becomes visible again.
+	if (buildMode == BuildMode::Skip) {
+		if (m_BLASResource && m_BLASResource->IsValid()) {
+			m_BLAS = m_BLASResource->m_BLAS;
+		}
 		m_DirtyFlags.reset();
 		m_LastBuildFrame = frameIndex;
-		return;
-	}
-	if (buildMode == BuildMode::Skip) {
-		eastl::string membersInfo;
-		for (const auto* member : m_Members) {
-			if (!membersInfo.empty())
-				membersInfo += ", ";
-			membersInfo += std::format("{} ({})", member->GetName().c_str(), magic_enum::enum_name(member->GetType())).c_str();
-		}
-		logger::info("BLASCluster::BuildUpdate - {}: {} with {} members and {} geometry descs has no dirty flags set. Members: [{}]",
-			fmt::ptr(this), m_Name, m_Members.size(), m_GeometryDescs.size(), membersInfo);
 		return;
 	}
 
@@ -310,29 +414,16 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	else
 		m_UpdateCount++;
 
-	if (m_GeometryDescs.empty()) {
+	if (m_GeometryDescs.empty() || !m_BLASResource) {
 		m_BLAS = nullptr;
 		m_LastBuildFrame = frameIndex;
 		m_DirtyFlags.reset();
 		return;
 	}
 
-	// Allocate a new accel struct on first build or when the required size grows.
-	const bool allocate = !m_BLAS;
-
-	auto blasDesc = MakeDesc(buildMode);
-	blasDesc.bottomLevelGeometries = m_GeometryDescs;
-
-	bool needsAllocation = allocate;
-	if (!needsAllocation && buildMode == BuildMode::Rebuild) {
-		auto prebuildInfo = device->getAccelStructPreBuildInfo(blasDesc);
-		needsAllocation = prebuildInfo.resultMaxSizeInBytes > m_BLAS->getBufferSize();
-	}
-
-	if (needsAllocation)
-		m_BLAS = device->createAccelStruct(blasDesc);
-
-	nvrhi::utils::BuildBottomLevelAccelStruct(commandList, m_BLAS, blasDesc);
+	auto* blasManager = sceneGraph->GetBLASManager().get();
+	blasManager->BuildResource(commandList, m_BLASResource, buildMode == BuildMode::Rebuild);
+	m_BLAS = m_BLASResource->m_BLAS;
 
 	m_DirtyFlags.reset();
 	m_LastBuildFrame = frameIndex;

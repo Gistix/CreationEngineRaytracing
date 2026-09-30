@@ -54,6 +54,7 @@ void SceneGraph::Initialize()
 	m_LightBuffer = Util::CreateStructuredRingBuffer<LightData>(device, Constants::LIGHTS_MAX, "Light Buffer");
 
 	m_MeshManager = eastl::make_unique<MeshManager>();
+	m_BLASManager = eastl::make_unique<BLASManager>(device);
 
 	m_MaterialManager = eastl::make_shared<MaterialManager>();
 
@@ -1016,6 +1017,9 @@ void SceneGraph::ProcessPendingMeshDestroys(uint64_t completedFence)
 		eastl::remove_if(m_PendingMeshDestroy.begin(), m_PendingMeshDestroy.end(),
 			[completedFence](const PendingDestroy& p) { return p.fenceValue <= completedFence; }),
 		m_PendingMeshDestroy.end());
+
+	if (m_BLASManager)
+		m_BLASManager->ProcessPendingReleases(completedFence, Renderer::GetSingleton()->GetFrameIndex());
 }
 
 uint32_t SceneGraph::AllocateMeshIndex()
