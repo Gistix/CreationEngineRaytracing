@@ -31,6 +31,93 @@ namespace
 		SubmissionQueueLock(const SubmissionQueueLock&) = delete;
 		SubmissionQueueLock& operator=(const SubmissionQueueLock&) = delete;
 	};
+
+	struct ExtensionProbe
+	{
+		const char* extensionName;
+		const char* probeFunction = nullptr;
+	};
+
+	constexpr ExtensionProbe s_CandidateDeviceExtensions[] = {
+		{ VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, "vkCreateAccelerationStructureKHR" },
+		{ VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, "vkCreateDeferredOperationKHR" },
+		{ VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME, nullptr },                                 // Required by RT pipeline
+		{ VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, "vkCreateRayTracingPipelinesKHR" },
+		{ VK_KHR_RAY_QUERY_EXTENSION_NAME, nullptr },
+		{ VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME, nullptr },
+		{ VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME, nullptr },                       // For NRD Reblur quads
+		{ VK_NV_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME, nullptr },                        // Ditto
+		{ VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME, "vkGetMicromapBuildSizesEXT" },
+
+		// High performance & stability additions (enabled by DXVK):
+		{ VK_NV_RAW_ACCESS_CHAINS_EXTENSION_NAME, nullptr },                                 // Boosts ByteAddressBuffer loads
+		{ VK_KHR_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_EXTENSION_NAME, nullptr },
+		{ VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, nullptr },
+		{ VK_EXT_MEMORY_BUDGET_EXTENSION_NAME, nullptr },
+		{ VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME, nullptr },
+	};
+
+	eastl::vector<const char*> QueryActiveDeviceExtensions(VkPhysicalDevice physicalDevice, VkDevice device)
+	{
+		HMODULE vulkanModule = GetModuleHandleA("vulkan-1.dll");
+		if (!vulkanModule) {
+			vulkanModule = LoadLibraryA("vulkan-1.dll");
+		}
+
+		if (!vulkanModule) {
+			logger::error("QueryActiveDeviceExtensions - Failed to obtain vulkan-1.dll module handle.");
+			return {};
+		}
+
+		auto pfnEnumerate = reinterpret_cast<PFN_vkEnumerateDeviceExtensionProperties>(
+			GetProcAddress(vulkanModule, "vkEnumerateDeviceExtensionProperties"));
+		auto pfnGetDeviceProcAddr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(
+			GetProcAddress(vulkanModule, "vkGetDeviceProcAddr"));
+
+		if (!pfnEnumerate || !pfnGetDeviceProcAddr) {
+			logger::error("QueryActiveDeviceExtensions - Failed to resolve Vulkan extension query function pointers.");
+			return {};
+		}
+
+		uint32_t count = 0;
+		if (pfnEnumerate(physicalDevice, nullptr, &count, nullptr) != VK_SUCCESS || count == 0) {
+			logger::error("QueryActiveDeviceExtensions - Failed to enumerate device extension properties.");
+			return {};
+		}
+
+		std::vector<VkExtensionProperties> availableExtensions(count);
+		pfnEnumerate(physicalDevice, nullptr, &count, availableExtensions.data());
+
+		auto isPhysicallySupported = [&](const char* name) {
+			for (const auto& ext : availableExtensions) {
+				if (std::strcmp(ext.extensionName, name) == 0)
+					return true;
+			}
+			return false;
+		};
+
+		eastl::vector<const char*> activeExtensions;
+		activeExtensions.reserve(std::size(s_CandidateDeviceExtensions));
+
+		for (const auto& candidate : s_CandidateDeviceExtensions) {
+			if (!isPhysicallySupported(candidate.extensionName)) {
+				continue;
+			}
+
+			if (candidate.probeFunction) {
+				auto pfn = pfnGetDeviceProcAddr(device, candidate.probeFunction);
+				if (!pfn) {
+					logger::debug("QueryActiveDeviceExtensions - Extension {} is physically supported but not enabled on VkDevice (probe '{}' is null)",
+						candidate.extensionName, candidate.probeFunction);
+					continue;
+				}
+			}
+
+			activeExtensions.push_back(candidate.extensionName);
+		}
+
+		return activeExtensions;
+	}
 }
 
 Renderer::Renderer()
@@ -131,24 +218,7 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 		return false;
 	}
 
-	const char* deviceExtensions[] = {
-		VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,				// "VK_KHR_acceleration_structure"
-		VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,				// "VK_KHR_deferred_host_operations"
-		VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,						// "VK_KHR_pipeline_library" (required by RT pipeline)
-		VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,					// "VK_KHR_ray_tracing_pipeline"
-		VK_KHR_RAY_QUERY_EXTENSION_NAME,							// "VK_KHR_ray_query"
-		VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME,		// "VK_NV_ray_tracing_invocation_reorder"
-		VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_KHR_compute_shader_derivatives" (for NRD Reblur quads)
-		VK_NV_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,			// "VK_NV_compute_shader_derivatives" ditto
-		VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME,						// "VK_EXT_opacity_micromap"
-
-		// High performance & stability additions (enabled by DXVK):
-		VK_NV_RAW_ACCESS_CHAINS_EXTENSION_NAME,						// "VK_NV_raw_access_chains" (boosts ByteAddressBuffer loads)
-		VK_KHR_SHADER_SUBGROUP_UNIFORM_CONTROL_FLOW_EXTENSION_NAME, // "VK_KHR_shader_subgroup_uniform_control_flow"
-		VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,				// "VK_EXT_mutable_descriptor_type"
-		VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,						// "VK_EXT_memory_budget"
-		VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,						// "VK_EXT_memory_priority"
-	};
+	auto deviceExtensions = QueryActiveDeviceExtensions(physicalDevice, device);
 
 	nvrhi::vulkan::DeviceDesc deviceDesc;
 	deviceDesc.errorCB = &MessageCallback::GetInstance();
@@ -161,8 +231,8 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 	deviceDesc.transferQueueIndex = transferQueueIndex;
 	deviceDesc.computeQueue = computeQueue;
 	deviceDesc.computeQueueIndex = computeQueueIndex;
-	deviceDesc.deviceExtensions = deviceExtensions;
-	deviceDesc.numDeviceExtensions = std::size(deviceExtensions);
+	deviceDesc.deviceExtensions = deviceExtensions.data();
+	deviceDesc.numDeviceExtensions = deviceExtensions.size();
 	deviceDesc.bufferDeviceAddressSupported = true;
 
 	m_NVRHIDevice = nvrhi::vulkan::createDevice(deviceDesc);
