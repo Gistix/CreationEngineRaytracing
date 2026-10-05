@@ -7,6 +7,12 @@
 #include <mutex>
 #include <ankerl/unordered_dense.h>
 
+class BaseMesh;
+
+namespace omm {
+	class GpuBakeNvrhi;
+}
+
 #pragma pack(push, 1)
 
 // 8 bytes - matches D3D12_RAYTRACING_OPACITY_MICROMAP_DESC and VkMicromapTriangleEXT
@@ -71,20 +77,74 @@ struct OmmResource
 	uint64_t contentHash = 0;
 };
 
+struct PendingOmmBakeTask
+{
+	uint64_t runtimeKey = 0;
+	BaseMesh* targetMesh = nullptr;
+	uint64_t submitFence = 0;
+	nvrhi::EventQueryHandle eventQuery;
+
+	// GPU outputs from GPU bake dispatch
+	nvrhi::BufferHandle ommArrayBuffer;
+	nvrhi::BufferHandle ommDescBuffer;
+	nvrhi::BufferHandle ommIndexBuffer;
+	nvrhi::BufferHandle ommDescArrayHistogramBuffer;
+	nvrhi::BufferHandle ommIndexHistogramBuffer;
+	nvrhi::BufferHandle ommPostDispatchInfoBuffer;
+
+	// CPU-readable readback staging buffers
+	nvrhi::BufferHandle descArrayHistogramReadback;
+	nvrhi::BufferHandle indexHistogramReadback;
+	nvrhi::BufferHandle postDispatchInfoReadback;
+};
+
 class OmmManager
 {
 public:
 	OmmManager();
-	~OmmManager() = default;
+	~OmmManager();
 
 	[[nodiscard]] bool IsSupported() const noexcept { return m_IsSupported; }
 
-	// Retrieves cached or builds new GPU OMM resources for the given shape.
-	// Multiple BSTriShape instances sharing the same baked OMM data reuse the same GPU buffers and OMM array.
-	std::shared_ptr<OmmResource> GetOrCreate(RE::BSTriShape* triShape, nvrhi::ICommandList* commandList);
+	// Retrieves cached, builds offline, or schedules runtime GPU bake for the given shape.
+	// 1. Checks for offline baked binary extra data ("CERT::OMM"). If present, uploads and returns immediately.
+	// 2. If absent and runtime OMM fallback is enabled:
+	//    - Returns cached OmmResource if already baked.
+	//    - Otherwise enqueues an asynchronous GPU bake task, returning nullptr for frame 0 (Any-Hit fallback).
+	std::shared_ptr<OmmResource> GetOrCreate(RE::BSTriShape* triShape, BaseMesh* mesh, nvrhi::ICommandList* commandList);
+
+	// Backward compatibility overload for offline-only path
+	std::shared_ptr<OmmResource> GetOrCreate(RE::BSTriShape* triShape, nvrhi::ICommandList* commandList)
+	{
+		return GetOrCreate(triShape, nullptr, commandList);
+	}
+
+	// Called every frame to inspect finished bake fences, read back exact usage counts, and attach OMM to meshes.
+	void ProcessPendingBakes(nvrhi::ICommandList* commandList, uint64_t completedFence);
+
+	// Unregisters a mesh if it is destroyed before its pending bake finishes
+	void CancelPendingBake(BaseMesh* mesh);
 
 private:
 	bool m_IsSupported = false;
+	std::unique_ptr<omm::GpuBakeNvrhi> m_GpuBaker;
+
 	mutable std::mutex m_CacheMutex;
 	ankerl::unordered_dense::map<uint64_t, std::shared_ptr<OmmResource>> m_Cache;
+
+	mutable std::mutex m_PendingMutex;
+	std::vector<PendingOmmBakeTask> m_PendingTasks;
+	ankerl::unordered_dense::set<uint64_t> m_InFlightKeys;
+
+	// Checks if shape has offline extra data
+	std::shared_ptr<OmmResource> TryGetOfflineResource(RE::BSTriShape* triShape, nvrhi::ICommandList* commandList);
+
+	// Dispatches runtime GPU bake task
+	bool ScheduleRuntimeGpuBake(RE::BSTriShape* triShape, BaseMesh* mesh, nvrhi::ICommandList* commandList, uint64_t runtimeKey, float alphaCutoff);
+
+	// Lazily initializes GPU baker on first command list
+	void EnsureGpuBaker(nvrhi::ICommandList* commandList);
+
+	// Computes 64-bit cache key from mesh geometry and material parameters
+	static uint64_t ComputeRuntimeKey(RE::BSTriShape* triShape, BaseMesh* mesh, float alphaCutoff);
 };

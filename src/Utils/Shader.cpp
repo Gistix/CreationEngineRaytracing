@@ -47,7 +47,7 @@ namespace Util
 #endif
 			}
 
-			if (Renderer::GetSingleton()->SupportsFeature(nvrhi::Feature::RayTracingOpacityMicromap))
+			if (settings.RaytracingSettings.EnableOMM && Renderer::GetSingleton()->SupportsFeature(nvrhi::Feature::RayTracingOpacityMicromap))
 			{
 				if (!Renderer::GetSingleton()->IsVulkan())
 					defines.emplace_back(L"ENABLE_OMM", L"1");

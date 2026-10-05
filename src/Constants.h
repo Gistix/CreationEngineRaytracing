@@ -59,6 +59,9 @@ namespace Constants
 	static constexpr size_t ParallelTraversalFanoutThreshold = 32;
 
 	static constexpr uint32_t OMM_SUBDIV_LEVEL = 3;
+	static constexpr uint32_t RuntimeOMMSubdivision = 6;
+	static constexpr uint32_t RuntimeOMMFormat = 2; // 1 = 2-State (OC2_2_State), 2 = 4-State (OC4_4_State)
+	static constexpr bool RuntimeOMMAsync = true;
 
 	static constexpr float WATER_ABSORPTION_REFERENCE_DEPTH = 600.0f;
 

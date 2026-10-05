@@ -2,6 +2,7 @@
 
 #include "Core/MaterialManager.h"
 #include "Renderer.h"
+#include "Scene.h"
 #include "Util.h"
 #include "Utils/Material.h"
 #include "Types/CommunityShaders/BSLightingShaderMaterialPBR.h"
@@ -97,3 +98,13 @@ void PBRMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	if (m_FeaturesTexture1.Update(pbrMaterial->featuresTexture1, renderer->GetWhiteTextureDescriptor()))
 		pbrData->FeaturesTexture1 = m_FeaturesTexture1.texture.GetDescriptorIndex();
 }
+
+nvrhi::TextureHandle PBRMaterial::GetDiffuseTexture() const
+{
+	if (m_DiffuseTexture.texture.texture) {
+		auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
+		return textureManager->GetTextureHandle(m_DiffuseTexture.texture.texture.get());
+	}
+	return nullptr;
+}
+

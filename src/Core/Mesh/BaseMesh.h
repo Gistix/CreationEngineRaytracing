@@ -165,6 +165,7 @@ public:
 	void SetOmmHash(uint64_t hash) noexcept { m_OmmHash = hash; }
 
 	const std::shared_ptr<OmmResource>& GetOmmResource() const noexcept { return m_OmmResource; }
+	void AttachOpacityMicromap(const std::shared_ptr<OmmResource>& ommResource);
 
 protected:
 
@@ -182,7 +183,8 @@ protected:
 		const char* debugName,
 		const char* logContext,
 		const char* resourceKind,
-		DescriptorTableManager* descriptorTable);
+		DescriptorTableManager* descriptorTable,
+		nvrhi::Format format = nvrhi::Format::UNKNOWN);
 
 	// Wraps a native D3D12 resource, validating it against the D3D11 description.
 	static BufferDescriptor CreateDX12Buffer(
@@ -192,7 +194,8 @@ protected:
 		const char* logContext,
 		const char* resourceKind,
 		DescriptorTableManager* descriptorTable,
-		uint64_t offset);
+		uint64_t offset,
+		nvrhi::Format format = nvrhi::Format::UNKNOWN);
 
 	static nvrhi::rt::GeometryDesc MakeGeometryDesc(
 		nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount,

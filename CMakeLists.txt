@@ -101,6 +101,8 @@ endif()
 
 include(NVRHI)
 
+include(OMM)
+
 include(NRD)
 
 # RTXDI library (ReSTIR DI / GI / PT)

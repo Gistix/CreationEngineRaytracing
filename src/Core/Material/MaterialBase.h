@@ -2,6 +2,7 @@
 
 #include "Interop/Material/MaterialBaseData.hlsli"
 #include "Constants.h"
+#include <nvrhi/nvrhi.h>
 
 #include <mutex>
 
@@ -45,6 +46,8 @@ struct MaterialBase
 	uint32_t GetOffsetComp() const { return static_cast<uint32_t>(m_Offset / 4); }
 
 	uint32_t GetHashKey() const { return m_HashKey; }
+
+	virtual nvrhi::TextureHandle GetDiffuseTexture() const { return nullptr; }
 
 	void Update(RE::BSShaderMaterial* shaderMaterial);
 

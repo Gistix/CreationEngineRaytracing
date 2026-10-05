@@ -20,6 +20,8 @@ struct LightingMaterial : public MaterialBase
 
 	virtual size_t GetDataSize() override { return sizeof(Data); }
 
+	nvrhi::TextureHandle GetDiffuseTexture() const override;
+
 	MaterialTexture m_DiffuseTexture;
 	MaterialTexture m_NormalTexture;
 	MaterialTexture m_RimSoftLightingTexture;

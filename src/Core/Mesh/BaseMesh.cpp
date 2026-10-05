@@ -15,13 +15,21 @@
 
 BaseMesh::~BaseMesh()
 {
-	auto& meshManager = Scene::GetSingleton()->GetSceneGraph()->GetMeshManager();
+	auto* sceneGraph = Scene::GetSingleton() ? Scene::GetSingleton()->GetSceneGraph() : nullptr;
+	if (sceneGraph) {
+		if (sceneGraph->GetOmmManager()) {
+			sceneGraph->GetOmmManager()->CancelPendingBake(this);
+		}
 
-	for (const auto& entry : m_GeometryEntries)
-		meshManager->ReleaseGeometryIndex(entry.geometryIndex);
+		auto& meshManager = sceneGraph->GetMeshManager();
+		if (meshManager) {
+			for (const auto& entry : m_GeometryEntries)
+				meshManager->ReleaseGeometryIndex(entry.geometryIndex);
 
-	if (m_MeshIndex != UINT16_MAX)
-		meshManager->ReleaseMeshIndex(m_MeshIndex);
+			if (m_MeshIndex != UINT16_MAX)
+				meshManager->ReleaseMeshIndex(m_MeshIndex);
+		}
+	}
 }
 
 eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
@@ -106,7 +114,8 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVulkanBuffer(
 	const char* debugName,
 	const char* logContext,
 	const char* resourceKind,
-	DescriptorTableManager* descriptorTable)
+	DescriptorTableManager* descriptorTable,
+	nvrhi::Format format)
 {
 	BufferDescriptor buffer{};
 
@@ -139,6 +148,10 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVulkanBuffer(
 		.setIsAccelStructBuildInput(true)
 		.setDebugName(debugName);
 
+	if (format != nvrhi::Format::UNKNOWN) {
+		bufferDesc.setFormat(format);
+	}
+
 	auto device = Renderer::GetSingleton()->GetDevice();
 	buffer.m_Buffer = device->createHandleForNativeBuffer(
 		nvrhi::ObjectTypes::VK_Buffer,
@@ -167,7 +180,8 @@ BaseMesh::BufferDescriptor BaseMesh::CreateDX12Buffer(
 	const char* logContext,
 	const char* resourceKind,
 	DescriptorTableManager* descriptorTable,
-	uint64_t offset)
+	uint64_t offset,
+	nvrhi::Format format)
 {
 	BufferDescriptor buffer{};
 
@@ -187,6 +201,10 @@ BaseMesh::BufferDescriptor BaseMesh::CreateDX12Buffer(
 		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
 		.setIsAccelStructBuildInput(true)
 		.setDebugName(debugName);
+
+	if (format != nvrhi::Format::UNKNOWN) {
+		bufferDesc.setFormat(format);
+	}
 
 	auto device = Renderer::GetSingleton()->GetDevice();
 	buffer.m_Buffer = device->createHandleForNativeBuffer(
@@ -217,7 +235,8 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 			"Index Buffer (VK)",
 			"BaseMesh::CreateIndexBuffer",
 			"index",
-			descriptorTable);
+			descriptorTable,
+			nvrhi::Format::R16_UINT);
 	}
 
 #if defined(FALLOUT4)
@@ -233,7 +252,8 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 		"BaseMesh::CreateIndexBuffer",
 		"index",
 		descriptorTable,
-		offset);
+		offset,
+		nvrhi::Format::R16_UINT);
 }
 
 BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape* triShape)
@@ -488,13 +508,22 @@ void BaseMesh::SetupOpacityMicromap(nvrhi::ICommandList* commandList)
 	if (!ommManager || !ommManager->IsSupported())
 		return;
 
-	m_OmmResource = ommManager->GetOrCreate(m_BSTriShape, commandList);
+	m_OmmResource = ommManager->GetOrCreate(m_BSTriShape, this, commandList);
 	if (!m_OmmResource) {
 		logger::debug("BaseMesh::SetupOpacityMicromap - OMM Resource not found for {}.", GetName().c_str());
 		return;
 	}
 
-	m_OmmHash = m_OmmResource->contentHash;
+	AttachOpacityMicromap(m_OmmResource);
+}
+
+void BaseMesh::AttachOpacityMicromap(const std::shared_ptr<OmmResource>& ommResource)
+{
+	if (!ommResource)
+		return;
+
+	m_OmmResource = ommResource;
+	m_OmmHash = ommResource->contentHash;
 
 	uint64_t triangleOffset = 0;
 	for (auto& entry : m_GeometryEntries) {
@@ -510,4 +539,6 @@ void BaseMesh::SetupOpacityMicromap(nvrhi::ICommandList* commandList)
 			triangleOffset += tris.indexCount / 3;
 		}
 	}
+
+	MarkDirty(DirtyFlags::Alpha | DirtyFlags::Mesh);
 }

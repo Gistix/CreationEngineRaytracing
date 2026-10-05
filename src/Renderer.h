@@ -76,6 +76,7 @@ class Renderer
 	uint32_t m_NextSlot = 0;
 
 	uint64_t m_LastSubmittedInstance = 0;
+	uint64_t m_LastCompletedFence = 0;
 
 	uint64_t SubmitCommandList(nvrhi::ICommandList* commandList);
 
@@ -254,6 +255,7 @@ public:
 	nvrhi::ITexture* GetWaterDisplacementTexture();
 
 	inline auto GetLastSubmittedFence() const { return m_LastSubmittedInstance; }
+	inline auto GetLastCompletedFence() const { return m_LastCompletedFence; }
 
 	inline auto GetMainTexture() { return m_RenderTargetManager.GetTexture(RenderTarget::Main); }
 

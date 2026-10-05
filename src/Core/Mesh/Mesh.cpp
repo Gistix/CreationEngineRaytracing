@@ -47,8 +47,9 @@ Mesh::Mesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
 
 	m_GeometryEntries.push_back({ MakeGeometryDesc(m_IndexBuffer.m_Buffer, m_IndexBuffer.m_Offset, indexCount, m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, vertexStride, triShapeData.vertexCount, GetMeshIndex(), vertexFormat), geometryIndex });
 
+	CreateMaterial();
+
 	SetupOpacityMicromap(commandList);
 
-	CreateMaterial();
 	m_IsReady = m_Material != nullptr;
 }

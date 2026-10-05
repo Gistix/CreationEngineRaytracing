@@ -14,3 +14,6 @@
 [submodule "extern/CommonLibF4"]
 	path = extern/CommonLibF4
 	url = https://github.com/Dear-Modding-FO4/commonlibf4.git
+[submodule "extern/OMM"]
+	path = extern/OMM
+	url = https://github.com/NVIDIA-RTX/OMM.git

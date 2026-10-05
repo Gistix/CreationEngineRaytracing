@@ -2,6 +2,7 @@
 
 #include "Core/MaterialManager.h"
 #include "Renderer.h"
+#include "Scene.h"
 #include "Util.h"
 
 LightingMaterial::LightingMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
@@ -51,3 +52,12 @@ void LightingMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 	if (m_SpecularBackLightingTexture.Update(lightingShaderMaterial->specularBackLightingTexture, renderer->GetBlackTextureDescriptor()))
 		lightingData->SpecularBackLightingTexture = m_SpecularBackLightingTexture.texture.GetDescriptorIndex();
 }
+
+nvrhi::TextureHandle LightingMaterial::GetDiffuseTexture() const
+{
+	if (m_DiffuseTexture.texture.texture) {
+		auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
+		return textureManager->GetTextureHandle(m_DiffuseTexture.texture.texture.get());
+	}
+	return nullptr;
+}

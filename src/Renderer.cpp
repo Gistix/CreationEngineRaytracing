@@ -635,6 +635,8 @@ nvrhi::ICommandList* Renderer::StartExecution()
 		slot.inFlight = false;
 	}
 
+	m_LastCompletedFence = slot.fenceValue;
+
 	// Release meshes whose recorded fence has been passed by the GPU.
 	Scene::GetSingleton()->GetSceneGraph()->ProcessPendingMeshDestroys(slot.fenceValue);
 	Scene::GetSingleton()->GetSceneGraph()->GetTextureManager()->ProcessPendingReleases(slot.fenceValue, m_LastSubmittedInstance);

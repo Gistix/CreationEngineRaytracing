@@ -235,3 +235,43 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 		return eastl::shared_ptr<DescriptorHandle>(it->second, it->second->descriptorHandle.get());
 	}
 }
+
+nvrhi::TextureHandle TextureManager::GetTextureHandle(RE::BSGraphics::Texture* texture)
+{
+	if (!texture || !texture->texture)
+		return nullptr;
+
+	{
+		std::scoped_lock lock(m_TexturesMutex);
+		if (auto refIt = m_Textures.find(texture->texture); refIt != m_Textures.end() && refIt->second)
+			return refIt->second->texture;
+	}
+
+	if (GetDescriptor(texture)) {
+		std::scoped_lock lock(m_TexturesMutex);
+		if (auto refIt = m_Textures.find(texture->texture); refIt != m_Textures.end() && refIt->second)
+			return refIt->second->texture;
+	}
+
+	return nullptr;
+}
+
+nvrhi::TextureHandle TextureManager::GetTextureHandle(const DescriptorHandle* descriptorHandle)
+{
+	if (!descriptorHandle || !descriptorHandle->IsValid())
+		return nullptr;
+
+	return GetTextureHandle(static_cast<uint32_t>(descriptorHandle->Get()));
+}
+
+nvrhi::TextureHandle TextureManager::GetTextureHandle(uint32_t descriptorIndex)
+{
+	std::scoped_lock lock(m_TexturesMutex);
+	for (const auto& [_, ref] : m_Textures) {
+		if (ref && ref->descriptorHandle && ref->descriptorHandle->IsValid() && static_cast<uint32_t>(ref->descriptorHandle->Get()) == descriptorIndex) {
+			return ref->texture;
+		}
+	}
+	return nullptr;
+}
+

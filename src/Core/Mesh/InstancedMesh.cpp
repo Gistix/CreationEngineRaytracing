@@ -44,9 +44,9 @@ InstancedMesh::InstancedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* co
 		m_VertexBuffer.m_Buffer, m_VertexBuffer.m_Offset, vertexStride, triShapeData.vertexCount,
 		GetMeshIndex(), vertexFormat), geometryIndex });
 
-	SetupOpacityMicromap(commandList);
-
 	CreateMaterial();
+
+	SetupOpacityMicromap(commandList);
 
 	// The engine's first AddGroup fires during block Attach, before this mesh is created. The
 	// SceneGraph owns the parsed instance data; keep a stable pointer to it for the mesh's lifetime.

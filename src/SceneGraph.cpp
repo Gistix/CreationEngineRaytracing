@@ -998,6 +998,10 @@ BLASCluster* SceneGraph::GetOrCreateSegmentCluster(SubIndexSegmentMesh* segment,
 
 void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 {
+	if (m_OmmManager) {
+		m_OmmManager->ProcessPendingBakes(commandList, Renderer::GetSingleton()->GetLastCompletedFence());
+	}
+
 	// Visit every cluster with pending dirty flags. Flags are set on membership changes (Mesh) and
 	// mesh flag commits, and only cleared inside BuildUpdate - so non-None always means a build is
 	// needed. m_AllClusters was rebuilt in Phase G after empty clusters were dropped. The scan runs

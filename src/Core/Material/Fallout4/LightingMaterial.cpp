@@ -2,6 +2,7 @@
 
 #include "Core/Material/Fallout4/LightingMaterial.h"
 #include "Renderer.h"
+#include "Scene.h"
 #include "RE/B/BSLightingShaderMaterialBase.h"
 
 LightingMaterial::LightingMaterial(RE::BSShaderMaterial* shaderMaterial, uint64_t offset)
@@ -82,6 +83,15 @@ void LightingMaterial::UpdateTextures(RE::BSShaderMaterial* shaderMaterial)
 
 	if (m_LookupTexture.Update(lighting->lookupTexture.get(), renderer->GetBlackTextureDescriptor()))
 		data->LookupTexture = m_LookupTexture.texture.GetDescriptorIndex();
+}
+
+nvrhi::TextureHandle LightingMaterial::GetDiffuseTexture() const
+{
+	if (m_DiffuseTexture.texture.texture) {
+		auto& textureManager = Scene::GetSingleton()->GetSceneGraph()->GetTextureManager();
+		return textureManager->GetTextureHandle(m_DiffuseTexture.texture.texture.get());
+	}
+	return nullptr;
 }
 
 #endif

@@ -34,6 +34,9 @@ struct TextureManager
 	TextureManager();
 	uint64_t GetFakeDoubledVRAMUsage();
 	eastl::shared_ptr<DescriptorHandle> GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType = TextureType::Standard);
+	nvrhi::TextureHandle GetTextureHandle(RE::BSGraphics::Texture* texture);
+	nvrhi::TextureHandle GetTextureHandle(const DescriptorHandle* descriptorHandle);
+	nvrhi::TextureHandle GetTextureHandle(uint32_t descriptorIndex);
 	void ReleaseTexture(RE::BSGraphics::Texture* texture);
 	void ProcessPendingReleases(uint64_t completedFence, uint64_t lastSubmittedFence);
 
