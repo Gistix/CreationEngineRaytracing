@@ -60,7 +60,7 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 		return;
 
 	std::scoped_lock lock(m_TexturesMutex);
-	m_Textures.erase(texture->texture);
+	m_Textures.erase(reinterpret_cast<ID3D11Resource*>(texture->texture));
 }
 
 void TextureManager::ProcessPendingReleases(uint64_t completedFence, uint64_t lastSubmittedFence)
@@ -82,7 +82,7 @@ void TextureManager::ProcessPendingReleases(uint64_t completedFence, uint64_t la
 
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType)
 {
-	ID3D11Resource* d3d11Resource = texture->texture;
+	ID3D11Resource* d3d11Resource = reinterpret_cast<ID3D11Resource*>(texture->texture);
 	if (!d3d11Resource)
 		return nullptr;
 

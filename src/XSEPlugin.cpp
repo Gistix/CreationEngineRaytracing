@@ -107,7 +107,7 @@ bool Load()
 }
 
 #if defined(SKYRIM)
-extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
+SKSE_PLUGIN_LOAD(const SKSE::LoadInterface* a_skse)
 {
 #ifndef NDEBUG
 	while (!REX::W32::IsDebuggerPresent()) {};
@@ -115,20 +115,20 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 	InitializeLog();
 	logger::info("Loaded {} {}", Plugin::NAME, Plugin::VERSION.string());
 	AgilitySDK::Initialize();
-	SKSE::Init(a_skse);
+	SKSE::Init(a_skse, { .trampoline = true, .trampolineSize = 128 });
 	return Load();
 }
 
-extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() noexcept {
+SKSE_PLUGIN_VERSION = []() noexcept {
 	SKSE::PluginVersionData v;
 	v.PluginName(Plugin::NAME.data());
 	v.PluginVersion(Plugin::VERSION);
 	v.UsesAddressLibrary();
 	v.UsesNoStructs();
 	return v;
-	}();
+}();
 
-extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface*, SKSE::PluginInfo* pluginInfo)
+SKSE_PLUGIN_QUERY(const SKSE::QueryInterface*, SKSE::PluginInfo* pluginInfo)
 {
 	pluginInfo->name = SKSEPlugin_Version.pluginName;
 	pluginInfo->infoVersion = SKSE::PluginInfo::kVersion;
@@ -145,7 +145,7 @@ extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(const F4SE::LoadInterface* a_f
 	InitializeLog();
 	logger::info("Loaded {} {}", Plugin::NAME, Plugin::VERSION.string());
 	AgilitySDK::Initialize();
-	F4SE::Init(a_f4se);
+	F4SE::Init(a_f4se, { .trampoline = true, .trampolineSize = 128 });
 	return Load();
 }
 

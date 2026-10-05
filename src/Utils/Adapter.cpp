@@ -565,7 +565,7 @@ namespace Util
 		ID3D11Texture2D* GetMainDepthStencilTexture()
 		{
 #if defined(SKYRIM)
-			return RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture;
+			return reinterpret_cast<ID3D11Texture2D*>(RE::BSGraphics::Renderer::GetSingleton()->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN].texture);
 #elif defined(FALLOUT4)
 			return reinterpret_cast<ID3D11Texture2D*>(RE::BSGraphics::GetRendererData()->depthStencilTargets[0].texture);
 #endif
@@ -664,7 +664,7 @@ namespace Util
 		uint32_t GetGraphicsFrameCount()
 		{
 #if defined(SKYRIM)
-			return GetGraphicsState().frameCount;
+			return GetGraphicsState().GetFrameCount();
 #elif defined(FALLOUT4)
 			return GetGraphicsState().currentFrame;
 #endif

@@ -85,7 +85,7 @@ namespace Util
 	void CreateSharedBuffer(ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer);
 
 #if defined(SKYRIM)
-	void CreateSharedBuffer(RE::ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer);
+	void CreateSharedBuffer(REX::W32::ID3D11Buffer* d3d11Buffer, ID3D12Resource** d3d12Buffer);
 #endif
 
 }

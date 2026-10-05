@@ -71,7 +71,7 @@ void Properties::Update(RE::BSTriShape* triShape, bool isEye)
 		else {
 			if (materialType == RE::BSShaderMaterial::Type::kEffect) {
 				auto* effect = static_cast<RE::BSEffectShaderProperty*>(shaderProperty);
-				const auto color = effect->unk88 ? *effect->unk88 : RE::NiColor{ 1.0f, 1.0f, 1.0f };
+				const auto color = effect->emittanceColor ? *effect->emittanceColor : RE::NiColor{ 1.0f, 1.0f, 1.0f };
 				m_Data.EmissiveColor = float4(color.red, color.green, color.blue, 1.0f);
 			}
 			if (materialType == RE::BSShaderMaterial::Type::kLighting) {

@@ -159,7 +159,7 @@ namespace Util
 			outVisibility.resize(runtime.numPartitions);
 
 			for (int32_t i = 0; i < runtime.numPartitions; ++i)
-				outVisibility[i] = runtime.partitions[i].editorVisible;
+				outVisibility[i] = runtime.partitions[i].visible;
 #else
 			(void)skinInstance;
 #endif

@@ -34,7 +34,6 @@ namespace stl
 	template <class T, std::size_t Size = 5>
 	void write_thunk_call(std::uintptr_t a_src)
 	{
-		CESE::AllocTrampoline(14);
 		auto& trampoline = CESE::GetTrampoline();
 		if (Size == 6) {
 			T::func = *(uintptr_t*)trampoline.write_call<6>(a_src, T::thunk);
@@ -69,7 +68,6 @@ namespace stl
 	template <class T>
 	void write_thunk_jmp(std::uintptr_t a_src)
 	{
-		CESE::AllocTrampoline(14);
 		auto& trampoline = CESE::GetTrampoline();
 #if defined(SKYRIM)
 		T::func = trampoline.write_branch<5>(a_src, T::thunk);

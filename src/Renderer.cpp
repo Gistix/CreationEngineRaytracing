@@ -291,7 +291,7 @@ nvrhi::ITexture* Renderer::GetMotionVectorTexture() {
 #if defined(SKYRIM)
 	if (!m_MotionVectorTexture) {
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
-		m_MotionVectorTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture, "Motion Vector");
+		m_MotionVectorTexture = ShareTexture(reinterpret_cast<ID3D11Texture2D*>(renderTargets[RE::RENDER_TARGETS::kMOTION_VECTOR].texture), "Motion Vector");
 	}
 #endif
 	return m_MotionVectorTexture;
@@ -301,7 +301,7 @@ nvrhi::ITexture* Renderer::GetWaterDisplacementTexture() {
 	if (!m_WaterDisplacementTexture) {
 #if defined(SKYRIM)
 		auto& renderTargets = RE::BSGraphics::Renderer::GetSingleton()->GetRuntimeData().renderTargets;
-		m_WaterDisplacementTexture = ShareTexture(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture, "Water Displacement");
+		m_WaterDisplacementTexture = ShareTexture(reinterpret_cast<ID3D11Texture2D*>(renderTargets[RE::RENDER_TARGETS::kWATER_DISPLACEMENT].texture), "Water Displacement");
 #elif defined(FALLOUT4)
 		m_WaterDisplacementTexture = m_GrayTexture->texture;
 #endif
