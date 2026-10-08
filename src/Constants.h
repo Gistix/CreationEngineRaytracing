@@ -9,7 +9,7 @@ namespace Constants
 		static constexpr uint32_t NORMALMAP_TEXTURE = 1;
 	}
 
-	static constexpr uint32_t NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024;
+	static constexpr uint32_t NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
 	static constexpr uint32_t NVRHI_CMDLIST_SCRATCH_CHUNK_SIZE = NVRHI_CMDLIST_UPLOAD_CHUNK_SIZE;
 
 	static constexpr uint32_t MAX_CB_VERSIONS = 16;
