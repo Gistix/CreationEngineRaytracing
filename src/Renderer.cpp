@@ -73,6 +73,8 @@ void Renderer::BuildVkFormatMapping()
 
 	// Depth SRV format - unecessary?
 	m_VkFormatMapping.emplace(VK_FORMAT_D24_UNORM_S8_UINT, nvrhi::Format::D24S8);
+
+	m_VkFormatMapping.emplace(VK_FORMAT_D24_UNORM_S8_UINT, nvrhi::Format::D24S8);
 }
 
 bool Renderer::Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
@@ -766,7 +768,7 @@ nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char
 		winrt::com_ptr<IDXGIVkInteropSurface> interopSurface;
 		HRESULT hr = d3d11Resource->QueryInterface(__uuidof(IDXGIVkInteropSurface), interopSurface.put_void());
 		if (FAILED(hr)) {
-			logger::error("Scene::SetTexture - QueryInterface IDXGIVkInteropSurface failed.");
+			logger::error("Renderer::WrapNativeTexture - QueryInterface IDXGIVkInteropSurface failed.");
 			return nullptr;
 		}
 
@@ -776,7 +778,7 @@ nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char
 
 		hr = interopSurface->GetVulkanImageInfo(&vkImage, &vkLayout, &createInfo);
 		if (FAILED(hr) || !vkImage) {
-			logger::error("Scene::SetTexture - GetVulkanImageInfo failed.");
+			logger::error("Renderer::WrapNativeTexture - GetVulkanImageInfo failed.");
 			return nullptr;
 		}
 
