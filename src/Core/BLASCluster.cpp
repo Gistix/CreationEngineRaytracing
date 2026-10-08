@@ -337,13 +337,14 @@ nvrhi::rt::AccelStructDesc BLASCluster::MakeDesc(BuildMode mode) const
 		.setDebugName(m_Name.c_str());
 
 	// Updatable/dynamic clusters favour fast builds (frequent refits); static clusters favour fast traversal.
-	blasDesc.buildFlags = m_Flags.any(Flags::Updatable, Flags::Dynamic)
-		? nvrhi::rt::AccelStructBuildFlags::PreferFastBuild
-		: nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
-
-	blasDesc.buildFlags |= (mode == BuildMode::Update
-		? nvrhi::rt::AccelStructBuildFlags::PerformUpdate
-		: nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
+	if (m_Flags.any(Flags::Updatable, Flags::Dynamic)) {
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastBuild;
+		blasDesc.buildFlags |= (mode == BuildMode::Update
+			? nvrhi::rt::AccelStructBuildFlags::PerformUpdate
+			: nvrhi::rt::AccelStructBuildFlags::AllowUpdate);
+	} else {
+		blasDesc.buildFlags = nvrhi::rt::AccelStructBuildFlags::PreferFastTrace;
+	}
 
 	return blasDesc;
 }
