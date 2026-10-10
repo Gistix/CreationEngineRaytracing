@@ -190,6 +190,15 @@ void Main()
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
         SpecularHitDistance[idx] = 0;
 #       endif
+#   elif defined(FSR_RR)
+        DiffuseAlbedo[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        SpecularAlbedo[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        DirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        DirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        IndirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+        IndirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+        ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+        NormalRoughness[idx] = float4(NormalToOctahedronUv(float3(0, 0, 1)), 1.0f, 1.0f);
 #   endif
         return;
 #else
@@ -212,9 +221,20 @@ void Main()
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;                
 #       endif              
+#   elif defined(FSR_RR)
+        DiffuseAlbedo[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        SpecularAlbedo[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        DirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        DirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        IndirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+        IndirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+        ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+        NormalRoughness[idx] = float4(NormalToOctahedronUv(float3(0, 0, 1)), 1.0f, 1.0f);
 #   endif       
         
+#   if !defined(FSR_RR)
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+#   endif
 
         float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
         MotionVectors[idx] = computeMotionVectorCameraRelative(
@@ -287,7 +307,9 @@ void Main()
 #else
     #if !(defined(SHARC) && SHARC_UPDATE)
         Output[idx] = float4(LLTrueLinearToGamma(skyRadiance), 1.0f);
+#       if !defined(FSR_RR)
         NormalRoughness[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+#       endif
         
         float3 skyVirtualPos = sourceDirection * kEnvironmentMapSceneDistance;
         MotionVectors[idx] = computeMotionVectorCameraRelative(
@@ -303,6 +325,15 @@ void Main()
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;
 #           endif  
+#       elif defined(FSR_RR)
+        DiffuseAlbedo[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        SpecularAlbedo[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        DirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        DirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        IndirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+        IndirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+        ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+        NormalRoughness[idx] = float4(NormalToOctahedronUv(float3(0, 0, 1)), 1.0f, 1.0f);
 #       endif
     
     #endif
@@ -334,29 +365,43 @@ void Main()
     // base diffuse is tinted by coat transmission (semi-transparent coat lets base color through).
     const bool useCoat = sourceSurface.CoatStrength > 0;
   
-#   if defined(NRD) | defined(DLSS_RR)    
     const float3 coatTint = lerp(float3(1, 1, 1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
+#   if defined(NRD) | defined(DLSS_RR)    
     DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+#   elif defined(FSR_RR)
+    DiffuseAlbedo[idx] = float4(sqrt(max(sourceSurface.DiffuseAlbedo * coatTint, 0.0f)), 1.0f);
 #   endif   
     
-#   if defined(DLSS_RR)    
+#   if defined(DLSS_RR) || defined(FSR_RR)
+    float3 specAlbedoLinear;
     if (useCoat)
     {
         float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
         const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * envBRDF.x + envBRDF.y);
+        specAlbedoLinear = float3(sourceSurface.CoatF0 * envBRDF.x + envBRDF.y);
     }
     else
     {
         const float2 envBRDF = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
+        specAlbedoLinear = float3(sourceSurface.F0 * envBRDF.x + envBRDF.y);
     }
+#       if defined(FSR_RR)
+    SpecularAlbedo[idx] = float4(sqrt(max(specAlbedoLinear, 0.0f)), 1.0f);
+#       else
+    SpecularAlbedo[idx] = specAlbedoLinear;
+#       endif
 #   endif
 #if defined(NRD)
     NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(
         useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal, 
         useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness, 
         0.0f
+    );
+#elif defined(FSR_RR)
+    NormalRoughness[idx] = float4(
+        NormalToOctahedronUv(useCoat ? sourceSurface.CoatNormal : sourceSurface.Normal),
+        saturate(useCoat ? sourceSurface.CoatRoughness : sourceSurface.Roughness),
+        1.0f
     );
 #else
     NormalRoughness[idx] = float4(
@@ -365,7 +410,7 @@ void Main()
     );
 #endif
 
-#if defined(NRD)
+#if defined(NRD) || defined(FSR_RR)
     float depthVS = 0.0f;
 #endif
 
@@ -378,7 +423,7 @@ void Main()
     const float depth = computeClipDepthCameraRelative(sourceSurface.CameraRelativePosition);
     Depth[idx] = depth;
     
-#   if defined(NRD) 
+#   if defined(NRD) || defined(FSR_RR)
     depthVS = ScreenToViewDepth(depth, Camera.CameraData);
     ViewDepth[idx] = depthVS;
 #   endif
@@ -645,6 +690,12 @@ void Main()
 #   endif
             DiffuseFactor[idx] = float3(1.0f, 1.0f, 1.0f);
             SpecularFactor[idx] = float3(1.0f, 1.0f, 1.0f);
+#elif defined(FSR_RR)
+            Output[idx] = float4(spCtx.GetAllRadiance(idx, true), 1.0f);
+            DirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+            DirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+            IndirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+            IndirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
 #else
             Output[idx] = float4(LLTrueLinearToGamma(spCtx.GetAllRadiance(idx, true)), 1.0f);
 #endif
@@ -673,6 +724,12 @@ void Main()
 #   endif
             DiffuseFactor[idx] = float3(1.0f, 1.0f, 1.0f);
             SpecularFactor[idx] = float3(1.0f, 1.0f, 1.0f);
+#elif defined(FSR_RR)
+            Output[idx] = float4(spCtx.GetAllRadiance(idx, true), 1.0f);
+            DirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+            DirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+            IndirectDiffuse[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
+            IndirectSpecular[idx] = float4(0.0f, 0.0f, 0.0f, 65504.0f);
 #else
             Output[idx] = float4(LLTrueLinearToGamma(spCtx.GetAllRadiance(idx, true)), 1.0f);
 #endif
@@ -699,8 +756,9 @@ void Main()
         AdjustShadingNormal(sourceSurface, sourceBRDFContext, true, false);
         sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceIsEnter);
         fillPlaneThp = fillThp;
-#if defined(NRD)
+#if defined(NRD) || defined(FSR_RR)
         depthVS = ScreenToViewDepth(computeClipDepthCameraRelative(sourceSurface.CameraRelativePosition), Camera.CameraData);
+        ViewDepth[idx] = depthVS;
 #endif
 
         // SurfaceDataBuffer for ReSTIR GI is now written in the bounce loop
@@ -722,8 +780,14 @@ void Main()
         UnpackTwoFp32ToFp16(domSP.DenoiserPackedBSDFEstimate, domDiffEst, domSpecEst);
 #   if defined(NRD) | defined(DLSS_RR)
         DiffuseAlbedo[idx] = domDiffEst;
+#   elif defined(FSR_RR)
+        DiffuseAlbedo[idx] = float4(sqrt(max(domDiffEst, 0.0f)), 1.0f);
 #   endif
+#   if defined(FSR_RR)
+        NormalRoughness[idx] = float4(NormalToOctahedronUv(domNormal), domRoughness, 1.0f);
+#   else
         NormalRoughness[idx] = float4(domNormal, domRoughness);
+#   endif
     }
     else
     {
@@ -732,9 +796,13 @@ void Main()
             float3 coatTint = lerp(float3(1,1,1), sourceSurface.CoatColor, sourceSurface.CoatStrength);
 #   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo * coatTint;
+#   elif defined(FSR_RR)
+            DiffuseAlbedo[idx] = float4(sqrt(max(sourceSurface.DiffuseAlbedo * coatTint, 0.0f)), 1.0f);
 #   endif
 #   if defined(NRD)
             NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.CoatNormal, sourceSurface.CoatRoughness, 0.0f);
+#   elif defined(FSR_RR)
+            NormalRoughness[idx] = float4(NormalToOctahedronUv(sourceSurface.CoatNormal), saturate(sourceSurface.CoatRoughness), 1.0f);
 #   else
             NormalRoughness[idx] = float4(normalize(sourceSurface.CoatNormal), saturate(sourceSurface.CoatRoughness));
 #   endif
@@ -743,27 +811,37 @@ void Main()
         {
 #   if defined(NRD) | defined(DLSS_RR)
             DiffuseAlbedo[idx] = sourceSurface.DiffuseAlbedo;
+#   elif defined(FSR_RR)
+            DiffuseAlbedo[idx] = float4(sqrt(max(sourceSurface.DiffuseAlbedo, 0.0f)), 1.0f);
 #   endif
 #   if defined(NRD)
             NormalRoughness[idx] = NRD_FrontEnd_PackNormalAndRoughness(sourceSurface.Normal, sourceSurface.Roughness, 0.0f);
+#   elif defined(FSR_RR)
+            NormalRoughness[idx] = float4(NormalToOctahedronUv(sourceSurface.Normal), saturate(sourceSurface.Roughness), 1.0f);
 #   else
             NormalRoughness[idx] = float4(normalize(sourceSurface.Normal), saturate(sourceSurface.Roughness));
 #   endif
         }
     }
 
-#   if defined(DLSS_RR) 
+#   if defined(DLSS_RR) || defined(FSR_RR)
+    float3 specAlbedoLinearFill;
     if (sourceSurface.CoatStrength > 0)
     {
         float coatNdotV = saturate(dot(sourceSurface.CoatNormal, sourceBRDFContext.ViewDirection));
         const float2 coatEnvBRDF = BRDF::EnvBRDF(sourceSurface.CoatRoughness, coatNdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.CoatF0 * coatEnvBRDF.x + coatEnvBRDF.y);
+        specAlbedoLinearFill = float3(sourceSurface.CoatF0 * coatEnvBRDF.x + coatEnvBRDF.y);
     }
     else
     {
         const float2 envBRDF2 = BRDF::EnvBRDF(sourceSurface.Roughness, sourceBRDFContext.NdotV);
-        SpecularAlbedo[idx] = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
+        specAlbedoLinearFill = float3(sourceSurface.F0 * envBRDF2.x + envBRDF2.y);
     }
+#       if defined(FSR_RR)
+    SpecularAlbedo[idx] = float4(sqrt(max(specAlbedoLinearFill, 0.0f)), 1.0f);
+#       else
+    SpecularAlbedo[idx] = specAlbedoLinearFill;
+#       endif
 #   endif
     
     // In FILL mode, emissive along delta paths was captured in BUILD → skip to avoid double-counting
@@ -781,7 +859,7 @@ void Main()
     // For non-delta lobes: standard NEE (EvaluateDirectRadiance) evaluates BSDF at sampled light directions.
     // For delta lobes: EvalDeltaLobeLighting checks if delta reflection/refraction directions fall within
     // each light source's solid angle, providing correct mirror reflections of analytical lights.
-#if defined(NRD)
+#if defined(NRD) || defined(FSR_RR)
     float3 directDiffuse = 0.0f;
     float3 directSpecular = 0.0f;
 
@@ -866,6 +944,9 @@ void Main()
     float3 diffuseRadiance = directDiffuse;
     float3 specularRadiance = directSpecular;
 #   endif
+#elif defined(FSR_RR)
+    float3 indirectDiffuseRadiance = 0.0f;
+    float3 indirectSpecularRadiance = 0.0f;
 #else
     float3 radiance = float3(0.0f, 0.0f, 0.0f);
 #endif
@@ -875,6 +956,11 @@ void Main()
      float diffHitDist = 0;     
      uint diffPathNum = 0;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+#elif defined(FSR_RR)
+     float diffHitDist = 0.0f;     
+     uint diffPathNum = 0;
+     float specHitDist = 0.0f;
+     uint specPathNum = 0;
 #elif defined(DLSS_RR)
     float specHitDist = 0.0f;
 #endif
@@ -1121,6 +1207,21 @@ void Main()
 #if defined(NRD)
             if (j == 0)
                 accumulatedHitDist = payload.hitDistance;
+#elif defined(FSR_RR)
+            if (j == 0)
+            {
+                float hitD = payload.Hit() ? payload.hitDistance : 65504.0f;
+                if (isSpecularSample)
+                {
+                    specHitDist += hitD;
+                    specPathNum++;
+                }
+                else
+                {
+                    diffHitDist += hitD;
+                    diffPathNum++;
+                }
+            }
 #elif defined(DLSS_RR)
             if (isSpecularSample)
                 specHitDist = payload.hitDistance;
@@ -1415,6 +1516,11 @@ void Main()
             specularRadiance += sampleRadiance;
         else
             diffuseRadiance += sampleRadiance;
+#elif defined(FSR_RR)
+        if (isSpecularSample)
+            indirectSpecularRadiance += sampleRadiance;
+        else
+            indirectDiffuseRadiance += sampleRadiance;
 #else
         radiance += sampleRadiance;
 #endif
@@ -1431,6 +1537,11 @@ void Main()
     specularRadiance /= MAX_SAMPLES;
     diffHitDist = max(diffHitDist, 1e-6f);
     specHitDist = max(specHitDist, 1e-6f);
+#elif defined(FSR_RR)
+    diffHitDist = diffPathNum > 0 ? (diffHitDist / float(diffPathNum)) : 65504.0f;
+    specHitDist = specPathNum > 0 ? (specHitDist / float(specPathNum)) : 65504.0f;
+    indirectDiffuseRadiance /= MAX_SAMPLES;
+    indirectSpecularRadiance /= MAX_SAMPLES;
 #else
     radiance /= MAX_SAMPLES;
 #endif        
@@ -1456,6 +1567,17 @@ void Main()
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;
+#   elif defined(FSR_RR)
+    float3 baseRadiance = spCtx.LoadStableRadiance(idx);
+    Output[idx] = float4(baseRadiance, 1.0f);
+
+    float3 diffAlbedoSafe = max(sourceSurface.DiffuseAlbedo, 1e-4f);
+    float3 specAlbedoSafe = max(specAlbedoLinearFill, 1e-4f);
+
+    DirectDiffuse[idx] = float4(directDiffuse / diffAlbedoSafe, 1.0f);
+    DirectSpecular[idx] = float4(directSpecular / specAlbedoSafe, 1.0f);
+    IndirectDiffuse[idx] = float4(indirectDiffuseRadiance / diffAlbedoSafe, diffHitDist);
+    IndirectSpecular[idx] = float4(indirectSpecularRadiance / specAlbedoSafe, specHitDist);
 #   else
     // combine stable radiance (noise-free) with all planes' noisy radiance
     {
@@ -1477,6 +1599,11 @@ void Main()
 #   if defined(NRD)
         diffuseRadiance *= primaryWaterAttenuation;
         specularRadiance *= primaryWaterAttenuation;
+#   elif defined(FSR_RR)
+        directDiffuse *= primaryWaterAttenuation;
+        directSpecular *= primaryWaterAttenuation;
+        indirectDiffuseRadiance *= primaryWaterAttenuation;
+        indirectSpecularRadiance *= primaryWaterAttenuation;
 #   else
         radiance *= primaryWaterAttenuation;
 #   endif
@@ -1500,6 +1627,16 @@ void Main()
     
     DiffuseFactor[idx] = diffFactor;
     SpecularFactor[idx] = specFactor;    
+#elif defined(FSR_RR)
+    Output[idx] = float4(primaryEmissive, 1.0f);
+
+    float3 diffAlbedoSafe = max(sourceSurface.DiffuseAlbedo, 1e-4f);
+    float3 specAlbedoSafe = max(specAlbedoLinear, 1e-4f);
+
+    DirectDiffuse[idx] = float4(directDiffuse / diffAlbedoSafe, 1.0f);
+    DirectSpecular[idx] = float4(directSpecular / specAlbedoSafe, 1.0f);
+    IndirectDiffuse[idx] = float4(indirectDiffuseRadiance / diffAlbedoSafe, diffHitDist);
+    IndirectSpecular[idx] = float4(indirectSpecularRadiance / specAlbedoSafe, specHitDist);
 #else    
     Output[idx] = float4(LLTrueLinearToGamma(direct + radiance), 1.0f);
 

@@ -15,7 +15,7 @@ Texture2D<float> DepthTexture           : register(t0);
 Texture2D<float4> NormalRoughnessTexture : register(t1);
 Texture2D<float4> PrimaryMotionVectors  : register(t2);
 
-#if defined(DLSS_RR)
+#if defined(DLSS_RR) || defined(FSR_RR)
 Texture2D<float4> AlbedoTexture         : register(t3);
 Texture2D<float3> GNMAOTexture          : register(t4);
 #endif
@@ -23,8 +23,12 @@ Texture2D<float3> GNMAOTexture          : register(t4);
 RWTexture2D<float4> OutNormalRoughness       : register(u0);
 RWTexture2D<float4> OutMotionVectors         : register(u1);
 
-#if defined(NRD)
+#if defined(NRD) || defined(FSR_RR)
 RWTexture2D<float>  OutViewDepth             : register(u2);
+#endif
+#if defined(FSR_RR)
+RWTexture2D<float4> OutDiffuseAlbedo         : register(u3);
+RWTexture2D<float4> OutSpecularAlbedo        : register(u4);
 #endif
 
 #if defined(DLSS_RR)
@@ -33,6 +37,10 @@ RWTexture2D<float>  OutViewDepth             : register(u2);
 #include "include/Common/BRDF.hlsli"
 
 RWTexture2D<float3> OutSpecularAlbedo        : register(u2);
+#elif defined(FSR_RR)
+#include "include/ColorConversions.hlsli"
+#include "include/PBR.hlsli"
+#include "include/Common/BRDF.hlsli"
 #endif
 
 WAVE_SIZE(32)
@@ -57,15 +65,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     const float4 normalRoughness = NormalRoughnessTexture.SampleLevel(PointClampSampler, sourceUV, 0);
     
     // Point-sample the G-buffer and motion vectors at the corresponding GI pixel.
+#if !defined(FSR_RR)
     OutNormalRoughness[pixelPos] = normalRoughness;
+#endif
     OutMotionVectors[pixelPos] = PrimaryMotionVectors.SampleLevel(PointClampSampler, sourceUV, 0);
 
-#if defined(NRD) || defined(DLSS_RR)
+#if defined(NRD) || defined(DLSS_RR) || defined(FSR_RR)
     const float depth = DepthTexture.SampleLevel(PointClampSampler, sourceUV, 0);
     const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 #endif
 
-#if defined(NRD)
+#if defined(NRD) || defined(FSR_RR)
     OutViewDepth[pixelPos] = depthVS;
 #endif
 
@@ -84,5 +94,22 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     const float2 envBRDF = BRDF::EnvBRDF(roughness, NdotV);
 
     OutSpecularAlbedo[pixelPos] = float3(F0 * envBRDF.x + envBRDF.y);
+#elif defined(FSR_RR)
+    const float roughness = PBR::Roughness(saturate(normalRoughness.w), Raytracing.Roughness.x, Raytracing.Roughness.y);
+    const float3 normal = normalRoughness.xyz;
+    OutNormalRoughness[pixelPos] = float4(NormalToOctahedronUv(normal), roughness, 1.0f);
+
+    const float3 positionVS = ScreenToViewPosition(sourceUV, depthVS, Camera.NDCToView);
+    const float3 viewDirection = normalize(-ViewToWorldPosition(positionVS, Camera.ViewInverse));
+
+    const float3 albedo = LLGammaToTrueLinear(AlbedoTexture.SampleLevel(PointClampSampler, sourceUV, 0).rgb);
+    const float metalness = Remap(saturate(GNMAOTexture.SampleLevel(PointClampSampler, sourceUV, 0).y), Raytracing.Metalness.x, Raytracing.Metalness.y);
+
+    const float3 F0 = PBR::F0(albedo, metalness);
+    const float NdotV = abs(dot(normal, viewDirection));
+    const float2 envBRDF = BRDF::EnvBRDF(roughness, NdotV);
+
+    OutDiffuseAlbedo[pixelPos] = float4(sqrt(max(albedo, 0.0f)), 1.0f);
+    OutSpecularAlbedo[pixelPos] = float4(sqrt(max(float3(F0 * envBRDF.x + envBRDF.y), 0.0f)), 1.0f);
 #endif
 }

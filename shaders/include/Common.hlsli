@@ -301,4 +301,17 @@ float4 QuaternionMultiplyLocal(float4 a, float4 b)
         a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz),
         a.w * b.w - dot(a.xyz, b.xyz));
 }
+
+float2 OctahedronWrap(float2 v)
+{
+    float2 s = float2(v.x >= 0.0f ? 1.0f : -1.0f, v.y >= 0.0f ? 1.0f : -1.0f);
+    return (1.0f - abs(v.yx)) * s;
+}
+
+float2 NormalToOctahedronUv(float3 n)
+{
+    n /= (abs(n.x) + abs(n.y) + abs(n.z));
+    n.xy = n.z >= 0.0f ? n.xy : OctahedronWrap(n.xy);
+    return n.xy * 0.5f + 0.5f;
+}
 #endif // COMMON_HLSLI

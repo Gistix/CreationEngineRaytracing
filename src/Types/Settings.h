@@ -14,6 +14,7 @@ enum class Denoiser
 	NRD_Reblur,
 	NRD_Relax,
 	DLSS_RR,
+	FSR_RR,
 	Accumulation
 };
 

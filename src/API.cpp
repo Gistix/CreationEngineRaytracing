@@ -116,6 +116,43 @@ void GetRRInput(void*& diffuseAlbedo, void*& specularAlbedo, void*& specularHitD
 	}
 }
 
+void GetFSR4RRInputs(FSR4RRInputs& inputs)
+{
+	auto* renderer = Renderer::GetSingleton();
+	auto& textureManager = renderer->RenderTargetManager();
+
+	if (renderer->IsVulkan()) {
+		inputs.directDiffuse = textureManager.GetSharedTexture(RenderTarget::DirectDiffuse).shared;
+		inputs.directSpecular = textureManager.GetSharedTexture(RenderTarget::DirectSpecular).shared;
+		inputs.indirectDiffuse = textureManager.GetSharedTexture(RenderTarget::IndirectDiffuse).shared;
+		inputs.indirectSpecular = textureManager.GetSharedTexture(RenderTarget::IndirectSpecular).shared;
+		inputs.diffuseAlbedo = textureManager.GetSharedTexture(RenderTarget::FSRDiffuseAlbedo).shared;
+		inputs.specularAlbedo = textureManager.GetSharedTexture(RenderTarget::FSRSpecularAlbedo).shared;
+		inputs.linearDepth = textureManager.GetSharedTexture(RenderTarget::ViewDepth).shared;
+	} else {
+		inputs.directDiffuse = textureManager.GetTexture(RenderTarget::DirectDiffuse)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		inputs.directSpecular = textureManager.GetTexture(RenderTarget::DirectSpecular)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		inputs.indirectDiffuse = textureManager.GetTexture(RenderTarget::IndirectDiffuse)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		inputs.indirectSpecular = textureManager.GetTexture(RenderTarget::IndirectSpecular)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		inputs.diffuseAlbedo = textureManager.GetTexture(RenderTarget::FSRDiffuseAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		inputs.specularAlbedo = textureManager.GetTexture(RenderTarget::FSRSpecularAlbedo)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+		inputs.linearDepth = textureManager.GetTexture(RenderTarget::ViewDepth)->getNativeObject(nvrhi::ObjectTypes::D3D12_Resource);
+	}
+}
+
+void GetFSR4RRInput(void*& directDiffuse, void*& directSpecular, void*& indirectDiffuse, void*& indirectSpecular, void*& diffuseAlbedo, void*& specularAlbedo, void*& linearDepth)
+{
+	FSR4RRInputs inputs;
+	GetFSR4RRInputs(inputs);
+	directDiffuse = inputs.directDiffuse;
+	directSpecular = inputs.directSpecular;
+	indirectDiffuse = inputs.indirectDiffuse;
+	indirectSpecular = inputs.indirectSpecular;
+	diffuseAlbedo = inputs.diffuseAlbedo;
+	specularAlbedo = inputs.specularAlbedo;
+	linearDepth = inputs.linearDepth;
+}
+
 void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao)
 {
 	auto* renderer = Renderer::GetSingleton();

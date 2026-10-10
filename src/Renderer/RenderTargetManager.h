@@ -24,6 +24,12 @@ struct RenderTargetManager
 		DownscaledMotionVectors,
 		DownscaledNormalRoughness,
 		Accumulation,
+		DirectDiffuse,
+		DirectSpecular,
+		IndirectDiffuse,
+		IndirectSpecular,
+		FSRDiffuseAlbedo,
+		FSRSpecularAlbedo,
 		Total
 	};
 

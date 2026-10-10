@@ -58,6 +58,14 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		case RenderTarget::DownscaledNormalRoughness:
 			desc.format = nvrhi::Format::RGBA16_SNORM;
 			break;
+		case RenderTarget::DirectDiffuse:
+		case RenderTarget::DirectSpecular:
+		case RenderTarget::IndirectDiffuse:
+		case RenderTarget::IndirectSpecular:
+		case RenderTarget::FSRDiffuseAlbedo:
+		case RenderTarget::FSRSpecularAlbedo:
+			desc.format = nvrhi::Format::RGBA16_FLOAT;
+			break;
 		default:
 			break;
 		}
@@ -221,5 +229,23 @@ void RenderTargetManager::CopySharedTextures(nvrhi::ICommandList* commandList) {
 		copyTexture(Texture::DiffuseAlbedo);
 		copyTexture(Texture::RRSpecularAlbedo);
 		copyTexture(Texture::RRSpecularHitDist);
+	}
+
+	if (Scene::GetSingleton()->m_Settings.GeneralSettings.Denoiser == Denoiser::FSR_RR) {
+		GetSharedTexture(Texture::DirectDiffuse);
+		GetSharedTexture(Texture::DirectSpecular);
+		GetSharedTexture(Texture::IndirectDiffuse);
+		GetSharedTexture(Texture::IndirectSpecular);
+		GetSharedTexture(Texture::FSRDiffuseAlbedo);
+		GetSharedTexture(Texture::FSRSpecularAlbedo);
+		GetSharedTexture(Texture::ViewDepth);
+
+		copyTexture(Texture::DirectDiffuse);
+		copyTexture(Texture::DirectSpecular);
+		copyTexture(Texture::IndirectDiffuse);
+		copyTexture(Texture::IndirectSpecular);
+		copyTexture(Texture::FSRDiffuseAlbedo);
+		copyTexture(Texture::FSRSpecularAlbedo);
+		copyTexture(Texture::ViewDepth);
 	}
 }

@@ -5,6 +5,17 @@
 #include "Types/SharedTexture.h"
 #include "Types/Settings.h"
 
+struct FSR4RRInputs
+{
+	void* directDiffuse = nullptr;
+	void* directSpecular = nullptr;
+	void* indirectDiffuse = nullptr;
+	void* indirectSpecular = nullptr;
+	void* diffuseAlbedo = nullptr;
+	void* specularAlbedo = nullptr;
+	void* linearDepth = nullptr;
+};
+
 extern "C" {
 	CERT_API bool InitializeRenderer(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 	CERT_API bool InitializeVulkanRenderer(RendererSettings* rendererSettings, void* instance, void* physicalDevice, void* device, void* graphicsQueue, int graphicsQueueIndex, void* transferQueue, int transferQueueIndex, void* computeQueue, int computeQueueIndex);
@@ -22,6 +33,8 @@ extern "C" {
 	CERT_API void GetSceneGraphCounters(uint32_t& textures, uint32_t& models, uint32_t& instances);
 	CERT_API void UpdateSettings(Settings);
 	CERT_API void GetRRInput(void*& diffuseAlbedo, void*& specularAlbedo, void*& specularHitDistance);
+	CERT_API void GetFSR4RRInputs(FSR4RRInputs& inputs);
+	CERT_API void GetFSR4RRInput(void*& directDiffuse, void*& directSpecular, void*& indirectDiffuse, void*& indirectSpecular, void*& diffuseAlbedo, void*& specularAlbedo, void*& linearDepth);
 	CERT_API void SetSharedTextures(void* albedo, void* normalRoughness, void* gnmao);
 	CERT_API void GetSharedTextures(SharedTexture& depth, SharedTexture& motionVector, SharedTexture& main);
 	CERT_API void UpdateJitter(float2 jitter);

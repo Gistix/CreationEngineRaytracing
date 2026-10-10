@@ -26,6 +26,7 @@ namespace Pass::Utility
 			(settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax ||
 			 settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR ||
+			 settings.GeneralSettings.Denoiser == Denoiser::FSR_RR ||
 			 settings.RaytracingSettings.ResolutionScale != 1.0f)
 		);
 
@@ -66,6 +67,15 @@ namespace Pass::Utility
 			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // GNMAOTexture
 			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // OutSpecularAlbedo
 			defines.push_back({ L"DLSS_RR", L"1" });
+		}
+
+		if (m_Denoiser == Denoiser::FSR_RR) {
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // AlbedoTexture
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // GNMAOTexture
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // OutViewDepth
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(3)); // OutDiffuseAlbedo
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // OutSpecularAlbedo
+			defines.push_back({ L"FSR_RR", L"1" });
 		}
 
 		m_BindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -129,6 +139,14 @@ namespace Pass::Utility
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, renderTargets->albedo));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, renderTargets->gnmao));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));
+		}
+
+		if (m_Denoiser == Denoiser::FSR_RR) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, renderTargets ? renderTargets->albedo.Get() : nullptr));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, renderTargets ? renderTargets->gnmao.Get() : nullptr));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::FSRDiffuseAlbedo)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::FSRSpecularAlbedo)));
 		}
 
 		m_BindingSets[currentSlot] = renderer->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);

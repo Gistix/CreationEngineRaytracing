@@ -104,8 +104,18 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool fsrrr = (settings.GeneralSettings.Denoiser == Denoiser::FSR_RR);
 
-		if (nrd || dlssrr) {
+		if (fsrrr) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Direct Diffuse
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // Direct Specular
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(6)); // Indirect Diffuse
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(7)); // Indirect Specular
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(8)); // Diffuse Albedo
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9)); // Specular Albedo
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(18)); // ViewDepth
+		}
+		else if (nrd || dlssrr) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(4)); // Diffuse Albedo
 
 			if (nrd) {
@@ -349,8 +359,18 @@ namespace Pass
 		const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 		const bool dlssrr = (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR);
+		const bool fsrrr = (settings.GeneralSettings.Denoiser == Denoiser::FSR_RR);
 
-		if (nrd || dlssrr) {
+		if (fsrrr) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::DirectDiffuse)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::DirectSpecular)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(6, textureManager.GetTexture(RenderTarget::IndirectDiffuse)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, textureManager.GetTexture(RenderTarget::IndirectSpecular)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(8, textureManager.GetTexture(RenderTarget::FSRDiffuseAlbedo)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, textureManager.GetTexture(RenderTarget::FSRSpecularAlbedo)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(18, textureManager.GetTexture(RenderTarget::ViewDepth)));
+		}
+		else if (nrd || dlssrr) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(4, textureManager.GetTexture(RenderTarget::DiffuseAlbedo)));
 
 			if (nrd) {

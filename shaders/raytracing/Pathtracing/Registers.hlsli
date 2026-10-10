@@ -53,6 +53,14 @@ RWTexture2D<float3>                         SpecularAlbedo              : regist
 RWTexture2D<float>                          SpecularHitDistance         : register(u6);
 #       endif
 
+#   elif defined(FSR_RR)
+RWTexture2D<float4>                         DirectDiffuse               : register(u4);
+RWTexture2D<float4>                         DirectSpecular              : register(u5);
+RWTexture2D<float4>                         IndirectDiffuse             : register(u6);
+RWTexture2D<float4>                         IndirectSpecular            : register(u7);
+RWTexture2D<float4>                         DiffuseAlbedo               : register(u8);
+RWTexture2D<float4>                         SpecularAlbedo              : register(u9);
+RWTexture2D<float>                          ViewDepth                   : register(u18);
 #   endif
 
 #   if defined(STABLE_PLANES)
