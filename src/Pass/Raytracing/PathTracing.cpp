@@ -116,6 +116,8 @@ namespace Pass
 
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(8)); // Diffuse Factor
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(9)); // Specular Factor
+				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(18)); // Direct Diffuse
+				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(19)); // Direct Specular
 			}
 			else {
 				globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(5)); // Specular Albedo (EnvBRDF)
@@ -359,6 +361,8 @@ namespace Pass
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(7, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(8, textureManager.GetTexture(RenderTarget::DiffuseFactor)));
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(9, textureManager.GetTexture(RenderTarget::SpecularFactor)));
+				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(18, textureManager.GetTexture(RenderTarget::DirectDiffuse)));
+				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(19, textureManager.GetTexture(RenderTarget::DirectSpecular)));
 			}
 			else {
 				bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(5, textureManager.GetTexture(RenderTarget::RRSpecularAlbedo)));

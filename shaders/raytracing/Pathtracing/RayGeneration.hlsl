@@ -186,6 +186,10 @@ void Main()
         DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
 #           endif
+#           if defined(SPLIT_DIRECT)
+        DirectDiffuse[idx] = float3(0.0f, 0.0f, 0.0f);
+        DirectSpecular[idx] = float3(0.0f, 0.0f, 0.0f);
+#           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);        
         SpecularHitDistance[idx] = 0;
@@ -207,6 +211,10 @@ void Main()
 #           else
         DiffuseRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
         SpecularRadiance[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(0.0f, 0.0f, false);
+#           endif
+#           if defined(SPLIT_DIRECT)
+        DirectDiffuse[idx] = float3(0.0f, 0.0f, 0.0f);
+        DirectSpecular[idx] = float3(0.0f, 0.0f, 0.0f);
 #           endif
 #       else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
@@ -283,6 +291,10 @@ void Main()
         return;
 #elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
         Output[idx] = float4(LLTrueLinearToGamma(spCtx.GetAllRadiance(idx, true)), 1.0f);
+#   if defined(SPLIT_DIRECT)
+        DirectDiffuse[idx] = float3(0.0f, 0.0f, 0.0f);
+        DirectSpecular[idx] = float3(0.0f, 0.0f, 0.0f);
+#   endif
         return;
 #else
     #if !(defined(SHARC) && SHARC_UPDATE)
@@ -299,6 +311,10 @@ void Main()
         DiffuseAlbedo[idx] = float3(0.0f, 0.0f, 0.0f);
 #           if defined(NRD) 
         ViewDepth[idx] = ScreenToViewDepth(1.0f, Camera.CameraData);
+#           if defined(SPLIT_DIRECT)
+        DirectDiffuse[idx] = float3(0.0f, 0.0f, 0.0f);
+        DirectSpecular[idx] = float3(0.0f, 0.0f, 0.0f);
+#           endif
 #           else
         SpecularAlbedo[idx] = float3(0.5f, 0.5f, 0.5f);
         SpecularHitDistance[idx] = 0;
@@ -859,7 +875,12 @@ void Main()
 #endif
 
 #if defined(NRD)
-#   if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
+#   if defined(SPLIT_DIRECT)
+    // Primary-surface direct lighting is output separately for cheap temporal
+    // accumulation; the NRD signal below accumulates indirect only.
+    float3 diffuseRadiance = 0.0f;
+    float3 specularRadiance = 0.0f;
+#   elif PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
     float3 diffuseRadiance = directDiffuse * fillPlaneThp;
     float3 specularRadiance = directSpecular * fillPlaneThp;
 #   else
@@ -1446,6 +1467,10 @@ void Main()
     specularRadiance /= specFactor;    
     
     Output[idx] = float4(baseRadiance, 1.0f);
+#       if defined(SPLIT_DIRECT)
+    DirectDiffuse[idx] = (directDiffuse * fillPlaneThp) / diffFactor;
+    DirectSpecular[idx] = (directSpecular * fillPlaneThp) / specFactor;
+#       endif
 #       if defined(NRD_REBLUR)
     DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
@@ -1477,6 +1502,10 @@ void Main()
 #   if defined(NRD)
         diffuseRadiance *= primaryWaterAttenuation;
         specularRadiance *= primaryWaterAttenuation;
+#       if defined(SPLIT_DIRECT)
+        directDiffuse *= primaryWaterAttenuation;
+        directSpecular *= primaryWaterAttenuation;
+#       endif
 #   else
         radiance *= primaryWaterAttenuation;
 #   endif
@@ -1490,6 +1519,10 @@ void Main()
     specularRadiance /= specFactor;    
     
     Output[idx] = float4(primaryEmissive, 1.0f);
+#   if defined(SPLIT_DIRECT)
+    DirectDiffuse[idx] = directDiffuse / diffFactor;
+    DirectSpecular[idx] = directSpecular / specFactor;
+#   endif
 #   if defined(NRD_REBLUR)
     DiffuseRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
     SpecularRadiance[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  

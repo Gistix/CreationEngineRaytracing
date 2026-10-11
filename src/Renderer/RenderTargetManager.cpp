@@ -55,6 +55,18 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		case RenderTarget::DownscaledMotionVectors:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
+		case RenderTarget::DirectDiffuse:
+		case RenderTarget::DirectSpecular:
+		case RenderTarget::DirectDiffuseHistory:
+		case RenderTarget::DirectSpecularHistory:
+		case RenderTarget::DirectDiffuseAccum:
+		case RenderTarget::DirectSpecularAccum:
+			desc.format = nvrhi::Format::R11G11B10_FLOAT;
+			break;
+		case RenderTarget::DirectViewZHistory:
+		case RenderTarget::DirectViewZAccum:
+			desc.format = nvrhi::Format::R32_FLOAT;
+			break;
 		case RenderTarget::DownscaledNormalRoughness:
 			desc.format = nvrhi::Format::RGBA16_SNORM;
 			break;

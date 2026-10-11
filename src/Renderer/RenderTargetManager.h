@@ -24,6 +24,14 @@ struct RenderTargetManager
 		DownscaledMotionVectors,
 		DownscaledNormalRoughness,
 		Accumulation,
+		DirectDiffuse,
+		DirectSpecular,
+		DirectDiffuseHistory,
+		DirectSpecularHistory,
+		DirectDiffuseAccum,
+		DirectSpecularAccum,
+		DirectViewZHistory,
+		DirectViewZAccum,
 		Total
 	};
 

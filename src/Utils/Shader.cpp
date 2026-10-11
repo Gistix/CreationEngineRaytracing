@@ -81,6 +81,10 @@ namespace Util
 				} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
 					defines.emplace_back(L"DLSS_RR", L"1");
 
+				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+					settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax)
+					defines.emplace_back(L"SPLIT_DIRECT", L"1");
+
 				if (settings.AdvancedSettings.StablePlanes)
 					defines.emplace_back(L"STABLE_PLANES");
 

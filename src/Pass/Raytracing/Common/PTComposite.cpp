@@ -16,6 +16,10 @@ namespace
 			defines.emplace_back(L"NRD_RELAX", L"1");
 		}
 
+		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax)
+			defines.emplace_back(L"SPLIT_DIRECT", L"1");
+
 		return defines;
 	}
 }
@@ -46,6 +50,8 @@ namespace Pass::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(2),
 			nvrhi::BindingLayoutItem::Texture_SRV(3),
 			nvrhi::BindingLayoutItem::Texture_SRV(4),
+			nvrhi::BindingLayoutItem::Texture_SRV(5), // AccumDirectDiffuse
+			nvrhi::BindingLayoutItem::Texture_SRV(6), // AccumDirectSpecular
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -121,6 +127,8 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::Texture_SRV(2, specularRadiance),
 			nvrhi::BindingSetItem::Texture_SRV(3, diffuseFactor),
 			nvrhi::BindingSetItem::Texture_SRV(4, specularFactor),
+			nvrhi::BindingSetItem::Texture_SRV(5, textureManager.GetTexture(RenderTarget::DirectDiffuseAccum)),
+			nvrhi::BindingSetItem::Texture_SRV(6, textureManager.GetTexture(RenderTarget::DirectSpecularAccum)),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 

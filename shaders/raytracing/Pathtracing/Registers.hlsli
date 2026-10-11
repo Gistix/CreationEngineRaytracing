@@ -48,6 +48,10 @@ RWTexture2D<float4>                         DiffuseRadiance             : regist
 RWTexture2D<float4>                         SpecularRadiance            : register(u7);
 RWTexture2D<float3>                         DiffuseFactor               : register(u8);
 RWTexture2D<float3>                         SpecularFactor              : register(u9);
+#           if defined(SPLIT_DIRECT)
+RWTexture2D<float3>                         DirectDiffuse               : register(u18);
+RWTexture2D<float3>                         DirectSpecular              : register(u19);
+#           endif
 #       else
 RWTexture2D<float3>                         SpecularAlbedo              : register(u5);
 RWTexture2D<float>                          SpecularHitDistance         : register(u6);

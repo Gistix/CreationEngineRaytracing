@@ -13,6 +13,11 @@ Texture2D<float3> DiffuseFactor         : register(t3);
 Texture2D<float3> SpecularFactor        : register(t4);
 #endif
 
+#if defined(SPLIT_DIRECT)
+Texture2D<float3> AccumDirectDiffuse    : register(t5);
+Texture2D<float3> AccumDirectSpecular   : register(t6);
+#endif
+
 RWTexture2D<float4> Output              : register(u0);
 
 #include "include/ColorConversions.hlsli"
@@ -33,6 +38,13 @@ void Main(uint2 idx : SV_DispatchThreadID)
     
     float4 diffuseRadiance = DiffuseRadiance[idx];
     float4 specularRadiance = SpecularRadiance[idx];
+
+#if defined(SPLIT_DIRECT)
+    // Primary-surface direct lighting (demodulated, temporally accumulated
+    // by DirectAccumulation); recombined with the same material factors below.
+    diffuseRadiance.rgb += AccumDirectDiffuse[idx];
+    specularRadiance.rgb += AccumDirectSpecular[idx];
+#endif
     
 #if defined(NRD)
     
