@@ -24,6 +24,7 @@
 #include "Pass/Utility/FaceNormals.h"
 #include "Pass/Utility/PostProcess.h"
 #include "Pass/Raytracing/GlobalIllumination.h"
+#include "Pass/Raytracing/GI12/GI12Pass.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
@@ -105,9 +106,19 @@ void Scene::UpdateMode(Mode mode)
 
 		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
-		auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
+		// GI-1.2 replaces the SHaRC + ray-traced GI pair when enabled.
+		const bool gi12Enabled = m_Settings.GI12Settings.Enabled;
 
-		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
+		eastl::unique_ptr<Pass::Raytracing::Common::SHaRCGI> sharc;
+		eastl::unique_ptr<Pass::Raytracing::GI12::GI12Pass> gi12;
+		eastl::unique_ptr<Pass::Raytracing::GlobalIllumination> giPass;
+
+		if (gi12Enabled)
+			gi12 = eastl::make_unique<Pass::Raytracing::GI12::GI12Pass>(renderer, tlasPtr);
+		else {
+			sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
+			giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
+		}
 		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
 		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
@@ -120,8 +131,12 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
 		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
-		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
-		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
+		if (gi12Enabled)
+			renderGraph->AddNode({ true, "GI-1.2", eastl::move(gi12) });
+		else {
+			renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
+			renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
+		}
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
@@ -548,6 +563,7 @@ void Scene::SetWaterFlowMap(void* waterFlowMap)
 void Scene::UpdateSettings(Settings settings)
 {
 	auto previousMode = m_Settings.GeneralSettings.Mode;
+	auto previousGI12 = m_Settings.GI12Settings.Enabled;
 
 	m_Settings = settings;
 
@@ -555,7 +571,12 @@ void Scene::UpdateSettings(Settings settings)
 
 	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
 
-	if (currentMode != previousMode || renderGraph->GetNodes().empty())
+	// The GI graph topology depends on the GI-1.2 toggle (it replaces the
+	// SHaRC + ray-traced GI pair), so rebuild when it flips too.
+	const bool gi12Flipped = (settings.GI12Settings.Enabled != previousGI12) &&
+		(currentMode == Mode::GlobalIllumination);
+
+	if (currentMode != previousMode || gi12Flipped || renderGraph->GetNodes().empty())
 		UpdateMode(currentMode);
 
 	const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||

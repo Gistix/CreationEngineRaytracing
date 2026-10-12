@@ -131,6 +131,49 @@ namespace Util
 			return defines;
 		}
 
+		eastl::vector<ShaderDefine> GetGI12Defines(const Settings& settings)
+		{
+			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, false, false);
+
+			defines.emplace_back(L"GI12", L"1");
+			defines.emplace_back(L"THREAD_GROUP_SIZE", Constants::GI_DISPATCH_THREADS);
+
+			const auto& gi12 = settings.GI12Settings;
+			const auto instanceMask = InstanceMask::All & ~InstanceMask::Water;
+			defines.emplace_back(L"INSTANCE_MASK", instanceMask);
+			if (gi12.ScreenProbes)
+				defines.emplace_back(L"GI12_SCREEN_PROBES", L"1");
+			if (gi12.HashGridCache)
+				defines.emplace_back(L"GI12_HASH_GRID", L"1");
+			if (gi12.GlossyReflections)
+				defines.emplace_back(L"GI12_GLOSSY", L"1");
+			if (gi12.Multibounce)
+				defines.emplace_back(L"GI12_MULTIBOUNCE", L"1");
+
+			defines.emplace_back(L"GI12_PROBE_SIZE", gi12.ProbeSize);
+			if (gi12.DebugView != 0)
+				defines.emplace_back(L"GI12_DEBUG_VIEW", gi12.DebugView);
+
+			// Resolve outputs feed NRD directly, so it needs the same
+			// demodulated RAW_RADIANCE packing as the ray-traced GI pass.
+			if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
+				defines.emplace_back(L"RAW_RADIANCE", L"1");
+				defines.emplace_back(L"NRD", L"1");
+				defines.emplace_back(L"NRD_REBLUR", L"1");
+				defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+				defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
+			} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
+				defines.emplace_back(L"RAW_RADIANCE", L"1");
+				defines.emplace_back(L"NRD", L"1");
+				defines.emplace_back(L"NRD_RELAX", L"1");
+				defines.emplace_back(L"NRD_NORMAL_ENCODING", L"4");
+				defines.emplace_back(L"NRD_ROUGHNESS_ENCODING", L"1");
+			} else if (settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR)
+				defines.emplace_back(L"DLSS_RR", L"1");
+
+			return defines;
+		}
+
 		eastl::vector<DxcDefine> GetDXCDefines(const eastl::vector<ShaderDefine>& defines) {
 			auto numDefines = defines.size();
 

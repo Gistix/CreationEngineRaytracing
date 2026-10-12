@@ -280,6 +280,7 @@ public:
 
 	inline auto& GetWhiteTextureDescriptor() const { return m_WhiteTexture->descriptorHandle; }
 	inline auto& GetGrayTextureDescriptor() const { return m_GrayTexture->descriptorHandle; }
+	inline nvrhi::ITexture* GetBlackTexture() const { return m_BlackTexture->texture; }
 	inline auto& GetNormalTextureDescriptor() const { return m_NormalTexture->descriptorHandle; }
 	inline nvrhi::ITexture* GetNormalTexture() const { return m_NormalTexture->texture; }
 	inline auto& GetBlackTextureDescriptor() const { return m_BlackTexture->descriptorHandle; }

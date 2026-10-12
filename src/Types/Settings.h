@@ -180,6 +180,36 @@ struct SHaRCSettings
 	float RadianceScale = 1e3f;
 };
 
+struct GI12Settings
+{
+	// Master toggle. Side-by-side with SHaRC; disabled by default.
+	bool Enabled = false;
+	// L1 screen probes (GI-1.0 diffuse cache).
+	bool ScreenProbes = true;
+	uint ProbeSize = 8;
+	// L2 world hash-grid cache.
+	bool HashGridCache = true;
+	// Distance-scaled cell multiplier; 0.01 gives about 7 game units at 700 units.
+	float CellSize = 0.01f;
+	float MinCellSize = 7.0f;
+	uint NumBuckets = 12; // log2: 1 << 12 buckets
+	uint NumTilesPerBucket = 2; // log2 shift: 1 << 2
+	float MaxSampleCount = 16.0f;
+	float MultibounceDiscardProbability = 0.7f;
+	bool Multibounce = true;
+	// GI-1.1 glossy reflections.
+	bool GlossyReflections = true;
+	bool GlossyHalfRes = true;
+	uint GlossyAtrousPassCount = 4;
+	float LowRoughnessThreshold = 0.2f;
+	float HighRoughnessThreshold = 0.6f;
+	// Resolve debug visualization (0 = off). 1 = raw diffuse irradiance,
+	// 2 = diffuse confidence (r) / probe coverage (g) / specular confidence (b),
+	// 3 = nearest-probe validity, 4 = raw specular radiance,
+	// 5 = L2 filtered direct average at the pixel position.
+	uint DebugView = 0;
+};
+
 struct RISSettings
 {
 	bool Enabled = true;
@@ -328,6 +358,7 @@ struct Settings
 	NRDRelaxSettings NRDRelaxSettings;
 	MaterialSettings MaterialSettings;
 	SHaRCSettings SHaRCSettings;
+	GI12Settings GI12Settings;
 	AdvancedSettings AdvancedSettings;
 	WaterSettings WaterSettings;
 	ExperimentalSettings ExperimentalSettings;
