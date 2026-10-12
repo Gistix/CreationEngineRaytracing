@@ -55,7 +55,10 @@ namespace ShaderUtils
 			L"-disable-payload-qualifiers",
 			L"-T", Target,
 			L"-I", L"Data/shaders",
-			L"-I", L"extern/RTXDI-Library/Include"
+			L"-I", L"extern/RTXDI-Library/Include",
+			L"-I", L"Data/Shaders/RTXGI",
+			L"-I", L"extern/RTXGI-DDGI/rtxgi-sdk/shaders",
+			L"-I", L"extern/RTXGI-DDGI/rtxgi-sdk/include"
 		};
 
 		if (Renderer::GetSingleton()->IsVulkan()) {
@@ -164,6 +167,9 @@ namespace ShaderUtils
 			L"-T", Target,
 			L"-I", L"Data/shaders",
 			L"-I", L"extern/RTXDI-Library/Include",
+			L"-I", L"Data/Shaders/RTXGI",
+			L"-I", L"extern/RTXGI-DDGI/rtxgi-sdk/shaders",
+			L"-I", L"extern/RTXGI-DDGI/rtxgi-sdk/include",
 			L"-O3"
 		};
 

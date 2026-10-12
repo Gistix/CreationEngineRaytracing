@@ -180,6 +180,35 @@ struct SHaRCSettings
 	float RadianceScale = 1e3f;
 };
 
+enum class DDGIDebugView : uint32_t
+{
+	None,
+	ProbeIrradiance,
+	ProbeDistance,
+	ProbeState,
+	ProbeOffset,
+	RayRadiance,
+	RayDistance,
+	ProbeGrid
+};
+
+struct DDGISettings
+{
+	bool Enabled = false;
+	int ProbeCountX = 16;
+	int ProbeCountY = 16;
+	int ProbeCountZ = 12;
+	float ProbeSpacing = 140.0f;
+	int RaysPerProbe = 144;
+	float Hysteresis = 0.97f;
+	float NormalBias = 10.0f;
+	float ViewBias = 20.0f;
+	bool EnableRelocation = true;
+	bool EnableClassification = true;
+	bool MultiBounce = true;
+	DDGIDebugView DebugView = DDGIDebugView::None;
+};
+
 struct RISSettings
 {
 	bool Enabled = true;
@@ -332,6 +361,7 @@ struct Settings
 	WaterSettings WaterSettings;
 	ExperimentalSettings ExperimentalSettings;
 	ReSTIRGISettings ReSTIRGI;
+	DDGISettings DDGI;
 	DebugSettings DebugSettings;
 };
 

@@ -20,6 +20,8 @@
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
 #include "Pass/Raytracing/Common/SHaRCGI.h"
+#include "Pass/Raytracing/Common/DDGIPass.h"
+#include "Pass/Raytracing/Common/DDGIDebugPass.h"
 
 #include "Pass/Utility/FaceNormals.h"
 #include "Pass/Utility/PostProcess.h"
@@ -105,6 +107,9 @@ void Scene::UpdateMode(Mode mode)
 
 		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
+		auto ddgi = eastl::make_unique<Pass::Raytracing::Common::DDGIPass>(renderer, tlasPtr);
+		auto* ddgiPtr = ddgi.get();
+
 		auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
 
 		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
@@ -112,6 +117,7 @@ void Scene::UpdateMode(Mode mode)
 		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
+		auto ddgiDebug = eastl::make_unique<Pass::Raytracing::Common::DDGIDebugPass>(renderer, ddgiPtr);
 
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
@@ -120,12 +126,14 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
 		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
+		renderGraph->AddNode({ true, "DDGI", eastl::move(ddgi) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
 		renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
+		renderGraph->AddNode({ true, "DDGI Debug", eastl::move(ddgiDebug) });
 	}
 	else if (mode == Mode::PathTracing) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
@@ -317,6 +325,8 @@ void Scene::Execute()
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
 
+		// Always present: CopySharedTextures copies internal -> shared.
+		// Debug views (including DDGI ProbeGrid) render into Main and must also be presented.
 		renderer->RenderTargetManager().CopySharedTextures(commandList);
 
 		commandList->endTimerQuery(renderer->GetFrameTimerQuery(currentSlot));
@@ -333,6 +343,8 @@ void Scene::Execute()
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
 
+		// Always present: CopySharedTextures copies internal -> shared.
+		// Debug views (including DDGI ProbeGrid) render into Main and must also be presented.
 		renderer->RenderTargetManager().CopySharedTextures(commandList);
 	}
 
@@ -562,6 +574,9 @@ void Scene::UpdateSettings(Settings settings)
 		settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 
 	if (currentMode == Mode::GlobalIllumination) {
+		const bool useDDGI = settings.DDGI.Enabled;
+		renderGraph->SetEnabled<Pass::Raytracing::GlobalIllumination>(!useDDGI);
+		renderGraph->SetEnabled<Pass::Raytracing::Common::DDGIPass>(useDDGI);
 		// NRDIntegration nodes gate themselves per denoiser variant in SettingsChanged
 	}
 	else if (currentMode == Mode::PathTracing) {

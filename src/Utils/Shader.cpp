@@ -122,6 +122,16 @@ namespace Util
 			return defines;
 		}
 
+		eastl::vector<ShaderDefine> GetDDGIDefines(const Settings& settings)
+		{
+			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, false, false);
+			defines.emplace_back(L"HLSL", L"1");
+			defines.emplace_back(L"RTXGI_COORDINATE_SYSTEM", L"3");
+			defines.emplace_back(L"RTXGI_DDGI_RESOURCE_MANAGEMENT", L"0");
+			defines.emplace_back(L"RTXGI_DDGI_BINDLESS_RESOURCES", L"0");
+			return defines;
+		}
+
 		eastl::vector<ShaderDefine> GetDebugDefines(const Settings& settings)
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, false, false);

@@ -7,6 +7,8 @@ namespace
 	eastl::vector<ShaderDefine> GetCompositeDefines(const Settings& settings)
 	{
 		eastl::vector<ShaderDefine> defines;
+		if (settings.DDGI.Enabled)
+			defines.emplace_back(L"DDGI_ENABLED", L"1");
 
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
 			defines.emplace_back(L"NRD", L"1");
@@ -103,7 +105,8 @@ namespace Pass::Common
 			CreatePipeline();
 		}
 
-		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
+		m_Enabled = (settings.DDGI.Enabled ||
+					 settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 					 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 	}
 

@@ -65,7 +65,11 @@ void Main(uint2 idx : SV_DispatchThreadID)
     const float2 giUV = screenUV * Raytracing.ResolutionScale;
 
     float4 diffuseIndirect = DiffuseIndirect.SampleLevel(LinearClampSampler, giUV, 0);
+#if defined(DDGI_ENABLED)
+    float4 specularIndirect = 0.0f;
+#else
     float4 specularIndirect = SpecularIndirect.SampleLevel(LinearClampSampler, giUV, 0);
+#endif
 
     if (Raytracing.ResolutionScale < 1.0f) {
         // Joint bilateral upsampling: blend the 4 surrounding gi texels weighted by
@@ -107,7 +111,9 @@ void Main(uint2 idx : SV_DispatchThreadID)
         weights /= max(weightSum, 1e-6f);
 
         diffuseIndirect = SampleJBUTexel4(DiffuseIndirect, base, weights, maxTexel);
+#if !defined(DDGI_ENABLED)
         specularIndirect = SampleJBUTexel4(SpecularIndirect, base, weights, maxTexel);
+#endif
     }
 
 #if defined(NRD_REBLUR)

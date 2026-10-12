@@ -106,6 +106,9 @@ include(NRD)
 # RTXDI library (ReSTIR DI / GI / PT)
 include(RTXDI)
 
+# RTXGI library (DDGI)
+include(RTXGI)
+
 target_compile_definitions(
     ${PROJECT_NAME}
     PRIVATE 
