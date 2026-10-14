@@ -23,6 +23,8 @@ struct RenderTargetManager
 		RRSpecularHitDist,
 		DownscaledMotionVectors,
 		DownscaledNormalRoughness,
+		WaterNormal,
+		WaterDepth,
 		Accumulation,
 		Total
 	};

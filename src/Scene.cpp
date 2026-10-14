@@ -29,6 +29,7 @@
 #include "Pass/Raytracing/ReSTIRGIPass.h"
 #include "Pass/Raytracing/Debug.h"
 #include "Pass/Raster/GBuffer.h"
+#include "Pass/Raster/WaterNormals.h"
 #include "Pass/NRD/NRDIntegration.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
@@ -103,6 +104,8 @@ void Scene::UpdateMode(Mode mode)
 
 		auto instanceLightCulling = eastl::make_unique<Pass::InstanceLightCulling>(renderer);
 
+		auto waterNormals = eastl::make_unique<Pass::Raster::WaterNormals>(renderer, tlasPtr);
+
 		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
 		auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
@@ -119,6 +122,7 @@ void Scene::UpdateMode(Mode mode)
 
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
 		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
+		renderGraph->AddNode({ true, "Water Normals", eastl::move(waterNormals) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });

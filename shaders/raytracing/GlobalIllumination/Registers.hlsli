@@ -68,6 +68,8 @@ StructuredBuffer<uint>                      InstanceLightList           : regist
 StructuredBuffer<uint>                      PrecomputedSobolBuffer      : register(t18);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
+Texture2D<float2>                           WaterNormal                 : register(t21);
+Texture2D<float>                            WaterDepth                  : register(t22);
 
 #define SOBOL_PRECOMPUTED_BUFFER PrecomputedSobolBuffer
 

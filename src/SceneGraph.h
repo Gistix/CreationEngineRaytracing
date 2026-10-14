@@ -194,6 +194,7 @@ public:
 	nvrhi::IBuffer* GetTransformBuffer() const { return m_MeshManager->GetTransformBuffer(); }
 	nvrhi::IBuffer* GetMeshSlotRemapBuffer() const { return m_MeshSlotRemapBuffer.current(); }
 	nvrhi::IBuffer* GetPropertiesBuffer() const { return m_MeshManager->GetPropertiesBuffer(); }
+	nvrhi::IBuffer* GetMaterialBuffer() const { return m_MaterialManager->GetBuffer(); }
 
 	inline auto& GetMeshManager() const { return m_MeshManager; }
 	inline auto& GetBLASManager() const noexcept { return m_BLASManager; }

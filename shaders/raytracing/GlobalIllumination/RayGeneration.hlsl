@@ -83,13 +83,29 @@ void Main()
     const float2 dynamicUVUnjittered = dynamicUV - (Camera.Jitter / Camera.ScreenSize);
 
     const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
-    
-    const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 
+    // Water fill: transparent water is omitted from the game GBuffer, so fall
+    // back to the rasterized water targets when water is nearer than the game
+    // depth (covers both game-sky holes and water-over-opaque surfaces).
+    const float waterDepth = WaterDepth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
 
-    
+    float useDepth = depth;
+    bool isWater = false;
     [branch]
-    if (depthVS < FP_VIEW_Z || depth >= SKY_Z)
+    if (waterDepth < SKY_Z)
+    {
+        const float waterDepthVS = ScreenToViewDepth(waterDepth, Camera.CameraData);
+        if (waterDepthVS >= FP_VIEW_Z && waterDepth <= depth + 1e-4f)
+        {
+            useDepth = waterDepth;
+            isWater = true;
+        }
+    }
+
+    const float depthVS = ScreenToViewDepth(useDepth, Camera.CameraData);
+
+    [branch]
+    if (depthVS < FP_VIEW_Z || useDepth >= SKY_Z)
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
@@ -114,13 +130,25 @@ void Main()
         return;
     }    
     
-    const snorm float4 normalRoughness = NormalRoughness.SampleLevel(DefaultSampler, dynamicUV, 0);
-    
-    const unorm float roughness = saturate(normalRoughness.w);
-    
-    const float3 metalnessAO = VAOMAO.SampleLevel(DefaultSampler, dynamicUV, 0);
+    // RG16 xy packing, z reconstructed (upper hemisphere). Roughness is a
+    // constant 0 for mirror water, matching the raster path that no longer
+    // stores it.
+    const float2 waterNormalXY = WaterNormal.SampleLevel(DefaultSampler, dynamicUV, 0);
+    const float3 waterNormalWS = float3(waterNormalXY, sqrt(saturate(1.0f - dot(waterNormalXY, waterNormalXY))));
 
-    float3 faceNormal = normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
+    const float4 normalRoughness = isWater
+        ? float4(waterNormalWS, 0.0f)
+        : (float4)NormalRoughness.SampleLevel(DefaultSampler, dynamicUV, 0);
+
+    const unorm float roughness = saturate(normalRoughness.w);
+
+    const float3 metalnessAO = isWater
+        ? float3(0.0f, 0.0f, 0.0f)
+        : (float3)VAOMAO.SampleLevel(DefaultSampler, dynamicUV, 0);
+
+    float3 faceNormal = isWater
+        ? float3(0.0f, 0.0f, 1.0f)
+        : normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
 
     const unorm float metalness = saturate(metalnessAO.y);
     const unorm float ao = saturate(1.0f - metalnessAO.z);
@@ -136,7 +164,11 @@ void Main()
     float3 tangentWS, bitangentWS;
     CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);    
 
-    float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(DefaultSampler, dynamicUV, 0).rgb);
+    // Black albedo: the additive layer carries reflections only; diffuse is
+    // forced to zero (guarded at demodulation). F0 stays 0.04 either way.
+    float3 albedo = isWater
+        ? float3(0.0f, 0.0f, 0.0f)
+        : LLGammaToTrueLinear(Albedo.SampleLevel(DefaultSampler, dynamicUV, 0).rgb);
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
@@ -150,21 +182,18 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);     
 
-
-    
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
-    
 
-    float3 direction;
+    half3 direction;
 #if defined(RAW_RADIANCE) && !defined(NRD)
     MonteCarlo::BRDFWeight brdfWeight;
 #endif
 
 #if defined(RAW_RADIANCE)
-    float3 diffuseRadiance = float3(0.0f, 0.0f, 0.0f);
-    float3 specularRadiance = float3(0.0f, 0.0f, 0.0f);
+    half3 diffuseRadiance = half3(0.0f, 0.0f, 0.0f);
+    half3 specularRadiance = half3(0.0f, 0.0f, 0.0f);
 #else
-    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+    half3 radiance = half3(0.0f, 0.0f, 0.0f);
 #endif
 
     RayDesc ray;
@@ -212,19 +241,15 @@ void Main()
 
         material = sourceMaterial;
         
-        float3 sampleRadiance = float3(0.0f, 0.0f, 0.0f);
-        float3 throughput = float3(1.0f, 1.0f, 1.0f);
+        half3 sampleRadiance = half3(0.0f, 0.0f, 0.0f);
+        half3 throughput = half3(1.0f, 1.0f, 1.0f);
 #if defined(SHARC)
         float materialRoughnessPrev = 0.0f;
 #endif
-        bool isEnter = true;
+        //bool isEnter = true;
         bool isSpecularSample = false;
         uint diffuseBounceCount = 0;
 
-        // Water volume tracking for Beer-Lambert absorption
-        bool insideWaterVolume = false;
-        float3 waterVolumeAbsorption = float3(0.0f, 0.0f, 0.0f);    
-        
         // Throughput difference of demodulated first bounce
 #if defined(RAW_RADIANCE) && !defined(NRD)
         float3 originalThroughput = float3(1.0f, 1.0f, 1.0f);
@@ -241,7 +266,7 @@ void Main()
             float2 scatterExtraSamples;
             GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
             if (bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples))
-                direction = bsdfSample.wo;
+                direction = (half3)bsdfSample.wo;
             else
                 break;            
  
@@ -256,17 +281,8 @@ void Main()
             const bool demodulatedThroughput = (j == 0 && !isSpecularSample);
 #endif
             
-            bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
-
-            throughput *= hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : surface.AO;
-
-            // Track water volume entry/exit on transmission
-            if (hasTransmission && any(surface.VolumeAbsorption > 0.0f))
-            {
-                // isEnter (front face) + transmission = entering volume
-                insideWaterVolume = isEnter;
-                waterVolumeAbsorption = insideWaterVolume ? surface.VolumeAbsorption : float3(0.0f, 0.0f, 0.0f);
-            }
+            const bool hasTransmission = bsdfSample.isLobe(LobeType::Transmission);
+            throughput *= half(hasTransmission || !bsdfSample.isLobe(LobeType::DiffuseReflection) ? 1.f : surface.AO);
 
 #if defined(RAW_RADIANCE) && !defined(NRD)
             brdfWeight.diffuse = bsdfSample.isLobe(LobeType::DiffuseReflection) ? bsdfSample.weight : float3(0.f, 0.f, 0.f);
@@ -280,12 +296,12 @@ void Main()
                     ? brdfWeight.diffuse / max(surface.DiffuseAlbedo, 1e-4f)
                     : brdfWeight.diffuse;            
         
-                throughput *= diffuseWeightDemodulated + brdfWeight.specular + brdfWeight.transmission;                      
+                throughput *= (half3)(diffuseWeightDemodulated + brdfWeight.specular + brdfWeight.transmission);                      
             } else {
-                throughput *= bsdfSample.weight;
+                throughput *= (half3)bsdfSample.weight;
             }         
 #else    // RAW_RADIANCE
-            throughput *= bsdfSample.weight;
+            throughput *= (half3) bsdfSample.weight;
 #endif   // !RAW_RADIANCE
             
 #if defined(SHARC) && SHARC_UPDATE
@@ -293,21 +309,25 @@ void Main()
 #else
 #   if RUSSIAN_ROULETTE != 0          
 #       if defined(RAW_RADIANCE) && !defined(NRD)
-        // Apply russian roulette based on the original throughput
-        float3 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
-#       else
-        float3 throughputColor = throughput;
+            // Apply russian roulette based on the original throughput
+            float3 throughputColor = demodulatedThroughput ? originalThroughput : throughput;
+    #       else
+            float3 throughputColor = throughput;
 #       endif            
 #   endif
             
 #   if RUSSIAN_ROULETTE == 1
-        const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
-        const float rrProb = min(rrVal, 0.95f);
+            [branch]
+            if (j > 0)
+            {
+                const float rrVal = 1.0f - min(1.0f, Color::RGBToLuminance(throughputColor));              
+                const float rrProb = min(rrVal, 0.95f);
 
-            if (Random(randomSeed) < rrProb)
-                break;
+                if (Random(randomSeed) < rrProb)
+                    break;
 
-            throughput /= (1.0f - rrProb);
+                throughput /= half(1.0f - rrProb);
+            }
 #   elif RUSSIAN_ROULETTE == 2
             const float rrVal = sqrt(Color::RGBToLuminance(throughputColor));
             float rrProb = saturate(0.85 - rrVal);
@@ -318,11 +338,11 @@ void Main()
             if (Random(randomSeed) < rrProb)
                 break;
 
-            throughput /= (1.0f - rrProb);
+            throughput /= half(1.0f - rrProb);
                 
 #       if defined(RAW_RADIANCE) && !defined(NRD)
             if (demodulatedThroughput)
-                originalThroughput /= (1.0f - rrProb);
+                originalThroughput /= half(1.0f - rrProb);
 #       endif                
 #   endif
 #endif
@@ -330,20 +350,10 @@ void Main()
 #if defined(SHARC) && (SHARC_ENABLE_SH_ENCODING || !SHARC_UPDATE)
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
-            // First bounce comes from GBuffer
-            if (j == 0)
-                ray.Origin = OffsetRayAlt(surface.Position, faceNormalOriented, hasTransmission);
-            else
-            {
-#if USE_SIA_INTERPOLATION
-                ray.Origin = OffsetRaySIA(surface.Position, faceNormalOriented, surface.SIAOffset, hasTransmission);
-#else
-                ray.Origin = OffsetRay(surface.Position, faceNormalOriented, surface.PositionError, hasTransmission);
-#endif
-            }
+            ray.Origin = surface.Position;
 
             ray.Direction = direction;
-            ray.TMin = 0.0f;
+            ray.TMin = 0.1f;
             ray.TMax = RAY_TMAX;
 
             if (!bsdfSample.isLobe(LobeType::Delta))
@@ -352,21 +362,10 @@ void Main()
             payload = TraceRayStandard(Scene, ray, randomSeed);
             
             rayCone = rayCone.propagateDistance(payload.hitDistance);
-
-            // Apply Beer-Lambert volume absorption for water
-            if (insideWaterVolume)
-            {
-                throughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
-                
-#   if defined(RAW_RADIANCE) && !defined(NRD)
-                if (demodulatedThroughput)
-                    originalThroughput *= exp(-waterVolumeAbsorption * payload.hitDistance);
-#   endif
-            }
-                       
+        
             if (!payload.Hit())
             {
-                float3 skyIrradiance = SampleSky(SkyHemisphere, direction) * Raytracing.Sky;
+                half3 skyIrradiance = half3(SampleSky(SkyHemisphere, direction) * Raytracing.Sky);
 
 #if defined(SHARC) && SHARC_UPDATE
                 SharcUpdateMiss(sharcParameters, sharcState, skyIrradiance);
@@ -420,32 +419,18 @@ void Main()
 #endif // SHARC  
             
             brdfContext = BRDFContext::make(surface, -direction);
-            isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
+            /*isEnter = dot(surface.FaceNormal, brdfContext.ViewDirection) >= 0.0f;
             if (!isEnter) {
                 surface.FlipNormal();
                 brdfContext.NdotV = saturate(dot(surface.Normal, brdfContext.ViewDirection));
-            }
+            }*/
 
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
-            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
+            bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, false);
 
-            // Direct lighting with delta lobe support
-            float3 directRadiance = 0.0f;
-            const uint bounceLobes = bsdf.GetLobes(surface);
-            const bool bounceHasNonDeltaLobes = (bounceLobes & (uint)LobeType::NonDelta) != 0;
-            const bool bounceHasDeltaLobes = (bounceLobes & (uint)LobeType::Delta) != 0;
-            
-            if (bounceHasNonDeltaLobes)
-            {
-                directRadiance += EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, false);
-            }
-            
-            // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
-            if (bounceHasDeltaLobes)
-            {
-                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, true);
-            }
-            
+            // Direct lighting
+            half3 directRadiance = (half3)EvaluateDirectRadiance(material.Type, material.Feature, surface, brdfContext, instance, bsdf, randomSeed, false);
+   
 #if !(defined(SHARC) && SHARC_UPDATE)
             sampleRadiance += directRadiance * throughput;
 #endif
@@ -454,9 +439,9 @@ void Main()
             if (!SharcUpdateHit(sharcParameters, sharcState, sharcHitData, directRadiance, Random(randomSeed)))
                 return;
 
-            throughput = float3(1.0f, 1.0f, 1.0f);
+            throughput = half3(1.0f, 1.0f, 1.0f);
 #else
-            sampleRadiance += surface.Emissive * throughput;
+            sampleRadiance += (half3)surface.Emissive * throughput;
 #endif
             
 #   if defined(RAW_RADIANCE) && !defined(NRD)
@@ -516,7 +501,12 @@ void Main()
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
 
-    diffuseRadiance /= diffFactor;
+    // Water contributes reflections only: force diffuse to black. The max()
+    // guard keeps near-black surfaces (water albedo is 0) finite here.
+    if (isWater)
+        diffuseRadiance = half3(0.0f, 0.0f, 0.0f);
+
+    diffuseRadiance /= max(diffFactor, (float3)1e-4f);
     specularRadiance /= specFactor;
     
 #   if defined(NRD_REBLUR)

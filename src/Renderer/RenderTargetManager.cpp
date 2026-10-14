@@ -16,7 +16,6 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		desc.width = resolution.x;
 		desc.height = resolution.y;
 		desc.format = nvrhi::Format::RGBA16_FLOAT;
-		desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
 		desc.isUAV = true;
 		desc.keepInitialState = true;
 
@@ -58,9 +57,28 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 		case RenderTarget::DownscaledNormalRoughness:
 			desc.format = nvrhi::Format::RGBA16_SNORM;
 			break;
+		case RenderTarget::WaterNormal:
+			desc.format = nvrhi::Format::RG16_FLOAT;
+			desc.isUAV = false;
+			desc.isRenderTarget = true;
+			desc.useClearValue = true;
+			desc.clearValue = nvrhi::Color(0.f);
+			break;
+		case RenderTarget::WaterDepth:
+			desc.format = nvrhi::Format::R32_FLOAT;
+			desc.isUAV = false;
+			desc.isRenderTarget = true;
+			desc.useClearValue = true;
+			desc.clearValue = nvrhi::Color(1.f);
+			break;
 		default:
 			break;
 		}
+
+		if (desc.isRenderTarget)
+			desc.initialState = nvrhi::ResourceStates::RenderTarget;
+		else if(desc.isUAV)
+			desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
 
 		std::string debugName = std::string(magic_enum::enum_name(texture));
 		desc.debugName = debugName.c_str();
@@ -80,7 +98,7 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 			desc11.Format = nvrhi::d3d12::convertFormat(desc.format);
 			desc11.SampleDesc.Count = 1;
 			desc11.Usage = D3D11_USAGE_DEFAULT;
-			desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			desc11.BindFlags = D3D11_BIND_SHADER_RESOURCE | (desc.isRenderTarget ? D3D11_BIND_RENDER_TARGET : D3D11_BIND_UNORDERED_ACCESS);
 
 			auto* nativeDevice = renderer->GetNativeD3D11Device();
 			winrt::com_ptr<IDXGIVkInteropDevice> interopDevice;
@@ -90,7 +108,7 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 				hr = nativeDevice->CreateTexture2D(&desc11, nullptr, renderTarget.d3d11Texture.put());
 
 			if (SUCCEEDED(hr))
-				renderTarget.handle = Renderer::WrapNativeTexture(renderTarget.d3d11Texture.get(), debugName.c_str(), nvrhi::ResourceStates::UnorderedAccess);
+				renderTarget.handle = Renderer::WrapNativeTexture(renderTarget.d3d11Texture.get(), debugName.c_str(), desc.initialState);
 
 			if (!renderTarget.handle) {
 				renderTarget.d3d11Texture = nullptr;
