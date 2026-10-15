@@ -37,7 +37,8 @@ protected:
 		Player = 1 << 1,
 		TwoSided = 1 << 2,
 		FrustumCulled = 1 << 3,
-		Dynamic = 1 << 4
+		Dynamic = 1 << 4,
+		Water = 1 << 5
 	};
 
 	RE::TESObjectREFR* m_Owner = nullptr; // null for orphan (no-owner) clusters; comparison key only

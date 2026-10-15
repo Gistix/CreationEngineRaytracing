@@ -24,7 +24,9 @@ RWTexture2D<float4> OutNormalRoughness       : register(u0);
 RWTexture2D<float4> OutMotionVectors         : register(u1);
 
 #if defined(NRD)
-RWTexture2D<float>  OutViewDepth             : register(u2);
+Texture2D<float2> WaterNormalTexture     : register(t3);
+Texture2D<float>  WaterDepthTexture      : register(t4);
+RWTexture2D<float>  OutViewDepth         : register(u2);
 #endif
 
 #if defined(DLSS_RR)
@@ -55,18 +57,32 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
         (float2(Camera.ScreenSize) * Raytracing.ResolutionScale);
 
     const float4 normalRoughness = NormalRoughnessTexture.SampleLevel(PointClampSampler, sourceUV, 0);
-    
-    // Point-sample the G-buffer and motion vectors at the corresponding GI pixel.
-    OutNormalRoughness[pixelPos] = normalRoughness;
     OutMotionVectors[pixelPos] = PrimaryMotionVectors.SampleLevel(PointClampSampler, sourceUV, 0);
 
 #if defined(NRD) || defined(DLSS_RR)
     const float depth = DepthTexture.SampleLevel(PointClampSampler, sourceUV, 0);
-    const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
+    float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
 #endif
 
 #if defined(NRD)
+    float4 finalNormalRoughness = normalRoughness;
+    const float waterDepth = WaterDepthTexture.SampleLevel(PointClampSampler, sourceUV, 0);
+    [branch]
+    if (waterDepth < SKY_Z)
+    {
+        const float waterDepthVS = ScreenToViewDepth(waterDepth, Camera.CameraData);
+        if (waterDepthVS >= FP_VIEW_Z && waterDepth <= depth + 1e-4f)
+        {
+            depthVS = waterDepthVS;
+            const float2 waterNormalXY = WaterNormalTexture.SampleLevel(PointClampSampler, sourceUV, 0);
+            const float3 waterNormalWS = float3(waterNormalXY, sqrt(saturate(1.0f - dot(waterNormalXY, waterNormalXY))));
+            finalNormalRoughness = float4(waterNormalWS, 0.0f); // roughness = 0.0 for mirror water!
+        }
+    }
+    OutNormalRoughness[pixelPos] = finalNormalRoughness;
     OutViewDepth[pixelPos] = depthVS;
+#else
+    OutNormalRoughness[pixelPos] = normalRoughness;
 #endif
 
 #if defined(DLSS_RR)

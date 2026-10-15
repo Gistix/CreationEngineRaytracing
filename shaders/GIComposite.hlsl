@@ -13,6 +13,8 @@ Texture2D<float> FullResDepth           : register(t3);
 Texture2D<float3> Albedo                : register(t4);
 Texture2D<float4> FullResNormalRoughness : register(t5);
 Texture2D<float3> GNMAO                 : register(t6);
+Texture2D<float2> WaterNormal           : register(t7);
+Texture2D<float>  WaterDepth            : register(t8);
 
 RWTexture2D<float4> Output              : register(u0);
 
@@ -136,8 +138,40 @@ void Main(uint2 idx : SV_DispatchThreadID)
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(normal, viewDirection, diffuseAlbedo, F0, roughness, diffFactor, specFactor);
 
+    const float waterDepth = WaterDepth.SampleLevel(PointClampSampler, screenUV, 0);
+    bool isWater = false;
+    float waterFresnel = 0.0f;
+
+    [branch]
+    if (waterDepth < SKY_Z)
+    {
+        const float waterDepthVS = ScreenToViewDepth(waterDepth, Camera.CameraData);
+        if (waterDepthVS >= FP_VIEW_Z && waterDepth <= depth + 1e-4f)
+        {
+            isWater = true;
+            const float2 waterNormalXY = WaterNormal.SampleLevel(PointClampSampler, screenUV, 0);
+            const float3 waterNormalWS = float3(waterNormalXY, sqrt(saturate(1.0f - dot(waterNormalXY, waterNormalXY))));
+            const float3 waterPosVS = ScreenToViewPosition(screenUV, waterDepthVS, Camera.NDCToView);
+            const float3 waterViewDir = normalize(-ViewToWorldPosition(waterPosVS, Camera.ViewInverse));
+
+            float3 unusedDiff;
+            NRD_MaterialFactors(waterNormalWS, waterViewDir, float3(0.0f, 0.0f, 0.0f), float3(0.02f, 0.02f, 0.02f), 0.0f, unusedDiff, specFactor);
+
+            float NdotV = saturate(dot(waterNormalWS, waterViewDir));
+            waterFresnel = 0.02f + (1.0f - 0.02f) * pow(saturate(1.0f - NdotV), 5.0f);
+        }
+    }
+
     diffuseIndirect.rgb *= diffFactor;
-    specularIndirect.rgb *= specFactor;
+    if (isWater)
+    {
+        diffuseIndirect.rgb *= (1.0f - waterFresnel);
+        specularIndirect.rgb *= specFactor;
+    }
+    else
+    {
+        specularIndirect.rgb *= specFactor;
+    }
     
     Output[idx] = float4(diffuseIndirect.rgb + specularIndirect.rgb, 1.0f);
 }

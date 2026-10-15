@@ -141,7 +141,7 @@ uint32_t BLASCluster::Update()
 
 	// Only those who affect geometry count or its flags
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh, DirtyFlags::Alpha)) {
-		m_Flags.reset(Flags::Updatable, Flags::TwoSided, Flags::Dynamic);
+		m_Flags.reset(Flags::Updatable, Flags::TwoSided, Flags::Dynamic, Flags::Water);
 
 		m_GeometryDescs.clear();
 		m_GeometrySlots.clear();
@@ -161,6 +161,9 @@ uint32_t BLASCluster::Update()
 
 			if (mesh->IsTwoSided())
 				m_Flags.set(Flags::TwoSided);
+
+			if (mesh->GetMaterial() && mesh->GetMaterial()->GetData()->Type == MaterialBase::Type::Water)
+				m_Flags.set(Flags::Water);
 
 			const uint16_t vertexID = mesh->GetVertexID();
 			const auto vertexDesc = VertexDesc(mesh->GetVertexDescRaw());
@@ -419,9 +422,13 @@ BLASCluster::BuildMode BLASCluster::DetermineBuildMode(SceneGraph* sceneGraph, u
 
 nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 {
+	uint8_t instanceMask = m_Flags.all(Flags::Water) ? InstanceMask::Water : InstanceMask::Default;
+	if (m_Flags.all(Flags::FrustumCulled))
+		instanceMask |= InstanceMask::FrustumCulled;
+
 	auto instanceDesc = nvrhi::rt::InstanceDesc()
 		.setInstanceID(m_InstanceIndex)
-		.setInstanceMask(m_Flags.all(Flags::FrustumCulled) ? InstanceMask::FrustumCulled : InstanceMask::Default)
+		.setInstanceMask(instanceMask)
 		.setTransform(m_Transform.f)
 		.setFlags(m_Flags.all(Flags::TwoSided) ? nvrhi::rt::InstanceFlags::TriangleCullDisable : nvrhi::rt::InstanceFlags::None)
 		.setBLAS(GetBLAS());

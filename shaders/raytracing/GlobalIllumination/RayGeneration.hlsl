@@ -89,23 +89,23 @@ void Main()
     // depth (covers both game-sky holes and water-over-opaque surfaces).
     const float waterDepth = WaterDepth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
 
-    float useDepth = depth;
+    float bedDepth = depth;
     bool isWater = false;
+    float waterDepthVS = 0.0f;
     [branch]
     if (waterDepth < SKY_Z)
     {
-        const float waterDepthVS = ScreenToViewDepth(waterDepth, Camera.CameraData);
+        waterDepthVS = ScreenToViewDepth(waterDepth, Camera.CameraData);
         if (waterDepthVS >= FP_VIEW_Z && waterDepth <= depth + 1e-4f)
         {
-            useDepth = waterDepth;
             isWater = true;
         }
     }
 
-    const float depthVS = ScreenToViewDepth(useDepth, Camera.CameraData);
+    const float depthVS = ScreenToViewDepth(bedDepth, Camera.CameraData);
 
     [branch]
-    if (depthVS < FP_VIEW_Z || useDepth >= SKY_Z)
+    if ((depthVS < FP_VIEW_Z || bedDepth >= SKY_Z) && !isWater)
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
@@ -136,19 +136,10 @@ void Main()
     const float2 waterNormalXY = WaterNormal.SampleLevel(DefaultSampler, dynamicUV, 0);
     const float3 waterNormalWS = float3(waterNormalXY, sqrt(saturate(1.0f - dot(waterNormalXY, waterNormalXY))));
 
-    const float4 normalRoughness = isWater
-        ? float4(waterNormalWS, 0.0f)
-        : (float4)NormalRoughness.SampleLevel(DefaultSampler, dynamicUV, 0);
-
+    const float4 normalRoughness = (float4)NormalRoughness.SampleLevel(DefaultSampler, dynamicUV, 0);
     const unorm float roughness = saturate(normalRoughness.w);
-
-    const float3 metalnessAO = isWater
-        ? float3(0.0f, 0.0f, 0.0f)
-        : (float3)VAOMAO.SampleLevel(DefaultSampler, dynamicUV, 0);
-
-    float3 faceNormal = isWater
-        ? float3(0.0f, 0.0f, 1.0f)
-        : normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
+    const float3 metalnessAO = (float3)VAOMAO.SampleLevel(DefaultSampler, dynamicUV, 0);
+    float3 faceNormal = normalize(FaceNormals.SampleLevel(DefaultSampler, dynamicUV, 0) * 2.0f - 1.0f);
 
     const unorm float metalness = saturate(metalnessAO.y);
     const unorm float ao = saturate(1.0f - metalnessAO.z);
@@ -164,11 +155,7 @@ void Main()
     float3 tangentWS, bitangentWS;
     CreateOrthonormalBasis(normalWS, tangentWS, bitangentWS);    
 
-    // Black albedo: the additive layer carries reflections only; diffuse is
-    // forced to zero (guarded at demodulation). F0 stays 0.04 either way.
-    float3 albedo = isWater
-        ? float3(0.0f, 0.0f, 0.0f)
-        : LLGammaToTrueLinear(Albedo.SampleLevel(DefaultSampler, dynamicUV, 0).rgb);
+    float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(DefaultSampler, dynamicUV, 0).rgb);
 
     RayCone sourceRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * hitDistance, Raytracing.PixelConeSpreadAngle);
     
@@ -182,7 +169,53 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);     
 
+    Surface waterSurface = (Surface)0;
+    BRDFContext waterBRDFContext = (BRDFContext)0;
+    StandardBSDF waterBSDF = (StandardBSDF)0;
+    RayCone waterRayCone = (RayCone)0;
+
+    [branch]
+    if (isWater)
+    {
+        const float waterDepthVS = ScreenToViewDepth(waterDepth, Camera.CameraData);
+        const float3 waterPosVS = ScreenToViewPosition(uv, waterDepthVS, Camera.NDCToView);
+        const float3 waterPosCS = ViewToWorldPosition(waterPosVS, Camera.ViewInverse);
+        const float3 waterPosWS = waterPosCS + Camera.Position.xyz;
+        const float waterHitDistance = length(waterPosCS);
+
+        float3 waterTangentWS, waterBitangentWS;
+        CreateOrthonormalBasis(waterNormalWS, waterTangentWS, waterBitangentWS);
+
+        waterRayCone = RayCone::make(Raytracing.PixelConeSpreadAngle * waterHitDistance, Raytracing.PixelConeSpreadAngle);
+        waterSurface = SurfaceMaker::make(waterPosWS, float3(0.0f, 0.0f, 1.0f), waterNormalWS, waterTangentWS, waterBitangentWS, float3(0.0f, 0.0f, 0.0f), 0.0f, 0.0f, 0, 1.0f);
+        waterBRDFContext = BRDFContext::make(waterSurface, -waterPosCS / waterHitDistance);
+        AdjustShadingNormal(waterSurface, waterBRDFContext, false, false);
+        waterBSDF = StandardBSDF::make(waterSurface, waterSurface.Normal, waterBRDFContext.ViewDirection, true);
+    }
+
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
+
+#if defined(NRD)
+    float3 rcpDiffFactor;
+    float3 rcpSpecFactor;
+    {
+        float3 diffFactor, specFactor;
+        NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);
+        rcpDiffFactor = 1.0f / max(diffFactor, (float3)1e-4f);
+        rcpSpecFactor = 1.0f / specFactor;
+
+        if (isWater)
+        {
+            float3 unusedDiffFactor;
+            NRD_MaterialFactors(waterSurface.Normal, waterBRDFContext.ViewDirection, waterSurface.DiffuseAlbedo, waterSurface.F0, waterSurface.Roughness, unusedDiffFactor, specFactor);
+            rcpSpecFactor = 1.0f / specFactor;
+        }
+    }
+
+#   if defined(NRD_REBLUR)
+    const float diffHitDistNormScale = 1.0f / max(_REBLUR_GetHitDistanceNormalization(depthVS, Raytracing.HitDistSettings.xyz, sourceSurface.Roughness), 1e-6f);
+#   endif
+#endif
 
     half3 direction;
 #if defined(RAW_RADIANCE) && !defined(NRD)
@@ -215,9 +248,16 @@ void Main()
 #endif    
     
 #if defined(NRD)
-     float diffHitDist = 0.0f;
-     uint diffPathNum = 0;
-     float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+    float diffHitDist = 0.0f;
+    float specHitDist = 0.0f;
+#   if MAX_SAMPLES > 1
+    uint diffPathNum = 0;
+    uint specPathNum = 0;
+    specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+#   endif
+#else
+    uint diffPathNum = 0;
+    uint specPathNum = 0;
 #endif
     
     [loop]
@@ -230,10 +270,32 @@ void Main()
         SharcInit(sharcState);
 #endif
         
-        surface = sourceSurface;
-        brdfContext = sourceBRDFContext;
-        bsdf = sourceBSDF;
-        rayCone = sourceRayCone; 
+        bool forceWaterSpecular = false;
+        if (isWater)
+        {
+#if MAX_SAMPLES > 1
+            forceWaterSpecular = (i % 2 == 0);
+#else
+            float NdotV = saturate(dot(waterSurface.Normal, waterBRDFContext.ViewDirection));
+            float F = 0.02f + (1.0f - 0.02f) * pow(saturate(1.0f - NdotV), 5.0f);
+            forceWaterSpecular = (Random(randomSeed) < clamp(F, 0.05f, 0.95f));
+#endif
+        }
+
+        if (forceWaterSpecular)
+        {
+            surface = waterSurface;
+            brdfContext = waterBRDFContext;
+            bsdf = waterBSDF;
+            rayCone = waterRayCone;
+        }
+        else
+        {
+            surface = sourceSurface;
+            brdfContext = sourceBRDFContext;
+            bsdf = sourceBSDF;
+            rayCone = sourceRayCone;
+        }
 
 #if defined(NRD)
         float accumulatedHitDist = 0;
@@ -456,24 +518,49 @@ void Main()
 
 #if defined(NRD)
 #   if defined(NRD_REBLUR)
-        float normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, depthVS, Raytracing.HitDistSettings.xyz, sourceSurface.Roughness);
+        float normHitDist;
+        if (isSpecularSample)
+        {
+            const float refDepthVS = isWater ? waterDepthVS : depthVS;
+            const float refRoughness = isWater ? 0.0f : surface.Roughness;
+            normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, refDepthVS, Raytracing.HitDistSettings.xyz, refRoughness);
+        }
+        else
+        {
+            normHitDist = max(saturate(accumulatedHitDist * diffHitDistNormScale), NRD_EPS);
+        }
 #   else
         float normHitDist = accumulatedHitDist;
 #   endif
         
+#   if MAX_SAMPLES > 1
         if (isSpecularSample) {
             NRD_FrontEnd_SpecHitDistAveraging_Add(specHitDist, normHitDist);        
         } else {
             diffHitDist += normHitDist;
             diffPathNum++;
         }
+#   else
+        if (isSpecularSample) {
+            specHitDist = normHitDist;
+        } else {
+            diffHitDist = normHitDist;
+        }
+#   endif
 #endif
         
 #if defined(RAW_RADIANCE)
-        if (isSpecularSample)
+        if (isSpecularSample) {
             specularRadiance += sampleRadiance;
-        else
+#   if MAX_SAMPLES > 1
+            specPathNum++;
+#   endif
+        } else {
             diffuseRadiance += sampleRadiance;
+#   if MAX_SAMPLES > 1
+            diffPathNum++;
+#   endif
+        }
 #else
         radiance += sampleRadiance;
 #endif
@@ -483,14 +570,24 @@ void Main()
 #endif
     }
 
-#if defined(NRD)
+#if defined(NRD) && MAX_SAMPLES > 1
     NRD_FrontEnd_SpecHitDistAveraging_End(specHitDist);
     diffHitDist *= diffPathNum > 0 ? 1.0f / float(diffPathNum) : 0.0f;
 #endif
     
 #if defined(RAW_RADIANCE)
-    diffuseRadiance /= MAX_SAMPLES;
-    specularRadiance /= MAX_SAMPLES;
+#   if MAX_SAMPLES > 1
+    if (isWater)
+    {
+        diffuseRadiance *= diffPathNum > 0 ? (1.0f / float(diffPathNum)) : 0.0f;
+        specularRadiance *= specPathNum > 0 ? (1.0f / float(specPathNum)) : 0.0f;
+    }
+    else
+    {
+        diffuseRadiance /= MAX_SAMPLES;
+        specularRadiance /= MAX_SAMPLES;
+    }
+#   endif
 #else
     radiance /= MAX_SAMPLES;
 #endif
@@ -498,26 +595,16 @@ void Main()
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
 #       if defined(NRD)
-    float3 diffFactor, specFactor;
-    NRD_MaterialFactors(sourceSurface.Normal, sourceBRDFContext.ViewDirection, sourceSurface.DiffuseAlbedo, sourceSurface.F0, sourceSurface.Roughness, diffFactor, specFactor);    
-
-    // Water contributes reflections only: force diffuse to black. The max()
-    // guard keeps near-black surfaces (water albedo is 0) finite here.
-    if (isWater)
-        diffuseRadiance = half3(0.0f, 0.0f, 0.0f);
-
-    diffuseRadiance /= max(diffFactor, (float3)1e-4f);
-    specularRadiance /= specFactor;
+    diffuseRadiance *= (half3)rcpDiffFactor;
+    specularRadiance *= (half3)rcpSpecFactor;
     
 #   if defined(NRD_REBLUR)
-    DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, true);
-    SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, true);  
+    DiffuseOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(diffuseRadiance, diffHitDist, false);
+    SpecularOutput[idx] = REBLUR_FrontEnd_PackRadianceAndNormHitDist(specularRadiance, specHitDist, false);  
 #   else
-    DiffuseOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, true);
-    SpecularOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, true);  
+    DiffuseOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(diffuseRadiance, diffHitDist, false);
+    SpecularOutput[idx] = RELAX_FrontEnd_PackRadianceAndHitDist(specularRadiance, specHitDist, false);  
 #   endif  
-    
-
     
 #       else // !NRD
     DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);

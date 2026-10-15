@@ -57,6 +57,8 @@ namespace Pass::Utility
 		eastl::vector<DxcDefine> defines;
 
 		if (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax) {
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(3)); // WaterNormal
+			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(4)); // WaterDepth
 			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // OutViewDepth
 			defines.push_back({ L"NRD", L"1" });
 		}
@@ -122,6 +124,8 @@ namespace Pass::Utility
 		};
 
 		if (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(3, textureManager.GetTexture(RenderTarget::WaterNormal)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(4, textureManager.GetTexture(RenderTarget::WaterDepth)));
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
 		}
 

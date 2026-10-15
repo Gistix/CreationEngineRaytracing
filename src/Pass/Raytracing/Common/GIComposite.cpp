@@ -61,6 +61,8 @@ namespace Pass::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(4),
 			nvrhi::BindingLayoutItem::Texture_SRV(5),
 			nvrhi::BindingLayoutItem::Texture_SRV(6),
+			nvrhi::BindingLayoutItem::Texture_SRV(7),
+			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
 
@@ -135,6 +137,8 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::Texture_SRV(4, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(5, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(6, renderTargets->gnmao),
+			nvrhi::BindingSetItem::Texture_SRV(7, textureManager.GetTexture(RenderTarget::WaterNormal)),
+			nvrhi::BindingSetItem::Texture_SRV(8, textureManager.GetTexture(RenderTarget::WaterDepth)),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
 
