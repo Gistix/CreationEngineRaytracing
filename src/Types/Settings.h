@@ -317,6 +317,30 @@ struct DebugSettings
 	TimingMode Timings = TimingMode::Disabled;
 };
 
+struct GI12Settings
+{
+	bool Enabled = false;
+	bool UseResampling = true;
+	bool UseDirectLighting = true;
+	bool UseTemporalFeedback = false;
+	bool UseMultibounce = true;
+	float ScreenProbesCellSize = 0.5f;
+	float HashGridCellSize = 32.0f;
+	float HashGridMinCellSize = 0.1f;
+	uint32_t HashGridTileCellRatio = 8;
+	uint32_t HashGridNumBuckets = 14;           // 1 << 14
+	uint32_t HashGridNumTilesPerBucket = 4;     // 1 << 4
+	float HashGridMaxSampleCount = 16.0f;
+	float DiscardMultibounceRayProbability = 0.7f;
+	float MaxMultibounceSampleCount = 16.0f;
+	float ReservoirCacheCellSize = 16.0f;
+	bool GlossyReflectionsHalfRes = true;
+	uint32_t GlossyReflectionsAtrousPassCount = 4;
+	float GlossyLowRoughnessThreshold = 0.2f;
+	float GlossyHighRoughnessThreshold = 0.6f;
+	bool CleanupFireflies = true;
+};
+
 struct Settings
 {
 	bool Enabled = true;
@@ -332,6 +356,7 @@ struct Settings
 	WaterSettings WaterSettings;
 	ExperimentalSettings ExperimentalSettings;
 	ReSTIRGISettings ReSTIRGI;
+	GI12Settings GI12;
 	DebugSettings DebugSettings;
 };
 

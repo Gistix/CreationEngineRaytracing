@@ -24,6 +24,12 @@
 #include "Pass/Utility/FaceNormals.h"
 #include "Pass/Utility/PostProcess.h"
 #include "Pass/Raytracing/GlobalIllumination.h"
+#include "Pass/Raytracing/GI12/GI12Resources.h"
+#include "Pass/Raytracing/GI12/GI12ScreenProbesPass.h"
+#include "Pass/Raytracing/GI12/GI12HashGridCachePass.h"
+#include "Pass/Raytracing/GI12/GI12WorldSpaceReSTIRPass.h"
+#include "Pass/Raytracing/GI12/GI12GlossyReflectionsPass.h"
+#include "Pass/Raytracing/GI12/GI12DenoiserPass.h"
 #include "Pass/Raytracing/GBuffer.h"
 #include "Pass/Raytracing/PathTracing.h"
 #include "Pass/Raytracing/ReSTIRGIPass.h"
@@ -43,6 +49,8 @@ Scene::Scene()
 {
 	m_SceneGraph = eastl::make_unique<SceneGraph>();
 }
+
+Scene::~Scene() = default;
 
 void Scene::Load()
 {
@@ -105,14 +113,6 @@ void Scene::UpdateMode(Mode mode)
 
 		auto faceNormals = eastl::make_unique<Pass::Utility::FaceNormals>(renderer);
 
-		auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
-
-		auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
-		auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
-		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
-		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
-		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
-
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
@@ -120,12 +120,44 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
 		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
-		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
-		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
-		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
-		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
-		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
-		renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
+
+		if (m_Settings.GI12.Enabled) {
+			if (!m_GI12Resources) {
+				m_GI12Resources = eastl::make_unique<Pass::Raytracing::GI12::GI12Resources>(renderer);
+				m_GI12Resources->Initialize();
+			}
+			auto* res = m_GI12Resources.get();
+			res->ResolutionChanged(renderer->GetResolution());
+
+			auto screenProbesPass = eastl::make_unique<Pass::Raytracing::GI12::GI12ScreenProbesPass>(renderer, tlasPtr, res);
+			auto* screenProbesPtr = screenProbesPass.get();
+			auto hashGridCachePass = eastl::make_unique<Pass::Raytracing::GI12::GI12HashGridCachePass>(renderer, tlasPtr, res);
+			auto worldSpaceReSTIRPass = eastl::make_unique<Pass::Raytracing::GI12::GI12WorldSpaceReSTIRPass>(renderer, tlasPtr, res);
+			auto screenProbesInterpolatePass = eastl::make_unique<Pass::Raytracing::GI12::GI12ScreenProbesInterpolatePass>(renderer, screenProbesPtr);
+			auto glossyReflectionsPass = eastl::make_unique<Pass::Raytracing::GI12::GI12GlossyReflectionsPass>(renderer, tlasPtr, res);
+			auto denoiserPass = eastl::make_unique<Pass::Raytracing::GI12::GI12DenoiserPass>(renderer, tlasPtr, res);
+
+			renderGraph->AddNode({ true, "GI 1.2 Screen Probes", eastl::move(screenProbesPass) });
+			renderGraph->AddNode({ true, "GI 1.2 Hash Grid Cache", eastl::move(hashGridCachePass) });
+			renderGraph->AddNode({ true, "GI 1.2 World Space ReSTIR", eastl::move(worldSpaceReSTIRPass) });
+			renderGraph->AddNode({ true, "GI 1.2 Screen Probes Interpolate", eastl::move(screenProbesInterpolatePass) });
+			renderGraph->AddNode({ true, "GI 1.2 Glossy Reflections", eastl::move(glossyReflectionsPass) });
+			renderGraph->AddNode({ true, "GI 1.2 Denoiser", eastl::move(denoiserPass) });
+		} else {
+			auto sharc = eastl::make_unique<Pass::Raytracing::Common::SHaRCGI>(renderer, tlasPtr);
+			auto giPass = eastl::make_unique<Pass::Raytracing::GlobalIllumination>(renderer, tlasPtr, sharc.get());
+			renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
+			renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
+			auto postProcess = eastl::make_unique<Pass::Utility::PostProcess>(renderer, Mode::GlobalIllumination, tlasPtr);
+			auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
+			auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
+			auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
+
+			renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
+			renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
+			renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
+			renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
+		}
 	}
 	else if (mode == Mode::PathTracing) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
@@ -314,8 +346,16 @@ void Scene::Execute()
 		commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
 		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
 
+		if (m_GI12Resources && m_Settings.GI12.Enabled) {
+			m_GI12Resources->UpdateConstants(commandList, m_Settings);
+		}
+
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
+
+		if (m_GI12Resources && m_Settings.GI12.Enabled) {
+			m_GI12Resources->SwapHistory();
+		}
 
 		renderer->RenderTargetManager().CopySharedTextures(commandList);
 
@@ -330,8 +370,16 @@ void Scene::Execute()
 		commandList->writeBuffer(m_CameraBuffer, m_CameraData.get(), sizeof(CameraData));
 		commandList->writeBuffer(m_FeatureBuffer, m_FeatureData.get(), sizeof(FeatureData));
 
+		if (m_GI12Resources && m_Settings.GI12.Enabled) {
+			m_GI12Resources->UpdateConstants(commandList, m_Settings);
+		}
+
 		// Executes attached render nodes
 		renderer->GetRenderGraph()->Execute(commandList);
+
+		if (m_GI12Resources && m_Settings.GI12.Enabled) {
+			m_GI12Resources->SwapHistory();
+		}
 
 		renderer->RenderTargetManager().CopySharedTextures(commandList);
 	}
@@ -548,14 +596,16 @@ void Scene::SetWaterFlowMap(void* waterFlowMap)
 void Scene::UpdateSettings(Settings settings)
 {
 	auto previousMode = m_Settings.GeneralSettings.Mode;
+	auto previousGI12Enabled = m_Settings.GI12.Enabled;
 
 	m_Settings = settings;
 
 	auto currentMode = settings.GeneralSettings.Mode;
+	auto currentGI12Enabled = settings.GI12.Enabled;
 
 	auto* renderGraph = Renderer::GetSingleton()->GetRenderGraph();
 
-	if (currentMode != previousMode || renderGraph->GetNodes().empty())
+	if (currentMode != previousMode || currentGI12Enabled != previousGI12Enabled || renderGraph->GetNodes().empty())
 		UpdateMode(currentMode);
 
 	const bool nrd = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||

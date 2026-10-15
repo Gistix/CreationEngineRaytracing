@@ -13,10 +13,11 @@
 
 #include "INISettings.h"
 
+namespace Pass::Raytracing::GI12 { class GI12Resources; }
+
 struct Scene
 {
 	eastl::unique_ptr<SceneGraph> m_SceneGraph;
-
 	eastl::unique_ptr<CameraData> m_CameraData;
 
 #if defined(FALLOUT4)	
@@ -78,8 +79,10 @@ struct Scene
 	INISettings m_INISettings;
 
 	spdlog::level::level_enum logLevel = spdlog::level::info;
+	eastl::unique_ptr<Pass::Raytracing::GI12::GI12Resources> m_GI12Resources;
 
 	Scene();
+	~Scene();
 
 	void Load();
 
@@ -99,6 +102,7 @@ struct Scene
 	}
 
 	SceneGraph* GetSceneGraph() const;
+	Pass::Raytracing::GI12::GI12Resources* GetGI12Resources() const { return m_GI12Resources.get(); }
 
 	inline auto GetCameraData() const { return m_CameraData.get(); }
 	inline const CameraRuntimeData& GetCameraRuntimeData() const { return m_CameraRuntimeData; }

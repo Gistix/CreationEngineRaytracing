@@ -122,6 +122,27 @@ namespace Util
 			return defines;
 		}
 
+		eastl::vector<ShaderDefine> GetGI12Defines(const Settings& settings)
+		{
+			eastl::vector<ShaderDefine> defines = {
+				{ L"USE_INLINE_RT", L"1" },
+				{ L"GI12_USE_MULTIBOUNCE", settings.GI12.UseMultibounce ? L"1" : L"0" },
+				{ L"GI12_USE_TEMPORAL_FEEDBACK", settings.GI12.UseTemporalFeedback ? L"1" : L"0" },
+				{ L"GI12_USE_DIRECT_LIGHTING", settings.GI12.UseDirectLighting ? L"1" : L"0" },
+				{ L"GI12_HALF_RES_GLOSSY", settings.GI12.GlossyReflectionsHalfRes ? L"1" : L"0" }
+			};
+
+			if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
+				defines.emplace_back(L"NRD", L"1");
+				defines.emplace_back(L"NRD_REBLUR", L"1");
+			} else if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
+				defines.emplace_back(L"NRD", L"1");
+				defines.emplace_back(L"NRD_RELAX", L"1");
+			}
+
+			return defines;
+		}
+
 		eastl::vector<ShaderDefine> GetDebugDefines(const Settings& settings)
 		{
 			eastl::vector<ShaderDefine> defines = GetRaytracingDefines(settings, false, false);
