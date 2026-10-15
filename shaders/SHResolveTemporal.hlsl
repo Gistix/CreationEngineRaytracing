@@ -36,8 +36,8 @@ RWTexture2D<float4> NormalOut : register(u3);
 SamplerState LinearClampSampler : register(s0);
 SamplerState PointClampSampler : register(s1);
 
-static const float kDepthRejectThreshold = 0.05f;
-static const float kNormalRejectDot = 0.95f;
+static const float kDepthRejectThreshold = 0.10f;
+static const float kBackfaceRejectDot = 0.0f;
 
 void LoadHistorySH(Texture2DArray<float4> history, float2 huv, out float3 sh[9], out float extra)
 {
@@ -178,13 +178,14 @@ void Main(uint2 idx : SV_DispatchThreadID)
         const float depthDenom = max(abs(viewDepth), 1e-3f);
         reset = abs(viewDepth - histDepth) / depthDenom > kDepthRejectThreshold;
 
-        // World-space normals are view-independent, so this still validates
-        // under camera rotation where depth legitimately changes.
+        // Since SH stores the incident directional radiance field, normal variation
+        // across curvature, bevels, and normal maps is naturally resolved during upsample.
+        // We only reject complete backfaces to prevent bleeding across thin two-sided geometry.
         if (!reset)
         {
             const float4 currN = NormalRoughnessLow[idx];
             const float4 histN = HistoryNormal.SampleLevel(PointClampSampler, huv, 0);
-            reset = dot(currN.xyz, histN.xyz) < kNormalRejectDot;
+            reset = dot(currN.xyz, histN.xyz) <= kBackfaceRejectDot;
         }
     }
 
@@ -203,12 +204,9 @@ void Main(uint2 idx : SV_DispatchThreadID)
     float3 outDiffSH[9];
     float3 outSpecSH[9];
 
-    // Disocclusion snaps to the current sample; fast motion shortens the
-    // history to avoid long smearing trails. Invalid current samples keep
-    // history (or stay black when there is none yet).
-    const float2 pixelMotion = mv * float2(Camera.RenderSize);
-    const float motionA = saturate((length(pixelMotion) - 1.0f) / 8.0f);
-    const float baseA = reset ? 1.0f : max(PC.BlendAlpha, motionA);
+    // Disocclusion snaps to the current sample. When reprojected surfaces match,
+    // maintain full temporal accumulation so camera motion does not drop history.
+    const float baseA = reset ? 1.0f : PC.BlendAlpha;
     const float diffA = diffValid ? baseA : 0.0f;
     const float specA = specValid ? baseA : 0.0f;
 
