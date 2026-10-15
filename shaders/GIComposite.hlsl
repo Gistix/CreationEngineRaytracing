@@ -29,24 +29,6 @@ SamplerState PointClampSampler          : register(s1);
 
 static const float kJBU_DepthSigma = 0.01f;
 
-float4 SampleJBUTexel4(
-    Texture2D<float4> texture,
-    int2 base,
-    float4 weights,
-    int2 maxTexel)
-{
-    float4 result = 0;
-
-    [unroll]
-    for (uint i = 0; i < 4; i++)
-    {
-        int2 texel = clamp(base + int2(i & 1, i >> 1), 0, maxTexel);
-        result += texture.Load(int3(texel, 0)) * weights[i];
-    }
-
-    return result;
-}
-
 WAVE_SIZE(32)
 [numthreads(8, 8, 1)]
 void Main(uint2 idx : SV_DispatchThreadID)
@@ -66,67 +48,14 @@ void Main(uint2 idx : SV_DispatchThreadID)
     // populated GI region without changing the RenderSize output coverage.
     const float2 giUV = screenUV * Raytracing.ResolutionScale;
 
-    float4 diffuseIndirect = DiffuseIndirect.SampleLevel(LinearClampSampler, giUV, 0);
-    float4 specularIndirect = SpecularIndirect.SampleLevel(LinearClampSampler, giUV, 0);
-
-    if (Raytracing.ResolutionScale < 1.0f) {
-        // Joint bilateral upsampling: blend the 4 surrounding gi texels weighted by
-        // depth (and optionally normal) similarity with the render-resolution surface.
-        const int2 maxTexel = int2(ceil(float2(Camera.RenderSize) * Raytracing.ResolutionScale)) - 1;
-        
-        const float2 samplePos = giUV * float2(Camera.ScreenSize) - 0.5f;
-        const int2 base = int2(floor(samplePos));
-
-        const float2 f = frac(samplePos);
-
-        float4 bilinearWeights =
-        {
-            (1.0f - f.x) * (1.0f - f.y),
-            (       f.x) * (1.0f - f.y),
-            (1.0f - f.x) * (       f.y),
-            (       f.x) * (       f.y)
-        };        
-
-        const float depth0 = ScreenToViewDepth(FullResDepth[idx], Camera.CameraData);
-
-        const float sigma = max(kJBU_DepthSigma * depth0, 1e-6f);
-        
-        float4 weights;
-        float weightSum = 0.0f;
-        
-        [unroll]
-        for (uint i = 0; i < 4; ++i) {
-            const int2 texel = clamp(base + int2(i & 1, i >> 1), int2(0, 0), maxTexel);
-            const float depth1 = LowResDepth[texel];
-            
-            float depthWeight = exp(-abs(depth0 - depth1) / sigma);
-            
-            weights[i] = depthWeight * bilinearWeights[i];
-
-            weightSum += weights[i];
-        }
-        
-        weights /= max(weightSum, 1e-6f);
-
-        diffuseIndirect = SampleJBUTexel4(DiffuseIndirect, base, weights, maxTexel);
-        specularIndirect = SampleJBUTexel4(SpecularIndirect, base, weights, maxTexel);
-    }
-
-#if defined(NRD_REBLUR)
-    diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
-    specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);
-#endif
-
-    // Reconstruct material factors at render resolution, using the same G-buffer
-    // inputs as NRD_MaterialFactors (albedo, metalness from GNMAO.y, roughness,
-    // shading normal, and view direction).
+    // Reconstruct material factors and geometric attributes at render resolution.
     const float depth = FullResDepth.SampleLevel(PointClampSampler, screenUV, 0);
-    const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
-    const float3 positionVS = ScreenToViewPosition(screenUV, depthVS, Camera.NDCToView);
-    const float3 viewDirection = normalize(-ViewToWorldPosition(positionVS, Camera.ViewInverse));
+    float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
+    float3 positionVS = ScreenToViewPosition(screenUV, depthVS, Camera.NDCToView);
+    float3 viewDirection = normalize(-ViewToWorldPosition(positionVS, Camera.ViewInverse));
 
     const float4 normalRoughness = FullResNormalRoughness.SampleLevel(PointClampSampler, screenUV, 0);
-    const float3 normal = normalRoughness.xyz;
+    float3 normal = normalRoughness.xyz;
     const float roughness = PBR::Roughness(saturate(normalRoughness.w), Raytracing.Roughness.x, Raytracing.Roughness.y);
 
     const float3 albedo = LLGammaToTrueLinear(Albedo.SampleLevel(PointClampSampler, screenUV, 0).rgb);
@@ -138,6 +67,8 @@ void Main(uint2 idx : SV_DispatchThreadID)
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(normal, viewDirection, diffuseAlbedo, F0, roughness, diffFactor, specFactor);
 
+    // Resolve water surface depth and normal if present so high-res properties
+    // match the low-res properties generated in PostProcess.hlsl.
     const float waterDepth = WaterDepth.SampleLevel(PointClampSampler, screenUV, 0);
     bool isWater = false;
     float waterFresnel = 0.0f;
@@ -149,18 +80,119 @@ void Main(uint2 idx : SV_DispatchThreadID)
         if (waterDepthVS >= FP_VIEW_Z && waterDepth <= depth + 1e-4f)
         {
             isWater = true;
+            depthVS = waterDepthVS;
             const float2 waterNormalXY = WaterNormal.SampleLevel(PointClampSampler, screenUV, 0);
             const float3 waterNormalWS = float3(waterNormalXY, sqrt(saturate(1.0f - dot(waterNormalXY, waterNormalXY))));
-            const float3 waterPosVS = ScreenToViewPosition(screenUV, waterDepthVS, Camera.NDCToView);
-            const float3 waterViewDir = normalize(-ViewToWorldPosition(waterPosVS, Camera.ViewInverse));
+            normal = waterNormalWS;
+            positionVS = ScreenToViewPosition(screenUV, depthVS, Camera.NDCToView);
+            viewDirection = normalize(-ViewToWorldPosition(positionVS, Camera.ViewInverse));
 
             float3 unusedDiff;
-            NRD_MaterialFactors(waterNormalWS, waterViewDir, float3(0.0f, 0.0f, 0.0f), float3(0.02f, 0.02f, 0.02f), 0.0f, unusedDiff, specFactor);
+            NRD_MaterialFactors(normal, viewDirection, float3(0.0f, 0.0f, 0.0f), float3(0.02f, 0.02f, 0.02f), 0.0f, unusedDiff, specFactor);
 
-            float NdotV = saturate(dot(waterNormalWS, waterViewDir));
+            float NdotV = saturate(dot(normal, viewDirection));
             waterFresnel = 0.02f + (1.0f - 0.02f) * pow(saturate(1.0f - NdotV), 5.0f);
         }
     }
+
+    const float3 pos0WS = ViewToWorldPosition(positionVS, Camera.ViewInverse);
+
+    float4 diffuseIndirect;
+    float4 specularIndirect;
+
+    if (Raytracing.ResolutionScale < 1.0f) {
+        // Joint bilateral upsampling: 3x3 footprint with plane-aware depth weighting,
+        // normal similarity, and a nearest-matching fallback for fine silhouettes.
+        const int2 maxTexel = int2(ceil(float2(Camera.RenderSize) * Raytracing.ResolutionScale)) - 1;
+        const float2 samplePos = giUV * float2(Camera.ScreenSize) - 0.5f;
+        const int2 centerTexel = int2(round(samplePos));
+
+        const float NdotV = saturate(dot(normal, viewDirection));
+        const float planeTolerance = max(kJBU_DepthSigma * depthVS / max(NdotV, 0.25f), 0.5f);
+
+        float4 diffAccum = 0.0f;
+        float4 specAccum = 0.0f;
+        float weightSum = 0.0f;
+
+        float maxWeight = -1.0f;
+        int2 bestTexel = centerTexel;
+
+        [unroll]
+        for (int dy = -1; dy <= 1; ++dy)
+        {
+            [unroll]
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                int2 texel = clamp(centerTexel + int2(dx, dy), 0, maxTexel);
+                float depth1 = LowResDepth[texel];
+
+                // 1. World position of low-res depth sample
+                float2 sampleUV = (float2(texel) + 0.5f) / (float2(Camera.ScreenSize) * Raytracing.ResolutionScale);
+                float3 samplePosVS = ScreenToViewPosition(sampleUV, depth1, Camera.NDCToView);
+                float3 samplePosWS = ViewToWorldPosition(samplePosVS, Camera.ViewInverse);
+
+                // 2. Point-to-plane distance (invariant to surface slope/foreshortening)
+                float planeDist = abs(dot(samplePosWS - pos0WS, normal));
+
+                // 3. Normal similarity (preserves geometric creases/corners while permitting normal maps)
+                float3 normal1 = FullResNormalRoughness.SampleLevel(PointClampSampler, sampleUV, 0).xyz;
+                [branch]
+                if (isWater)
+                {
+                    float waterDepth1 = WaterDepth.SampleLevel(PointClampSampler, sampleUV, 0);
+                    if (waterDepth1 < SKY_Z)
+                    {
+                        float2 waterNorm1 = WaterNormal.SampleLevel(PointClampSampler, sampleUV, 0);
+                        normal1 = float3(waterNorm1, sqrt(saturate(1.0f - dot(waterNorm1, waterNorm1))));
+                    }
+                }
+
+                float normalSim = saturate(dot(normal, normal1));
+                float normalWeight = pow(normalSim, 16.0f);
+
+                // 4. Spatial Gaussian weight
+                float2 offset = float2(dx, dy) - (samplePos - float2(centerTexel));
+                float spatialWeight = exp(-dot(offset, offset) * 1.5f);
+
+                // 5. Plane-aware depth weight
+                float depthWeight = exp(-planeDist / planeTolerance);
+
+                float w = spatialWeight * depthWeight * normalWeight;
+
+                if (w > maxWeight)
+                {
+                    maxWeight = w;
+                    bestTexel = texel;
+                }
+
+                diffAccum += DiffuseIndirect.Load(int3(texel, 0)) * w;
+                specAccum += SpecularIndirect.Load(int3(texel, 0)) * w;
+                weightSum += w;
+            }
+        }
+
+        if (weightSum > 1e-3f)
+        {
+            diffuseIndirect = diffAccum / weightSum;
+            specularIndirect = specAccum / weightSum;
+        }
+        else
+        {
+            // Fallback for fine geometry: select the best matching sample on the plane
+            diffuseIndirect = DiffuseIndirect.Load(int3(bestTexel, 0));
+            specularIndirect = SpecularIndirect.Load(int3(bestTexel, 0));
+        }
+    }
+    else
+    {
+        diffuseIndirect = DiffuseIndirect.SampleLevel(LinearClampSampler, giUV, 0);
+        specularIndirect = SpecularIndirect.SampleLevel(LinearClampSampler, giUV, 0);
+    }
+
+#if defined(NRD_REBLUR)
+    diffuseIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(diffuseIndirect);
+    specularIndirect = REBLUR_BackEnd_UnpackRadianceAndNormHitDist(specularIndirect);
+#endif
 
     diffuseIndirect.rgb *= diffFactor;
     if (isWater)
