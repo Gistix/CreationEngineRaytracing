@@ -43,6 +43,8 @@ nvrhi::ITexture* RenderTargetManager::GetTexture(Texture texture) {
 			break;
 		case RenderTarget::DiffuseRadiance:
 		case RenderTarget::SpecularRadiance:
+		case RenderTarget::DiffuseDirection:
+		case RenderTarget::SpecularDirection:
 			desc.format = nvrhi::Format::RGBA16_FLOAT;
 			break;
 		case RenderTarget::DiffuseFactor: // RRDiffuseAlbedo

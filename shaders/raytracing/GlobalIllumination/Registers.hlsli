@@ -34,6 +34,11 @@ RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer     : regist
 RWTexture2D<float4>                         DiffuseOutput               : register(u0);
 RWTexture2D<float4>                         SpecularOutput              : register(u1);
 
+#       if defined(SH_GI)
+RWTexture2D<float4>                         DiffuseDirection            : register(u2);
+RWTexture2D<float4>                         SpecularDirection           : register(u3);
+#       endif // SH_GI
+
 #   else
 RWTexture2D<float4>                         Output                      : register(u0);
 #   endif // RAW_RADIANCE

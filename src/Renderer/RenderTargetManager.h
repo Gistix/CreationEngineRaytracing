@@ -16,6 +16,8 @@ struct RenderTargetManager
 		DiffuseAlbedo,
 		DiffuseRadiance,
 		SpecularRadiance,
+		DiffuseDirection,
+		SpecularDirection,
 		DiffuseFactor,
 		RRDiffuseAlbedo = DiffuseFactor,
 		SpecularFactor,

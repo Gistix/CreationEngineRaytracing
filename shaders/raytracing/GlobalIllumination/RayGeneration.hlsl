@@ -29,6 +29,16 @@
 #   include "include/NRD.hlsli"
 #endif
 
+#if defined(SH_GI)
+// Normalizes a summed incident direction for storage; a zero sum encodes an
+// invalid sample (w = 0).
+float4 SH_PackDirection(float3 dirSum)
+{
+    float len = length(dirSum);
+    return len > 1e-6f ? float4(dirSum / len, 1.0f) : float4(0.0f, 0.0f, 0.0f, 0.0f);
+}
+#endif
+
 #if USE_RAY_QUERY
 WAVE_SIZE(32)
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
@@ -103,7 +113,11 @@ void Main()
 #           endif
 #       else
         DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);   
+        SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#           if defined(SH_GI)
+        DiffuseDirection[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        SpecularDirection[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#           endif // SH_GI
 #       endif // NRD
         
 #   else // RAW_RADIANCE
@@ -189,6 +203,16 @@ void Main()
      float diffHitDist = 0.0f;
      uint diffPathNum = 0;
      float specHitDist = NRD_FrontEnd_SpecHitDistAveraging_Begin();   
+#endif
+
+#if defined(SH_GI)
+// First-bounce incident direction sums (world space) and hit-distance sums,
+// one set per lobe. Directions are normalized on write; a zero sum encodes
+// an invalid sample (w = 0).
+    float3 diffuseDirSum = float3(0.0f, 0.0f, 0.0f);
+    float3 specularDirSum = float3(0.0f, 0.0f, 0.0f);
+    float diffuseHitDistSum = 0.0f;
+    float specularHitDistSum = 0.0f;
 #endif
     
     [loop]
@@ -352,6 +376,24 @@ void Main()
             payload = TraceRayStandard(Scene, ray, randomSeed);
             
             rayCone = rayCone.propagateDistance(payload.hitDistance);
+
+#if defined(SH_GI)
+            if (j == 0)
+            {
+                if (isSpecularSample)
+                {
+                    specularDirSum += direction;
+                    if (payload.Hit())
+                        specularHitDistSum += payload.hitDistance;
+                }
+                else
+                {
+                    diffuseDirSum += direction;
+                    if (payload.Hit())
+                        diffuseHitDistSum += payload.hitDistance;
+                }
+            }
+#endif
 
             // Apply Beer-Lambert volume absorption for water
             if (insideWaterVolume)
@@ -530,8 +572,16 @@ void Main()
 
     
 #       else // !NRD
-    DiffuseOutput[idx] = float4(diffuseRadiance, diffHitDist);
-    SpecularOutput[idx] = float4(specularRadiance, specHitDist);    
+#           if defined(SH_GI)
+    DiffuseOutput[idx] = float4(diffuseRadiance, diffuseHitDistSum / float(MAX_SAMPLES));
+    SpecularOutput[idx] = float4(specularRadiance, specularHitDistSum / float(MAX_SAMPLES));
+    DiffuseDirection[idx] = SH_PackDirection(diffuseDirSum);
+    SpecularDirection[idx] = SH_PackDirection(specularDirSum);
+#           else
+    // Unreachable: RAW_RADIANCE without NRD is only produced with SH_GI.
+    DiffuseOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    SpecularOutput[idx] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+#           endif // SH_GI
 #       endif // NRD
     
 #   else // !RAW_RADIANCE

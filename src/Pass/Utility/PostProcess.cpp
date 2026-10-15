@@ -25,6 +25,7 @@ namespace Pass::Utility
 			settings.GeneralSettings.Mode == Mode::GlobalIllumination && 
 			(settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			 settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax ||
+			 settings.GeneralSettings.Denoiser == Denoiser::SH_Temporal ||
 			 settings.GeneralSettings.Denoiser == Denoiser::DLSS_RR ||
 			 settings.RaytracingSettings.ResolutionScale != 1.0f)
 		);
@@ -56,9 +57,14 @@ namespace Pass::Utility
 
 		eastl::vector<DxcDefine> defines;
 
-		if (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax) {
+		const bool nrd = (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax);
+		const bool shTemporal = (m_Denoiser == Denoiser::SH_Temporal);
+
+		if (nrd || shTemporal) {
 			bindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // OutViewDepth
 			defines.push_back({ L"NRD", L"1" });
+			if (shTemporal)
+				defines.push_back({ L"SH_TEMPORAL", L"1" });
 		}
 
 		if (m_Denoiser == Denoiser::DLSS_RR) {
@@ -121,7 +127,8 @@ namespace Pass::Utility
 			nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::DownscaledMotionVectors))
 		};
 
-		if (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax) {
+		if (m_Denoiser == Denoiser::NRD_Reblur || m_Denoiser == Denoiser::NRD_Relax ||
+			m_Denoiser == Denoiser::SH_Temporal) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::ViewDepth)));
 		}
 

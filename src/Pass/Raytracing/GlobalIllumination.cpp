@@ -98,6 +98,12 @@ namespace Pass::Raytracing
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
 		}
 
+		if (settings.GeneralSettings.Denoiser == Denoiser::SH_Temporal) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(1)); // Specular Radiance
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(2)); // Diffuse Direction
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_UAV(3)); // Specular Direction
+		}
+
 #if defined(NVAPI)
 		// The NVAPI shader extension slot is D3D12-only; Vulkan uses SPIR-V SER intrinsics.
 		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
@@ -249,8 +255,11 @@ namespace Pass::Raytracing
 
 		auto& textureManager = renderer->RenderTargetManager();
 
+		const bool shTemporal = (settings.GeneralSettings.Denoiser == Denoiser::SH_Temporal);
+
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
-			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax)
+			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax ||
+			shTemporal)
 			diffuseTexture = textureManager.GetTexture(RenderTarget::DiffuseRadiance);
 		else
 			diffuseTexture = renderer->GetMainTexture();
@@ -294,6 +303,12 @@ namespace Pass::Raytracing
 		if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
 			settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
+		}
+
+		if (shTemporal) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(1, textureManager.GetTexture(RenderTarget::SpecularRadiance)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(2, textureManager.GetTexture(RenderTarget::DiffuseDirection)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_UAV(3, textureManager.GetTexture(RenderTarget::SpecularDirection)));
 		}
 
 #if defined(NVAPI)

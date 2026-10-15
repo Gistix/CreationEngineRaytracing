@@ -32,6 +32,8 @@
 #include "Pass/NRD/NRDIntegration.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
 #include "Pass/Raytracing/Common/GIComposite.h"
+#include "Pass/Raytracing/Common/SHResolveTemporal.h"
+#include "Pass/Raytracing/Common/SHUpsample.h"
 #include "Pass/Raytracing/Common/LandLODOccluder.h"
 #include "Pass/Raytracing/Common/TransformComposition.h"
 #include "Pass/Raytracing/Common/InstanceLightCulling.h"
@@ -112,6 +114,9 @@ void Scene::UpdateMode(Mode mode)
 		auto nrdReblurPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::REBLUR_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
+		auto shResolve = eastl::make_unique<Pass::Common::SHResolveTemporal>(renderer, tlasPtr);
+		auto* shResolvePtr = shResolve.get();
+		auto shUpsample = eastl::make_unique<Pass::Common::SHUpsample>(renderer, tlasPtr, shResolvePtr);
 
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
@@ -125,6 +130,8 @@ void Scene::UpdateMode(Mode mode)
 		renderGraph->AddNode({ true, "Post Process", eastl::move(postProcess) });
 		renderGraph->AddNode({ true, "NRD Reblur Radiance", eastl::move(nrdReblurPass) });
 		renderGraph->AddNode({ true, "NRD Relax Radiance", eastl::move(nrdRelaxPass) });
+		renderGraph->AddNode({ true, "SH Resolve Temporal", eastl::move(shResolve) });
+		renderGraph->AddNode({ true, "SH Upsample", eastl::move(shUpsample) });
 		renderGraph->AddNode({ true, "GI Composite", eastl::move(giComposite) });
 	}
 	else if (mode == Mode::PathTracing) {
@@ -580,7 +587,8 @@ float Scene::GetResolutionScale() const
 		return 1.0f;
 
 	if (m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Reblur &&
-		m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Relax)
+		m_Settings.GeneralSettings.Denoiser != Denoiser::NRD_Relax &&
+		m_Settings.GeneralSettings.Denoiser != Denoiser::SH_Temporal)
 		return 1.0f;
 
 	return m_Settings.RaytracingSettings.ResolutionScale;
