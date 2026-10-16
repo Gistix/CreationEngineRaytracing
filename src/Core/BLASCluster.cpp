@@ -141,7 +141,7 @@ uint32_t BLASCluster::Update()
 
 	// Only those who affect geometry count or its flags
 	if (m_DirtyFlags.any(DirtyFlags::Visibility, DirtyFlags::Mesh, DirtyFlags::Alpha)) {
-		m_Flags.reset(Flags::Updatable, Flags::TwoSided, Flags::Dynamic, Flags::Water);
+		m_Flags.reset(Flags::Updatable, Flags::TwoSided, Flags::Dynamic, Flags::Water, Flags::MergedInstance);
 
 		m_GeometryDescs.clear();
 		m_GeometrySlots.clear();
@@ -159,6 +159,9 @@ uint32_t BLASCluster::Update()
 			if (mesh->IsUpdatable())
 				m_Flags.set(Flags::Updatable);
 
+			if (mesh->IsMergedInstance())
+				m_Flags.set(Flags::MergedInstance);
+
 			if (mesh->IsTwoSided())
 				m_Flags.set(Flags::TwoSided);
 
@@ -172,14 +175,17 @@ uint32_t BLASCluster::Update()
 			const auto meshIndex = mesh->GetMeshIndex();
 			const auto materialIndex = static_cast<uint32_t>(mesh->GetMaterial()->GetOffset());
 
-			for (size_t i = 0; i < entries.size(); i++) {
-				const auto& entry = entries[i];
-				m_GeometryDescs.push_back(entry.desc);
+			if (mesh->IsMergedInstance()) {
+				// N geometry descs share a single mesh slot (one remap entry / TLAS span per group);
+				// the per-instance transform is resolved at hit time from the instance transform pool.
+				const auto& entry = entries[0];
+				for (const auto& geometryEntry : entries)
+					m_GeometryDescs.push_back(geometryEntry.desc);
 				m_GeometrySlots.push_back(entry.geometryIndex);
 
 				auto& geomTris = entry.desc.geometryData.triangles;
 				MeshData md(
-					mesh->GetIndexID(i),
+					mesh->GetIndexID(0),
 					vertexID,
 					vertexDesc,
 					static_cast<uint16_t>(geomTris.vertexCount),
@@ -190,10 +196,37 @@ uint32_t BLASCluster::Update()
 					0,
 					static_cast<uint32_t>(geomTris.indexOffset),
 					static_cast<uint32_t>(geomTris.vertexOffset),
-					materialIndex
-				);
+					materialIndex,
+					mesh->GetInstanceTransformBase(),
+					mesh->GetInstanceCount(),
+					0);
 
 				meshManager->WriteMeshData(entry.geometryIndex, md);
+			}
+			else {
+				for (size_t i = 0; i < entries.size(); i++) {
+					const auto& entry = entries[i];
+					m_GeometryDescs.push_back(entry.desc);
+					m_GeometrySlots.push_back(entry.geometryIndex);
+
+					auto& geomTris = entry.desc.geometryData.triangles;
+					MeshData md(
+						mesh->GetIndexID(i),
+						vertexID,
+						vertexDesc,
+						static_cast<uint16_t>(geomTris.vertexCount),
+						static_cast<uint16_t>(geomTris.indexCount / 3),
+						meshType,
+						dynamicIndex,
+						meshIndex,
+						0,
+						static_cast<uint32_t>(geomTris.indexOffset),
+						static_cast<uint32_t>(geomTris.vertexOffset),
+						materialIndex
+					);
+
+					meshManager->WriteMeshData(entry.geometryIndex, md);
+				}
 			}
 		}
 
@@ -202,7 +235,7 @@ uint32_t BLASCluster::Update()
 			m_BLASResource = nullptr;
 			m_BLAS = nullptr;
 		}
-		else if (m_Flags.all(Flags::Updatable)) {
+		else if (m_Flags.all(Flags::Updatable) || m_Flags.all(Flags::MergedInstance)) {
 			std::vector<nvrhi::BufferHandle> bufferRefs;
 			for (const auto& d : m_GeometryDescs) {
 				if (d.geometryType == nvrhi::rt::GeometryType::Triangles) {
@@ -211,6 +244,9 @@ uint32_t BLASCluster::Update()
 
 					if (d.geometryData.triangles.indexBuffer)
 						bufferRefs.push_back(d.geometryData.triangles.indexBuffer);
+
+					if (d.transformBuffer)
+						bufferRefs.push_back(d.transformBuffer);
 				}
 			}
 			auto buildFlags = MakeDesc(BuildMode::Rebuild).buildFlags;

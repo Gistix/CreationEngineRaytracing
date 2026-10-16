@@ -41,6 +41,10 @@ namespace Constants
 
 	static constexpr uint32_t NUM_INSTANCES_MAX = UINT16_MAX;
 
+	// Pre-sized instance transform pool (world matrices for grouped/merged instance BLASes).
+	static constexpr uint32_t NUM_INSTANCE_TRANSFORMS_MAX = 1u << 18;
+	static constexpr uint32_t NUM_GRASS_INSTANCES_MAX = NUM_INSTANCE_TRANSFORMS_MAX;
+
 	static constexpr uint32_t NUM_TEXTURES_MIN = 512;
 	static constexpr uint32_t NUM_TEXTURES_MAX = 16 * 1024;
 

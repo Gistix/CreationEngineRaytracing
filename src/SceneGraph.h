@@ -169,6 +169,36 @@ class SceneGraph
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<InstancedData>> m_InstancedData;
 
+	// Captured grass groups, keyed by the shared BSMultiStreamInstanceTriShape. Records are stored
+	// verbatim (raw bytes) because the generated and streamed paths use different layouts. The map
+	// is guarded because capture runs on grass worker threads (AddCellGrassTask) while the render
+	// thread consumes it.
+	struct GrassGroup
+	{
+		eastl::vector<uint8_t> records;
+		uint32_t               count = 0;
+		uint16_t               recordSize = 0;
+		uint64_t               engineIndex = UINT64_MAX;  // AddGroup index when known
+		uint64_t               serial = 0;                // globally unique key for the baked mesh
+	};
+
+	struct GrassShapeState
+	{
+		eastl::unordered_map<uint64_t, GrassGroup> groups;
+		uint64_t nextGroupKey = 0;
+		uint64_t version = 0;
+	};
+
+	eastl::unordered_map<RE::BSTriShape*, GrassShapeState> m_GrassShapes;
+	mutable std::mutex m_GrassMutex;
+
+	// One baked mesh + orphan BLAS cluster per captured group. Render-thread only.
+	eastl::unordered_map<uint64_t, eastl::unique_ptr<BaseMesh>> m_GrassGroupMeshes;
+	eastl::unordered_map<uint64_t, eastl::unique_ptr<BLASCluster>> m_GrassGroupClusters;
+	uint64_t m_NextGrassGroupSerial = 1;
+
+	BLASCluster* GetOrCreateGrassCluster(uint64_t a_serial);
+
 public:
 	void Initialize();
 
@@ -257,6 +287,10 @@ public:
 	void UpdateInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_count, const void* a_data, uint32_t a_strideBytes);
 	void ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry);
 	InstancedData* GetOrCreateInstancedData(RE::BSTriShape* a_geometry);
+
+	void AddGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex, const void* records, uint32_t count, uint32_t recordSize);
+	void RemoveGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex);
+	void UpdateGrassMeshes(nvrhi::ICommandList* commandList);
 private:
 	eastl::vector<PassTiming> m_UpdateTimings;
 

@@ -9,6 +9,7 @@
 #	include "CellAttachDetachEvent.h"
 #	include "BSTHashMap.h"
 #	include "GrassTypeKey.h"
+#	include "GrassInstanceData.h"
 #	include "BSTriShape.h"
 #elif defined(FALLOUT4)
 #	include "FO4/FO4.h"

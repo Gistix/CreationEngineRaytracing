@@ -72,6 +72,7 @@ ByteAddressBuffer                           PropertiesBuffer            : regist
 Texture2D<float2>                           WaterNormal                 : register(t21);
 Texture2D<float>                            WaterDepth                  : register(t22);
 #endif
+StructuredBuffer<Transform>                 InstanceTransforms          : register(t23);
 
 #define SOBOL_PRECOMPUTED_BUFFER PrecomputedSobolBuffer
 

@@ -303,6 +303,7 @@ struct ExperimentalSettings
 	uint32_t TextureCutOff = 0;
 	bool GlobalLights = false;
 	bool RenderTreeLOD = false;
+	bool RenderGrass = false;
 };
 
 enum struct TimingMode

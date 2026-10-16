@@ -12,6 +12,8 @@ namespace MeshType
     static const uint Skinned = 2;
     static const uint Dynamic = 3;
     static const uint SubIndex = 4;
+    static const uint Instanced = 5;
+    static const uint MergedInstance = 6;
 }
 #endif
 
@@ -29,8 +31,8 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint IndexOffset;
     uint VertexOffset;
     uint MaterialOffset;
-    uint Pad0;
-    uint Pad1;
+    uint InstanceTransformBase;
+    uint InstanceCount;
     uint Pad2;
 
     uint GetIndexOffset()

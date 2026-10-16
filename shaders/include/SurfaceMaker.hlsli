@@ -46,10 +46,11 @@ struct SurfaceMaker
         surface.SpecTrans = 0.0f;
         surface.IsThinSurface = false;
 
-        uint meshSlot;
-        Mesh mesh = GetMesh(payload, instance, meshSlot);
+        Transform meshTransform;
+        Mesh mesh = GetMeshAndTransform(payload, instance, meshTransform);
+
+        uint meshSlot = mesh.MeshID;
         Properties props = GetMeshProperties(meshSlot);
-        Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
 
         // Loads all geometry releated data
         Vertex v0, v1, v2;

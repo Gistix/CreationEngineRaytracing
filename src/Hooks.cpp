@@ -548,6 +548,51 @@ namespace Hooks
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+
+	// vfunc slot 0x3C - the streamed/loaded grass group creator; returns the engine group index.
+	struct BSMultiStreamInstanceTriShape_AddGroup_Grass
+	{
+		static uint32_t thunk(RE::BSMultiStreamInstanceTriShape* a_this, uint32_t a_numInstances, const void* a_instanceData, uint32_t a_stride, float a_arg4)
+		{
+			const uint32_t index = func(a_this, a_numInstances, a_instanceData, a_stride, a_arg4);
+
+			if (a_instanceData && a_numInstances > 0 && a_stride > 0)
+				Scene::GetSingleton()->GetSceneGraph()->AddGrassGroup(a_this, index, a_instanceData, a_numInstances, a_stride);
+
+			return index;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// BSMultiStreamInstanceTriShape group creator - SE sub_140D46810 (REL 74598),
+	// AE sub_140E1DE60 (REL 76326). Called per group by DoneAddingInstances. `a_stride` is the
+	// shape's instanceSize in halfs, so each record is 2*a_stride bytes.
+	struct BSMultiStreamInstanceTriShape_AddGroupImpl
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_this, uint32_t a_numInstances, const void* a_instanceData, int32_t a_stride, void* a_out, float a_padding)
+		{
+			if (a_instanceData && a_numInstances > 0 && a_stride > 0)
+				Scene::GetSingleton()->GetSceneGraph()->AddGrassGroup(a_this, UINT64_MAX, a_instanceData, a_numInstances, static_cast<uint32_t>(a_stride) * 2u);
+
+			func(a_this, a_numInstances, a_instanceData, a_stride, a_out, a_padding);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	// vfunc slot 0x3D - removes a group on cell teardown.
+	struct BSMultiStreamInstanceTriShape_RemoveGroup_Grass
+	{
+		static void thunk(RE::BSMultiStreamInstanceTriShape* a_this, uint32_t a_groupIndex)
+		{
+			Scene::GetSingleton()->GetSceneGraph()->RemoveGrassGroup(a_this, a_groupIndex);
+
+			func(a_this, a_groupIndex);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 	
 	// 1401B6AF0 SE/140203810 AE
 	struct GrassManager_CreateInstances
@@ -690,6 +735,11 @@ namespace Hooks
 		// Tree LOD instanced geometry
 		stl::detour_thunk<BSMultiStreamInstanceTriShape_AddGroup>(REL::RelocationID(74595, 76323));
 		stl::detour_thunk<BSMultiStreamInstanceTriShape_RemoveGroup>(REL::RelocationID(74600, 76328));
+
+		// Grass
+		stl::write_vfunc<0x3C, BSMultiStreamInstanceTriShape_AddGroup_Grass>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::write_vfunc<0x3D, BSMultiStreamInstanceTriShape_RemoveGroup_Grass>(RE::VTABLE_BSMultiStreamInstanceTriShape[0]);
+		stl::detour_thunk<BSMultiStreamInstanceTriShape_AddGroupImpl>(REL::RelocationID(74598, 76326));
 		
 		// Landscape
 		//stl::detour_thunk<TESObjectLAND_Attach3D>(REL::RelocationID(18334, 18750));

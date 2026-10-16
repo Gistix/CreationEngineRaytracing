@@ -91,6 +91,10 @@ void Main(uint3 DTid : SV_DispatchThreadID)
     const uint meshID = mesh.MeshID;
     Instance instance = Instances[instanceID];
 
+    // Merged-instance meshes supply their per-instance transforms directly (InstanceTransforms); nothing to compose.
+    if (mesh.Type == MeshType::MergedInstance)
+        return;
+
     // meshSlot == transform index
     float3x4 transform = CurrentTransforms[meshID].Value;
     float3x4 prevTransform = PrevTransforms[meshID].Value;

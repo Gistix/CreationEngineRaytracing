@@ -7,7 +7,8 @@ MeshManager::MeshManager()
 	m_GeometrySlots(sizeof(MeshData), Constants::NUM_MESHES_MAX, 0),
 	m_TransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX),
 	m_PrevTransformSlots(sizeof(float3x4), Constants::NUM_MESHES_MAX),
-	m_PropertiesSlots(sizeof(PropertiesData), Constants::NUM_MESHES_MAX, 0)
+	m_PropertiesSlots(sizeof(PropertiesData), Constants::NUM_MESHES_MAX, 0),
+	m_InstanceTransformSlots(sizeof(TransformData), Constants::NUM_INSTANCE_TRANSFORMS_MAX)
 {
 	CreateBuffers();
 }
@@ -50,6 +51,16 @@ void MeshManager::CreateBuffers()
 		.setDebugName("Properties Buffer");
 
 	m_PropertiesBuffer = device->createBuffer(propsDesc);
+
+	auto instDesc = nvrhi::BufferDesc()
+		.setByteSize(Constants::NUM_INSTANCE_TRANSFORMS_MAX * sizeof(TransformData))
+		.setStructStride(sizeof(TransformData))
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setCanHaveUAVs(false)
+		.setIsAccelStructBuildInput(Renderer::GetSingleton()->IsVulkan())
+		.setDebugName("Instance Transform Buffer");
+
+	m_InstanceTransformBuffer = device->createBuffer(instDesc);
 }
 
 uint32_t MeshManager::AllocateMeshIndex()
@@ -94,6 +105,72 @@ void MeshManager::WritePropertiesData(uint32_t index, const PropertiesData& data
 	m_PropertiesSlots.Write(index * sizeof(PropertiesData), &data, sizeof(PropertiesData));
 }
 
+uint32_t MeshManager::AllocateInstanceTransforms(uint32_t count)
+{
+	if (count == 0)
+		return UINT32_MAX;
+
+	std::scoped_lock lock(m_InstanceTransformMutex);
+
+	for (auto it = m_FreeInstanceRanges.begin(); it != m_FreeInstanceRanges.end(); ++it) {
+		if (it->count >= count) {
+			const uint32_t base = it->base;
+			if (it->count == count) {
+				m_FreeInstanceRanges.erase(it);
+			}
+			else {
+				it->base += count;
+				it->count -= count;
+			}
+			return base;
+		}
+	}
+
+	if (m_InstanceTransformNext + count > Constants::NUM_INSTANCE_TRANSFORMS_MAX)
+		return UINT32_MAX;
+
+	const uint32_t base = m_InstanceTransformNext;
+	m_InstanceTransformNext += count;
+	return base;
+}
+
+void MeshManager::ReleaseInstanceTransforms(uint32_t base, uint32_t count)
+{
+	if (count == 0 || base == UINT32_MAX)
+		return;
+
+	std::scoped_lock lock(m_InstanceTransformMutex);
+
+	// Insert sorted by base and coalesce adjacent ranges.
+	InstanceRange merged{ base, count };
+	auto it = m_FreeInstanceRanges.begin();
+	while (it != m_FreeInstanceRanges.end() && it->base < merged.base)
+		++it;
+
+	it = m_FreeInstanceRanges.insert(it, merged);
+
+	if (it != m_FreeInstanceRanges.begin()) {
+		auto prev = it - 1;
+		if (prev->base + prev->count == it->base) {
+			prev->count += it->count;
+			it = m_FreeInstanceRanges.erase(it);
+			it = prev;
+		}
+	}
+
+	auto next = it + 1;
+	if (next != m_FreeInstanceRanges.end() && it->base + it->count == next->base) {
+		it->count += next->count;
+		m_FreeInstanceRanges.erase(next);
+	}
+}
+
+void MeshManager::WriteInstanceTransform(uint32_t index, const float3x4& transform, const float3x4& prevTransform)
+{
+	TransformData data{ transform, prevTransform };
+	m_InstanceTransformSlots.Write(index * sizeof(TransformData), &data, sizeof(TransformData));
+}
+
 void MeshManager::Flush(nvrhi::ICommandList* commandList)
 {
 	// Upload dirty mesh data
@@ -125,5 +202,12 @@ void MeshManager::Flush(nvrhi::ICommandList* commandList)
 		const uint8_t* mirror = static_cast<const uint8_t*>(m_PrevTransformSlots.GetMirror());
 		for (const auto& [offset, size] : dirtyRanges)
 			commandList->writeBuffer(m_PrevBuffer, mirror + offset, size, offset);
+	}
+
+	{
+		auto dirtyRanges = m_InstanceTransformSlots.ConsumeDirtyRanges();
+		const uint8_t* mirror = static_cast<const uint8_t*>(m_InstanceTransformSlots.GetMirror());
+		for (const auto& [offset, size] : dirtyRanges)
+			commandList->writeBuffer(m_InstanceTransformBuffer, mirror + offset, size, offset);
 	}
 }

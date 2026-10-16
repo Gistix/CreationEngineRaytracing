@@ -48,7 +48,8 @@ public:
 		Skinned,
 		Dynamic,
 		SubIndex,
-		Instanced
+		Instanced,
+		MergedInstance
 	};
 
 	enum class Flags : uint8_t
@@ -80,6 +81,16 @@ public:
 
 	virtual class SubIndexMesh* AsSubIndexMesh() { return nullptr; }
 	virtual class InstancedMesh* AsInstancedMesh() { return nullptr; }
+	virtual class MultiStreamInstanceMesh* AsMultiStreamInstanceMesh() { return nullptr; }
+
+	// True for meshes that pack N instances into one BLAS (one geometry desc per instance) and
+	// resolve the per-instance transform at hit time from the instance transform buffer.
+	virtual bool IsMergedInstance() const { return false; }
+	bool IsGroupedInstance() const { return IsMergedInstance(); }
+	virtual uint32_t GetInstanceTransformBase() const { return 0; }
+	virtual uint32_t GetInstanceCount() const { return 0; }
+	uint32_t GetGrassTransformBase() const { return GetInstanceTransformBase(); }
+	uint32_t GetGrassInstanceCount() const { return GetInstanceCount(); }
 
 	// Bindless slot of the live (skinned) dynamic float4 position buffer; 0 for non-dynamic meshes.
 	virtual uint32_t GetDynamicIndex() const { return 0; }
@@ -195,6 +206,12 @@ protected:
 		nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount,
 		nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount,
 		uint32_t transformIndex, nvrhi::Format vertexFormat = nvrhi::Format::RGB32_FLOAT);
+
+	static nvrhi::rt::GeometryDesc MakeGeometryDesc(
+		nvrhi::IBuffer* indexBuffer, uint64_t indexOffset, uint32_t indexCount,
+		nvrhi::IBuffer* vertexBuffer, uint64_t vertexOffset, uint16_t vertexStride, uint32_t vertexCount,
+		nvrhi::IBuffer* transformBuffer, uint64_t transformOffset,
+		nvrhi::Format vertexFormat = nvrhi::Format::RGB32_FLOAT);
 
 	void CreateMaterial();
 	void UpdateMaterial();

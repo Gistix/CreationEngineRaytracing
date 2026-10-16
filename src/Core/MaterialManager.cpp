@@ -18,6 +18,7 @@
 #include "Core/Material/Skyrim/EffectMaterial.h"
 #include "Core/Material/Skyrim/WaterMaterial.h"
 #include "Core/Material/Skyrim/DistantTreeMaterial.h"
+#include "Core/Material/Skyrim/GrassMaterial.h"
 #elif defined(FALLOUT4)
 #include "Core/Material/Fallout4/LightingMaterial.h"
 #include "Core/Material/Fallout4/EnvmapMaterial.h"
@@ -127,6 +128,13 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderProperty* shade
 	auto offset = m_Slots.Allocate();
 
 	auto type = shaderMaterial->GetType();
+#if defined(SKYRIM)
+	if (shaderProperty && shaderProperty->GetRTTI() == Constants::rtti::BSGrassShaderProperty.get())
+	{
+		material = eastl::make_shared<GrassMaterial>(shaderMaterial, offset);
+	}
+	else
+#endif
 	if (type == Type::kLighting) 
 	{
 #if defined(SKYRIM)

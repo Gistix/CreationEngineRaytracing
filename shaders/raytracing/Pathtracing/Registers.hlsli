@@ -109,6 +109,7 @@ StructuredBuffer<uint>                      InstanceLightList           : regist
 StructuredBuffer<uint>                      PrecomputedSobolBuffer      : register(t13);
 ByteAddressBuffer                           MeshSlotRemap               : register(t19);
 ByteAddressBuffer                           PropertiesBuffer            : register(t20);
+StructuredBuffer<Transform>                 InstanceTransforms          : register(t23);
 
 #define SOBOL_PRECOMPUTED_BUFFER PrecomputedSobolBuffer
 
