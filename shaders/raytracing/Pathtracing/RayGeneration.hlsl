@@ -75,7 +75,7 @@ void Main()
 #if USE_RAY_QUERY
     uint2 size = Camera.RenderSize;  
 #   if defined(GROUP_TILING)    
-    uint2 idx = ThreadGroupTilingX((uint2)ceil(size / THREAD_GROUP_SIZE), THREAD_GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
+    uint2 idx = ThreadGroupTilingX((size + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, THREAD_GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
 #   endif
     if (any(idx >= size))
         return;

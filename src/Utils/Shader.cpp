@@ -102,6 +102,9 @@ namespace Util
 			auto instanceMask = InstanceMask::All & ~InstanceMask::Water;
 			defines.emplace_back(L"INSTANCE_MASK", instanceMask);
 
+			if (settings.RaytracingSettings.WaterIndirectLighting)
+				defines.emplace_back(L"WATER_INDIRECT_LIGHTING", L"1");
+
 			if (!sharc || (sharc && !sharcUpdate)) {
 				if (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur) {
 					defines.emplace_back(L"RAW_RADIANCE", L"1");

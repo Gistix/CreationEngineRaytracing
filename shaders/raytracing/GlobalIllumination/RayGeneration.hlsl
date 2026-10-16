@@ -45,7 +45,7 @@ void Main()
 #if USE_RAY_QUERY
     uint2 size = (uint2)max(uint2(1, 1), (uint2)ceil(float2(Camera.RenderSize) * Raytracing.ResolutionScale));  
 #   if defined(GROUP_TILING)    
-    uint2 idx = ThreadGroupTilingX((uint2)ceil(size / THREAD_GROUP_SIZE), THREAD_GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
+    uint2 idx = ThreadGroupTilingX((size + THREAD_GROUP_SIZE - 1) / THREAD_GROUP_SIZE, THREAD_GROUP_SIZE.xx, 32, GTid.xy, Gid.xy);
 #   endif
     if (any(idx >= size))
         return;
@@ -84,12 +84,14 @@ void Main()
 
     const float depth = Depth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
 
+    const float depthVS = ScreenToViewDepth(depth, Camera.CameraData);
+
+#if defined(WATER_INDIRECT_LIGHTING)
     // Water fill: transparent water is omitted from the game GBuffer, so fall
     // back to the rasterized water targets when water is nearer than the game
     // depth (covers both game-sky holes and water-over-opaque surfaces).
     const float waterDepth = WaterDepth.SampleLevel(DefaultSampler, dynamicUVUnjittered, 0);
 
-    float bedDepth = depth;
     bool isWater = false;
     float waterDepthVS = 0.0f;
     [branch]
@@ -102,10 +104,12 @@ void Main()
         }
     }
 
-    const float depthVS = ScreenToViewDepth(bedDepth, Camera.CameraData);
-
     [branch]
-    if ((depthVS < FP_VIEW_Z || bedDepth >= SKY_Z) && !isWater)
+    if ((depthVS < FP_VIEW_Z || depth >= SKY_Z) && !isWater)
+#else
+    [branch]
+    if (depthVS < FP_VIEW_Z || depth >= SKY_Z)
+#endif
     {
 #if !(defined(SHARC) && SHARC_UPDATE)
 #   if defined(RAW_RADIANCE)
@@ -130,11 +134,13 @@ void Main()
         return;
     }    
     
+#if defined(WATER_INDIRECT_LIGHTING)
     // RG16 xy packing, z reconstructed (upper hemisphere). Roughness is a
     // constant 0 for mirror water, matching the raster path that no longer
     // stores it.
     const float2 waterNormalXY = WaterNormal.SampleLevel(DefaultSampler, dynamicUV, 0);
     const float3 waterNormalWS = float3(waterNormalXY, sqrt(saturate(1.0f - dot(waterNormalXY, waterNormalXY))));
+#endif
 
     const float4 normalRoughness = (float4)NormalRoughness.SampleLevel(DefaultSampler, dynamicUV, 0);
     const unorm float roughness = saturate(normalRoughness.w);
@@ -169,6 +175,7 @@ void Main()
 
     StandardBSDF sourceBSDF = StandardBSDF::make(sourceSurface, sourceSurface.Normal, sourceBRDFContext.ViewDirection, true);     
 
+#if defined(WATER_INDIRECT_LIGHTING)
     Surface waterSurface = (Surface)0;
     BRDFContext waterBRDFContext = (BRDFContext)0;
     StandardBSDF waterBSDF = (StandardBSDF)0;
@@ -192,6 +199,7 @@ void Main()
         AdjustShadingNormal(waterSurface, waterBRDFContext, false, false);
         waterBSDF = StandardBSDF::make(waterSurface, waterSurface.Normal, waterBRDFContext.ViewDirection, true);
     }
+#endif
 
     uint randomSeed = InitRandomSeed(idx, size, Camera.FrameIndex);   
 
@@ -204,12 +212,14 @@ void Main()
         rcpDiffFactor = 1.0f / max(diffFactor, (float3)1e-4f);
         rcpSpecFactor = 1.0f / specFactor;
 
+#   if defined(WATER_INDIRECT_LIGHTING)
         if (isWater)
         {
             float3 unusedDiffFactor;
             NRD_MaterialFactors(waterSurface.Normal, waterBRDFContext.ViewDirection, waterSurface.DiffuseAlbedo, waterSurface.F0, waterSurface.Roughness, unusedDiffFactor, specFactor);
             rcpSpecFactor = 1.0f / specFactor;
         }
+#   endif
     }
 
 #   if defined(NRD_REBLUR)
@@ -270,6 +280,7 @@ void Main()
         SharcInit(sharcState);
 #endif
         
+#if defined(WATER_INDIRECT_LIGHTING)
         bool forceWaterSpecular = false;
         if (isWater)
         {
@@ -290,6 +301,7 @@ void Main()
             rayCone = waterRayCone;
         }
         else
+#endif
         {
             surface = sourceSurface;
             brdfContext = sourceBRDFContext;
@@ -521,8 +533,13 @@ void Main()
         float normHitDist;
         if (isSpecularSample)
         {
+#if defined(WATER_INDIRECT_LIGHTING)
             const float refDepthVS = isWater ? waterDepthVS : depthVS;
             const float refRoughness = isWater ? 0.0f : surface.Roughness;
+#else
+            const float refDepthVS = depthVS;
+            const float refRoughness = surface.Roughness;
+#endif
             normHitDist = REBLUR_FrontEnd_GetNormHitDist(accumulatedHitDist, refDepthVS, Raytracing.HitDistSettings.xyz, refRoughness);
         }
         else
@@ -577,12 +594,14 @@ void Main()
     
 #if defined(RAW_RADIANCE)
 #   if MAX_SAMPLES > 1
+#if defined(WATER_INDIRECT_LIGHTING)
     if (isWater)
     {
         diffuseRadiance *= diffPathNum > 0 ? (1.0f / float(diffPathNum)) : 0.0f;
         specularRadiance *= specPathNum > 0 ? (1.0f / float(specPathNum)) : 0.0f;
     }
     else
+#endif
     {
         diffuseRadiance /= MAX_SAMPLES;
         specularRadiance /= MAX_SAMPLES;

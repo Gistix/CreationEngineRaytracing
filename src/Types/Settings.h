@@ -37,6 +37,7 @@ struct RaytracingSettings
 	int SamplesPerPixel = 1;
 	RussianRoulette RussianRoulette = RussianRoulette::Standard;
 	float ResolutionScale = 1.0f;
+	bool WaterIndirectLighting = true;
 };
 
 struct NRDSettings

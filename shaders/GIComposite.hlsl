@@ -67,6 +67,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
     float3 diffFactor, specFactor;
     NRD_MaterialFactors(normal, viewDirection, diffuseAlbedo, F0, roughness, diffFactor, specFactor);
 
+#if defined(WATER_INDIRECT_LIGHTING)
     // Resolve water surface depth and normal if present so high-res properties
     // match the low-res properties generated in PostProcess.hlsl.
     const float waterDepth = WaterDepth.SampleLevel(PointClampSampler, screenUV, 0);
@@ -94,6 +95,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
             waterFresnel = 0.02f + (1.0f - 0.02f) * pow(saturate(1.0f - NdotV), 5.0f);
         }
     }
+#endif
 
     const float3 pos0WS = ViewToWorldPosition(positionVS, Camera.ViewInverse);
 
@@ -136,6 +138,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
 
                 // 3. Normal similarity (preserves geometric creases/corners while permitting normal maps)
                 float3 normal1 = FullResNormalRoughness.SampleLevel(PointClampSampler, sampleUV, 0).xyz;
+#if defined(WATER_INDIRECT_LIGHTING)
                 [branch]
                 if (isWater)
                 {
@@ -146,6 +149,7 @@ void Main(uint2 idx : SV_DispatchThreadID)
                         normal1 = float3(waterNorm1, sqrt(saturate(1.0f - dot(waterNorm1, waterNorm1))));
                     }
                 }
+#endif
 
                 float normalSim = saturate(dot(normal, normal1));
                 float normalWeight = pow(normalSim, 16.0f);
@@ -195,12 +199,14 @@ void Main(uint2 idx : SV_DispatchThreadID)
 #endif
 
     diffuseIndirect.rgb *= diffFactor;
+#if defined(WATER_INDIRECT_LIGHTING)
     if (isWater)
     {
         diffuseIndirect.rgb *= (1.0f - waterFresnel);
         specularIndirect.rgb *= specFactor;
     }
     else
+#endif
     {
         specularIndirect.rgb *= specFactor;
     }

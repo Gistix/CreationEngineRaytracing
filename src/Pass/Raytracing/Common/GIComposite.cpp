@@ -16,6 +16,9 @@ namespace
 			defines.emplace_back(L"NRD_RELAX", L"1");
 		}
 
+		if (settings.RaytracingSettings.WaterIndirectLighting)
+			defines.emplace_back(L"WATER_INDIRECT_LIGHTING", L"1");
+
 		return defines;
 	}
 }
