@@ -289,13 +289,26 @@ namespace Wetness
         if (!settings.EnableWetnessEffects)
             return params;
 
-        float4 waterData = GetWaterData(worldPosition, cameraPosition, waterDataGrid);
-        float waterHeight = waterData.w + cameraPosition.z;  // Convert from camera-relative to absolute
+        const bool hasRaindrops = isPrimary && (vertexNormal.z > 0.0) && (settings.Raining > 0.0) && settings.EnableRaindropFx && (settings.EnableSplashes || settings.EnableRipples);
+        if (settings.Wetness <= 0.0 && settings.MaxShoreWetness <= 0.0 && !hasRaindrops)
+            return params;
 
-        // Shore wetness
-        float wetnessDistToWater = abs(worldPosition.z - waterHeight);
-        float shoreFactor = saturate(1.0 - (wetnessDistToWater / max((float)settings.ShoreRange, 1.0)));
-        float shoreFactorAlbedo = (worldPosition.z < waterHeight) ? 1.0 : shoreFactor;
+        float waterHeight = -2147483648.0;
+        float shoreFactor = 0.0;
+        float shoreFactorAlbedo = 0.0;
+        if (settings.MaxShoreWetness > 0.0)
+        {
+            float4 waterData = GetWaterData(worldPosition, cameraPosition, waterDataGrid);
+            if (waterData.w > -2147483648.0)
+            {
+                waterHeight = waterData.w + cameraPosition.z;  // Convert from camera-relative to absolute
+
+                // Shore wetness
+                float wetnessDistToWater = abs(worldPosition.z - waterHeight);
+                shoreFactor = saturate(1.0 - (wetnessDistToWater / max((float)settings.ShoreRange, 1.0)));
+                shoreFactorAlbedo = (worldPosition.z < waterHeight) ? 1.0 : shoreFactor;
+            }
+        }
 
         // Rain angle and wetness
         float minWetnessValue = settings.MinRainWetness;
@@ -304,7 +317,7 @@ namespace Wetness
 
         // Raindrop effects (complex calculation, primary surface only)
         float4 raindropInfo = float4(0, 0, 1, 0);
-        if (isPrimary && (vertexNormal.z > 0.0) && (settings.Raining > 0.0) && settings.EnableRaindropFx)
+        if (hasRaindrops)
         {
             raindropInfo = GetRainDrops(worldPosition.xyz, settings.Time, vertexNormal, flatnessAmount, settings);
         }
@@ -316,11 +329,16 @@ namespace Wetness
             rainWetness = settings.SkinWetness * settings.Wetness;
 
         float shoreWetness = shoreFactor * settings.MaxShoreWetness;
+        float shoreAlbedoWetness = shoreFactorAlbedo * settings.MaxShoreWetness;
         float wetness = max(shoreWetness, rainWetness);
 
         // Puddle effects (basic calculation, applies on all bounces)
         // Scale by Wetness so puddles go to 0 when weather clears
         float puddleWetness = settings.PuddleWetness * settings.Wetness * minWetnessAngle;
+
+        if (wetness <= 0.0 && puddleWetness <= 0.0 && shoreAlbedoWetness <= 0.0 && all(raindropInfo.xy == 0.0))
+            return params;
+
         float puddle = wetness;
 
         if (!isSkinned)
@@ -338,7 +356,7 @@ namespace Wetness
         params.wetnessNormal = lerp(surfaceNormal, vertexNormal, saturate(puddle));
 
         // Glossiness factors
-        float wetnessGlossinessAlbedo = max(puddle, shoreFactorAlbedo * settings.MaxShoreWetness);
+        float wetnessGlossinessAlbedo = max(puddle, shoreAlbedoWetness);
         wetnessGlossinessAlbedo *= wetnessGlossinessAlbedo;
 
         float wetnessGlossinessSpecular = puddle;
@@ -346,7 +364,7 @@ namespace Wetness
             wetnessGlossinessSpecular *= shoreFactor;
 
         // Apply raindrop ripple normal (primary surface only)
-        if (isPrimary)
+        if (isPrimary && any(raindropInfo.xy != 0.0))
         {
             flatnessAmount *= smoothstep(settings.PuddleMinWetness, 1.0, wetnessGlossinessSpecular);
             float3 rippleNormal = normalize(lerp(float3(0, 0, 1), raindropInfo.xyz, lerp(flatnessAmount, 1.0, 0.5)));
@@ -365,12 +383,13 @@ namespace Wetness
     // Apply wetness to surface: darken albedo + set up coat lobe
     void ApplyWetness(inout Surface surface, WetnessParams params)
     {
-        if (params.wetness <= 0 && params.waterRoughness >= 1.0)
+        if (params.wetness <= 0 && params.waterRoughness >= 1.0 && params.wetnessGlossinessAlbedo <= 0)
             return;
 
         float wetnessStrength = saturate(1.0 - params.waterRoughness);
 
         // Albedo darkening (porosity-based, basic calculation for all bounces)
+        if (params.wetnessGlossinessAlbedo > 0.0)
         {
             float porosity = 1.0;
             porosity = lerp(porosity, 0.0, saturate(sqrt(surface.Metallic)));

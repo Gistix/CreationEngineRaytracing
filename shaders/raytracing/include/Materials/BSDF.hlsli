@@ -356,8 +356,27 @@ struct SpecularReflectionMicrofacet // : IBxDF
         if (wo.z < kMinCosTheta) return false;
 #endif
         
-        pdf = EvalPdf(wi, wo); // We used to have pdf returned as part of the sampleGGX_XXX functions but this made it easier to add bugs when changing due to code duplication in refraction cases
-        weight = Eval(wi, wo) / max(pdf, BSDF_MIN_PDF);
+        float alphaSqr = alpha * alpha;
+        float D = evalNdfGGX(alpha, h.z);
+        float lambdaI = evalLambdaGGX(alphaSqr, wi.z);
+        float lambdaO = evalLambdaGGX(alphaSqr, wo.z);
+        float onePlusLambdaI = 1.f + lambdaI;
+
+        pdf = (0.25f * D) / (onePlusLambdaI * wi.z);
+
+        float3 F = evalFresnelSchlick(albedo, 1.f, wiDotH);
+        float3 ms = MultiScatterSpecularApprox(alpha, wi.z, albedo);
+        weight = ms * F * (onePlusLambdaI / (onePlusLambdaI + lambdaO));
+
+#if defined(GLINT)
+        if (glintEnabled)
+        {
+            float2x2 uvJ = Glint::EstimateUVJacobian(glintMipLevel);
+            float glintD = Glint::EvalGlintNDF(h, alpha, glintAlpha, glintUV, uvJ, glintN, glintFilterSize);
+            weight *= glintD / max(D, BSDF_MIN_PDF);
+        }
+#endif
+
         lobe = (uint)LobeType::SpecularReflection;
         return true;
     }

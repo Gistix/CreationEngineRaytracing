@@ -54,10 +54,15 @@ struct SurfaceMaker
         // Loads all geometry releated data
         Vertex v0, v1, v2;
         
-#if defined(HAS_PREV_POSITIONS)
-        float3 prevPos0, prevPos1, prevPos2;
+#if defined(HAS_PREV_POSITIONS) && !(defined(SHARC) && SHARC_UPDATE)
+#   if defined(PATH_TRACER_MODE) && PATH_TRACER_MODE == PATH_TRACER_MODE_BUILD_STABLE_PLANES
+        const bool computePrevPos = true;
+#   else
+        const bool computePrevPos = primary;
+#   endif
+        float3 prevPos0 = 0.0f, prevPos1 = 0.0f, prevPos2 = 0.0f;
         
-        if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
+        if (computePrevPos && (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic))
             GetVertices(mesh, props, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
         else
 #endif        
@@ -122,31 +127,21 @@ struct SurfaceMaker
             currentObjectSpacePos, meshTransform.Transform, instance.Transform, Camera.Position);
 
         // Previous-frame positions for motion vectors.
-#if defined(HAS_PREV_POSITIONS)
+#if defined(HAS_PREV_POSITIONS) && !(defined(SHARC) && SHARC_UPDATE)
+        if (computePrevPos)
         {       
             // Previous object-space position: per-vertex skinned/dynamic positions, else current.
             float3 prevObjectSpacePos = currentObjectSpacePos;
             if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
                 prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
 
-            // Reconstruct the current/previous delta in camera-relative space (using the SAME
-            // camera reference, Camera.Position, for both terms) so the subtraction stays
-            // well-conditioned regardless of how far the object is from the world origin.
-            // For static geometry (identical transforms + identical object-space positions)
-            // this cancels to exactly zero, just as the naive world-space version did —
-            // but for skinned/dynamic geometry it avoids catastrophic cancellation between
-            // two large, nearly-equal world-space coordinates.
-            float3 currentWorldRelPos = TransformMeshInstancePointCameraRelative(
-                currentObjectSpacePos, meshTransform.Transform, instance.Transform, Camera.Position);
-
-            float3 prevWorldRelPos = TransformMeshInstancePointCameraRelative(
-                prevObjectSpacePos, meshTransform.PrevTransform, instance.PrevTransform, Camera.Position); // NOTE: Camera.Position (current), not PositionPrev — keeps both terms in the same reference frame
-
-            // Apply object motion after current/previous reconstruction cancel, so
-            // static geometry does not inherit world-coordinate cancellation error.
             // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.
             surface.PrevCameraRelativePosition = TransformMeshInstancePointCameraRelative(
                 prevObjectSpacePos, meshTransform.PrevTransform, instance.PrevTransform, Camera.PositionPrev);
+        }
+        else
+        {
+            surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);
         }
 #else
         surface.PrevCameraRelativePosition = surface.CameraRelativePosition + (Camera.Position - Camera.PositionPrev);

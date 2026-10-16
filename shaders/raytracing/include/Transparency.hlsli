@@ -156,7 +156,7 @@ float3 ComputeShadowNormal(
     return N;
 }
 
-void ApplyFresnelTransmittance(
+bool ApplyFresnelTransmittance(
     float3 normal, float3 F0, float3 direction,
     inout float3 transmittance, inout float3 transmitanceInOut)
 {
@@ -165,6 +165,12 @@ void ApplyFresnelTransmittance(
     float3 F = BRDF::F_Schlick(F0, NdotV);
     transmittance *= (1.0f - F) / (1.0f + F);
     transmitanceInOut *= transmittance;
+    if (all(transmitanceInOut < 1e-3f))
+    {
+        transmitanceInOut = 0.0f;
+        return true;
+    }
+    return false;
 }
 
 bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics, inout uint randomSeed, in float3 direction, float hitDistance, inout float3 transmitanceInOut)
@@ -208,8 +214,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         WaterMaterial(surface, texCoord, tangentWS, bitangentWS, mesh, props);
         
         float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
-        ApplyFresnelTransmittance(surface.Normal, surface.F0, direction, transmittance, transmitanceInOut);
-        return false;        
+        return ApplyFresnelTransmittance(surface.Normal, surface.F0, direction, transmittance, transmitanceInOut);
     }
     else
     {
@@ -303,8 +308,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             }
 
             const float3 normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
-            ApplyFresnelTransmittance(normal, 0.04f, direction, transmittance, transmitanceInOut);
-            return false;
+            return ApplyFresnelTransmittance(normal, 0.04f, direction, transmittance, transmitanceInOut);
         }
     
         if (isWindow)
@@ -358,8 +362,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 #endif
 
             float3 normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
-            ApplyFresnelTransmittance(normal, F0, direction, transmittance, transmitanceInOut);
-            return false;
+            return ApplyFresnelTransmittance(normal, F0, direction, transmittance, transmitanceInOut);
         }        
     }
     

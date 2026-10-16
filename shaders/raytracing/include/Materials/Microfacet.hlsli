@@ -72,12 +72,7 @@ float evalPdfGGX_VNDF(float alpha, float3 wi, float3 h)
 {
     float G1 = evalG1GGX(alpha * alpha, wi.z);
     float D = evalNdfGGX(alpha, h.z);
-    
-#if 0   // old code; "1.0 / max(0.f, dot(wi, h)) * 4.0f" term used to be applied externally
-    return G1 * D * max(0.f, dot(wi, h)) / wi.z;
-#else
-    return G1 * D * max(0.f, dot(wi, h)) / (wi.z * max(0.f, dot(wi, h)) * 4.0f);   // <- corrected?
-#endif
+    return (0.25f * G1 * D) / wi.z;
 }
 
 /** Evaluates the PDF for sampling the GGX distribution of >bounded< visible normals (BVNDF).

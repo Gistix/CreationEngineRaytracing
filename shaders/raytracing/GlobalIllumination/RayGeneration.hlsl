@@ -184,7 +184,6 @@ void Main()
     [branch]
     if (isWater)
     {
-        const float waterDepthVS = ScreenToViewDepth(waterDepth, Camera.CameraData);
         const float3 waterPosVS = ScreenToViewPosition(uv, waterDepthVS, Camera.NDCToView);
         const float3 waterPosCS = ViewToWorldPosition(waterPosVS, Camera.ViewInverse);
         const float3 waterPosWS = waterPosCS + Camera.Position.xyz;
@@ -333,9 +332,7 @@ void Main()
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
             BSDFSample bsdfSample;
-                              
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
-       
+        
             float4 scatterSamples;
             float2 scatterExtraSamples;
             GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
@@ -424,10 +421,25 @@ void Main()
 #if defined(SHARC) && (SHARC_ENABLE_SH_ENCODING || !SHARC_UPDATE)
             materialRoughnessPrev += bsdfSample.isLobe(LobeType::Diffuse) ? 1.0f : surface.Roughness;
 #endif
-            ray.Origin = surface.Position;
+            if (j > 0)
+            {
+                float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+                ray.Origin = OffsetRayAuto(surface.Position, faceNormalOriented, surface.PositionError,
+#if USE_SIA_INTERPOLATION
+                    surface.SIAOffset,
+#else
+                    0.0f,
+#endif
+                    hasTransmission);
+                ray.TMin = 0.0f;
+            }
+            else
+            {
+                ray.Origin = surface.Position;
+                ray.TMin = 0.1f;
+            }
 
             ray.Direction = direction;
-            ray.TMin = 0.1f;
             ray.TMax = RAY_TMAX;
 
             if (!bsdfSample.isLobe(LobeType::Delta))
