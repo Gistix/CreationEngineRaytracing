@@ -13,8 +13,10 @@ Texture2D<float> FullResDepth           : register(t3);
 Texture2D<float3> Albedo                : register(t4);
 Texture2D<float4> FullResNormalRoughness : register(t5);
 Texture2D<float3> GNMAO                 : register(t6);
+#if defined(WATER_INDIRECT_LIGHTING)
 Texture2D<float2> WaterNormal           : register(t7);
 Texture2D<float>  WaterDepth            : register(t8);
+#endif
 
 RWTexture2D<float4> Output              : register(u0);
 

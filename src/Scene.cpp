@@ -122,7 +122,7 @@ void Scene::UpdateMode(Mode mode)
 
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });
 		renderGraph->AddNode({ true, "Instance Light Culling", eastl::move(instanceLightCulling) });
-		renderGraph->AddNode({ true, "Water Normals", eastl::move(waterNormals) });
+		renderGraph->AddNode({ m_Settings.RaytracingSettings.WaterIndirectLighting, "Water Normals", eastl::move(waterNormals) });
 		renderGraph->AddNode({ true, "Face Normals", eastl::move(faceNormals) });
 		renderGraph->AddNode({ true, "SHaRC", eastl::move(sharc) });
 		renderGraph->AddNode({ true, "Global Illumination", eastl::move(giPass) });
@@ -566,7 +566,7 @@ void Scene::UpdateSettings(Settings settings)
 		settings.GeneralSettings.Denoiser == Denoiser::NRD_Relax);
 
 	if (currentMode == Mode::GlobalIllumination) {
-		// NRDIntegration nodes gate themselves per denoiser variant in SettingsChanged
+		renderGraph->SetEnabled<Pass::Raster::WaterNormals>(settings.RaytracingSettings.WaterIndirectLighting);
 	}
 	else if (currentMode == Mode::PathTracing) {
 		// Accumulation only works in PathTracing mode (PT writes directly to MainTexture)

@@ -82,12 +82,15 @@ namespace Pass::Raytracing
 			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(18), // Precomputed Sobol Buffer
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(19),        // MeshSlotRemap
 			nvrhi::BindingLayoutItem::RawBuffer_SRV(20),        // PropertiesBuffer
-			nvrhi::BindingLayoutItem::Texture_SRV(21),          // Water normals (raster fill)
-			nvrhi::BindingLayoutItem::Texture_SRV(22),          // Water depth (raster fill)
 			nvrhi::BindingLayoutItem::Texture_UAV(0) // Diffuse Radiance
 		};
 
 		const auto& settings = Scene::GetSingleton()->m_Settings;
+
+		if (settings.RaytracingSettings.WaterIndirectLighting) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(21)); // Water normals (raster fill)
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(22)); // Water depth (raster fill)
+		}
 
 		if (settings.SHaRCSettings.Enabled) {
 			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::VolatileConstantBuffer(3));
@@ -284,10 +287,13 @@ namespace Pass::Raytracing
 			nvrhi::BindingSetItem::StructuredBuffer_SRV(18, scene->GetSobolBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(19, sceneGraph->GetMeshSlotRemapBuffer()),
 			nvrhi::BindingSetItem::RawBuffer_SRV(20, sceneGraph->GetPropertiesBuffer()),
-			nvrhi::BindingSetItem::Texture_SRV(21, textureManager.GetTexture(RenderTarget::WaterNormal)),
-			nvrhi::BindingSetItem::Texture_SRV(22, textureManager.GetTexture(RenderTarget::WaterDepth)),
 			nvrhi::BindingSetItem::Texture_UAV(0, diffuseTexture)
 		};
+
+		if (settings.RaytracingSettings.WaterIndirectLighting) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(21, textureManager.GetTexture(RenderTarget::WaterNormal)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(22, textureManager.GetTexture(RenderTarget::WaterDepth)));
+		}
 
 		if (settings.SHaRCSettings.Enabled) {
 			bindingSetDesc.addItem(nvrhi::BindingSetItem::ConstantBuffer(3, m_SHaRC->GetSHaRCConstantBuffer()));

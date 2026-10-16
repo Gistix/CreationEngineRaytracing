@@ -24,8 +24,10 @@ RWTexture2D<float4> OutNormalRoughness       : register(u0);
 RWTexture2D<float4> OutMotionVectors         : register(u1);
 
 #if defined(NRD)
+#if defined(WATER_INDIRECT_LIGHTING)
 Texture2D<float2> WaterNormalTexture     : register(t3);
 Texture2D<float>  WaterDepthTexture      : register(t4);
+#endif
 RWTexture2D<float>  OutViewDepth         : register(u2);
 #endif
 
@@ -66,6 +68,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 
 #if defined(NRD)
     float4 finalNormalRoughness = normalRoughness;
+#if defined(WATER_INDIRECT_LIGHTING)
     const float waterDepth = WaterDepthTexture.SampleLevel(PointClampSampler, sourceUV, 0);
     [branch]
     if (waterDepth < SKY_Z)
@@ -79,6 +82,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
             finalNormalRoughness = float4(waterNormalWS, 0.0f); // roughness = 0.0 for mirror water!
         }
     }
+#endif
     OutNormalRoughness[pixelPos] = finalNormalRoughness;
     OutViewDepth[pixelPos] = depthVS;
 #else

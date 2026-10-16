@@ -12,6 +12,7 @@ namespace Pass::Utility
 	{
 		Mode m_Mode;
 		Denoiser m_Denoiser = Denoiser::None;
+		bool m_WaterIndirectLighting = true;
 		Pass::SceneTLAS* m_SceneTLAS = nullptr;
 		nvrhi::SamplerHandle m_PointClampSampler;
 		nvrhi::ShaderHandle m_ComputeShader;

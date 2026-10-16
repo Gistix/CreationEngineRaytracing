@@ -62,6 +62,7 @@ namespace Pass::Raster
 		virtual void CreatePipeline() override;
 
 		virtual void ResolutionChanged(uint2 resolution) override;
+		virtual void SettingsChanged(const Settings& settings) override;
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};

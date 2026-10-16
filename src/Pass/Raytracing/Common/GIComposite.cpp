@@ -64,10 +64,13 @@ namespace Pass::Common
 			nvrhi::BindingLayoutItem::Texture_SRV(4),
 			nvrhi::BindingLayoutItem::Texture_SRV(5),
 			nvrhi::BindingLayoutItem::Texture_SRV(6),
-			nvrhi::BindingLayoutItem::Texture_SRV(7),
-			nvrhi::BindingLayoutItem::Texture_SRV(8),
 			nvrhi::BindingLayoutItem::Texture_UAV(0)
 		};
+
+		if (Scene::GetSingleton()->m_Settings.RaytracingSettings.WaterIndirectLighting) {
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(7));
+			globalBindingLayoutDesc.addItem(nvrhi::BindingLayoutItem::Texture_SRV(8));
+		}
 
 		m_BindingLayout = GetRenderer()->GetDevice()->createBindingLayout(globalBindingLayoutDesc);
 	}
@@ -105,7 +108,10 @@ namespace Pass::Common
 
 		if (defines != m_Defines) {
 			m_Defines = eastl::move(defines);
+			CreateBindingLayout();
 			CreatePipeline();
+			m_BindingSets.fill(nullptr);
+			m_BindingSetDirty.fill(true);
 		}
 
 		m_Enabled = (settings.GeneralSettings.Denoiser == Denoiser::NRD_Reblur ||
@@ -140,10 +146,13 @@ namespace Pass::Common
 			nvrhi::BindingSetItem::Texture_SRV(4, renderTargets->albedo),
 			nvrhi::BindingSetItem::Texture_SRV(5, renderTargets->normalRoughness),
 			nvrhi::BindingSetItem::Texture_SRV(6, renderTargets->gnmao),
-			nvrhi::BindingSetItem::Texture_SRV(7, textureManager.GetTexture(RenderTarget::WaterNormal)),
-			nvrhi::BindingSetItem::Texture_SRV(8, textureManager.GetTexture(RenderTarget::WaterDepth)),
 			nvrhi::BindingSetItem::Texture_UAV(0, renderer->GetMainTexture())
 		};
+
+		if (scene->m_Settings.RaytracingSettings.WaterIndirectLighting) {
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(7, textureManager.GetTexture(RenderTarget::WaterNormal)));
+			bindingSetDesc.addItem(nvrhi::BindingSetItem::Texture_SRV(8, textureManager.GetTexture(RenderTarget::WaterDepth)));
+		}
 
 		m_BindingSets[currentSlot] = GetRenderer()->GetDevice()->createBindingSet(bindingSetDesc, m_BindingLayout);
 		m_BindingSetDirty[currentSlot] = false;

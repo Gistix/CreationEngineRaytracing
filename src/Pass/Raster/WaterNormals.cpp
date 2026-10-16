@@ -29,6 +29,8 @@ namespace Pass::Raster
 			.setIsDrawIndirectArgs(true)
 			.enableAutomaticStateTracking(nvrhi::ResourceStates::IndirectArgument),
 			"WaterNormals Indirect Args");
+
+		m_Enabled = Scene::GetSingleton()->m_Settings.RaytracingSettings.WaterIndirectLighting;
 	}
 
 	void WaterNormals::ResolutionChanged([[maybe_unused]] uint2 resolution)
@@ -36,6 +38,11 @@ namespace Pass::Raster
 		m_FrameBuffer = nullptr;
 		m_GraphicsPipeline = nullptr;
 		m_DepthTexture = nullptr;
+	}
+
+	void WaterNormals::SettingsChanged(const Settings& settings)
+	{
+		m_Enabled = settings.RaytracingSettings.WaterIndirectLighting;
 	}
 
 	void WaterNormals::Initialize()
@@ -163,6 +170,9 @@ namespace Pass::Raster
 
 	void WaterNormals::Execute(nvrhi::ICommandList* commandList)
 	{
+		if (!m_Enabled)
+			return;
+
 		CheckGraphicsBindings();
 		CheckArgsBindings();
 
