@@ -75,7 +75,8 @@ Instance GetInstance(uint instanceIdx)
 
 uint GetSafeMeshIndex(in Instance instance, uint geometryIndex)
 {
-    const uint safeGeometryIndex = min(geometryIndex, instance.NumGeometry);
+    // Merged-instance clusters have NumGeometry == 1, so safeGeometryIndex clamps to 0 for all geometryIndex values.
+    const uint safeGeometryIndex = (instance.NumGeometry > 1u) ? min(geometryIndex, instance.NumGeometry - 1u) : 0u;
     return min(instance.FirstGeometryID + safeGeometryIndex, Raytracing.NumMeshes);
 }
 
@@ -83,14 +84,6 @@ uint GetSafeMeshIndex(in Instance instance, uint geometryIndex)
 // Meshes[geometrySlot] has the per-geometry MeshData, access .MeshID for transforms/properties.
 uint GetMeshSlotFromRemap(in Instance instance, uint geometryIndex)
 {
-    // Merged-instance meshes use a single remap entry per group; the per-instance
-    // transform is resolved from InstanceTransforms by geometry index.
-    const uint baseRemap = min(instance.FirstGeometryID, Raytracing.NumMeshes);
-    const uint geometrySlot0 = MeshSlotRemap.Load(baseRemap * 4) & 0xFFFF;
-    const Mesh baseMesh = Meshes[NonUniformResourceIndex(geometrySlot0)];
-    if (baseMesh.Type == MeshType::MergedInstance)
-        return geometrySlot0;
-
     return MeshSlotRemap.Load(GetSafeMeshIndex(instance, geometryIndex) * 4) & 0xFFFF;
 }
 
@@ -98,19 +91,14 @@ uint GetMeshSlotFromRemap(in Instance instance, uint geometryIndex)
 // instance transform pool; everything else reads the composed transform buffer.
 Mesh GetMeshAndTransform(in Instance instance, uint geometryIndex, out Transform meshTransform)
 {
-    const uint baseRemap = min(instance.FirstGeometryID, Raytracing.NumMeshes);
-    const uint geometrySlot0 = MeshSlotRemap.Load(baseRemap * 4) & 0xFFFF;
-    const Mesh baseMesh = Meshes[NonUniformResourceIndex(geometrySlot0)];
-
-    if (baseMesh.Type == MeshType::MergedInstance)
-    {
-        meshTransform = InstanceTransforms[NonUniformResourceIndex(baseMesh.InstanceTransformBase + geometryIndex)];
-        return baseMesh;
-    }
-
-    const uint geometrySlot = MeshSlotRemap.Load(GetSafeMeshIndex(instance, geometryIndex) * 4) & 0xFFFF;
+    const uint geometrySlot = GetMeshSlotFromRemap(instance, geometryIndex);
     const Mesh mesh = Meshes[NonUniformResourceIndex(geometrySlot)];
-    meshTransform = Transforms[NonUniformResourceIndex(mesh.MeshID)];
+
+    if (mesh.Type == MeshType::MergedInstance)
+        meshTransform = InstanceTransforms[NonUniformResourceIndex(mesh.InstanceTransformBase + geometryIndex)];
+    else
+        meshTransform = Transforms[NonUniformResourceIndex(mesh.MeshID)];
+
     return mesh;
 }
 
