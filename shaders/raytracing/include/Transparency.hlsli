@@ -84,8 +84,16 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
             else
 #endif
             {
-                LightingMaterialData lightingMat = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-                alpha *= Textures[NonUniformResourceIndex(lightingMat.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).a;
+                const bool defaultSampler = (baseMaterial.Type != Type::Grass);
+                LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
+            
+                Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
+            
+                const float4 diffuse = defaultSampler ?
+                baseTexture.SampleLevel(DefaultSampler, texCoord, 0) :
+                baseTexture.SampleLevel(ClampSampler, texCoord, 0);
+            
+                alpha *= diffuse.a;
             }
         }
         
@@ -240,8 +248,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     const bool needsAlphaTest = (props.AlphaFlags & AlphaFlags::Test) != 0;
     const bool needsAlphaBlend = (props.AlphaFlags & AlphaFlags::Blend) != 0;
     const bool isAdditive = (props.AlphaFlags & AlphaFlags::Additive) != 0;
-    const bool needsLightingTransmissionAlpha = isTransmissive &&
-        baseMaterial.Type == Type::Lighting && !isAdditive;
+    const bool needsLightingTransmissionAlpha = isTransmissive && baseMaterial.Type == Type::Lighting && !isAdditive;
     const bool needsAlphaSample = needsAlphaTest || needsAlphaBlend || needsLightingTransmissionAlpha;
 
     // Candidates with no alpha-dependent or transmission path can be accepted
@@ -249,8 +256,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     if (!needsAlphaSample && !isTransmissive && !isWindow)
         return true;
 
-    const bool needsTexcoords = needsAlphaSample || isWindow ||
-        (isTransmissive && baseMaterial.Type != Type::Grass);
+    const bool needsTexcoords = needsAlphaSample || isWindow ||  (isTransmissive && baseMaterial.Type != Type::Grass);
     const bool fetchColorAlpha = needsAlphaSample && wantColorAlpha;
     const Triangle geomTriangle = GetTriangle(mesh, primitiveIndex);
 
@@ -259,8 +265,7 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     float2 texCoord = 0.0f;
     if (needsTexcoords)
     {
-        GetTriangleTexcoords(mesh, geomTriangle, fetchColorAlpha,
-            texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
+        GetTriangleTexcoords(mesh, geomTriangle, fetchColorAlpha, texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
         texCoord = baseMaterial.TexCoord(Interpolate(texcoord0, texcoord1, texcoord2, uvw));
     }
 
@@ -284,10 +289,18 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
             alpha = Textures[NonUniformResourceIndex(material.TreeLODAtlas)].SampleLevel(DefaultSampler, texCoord, alphaMip).a;
         }
         else
-#endif
+#endif 
         {
+            const bool defaultSampler = (baseMaterial.Type != Type::Grass);
             LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-            alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, alphaMip).a;
+            
+            Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
+            
+            const float4 diffuse = defaultSampler ? 
+                baseTexture.SampleLevel(DefaultSampler, texCoord, alphaMip) : 
+                baseTexture.SampleLevel(ClampSampler, texCoord, alphaMip);
+            
+            alpha = diffuse.a;
         }
 
         alpha *= props.Alpha * instance.Alpha;
