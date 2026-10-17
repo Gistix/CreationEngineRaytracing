@@ -237,7 +237,10 @@ uint32_t BLASCluster::Update()
 		}
 		else if (m_Flags.all(Flags::Updatable) || m_Flags.all(Flags::MergedInstance)) {
 			std::vector<nvrhi::BufferHandle> bufferRefs;
-			for (const auto& d : m_GeometryDescs) {
+			const size_t refCount = m_Flags.all(Flags::MergedInstance) ? 1 : m_GeometryDescs.size();
+			bufferRefs.reserve(refCount * 3);
+			for (size_t i = 0; i < refCount; ++i) {
+				const auto& d = m_GeometryDescs[i];
 				if (d.geometryType == nvrhi::rt::GeometryType::Triangles) {
 					if (d.geometryData.triangles.vertexBuffer)
 						bufferRefs.push_back(d.geometryData.triangles.vertexBuffer);
