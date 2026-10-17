@@ -58,6 +58,9 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         isPBRParallax = enabledParallax && (pbr.PBRFlags & PBR::Flags::HasDisplacement) != 0;
     }
     
+    const float2 texCoordOriginal = texCoord0;
+    const float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
+
     // Parallax
     [branch]
     if (surface.Primary)
@@ -65,7 +68,6 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         if (isPBRParallax || isVanillaParallax || isVanillaParallaxOcc)
         {
             uint16_t displacementTextureIdx = 0;
-            float3x3 tbnTr = float3x3(tangentWS, bitangentWS, normalWS);
             float noise = 0;
             float pixelOffset;
         
@@ -76,35 +78,77 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             displacementParams.FlattenAmount = 0;
         
             bool interlayer = false;
+            float3 parallaxViewDir = viewDir;
         
-        [branch]
+            [branch]
             if (isPBRParallax)
             {
                 displacementTextureIdx = pbr.DisplacementTexture;
                 displacementParams.HeightScale *= pbr.DisplacementScale;
                     
                 interlayer = (pbr.PBRFlags & PBR::Flags::InterlayerParallax) != 0;
+                [branch]
+                if (interlayer)
+                {
+                    displacementParams.DisplacementScale = 0.5f;
+                    displacementParams.DisplacementOffset = -0.25f;
+
+                    float4 sampledCoat = pbr.FeatureColor;
+                    if (pbr.PBRFlags & PBR::Flags::HasFeatureTexture0)
+                    {
+                        Texture2D coatColorTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture0)];
+                        float4 texCoat = coatColorTexture.SampleLevel(DefaultSampler, texCoordOriginal, mipLevel);
+                        sampledCoat.rgb *= texCoat.rgb;
+                        sampledCoat.a *= texCoat.a;
+                    }
+
+                    // Coat IOR / F0 (default dielectric coat F0 = 0.04)
+                    float coatF0 = 0.04f;
+                    float eta = lerp(1.0f, (1.0f - sqrt(coatF0)) / (1.0f + sqrt(coatF0)), sampledCoat.a);
+
+                    float3 entryNormalTS;
+                    if (pbr.PBRFlags & PBR::Flags::CoatNormal)
+                    {
+                        Texture2D coatNormalTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture1)];
+                        float3 sampledCoatNormal = coatNormalTexture.SampleLevel(DefaultSampler, texCoordOriginal, mipLevel).xyz;
+                        entryNormalTS = normalize(sampledCoatNormal * 2.0f - 1.0f);
+                    }
+                    else
+                    {
+                        float3 sampledNormal = normalTexture.SampleLevel(DefaultSampler, texCoordOriginal, mipLevel).xyz;
+                        entryNormalTS = normalize(sampledNormal * 2.0f - 1.0f);
+                    }
+
+                    float3 entryNormal = normalize(entryNormalTS.x * tangentWS + entryNormalTS.y * bitangentWS + entryNormalTS.z * normalWS);
+                    float3 refracted = refract(-viewDir, entryNormal, eta);
+                    if (any(refracted != 0.0f))
+                    {
+                        parallaxViewDir = -normalize(refracted);
+                    }
+                }
             }
             else if (isVanillaParallax || isVanillaParallaxOcc)
             {
-            // Load ParallaxOcc for Parallax as well
-                ParallaxOccMaterialData parallaxOccMaterial = Materials[0].Load < ParallaxOccMaterialData > (mesh.GetMaterialOffset());
+                // Load ParallaxOcc for Parallax as well
+                ParallaxOccMaterialData parallaxOccMaterial = Materials[0].Load<ParallaxOccMaterialData>(mesh.GetMaterialOffset());
            
                 displacementTextureIdx = parallaxOccMaterial.HeightTexture;
 
-            // Only valid if material is ParallaxOcc
+                // Only valid if material is ParallaxOcc
                 if (isVanillaParallaxOcc)
                     displacementParams.HeightScale *= parallaxOccMaterial.Scale;
             }
         
             Texture2D displacementTexture = Textures[NonUniformResourceIndex(displacementTextureIdx)];
-            texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, viewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, interlayer, pixelOffset);
+            texCoord0 = ExtendedMaterials::GetParallaxCoords(dist, texCoord0, mipLevel, parallaxViewDir, tbnTr, noise, displacementTexture, DefaultSampler, 0, displacementParams, interlayer, pixelOffset);
         }
     }
     
     float3 normal = clampSampler ? 
         normalTexture.SampleLevel(ClampSampler, texCoord0, mipLevel).xyz : 
         normalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).xyz;
+
+    const float3 rawNormal = normal;
 
     [branch]
     if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
@@ -223,10 +267,16 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             surface.CoatRoughness = pbr.FeatureScalar;
             surface.CoatF0 = float3(0.04, 0.04, 0.04);
 
+            float2 coatUv = texCoord0;
+            if (pbr.PBRFlags & PBR::Flags::InterlayerParallax)
+            {
+                coatUv = texCoordOriginal;
+            }
+
             if (pbr.PBRFlags & PBR::Flags::HasFeatureTexture0)
             {
                 Texture2D coatColorTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture0)];
-                float4 sampledCoat = coatColorTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+                float4 sampledCoat = coatColorTexture.SampleLevel(DefaultSampler, coatUv, mipLevel);
                 surface.CoatColor *= LinearSRGBToWorking(sampledCoat.rgb);
                 surface.CoatStrength *= sampledCoat.a;
             }
@@ -234,7 +284,7 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
             if (pbr.PBRFlags & PBR::Flags::HasFeatureTexture1)
             {
                 Texture2D coatNormalTexture = Textures[NonUniformResourceIndex(pbr.FeaturesTexture1)];
-                float4 sampledCoatNormal = coatNormalTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel);
+                float4 sampledCoatNormal = coatNormalTexture.SampleLevel(DefaultSampler, coatUv, mipLevel);
                 surface.CoatRoughness *= sampledCoatNormal.a;
 
                 if (pbr.PBRFlags & PBR::Flags::CoatNormal)
@@ -331,6 +381,31 @@ void LightingMaterial(inout Surface surface, in float2 texCoord0, in float4 vert
         }
 
         surface.Albedo = VanillaDiffuseColor(albedo) * workingVertexColor;
+
+        [branch]
+        if (material.Feature == Feature::kMultilayerParallax)
+        {
+            MultiLayerParallaxMaterialDataExtra layer = Materials[0].Load<MultiLayerParallaxMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+
+            Texture2D layerTexture = Textures[NonUniformResourceIndex(layer.LayerTexture)];
+            float layerValue = layer.LayerThickness * layerTexture.SampleLevel(DefaultSampler, texCoord0, mipLevel).w;
+
+            float3 tangentViewDirection = mul(tbnTr, viewDir);
+            float3 layerNormal = float3(layer.RefractionScale, layer.RefractionScale, layer.RefractionScale) * (rawNormal * 2.0f + float3(-1.0f, -1.0f, -2.0f)) + float3(0.0f, 0.0f, 1.0f);
+            float layerViewAngle = dot(-tangentViewDirection, layerNormal) * 2.0f;
+            float3 layerViewProjection = -layerNormal * layerViewAngle - tangentViewDirection;
+
+            float2 layerUv = texCoord0 * float2(layer.InnerLayerUScale, layer.InnerLayerVScale) +
+                (0.0009765625f * (layerValue / max(abs(layerViewProjection.z), 1e-5f))) * layerViewProjection.xy;
+
+            float3 layerColor = layerTexture.SampleLevel(DefaultSampler, layerUv, mipLevel).xyz;
+
+            float viewNormalAngle = dot(surface.Normal, viewDir);
+            float mlpBlendFactor = saturate(viewNormalAngle) * (1.0f - diffuse.a);
+
+            surface.Albedo = lerp(surface.Albedo, VanillaDiffuseColor(layerColor) * workingVertexColor, mlpBlendFactor);
+            alpha = 1.0f;
+        }
 
         [branch]
         if (material.Feature == Feature::kHairTint)

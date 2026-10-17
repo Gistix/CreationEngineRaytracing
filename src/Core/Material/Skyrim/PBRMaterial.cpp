@@ -44,9 +44,9 @@ void PBRMaterial::UpdateData(RE::BSShaderMaterial* shaderMaterial)
 		pbrData->FeatureScalar = pbrMaterial->GetSubsurfaceOpacity();
 	}
 	else if (pbrFlags.any(PBRFlags::TwoLayer)) {
-		const auto& coatColor = pbrMaterial->GetSubsurfaceColor();
-		pbrData->FeatureColor = float4(coatColor.red, coatColor.green, coatColor.blue, pbrMaterial->GetSubsurfaceOpacity());
-		pbrData->FeatureScalar = pbrMaterial->coatRoughness;
+		const auto& coatColor = pbrMaterial->GetCoatColor();
+		pbrData->FeatureColor = float4(coatColor.red, coatColor.green, coatColor.blue, pbrMaterial->GetCoatStrength());
+		pbrData->FeatureScalar = pbrMaterial->GetCoatRoughness();
 	}
 	else if (pbrFlags.any(PBRFlags::Fuzz)) {
 		pbrData->FeatureColor = float4(pbrMaterial->fuzzColor.red, pbrMaterial->fuzzColor.green, pbrMaterial->fuzzColor.blue, pbrMaterial->fuzzWeight);

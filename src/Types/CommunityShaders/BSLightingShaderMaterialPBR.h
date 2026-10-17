@@ -79,6 +79,26 @@ public:
 		return subSurfaceLightRolloff;
 	}
 
+	const RE::NiColor& GetCoatColor() const
+	{
+		return specularColor;
+	}
+
+	float GetCoatStrength() const
+	{
+		return subSurfaceLightRolloff;
+	}
+
+	float GetCoatRoughness() const
+	{
+		return coatRoughness;
+	}
+
+	float GetCoatSpecularLevel() const
+	{
+		return coatSpecularLevel;
+	}
+
 	const GlintParameters& GetProjectedMaterialGlintParameters() const
 	{
 		return projectedMaterialGlintParameters;
