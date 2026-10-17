@@ -1059,9 +1059,9 @@ void Main()
 #   if RUSSIAN_ROULETTE != 0          
 #       if defined(RAW_RADIANCE)
         // Apply russian roulette based on the original throughput
-        float3 throughputColor = throughput * throughputDelta;
+        const float3 throughputColor = throughput * throughputDelta;
 #       else
-        float3 throughputColor = throughput;
+        const float3 throughputColor = throughput;
 #       endif            
 #   endif
             

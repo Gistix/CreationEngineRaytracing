@@ -114,6 +114,14 @@ Mesh GetMeshAndTransform(in Instance instance, uint geometryIndex, out Transform
     return mesh;
 }
 
+Transform GetMeshTransform(in Mesh mesh, uint geometryIndex)
+{
+    if (mesh.Type == MeshType::MergedInstance)
+        return InstanceTransforms[NonUniformResourceIndex(mesh.InstanceTransformBase + geometryIndex)];
+
+    return Transforms[NonUniformResourceIndex(mesh.MeshID)];
+}
+
 Mesh GetMeshAndTransform(in Payload payload, out Instance instance, out Transform meshTransform)
 {
     instance = GetInstance(payload.GetInstanceIndex());
@@ -212,6 +220,12 @@ Triangle GetTriangle(in uint meshIndex, in uint indexByteOffset, in uint primiti
         tri.z = (uint16_t)(d1 >> 16);
     }
     return tri;
+}
+
+Triangle GetTriangle(in Mesh mesh, in uint primitiveIndex)
+{
+    const uint safePrimitiveIndex = min(primitiveIndex, (uint)max(0, (int)mesh.NumTriangles - 1));
+    return GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
 }
 
 // Decodes a signed-normalized byte4 (ubyte4 * 2 - 1) from a raw uint.
@@ -344,12 +358,8 @@ Vertex GetVertex(ByteAddressBuffer vertices, VertexDesc vertexDesc, uint index, 
     return GetVertex(vertices, vertexDesc, 0u, index, isMSN, numVertices);
 }
 
-void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
+void GetVertices(in Mesh mesh, in Properties meshProps, in Triangle geomTriangle, out Vertex v0, out Vertex v1, out Vertex v2)
 {
-    const uint safePrimitiveIndex = min(primitiveIndex, (uint)max(0, (int)mesh.NumTriangles - 1));
-    
-    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
-
     const bool isMSN = (meshProps.ShaderFlags & ShaderFlags::kModelSpaceNormals) != 0;
     
     const ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
@@ -366,6 +376,11 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
         v1.Position = dynPos[geomTriangle.y].xyz;
         v2.Position = dynPos[geomTriangle.z].xyz;
     }
+}
+
+void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, out Vertex v0, out Vertex v1, out Vertex v2)
+{
+    GetVertices(mesh, meshProps, GetTriangle(mesh, primitiveIndex), v0, v1, v2);
 }
 
 #if defined(HAS_PREV_POSITIONS)
@@ -434,13 +449,10 @@ half GetVertexColorAlpha(in ByteAddressBuffer vertices, in VertexDesc vertexDesc
 }
 
 void GetTriangleTexcoords(
-    in Mesh mesh, in uint primitiveIndex, in bool wantColorAlpha,
+    in Mesh mesh, in Triangle geomTriangle, in bool wantColorAlpha,
     out half2 texcoord0, out half2 texcoord1, out half2 texcoord2,
     out half alpha0, out half alpha1, out half alpha2)
 {
-    const uint safePrimitiveIndex = min(primitiveIndex, (uint)max(0, (int)mesh.NumTriangles - 1));
-    const Triangle geomTriangle = GetTriangle(mesh.IndexID, mesh.IndexOffset, safePrimitiveIndex);
-
     const ByteAddressBuffer vertices = Vertices[NonUniformResourceIndex(mesh.VertexID)];
     texcoord0 = GetVertexTexcoord0(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.x);
     texcoord1 = GetVertexTexcoord0(vertices, mesh.VertexDesc, mesh.VertexOffset, geomTriangle.y);
@@ -458,6 +470,15 @@ void GetTriangleTexcoords(
         alpha1 = (half)0;
         alpha2 = (half)0;
     }
+}
+
+void GetTriangleTexcoords(
+    in Mesh mesh, in uint primitiveIndex, in bool wantColorAlpha,
+    out half2 texcoord0, out half2 texcoord1, out half2 texcoord2,
+    out half alpha0, out half alpha1, out half alpha2)
+{
+    GetTriangleTexcoords(mesh, GetTriangle(mesh, primitiveIndex), wantColorAlpha,
+        texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
 }
 
 #endif // GEOMETRY_HLSL

@@ -201,45 +201,73 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
     Properties props = GetMeshProperties(meshSlot);
 
     MaterialBaseData baseMaterial = Materials[0].Load<MaterialBaseData>(mesh.GetMaterialOffset());
-
     const float3 uvw = GetBary(barycentrics);
-
     const bool wantColorAlpha = (props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim);
-
-    // Slim fetch: only Texcoord0 (and rarely the vertex color alpha) is needed
-    // for the alpha/transmittance lookups. The full vertex data is loaded lazily
-    // inside the water/glass/window branches that need normals; the common
-    // alpha-tested path (foliage) never touches it.
-    half2 texcoord0, texcoord1, texcoord2;
-    half alpha0, alpha1, alpha2;
-    GetTriangleTexcoords(mesh, primitiveIndex, wantColorAlpha, texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
-    const float2 texCoord = baseMaterial.TexCoord(Interpolate(texcoord0, texcoord1, texcoord2, uvw));
-
-    const float alphaMip = ComputeShadowAlphaMip(hitDistance);
 
     if (baseMaterial.Type == Type::Water)
     {
+        const Triangle geomTriangle = GetTriangle(mesh, primitiveIndex);
+        half2 texcoord0, texcoord1, texcoord2;
+        half unusedAlpha0, unusedAlpha1, unusedAlpha2;
+        GetTriangleTexcoords(mesh, geomTriangle, false,
+            texcoord0, texcoord1, texcoord2, unusedAlpha0, unusedAlpha1, unusedAlpha2);
+        const float2 texCoord = baseMaterial.TexCoord(Interpolate(texcoord0, texcoord1, texcoord2, uvw));
+
         Vertex v0, v1, v2;
-        GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
+        GetVertices(mesh, props, geomTriangle, v0, v1, v2);
+        const Transform meshTransform = GetMeshTransform(mesh, geometryIndex);
 
-        Transform meshTransform;
-        GetMeshAndTransform(instance, geometryIndex, meshTransform);
-
-        float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
-
-        float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));        
+        float3x3 objectToWorld3x3 = mul((float3x3)instance.Transform, (float3x3)meshTransform.Transform);
+        float3 normalWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw)));
         float3 tangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Tangent, v1.Tangent, v2.Tangent, uvw)));
-        float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));    
-        
+        float3 bitangentWS = normalize(mul(objectToWorld3x3, Interpolate(v0.Bitangent, v1.Bitangent, v2.Bitangent, uvw)));
+
         Surface surface = (Surface)0;
         WaterMaterial(surface, texCoord, tangentWS, bitangentWS, mesh, props);
-        
+
         float3 transmittance = exp(-surface.VolumeAbsorption * hitDistance);
         return ApplyFresnelTransmittance(surface.Normal, surface.F0, direction, transmittance, transmitanceInOut);
     }
-    else
+
+    const bool isTransmissive = ((props.AlphaFlags & AlphaFlags::Transmission) != 0) || ((props.ShaderFlags & ShaderFlags::kRefraction) != 0);
+    const bool isWindow = ((props.ShaderFlags & ShaderFlags::kAssumeShadowmask) != 0) &&
+#if defined(SKYRIM)
+        (baseMaterial.Feature == Feature::kGlowMap || baseMaterial.Type == Type::TruePBR);
+#else
+        (baseMaterial.Feature == Feature::kGlowMap);
+#endif
+
+    const bool needsAlphaTest = (props.AlphaFlags & AlphaFlags::Test) != 0;
+    const bool needsAlphaBlend = (props.AlphaFlags & AlphaFlags::Blend) != 0;
+    const bool isAdditive = (props.AlphaFlags & AlphaFlags::Additive) != 0;
+    const bool needsLightingTransmissionAlpha = isTransmissive &&
+        baseMaterial.Type == Type::Lighting && !isAdditive;
+    const bool needsAlphaSample = needsAlphaTest || needsAlphaBlend || needsLightingTransmissionAlpha;
+
+    // Candidates with no alpha-dependent or transmission path can be accepted
+    // without loading triangle or texture data.
+    if (!needsAlphaSample && !isTransmissive && !isWindow)
+        return true;
+
+    const bool needsTexcoords = needsAlphaSample || isWindow ||
+        (isTransmissive && baseMaterial.Type != Type::Grass);
+    const bool fetchColorAlpha = needsAlphaSample && wantColorAlpha;
+    const Triangle geomTriangle = GetTriangle(mesh, primitiveIndex);
+
+    half2 texcoord0 = (half2)0, texcoord1 = (half2)0, texcoord2 = (half2)0;
+    half alpha0 = (half)0, alpha1 = (half)0, alpha2 = (half)0;
+    float2 texCoord = 0.0f;
+    if (needsTexcoords)
     {
-        float alpha = 1.0f;
+        GetTriangleTexcoords(mesh, geomTriangle, fetchColorAlpha,
+            texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
+        texCoord = baseMaterial.TexCoord(Interpolate(texcoord0, texcoord1, texcoord2, uvw));
+    }
+
+    float alpha = 1.0f;
+    if (needsAlphaSample)
+    {
+        const float alphaMip = ComputeShadowAlphaMip(hitDistance);
 #if defined(FALLOUT4)
         [branch]
         if (baseMaterial.Type == Type::Effect)
@@ -249,149 +277,143 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         }
         else
 #elif defined(SKYRIM)
+        [branch]
         if (baseMaterial.Type == Type::DistantTree)
         {
             DistantTreeMaterialData material = Materials[0].Load<DistantTreeMaterialData>(mesh.GetMaterialOffset());
             alpha = Textures[NonUniformResourceIndex(material.TreeLODAtlas)].SampleLevel(DefaultSampler, texCoord, alphaMip).a;
-        } 
+        }
         else
 #endif
         {
             LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
             alpha = Textures[NonUniformResourceIndex(material.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, alphaMip).a;
         }
-    
-        alpha *= props.Alpha * instance.Alpha;
-        
-        if (wantColorAlpha)
-            alpha *= Interpolate(alpha0, alpha1, alpha2, uvw);
-        
-        [branch]
-        if (props.AlphaFlags & AlphaFlags::Test)
-        {
-            if (alpha < props.AlphaThreshold)
-                return false;
-        }
 
-        if (props.AlphaFlags & AlphaFlags::Additive)
+        alpha *= props.Alpha * instance.Alpha;
+        if (fetchColorAlpha)
+            alpha *= Interpolate(alpha0, alpha1, alpha2, uvw);
+
+        [branch]
+        if (needsAlphaTest && alpha < props.AlphaThreshold)
+            return false;
+
+        if (isAdditive)
             alpha = 0.0f;
-    
-        if (props.AlphaFlags & AlphaFlags::Blend)
+
+        [branch]
+        if (needsAlphaBlend)
         {
             float rnd = Random(randomSeed);
             if (rnd > alpha)
                 return false;
         }
-        
-        const bool isTransmissive = ((props.AlphaFlags & AlphaFlags::Transmission) != 0) || ((props.ShaderFlags & ShaderFlags::kRefraction) != 0);
-        const bool isWindow = ((props.ShaderFlags & ShaderFlags::kAssumeShadowmask) != 0) &&
-#if defined(SKYRIM)
-            (baseMaterial.Feature == Feature::kGlowMap || baseMaterial.Type == Type::TruePBR);
-#else
-            (baseMaterial.Feature == Feature::kGlowMap);
-#endif
-
-        if (!isTransmissive && !isWindow)
-            return true;
-
-        // Only the glass/window paths need full vertex data (normals) and the
-        // transform; the cutout path above never reaches this.
-        Vertex v0, v1, v2;
-        GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
-        Transform meshTransform;
-        GetMeshAndTransform(instance, geometryIndex, meshTransform);
-
-        if (isTransmissive)
-        {
-            float3 transmittance = 1.0f;
-            uint normalTextureIndex = 0;
-
-            [branch]
-            if (props.ShaderFlags & ShaderFlags::kRefraction)
-            {
-                transmittance = 1.0f; // fully transparent glass
-                LightingMaterialData lightingMat = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-                normalTextureIndex = lightingMat.NormalTexture;
-            }
-#if defined(FALLOUT4)
-            else if (baseMaterial.Type == Type::Effect)
-            {
-                transmittance = 1.0f; // fully transparent glass
-                EffectMaterialData effectMat = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
-                normalTextureIndex = effectMat.NormalTexture;
-            }
-#endif
-            else if (baseMaterial.Type == Type::Lighting)
-            {
-                LightingMaterialData lightingMat = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-                float3 baseColor = Textures[NonUniformResourceIndex(lightingMat.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
-                transmittance = lerp(float3(1.0f, 1.0f, 1.0f), baseColor, alpha);
-                normalTextureIndex = lightingMat.NormalTexture;
-            }
-
-            const float3 normal = baseMaterial.Type == Type::Grass
-                ? ComputeShadowGeometricNormal(instance, mesh, meshTransform, v0, v1, v2, uvw)
-                : ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
-            return ApplyFresnelTransmittance(normal, 0.04f, direction, transmittance, transmitanceInOut);
-        }
-    
-        if (isWindow)
-        {
-            float3 transmittance = 0.0f;
-            float3 F0 = 0.04f;
-            uint normalTextureIndex = 0;
-
-            [branch]
-            if (baseMaterial.Feature == Feature::kGlowMap)
-            {
-                LightingMaterialData lightingMat = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
-                normalTextureIndex = lightingMat.NormalTexture;
-
-                GlowmapMaterialDataExtra glow = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
-                transmittance = Textures[NonUniformResourceIndex(glow.GlowTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
-                
-                [branch]
-                if (props.ShaderFlags & ShaderFlags::kSpecular) {
-                    float3 specularColor = 0.0f;
-
-                    [branch]
-                    if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals) {
-                        Texture2D specularTexture = Textures[NonUniformResourceIndex(
-#if defined(SKYRIM)
-                            lightingMat.SpecularBackLightingTexture
-#else
-                            lightingMat.SmoothnessSpecMaskTexture
-#endif
-                        )];
-                        specularColor = specularTexture.SampleLevel(DefaultSampler, texCoord, 0).r * lightingMat.SpecularColor * lightingMat.SpecularColorScale;
-                    } else {
-                        Texture2D normalTexture = Textures[NonUniformResourceIndex(lightingMat.NormalTexture)];
-                        specularColor = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).a * lightingMat.SpecularColor * lightingMat.SpecularColorScale;
-                    }
-                    F0 = clamp(0.08f * specularColor, 0.02f, 0.08f);
-                }
-            }
-#if defined(SKYRIM)
-            else
-            {
-                PBRMaterialData pbr = Materials[0].Load<PBRMaterialData>(mesh.GetMaterialOffset());
-                Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
-                Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
-                float specular = rmaosTexture.SampleLevel(DefaultSampler, texCoord, 0).a;
-                float3 emissive = emissiveTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
-                transmittance = emissive;
-                F0 = pbr.SpecularLevel * specular;
-                normalTextureIndex = pbr.NormalTexture;
-            }
-#endif
-
-            float3 normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
-            return ApplyFresnelTransmittance(normal, F0, direction, transmittance, transmitanceInOut);
-        }        
     }
-    
+    else if (isAdditive)
+    {
+        alpha = 0.0f;
+    }
+
+    if (!isTransmissive && !isWindow)
+        return true;
+
+    Vertex v0, v1, v2;
+    GetVertices(mesh, props, geomTriangle, v0, v1, v2);
+    const Transform meshTransform = GetMeshTransform(mesh, geometryIndex);
+
+    if (isTransmissive)
+    {
+        float3 transmittance = 1.0f;
+        uint normalTextureIndex = 0;
+
+        [branch]
+        if (props.ShaderFlags & ShaderFlags::kRefraction)
+        {
+            transmittance = 1.0f; // fully transparent glass
+            LightingMaterialData lightingMat = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
+            normalTextureIndex = lightingMat.NormalTexture;
+        }
+#if defined(FALLOUT4)
+        else if (baseMaterial.Type == Type::Effect)
+        {
+            transmittance = 1.0f; // fully transparent glass
+            EffectMaterialData effectMat = Materials[0].Load<EffectMaterialData>(mesh.GetMaterialOffset());
+            normalTextureIndex = effectMat.NormalTexture;
+        }
+#endif
+        else if (baseMaterial.Type == Type::Lighting)
+        {
+            LightingMaterialData lightingMat = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
+            float3 baseColor = Textures[NonUniformResourceIndex(lightingMat.DiffuseTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
+            transmittance = lerp(float3(1.0f, 1.0f, 1.0f), baseColor, alpha);
+            normalTextureIndex = lightingMat.NormalTexture;
+        }
+
+        const float3 normal = baseMaterial.Type == Type::Grass
+            ? ComputeShadowGeometricNormal(instance, mesh, meshTransform, v0, v1, v2, uvw)
+            : ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
+        return ApplyFresnelTransmittance(normal, 0.04f, direction, transmittance, transmitanceInOut);
+    }
+
+    if (isWindow)
+    {
+        float3 transmittance = 0.0f;
+        float3 F0 = 0.04f;
+        uint normalTextureIndex = 0;
+
+        [branch]
+        if (baseMaterial.Feature == Feature::kGlowMap)
+        {
+            LightingMaterialData lightingMat = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
+            normalTextureIndex = lightingMat.NormalTexture;
+
+            GlowmapMaterialDataExtra glow = Materials[0].Load<GlowmapMaterialDataExtra>(mesh.GetMaterialOffset() + kLightingSize);
+            transmittance = Textures[NonUniformResourceIndex(glow.GlowTexture)].SampleLevel(DefaultSampler, texCoord, 0).rgb;
+
+            [branch]
+            if (props.ShaderFlags & ShaderFlags::kSpecular)
+            {
+                float3 specularColor = 0.0f;
+
+                [branch]
+                if (props.ShaderFlags & ShaderFlags::kModelSpaceNormals)
+                {
+                    Texture2D specularTexture = Textures[NonUniformResourceIndex(
+#if defined(SKYRIM)
+                        lightingMat.SpecularBackLightingTexture
+#else
+                        lightingMat.SmoothnessSpecMaskTexture
+#endif
+                    )];
+                    specularColor = specularTexture.SampleLevel(DefaultSampler, texCoord, 0).r * lightingMat.SpecularColor * lightingMat.SpecularColorScale;
+                }
+                else
+                {
+                    Texture2D normalTexture = Textures[NonUniformResourceIndex(lightingMat.NormalTexture)];
+                    specularColor = normalTexture.SampleLevel(DefaultSampler, texCoord, 0).a * lightingMat.SpecularColor * lightingMat.SpecularColorScale;
+                }
+                F0 = clamp(0.08f * specularColor, 0.02f, 0.08f);
+            }
+        }
+#if defined(SKYRIM)
+        else
+        {
+            PBRMaterialData pbr = Materials[0].Load<PBRMaterialData>(mesh.GetMaterialOffset());
+            Texture2D rmaosTexture = Textures[NonUniformResourceIndex(pbr.RMAOSTexture)];
+            Texture2D emissiveTexture = Textures[NonUniformResourceIndex(pbr.EmissiveTexture)];
+            float specular = rmaosTexture.SampleLevel(DefaultSampler, texCoord, 0).a;
+            float3 emissive = emissiveTexture.SampleLevel(DefaultSampler, texCoord, 0).rgb;
+            transmittance = emissive;
+            F0 = pbr.SpecularLevel * specular;
+            normalTextureIndex = pbr.NormalTexture;
+        }
+#endif
+
+        float3 normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
+        return ApplyFresnelTransmittance(normal, F0, direction, transmittance, transmitanceInOut);
+    }
+
     return true;
 }
-
 #endif // TRANSPARENCY_HLSLI
 
