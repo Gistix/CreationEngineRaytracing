@@ -15,6 +15,12 @@ void GrassMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh, Pro
     float alpha = diffuse.a * props.Alpha;
 
     surface.Albedo = VanillaDiffuseColor(diffuse.rgb);
+
+    // Foliage translucency: thin two-sided surface with diffuse transmission
+    surface.IsThinSurface = true;
+    surface.TransmissionColor = surface.Albedo * 0.4f;
+    surface.DiffTrans = 0.4f;
+    surface.Roughness = 0.6f;
 }
 
 #endif // GRASS_MATERIAL_FUNC_HLSL

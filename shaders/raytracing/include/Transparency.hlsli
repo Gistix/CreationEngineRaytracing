@@ -156,6 +156,26 @@ float3 ComputeShadowNormal(
     return N;
 }
 
+float3 ComputeShadowGeometricNormal(
+    Instance instance, Mesh mesh, Transform meshTransform,
+    Vertex v0, Vertex v1, Vertex v2, float3 uvw)
+{
+    const float3x3 objectToWorld3x3 = mul((float3x3)instance.Transform, (float3x3)meshTransform.Transform);
+    float3 normal = Interpolate(v0.Normal, v1.Normal, v2.Normal, uvw);
+
+    if (!all(isfinite(normal)) || dot(normal, normal) < 1e-8f)
+        normal = cross(v1.Position - v0.Position, v2.Position - v0.Position);
+
+    if (!all(isfinite(normal)) || dot(normal, normal) < 1e-8f)
+        normal = float3(0.0f, 0.0f, 1.0f);
+
+    normal = mul(objectToWorld3x3, normal);
+    if (!all(isfinite(normal)) || dot(normal, normal) < 1e-8f)
+        normal = float3(0.0f, 0.0f, 1.0f);
+
+    return normalize(normal);
+}
+
 bool ApplyFresnelTransmittance(
     float3 normal, float3 F0, float3 direction,
     inout float3 transmittance, inout float3 transmitanceInOut)
@@ -202,7 +222,8 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         Vertex v0, v1, v2;
         GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
 
-        Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
+        Transform meshTransform;
+        GetMeshAndTransform(instance, geometryIndex, meshTransform);
 
         float3x3 objectToWorld3x3 = mul((float3x3) instance.Transform, (float3x3) meshTransform.Transform);
 
@@ -277,7 +298,8 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
         // transform; the cutout path above never reaches this.
         Vertex v0, v1, v2;
         GetVertices(mesh, props, primitiveIndex, v0, v1, v2);
-        Transform meshTransform = Transforms[NonUniformResourceIndex(meshSlot)];
+        Transform meshTransform;
+        GetMeshAndTransform(instance, geometryIndex, meshTransform);
 
         if (isTransmissive)
         {
@@ -307,7 +329,9 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
                 normalTextureIndex = lightingMat.NormalTexture;
             }
 
-            const float3 normal = ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
+            const float3 normal = baseMaterial.Type == Type::Grass
+                ? ComputeShadowGeometricNormal(instance, mesh, meshTransform, v0, v1, v2, uvw)
+                : ComputeShadowNormal(instance, mesh, meshTransform, v0, v1, v2, uvw, normalTextureIndex, texCoord);
             return ApplyFresnelTransmittance(normal, 0.04f, direction, transmittance, transmitanceInOut);
         }
     
