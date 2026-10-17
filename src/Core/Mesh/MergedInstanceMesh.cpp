@@ -92,10 +92,7 @@ MergedInstanceMesh::MergedInstanceMesh(
 		XMStoreFloat3x4(&xf, world);
 		meshManager->WriteInstanceTransform(transformBase + i, xf, xf);
 
-		const float3 position(a_instances[i].position.x, a_instances[i].position.y, a_instances[i].position.z);
-		const XMVECTOR worldPosition = XMVector3Transform(XMLoadFloat3(reinterpret_cast<const XMFLOAT3*>(&position)), world);
-		XMFLOAT3 fp;
-		XMStoreFloat3(&fp, worldPosition);
+		const float3 fp(xf._14, xf._24, xf._34);
 		boundMin = float3(std::min(boundMin.x, fp.x), std::min(boundMin.y, fp.y), std::min(boundMin.z, fp.z));
 		boundMax = float3(std::max(boundMax.x, fp.x), std::max(boundMax.y, fp.y), std::max(boundMax.z, fp.z));
 	}
@@ -104,8 +101,16 @@ MergedInstanceMesh::MergedInstanceMesh(
 	m_InstanceCount = count;
 
 	// All blade geometries share the source index/vertex buffers and a single mesh slot.
-	AllocateMeshIndex();
+	if (!AllocateMeshIndex()) {
+		logger::warn("MergedInstanceMesh - Mesh slot pool exhausted for {}", m_Name);
+		return;
+	}
+
 	const uint16_t geometryIndex = AllocateGeometryIndex();
+	if (geometryIndex == UINT16_MAX) {
+		logger::warn("MergedInstanceMesh - Geometry slot pool exhausted for {}", m_Name);
+		return;
+	}
 
 	m_GeometryEntries.reserve(count);
 	for (uint32_t i = 0; i < count; ++i)
