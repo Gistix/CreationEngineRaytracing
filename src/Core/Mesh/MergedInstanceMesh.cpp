@@ -27,7 +27,9 @@ namespace
 			row1.x * axisScale.x, row1.y * axisScale.y, row1.z * axisScale.z, translation.y,
 			row2.x * axisScale.x, row2.y * axisScale.y, row2.z * axisScale.z, translation.z);
 
-		return XMMatrixMultiply(a_shapeLocal, XMLoadFloat3x4(&instanceTransform));
+		// XMLoadFloat3x4 and GetXMFromNiTransform load transposed affine matrices (translation in r[3]),
+		// so applying instanceTransform first and a_shapeLocal second is XMMatrixMultiply(instance, shapeLocal).
+		return XMMatrixMultiply(XMLoadFloat3x4(&instanceTransform), a_shapeLocal);
 	}
 }
 
