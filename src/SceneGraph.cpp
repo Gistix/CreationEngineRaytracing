@@ -569,7 +569,7 @@ void SceneGraph::Update(nvrhi::ICommandList* commandList)
 			auto& [mesh, refr] = entry;
 			mesh->SetLastVisitedFrame(frameIndex);
 
-			if (!mesh->AsSubIndexMesh()) {	
+			if (!mesh->AsSubIndexMesh() && !mesh->AsMultiStreamInstanceMesh()) {	
 				const bool ownerChanged = mesh->SetOwner(refr);
 				auto cluster = mesh->GetCluster();
 
@@ -1211,12 +1211,15 @@ void SceneGraph::UpdateGrassMeshes(nvrhi::ICommandList* commandList)
 
 		for (auto& [shape, state] : m_GrassShapes) {
 			const auto parentIt = m_Meshes.find(shape);
-			const bool hasParent = (parentIt != m_Meshes.end()) && parentIt->second->AsMultiStreamInstanceMesh();
+			const bool hasVisibleParent = (parentIt != m_Meshes.end()) && parentIt->second->AsMultiStreamInstanceMesh() && !parentIt->second->IsHidden();
 
 			for (auto& [key, group] : state.groups) {
+				if (!hasVisibleParent)
+					continue;
+
 				live.insert(group.serial);
 
-				if (hasParent && !m_GrassGroupMeshes.contains(group.serial))
+				if (!m_GrassGroupMeshes.contains(group.serial))
 					toBuild.push_back({ group.serial, shape, group });
 			}
 		}
@@ -1257,8 +1260,8 @@ void SceneGraph::UpdateGrassMeshes(nvrhi::ICommandList* commandList)
 		const bool uniformScale = shaderProperty && shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kUniformScale);
 
 		auto mesh = eastl::make_unique<MergedInstanceMesh>(build.shape, instances, uniformScale, commandList);
-		if (mesh->GetGeometryEntries().empty()) {
-			logger::warn("[Grass] MergedInstanceMesh empty for shape={:p}", fmt::ptr(build.shape));
+		if (!mesh->IsReady() || mesh->GetGeometryEntries().empty()) {
+			logger::warn("[Grass] MergedInstanceMesh empty or not ready for shape={:p}", fmt::ptr(build.shape));
 			continue;
 		}
 
