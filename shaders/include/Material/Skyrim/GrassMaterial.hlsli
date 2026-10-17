@@ -11,8 +11,9 @@ void GrassMaterial(inout Surface surface, in float2 texCoord0, in Mesh mesh, Pro
 {
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
-    float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
+    const float4 diffuse = baseTexture.SampleLevel(ClampSampler, texCoord0, surface.MipLevel);
     surface.Albedo = VanillaDiffuseColor(diffuse.rgb);
+    
 #if defined(RASTER)
     surface.Alpha = diffuse.a * props.Alpha;
 #endif
