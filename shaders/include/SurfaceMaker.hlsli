@@ -292,7 +292,14 @@ struct SurfaceMaker
         surface.GeomNormal = normalWS;
         surface.GeomTangent = tangentWS;
 
+        surface.Normal = normalWS;
+        surface.Tangent = tangentWS;
+        surface.Bitangent = bitangentWS;
+
         surface.Albedo = float3(1.0f, 1.0f, 1.0f);
+#if defined(RASTER)
+        surface.Alpha = 1.0f;
+#endif
         surface.Emissive = float3(0.0f, 0.0f, 0.0f);
         surface.TransmissionColor = float3(0.0f, 0.0f, 0.0f);
         surface.VolumeAbsorption = float3(0.0f, 0.0f, 0.0f);

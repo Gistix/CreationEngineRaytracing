@@ -11,9 +11,10 @@ void DistantTreeMaterial(inout Surface surface, in float2 texCoord0, in Mesh mes
     LightingMaterialData material = Materials[0].Load<LightingMaterialData>(mesh.GetMaterialOffset());
     Texture2D baseTexture = Textures[NonUniformResourceIndex(material.DiffuseTexture)];
     float4 diffuse = baseTexture.SampleLevel(DefaultSampler, texCoord0, surface.MipLevel);
-    float alpha = diffuse.a * props.Alpha;
-
     surface.Albedo = diffuse.rgb;
+#if defined(RASTER)
+    surface.Alpha = diffuse.a * props.Alpha;
+#endif
 }
 
 #endif // DISTANT_TREE_MATERIAL_FUNC_HLSL
