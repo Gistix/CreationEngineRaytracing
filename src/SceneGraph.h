@@ -169,17 +169,16 @@ class SceneGraph
 
 	eastl::unordered_map<RE::BSTriShape*, eastl::unique_ptr<InstancedData>> m_InstancedData;
 
-	// Captured grass groups, keyed by the shared BSMultiStreamInstanceTriShape. Records are stored
-	// verbatim (raw bytes) because the generated and streamed paths use different layouts. The map
-	// is guarded because capture runs on grass worker threads (AddCellGrassTask) while the render
-	// thread consumes it.
+	// Captured grass groups, keyed by the shared BSMultiStreamInstanceTriShape. Records are read
+	// from InstanceGroup::vertexBuffer->m_data when BSMultiStreamInstanceTriShape::AttachQueuedGroups
+	// (or AddGroup) attaches the group.
 	struct GrassGroup
 	{
-		eastl::vector<uint8_t> records;
-		uint32_t               count = 0;
-		uint16_t               recordSize = 0;
-		uint64_t               engineIndex = UINT64_MAX;  // AddGroup index when known
-		uint64_t               serial = 0;                // globally unique key for the baked mesh
+		eastl::vector<uint8_t>                            records;
+		uint32_t                                          count = 0;
+		uint16_t                                          recordSize = 0;
+		RE::BSMultiStreamInstanceTriShape::InstanceGroup* instanceGroup = nullptr;
+		uint64_t                                          serial = 0;  // globally unique key for the baked mesh
 	};
 
 	struct GrassShapeState
@@ -288,8 +287,8 @@ public:
 	void ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry);
 	InstancedData* GetOrCreateInstancedData(RE::BSTriShape* a_geometry);
 
-	void AddGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex, const void* records, uint32_t count, uint32_t recordSize);
-	void RemoveGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex);
+	void AddGrassGroup(RE::BSMultiStreamInstanceTriShape* a_geometry, RE::BSMultiStreamInstanceTriShape::InstanceGroup* a_instanceGroup);
+	void RemoveGrassGroup(RE::BSMultiStreamInstanceTriShape* a_geometry, RE::BSMultiStreamInstanceTriShape::InstanceGroup* a_instanceGroup);
 	void UpdateGrassMeshes(nvrhi::ICommandList* commandList);
 private:
 	eastl::vector<PassTiming> m_UpdateTimings;

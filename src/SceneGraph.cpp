@@ -1123,41 +1123,53 @@ void SceneGraph::ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometr
 	it->second->changed = true;
 }
 
-void SceneGraph::AddGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex, const void* records, uint32_t count, uint32_t recordSize)
+void SceneGraph::AddGrassGroup(RE::BSMultiStreamInstanceTriShape* a_geometry, RE::BSMultiStreamInstanceTriShape::InstanceGroup* a_instanceGroup)
 {
-	if (!bsTriShape || !records || count == 0 || recordSize == 0)
+	if (!a_geometry || !a_instanceGroup || !a_instanceGroup->vertexBuffer)
 		return;
 
-	size_t groupCount = 0;
-	{
-		std::scoped_lock lock(m_GrassMutex);
+	const void* records = a_instanceGroup->vertexBuffer->m_data;
+	const uint32_t count = a_instanceGroup->instanceCount;
+	// CommonLibSSE-NG declares BSGraphics::VertexBuffer::byteWidth as size_t, but the engine's
+	// CreateVertexBuffer (SE 75502, AE 77293) only writes a 32-bit uint32_t at offset +0x10,
+	// leaving the upper 32 bits at +0x14 as uninitialized heap bytes.
+	const uint32_t byteWidth = static_cast<uint32_t>(a_instanceGroup->vertexBuffer->byteWidth);
+	if (!records || count == 0 || byteWidth == 0)
+		return;
 
-		auto& state = m_GrassShapes[bsTriShape];
-		auto& group = state.groups[state.nextGroupKey++];
+	const uint32_t recordSize = byteWidth / count;
+	if (recordSize == 0)
+		return;
 
-		group.engineIndex = engineIndex;
-		group.count = count;
-		group.recordSize = static_cast<uint16_t>(recordSize);
-		group.serial = m_NextGrassGroupSerial++;
-		group.records.resize(static_cast<size_t>(count) * recordSize);
-		std::memcpy(group.records.data(), records, group.records.size());
-
-		groupCount = state.groups.size();
-		++state.version;
-	}
-}
-
-void SceneGraph::RemoveGrassGroup(RE::BSTriShape* bsTriShape, uint64_t engineIndex)
-{
 	std::scoped_lock lock(m_GrassMutex);
 
-	auto it = m_GrassShapes.find(bsTriShape);
+	auto& state = m_GrassShapes[a_geometry];
+	auto& group = state.groups[state.nextGroupKey++];
+
+	group.instanceGroup = a_instanceGroup;
+	group.count = count;
+	group.recordSize = static_cast<uint16_t>(recordSize);
+	group.serial = m_NextGrassGroupSerial++;
+	group.records.resize(static_cast<size_t>(count) * recordSize);
+	std::memcpy(group.records.data(), records, group.records.size());
+
+	++state.version;
+}
+
+void SceneGraph::RemoveGrassGroup(RE::BSMultiStreamInstanceTriShape* a_geometry, RE::BSMultiStreamInstanceTriShape::InstanceGroup* a_instanceGroup)
+{
+	if (!a_geometry || !a_instanceGroup)
+		return;
+
+	std::scoped_lock lock(m_GrassMutex);
+
+	auto it = m_GrassShapes.find(a_geometry);
 	if (it == m_GrassShapes.end())
 		return;
 
 	bool removed = false;
 	for (auto groupIt = it->second.groups.begin(); groupIt != it->second.groups.end(); ) {
-		if (groupIt->second.engineIndex == engineIndex) {
+		if (groupIt->second.instanceGroup == a_instanceGroup) {
 			groupIt = it->second.groups.erase(groupIt);
 			removed = true;
 		}
