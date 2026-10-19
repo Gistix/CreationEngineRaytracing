@@ -16,11 +16,11 @@ std::shared_ptr<OmmResource> OmmManager::GetOrCreate(RE::BSTriShape* triShape, n
 	}
 
 	auto* extraData = Util::Adapter::GetBinaryExtraData(triShape, Constants::ExtraData::OMMData);
-	if (!extraData || !extraData->value || extraData->size < sizeof(uint32_t) * 2) {
+	if (!extraData || !extraData->data || extraData->size < sizeof(uint32_t) * 2) {
 		return nullptr;
 	}
 
-	std::span<const uint8_t> payloadSpan(static_cast<const uint8_t*>(extraData->value), extraData->size);
+	std::span<const uint8_t> payloadSpan(static_cast<const uint8_t*>(extraData->data), extraData->size);
 
 	if (payloadSpan.size() < sizeof(OmmPayloadHeader)) {
 		return nullptr;

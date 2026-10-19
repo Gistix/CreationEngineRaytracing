@@ -13,6 +13,7 @@
 #include "BSSkin.h"
 #include "BSLightingShaderMaterials.h"
 #include "Types/RE/FO4/ShadowSceneNode.h"
+#include "Types/RE/FO4/NiBinaryExtraData.h"
 #include "Types/RE/FO4/NiIntegersExtraData.h"
 #include "Types/RE/FO4/NiFloatsExtraData.h"
 #include "Types/RE/FO4/TESObjectLIGH.h"

@@ -11,7 +11,6 @@
 #	include "GrassTypeKey.h"
 #	include "GrassInstanceData.h"
 #	include "BSTriShape.h"
-#	include "NiBinaryExtraData.h"
 #elif defined(FALLOUT4)
 #	include "FO4/FO4.h"
 #endif
