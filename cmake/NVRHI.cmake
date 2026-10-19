@@ -12,8 +12,7 @@ set(NVRHI_INSTALL_EXPORTS OFF CACHE BOOL "" FORCE)
 
 set(NVRHI_WITH_VULKAN ON CACHE BOOL "" FORCE)
 
-# RTXMU disables OMM
-set(NVRHI_WITH_RTXMU OFF CACHE BOOL "" FORCE)
+set(NVRHI_WITH_RTXMU ON CACHE BOOL "" FORCE)
 
 set(NVRHI_WITH_AFTERMATH OFF CACHE BOOL "" FORCE)
 set(NVRHI_WITH_NVAPI ON CACHE BOOL "" FORCE)
@@ -28,7 +27,7 @@ if (NVRHI_WITH_NVAPI)
 	set(NVRHI_D3D12_WITH_DXR12_OPACITY_MICROMAP OFF CACHE BOOL "" FORCE)
 endif()
 
-set(RTXMU_WITH_VULKAN OFF CACHE BOOL "" FORCE)
+set(RTXMU_WITH_VULKAN ON CACHE BOOL "" FORCE)
 set(AUTO_LOCATE_VULKAN OFF CACHE BOOL "" FORCE)
 
 set(DXHEADERS_INSTALL OFF CACHE BOOL "" FORCE)
@@ -38,6 +37,18 @@ if (NVRHI_WITH_NVAPI)
 endif()
 
 FetchContent_MakeAvailable(nvrhi)
+
+if (TARGET rtxmu AND MSVC)
+    target_compile_options(rtxmu PRIVATE /WX- /wd4100)
+endif()
+
+if (TARGET nvrhi_vk AND MSVC)
+    target_compile_options(nvrhi_vk PRIVATE /WX- /wd4100)
+endif()
+
+if (TARGET nvrhi_d3d12 AND MSVC)
+    target_compile_options(nvrhi_d3d12 PRIVATE /WX- /wd4100)
+endif()
 
 if (NVRHI_WITH_AFTERMATH)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
