@@ -318,6 +318,26 @@ namespace VRAMTracker
 			totalBytes += dedicatedBytes;
 		}
 
+		if (auto* renderer = Renderer::GetSingleton()) {
+			if (auto* device = renderer->GetDevice()) {
+				nvrhi::rt::AccelStructMemoryStats rtxmuStats{};
+				if (device->getAccelStructMemoryStats(rtxmuStats)) {
+					if (rtxmuStats.scratchPoolSize > 0) {
+						entries.emplace_back("RTXMU Scratch Pool", rtxmuStats.scratchPoolSize);
+						totalBytes += rtxmuStats.scratchPoolSize;
+					}
+					if (rtxmuStats.updatePoolSize > 0) {
+						entries.emplace_back("RTXMU Update Pool", rtxmuStats.updatePoolSize);
+						totalBytes += rtxmuStats.updatePoolSize;
+					}
+					if (rtxmuStats.transientResultPoolSize > 0) {
+						entries.emplace_back("RTXMU Transient Result Pool", rtxmuStats.transientResultPoolSize);
+						totalBytes += rtxmuStats.transientResultPoolSize;
+					}
+				}
+			}
+		}
+
 		entries.emplace_back("Total BLAS Memory", totalBytes);
 		return totalBytes;
 	}
