@@ -138,6 +138,7 @@ struct BLASGeometryKey
 		bool m_IsUpdatable = false;
 
 		[[nodiscard]] bool IsValid() const noexcept { return m_BLAS != nullptr; }
+		[[nodiscard]] uint64_t GetAllocatedMemory() const noexcept { return m_BLAS ? m_BLAS->getBufferSize() : 0; }
 	};
 
 	void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept;

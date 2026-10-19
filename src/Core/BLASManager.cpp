@@ -167,7 +167,7 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 
 		if (!needsAllocation && (forceRebuild || !resource->m_IsUpdatable)) {
 			auto prebuildInfo = m_Device->getAccelStructPreBuildInfo(blasDesc);
-			needsAllocation = prebuildInfo.resultMaxSizeInBytes > resource->m_BLAS->getBufferSize();
+			needsAllocation = prebuildInfo.resultMaxSizeInBytes > resource->GetAllocatedMemory();
 		}
 
 		if (needsAllocation) {
@@ -237,7 +237,7 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 		outSharedBytes = 0;
 		for (const auto& [key, res] : m_SharedCache) {
 			if (res && res->m_BLAS) {
-				outSharedBytes += res->m_BLAS->getBufferSize();
+				outSharedBytes += res->GetAllocatedMemory();
 			}
 		}
 		outTransformBytes = m_SharedTransformBuffer ? m_SharedTransformBuffer->getDesc().byteSize : 0;

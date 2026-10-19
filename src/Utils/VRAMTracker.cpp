@@ -11,6 +11,7 @@
 
 #include <dxgi1_4.h>
 #include <format>
+#include <unordered_set>
 #include <magic_enum/magic_enum.hpp>
 
 namespace VRAMTracker
@@ -289,14 +290,15 @@ namespace VRAMTracker
 
 		uint32_t dedicatedCount = 0;
 		uint64_t dedicatedBytes = 0;
+		std::unordered_set<const BLASResource*> seenDedicated;
 
 		auto inspectCluster = [&](BLASCluster* cluster) {
 			if (!cluster)
 				return;
 			const auto& res = cluster->GetBLASResource();
-			if (res && !res->m_IsShared && res->m_BLAS) {
+			if (res && !res->m_IsShared && res->m_BLAS && seenDedicated.insert(res.get()).second) {
 				dedicatedCount++;
-				dedicatedBytes += res->m_BLAS->getBufferSize();
+				dedicatedBytes += res->GetAllocatedMemory();
 			}
 		};
 
