@@ -181,6 +181,7 @@ struct BLASGeometryKey
 		[[nodiscard]] nvrhi::IBuffer* GetSharedTransformBuffer() const noexcept { return m_SharedTransformBuffer; }
 		[[nodiscard]] size_t GetCachedBLASCount() const;
 		[[nodiscard]] size_t GetDedicatedBLASCount() const;
+		void GetBLASMemoryStats(uint32_t& outSharedCount, uint64_t& outSharedBytes, uint64_t& outTransformBytes) const;
 
 	private:
 		nvrhi::IDevice* m_Device = nullptr;

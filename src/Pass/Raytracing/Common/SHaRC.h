@@ -87,5 +87,7 @@ namespace Pass
 		virtual void SettingsChanged(const Settings& settings) override;
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
+
+		virtual uint64_t GetAllocatedMemory() const override;
 	};
 }

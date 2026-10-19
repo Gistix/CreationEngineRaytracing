@@ -189,3 +189,15 @@ void DynamicMesh::Update(nvrhi::ICommandList* commandList)
 
 	m_NeedsUpload = false;
 }
+
+void DynamicMesh::CollectOwnedBuffers(OwnedBufferStats& stats) const
+{
+	SkinnedMesh::CollectOwnedBuffers(stats);
+	stats.dynamicMeshCount++;
+	if (m_DynamicBuffer) {
+		stats.dynamicLiveBytes += m_DynamicBuffer->getDesc().byteSize;
+	}
+	if (m_OriginalDynamicBuffer) {
+		stats.dynamicOriginalBytes += m_OriginalDynamicBuffer->getDesc().byteSize;
+	}
+}

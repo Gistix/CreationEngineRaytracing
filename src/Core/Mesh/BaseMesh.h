@@ -83,6 +83,22 @@ public:
 	virtual class InstancedMesh* AsInstancedMesh() { return nullptr; }
 	virtual class MultiStreamInstanceMesh* AsMultiStreamInstanceMesh() { return nullptr; }
 
+	struct OwnedBufferStats
+	{
+		uint32_t skinnedMeshCount = 0;
+		uint64_t skinnedLiveVertexBytes = 0;
+		uint64_t skinnedPrevPositionBytes = 0;
+
+		uint32_t dynamicMeshCount = 0;
+		uint64_t dynamicLiveBytes = 0;
+		uint64_t dynamicOriginalBytes = 0;
+
+		uint32_t landLODMeshCount = 0;
+		uint64_t landLODLiveVertexBytes = 0;
+	};
+
+	virtual void CollectOwnedBuffers(OwnedBufferStats&) const {}
+
 	// True for meshes that pack N instances into one BLAS (one geometry desc per instance) and
 	// resolve the per-instance transform at hit time from the instance transform buffer.
 	virtual bool IsMergedInstance() const { return false; }

@@ -29,6 +29,8 @@ namespace Pass
 
 		inline auto& GetBindlessLayout() const { return m_BindlessLayout; }
 		inline auto& GetLightDescriptorTable() const { return m_DescriptorTable; }
+		inline uint32_t GetTopLevelInstanceCount() const { return m_TopLevelInstances; }
+		inline uint64_t GetTopLevelBufferSize() const { return m_TopLevelAS ? m_TopLevelAS->getBufferSize() : 0; }
 
 		virtual void Execute(nvrhi::ICommandList* commandList) override;
 	};

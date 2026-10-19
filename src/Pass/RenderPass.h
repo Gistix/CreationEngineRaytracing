@@ -16,7 +16,7 @@ private:
     Renderer* m_Renderer = nullptr;
 
 protected:
-    Renderer* GetRenderer() { return m_Renderer; }
+    Renderer* GetRenderer() const { return m_Renderer; }
     bool m_Enabled = true;
     bool m_Initialized = false;
 
@@ -45,4 +45,5 @@ public:
     virtual void ResolutionChanged([[maybe_unused]] uint2 resolution) {};
     virtual void Execute(nvrhi::ICommandList* commandList) = 0;
     virtual void ReloadShaders() {};
+    virtual uint64_t GetAllocatedMemory() const { return 0; }
 };

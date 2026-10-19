@@ -898,4 +898,31 @@ namespace Pass::NRD
 			commandList->endMarker();
 		}
 	}
+
+	uint64_t NRDIntegration::GetAllocatedMemory() const
+	{
+		auto* device = GetRenderer()->GetDevice();
+		if (!device)
+			return 0;
+
+		uint64_t total = 0;
+		for (const auto& tex : m_PermanentPool) {
+			if (tex)
+				total += device->getTextureMemoryRequirements(tex).size;
+		}
+		for (const auto& tex : m_TransientPool) {
+			if (tex)
+				total += device->getTextureMemoryRequirements(tex).size;
+		}
+		if (m_MotionVectorsScratch)
+			total += device->getTextureMemoryRequirements(m_MotionVectorsScratch).size;
+		if (m_FallbackSrvTexture)
+			total += device->getTextureMemoryRequirements(m_FallbackSrvTexture).size;
+		if (m_FallbackUavTexture)
+			total += device->getTextureMemoryRequirements(m_FallbackUavTexture).size;
+		if (m_ConstantBuffer)
+			total += m_ConstantBuffer->getDesc().byteSize;
+
+		return total;
+	}
 }

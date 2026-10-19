@@ -3,7 +3,7 @@
 #include "Types/Settings.h"
 #include "Types/PassTiming.h"
 #include "Types/SharedTexture.h"
-#include "Types/Settings.h"
+#include "Types/VRAMStats.h"
 
 extern "C" {
 	CERT_API bool InitializeRenderer(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
@@ -27,5 +27,6 @@ extern "C" {
 	CERT_API void UpdateJitter(float2 jitter);
 	CERT_API uint32_t GetAccumulatedFrameCount();
 	CERT_API uint64_t GetFakeDoubledVRAMUsage();
+	CERT_API void GetVRAMUsage(eastl::vector<eastl::pair<eastl::string, eastl::vector<eastl::pair<eastl::string, uint64_t>>>>&);
 	CERT_API void ReloadShaders();
 }

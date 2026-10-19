@@ -33,6 +33,7 @@ public:
 
 	void Update(nvrhi::ICommandList* commandList) override;
 	void SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool writing) override;
+	void CollectOwnedBuffers(OwnedBufferStats& stats) const override;
 
 	bool IsUpdatable() const override { return true; }
 };

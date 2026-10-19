@@ -87,5 +87,6 @@ namespace Pass::NRD
 		void SettingsChanged(const Settings& settings) override;
 		void ResolutionChanged(uint2 resolution) override;
 		void Execute(nvrhi::ICommandList* commandList) override;
+		uint64_t GetAllocatedMemory() const override;
 	};
 }

@@ -2,6 +2,7 @@
 #include "Scene.h"
 #include "Renderer.h"
 #include "Pass/Raytracing/Common/Accumulation.h"
+#include "Utils/VRAMTracker.h"
 
 bool InitializeRenderer(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
@@ -158,6 +159,11 @@ uint64_t GetFakeDoubledVRAMUsage()
 		return 0;
 
 	return textureManager->GetFakeDoubledVRAMUsage();
+}
+
+void GetVRAMUsage(eastl::vector<eastl::pair<eastl::string, eastl::vector<eastl::pair<eastl::string, uint64_t>>>>& outData)
+{
+	VRAMTracker::Collect(outData);
 }
 
 void ReloadShaders()

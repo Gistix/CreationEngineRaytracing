@@ -27,6 +27,19 @@ public:
 		return m_Handle[Renderer::GetSingleton()->GetCurrentSlot()];
 	}
 
+	uint32_t GetCurrentInstanceCount() const { return static_cast<uint32_t>(m_InstanceDescs.size()); }
+	uint32_t GetMaxInstances(uint32_t slot) const { return slot < Constants::MAX_FRAMES_IN_FLIGHT ? m_NumInstances[slot] : 0; }
+	uint64_t GetTotalBufferSize() const
+	{
+		uint64_t total = 0;
+		for (const auto& handle : m_Handle) {
+			if (handle) {
+				total += handle->getBufferSize();
+			}
+		}
+		return total;
+	}
+
 	void AddListener(ITLASUpdateListener* listener)
 	{
 		m_Listeners.push_back(listener);

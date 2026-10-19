@@ -25,6 +25,7 @@ public:
 	// Returns true if the pose advanced this frame. Must be called while the trishape is alive (traversal).
 	void Update(nvrhi::ICommandList* commandList) override;
 	virtual void SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool writing);
+	void CollectOwnedBuffers(OwnedBufferStats& stats) const override;
 
 	uint32_t GetBoneCount() const { return static_cast<uint32_t>(m_BoneWorlds.size()); }
 

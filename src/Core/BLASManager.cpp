@@ -229,3 +229,16 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 	{
 		return 0;
 	}
+
+	void BLASManager::GetBLASMemoryStats(uint32_t& outSharedCount, uint64_t& outSharedBytes, uint64_t& outTransformBytes) const
+	{
+		std::shared_lock lock(m_CacheMutex);
+		outSharedCount = static_cast<uint32_t>(m_SharedCache.size());
+		outSharedBytes = 0;
+		for (const auto& [key, res] : m_SharedCache) {
+			if (res && res->m_BLAS) {
+				outSharedBytes += res->m_BLAS->getBufferSize();
+			}
+		}
+		outTransformBytes = m_SharedTransformBuffer ? m_SharedTransformBuffer->getDesc().byteSize : 0;
+	}

@@ -394,3 +394,14 @@ void SkinnedMesh::RefreshVisibleGeometryCache()
 		m_VisibleGeometrySourceIndices.push_back(i);
 	}
 }
+
+void SkinnedMesh::CollectOwnedBuffers(OwnedBufferStats& stats) const
+{
+	stats.skinnedMeshCount++;
+	if (m_LiveVertexBuffer) {
+		stats.skinnedLiveVertexBytes += m_LiveVertexBuffer->getDesc().byteSize;
+	}
+	if (m_PrevPositionBuffer) {
+		stats.skinnedPrevPositionBytes += m_PrevPositionBuffer->getDesc().byteSize;
+	}
+}

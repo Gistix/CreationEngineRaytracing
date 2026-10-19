@@ -506,4 +506,20 @@ namespace Pass
 			commandList->dispatch(threadGroupSize);
 		}
 	}
+
+	uint64_t SHaRC::GetAllocatedMemory() const
+	{
+		uint64_t total = 0;
+		if (m_HashEntriesBuffer)
+			total += m_HashEntriesBuffer->getDesc().byteSize;
+		if (m_LockBuffer)
+			total += m_LockBuffer->getDesc().byteSize;
+		if (m_AccumulationBuffer)
+			total += m_AccumulationBuffer->getDesc().byteSize;
+		if (m_ResolveBuffer)
+			total += m_ResolveBuffer->getDesc().byteSize;
+		if (m_SHaRCBuffer)
+			total += m_SHaRCBuffer->getDesc().byteSize;
+		return total;
+	}
 }

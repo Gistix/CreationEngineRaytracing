@@ -118,3 +118,11 @@ void LandLODMesh::UpdateOcclusion()
 
 	MarkDirty(DirtyFlags::Vertex);
 }
+
+void LandLODMesh::CollectOwnedBuffers(OwnedBufferStats& stats) const
+{
+	stats.landLODMeshCount++;
+	if (m_LiveVertexBuffer) {
+		stats.landLODLiveVertexBytes += m_LiveVertexBuffer->getDesc().byteSize;
+	}
+}

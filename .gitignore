@@ -7,3 +7,4 @@ dist/
 
 CMakeUserPresets.json
 shadertoolsconfig.json
+.commandcode/
