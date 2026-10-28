@@ -94,6 +94,24 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 			return nullptr;
 		}
 
+		// NVRHI creates the view from this descriptor, so a cubemap view must
+		// match the image it wraps: 2D, cube-compatible, exactly 6 layers.
+		// Envmap slots can reference non-cube textures, and a cube view over
+		// one is invalid; let the caller use its fallback (black cubemap).
+		const bool isCubeView =
+			createInfo.imageType == VK_IMAGE_TYPE_2D &&
+			(createInfo.flags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0 &&
+			createInfo.arrayLayers == 6;
+
+		if (textureType == TextureType::CubeMap && !isCubeView) {
+			logger::debug("TextureManager::GetDescriptor - Texture 0x{:08X} is not a 6-layer cubemap (imageType {}, layers {}, flags 0x{:08X}); using fallback.",
+				reinterpret_cast<uintptr_t>(d3d11Resource),
+				static_cast<int>(createInfo.imageType),
+				createInfo.arrayLayers,
+				static_cast<uint32_t>(createInfo.flags));
+			return nullptr;
+		}
+
 		auto format = Renderer::GetFormat(createInfo.format);
 
 		if (format == nvrhi::Format::UNKNOWN) {

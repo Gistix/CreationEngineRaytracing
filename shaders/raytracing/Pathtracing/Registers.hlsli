@@ -32,11 +32,11 @@ RWStructuredBuffer<uint64_t>                SharcHashEntriesBuffer      : regist
 RWStructuredBuffer<uint>                    SharcLockBuffer             : register(u1);
 RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer     : register(u2);
 #else
-RWTexture2D<float4>                         Output                      : register(u0);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> Output                      : register(u0);
 
-RWTexture2D<float4>                         NormalRoughness             : register(u1);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> NormalRoughness             : register(u1);
 
-RWTexture2D<float4>                         MotionVectors               : register(u2); // PT Motion Vectors output (written by BUILD/REFERENCE pass)
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> MotionVectors               : register(u2); // PT Motion Vectors output (written by BUILD/REFERENCE pass)
 RWTexture2D<float>                          Depth                       : register(u3); // PT Depth output (clip-space depth, written by BUILD/REFERENCE pass)
 
 #   if defined(NRD) | defined(DLSS_RR)
@@ -44,8 +44,8 @@ RWTexture2D<float3>                         DiffuseAlbedo               : regist
 
 #       if defined(NRD)
 RWTexture2D<float>                          ViewDepth                   : register(u5);
-RWTexture2D<float4>                         DiffuseRadiance             : register(u6);
-RWTexture2D<float4>                         SpecularRadiance            : register(u7);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> DiffuseRadiance             : register(u6);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> SpecularRadiance            : register(u7);
 RWTexture2D<float3>                         DiffuseFactor               : register(u8);
 RWTexture2D<float3>                         SpecularFactor              : register(u9);
 #       else
@@ -59,15 +59,15 @@ RWTexture2D<float>                          SpecularHitDistance         : regist
 // Stable Planes UAVs (always declared, used when PATH_TRACER_MODE != REFERENCE)
 RWTexture2DArray<uint>                      StablePlanesHeaderUAV       : register(u10);
 RWStructuredBuffer<StablePlane>             StablePlanesBufferUAV       : register(u11);
-RWTexture2D<float4>                         StableRadianceUAV           : register(u12);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> StableRadianceUAV           : register(u12);
 #   endif
 
 #   if defined(RESTIR_GI)
 // ReSTIR GI: Secondary G-Buffer UAVs (written during FILL pass for GI initial samples)
-RWTexture2D<float4>                         SecondaryGBufPositionNormal : register(u13);
-RWTexture2D<float4>                         SecondaryGBufRadiance       : register(u14);
-RWTexture2D<float4>                         SecondaryGBufDiffuseAlbedo  : register(u15);
-RWTexture2D<float4>                         SecondaryGBufSpecularRough  : register(u16);
+VK_STORAGE_FORMAT("rgba32f") RWTexture2D<float4> SecondaryGBufPositionNormal : register(u13);
+VK_STORAGE_FORMAT("rgba32f") RWTexture2D<float4> SecondaryGBufRadiance       : register(u14);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> SecondaryGBufDiffuseAlbedo  : register(u15);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> SecondaryGBufSpecularRough  : register(u16);
 
 // ReSTIR GI: Packed primary surface data (ping-pong StructuredBuffer)
 RWStructuredBuffer<PackedSurfaceData>       SurfaceDataBuffer           : register(u17);

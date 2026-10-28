@@ -1,5 +1,6 @@
 #include "interop/CameraData.hlsli"
 #include "interop/SharedData.hlsli"
+#include "include/Vulkan.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
 ConstantBuffer<FeatureData> Features    : register(b1);
@@ -13,7 +14,7 @@ Texture2D<float3> DiffuseFactor         : register(t3);
 Texture2D<float3> SpecularFactor        : register(t4);
 #endif
 
-RWTexture2D<float4> Output              : register(u0);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> Output              : register(u0);
 
 #include "include/ColorConversions.hlsli"
 #include "include/WaveSize.hlsli"

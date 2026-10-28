@@ -51,9 +51,17 @@
 #   define VK_PUSH_CONSTANT [[vk::push_constant]]
 // VK_BINDING(set, index) -> binding `index` in descriptor set `set`.
 #   define VK_BINDING(set, index) [[vk::binding(index, set)]]
+// VK_STORAGE_FORMAT(format) declares the storage image format in SPIR-V. DXC
+// otherwise assigns Rgba32f to unannotated float4 UAVs, which mismatches e.g.
+// RGBA16_FLOAT targets and produces Undefined-Value-StorageImage-
+// FormatMismatch-ImageView warnings. The attribute has no D3D equivalent and
+// is ignored (with a warning) by DXIL, so only emit it for SPIR-V.
+//     VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> Output : register(u0);
+#   define VK_STORAGE_FORMAT(format) [[vk::image_format(format)]]
 #else
 #   define VK_PUSH_CONSTANT
 #   define VK_BINDING(set, index)
+#   define VK_STORAGE_FORMAT(format)
 #endif
 
 #endif // VULKAN_HLSLI

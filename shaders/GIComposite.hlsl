@@ -1,6 +1,7 @@
 #include "interop/CameraData.hlsli"
 #include "interop/RaytracingData.hlsli"
 #include "interop/SharedData.hlsli"
+#include "include/Vulkan.hlsli"
 
 ConstantBuffer<CameraData> Camera       : register(b0);
 ConstantBuffer<FeatureData> Features    : register(b1);
@@ -18,7 +19,7 @@ Texture2D<float2> WaterNormal           : register(t7);
 Texture2D<float>  WaterDepth            : register(t8);
 #endif
 
-RWTexture2D<float4> Output              : register(u0);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> Output              : register(u0);
 
 SamplerState LinearClampSampler         : register(s0);
 SamplerState PointClampSampler          : register(s1);

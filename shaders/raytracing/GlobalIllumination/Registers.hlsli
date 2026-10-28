@@ -31,11 +31,11 @@ RWStructuredBuffer<SharcAccumulationData>   SharcAccumulationBuffer     : regist
 #else
 
 #   if defined(RAW_RADIANCE)
-RWTexture2D<float4>                         DiffuseOutput               : register(u0);
-RWTexture2D<float4>                         SpecularOutput              : register(u1);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> DiffuseOutput               : register(u0);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> SpecularOutput              : register(u1);
 
 #   else
-RWTexture2D<float4>                         Output                      : register(u0);
+VK_STORAGE_FORMAT("rgba16f") RWTexture2D<float4> Output                      : register(u0);
 #   endif // RAW_RADIANCE
 
 #endif
