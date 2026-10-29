@@ -211,6 +211,14 @@ protected:
 		const char* resourceKind,
 		DescriptorTableManager* descriptorTable);
 
+	// Wraps a native D3D12 buffer imported from external D3D11On12.
+	static BufferDescriptor CreateNativeD3D12Buffer(
+		ID3D11Buffer* buffer11,
+		const char* debugName,
+		const char* logContext,
+		const char* resourceKind,
+		DescriptorTableManager* descriptorTable);
+
 	// Wraps a native D3D12 resource, validating it against the D3D11 description.
 	static BufferDescriptor CreateDX12Buffer(
 		ID3D12Resource* resourceDX12,

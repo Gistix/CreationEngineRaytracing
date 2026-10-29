@@ -171,6 +171,69 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVulkanBuffer(
 	return buffer;
 }
 
+BaseMesh::BufferDescriptor BaseMesh::CreateNativeD3D12Buffer(
+	ID3D11Buffer* buffer11,
+	const char* debugName,
+	const char* logContext,
+	const char* resourceKind,
+	DescriptorTableManager* descriptorTable)
+{
+	BufferDescriptor buffer{};
+
+	if (!buffer11) {
+		logger::error("{} - D3D11 {} buffer is null", logContext, resourceKind);
+		return buffer;
+	}
+
+	UINT64 sliceOffset = 0;
+	D3D12_GPU_VIRTUAL_ADDRESS gpuVA = 0;
+	auto d12Buffer = D3D12ResourceInterop::GetD3D12Buffer(buffer11, &sliceOffset, &gpuVA);
+	if (!d12Buffer) {
+		logger::error("{} - Failed to obtain ID3D12Resource from D3D11 {} buffer", logContext, resourceKind);
+		return buffer;
+	}
+
+	if (auto* d12Device = Renderer::GetSingleton()->GetNativeD3D12Device()) {
+		ID3D12Pageable* pageable = d12Buffer.get();
+		d12Device->MakeResident(1, &pageable);
+	}
+
+	D3D11_BUFFER_DESC desc11{};
+	buffer11->GetDesc(&desc11);
+
+	auto resourceDesc = d12Buffer->GetDesc();
+	uint64_t totalSize = resourceDesc.Width;
+	if (totalSize < sliceOffset + desc11.ByteWidth) {
+		totalSize = sliceOffset + desc11.ByteWidth;
+	}
+
+	auto bufferDesc = nvrhi::BufferDesc()
+		.setByteSize(totalSize)
+		.setCanHaveRawViews(true)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::NonPixelShaderResource)
+		.setIsAccelStructBuildInput(true)
+		.setDebugName(debugName);
+
+	auto device = Renderer::GetSingleton()->GetDevice();
+	buffer.m_Buffer = device->createHandleForNativeBuffer(
+		nvrhi::ObjectTypes::D3D12_Resource,
+		nvrhi::Object(d12Buffer.get()),
+		bufferDesc);
+
+	if (buffer.m_Buffer) {
+		buffer.m_SourceBuffer.copy_from(buffer11);
+		buffer.m_Descriptor = descriptorTable->CreateDescriptorHandle(nvrhi::BindingSetItem::RawBuffer_SRV(0, buffer.m_Buffer));
+		if (!buffer.m_Descriptor.IsValid())
+			return {};
+	}
+	else {
+		logger::error("{} - Failed to create handle for native D3D12 buffer", logContext);
+	}
+
+	buffer.m_Offset = sliceOffset;
+	return buffer;
+}
+
 BaseMesh::BufferDescriptor BaseMesh::CreateDX12Buffer(
 	ID3D12Resource* resourceDX12,
 	ID3D11Buffer* buffer11,
@@ -231,6 +294,15 @@ BaseMesh::BufferDescriptor BaseMesh::CreateIndexBuffer(RE::BSGraphics::TriShape*
 			descriptorTable);
 	}
 
+	if (Renderer::GetSingleton()->IsNativeD3D12()) {
+		return CreateNativeD3D12Buffer(
+			Util::Adapter::GetD3D11IndexBuffer(triShape),
+			"Index Buffer (D3D12)",
+			"BaseMesh::CreateIndexBuffer",
+			"index",
+			descriptorTable);
+	}
+
 #if defined(FALLOUT4)
 	const uint64_t offset = triShape->indexBuffer->dataOffset;
 #else
@@ -255,6 +327,15 @@ BaseMesh::BufferDescriptor BaseMesh::CreateVertexBuffer(RE::BSGraphics::TriShape
 		return CreateVulkanBuffer(
 			Util::Adapter::GetD3D11VertexBuffer(triShape),
 			"Vertex Buffer (VK)",
+			"BaseMesh::CreateVertexBuffer",
+			"vertex",
+			descriptorTable);
+	}
+
+	if (Renderer::GetSingleton()->IsNativeD3D12()) {
+		return CreateNativeD3D12Buffer(
+			Util::Adapter::GetD3D11VertexBuffer(triShape),
+			"Vertex Buffer (D3D12)",
 			"BaseMesh::CreateVertexBuffer",
 			"vertex",
 			descriptorTable);

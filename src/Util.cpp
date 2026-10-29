@@ -3,6 +3,7 @@
 #include "Util.h"
 #include "Constants.h"
 #include "Renderer.h"
+#include "Utils/D3D12ResourceInterop.h"
 
 namespace Util
 {
@@ -104,6 +105,16 @@ namespace Util
 	{
 		if (!d3d11Buffer) {
 			logger::error("CreateSharedBuffer - D3D11 buffer is nullptr");
+			return;
+		}
+
+		if (Renderer::GetSingleton()->IsNativeD3D12()) {
+			auto res = D3D12ResourceInterop::GetD3D12Buffer(d3d11Buffer);
+			if (res) {
+				*d3d12Buffer = res.detach();
+				return;
+			}
+			logger::error("CreateSharedBuffer - Failed to get native D3D12 buffer");
 			return;
 		}
 

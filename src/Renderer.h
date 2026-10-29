@@ -17,6 +17,7 @@
 
 #include "Types/Settings.h"
 #include "Utils/DXVKInterop.h"
+#include "Utils/D3D12ResourceInterop.h"
 
 struct MessageCallback : public nvrhi::IMessageCallback
 {
@@ -48,6 +49,7 @@ struct MessageCallback : public nvrhi::IMessageCallback
 class Renderer
 {
 	bool m_IsVulkan = false;
+	bool m_IsNativeD3D12 = false;
 
 	bool m_IsInitialized = false;
 
@@ -187,7 +189,10 @@ public:
 
 	bool Initialize(RendererSettings* rendererSettings, VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device, VkQueue graphicsQueue, int graphicsQueueIndex, VkQueue transferQueue, int transferQueueIndex, VkQueue computeQueue, int computeQueueIndex);
 
+	bool InitializeD3D11On12(RendererSettings* rendererSettings, ID3D12Device5* d3d12Device = nullptr, ID3D12CommandQueue* commandQueue = nullptr, ID3D12CommandQueue* computeCommandQueue = nullptr, ID3D12CommandQueue* copyCommandQueue = nullptr);
+
 	bool IsVulkan() const { return m_IsVulkan; }
+	bool IsNativeD3D12() const { return m_IsNativeD3D12; }
 
 	bool IsInitialized() const { return m_IsInitialized; }
 
@@ -281,6 +286,7 @@ public:
 	inline auto& GetWhiteTextureDescriptor() const { return m_WhiteTexture->descriptorHandle; }
 	inline auto& GetGrayTextureDescriptor() const { return m_GrayTexture->descriptorHandle; }
 	inline auto& GetNormalTextureDescriptor() const { return m_NormalTexture->descriptorHandle; }
+	inline nvrhi::ITexture* GetWhiteTexture() const { return m_WhiteTexture->texture; }
 	inline nvrhi::ITexture* GetNormalTexture() const { return m_NormalTexture->texture; }
 	inline auto& GetBlackTextureDescriptor() const { return m_BlackTexture->descriptorHandle; }
 	inline auto& GetBlackCubemapDescriptor() const { return m_BlackCubemap->descriptorHandle; }
@@ -354,9 +360,9 @@ public:
 	void SetRenderTargets(void* albedo, void* normalRoughness, void* gnmao);
 
 	static nvrhi::TextureHandle WrapNativeTexture(void* nativeTexture, const char* debugName,
-		nvrhi::ResourceStates initialState = nvrhi::ResourceStates::ShaderResource);
+		nvrhi::ResourceStates initialState = nvrhi::ResourceStates::Common);
 
-	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName);
+	nvrhi::TextureHandle ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::ResourceStates initialState = nvrhi::ResourceStates::Common);
 
 	void InitDefaultTextures();
 

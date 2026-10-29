@@ -164,6 +164,102 @@ void Renderer::BuildVkFormatMapping()
 	m_VkFormatMapping.emplace(VK_FORMAT_D24_UNORM_S8_UINT, nvrhi::Format::D24S8);
 }
 
+bool Renderer::InitializeD3D11On12(RendererSettings* rendererSettings, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
+{
+	m_Settings = *rendererSettings;
+
+	winrt::com_ptr<ID3D11Device> nativeDevice;
+	if (auto* device11 = GetNativeD3D11Device())
+		nativeDevice.copy_from(device11);
+	else if (auto* depth = Util::Adapter::GetMainDepthStencilTexture())
+		depth->GetDevice(nativeDevice.put());
+
+	winrt::com_ptr<ID3D12Device5> resolvedD3D12Device;
+	if (d3d12Device) {
+		resolvedD3D12Device.copy_from(d3d12Device);
+	} else if (nativeDevice) {
+		resolvedD3D12Device = D3D12ResourceInterop::GetD3D12Device(nativeDevice.get());
+	}
+
+	if (!resolvedD3D12Device) {
+		logger::error("Renderer::InitializeD3D11On12 - Failed to obtain ID3D12Device.");
+		return false;
+	}
+
+	winrt::com_ptr<ID3D12CommandQueue> resolvedCommandQueue;
+	if (commandQueue) {
+		resolvedCommandQueue.copy_from(commandQueue);
+	} else if (nativeDevice) {
+		resolvedCommandQueue = D3D12ResourceInterop::GetD3D12CommandQueue(nativeDevice.get());
+	}
+
+	if (!resolvedCommandQueue) {
+		logger::error("Renderer::InitializeD3D11On12 - Failed to obtain direct graphics ID3D12CommandQueue.");
+		return false;
+	}
+
+	winrt::com_ptr<ID3D12CommandQueue> resolvedComputeQueue;
+	if (computeCommandQueue) {
+		resolvedComputeQueue.copy_from(computeCommandQueue);
+	} else {
+		D3D12_COMMAND_QUEUE_DESC qDesc{};
+		qDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+		if (FAILED(resolvedD3D12Device->CreateCommandQueue(&qDesc, IID_PPV_ARGS(resolvedComputeQueue.put())))) {
+			logger::error("Renderer::InitializeD3D11On12 - Failed to create compute command queue.");
+			return false;
+		}
+	}
+
+	winrt::com_ptr<ID3D12CommandQueue> resolvedCopyQueue;
+	if (copyCommandQueue) {
+		resolvedCopyQueue.copy_from(copyCommandQueue);
+	} else {
+		D3D12_COMMAND_QUEUE_DESC qDesc{};
+		qDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+		if (FAILED(resolvedD3D12Device->CreateCommandQueue(&qDesc, IID_PPV_ARGS(resolvedCopyQueue.put())))) {
+			logger::error("Renderer::InitializeD3D11On12 - Failed to create copy command queue.");
+			return false;
+		}
+	}
+
+	// NVRHI Device
+	nvrhi::d3d12::DeviceDesc deviceDesc;
+	deviceDesc.errorCB = &MessageCallback::GetInstance();
+	deviceDesc.pDevice = resolvedD3D12Device.get();
+	deviceDesc.pGraphicsCommandQueue = resolvedCommandQueue.get();
+	deviceDesc.pComputeCommandQueue = resolvedComputeQueue.get();
+	deviceDesc.pCopyCommandQueue = resolvedCopyQueue.get();
+	deviceDesc.aftermathEnabled = false;
+	deviceDesc.logBufferLifetime = false;
+#if defined(NVRHI_ENHANCED_BARRIERS)
+	deviceDesc.enableEnhancedBarriers = true;
+#endif
+
+	m_NVRHIDevice = nvrhi::d3d12::createDevice(deviceDesc);
+
+	if (!m_NVRHIDevice)
+		return false;
+
+	m_IsNativeD3D12 = true;
+	m_IsVulkan = false;
+	m_NativeD3D12Device = resolvedD3D12Device.get();
+	if (nativeDevice) {
+		m_NativeD3D11Device = reinterpret_cast<ID3D11Device5*>(nativeDevice.get());
+	}
+
+	D3D12_FEATURE_DATA_SHADER_MODEL smFeature{ D3D_SHADER_MODEL_6_9 };
+	if (SUCCEEDED(resolvedD3D12Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &smFeature, sizeof(smFeature))))
+		m_ShaderModel = smFeature.HighestShaderModel;
+
+	logger::info("Shader Model: {}", magic_enum::enum_name(m_ShaderModel));
+
+	BuildFormatMapping();
+
+	PostInitialize();
+
+	return true;
+}
+
 bool Renderer::Initialize(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
 {
 	m_Settings = *rendererSettings;
@@ -634,10 +730,10 @@ void Renderer::SetRenderTargets(void* albedo, void* normalRoughness, [[maybe_unu
 	if (!m_RenderTargets)
 		m_RenderTargets = eastl::make_unique<RenderTargets>();
 
-	m_RenderTargets->albedo = WrapNativeTexture(albedo, "Albedo RenderTarget");
-	m_RenderTargets->normalRoughness = WrapNativeTexture(normalRoughness, "Normal Roughness RenderTarget");
+	m_RenderTargets->albedo = WrapNativeTexture(albedo, "Albedo RenderTarget", nvrhi::ResourceStates::Common);
+	m_RenderTargets->normalRoughness = WrapNativeTexture(normalRoughness, "Normal Roughness RenderTarget", nvrhi::ResourceStates::Common);
 #if defined(SKYRIM)
-	m_RenderTargets->gnmao = WrapNativeTexture(gnmao, "GNMAO RenderTarget");
+	m_RenderTargets->gnmao = WrapNativeTexture(gnmao, "GNMAO RenderTarget", nvrhi::ResourceStates::Common);
 #endif
 }
 
@@ -726,8 +822,13 @@ nvrhi::ICommandList* Renderer::StartExecution()
 
 uint64_t Renderer::SubmitCommandList(nvrhi::ICommandList* commandList)
 {
-	if (m_VulkanInteropDevice)
+	if (IsVulkan()) {
 		m_VulkanInteropDevice->FlushRenderingCommands();
+	} else if (IsNativeD3D12()) {
+		winrt::com_ptr<ID3D11DeviceContext> ctx;
+		m_NativeD3D11Device->GetImmediateContext(ctx.put());
+		ctx->Flush();
+	}
 
 	std::scoped_lock lock(m_ExecutionMutex);
 	SubmissionQueueLock queueLock(m_VulkanInteropDevice.get());
@@ -867,6 +968,41 @@ nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char
 
 		return renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::VK_Image, vkImage, desc);
 	}
+	else if (renderer->IsNativeD3D12()) {
+		winrt::com_ptr<ID3D12Resource> d12Resource;
+		if (auto* unk = reinterpret_cast<IUnknown*>(nativeTexture))
+			unk->QueryInterface(IID_PPV_ARGS(d12Resource.put()));
+
+		ID3D12Resource* actualD3D12 = d12Resource ? d12Resource.get() : reinterpret_cast<ID3D12Resource*>(nativeTexture);
+		if (!actualD3D12) {
+			logger::error("Renderer::WrapNativeTexture - Failed to acquire D3D12 resource for {}", desc.debugName);
+			return nullptr;
+		}
+
+		ID3D12Pageable* pageable = actualD3D12;
+		renderer->GetNativeD3D12Device()->MakeResident(1, &pageable);
+
+		auto targetDesc = actualD3D12->GetDesc();
+
+		desc.width = static_cast<uint32_t>(targetDesc.Width);
+		desc.height = targetDesc.Height;
+		desc.format = renderer->GetFormat(targetDesc.Format);
+		desc.mipLevels = targetDesc.MipLevels;
+		desc.arraySize = targetDesc.DepthOrArraySize;
+
+		if (targetDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			desc.isUAV = true;
+
+		if (targetDesc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+			desc.isRenderTarget = true;
+
+		if (desc.format == nvrhi::Format::UNKNOWN) {
+			logger::error("Renderer::WrapNativeTexture - Unmapped format {} for {}", magic_enum::enum_name(targetDesc.Format), desc.debugName);
+			return nullptr;
+		}
+
+		return renderer->GetDevice()->createHandleForNativeTexture(nvrhi::ObjectTypes::D3D12_Resource, actualD3D12, desc);
+	}
 	else {
 		auto targetDesc = reinterpret_cast<ID3D12Resource*>(nativeTexture)->GetDesc();
 
@@ -876,10 +1012,11 @@ nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char
 		desc.mipLevels = targetDesc.MipLevels;
 		desc.arraySize = targetDesc.DepthOrArraySize;
 
-		if (targetDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+		if (targetDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
 			desc.isUAV = true;
-			//desc.initialState = nvrhi::ResourceStates::UnorderedAccess;
-		}
+
+		if (targetDesc.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+			desc.isRenderTarget = true;
 
 		if (desc.format == nvrhi::Format::UNKNOWN) {
 			logger::error("Renderer::WrapNativeTexture - Unmapped format {} for {}", magic_enum::enum_name(targetDesc.Format), desc.debugName);
@@ -890,15 +1027,15 @@ nvrhi::TextureHandle Renderer::WrapNativeTexture(void* nativeTexture, const char
 	}
 }
 
-nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName)
+nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const char* debugName, nvrhi::ResourceStates initialState)
 {
 	if (!d3d11Texture) {
 		logger::error("Renderer::ShareTexture - Invalid D3D11 texture pointer");
 		return nullptr;
 	}
 
-	if (IsVulkan()) {
-		return WrapNativeTexture(d3d11Texture, std::format("{} [Vulkan Texture]", debugName).c_str());
+	if (IsVulkan() || IsNativeD3D12()) {
+		return WrapNativeTexture(d3d11Texture, std::format("{} [{}]", debugName, IsVulkan() ? "Vulkan Texture" : "D3D12 Texture").c_str(), initialState);
 	}
 	else {
 		winrt::com_ptr<IDXGIResource1> dxgiResource;
@@ -926,7 +1063,7 @@ nvrhi::TextureHandle Renderer::ShareTexture(ID3D11Texture2D* d3d11Texture, const
 			return nullptr;
 		}
 
-		return WrapNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str());
+		return WrapNativeTexture(d3d12Resource.get(), std::format("{} [Shared Texture]", debugName).c_str(), initialState);
 	}
 }
 

@@ -20,6 +20,11 @@ bool InitializeVulkanRenderer(RendererSettings* rendererSettings, void* instance
 		reinterpret_cast<VkQueue>(computeQueue), computeQueueIndex);
 }
 
+bool InitializeD3D11On12Renderer(RendererSettings* rendererSettings, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue)
+{
+	return Renderer::GetSingleton()->InitializeD3D11On12(rendererSettings, d3d12Device, commandQueue, computeCommandQueue, copyCommandQueue);
+}
+
 void Initialize(Settings settings)
 {
 	auto* scene = Scene::GetSingleton();

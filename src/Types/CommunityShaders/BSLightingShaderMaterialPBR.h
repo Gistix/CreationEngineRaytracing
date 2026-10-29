@@ -18,6 +18,7 @@ enum class PBRFlags : uint32_t
 	CoatNormal = 1 << 4,
 	Fuzz = 1 << 5,
 	HairMarschner = 1 << 6,
+	Foliage = 1 << 7,
 };
 
 enum class PBRShaderFlags : uint32_t
@@ -35,6 +36,8 @@ enum class PBRShaderFlags : uint32_t
 	HairMarschner = 1 << 10,
 	Glint = 1 << 11,
 	ProjectedGlint = 1 << 12,
+	Foliage = 1 << 13,
+	ThinSurface = 1 << 14,
 };
 
 class BSLightingShaderMaterialPBR : public RE::BSLightingShaderMaterialBase
@@ -79,6 +82,16 @@ public:
 		return subSurfaceLightRolloff;
 	}
 
+	float GetSubsurfaceBalance() const
+	{
+		return subsurfaceBalance;
+	}
+
+	const std::array<float, 3>& GetThinSurfaceParameters() const
+	{
+		return thinSurfaceParameters;
+	}
+
 	const RE::NiColor& GetCoatColor() const
 	{
 		return specularColor;
@@ -99,9 +112,34 @@ public:
 		return coatSpecularLevel;
 	}
 
+	const std::array<float, 3>& GetProjectedMaterialBaseColorScale() const
+	{
+		return projectedMaterialBaseColorScale;
+	}
+
+	float GetProjectedMaterialRoughness() const
+	{
+		return projectedMaterialRoughness;
+	}
+
+	float GetProjectedMaterialSpecularLevel() const
+	{
+		return projectedMaterialSpecularLevel;
+	}
+
 	const GlintParameters& GetProjectedMaterialGlintParameters() const
 	{
 		return projectedMaterialGlintParameters;
+	}
+
+	const RE::NiColor& GetFuzzColor() const
+	{
+		return fuzzColor;
+	}
+
+	float GetFuzzWeight() const
+	{
+		return fuzzWeight;
 	}
 
 	const GlintParameters& GetGlintParameters() const
@@ -115,6 +153,10 @@ public:
 	RE::BSShaderMaterial::Feature loadedWithFeature = RE::BSShaderMaterial::Feature::kDefault;
 
 	stl::enumeration<PBRFlags> pbrFlags;
+	// Retain NIF defaults when texture-set parameters are reapplied.
+	stl::enumeration<PBRFlags> nifThinSurfaceFlags;
+	float subsurfaceBalance = 0.75f;
+	std::array<float, 3> thinSurfaceParameters = { 0.5f, 0.5f, 1.f };
 
 	float coatRoughness = 1.f;
 	float coatSpecularLevel = 0.04f;

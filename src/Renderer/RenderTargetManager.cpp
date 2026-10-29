@@ -170,28 +170,38 @@ SharedTexture RenderTargetManager::GetSharedTexture(Texture texture) {
 				}
 			}
 
-			winrt::com_ptr<IDXGIResource> dxgiResource;
-			hr = renderTarget.d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
-			if (FAILED(hr)) {
-				logger::error("RenderTargetManager::GetSharedTexture - QueryInterface IDXGIResource failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
-				return sharedTexture;
-			}
+			if (renderer->IsNativeD3D12()) {
+				renderTarget.d3d12Resource = D3D12ResourceInterop::GetD3D12Texture(renderTarget.d3d11Texture.get());
+				if (!renderTarget.d3d12Resource) {
+					logger::error("RenderTargetManager::GetSharedTexture - Failed to query D3D12 resource for {}", magic_enum::enum_name(texture));
+					return sharedTexture;
+				}
+				std::string sharedDebugName = std::format("{}_D3D11Shared", magic_enum::enum_name(texture));
+				renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str(), nvrhi::ResourceStates::Common);
+			} else {
+				winrt::com_ptr<IDXGIResource> dxgiResource;
+				hr = renderTarget.d3d11Texture->QueryInterface(IID_PPV_ARGS(dxgiResource.put()));
+				if (FAILED(hr)) {
+					logger::error("RenderTargetManager::GetSharedTexture - QueryInterface IDXGIResource failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
+					return sharedTexture;
+				}
 
-			HANDLE sharedHandle = nullptr;
-			hr = dxgiResource->GetSharedHandle(&sharedHandle);
-			if (FAILED(hr) || !sharedHandle) {
-				logger::error("RenderTargetManager::GetSharedTexture - GetSharedHandle failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
-				return sharedTexture;
-			}
+				HANDLE sharedHandle = nullptr;
+				hr = dxgiResource->GetSharedHandle(&sharedHandle);
+				if (FAILED(hr) || !sharedHandle) {
+					logger::error("RenderTargetManager::GetSharedTexture - GetSharedHandle failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
+					return sharedTexture;
+				}
 
-			hr = nativeD3D12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(renderTarget.d3d12Resource.put()));
-			if (FAILED(hr) || !renderTarget.d3d12Resource) {
-				logger::error("RenderTargetManager::GetSharedTexture - OpenSharedHandle failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
-				return sharedTexture;
-			}
+				hr = nativeD3D12Device->OpenSharedHandle(sharedHandle, IID_PPV_ARGS(renderTarget.d3d12Resource.put()));
+				if (FAILED(hr) || !renderTarget.d3d12Resource) {
+					logger::error("RenderTargetManager::GetSharedTexture - OpenSharedHandle failed for {} with hr 0x{:08X}", magic_enum::enum_name(texture), static_cast<uint32_t>(hr));
+					return sharedTexture;
+				}
 
-			std::string sharedDebugName = std::format("{}_D3D11Shared", magic_enum::enum_name(texture));
-			renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str());
+				std::string sharedDebugName = std::format("{}_D3D11Shared", magic_enum::enum_name(texture));
+				renderTarget.sharedD3D12Handle = Renderer::WrapNativeTexture(renderTarget.d3d12Resource.get(), sharedDebugName.c_str(), nvrhi::ResourceStates::Common);
+			}
 		}
 
 		sharedTexture.native = renderTarget.d3d12Resource.get();

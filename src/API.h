@@ -8,6 +8,7 @@
 extern "C" {
 	CERT_API bool InitializeRenderer(RendererSettings* rendererSettings, ID3D11Device5* d3d11Device, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 	CERT_API bool InitializeVulkanRenderer(RendererSettings* rendererSettings, void* instance, void* physicalDevice, void* device, void* graphicsQueue, int graphicsQueueIndex, void* transferQueue, int transferQueueIndex, void* computeQueue, int computeQueueIndex);
+	CERT_API bool InitializeD3D11On12Renderer(RendererSettings* rendererSettings, ID3D12Device5* d3d12Device, ID3D12CommandQueue* commandQueue, ID3D12CommandQueue* computeCommandQueue, ID3D12CommandQueue* copyCommandQueue);
 	CERT_API void Initialize(Settings);
 	CERT_API void UpdateCamera();
 	CERT_API void Execute();

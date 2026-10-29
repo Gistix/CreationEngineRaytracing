@@ -93,7 +93,7 @@ namespace Hooks
 		static RE::BSGraphics::TriShapeDX12* thunk(RE::MemoryManager* a_memoryManager, [[ maybe_unused ]] size_t size, int32_t a_alignment, bool a_alignmentRequired)
 		{
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized())
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized())
 				return func(a_memoryManager, size, a_alignment, a_alignmentRequired);
 
 			auto* triShape = func(a_memoryManager, sizeof(RE::BSGraphics::TriShapeDX12), a_alignment, a_alignmentRequired);
@@ -119,7 +119,7 @@ namespace Hooks
 			auto triShape = func(a_renderer, a_bsStream, a_vertexDesc, a_vertexCount, a_indexCount);
 
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized())
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -147,7 +147,7 @@ namespace Hooks
 			auto triShape = func(a_renderer, vertexData, vertexDataSize, vertexDesc, indexData, numIndices);
 
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized())
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -180,7 +180,7 @@ namespace Hooks
 			auto triShape = func(a_renderer, a_vertexData, a_vertexDataSize, a_vertexDesc, a_indexRenderData);
 
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized())
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -215,7 +215,7 @@ namespace Hooks
 			auto triShape = func(a_renderer, a_vertexRenderData, vertexDesc, a_indexData, a_numIndices);
 
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized())
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized())
 				return triShape;
 
 			// Share vertex buffer
@@ -273,7 +273,7 @@ namespace Hooks
 			auto result = func(src, tgt, weight);
 
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized())
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized())
 				return result;
 
 			if (src) {
@@ -300,7 +300,7 @@ namespace Hooks
 			auto result = func(src, tgt, weight, partitionMask);
 
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized())
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized())
 				return result;
 
 			if (src) {
@@ -353,7 +353,7 @@ namespace Hooks
 		static void thunk([[ maybe_unused ]] void* a1, RE::BSGraphics::TriShape* a_triShape)
 		{
 			const auto& renderer = Renderer::GetSingleton();
-			if (renderer->IsVulkan() || !renderer->IsInitialized()) {
+			if (renderer->IsVulkan() || renderer->IsNativeD3D12() || !renderer->IsInitialized()) {
 				func(a1, a_triShape);
 				return;
 			}

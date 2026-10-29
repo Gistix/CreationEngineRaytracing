@@ -491,7 +491,7 @@ void Scene::SetSkyHemisphere(void* skyHemi)
 
 	m_SkyHemisphereResource = skyHemi;
 
-	m_SkyHemisphereTexture = Renderer::WrapNativeTexture(skyHemi, "NVRHI Sky Hemisphere Texture");
+	m_SkyHemisphereTexture = Renderer::WrapNativeTexture(skyHemi, "NVRHI Sky Hemisphere Texture", nvrhi::ResourceStates::UnorderedAccess);
 }
 
 nvrhi::ITexture* Scene::GetSkinDetailNormalTexture() const
@@ -507,6 +507,11 @@ nvrhi::ITexture* Scene::GetProjNoiseTexture() const
 	if (m_ProjNoiseTexture)
 		return m_ProjNoiseTexture;
 
+	if (Renderer::GetSingleton()->IsNativeD3D12()) {
+		m_ProjNoiseTexture = Renderer::GetSingleton()->GetWhiteTexture();
+		return m_ProjNoiseTexture;
+	}
+
 	auto* projNoiseMap = Util::Adapter::GetDefaultTextureProjNoiseMap();
 	if (!projNoiseMap)
 		return nullptr;
@@ -521,7 +526,7 @@ void Scene::SetSkinDetailNormal(void* skinDetailNormal)
 	if (skinDetailNormal == m_SkinDetailNormalResource)
 		return;
 
-	auto texture = skinDetailNormal ? Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture") : nullptr;
+	auto texture = skinDetailNormal ? Renderer::WrapNativeTexture(skinDetailNormal, "NVRHI Skin Detail Normal Texture", nvrhi::ResourceStates::PixelShaderResource) : nullptr;
 	if (skinDetailNormal && !texture)
 		return;
 
@@ -546,7 +551,7 @@ void Scene::SetWaterFlowMap(void* waterFlowMap)
 
 	m_WaterFlowMapResource = waterFlowMap;
 
-	m_WaterFlowMapTexture = Renderer::WrapNativeTexture(waterFlowMap, "NVRHI Water FlowMap Texture");
+	m_WaterFlowMapTexture = Renderer::WrapNativeTexture(waterFlowMap, "NVRHI Water FlowMap Texture", nvrhi::ResourceStates::ShaderResource);
 }
 
 void Scene::UpdateSettings(Settings settings)
