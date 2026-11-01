@@ -199,7 +199,7 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 					
 					if (it->second->m_BLAS) {
 						std::scoped_lock rLock(m_ReleaseMutex);
-						m_PendingReleases.push_back({ eastl::move(it->second->m_BLAS), Renderer::GetSingleton()->GetFrameIndex() });
+						m_PendingReleases.push_back({ eastl::move(it->second->m_BLAS), Renderer::GetSingleton()->GetLastSubmittedFence() });
 					}
 					it = m_SharedCache.erase(it);
 				} else {
