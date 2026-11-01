@@ -183,6 +183,7 @@ struct BLASGeometryKey
 		[[nodiscard]] size_t GetCachedBLASCount() const;
 		[[nodiscard]] size_t GetDedicatedBLASCount() const;
 		void GetBLASMemoryStats(uint32_t& outSharedCount, uint64_t& outSharedBytes, uint64_t& outTransformBytes) const;
+		void GetPendingBLASMemoryStats(uint32_t& outPendingCount, uint64_t& outPendingBytes) const;
 
 	private:
 		nvrhi::IDevice* m_Device = nullptr;
@@ -203,6 +204,6 @@ struct BLASGeometryKey
 			nvrhi::rt::AccelStructHandle blas;
 			uint64_t fence = UINT64_MAX;
 		};
-		std::mutex m_ReleaseMutex;
+		mutable std::mutex m_ReleaseMutex;
 		std::vector<PendingRelease> m_PendingReleases;
 	};

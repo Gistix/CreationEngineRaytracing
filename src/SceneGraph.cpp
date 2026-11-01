@@ -1045,6 +1045,21 @@ void SceneGraph::ProcessPendingMeshDestroys(uint64_t completedFence)
 	m_BLASManager->ProcessPendingReleases(completedFence, Renderer::GetSingleton()->GetFrameIndex());
 }
 
+void SceneGraph::GetPendingMeshMemoryStats(uint32_t& outPendingCount, uint64_t& outPendingBytes) const
+{
+	outPendingCount = static_cast<uint32_t>(m_PendingMeshDestroy.size());
+	outPendingBytes = 0;
+	BaseMesh::OwnedBufferStats stats{};
+	for (const auto& p : m_PendingMeshDestroy) {
+		if (p.mesh) {
+			p.mesh->CollectOwnedBuffers(stats);
+		}
+	}
+	outPendingBytes = stats.skinnedLiveVertexBytes + stats.skinnedPrevPositionBytes +
+	                  stats.dynamicLiveBytes + stats.dynamicOriginalBytes +
+	                  stats.landLODLiveVertexBytes;
+}
+
 uint32_t SceneGraph::AllocateMeshIndex()
 {
 	return m_MeshManager->AllocateMeshIndex();

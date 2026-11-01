@@ -237,6 +237,8 @@ public:
 	inline const auto& GetOwnerClusters() { return m_OwnerClusters; }
 	inline const auto& GetOrphanClusters() { return m_OrphanClusters; }
 	inline const auto& GetSubIndexSegmentClusters() { return m_SubIndexSegmentClusters; }
+	inline const auto& GetGrassGroupClusters() { return m_GrassGroupClusters; }
+	inline const auto& GetGrassGroupMeshes() { return m_GrassGroupMeshes; }
 	inline const auto& GetAllClusters() { return m_AllClusters; }
 	
 	// Per-segment cluster helper, called by SubIndexMesh when it creates a SubIndexSegmentMesh child
@@ -285,6 +287,7 @@ public:
 	void WriteTransformData(uint32_t index, const float3x4& transform, const float3x4& prevTransform);
 	
 	void ProcessPendingMeshDestroys(uint64_t completedFence);
+	void GetPendingMeshMemoryStats(uint32_t& outPendingCount, uint64_t& outPendingBytes) const;
 
 	void UpdateInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry, uint32_t a_count, const void* a_data, uint32_t a_strideBytes);
 	void ClearInstancedData(RE::BSMultiStreamInstanceTriShape* a_geometry);

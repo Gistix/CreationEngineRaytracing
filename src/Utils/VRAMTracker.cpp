@@ -193,6 +193,11 @@ namespace VRAMTracker
 				mesh->CollectOwnedBuffers(meshStats);
 			}
 		}
+		for (const auto& [id, mesh] : sceneGraph->GetGrassGroupMeshes()) {
+			if (mesh) {
+				mesh->CollectOwnedBuffers(meshStats);
+			}
+		}
 
 		if (meshStats.skinnedMeshCount > 0) {
 			std::string label = std::format("Skinned Live Vertex ({} meshes)", meshStats.skinnedMeshCount);
@@ -217,6 +222,13 @@ namespace VRAMTracker
 			entries.emplace_back(label.c_str(), meshStats.landLODLiveVertexBytes);
 			totalBytes += meshStats.landLODLiveVertexBytes;
 		}
+
+		uint32_t pendingMeshCount = 0;
+		uint64_t pendingMeshBytes = 0;
+		sceneGraph->GetPendingMeshMemoryStats(pendingMeshCount, pendingMeshBytes);
+		std::string pendingMeshLabel = std::format("Pending Destroy Meshes ({} meshes)", pendingMeshCount);
+		entries.emplace_back(pendingMeshLabel.c_str(), pendingMeshBytes);
+		totalBytes += pendingMeshBytes;
 
 		auto& meshManager = sceneGraph->GetMeshManager();
 		if (meshManager) {
@@ -292,30 +304,49 @@ namespace VRAMTracker
 		uint64_t dedicatedBytes = 0;
 		std::unordered_set<const BLASResource*> seenDedicated;
 
-		auto inspectCluster = [&](BLASCluster* cluster) {
+		auto inspectCluster = [&](BLASCluster* cluster, uint32_t& outCount, uint64_t& outBytes, std::unordered_set<const BLASResource*>& seen) {
 			if (!cluster)
 				return;
 			const auto& res = cluster->GetBLASResource();
-			if (res && !res->m_IsShared && res->m_BLAS && seenDedicated.insert(res.get()).second) {
-				dedicatedCount++;
-				dedicatedBytes += res->GetAllocatedMemory();
+			if (res && !res->m_IsShared && res->m_BLAS && seen.insert(res.get()).second) {
+				outCount++;
+				outBytes += res->GetAllocatedMemory();
 			}
 		};
 
 		for (const auto& [refr, cluster] : sceneGraph->GetOwnerClusters()) {
-			inspectCluster(cluster.get());
+			inspectCluster(cluster.get(), dedicatedCount, dedicatedBytes, seenDedicated);
 		}
 		for (const auto& [triShape, cluster] : sceneGraph->GetOrphanClusters()) {
-			inspectCluster(cluster.get());
+			inspectCluster(cluster.get(), dedicatedCount, dedicatedBytes, seenDedicated);
 		}
 		for (const auto& [segment, cluster] : sceneGraph->GetSubIndexSegmentClusters()) {
-			inspectCluster(cluster.get());
+			inspectCluster(cluster.get(), dedicatedCount, dedicatedBytes, seenDedicated);
 		}
 
 		if (dedicatedCount > 0) {
 			std::string dedicatedLabel = std::format("Dedicated Cluster BLAS ({} structures)", dedicatedCount);
 			entries.emplace_back(dedicatedLabel.c_str(), dedicatedBytes);
 			totalBytes += dedicatedBytes;
+		}
+
+		uint32_t grassCount = 0;
+		uint64_t grassBytes = 0;
+		std::unordered_set<const BLASResource*> seenGrass;
+		for (const auto& [id, cluster] : sceneGraph->GetGrassGroupClusters()) {
+			inspectCluster(cluster.get(), grassCount, grassBytes, seenGrass);
+		}
+		std::string grassLabel = std::format("Grass Cluster BLAS ({} structures)", grassCount);
+		entries.emplace_back(grassLabel.c_str(), grassBytes);
+		totalBytes += grassBytes;
+
+		if (blasManager) {
+			uint32_t pendingCount = 0;
+			uint64_t pendingBytes = 0;
+			blasManager->GetPendingBLASMemoryStats(pendingCount, pendingBytes);
+			std::string pendingLabel = std::format("Pending Release BLAS ({} structures)", pendingCount);
+			entries.emplace_back(pendingLabel.c_str(), pendingBytes);
+			totalBytes += pendingBytes;
 		}
 
 		if (auto* renderer = Renderer::GetSingleton()) {

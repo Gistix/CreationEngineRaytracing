@@ -242,3 +242,15 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 		}
 		outTransformBytes = m_SharedTransformBuffer ? m_SharedTransformBuffer->getDesc().byteSize : 0;
 	}
+
+	void BLASManager::GetPendingBLASMemoryStats(uint32_t& outPendingCount, uint64_t& outPendingBytes) const
+	{
+		std::scoped_lock lock(m_ReleaseMutex);
+		outPendingCount = static_cast<uint32_t>(m_PendingReleases.size());
+		outPendingBytes = 0;
+		for (const auto& p : m_PendingReleases) {
+			if (p.blas) {
+				outPendingBytes += p.blas->getBufferSize();
+			}
+		}
+	}
