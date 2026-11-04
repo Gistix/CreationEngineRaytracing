@@ -433,7 +433,7 @@ half GetVertexColorAlpha(in ByteAddressBuffer vertices, in VertexDesc vertexDesc
         return half(((packed >> 24) & 0xFF) * BYTE_NORM_RCP);
     }
 
-    return (half)0;
+    return (half)1;
 }
 
 void GetTriangleTexcoords(

@@ -54,7 +54,8 @@ bool ConsiderTransparentMaterial(uint instanceIndex, uint geometryIndex, uint pr
         {
             // Slim fetch: only Texcoord0 (and rarely the vertex color alpha) is
             // needed here; loading full Vertex structs costs ~5x the traffic.
-            const bool wantColorAlpha = (props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim);
+            const bool wantColorAlpha = (props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim)
+                && mesh.VertexDesc.HasFlag(VertexFlags::Colors);
             GetTriangleTexcoords(mesh, primitiveIndex, wantColorAlpha, texcoord0, texcoord1, texcoord2, alpha0, alpha1, alpha2);
 
             if (wantColorAlpha)
@@ -210,7 +211,8 @@ bool ConsiderTransparentMaterialShadow(uint instanceIndex, uint geometryIndex, u
 
     MaterialBaseData baseMaterial = Materials[0].Load<MaterialBaseData>(mesh.GetMaterialOffset());
     const float3 uvw = GetBary(barycentrics);
-    const bool wantColorAlpha = (props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim);
+    const bool wantColorAlpha = (props.ShaderFlags & ShaderFlags::kVertexAlpha) && !(props.ShaderFlags & ShaderFlags::kTreeAnim)
+        && mesh.VertexDesc.HasFlag(VertexFlags::Colors);
 
     if (baseMaterial.Type == Type::Water)
     {
