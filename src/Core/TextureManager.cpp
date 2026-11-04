@@ -42,12 +42,21 @@ TextureManager::TextureManager()
 
 uint64_t TextureManager::GetFakeDoubledVRAMUsage()
 {
+	std::scoped_lock lock(m_TexturesMutex);
 	uint64_t vramUsage = 0;
 
 	for (const auto& [key, texture]: m_Textures)
 	{
 		if (texture)
 			vramUsage += texture->size;
+	}
+
+	{
+		std::scoped_lock queueLock(m_ReleaseQueue->mutex);
+		for (const auto& pending : m_ReleaseQueue->textures) {
+			if (pending.texture)
+				vramUsage += pending.texture->size;
+		}
 	}
 
 	return vramUsage;
@@ -58,8 +67,36 @@ void TextureManager::ReleaseTexture(RE::BSGraphics::Texture* texture)
 	if (!texture)
 		return;
 
-	std::scoped_lock lock(m_TexturesMutex);
-	m_Textures.erase(reinterpret_cast<ID3D11Resource*>(texture->texture));
+	eastl::unique_ptr<TextureReference> released;
+	{
+		std::scoped_lock lock(m_TexturesMutex);
+		auto it = m_Textures.find(reinterpret_cast<ID3D11Resource*>(texture->texture));
+		if (it == m_Textures.end())
+			return;
+
+		released = eastl::move(it->second);
+		m_Textures.erase(it);
+	}
+
+	std::scoped_lock lock(m_ReleaseQueue->mutex);
+	m_ReleaseQueue->textures.push_back({ eastl::move(released), UINT64_MAX });
+}
+
+void TextureManager::ProcessPendingReleases(uint64_t completedFence, uint64_t lastSubmittedFence)
+{
+	eastl::vector<eastl::unique_ptr<TextureReference>> released;
+	{
+		std::scoped_lock lock(m_ReleaseQueue->mutex);
+		auto& pending = m_ReleaseQueue->textures;
+		pending.erase(eastl::remove_if(pending.begin(), pending.end(), [&](PendingRelease& entry) {
+			if (entry.fence == UINT64_MAX)
+				entry.fence = lastSubmittedFence;
+			if (entry.fence > completedFence)
+				return false;
+			released.push_back(eastl::move(entry.texture));
+			return true;
+		}), pending.end());
+	}
 }
 
 eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics::Texture* texture, TextureType textureType)
@@ -221,6 +258,8 @@ eastl::shared_ptr<DescriptorHandle> TextureManager::GetDescriptor(RE::BSGraphics
 			it->second = eastl::make_unique<TextureReference>(textureHandle, m_TextureDescriptors->m_DescriptorTable.get());
 		else
 			it->second = eastl::make_unique<TextureReference>(textureHandle, m_CubemapDescriptors->m_DescriptorTable.get());
+
+		it->second->sourceTexture.copy_from(d3d11Resource);
 
 		return it->second->descriptorHandle;
 	}
