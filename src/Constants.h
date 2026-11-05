@@ -27,9 +27,7 @@ namespace Constants
 	static constexpr uint32_t NUM_MESHES_MIN = 1024;
 	static constexpr uint32_t NUM_MESHES_MAX = 32 * 1024;
 
-	static constexpr uint32_t NUM_MATERIALS_MIN = 1024;
-	static constexpr uint32_t NUM_MATERIALS_THRESHOLD = 256;
-	static constexpr uint32_t NUM_MATERIALS_STEP = 512;
+	static constexpr uint32_t MATERIAL_BUFFER_BYTES = 2 * 1024 * 1024;
 
 	static constexpr uint32_t TLAS_INSTANCES_MIN = 2048;
 	static constexpr uint32_t TLAS_INSTANCES_THRESHOLD = 256;

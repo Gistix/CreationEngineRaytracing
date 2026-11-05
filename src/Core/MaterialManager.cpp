@@ -47,7 +47,7 @@
 #include <typeinfo>
 
 MaterialManager::MaterialManager()
-	: m_Slots(kSizeReference, Constants::NUM_MATERIALS_MIN, Constants::NUM_MATERIALS_STEP)
+	: m_Slots(kSizeReference, Constants::MATERIAL_BUFFER_BYTES)
 {
 	auto device = Renderer::GetSingleton()->GetDevice();
 
@@ -85,16 +85,9 @@ void MaterialManager::BindBuffer()
 	device->writeDescriptorTable(m_Descriptors->m_DescriptorTable, nvrhi::BindingSetItem::RawBuffer_SRV(0, m_Buffer));
 }
 
-void MaterialManager::Grow()
+void MaterialManager::Release(uint64_t offset, size_t size)
 {
-	CreateBuffer();
-
-	m_Slots.MarkAllDirty();
-}
-
-void MaterialManager::Release(uint64_t offset)
-{
-	m_Slots.Release(offset);
+	m_Slots.Release(offset, size);
 }
 
 eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderProperty* shaderProperty)
@@ -125,7 +118,8 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderProperty* shade
 		}
 	}
 
-	auto offset = m_Slots.Allocate();
+	// The block size depends on the material type, so the block is allocated once the material exists.
+	constexpr uint64_t offset = MaterialAllocator::INVALID_OFFSET;
 
 	auto type = shaderMaterial->GetType();
 #if defined(SKYRIM)
@@ -251,6 +245,13 @@ eastl::shared_ptr<MaterialBase> MaterialManager::Get(RE::BSShaderProperty* shade
 			material = eastl::make_shared<MaterialBase>(shaderMaterial, offset);
 	}
 
+	const auto allocation = m_Slots.Allocate(material->GetDataSize());
+
+	// Meshes treat a null material as not ready and are skipped.
+	if (allocation.offset == MaterialAllocator::INVALID_OFFSET)
+		return nullptr;
+
+	material->SetAllocation(allocation.offset, allocation.size);
 	material->SetManager(shared_from_this());
 
 	if (isEmplaced)
@@ -268,8 +269,8 @@ void MaterialManager::Update(MaterialBase* material)
 	const uint64_t offset = material->GetOffset();
 	const size_t size = material->GetDataSize();
 
-	if (size > kSizeReference) {
-		logger::critical("MaterialManager::Write - material data exceeds the reference slot size");
+	if (size > material->GetAllocatedSize()) {
+		logger::critical("MaterialManager::Write - material data ({} bytes) exceeds its allocated block ({} bytes)", size, material->GetAllocatedSize());
 		return;
 	}
 
@@ -283,9 +284,6 @@ void MaterialManager::Update(MaterialBase* material)
 
 void MaterialManager::Flush(nvrhi::ICommandList* commandList)
 {
-	if (m_Slots.ConsumeGrowFlag() || m_Buffer->getDesc().byteSize < m_Slots.GetCapacity())
-		Grow();
-
 	auto dirtyRanges = m_Slots.ConsumeDirtyRanges();
 
 	for (const auto& [offset, size] : dirtyRanges) {

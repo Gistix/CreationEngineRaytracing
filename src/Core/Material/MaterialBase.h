@@ -41,6 +41,14 @@ struct MaterialBase
 
 	uint64_t GetOffset() const { return m_Offset; }
 
+	size_t GetAllocatedSize() const { return m_AllocatedSize; }
+
+	void SetAllocation(uint64_t offset, size_t size)
+	{
+		m_Offset = offset;
+		m_AllocatedSize = size;
+	}
+
 	// Material has to be aligned to 4 bytes by design, so we compress the offset to send as a uint32_t
 	uint32_t GetOffsetComp() const { return static_cast<uint32_t>(m_Offset / 4); }
 
@@ -62,6 +70,9 @@ struct MaterialBase
 
 	// Material buffer offset
 	uint64_t m_Offset = 0;
+
+	// Size of the block allocated in the material buffer, 0 if there is none
+	size_t m_AllocatedSize = 0;
 
 	// Material data sent to the GPU
 	eastl::unique_ptr<Data> m_Data;

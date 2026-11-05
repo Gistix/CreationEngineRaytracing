@@ -15,13 +15,16 @@ MaterialBase::MaterialBase(RE::BSShaderMaterial* shaderMaterial, uint64_t offset
 
 MaterialBase::~MaterialBase()
 {
+	if (m_AllocatedSize == 0)
+		return;
+
 	auto managerPtr = m_Manager.lock();
 	if (!managerPtr) {
 		logger::error("Missing material manager during material destruction");
 		return;
 	}
 
-	managerPtr->Release(m_Offset);
+	managerPtr->Release(m_Offset, m_AllocatedSize);
 }
 
 void MaterialBase::SetManager(const eastl::shared_ptr<MaterialManager>& managerPtr)

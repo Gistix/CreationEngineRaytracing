@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/ResourceSlotManager.h"
+#include "Core/MaterialAllocator.h"
 #include "Core/Texture.h"
 #include "Core/TextureManager.h"
 #include "Core/Material/MaterialBase.h"
@@ -42,18 +42,18 @@ class MaterialManager : public eastl::enable_shared_from_this<MaterialManager>
 		sizeof(EffectMaterialData),
 		sizeof(WaterMaterialData)
 	});
+	static_assert(kSizeReference % 4 == 0, "Material offsets must stay aligned to 4 bytes");
 
 	eastl::unordered_map<RE::BSShaderMaterial*, eastl::weak_ptr<MaterialBase>> m_Material;
 	mutable std::mutex m_MaterialMutex;
 
-	ResourceSlotManager m_Slots;
+	MaterialAllocator m_Slots;
 
 	nvrhi::BufferHandle m_Buffer;
 	eastl::unique_ptr<BindlessTable> m_Descriptors;
 
 	void CreateBuffer();
 	void BindBuffer();
-	void Grow();
 public:
 	MaterialManager();
 
@@ -61,7 +61,7 @@ public:
 	inline auto& GetDescriptors() const { return m_Descriptors; }
 
 	eastl::shared_ptr<MaterialBase> Get(RE::BSShaderProperty* shaderProperty);
-	void Release(uint64_t offset);
+	void Release(uint64_t offset, size_t size);
 
 	void Update(MaterialBase* material);
 	void Flush(nvrhi::ICommandList* commandList);
