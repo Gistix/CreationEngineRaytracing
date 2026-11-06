@@ -422,8 +422,11 @@ namespace VRAMTracker
 		if (!textureManager)
 			return 0;
 
-		std::scoped_lock lock(textureManager->m_TexturesMutex);
-		uint32_t count = static_cast<uint32_t>(textureManager->m_Textures.size());
+		uint32_t count = 0;
+		{
+			std::scoped_lock lock(textureManager->m_TexturesMutex);
+			count = static_cast<uint32_t>(textureManager->m_Textures.size());
+		}
 		uint64_t totalBytes = textureManager->GetFakeDoubledVRAMUsage();
 
 		std::string label = std::format("Shared Game Textures ({} textures, non-additive)", count);
