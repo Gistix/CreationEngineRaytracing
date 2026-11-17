@@ -302,15 +302,11 @@ uint32_t BLASCluster::Update()
 					if (geomTris.ommIndexBuffer)
 						bufferRefs.push_back(geomTris.ommIndexBuffer);
 
-					if (hasRelTransform) {
-						const uint64_t transformOffset = blasManager->StageRelativeTransform(relTransform);
-						geomDesc.setTransformBuffer(blasManager->GetSharedTransformBuffer(), transformOffset);
-						geomDesc.useTransform = true;
-					} else {
-						geomDesc.transformBuffer = nullptr;
-						geomDesc.transformBufferOffset = 0;
-						geomDesc.useTransform = false;
-					}
+					// The shared transform buffer slot is assigned by BLASManager, and only when this
+					// key misses the cache; the relative transform itself travels in the key.
+					geomDesc.transformBuffer = nullptr;
+					geomDesc.transformBufferOffset = 0;
+					geomDesc.useTransform = hasRelTransform;
 
 					sharedDescs.push_back(geomDesc);
 
@@ -336,7 +332,7 @@ uint32_t BLASCluster::Update()
 			auto buildFlags = MakeDesc(BuildMode::Rebuild).buildFlags;
 			m_BLASResource = blasManager->GetOrCreateSharedBLAS(key, sharedDescs, buildFlags, bufferRefs, m_Name);
 			m_BLAS = m_BLASResource->m_BLAS;
-			m_GeometryDescs = sharedDescs;
+			m_GeometryDescs = m_BLASResource->m_GeometryDescs;
 		}
 	}
 	else if (m_DirtyFlags.any(DirtyFlags::Transform) && m_BLASResource && m_BLASResource->m_IsShared) {

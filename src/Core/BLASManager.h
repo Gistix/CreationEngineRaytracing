@@ -129,6 +129,10 @@ struct BLASGeometryKey
 		nvrhi::rt::AccelStructBuildFlags m_BuildFlags = nvrhi::rt::AccelStructBuildFlags::None;
 		std::vector<nvrhi::BufferHandle> m_BufferRefs;
 
+		// Shared transform buffer slots this resource holds a reference on (shared resources only).
+		// Owned by BLASManager: acquired on creation, released when the resource is evicted.
+		std::vector<uint32_t> m_TransformSlots;
+
 		eastl::string m_DebugName;
 		uint64_t m_LastBuildFrame = Constants::INVALID_FRAME_INDEX;
 		uint64_t m_LastUsedFrame = Constants::INVALID_FRAME_INDEX;
@@ -149,7 +153,9 @@ struct BLASGeometryKey
 		explicit BLASManager(nvrhi::IDevice* device = nullptr);
 		~BLASManager() = default;
 
-		// Look up or register a shared BLAS resource for static single/multi-mesh or orphan geometry
+		// Look up or register a shared BLAS resource for static single/multi-mesh or orphan geometry.
+		// On a cache miss, each geometry whose key has a relative transform gets a slot in the shared
+		// transform buffer (descs[i] pairs with key.geometries[i]); cache hits allocate nothing.
 		eastl::shared_ptr<BLASResource> GetOrCreateSharedBLAS(
 			const BLASKey& key,
 			const std::vector<nvrhi::rt::GeometryDesc>& descs,
@@ -164,10 +170,8 @@ struct BLASGeometryKey
 			const std::vector<nvrhi::BufferHandle>& bufferRefs,
 			const eastl::string& debugName);
 
-		// Staging of relative transforms for multi-mesh BLAS geometries during Phase G
-		uint64_t StageRelativeTransform(const float3x4& transform);
-
-		// Flushes any staged relative transforms to GPU memory before BLAS building
+		// Uploads relative transforms staged since the last flush, growing the GPU buffer if the
+		// slot count outgrew it. Render thread only; called before every BLAS build.
 		void FlushTransforms(nvrhi::ICommandList* commandList);
 
 		// Builds or refits the specified BLAS resource if dirty or needed
@@ -179,7 +183,6 @@ struct BLASGeometryKey
 		// Periodic maintenance: releases unreferenced BLASes after GPU fence completion
 		void ProcessPendingReleases(uint64_t completedFence, uint64_t currentFrame);
 
-		[[nodiscard]] nvrhi::IBuffer* GetSharedTransformBuffer() const noexcept { return m_SharedTransformBuffer; }
 		[[nodiscard]] size_t GetCachedBLASCount() const;
 		[[nodiscard]] size_t GetDedicatedBLASCount() const;
 		void GetBLASMemoryStats(uint32_t& outSharedCount, uint64_t& outSharedBytes, uint64_t& outTransformBytes) const;
@@ -191,13 +194,47 @@ struct BLASGeometryKey
 		mutable std::shared_mutex m_CacheMutex;
 		ankerl::unordered_dense::map<BLASKey, eastl::shared_ptr<BLASResource>, BLASKeyHash> m_SharedCache;
 
-		// Shared static transform buffer for multi-mesh relative transforms
-		static constexpr size_t kMaxSharedTransforms = 4096;
+		// Shared static transform buffer for multi-mesh relative transforms.
+		//
+		// Slots are deduplicated by value and reference counted: every shared BLASResource holds one
+		// reference per transformed geometry and drops them when it is evicted from the cache, after
+		// which the slot is recycled. Lock order is m_CacheMutex -> m_TransformMutex.
+		struct TransformKey
+		{
+			float3x4 value;
+
+			bool operator==(const TransformKey& other) const noexcept
+			{
+				return std::memcmp(&value, &other.value, sizeof(float3x4)) == 0;
+			}
+		};
+
+		struct TransformKeyHash
+		{
+			using is_avalanching = void;
+			size_t operator()(const TransformKey& key) const noexcept
+			{
+				return static_cast<size_t>(ankerl::unordered_dense::detail::wyhash::hash(&key.value, sizeof(float3x4)));
+			}
+		};
+
+		static constexpr uint32_t kInitialSharedTransforms = 4096;
+
+		nvrhi::BufferHandle CreateTransformBuffer(uint32_t capacity) const;
+
+		// Both require m_TransformMutex to be held.
+		uint32_t AcquireTransformSlot(const float3x4& transform);
+		void ReleaseTransformSlots(const std::vector<uint32_t>& slots);
+
 		nvrhi::BufferHandle m_SharedTransformBuffer;
-		std::mutex m_TransformMutex;
-		std::vector<float3x4> m_StagedTransforms;
-		uint32_t m_NextTransformSlot = 0;
-		uint32_t m_UploadedTransformCount = 0;
+		uint32_t m_TransformBufferCapacity = 0; // slots the GPU buffer can hold
+		mutable std::mutex m_TransformMutex;
+		std::vector<float3x4> m_StagedTransforms;    // CPU mirror, indexed by slot
+		std::vector<uint32_t> m_TransformRefCounts;  // per slot; 0 = free
+		std::vector<uint32_t> m_FreeTransformSlots;
+		ankerl::unordered_dense::map<TransformKey, uint32_t, TransformKeyHash> m_TransformSlotLookup;
+		uint32_t m_DirtyTransformBegin = UINT32_MAX; // slot range awaiting upload, [begin, end)
+		uint32_t m_DirtyTransformEnd = 0;
 
 		struct PendingRelease
 		{

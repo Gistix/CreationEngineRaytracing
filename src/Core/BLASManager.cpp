@@ -5,6 +5,9 @@
 
 #include <nvrhi/utils.h>
 
+#include <algorithm>
+#include <cassert>
+
 void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 {
 		if (!buffer)
@@ -24,16 +27,23 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 		: m_Device(device)
 	{
 		m_StagedTransforms.reserve(256);
+		m_TransformRefCounts.reserve(256);
 
+		m_TransformBufferCapacity = kInitialSharedTransforms;
+		m_SharedTransformBuffer = CreateTransformBuffer(m_TransformBufferCapacity);
+	}
+
+	nvrhi::BufferHandle BLASManager::CreateTransformBuffer(uint32_t capacity) const
+	{
 		auto desc = nvrhi::BufferDesc()
-			.setByteSize(kMaxSharedTransforms * sizeof(float3x4))
+			.setByteSize(static_cast<uint64_t>(capacity) * sizeof(float3x4))
 			.setCanHaveRawViews(true)
 			.setIsAccelStructBuildInput(true)
 			.setInitialState(nvrhi::ResourceStates::AccelStructBuildInput)
 			.setKeepInitialState(true)
 			.setDebugName("BLASManager SharedTransforms");
 
-		m_SharedTransformBuffer = m_Device->createBuffer(desc);
+		return m_Device->createBuffer(desc);
 	}
 
 	eastl::shared_ptr<BLASResource> BLASManager::GetOrCreateSharedBLAS(
@@ -72,6 +82,38 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 		resource->m_IsDirty = true;
 		resource->m_IsUpdatable = false;
 
+		// Give every transformed geometry a slot in the shared transform buffer. Only the offset is
+		// stored here; BuildResource binds the buffer itself, since it can be replaced when it grows.
+		if (key.geometries.size() != resource->m_GeometryDescs.size()) {
+			// descs[i] must pair with key.geometries[i]. Without that pairing no slot can be assigned
+			// safely, so build untransformed rather than bind another geometry's transform.
+			logger::error("BLASManager: '{}' has {} geometry descs but {} key geometries; relative transforms dropped",
+				debugName.c_str(), resource->m_GeometryDescs.size(), key.geometries.size());
+
+			for (auto& geometryDesc : resource->m_GeometryDescs) {
+				geometryDesc.transformBuffer = nullptr;
+				geometryDesc.transformBufferOffset = 0;
+				geometryDesc.useTransform = false;
+			}
+		} else {
+			const size_t geometryCount = key.geometries.size();
+
+			std::scoped_lock transformLock(m_TransformMutex);
+			for (size_t i = 0; i < geometryCount; ++i) {
+				const auto& geometryKey = key.geometries[i];
+				if (!geometryKey.hasRelativeTransform)
+					continue;
+
+				const uint32_t slot = AcquireTransformSlot(geometryKey.relativeTransform);
+				resource->m_TransformSlots.push_back(slot);
+
+				auto& geometryDesc = resource->m_GeometryDescs[i];
+				geometryDesc.transformBuffer = nullptr;
+				geometryDesc.transformBufferOffset = static_cast<uint64_t>(slot) * sizeof(float3x4);
+				geometryDesc.useTransform = true;
+			}
+		}
+
 		m_SharedCache[key] = resource;
 		return resource;
 	}
@@ -97,39 +139,78 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 		return resource;
 	}
 
-	uint64_t BLASManager::StageRelativeTransform(const float3x4& transform)
+	uint32_t BLASManager::AcquireTransformSlot(const float3x4& transform)
 	{
-		std::scoped_lock lock(m_TransformMutex);
+		// Identical transforms share one slot.
+		auto [it, inserted] = m_TransformSlotLookup.try_emplace(TransformKey{ transform }, 0u);
+		if (!inserted) {
+			++m_TransformRefCounts[it->second];
+			return it->second;
+		}
 
-		// Check if identical transform is already staged
-		for (size_t i = 0; i < m_StagedTransforms.size(); ++i) {
-			if (std::memcmp(&m_StagedTransforms[i], &transform, sizeof(float3x4)) == 0) {
-				return static_cast<uint64_t>(i * sizeof(float3x4));
+		uint32_t slot;
+		if (!m_FreeTransformSlots.empty()) {
+			slot = m_FreeTransformSlots.back();
+			m_FreeTransformSlots.pop_back();
+			m_StagedTransforms[slot] = transform;
+		} else {
+			// Grows the CPU mirror only; FlushTransforms resizes the GPU buffer on the render thread.
+			slot = static_cast<uint32_t>(m_StagedTransforms.size());
+			m_StagedTransforms.push_back(transform);
+			m_TransformRefCounts.push_back(0);
+		}
+
+		it->second = slot;
+		m_TransformRefCounts[slot] = 1;
+
+		m_DirtyTransformBegin = std::min(m_DirtyTransformBegin, slot);
+		m_DirtyTransformEnd = std::max(m_DirtyTransformEnd, slot + 1);
+
+		return slot;
+	}
+
+	void BLASManager::ReleaseTransformSlots(const std::vector<uint32_t>& slots)
+	{
+		for (const uint32_t slot : slots) {
+			assert(slot < m_TransformRefCounts.size() && m_TransformRefCounts[slot] > 0);
+			if (--m_TransformRefCounts[slot] == 0) {
+				m_TransformSlotLookup.erase(TransformKey{ m_StagedTransforms[slot] });
+				m_FreeTransformSlots.push_back(slot);
 			}
 		}
-
-		if (m_NextTransformSlot >= kMaxSharedTransforms) {
-			logger::error("BLASManager: Shared transform buffer capacity exceeded ({})", kMaxSharedTransforms);
-			return 0;
-		}
-
-		const uint32_t slot = m_NextTransformSlot++;
-		m_StagedTransforms.push_back(transform);
-		return static_cast<uint64_t>(slot * sizeof(float3x4));
 	}
 
 	void BLASManager::FlushTransforms(nvrhi::ICommandList* commandList)
 	{
 		std::scoped_lock lock(m_TransformMutex);
 
-		if (m_NextTransformSlot > m_UploadedTransformCount && m_SharedTransformBuffer) {
-			const size_t newCount = m_NextTransformSlot - m_UploadedTransformCount;
-			const size_t byteOffset = m_UploadedTransformCount * sizeof(float3x4);
-			const size_t byteSize = newCount * sizeof(float3x4);
+		if (m_DirtyTransformBegin >= m_DirtyTransformEnd)
+			return;
 
-			commandList->writeBuffer(m_SharedTransformBuffer, &m_StagedTransforms[m_UploadedTransformCount], byteSize, byteOffset);
-			m_UploadedTransformCount = m_NextTransformSlot;
+		// Out of GPU slots: replace the buffer with a larger one and re-upload every slot. Builds
+		// already recorded keep the old buffer alive through their command list.
+		const uint32_t slotCount = static_cast<uint32_t>(m_StagedTransforms.size());
+		if (slotCount > m_TransformBufferCapacity) {
+			uint32_t capacity = m_TransformBufferCapacity;
+			while (capacity < slotCount)
+				capacity *= 2;
+
+			logger::info("BLASManager: Growing shared transform buffer from {} to {} slots", m_TransformBufferCapacity, capacity);
+
+			m_SharedTransformBuffer = CreateTransformBuffer(capacity);
+			m_TransformBufferCapacity = capacity;
+
+			m_DirtyTransformBegin = 0;
+			m_DirtyTransformEnd = slotCount;
 		}
+
+		const size_t byteOffset = static_cast<size_t>(m_DirtyTransformBegin) * sizeof(float3x4);
+		const size_t byteSize = static_cast<size_t>(m_DirtyTransformEnd - m_DirtyTransformBegin) * sizeof(float3x4);
+
+		commandList->writeBuffer(m_SharedTransformBuffer, &m_StagedTransforms[m_DirtyTransformBegin], byteSize, byteOffset);
+
+		m_DirtyTransformBegin = UINT32_MAX;
+		m_DirtyTransformEnd = 0;
 	}
 
 	void BLASManager::BuildResource(
@@ -161,6 +242,15 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 
 		blasDesc.buildFlags = resource->m_BuildFlags;
 		blasDesc.bottomLevelGeometries = resource->m_GeometryDescs;
+
+		// Shared resources store only their slot offset; bind the current buffer (FlushTransforms
+		// above may have just replaced it).
+		if (resource->m_IsShared) {
+			for (auto& geometryDesc : blasDesc.bottomLevelGeometries) {
+				if (geometryDesc.useTransform)
+					geometryDesc.transformBuffer = m_SharedTransformBuffer;
+			}
+		}
 
 		const bool allocate = !resource->m_BLAS;
 		bool needsAllocation = allocate;
@@ -201,6 +291,15 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 						std::scoped_lock rLock(m_ReleaseMutex);
 						m_PendingReleases.push_back({ eastl::move(it->second->m_BLAS), Renderer::GetSingleton()->GetLastSubmittedFence() });
 					}
+
+					// Only the cache references this resource (use_count == 1), so no cluster - and
+					// therefore no TLAS instance, build or hit - can still resolve to its slots.
+					if (!it->second->m_TransformSlots.empty()) {
+						std::scoped_lock transformLock(m_TransformMutex);
+						ReleaseTransformSlots(it->second->m_TransformSlots);
+						it->second->m_TransformSlots.clear();
+					}
+
 					it = m_SharedCache.erase(it);
 				} else {
 					++it;
@@ -240,7 +339,11 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 				outSharedBytes += res->GetAllocatedMemory();
 			}
 		}
-		outTransformBytes = m_SharedTransformBuffer ? m_SharedTransformBuffer->getDesc().byteSize : 0;
+
+		// The buffer handle is replaced on the render thread when it grows; read the capacity under
+		// its mutex instead of touching the handle.
+		std::scoped_lock transformLock(m_TransformMutex);
+		outTransformBytes = static_cast<uint64_t>(m_TransformBufferCapacity) * sizeof(float3x4);
 	}
 
 	void BLASManager::GetPendingBLASMemoryStats(uint32_t& outPendingCount, uint64_t& outPendingBytes) const
