@@ -958,15 +958,25 @@ void Main()
         
 #if defined(RAW_RADIANCE)
         float3 throughputDelta = float3(1.0f, 1.0f, 1.0f);
-#endif        
-        
+#endif
+
+        float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+#if LIGHTING_MODE != LIGHTING_MODE_DIFFUSE
+        BSDFSample nextBsdfSample;
+        bool nextBsdfValid;
+        {
+            float4 scatterSamples;
+            float2 scatterExtraSamples;
+            GenerateScatterBSDFSamples(idx, sampleIndex, 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+            nextBsdfValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, nextBsdfSample, scatterSamples, scatterExtraSamples);
+        }
+#endif
+
         [loop]
         for (uint j = 0; j < MAX_BOUNCES; j++)
         {
             BSDFSample bsdfSample;
             bool isPrimaryReplacement = false;
-            
-            float3 faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;            
 
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES
 #   if defined(RESTIR_GI)
@@ -994,11 +1004,9 @@ void Main()
             
             const bool hasTransmission = false;
 #else            
-            float4 scatterSamples;
-            float2 scatterExtraSamples;
-            GenerateScatterBSDFSamples(idx, sampleIndex, j + 1, diffuseBounceCount, scatterSamples, scatterExtraSamples);
-            bool isValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, bsdfSample, scatterSamples, scatterExtraSamples);
-            
+            bsdfSample = nextBsdfSample;
+            bool isValid = nextBsdfValid;
+
             if (isValid)
                 direction = bsdfSample.wo;
             else
@@ -1326,11 +1334,39 @@ void Main()
             AdjustShadingNormal(surface, brdfContext, true, false);  // Adjusts the normal of the supplied shading frame to reduce black pixels due to back-facing view direction.
             bsdf = StandardBSDF::make(surface, surface.Normal, brdfContext.ViewDirection, isEnter);
 
+            faceNormalOriented = dot(brdfContext.ViewDirection, surface.FaceNormal) >= 0.0f ? surface.FaceNormal : -surface.FaceNormal;
+#if LIGHTING_MODE != LIGHTING_MODE_DIFFUSE
+            if (j + 1 < MAX_BOUNCES)
+            {
+                float4 scatterSamples;
+                float2 scatterExtraSamples;
+                GenerateScatterBSDFSamples(idx, sampleIndex, j + 2, diffuseBounceCount, scatterSamples, scatterExtraSamples);
+                nextBsdfValid = bsdf.SampleBSDF(brdfContext, material.Feature, surface, nextBsdfSample, scatterSamples, scatterExtraSamples);
+            }
+            else
+            {
+                nextBsdfValid = false;
+                nextBsdfSample = (BSDFSample)0;
+            }
+#endif
+
             // Direct lighting with delta lobe support
             float3 directRadiance = 0.0f;
             const uint bounceLobes = bsdf.GetLobes(surface);
             const bool bounceHasNonDeltaLobes = (bounceLobes & (uint)LobeType::NonDelta) != 0;
             const bool bounceHasDeltaLobes = (bounceLobes & (uint)LobeType::Delta) != 0;
+
+            DeltaLobe bounceDeltaLobes[cMaxDeltaLobes];
+            [unroll]
+            for (uint lobe = 0; lobe < cMaxDeltaLobes; lobe++)
+                bounceDeltaLobes[lobe] = DeltaLobe::make();
+
+            if (bounceHasDeltaLobes)
+            {
+                int deltaLobeCount;
+                float nonDeltaPart;
+                bsdf.EvalDeltaLobes(brdfContext, surface, bounceDeltaLobes, deltaLobeCount, nonDeltaPart);
+            }
             
             if (bounceHasNonDeltaLobes)
             {
@@ -1340,7 +1376,7 @@ void Main()
             // Delta lobe lighting: check if delta reflection/refraction directions see any analytical lights
             if (bounceHasDeltaLobes)
             {
-                directRadiance += EvalDeltaLobeLighting(surface, brdfContext, instance, bsdf, randomSeed, surface.Primary);
+                directRadiance += EvalDeltaLobeLighting(surface, instance, bounceDeltaLobes, randomSeed, surface.Primary);
             }
             
 #if PATH_TRACER_MODE == PATH_TRACER_MODE_FILL_STABLE_PLANES

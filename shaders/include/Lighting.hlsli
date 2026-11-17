@@ -44,9 +44,7 @@ float2 EvalHemiUV(float3 dir)
     dir.z = max(dir.z, 0.0f);
 
     float r = sqrt(1.0f - dir.z);
-    float phi = atan2(dir.y, dir.x);
-
-    float2 disk = float2(cos(phi), sin(phi)) * r;
+    float2 disk = dir.xy * (r * rsqrt(max(dot(dir.xy, dir.xy), 1e-30f)));
     return disk * 0.5f + 0.5f;
 }
 
@@ -63,6 +61,9 @@ float3 SampleSky(Texture2D<float4> SkyHemisphere, float3 dir)
 
 float EvalSkyOcclusion(Texture2D<float4> SkyHemisphere, float3 dir, float opacity)
 {
+    if (opacity == 0.0f)
+        return 1.0f;
+
     float2 uv = EvalHemiUV(dir);
 
     return lerp(1.0f, 1.0f - SkyHemisphere.SampleLevel(DefaultSampler, uv, 0.0f).a, opacity);
@@ -115,47 +116,6 @@ void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout u
     // Correct MC weight for uniform cone sampling of a finite-size disk light.
     // Factor = 2/(1+cosα) → 1 for small angles (sun), matters for large celestial bodies.
     irradiance *= 2.0f / (1.0f + cosSunDisk);
-}
-
-float3 EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed)
-{
-    float3 irradiance;
-    float3 lr;
-    GetDirectionalLightIrradiance(irradiance, lr, randomSeed);
-    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * irradiance;
-    [branch]
-    if (any(direct > MIN_DIFFUSE_SHADOW))
-    {
-        direct *= TraceRayShadow(Scene, surface, lr, randomSeed);
-    }
-    else
-    {
-        direct = 0.0f;
-    }
-
-    return direct;
-}
-
-void EvalDirectionalLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in StandardBSDF bsdf, inout uint randomSeed, out float3 outDiffuse, out float3 outSpecular)
-{
-    float3 irradiance;
-    float3 lr;
-    GetDirectionalLightIrradiance(irradiance, lr, randomSeed);
-    EvalLight(lr, type, feature, surface, brdfContext, bsdf, outDiffuse, outSpecular);
-    outDiffuse *= irradiance;
-    outSpecular *= irradiance;
-    [branch]
-    if (any((outDiffuse + outSpecular) > MIN_DIFFUSE_SHADOW))
-    {
-        float3 shadow = TraceRayShadow(Scene, surface, lr, randomSeed);
-        outDiffuse *= shadow;
-        outSpecular *= shadow;
-    }
-    else
-    {
-        outDiffuse = 0.0f;
-        outSpecular = 0.0f;
-    }
 }
 
 float GetPointAttenuation(Light light, float dist, inout float lightSourceAngle)
@@ -327,92 +287,45 @@ int GetPointLightIrradiance(in InstanceLightData lightData, in Surface surface, 
 #endif
 }
 
-float3 EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed)
-{
-    float3 lightIrradiance;
-    float3 lr;
-    float dist;
-    
-    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
-
-    if (lightIndex < 0)
-        return 0.0f;
-    
-    float3 direct = EvalLight(lr, type, feature, surface, brdfContext, bsdf) * lightIrradiance;
-
-    [branch]
-    if (any(direct > MIN_DIFFUSE_SHADOW))
-    {
-        
-#if USE_LIGHT_TLAS    
-#   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
-#else
-#   define LIGHT_TLAS Scene     
-#endif
-        
-        direct *= TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
-    }
-    else
-    {
-        direct = 0.0f;
-    }
-
-    return direct;
-}
-
-void EvalPointLight(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in InstanceLightData lightData, in StandardBSDF bsdf, inout uint randomSeed, out float3 outDiffuse, out float3 outSpecular)
-{
-    float3 lightIrradiance;
-    float3 lr;
-    float dist;
-    
-    int lightIndex = GetPointLightIrradiance(lightData, surface, lightIrradiance, lr, dist, randomSeed);
-
-    if (lightIndex < 0)
-    {
-        outDiffuse = 0.0f;
-        outSpecular = 0.0f;
-        return;
-    }
-    
-    EvalLight(lr, type, feature, surface, brdfContext, bsdf, outDiffuse, outSpecular);
-    outDiffuse *= lightIrradiance;
-    outSpecular *= lightIrradiance;
-
-    [branch]
-    if (any((outDiffuse + outSpecular) > MIN_DIFFUSE_SHADOW))
-    {
-#if USE_LIGHT_TLAS    
-#   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
-#else
-#   define LIGHT_TLAS Scene     
-#endif
-        float3 shadow = TraceRayShadowFinite(LIGHT_TLAS, surface, lr, dist, randomSeed);
-        outDiffuse *= shadow;
-        outSpecular *= shadow;
-    }
-    else
-    {
-        outDiffuse = 0.0f;
-        outSpecular = 0.0f;
-    }
-}
-
 // Evaluate analytical lights for delta lobes specifically.
 // For delta (perfect mirror/glass) surfaces, the standard bsdf.Eval() returns 0 for any light direction.
 // Instead, we use EvalDeltaLobes to get the exact reflection/refraction directions and check whether
 // each delta direction falls within a light source's solid angle. If so, we contribute the delta lobe's
 // throughput multiplied by the light irradiance. This correctly handles sun glints, point light
 // reflections in mirrors, etc.
-float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance,
-                              in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
+float3 EvalDeltaLobeLighting(in Surface surface, in Instance instance, in DeltaLobe deltaLobes[cMaxDeltaLobes],
+                              inout uint randomSeed, bool isPrimary)
 {
-    DeltaLobe deltaLobes[cMaxDeltaLobes];
-    int deltaLobeCount;
-    float nonDeltaPart;
-    bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
-
     float3 totalRadiance = 0.0f;
+
+    const float3 sunDir = DIRECTIONAL_LIGHT.Direction;
+    const float cosSunDisk = cos(0.00465f);
+
+    bool anyLobeActive = false;
+    [unroll]
+    for (uint lobe = 0; lobe < cMaxDeltaLobes; lobe++)
+        anyLobeActive = anyLobeActive || (deltaLobes[lobe].probability > 0.0f);
+
+    bool hasPointLight = false;
+    int lightIndex = -1;
+    float3 lightIrradiance = 0.0f;
+    float3 dirToLight = 0.0f;
+    float lightDist = 0.0f;
+    float cosLightAngle = 1.0f;
+
+    if (anyLobeActive && instance.LightData.LightCount > 0)
+    {
+        float3 lr;
+        lightIndex = GetPointLightIrradiance(instance.LightData, surface, lightIrradiance, lr, lightDist, randomSeed);
+
+        if (lightIndex >= 0)
+        {
+            Light light = Lights[lightIndex];
+            cosLightAngle = cos(GetLightAngle(light, lightDist * GAME_UNIT_TO_M));
+            dirToLight = normalize(light.Position - surface.Position);
+            hasPointLight = true;
+        }
+    }
 
     [unroll]
     for (uint i = 0; i < cMaxDeltaLobes; i++)
@@ -425,15 +338,12 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
 
         // --- Directional Light (Sun) ---
         {
-            const float3 sunDir = DIRECTIONAL_LIGHT.Direction;            
-            float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, sunDir, Features.CloudShadows.Opacity);
-
-            // Sun angular radius ~0.00465 radians. Check if delta direction is within the sun disk.
-            float cosSunDisk = cos(0.00465f);
             float cosDelta = dot(deltaDir, sunDir);
 
             if (cosDelta >= cosSunDisk)
             {
+                float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, sunDir, Features.CloudShadows.Opacity);
+
                 // irradiance = E_sun (total flux/area from the sun).
                 // A delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
                 // Convert: L_sun = E_sun / Ω_proj, where Ω_proj = π·sin²α = π(1-cos²α)
@@ -448,67 +358,113 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
         }
 
         // --- Point Lights ---
-        if (instance.LightData.LightCount > 0)
+        if (hasPointLight && dot(deltaDir, dirToLight) >= cosLightAngle)
         {
-            // Evaluate delta lobe against each visible point light (using the same RIS selection as standard NEE)
-            float3 lightIrradiance;
-            float3 lr;
-            float dist;
-            int lightIndex = GetPointLightIrradiance(instance.LightData, surface, lightIrradiance, lr, dist, randomSeed);
-            
-            if (lightIndex >= 0)
-            {
-                // Compute the angular size of this light as seen from the surface
-                Light light = Lights[lightIndex];
-                float lightSourceAngle = GetLightAngle(light, dist * GAME_UNIT_TO_M);
-                
-                // Check if delta direction is within the light's angular extent
-                float3 dirToLight = normalize(light.Position - surface.Position);
-                float cosAngle = cos(lightSourceAngle);
-                float cosDelta = dot(deltaDir, dirToLight);
-                
-                if (cosDelta >= cosAngle)
-                {
-                    float3 contribution = deltaThroughput * lightIrradiance * (isPrimary ? 1.0f : Raytracing.Point);
-                    
-                    // Shadow ray toward the light
-#if USE_LIGHT_TLAS    
+            float3 contribution = deltaThroughput * lightIrradiance * (isPrimary ? 1.0f : Raytracing.Point);
+
+            // Shadow ray toward the light
+#if USE_LIGHT_TLAS
 #   define DELTA_LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
 #else
-#   define DELTA_LIGHT_TLAS Scene     
+#   define DELTA_LIGHT_TLAS Scene
 #endif
-                    contribution *= TraceRayShadowFinite(DELTA_LIGHT_TLAS, surface, deltaDir, dist, randomSeed);
-                    
-                    totalRadiance += contribution;
-                }
-            }
+            contribution *= TraceRayShadowFinite(DELTA_LIGHT_TLAS, surface, deltaDir, lightDist, randomSeed);
+
+            totalRadiance += contribution;
         }
     }
 
     return totalRadiance;
 }
 
+float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in Instance instance,
+                              in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
+{
+    DeltaLobe deltaLobes[cMaxDeltaLobes];
+    int deltaLobeCount;
+    float nonDeltaPart;
+    bsdf.EvalDeltaLobes(brdfContext, surface, deltaLobes, deltaLobeCount, nonDeltaPart);
+
+    return EvalDeltaLobeLighting(surface, instance, deltaLobes, randomSeed, isPrimary);
+}
+
+#if USE_LIGHT_TLAS
+#   define LIGHT_TLAS LightTLAS[NonUniformResourceIndex(lightIndex)]
+#else
+#   define LIGHT_TLAS Scene
+#endif
+
 float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
-    float3 radiance = EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
-    radiance += EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
+    float3 sunIrradiance;
+    float3 sunDir;
+    GetDirectionalLightIrradiance(sunIrradiance, sunDir, randomSeed);
+    float3 sunDirect = EvalLight(sunDir, type, feature, surface, brdfContext, bsdf) * sunIrradiance;
+
+    float3 pointIrradiance;
+    float3 pointDir;
+    float pointDist;
+    int lightIndex = GetPointLightIrradiance(instance.LightData, surface, pointIrradiance, pointDir, pointDist, randomSeed);
+
+    float3 pointDirect = 0.0f;
+    if (lightIndex >= 0)
+        pointDirect = EvalLight(pointDir, type, feature, surface, brdfContext, bsdf) * pointIrradiance;
+
+    float3 radiance = 0.0f;
+
+    [branch]
+    if (any(sunDirect > MIN_DIFFUSE_SHADOW))
+        radiance += sunDirect * TraceRayShadow(Scene, surface, sunDir, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
+
+    [branch]
+    if (any(pointDirect > MIN_DIFFUSE_SHADOW))
+        radiance += pointDirect * TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
 
     return radiance;
 }
 
 void EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary, out float3 outDiffuse, out float3 outSpecular)
 {
-    float3 dirDiff, dirSpec;
-    EvalDirectionalLight(type, feature, surface, brdfContext, bsdf, randomSeed, dirDiff, dirSpec);
-    float dirScale = (isPrimary ? 1.0f : Raytracing.Directional);
-    outDiffuse = dirDiff * dirScale;
-    outSpecular = dirSpec * dirScale;
+    float3 sunIrradiance;
+    float3 sunDir;
+    GetDirectionalLightIrradiance(sunIrradiance, sunDir, randomSeed);
+    float3 sunDiffuse, sunSpecular;
+    EvalLight(sunDir, type, feature, surface, brdfContext, bsdf, sunDiffuse, sunSpecular);
+    sunDiffuse *= sunIrradiance;
+    sunSpecular *= sunIrradiance;
 
-    float3 ptDiff, ptSpec;
-    EvalPointLight(type, feature, surface, brdfContext, instance.LightData, bsdf, randomSeed, ptDiff, ptSpec);
-    float ptScale = (isPrimary ? 1.0f : Raytracing.Point);
-    outDiffuse += ptDiff * ptScale;
-    outSpecular += ptSpec * ptScale;
+    float3 pointIrradiance;
+    float3 pointDir;
+    float pointDist;
+    int lightIndex = GetPointLightIrradiance(instance.LightData, surface, pointIrradiance, pointDir, pointDist, randomSeed);
+
+    float3 pointDiffuse = 0.0f;
+    float3 pointSpecular = 0.0f;
+    if (lightIndex >= 0)
+    {
+        EvalLight(pointDir, type, feature, surface, brdfContext, bsdf, pointDiffuse, pointSpecular);
+        pointDiffuse *= pointIrradiance;
+        pointSpecular *= pointIrradiance;
+    }
+
+    outDiffuse = 0.0f;
+    outSpecular = 0.0f;
+
+    [branch]
+    if (any((sunDiffuse + sunSpecular) > MIN_DIFFUSE_SHADOW))
+    {
+        float3 shadow = TraceRayShadow(Scene, surface, sunDir, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
+        outDiffuse += sunDiffuse * shadow;
+        outSpecular += sunSpecular * shadow;
+    }
+
+    [branch]
+    if (any((pointDiffuse + pointSpecular) > MIN_DIFFUSE_SHADOW))
+    {
+        float3 shadow = TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
+        outDiffuse += pointDiffuse * shadow;
+        outSpecular += pointSpecular * shadow;
+    }
 }
 
 void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 irradiance, out float3 lr, out float distance, inout uint randomSeed)
