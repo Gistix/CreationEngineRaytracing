@@ -22,7 +22,7 @@ INTEROP_STRUCT(RaytracingData, 16)
     float PixelConeSpreadAngle;
     float TexLODBias;
     uint NumLights;
-    uint Pad1;
+    uint NumDirectionalLights;
     float2 Roughness;
     float2 Metalness;
     float Emissive;
@@ -34,6 +34,7 @@ INTEROP_STRUCT(RaytracingData, 16)
     uint NumMeshes;
     float Point; 
     INTEROP_DATA_TYPE(Light) DirectionalLight;
+    INTEROP_DATA_TYPE(Light) DirectionalLight2;
     SubSurfaceScattering SubSurfaceScattering;
     float4 HitDistSettings;
     float3 WaterObjectUV;

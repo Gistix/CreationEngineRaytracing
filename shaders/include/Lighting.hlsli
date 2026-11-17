@@ -105,13 +105,57 @@ void EvalLight(in float3 l, in uint16_t type, in uint16_t feature, in Surface su
 #endif
 }
 
-void GetDirectionalLightIrradiance(out float3 irradiance, out float3 lr, inout uint randomSeed)
+// Light 0 is always valid (sun, or the brighter moon at night). Light 1 is the second moon at night.
+bool HasSecondDirectionalLight()
 {
-    irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, DIRECTIONAL_LIGHT.Direction, Features.CloudShadows.Opacity);
+    return Raytracing.NumDirectionalLights > 1;
+}
+
+Light GetDirectionalLight(uint index)
+{
+    if (index == 0)
+        return Raytracing.DirectionalLight;
+    return Raytracing.DirectionalLight2;
+}
+
+// Unshadowed irradiance of a directional light, excluding the sampled direction.
+// Color/Fade are the light's own colour and intensity (see SceneTLAS).
+float3 GetDirectionalLightBaseIrradiance(Light light)
+{
+    return DirLightToLinear(light.Color) * light.Fade * EvalSkyOcclusion(SKY_HEMI, light.Direction, Features.CloudShadows.Opacity);
+}
+
+// Picks one of up to three candidates proportionally to their weights. pdf is 0 when every weight is 0.
+uint SampleLightCandidate(float3 weights, inout uint randomSeed, out float pdf)
+{
+    const float total = weights.x + weights.y + weights.z;
+    if (total <= 0.0f)
+    {
+        pdf = 0.0f;
+        return 0;
+    }
+
+    const float r = Random(randomSeed) * total;
+
+    uint index = 2;
+    if (r < weights.x || (weights.y + weights.z) <= 0.0f)
+        index = 0;
+    else if (r < weights.x + weights.y || weights.z <= 0.0f)
+        index = 1;
+
+    pdf = weights[index] / total;
+    return index;
+}
+
+void GetDirectionalLightIrradiance(uint index, out float3 irradiance, out float3 lr, inout uint randomSeed)
+{
+    const Light light = GetDirectionalLight(index);
+
+    irradiance = GetDirectionalLightBaseIrradiance(light);
 
     // Sun angular radius is ~0.00465 radians (~0.266 degrees)
     float cosSunDisk = cos(0.00465f);
-    lr = TangentToWorld(DIRECTIONAL_LIGHT.Direction, SampleConeUniform(randomSeed, cosSunDisk));
+    lr = TangentToWorld(light.Direction, SampleConeUniform(randomSeed, cosSunDisk));
 
     // Correct MC weight for uniform cone sampling of a finite-size disk light.
     // Factor = 2/(1+cosα) → 1 for small angles (sun), matters for large celestial bodies.
@@ -298,8 +342,8 @@ float3 EvalDeltaLobeLighting(in Surface surface, in Instance instance, in DeltaL
 {
     float3 totalRadiance = 0.0f;
 
-    const float3 sunDir = DIRECTIONAL_LIGHT.Direction;
     const float cosSunDisk = cos(0.00465f);
+    const uint numDirectionalLights = HasSecondDirectionalLight() ? 2 : 1;
 
     bool anyLobeActive = false;
     [unroll]
@@ -336,13 +380,15 @@ float3 EvalDeltaLobeLighting(in Surface surface, in Instance instance, in DeltaL
         float3 deltaDir = deltaLobes[i].dir;
         float3 deltaThroughput = deltaLobes[i].thp;
 
-        // --- Directional Light (Sun) ---
+        // --- Directional Lights (Sun / Moons) ---
+        for (uint d = 0; d < numDirectionalLights; d++)
         {
-            float cosDelta = dot(deltaDir, sunDir);
+            const Light dirLight = GetDirectionalLight(d);
+            float cosDelta = dot(deltaDir, dirLight.Direction);
 
             if (cosDelta >= cosSunDisk)
             {
-                float3 irradiance = DirLightToLinear(DIRECTIONAL_LIGHT.Color) * EvalSkyOcclusion(SKY_HEMI, sunDir, Features.CloudShadows.Opacity);
+                float3 irradiance = GetDirectionalLightBaseIrradiance(dirLight);
 
                 // irradiance = E_sun (total flux/area from the sun).
                 // A delta surface "picks out" the sun's RADIANCE L_sun, not irradiance E_sun.
@@ -394,12 +440,30 @@ float3 EvalDeltaLobeLighting(in Surface surface, in BRDFContext brdfContext, in 
 #   define LIGHT_TLAS Scene
 #endif
 
+// Direct lighting from the directional light(s) and one sampled point light.
+// Primary hits: one shadow ray towards a directional light (when both moons are active, one is picked proportionally
+// to its unshadowed contribution) plus one towards the point light.
+// Secondary hits: a single shadow ray, towards one candidate (moon/sun, second moon or point light) picked
+// proportionally to its unshadowed contribution.
 float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary)
 {
-    float3 sunIrradiance;
-    float3 sunDir;
-    GetDirectionalLightIrradiance(sunIrradiance, sunDir, randomSeed);
-    float3 sunDirect = EvalLight(sunDir, type, feature, surface, brdfContext, bsdf) * sunIrradiance;
+    const float directionalMult = isPrimary ? 1.0f : Raytracing.Directional;
+    const float pointMult = isPrimary ? 1.0f : Raytracing.Point;
+
+    float3 dir0Irradiance;
+    float3 dir0L;
+    GetDirectionalLightIrradiance(0, dir0Irradiance, dir0L, randomSeed);
+    const float3 dir0Direct = EvalLight(dir0L, type, feature, surface, brdfContext, bsdf) * dir0Irradiance * directionalMult;
+
+    float3 dir1Direct = 0.0f;
+    float3 dir1L = 0.0f;
+    [branch]
+    if (HasSecondDirectionalLight())
+    {
+        float3 dir1Irradiance;
+        GetDirectionalLightIrradiance(1, dir1Irradiance, dir1L, randomSeed);
+        dir1Direct = EvalLight(dir1L, type, feature, surface, brdfContext, bsdf) * dir1Irradiance * directionalMult;
+    }
 
     float3 pointIrradiance;
     float3 pointDir;
@@ -408,30 +472,69 @@ float3 EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface 
 
     float3 pointDirect = 0.0f;
     if (lightIndex >= 0)
-        pointDirect = EvalLight(pointDir, type, feature, surface, brdfContext, bsdf) * pointIrradiance;
+        pointDirect = EvalLight(pointDir, type, feature, surface, brdfContext, bsdf) * pointIrradiance * pointMult;
+
+    const float pointWeight = isPrimary ? 0.0f : Luminance(pointDirect);
+
+    float pdf;
+    const uint candidate = SampleLightCandidate(float3(Luminance(dir0Direct), Luminance(dir1Direct), pointWeight), randomSeed, pdf);
 
     float3 radiance = 0.0f;
 
     [branch]
-    if (any(sunDirect > MIN_DIFFUSE_SHADOW))
-        radiance += sunDirect * TraceRayShadow(Scene, surface, sunDir, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
+    if (pdf > 0.0f)
+    {
+        [branch]
+        if (candidate < 2)
+        {
+            const float3 dirDirect = candidate == 0 ? dir0Direct : dir1Direct;
+            const float3 dirL = candidate == 0 ? dir0L : dir1L;
 
+            [branch]
+            if (any(dirDirect > MIN_DIFFUSE_SHADOW))
+                radiance += dirDirect * (TraceRayShadow(Scene, surface, dirL, randomSeed) / pdf);
+        }
+        else if (any(pointDirect > MIN_DIFFUSE_SHADOW))
+        {
+            radiance += pointDirect * (TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed) / pdf);
+        }
+    }
+
+    // Primary hits always trace the point light in addition to the directional light
     [branch]
-    if (any(pointDirect > MIN_DIFFUSE_SHADOW))
-        radiance += pointDirect * TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
+    if (isPrimary && any(pointDirect > MIN_DIFFUSE_SHADOW))
+        radiance += pointDirect * TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed);
 
     return radiance;
 }
 
 void EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface surface, in BRDFContext brdfContext, in Instance instance, in StandardBSDF bsdf, inout uint randomSeed, bool isPrimary, out float3 outDiffuse, out float3 outSpecular)
 {
-    float3 sunIrradiance;
-    float3 sunDir;
-    GetDirectionalLightIrradiance(sunIrradiance, sunDir, randomSeed);
-    float3 sunDiffuse, sunSpecular;
-    EvalLight(sunDir, type, feature, surface, brdfContext, bsdf, sunDiffuse, sunSpecular);
-    sunDiffuse *= sunIrradiance;
-    sunSpecular *= sunIrradiance;
+    const float directionalMult = isPrimary ? 1.0f : Raytracing.Directional;
+    const float pointMult = isPrimary ? 1.0f : Raytracing.Point;
+
+    float3 dir0Irradiance;
+    float3 dir0L;
+    GetDirectionalLightIrradiance(0, dir0Irradiance, dir0L, randomSeed);
+    float3 dir0Diffuse, dir0Specular;
+    EvalLight(dir0L, type, feature, surface, brdfContext, bsdf, dir0Diffuse, dir0Specular);
+    dir0Irradiance *= directionalMult;
+    dir0Diffuse *= dir0Irradiance;
+    dir0Specular *= dir0Irradiance;
+
+    float3 dir1Diffuse = 0.0f;
+    float3 dir1Specular = 0.0f;
+    float3 dir1L = 0.0f;
+    [branch]
+    if (HasSecondDirectionalLight())
+    {
+        float3 dir1Irradiance;
+        GetDirectionalLightIrradiance(1, dir1Irradiance, dir1L, randomSeed);
+        EvalLight(dir1L, type, feature, surface, brdfContext, bsdf, dir1Diffuse, dir1Specular);
+        dir1Irradiance *= directionalMult;
+        dir1Diffuse *= dir1Irradiance;
+        dir1Specular *= dir1Irradiance;
+    }
 
     float3 pointIrradiance;
     float3 pointDir;
@@ -443,25 +546,50 @@ void EvaluateDirectRadiance(in uint16_t type, in uint16_t feature, in Surface su
     if (lightIndex >= 0)
     {
         EvalLight(pointDir, type, feature, surface, brdfContext, bsdf, pointDiffuse, pointSpecular);
+        pointIrradiance *= pointMult;
         pointDiffuse *= pointIrradiance;
         pointSpecular *= pointIrradiance;
     }
+
+    const float pointWeight = isPrimary ? 0.0f : Luminance(pointDiffuse + pointSpecular);
+
+    float pdf;
+    const uint candidate = SampleLightCandidate(float3(Luminance(dir0Diffuse + dir0Specular), Luminance(dir1Diffuse + dir1Specular), pointWeight), randomSeed, pdf);
 
     outDiffuse = 0.0f;
     outSpecular = 0.0f;
 
     [branch]
-    if (any((sunDiffuse + sunSpecular) > MIN_DIFFUSE_SHADOW))
+    if (pdf > 0.0f)
     {
-        float3 shadow = TraceRayShadow(Scene, surface, sunDir, randomSeed) * (isPrimary ? 1.0f : Raytracing.Directional);
-        outDiffuse += sunDiffuse * shadow;
-        outSpecular += sunSpecular * shadow;
+        [branch]
+        if (candidate < 2)
+        {
+            const float3 dirDiffuse = candidate == 0 ? dir0Diffuse : dir1Diffuse;
+            const float3 dirSpecular = candidate == 0 ? dir0Specular : dir1Specular;
+            const float3 dirL = candidate == 0 ? dir0L : dir1L;
+
+            [branch]
+            if (any((dirDiffuse + dirSpecular) > MIN_DIFFUSE_SHADOW))
+            {
+                float3 shadow = TraceRayShadow(Scene, surface, dirL, randomSeed) / pdf;
+                outDiffuse += dirDiffuse * shadow;
+                outSpecular += dirSpecular * shadow;
+            }
+        }
+        else if (any((pointDiffuse + pointSpecular) > MIN_DIFFUSE_SHADOW))
+        {
+            float3 shadow = TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed) / pdf;
+            outDiffuse += pointDiffuse * shadow;
+            outSpecular += pointSpecular * shadow;
+        }
     }
 
+    // Primary hits always trace the point light in addition to the directional light
     [branch]
-    if (any((pointDiffuse + pointSpecular) > MIN_DIFFUSE_SHADOW))
+    if (isPrimary && any((pointDiffuse + pointSpecular) > MIN_DIFFUSE_SHADOW))
     {
-        float3 shadow = TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed) * (isPrimary ? 1.0f : Raytracing.Point);
+        float3 shadow = TraceRayShadowFinite(LIGHT_TLAS, surface, pointDir, pointDist, randomSeed);
         outDiffuse += pointDiffuse * shadow;
         outSpecular += pointSpecular * shadow;
     }
@@ -471,7 +599,25 @@ void GetLightIrradianceMIS(in Instance instance, in Surface surface, out float3 
 {
     float3 directionalIrradiance;
     float3 dirLr;
-    GetDirectionalLightIrradiance(directionalIrradiance, dirLr, randomSeed);
+    GetDirectionalLightIrradiance(0, directionalIrradiance, dirLr, randomSeed);
+
+    // Two moons: pick one proportionally to its irradiance
+    [branch]
+    if (HasSecondDirectionalLight())
+    {
+        float3 dir1Irradiance;
+        float3 dir1Lr;
+        GetDirectionalLightIrradiance(1, dir1Irradiance, dir1Lr, randomSeed);
+
+        float dirPdf;
+        const uint dirIndex = SampleLightCandidate(float3(Luminance(directionalIrradiance), Luminance(dir1Irradiance), 0.0f), randomSeed, dirPdf);
+        if (dirIndex == 1)
+        {
+            directionalIrradiance = dir1Irradiance;
+            dirLr = dir1Lr;
+        }
+        directionalIrradiance = dirPdf > 0.0f ? directionalIrradiance / dirPdf : 0.0f;
+    }
 
     float3 pointIrradiance;
     float3 pointLr;

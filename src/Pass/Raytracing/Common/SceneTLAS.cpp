@@ -1,6 +1,7 @@
 #include "SceneTLAS.h"
 #include "Renderer.h"
 #include "Scene.h"
+#include "Utils/Celestial.h"
 
 namespace Pass
 {
@@ -76,10 +77,12 @@ namespace Pass
 		{
 #if defined(SKYRIM)
 			auto dirLight = ce_cast<RE::NiDirectionalLight*>(Util::Adapter::GetShaderManagerState().shadowSceneNode[0]->GetRuntimeData().sunLight->light.get());
-			auto& lightRuntimeData = dirLight->GetLightRuntimeData();
 			m_RaytracingData->DirectionalLight.Direction = -Util::Math::Normalize(Util::Math::Float3(dirLight->GetWorldDirection()));
-			m_RaytracingData->DirectionalLight.Color = Util::Math::Float3(lightRuntimeData.diffuse);
-			m_RaytracingData->DirectionalLight.Fade = lightRuntimeData.fade;
+			// Colour comes from CS linear lighting (SkySync sets it per sun/moon). Alpha stays in Fade because the
+			// non-LL path in DirLightToLinear applies the sRGB transfer to Color before the alpha is applied.
+			const auto& llColor = scene->m_FeatureData->LinearLighting.directionalLightColor;
+			m_RaytracingData->DirectionalLight.Color = float3(llColor.x, llColor.y, llColor.z);
+			m_RaytracingData->DirectionalLight.Fade = llColor.w;
 #elif defined(FALLOUT4)
 			auto ssn = Util::Adapter::GetShadowSceneNode(0);
 			if (ssn && ssn->sunLight && ssn->sunLight->light) {
@@ -88,7 +91,70 @@ namespace Pass
 					auto runtimeData = Util::Adapter::GetLightRuntimeData(dirLight);
 					m_RaytracingData->DirectionalLight.Direction = -Util::Math::Normalize(Util::Math::GetMatrixColumn(dirLight->world.rotate, 0));
 					m_RaytracingData->DirectionalLight.Color = Util::Math::Float3(runtimeData.diffuse);
-					m_RaytracingData->DirectionalLight.Fade = runtimeData.fade;
+					m_RaytracingData->DirectionalLight.Fade = 1.0f;
+				}
+			}
+#endif
+
+			m_RaytracingData->NumDirectionalLights = 1;
+			m_RaytracingData->DirectionalLight2 = m_RaytracingData->DirectionalLight;
+
+#if defined(SKYRIM)
+			// Night: one directional light per moon, coloured according to LightingSettings::CelestialColors.
+			//  Default:  the brighter moon keeps the CS linear lighting colour and energy, the other moon's colour is that
+			//            scaled by its base colour and intensity relative to the brighter moon.
+			//  Hue:      moon base colours, brightness from the CS linear lighting colour.
+			//  Absolute: moon base colours and intensities only.
+			Util::Celestial::NightLights night;
+			if (Util::Celestial::GetNightLights(night) && night.SunBelowHorizon) {
+				const auto* primary = &night.Masser;
+				const auto* secondary = &night.Secunda;
+				if (secondary->Intensity > primary->Intensity)
+					std::swap(primary, secondary);
+
+				if (primary->IsLit()) {
+					const auto& ll = scene->m_FeatureData->LinearLighting;
+					const auto mode = settings.LightingSettings.CelestialColors;
+					const bool hasSecondary = secondary->IsLit();
+
+					const float3 gameColor(llColor.x, llColor.y, llColor.z);
+					const float3 primaryColor = Util::Celestial::ToLightInputSpace(primary->Color, ll);
+					const float3 secondaryColor = Util::Celestial::ToLightInputSpace(secondary->Color, ll);
+					const float intensityRatio = secondary->Intensity / primary->Intensity;
+
+					auto& light0 = m_RaytracingData->DirectionalLight;
+					auto& light1 = m_RaytracingData->DirectionalLight2;
+
+					light0.Direction = primary->Direction;
+					light1.Direction = secondary->Direction;
+
+					switch (mode) {
+					case CelestialColorMode::Hue:
+						{
+							// Split the game light's luminance between the moons by their intensities, so the second
+							// moon doesn't add energy on top of what the game/CS intended for the night.
+							const float primaryWeight = Util::Celestial::WorkingLuminance(primaryColor, ll);
+							const float secondaryWeight = hasSecondary ? Util::Celestial::WorkingLuminance(secondaryColor, ll) * intensityRatio : 0.0f;
+							const float totalWeight = primaryWeight + secondaryWeight;
+							const float scale = totalWeight > 0.0f ? Util::Celestial::WorkingLuminance(gameColor, ll) / totalWeight : 0.0f;
+							light0.Color = primaryColor * scale;
+							light1.Color = secondaryColor * (scale * intensityRatio);
+							light0.Fade = light1.Fade = llColor.w;
+						}
+						break;
+					case CelestialColorMode::Absolute:
+						light0.Color = primaryColor;
+						light0.Fade = primary->Intensity;
+						light1.Color = secondaryColor;
+						light1.Fade = secondary->Intensity;
+						break;
+					default:
+						light1.Color = gameColor * (secondary->Color / primary->Color) * intensityRatio;
+						break;
+					}
+
+					if (hasSecondary)
+						m_RaytracingData->NumDirectionalLights = 2;
 				}
 			}
 #endif

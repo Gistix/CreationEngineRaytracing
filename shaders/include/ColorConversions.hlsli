@@ -112,10 +112,9 @@ float3 PointLightToLinear(float3 color, bool isLinear)
 
 float3 DirLightToLinear(float3 color)
 {
-#if defined(SKYRIM)       
-    float4 light = LLSETTINGS.directionalLightColor;
-    float3 finalColor = LLON ? light.rgb : LightToLinear(light.rgb * PBRLightingScaleRcp);
-    return finalColor * light.a * (LLON ? LLSETTINGS.directionalLightMult : K_PI);
+#if defined(SKYRIM)
+    float3 finalColor = LLON ? color : LightToLinear(color * PBRLightingScaleRcp);
+    return finalColor * (LLON ? LLSETTINGS.directionalLightMult : K_PI);
 #else
     return color * K_PI;
 #endif 

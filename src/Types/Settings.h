@@ -162,6 +162,14 @@ struct MaterialSettings
 	float2 Metalness = { 0.0f, 1.0f };
 };
 
+// Colour of the night directional lights (moons)
+enum struct CelestialColorMode
+{
+	Default,   // Native directional light colour
+	Hue,       // Moon base colours, brightness from the game's native directional light
+	Absolute   // Moon base colours and intensities
+};
+
 struct LightingSettings
 {
 	float Directional = 5.0f;
@@ -170,6 +178,7 @@ struct LightingSettings
 	float Emissive = 5.0f;
 	float Effect = 5.0f;
 	float Sky = 5.0f;
+	CelestialColorMode CelestialColors = CelestialColorMode::Default;
 };
 
 struct SHaRCSettings
