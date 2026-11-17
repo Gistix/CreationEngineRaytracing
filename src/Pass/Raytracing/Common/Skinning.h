@@ -24,7 +24,7 @@ namespace Pass
 {
 	class Skinning : public RenderPass
 	{
-		static constexpr uint MAX_GEOMETRY = 2048;
+		static constexpr uint MAX_GEOMETRY = 4096;
 		static constexpr uint MAX_BONE_MATRICES = MAX_GEOMETRY * 10;
 
 		// ---- Bone Compute Pass ----
