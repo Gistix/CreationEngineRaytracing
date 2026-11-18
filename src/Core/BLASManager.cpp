@@ -257,7 +257,7 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 
 		if (!needsAllocation && (forceRebuild || !resource->m_IsUpdatable)) {
 			auto prebuildInfo = m_Device->getAccelStructPreBuildInfo(blasDesc);
-			needsAllocation = prebuildInfo.resultMaxSizeInBytes > resource->GetAllocatedMemory();
+			needsAllocation = prebuildInfo.resultBytes > resource->GetAllocatedMemory();
 		}
 
 		if (needsAllocation) {
