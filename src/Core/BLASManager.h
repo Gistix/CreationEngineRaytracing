@@ -171,14 +171,18 @@ struct BLASGeometryKey
 			const eastl::string& debugName);
 
 		// Uploads relative transforms staged since the last flush, growing the GPU buffer if the
-		// slot count outgrew it. Render thread only; called before every BLAS build.
+		// slot count outgrew it. Render thread only; SubmitBuilds calls it before recording builds.
 		void FlushTransforms(nvrhi::ICommandList* commandList);
 
-		// Builds or refits the specified BLAS resource if dirty or needed
+		// Queues a build or refit of the specified BLAS resource if dirty or needed. The BLAS handle
+		// is (re)allocated immediately, but nothing is recorded until SubmitBuilds.
 		void BuildResource(
-			nvrhi::ICommandList* commandList,
 			const eastl::shared_ptr<BLASResource>& resource,
 			bool forceRebuild = false);
+
+		// Records every build queued by BuildResource as one batch, so input barriers are resolved
+		// once and the GPU can overlap the builds. Render thread only.
+		void SubmitBuilds(nvrhi::ICommandList* commandList);
 
 		// Periodic maintenance: releases unreferenced BLASes after GPU fence completion
 		void ProcessPendingReleases(uint64_t completedFence, uint64_t currentFrame);
@@ -243,4 +247,19 @@ struct BLASGeometryKey
 		};
 		mutable std::mutex m_ReleaseMutex;
 		std::vector<PendingRelease> m_PendingReleases;
+
+		// Builds queued by BuildResource for the next SubmitBuilds. Geometry descs are copied into
+		// m_PendingGeometries so shared-transform buffers can be rebound after FlushTransforms.
+		// The vectors are cleared, not freed, so steady-state frames do not allocate.
+		struct PendingBuild
+		{
+			nvrhi::rt::AccelStructHandle blas;
+			nvrhi::rt::AccelStructBuildFlags buildFlags = nvrhi::rt::AccelStructBuildFlags::None;
+			uint32_t firstGeometry = 0;
+			uint32_t geometryCount = 0;
+			bool usesSharedTransforms = false;
+		};
+		std::vector<PendingBuild> m_PendingBuilds;
+		std::vector<nvrhi::rt::GeometryDesc> m_PendingGeometries;
+		std::vector<nvrhi::rt::BottomLevelAccelStructBuild> m_BuildBatch;
 	};

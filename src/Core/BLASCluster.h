@@ -109,7 +109,7 @@ public:
 	bool Valid() const;
 
 	// Rebuilds or refits the BLAS as needed (once per frame), pulling dirty state from its members.
-	void BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph);
+	void BuildUpdate(SceneGraph* sceneGraph);
 
 	nvrhi::rt::InstanceDesc MakeInstanceDesc() const;
 

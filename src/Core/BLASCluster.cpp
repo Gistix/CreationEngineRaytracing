@@ -478,7 +478,7 @@ nvrhi::rt::InstanceDesc BLASCluster::MakeInstanceDesc() const
 	return instanceDesc;
 }
 
-void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* sceneGraph)
+void BLASCluster::BuildUpdate(SceneGraph* sceneGraph)
 {
 	auto* renderer = Renderer::GetSingleton();
 	const auto frameIndex = renderer->GetFrameIndex();
@@ -510,7 +510,7 @@ void BLASCluster::BuildUpdate(nvrhi::ICommandList* commandList, SceneGraph* scen
 	}
 
 	auto* blasManager = sceneGraph->GetBLASManager().get();
-	blasManager->BuildResource(commandList, m_BLASResource, buildMode == BuildMode::Rebuild);
+	blasManager->BuildResource(m_BLASResource, buildMode == BuildMode::Rebuild);
 	m_BLAS = m_BLASResource->m_BLAS;
 
 	m_DirtyFlags.reset();

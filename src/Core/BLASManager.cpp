@@ -214,7 +214,6 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 	}
 
 	void BLASManager::BuildResource(
-		nvrhi::ICommandList* commandList,
 		const eastl::shared_ptr<BLASResource>& resource,
 		bool forceRebuild)
 	{
@@ -234,8 +233,6 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 			return;
 		}
 
-		FlushTransforms(commandList);
-
 		auto blasDesc = nvrhi::rt::AccelStructDesc()
 			.setIsTopLevel(false)
 			.setDebugName(resource->m_DebugName.c_str());
@@ -243,8 +240,8 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 		blasDesc.buildFlags = resource->m_BuildFlags;
 		blasDesc.bottomLevelGeometries = resource->m_GeometryDescs;
 
-		// Shared resources store only their slot offset; bind the current buffer (FlushTransforms
-		// above may have just replaced it).
+		// Shared resources store only their slot offset; bind the current buffer. SubmitBuilds binds
+		// it again after FlushTransforms, which may replace it.
 		if (resource->m_IsShared) {
 			for (auto& geometryDesc : blasDesc.bottomLevelGeometries) {
 				if (geometryDesc.useTransform)
@@ -268,10 +265,50 @@ void* GetNativeBufferPointer(nvrhi::IBuffer* buffer) noexcept
 			blasDesc.buildFlags |= nvrhi::rt::AccelStructBuildFlags::PerformUpdate;
 		}
 
-		nvrhi::utils::BuildBottomLevelAccelStruct(commandList, resource->m_BLAS, blasDesc);
+		PendingBuild& pending = m_PendingBuilds.emplace_back();
+		pending.blas = resource->m_BLAS;
+		pending.buildFlags = blasDesc.buildFlags;
+		pending.firstGeometry = static_cast<uint32_t>(m_PendingGeometries.size());
+		pending.geometryCount = static_cast<uint32_t>(blasDesc.bottomLevelGeometries.size());
+		pending.usesSharedTransforms = resource->m_IsShared;
+		m_PendingGeometries.insert(m_PendingGeometries.end(), blasDesc.bottomLevelGeometries.begin(), blasDesc.bottomLevelGeometries.end());
 
 		resource->m_LastBuildFrame = frameIndex;
 		resource->m_IsDirty = false;
+	}
+
+	void BLASManager::SubmitBuilds(nvrhi::ICommandList* commandList)
+	{
+		if (m_PendingBuilds.empty())
+			return;
+
+		FlushTransforms(commandList);
+
+		m_BuildBatch.clear();
+		m_BuildBatch.reserve(m_PendingBuilds.size());
+
+		for (const auto& pending : m_PendingBuilds) {
+			auto* geometries = m_PendingGeometries.data() + pending.firstGeometry;
+
+			if (pending.usesSharedTransforms) {
+				for (uint32_t i = 0; i < pending.geometryCount; i++) {
+					if (geometries[i].useTransform)
+						geometries[i].transformBuffer = m_SharedTransformBuffer;
+				}
+			}
+
+			auto& build = m_BuildBatch.emplace_back();
+			build.accelStruct = pending.blas;
+			build.geometries = geometries;
+			build.numGeometries = pending.geometryCount;
+			build.buildFlags = pending.buildFlags;
+		}
+
+		commandList->buildBottomLevelAccelStructs(m_BuildBatch.data(), m_BuildBatch.size());
+
+		m_BuildBatch.clear();
+		m_PendingBuilds.clear();
+		m_PendingGeometries.clear();
 	}
 
 	void BLASManager::ProcessPendingReleases(uint64_t completedFence, uint64_t currentFrame)

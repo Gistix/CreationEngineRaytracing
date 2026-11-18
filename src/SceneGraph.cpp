@@ -1027,7 +1027,10 @@ void SceneGraph::BuildClusters(nvrhi::ICommandList* commandList)
 	// on the render thread after Phase WaitAll, so flags are not being written.
 	for (auto* cluster : m_AllClusters)
 		if (cluster->m_DirtyFlags != DirtyFlags::None)
-			cluster->BuildUpdate(commandList, this);
+			cluster->BuildUpdate(this);
+
+	// BuildUpdate only queues builds; record them as one batch before the TLAS build reads them.
+	m_BLASManager->SubmitBuilds(commandList);
 }
 
 void SceneGraph::ReleaseTexture(RE::BSGraphics::Texture* texture)
