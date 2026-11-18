@@ -242,6 +242,22 @@ bool Renderer::Initialize(RendererSettings* rendererSettings, VkInstance instanc
 	if (!m_NVRHIDevice)
 		return false;
 
+	// A queue other than DXVK's own must be ordered against D3D11 through fences. Set up
+	// before PostInitialize, which already submits work.
+	VkQueue dxvkQueue = VK_NULL_HANDLE;
+	uint32_t dxvkQueueFamily = 0;
+	interopDevice->GetSubmissionQueue(&dxvkQueue, &dxvkQueueFamily);
+
+	if (graphicsQueue != dxvkQueue) {
+		m_DedicatedQueueSync.vkDevice = static_cast<nvrhi::vulkan::IDevice*>(m_NVRHIDevice.Get());
+
+		if (!InitializeDedicatedQueueSync(nativeDevice.get(), interopDevice.get())) {
+			logger::error("Renderer::Initialize - Given a dedicated Vulkan queue, but D3D11 fence interop (IDXGIVkInteropDevice2) is unavailable.");
+			m_NVRHIDevice = nullptr;
+			return false;
+		}
+	}
+
 	m_IsVulkan = true;
 	m_VulkanInteropDevice = std::move(interopDevice);
 
@@ -751,8 +767,53 @@ nvrhi::ICommandList* Renderer::StartExecution()
 	return m_CommandList;
 }
 
+bool Renderer::InitializeDedicatedQueueSync(ID3D11Device* d3d11Device, IDXGIVkInteropDevice* interopDevice)
+{
+	auto& sync = m_DedicatedQueueSync;
+
+	winrt::com_ptr<IDXGIVkInteropDevice2> interopDevice2;
+	winrt::com_ptr<ID3D11Device5> device5;
+	winrt::com_ptr<ID3D11DeviceContext> context;
+
+	bool ok = sync.vkDevice &&
+	          SUCCEEDED(interopDevice->QueryInterface(__uuidof(IDXGIVkInteropDevice2), interopDevice2.put_void())) &&
+	          SUCCEEDED(d3d11Device->QueryInterface(IID_PPV_ARGS(device5.put())));
+
+	if (ok) {
+		d3d11Device->GetImmediateContext(context.put());
+		ok = context && SUCCEEDED(context->QueryInterface(IID_PPV_ARGS(sync.context.put()))) &&
+		     SUCCEEDED(device5->CreateFence(0, D3D11_FENCE_FLAG_NONE, IID_PPV_ARGS(sync.d3d11Done.put()))) &&
+		     SUCCEEDED(device5->CreateFence(0, D3D11_FENCE_FLAG_NONE, IID_PPV_ARGS(sync.rendererDone.put()))) &&
+		     SUCCEEDED(interopDevice2->GetFenceSemaphore(sync.d3d11Done.get(), &sync.d3d11DoneSemaphore)) &&
+		     SUCCEEDED(interopDevice2->GetFenceSemaphore(sync.rendererDone.get(), &sync.rendererDoneSemaphore));
+	}
+
+	if (!ok)
+		sync = {};
+
+	return ok;
+}
+
 uint64_t Renderer::SubmitCommandList(nvrhi::ICommandList* commandList)
 {
+	if (auto& sync = m_DedicatedQueueSync; sync.context) {
+		std::scoped_lock lock(m_ExecutionMutex);
+
+		const uint64_t value = ++sync.value;
+
+		// Signal and Wait are only recorded into DXVK's command stream, so neither blocks this
+		// thread. Our submission may reach the GPU before DXVK submits the signal it waits on,
+		// which timeline semaphores allow.
+		sync.context->Signal(sync.d3d11Done.get(), value);  // after all D3D11 work recorded so far
+		sync.vkDevice->queueWaitForSemaphore(nvrhi::CommandQueue::Graphics, sync.d3d11DoneSemaphore, value);
+		sync.vkDevice->queueSignalSemaphore(nvrhi::CommandQueue::Graphics, sync.rendererDoneSemaphore, value);
+
+		m_LastSubmittedInstance = GetDevice()->executeCommandList(commandList, nvrhi::CommandQueue::Graphics);
+
+		sync.context->Wait(sync.rendererDone.get(), value);  // D3D11 work recorded after this waits for ours
+		return m_LastSubmittedInstance;
+	}
+
 	if (m_VulkanInteropDevice)
 		m_VulkanInteropDevice->FlushRenderingCommands();
 

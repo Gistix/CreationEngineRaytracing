@@ -57,6 +57,22 @@ class Renderer
 	nvrhi::DeviceHandle m_NVRHIDevice;
 	winrt::com_ptr<IDXGIVkInteropDevice> m_VulkanInteropDevice;
 
+	// Set when the renderer was given its own Vulkan queue (DXVK fork IDXGIVkInteropDevice2)
+	// instead of DXVK's. Work is then ordered against D3D11 on the GPU through these fences,
+	// rather than flushing DXVK and locking (draining) its submission queue on every submit.
+	struct DedicatedQueueSync
+	{
+		nvrhi::vulkan::IDevice* vkDevice = nullptr;  // underlying device, below any validation layer
+		winrt::com_ptr<ID3D11DeviceContext4> context;
+		winrt::com_ptr<ID3D11Fence> d3d11Done;     // signalled by D3D11, waited on by our queue
+		winrt::com_ptr<ID3D11Fence> rendererDone;  // signalled by our queue, waited on by D3D11
+		VkSemaphore d3d11DoneSemaphore = VK_NULL_HANDLE;
+		VkSemaphore rendererDoneSemaphore = VK_NULL_HANDLE;
+		uint64_t value = 0;
+	} m_DedicatedQueueSync;
+
+	bool InitializeDedicatedQueueSync(ID3D11Device* d3d11Device, IDXGIVkInteropDevice* interopDevice);
+
 	nvrhi::CommandListHandle m_CommandList = nullptr;
 
 	eastl::array<bool, magic_enum::enum_count<nvrhi::Feature>()> m_SupportedFeatures;
