@@ -35,6 +35,7 @@ namespace Pass::Raytracing
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 		eastl::vector<ShaderDefine> m_Defines;
+		bool m_UseRayQuery = true;  // Backend snapshot used by the current layout/pipeline (see Renderer::UseRayQuery)
 
 	public:
 		void SceneTexturesChanged() override { m_BindingSetDirty.fill(true); }

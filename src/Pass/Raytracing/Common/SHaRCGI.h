@@ -53,6 +53,7 @@ namespace Pass::Raytracing::Common
 		SceneTLAS* m_SceneTLAS;
 
 		eastl::vector<ShaderDefine> m_Defines;
+		bool m_UseRayQuery = true;  // Backend snapshot used by the current layout/pipeline (see Renderer::UseRayQuery)
 
 		virtual void Initialize() override;
 

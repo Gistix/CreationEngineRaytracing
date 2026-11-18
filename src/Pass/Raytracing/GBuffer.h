@@ -36,6 +36,7 @@ namespace Pass::Raytracing
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 
 		nvrhi::TextureHandle m_ViewDepth;
+		bool m_UseRayQuery = true;  // Backend snapshot used by the current layout/pipeline (see Renderer::UseRayQuery)
 
 	public:
 		GBuffer(Renderer* renderer, SceneTLAS* m_SceneTLAS);

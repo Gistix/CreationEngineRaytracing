@@ -54,6 +54,7 @@ namespace Pass
 		eastl::array<bool, Constants::MAX_FRAMES_IN_FLIGHT> m_BindingSetDirty {};
 		bool m_UseStablePlanes = false;  // Toggle for stable planes vs reference mode
 		bool m_UseRestirGI = false;
+		bool m_UseRayQuery = true;  // Backend snapshot used by the current layout/pipeline (see Renderer::UseRayQuery)
 	public:
 		void SceneTexturesChanged() override { m_BindingSetDirty.fill(true); }
 		PathTracing(Renderer* renderer, SceneTLAS* m_SceneTLAS, SHaRC* sharc);

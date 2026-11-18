@@ -677,6 +677,32 @@ uint2 Renderer::GetScaledDynamicResolution()
 	};
 }
 
+bool Renderer::IsSERSupported() const
+{
+	if (!SupportsFeature(nvrhi::Feature::ShaderExecutionReordering))
+		return false;
+
+	if (IsVulkan())
+		return true;
+
+#if defined(NVAPI)
+	// D3D12 goes through the NVAPI hit object API, which needs SM 6.9.
+	return m_ShaderModel >= D3D_SHADER_MODEL_6_9;
+#else
+	return false;
+#endif
+}
+
+bool Renderer::UseRayQuery(const Settings& settings) const
+{
+	if (!m_Settings.UseRayQuery)
+		return false;
+
+	// SER only reorders TraceRay invocations, so prefer the ray tracing pipeline when it is active.
+	const bool serActive = settings.AdvancedSettings.ShaderExecutionReordering && IsSERSupported();
+	return !(serActive && SupportsFeature(nvrhi::Feature::RayTracingPipeline));
+}
+
 void Renderer::SettingsChanged(const Settings& settings)
 {
 	m_RenderGraph->SettingsChanged(settings);

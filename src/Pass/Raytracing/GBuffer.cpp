@@ -39,6 +39,9 @@ namespace Pass::Raytracing
 		auto* scene = Scene::GetSingleton();
 		auto& rtSettings = scene->m_Settings.RaytracingSettings;
 
+		// GBuffer has no SER code and is never rebuilt on settings changes, so it keeps the backend chosen here.
+		m_UseRayQuery = GetRenderer()->UseRayQuery(scene->m_Settings);
+
 		const auto bouncesWStr = std::to_wstring(rtSettings.Bounces);
 		const auto samplesWStr = std::to_wstring(rtSettings.SamplesPerPixel);
 
@@ -46,7 +49,7 @@ namespace Pass::Raytracing
 			{ L"DEBUG_TRACE_HEATMAP", L"0" }			
 		};
 
-		if (GetRenderer()->m_Settings.UseRayQuery)
+		if (m_UseRayQuery)
 		{
 			if (!CreateComputePipeline(defines))
 				return;
@@ -88,7 +91,7 @@ namespace Pass::Raytracing
 
 #if defined(NVAPI)
 		// The NVAPI shader extension slot is D3D12-only; Vulkan uses SPIR-V SER intrinsics.
-		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
+		if (!GetRenderer()->IsVulkan() && !m_UseRayQuery)
 			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
 #endif
 
@@ -262,7 +265,7 @@ namespace Pass::Raytracing
 
 		
 #if defined(NVAPI)
-		if (!renderer->IsVulkan() && !renderer->m_Settings.UseRayQuery)
+		if (!renderer->IsVulkan() && !m_UseRayQuery)
 			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 

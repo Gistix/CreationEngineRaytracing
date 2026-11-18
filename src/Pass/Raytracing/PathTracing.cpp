@@ -28,6 +28,7 @@ namespace Pass
 		const auto& settings = Scene::GetSingleton()->m_Settings;
 
 		m_Defines = Util::Shader::GetPathTracingDefines(settings, m_SHaRC != nullptr, false);
+		m_UseRayQuery = GetRenderer()->UseRayQuery(settings);
 
 		m_UseStablePlanes = settings.AdvancedSettings.StablePlanes;
 		m_UseRestirGI = settings.ReSTIRGI.Enabled;
@@ -55,6 +56,7 @@ namespace Pass
 
 		if (defines != m_Defines) {
 			m_Defines = defines;
+			m_UseRayQuery = GetRenderer()->UseRayQuery(settings);
 			m_BindingSets.fill(nullptr);
 			CreateBindingLayout();
 			CreatePipeline();
@@ -65,7 +67,7 @@ namespace Pass
 	void PathTracing::CreateBindingLayout()
 	{
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
-		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
+		globalBindingLayoutDesc.visibility = m_UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
@@ -144,7 +146,7 @@ namespace Pass
 
 #if defined(NVAPI)
 		// The NVAPI shader extension slot is D3D12-only; Vulkan uses SPIR-V SER intrinsics.
-		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
+		if (!GetRenderer()->IsVulkan() && !m_UseRayQuery)
 			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
 #endif
 
@@ -153,7 +155,7 @@ namespace Pass
 
 	void PathTracing::CreatePipeline()
 	{
-		if (GetRenderer()->m_Settings.UseRayQuery) {
+		if (m_UseRayQuery) {
 			CreateComputePipeline();
 		} else {
 			CreateRayTracingPipeline();
@@ -387,7 +389,7 @@ namespace Pass
 		}
 
 #if defined(NVAPI)
-		if (!renderer->IsVulkan() && !renderer->m_Settings.UseRayQuery)
+		if (!renderer->IsVulkan() && !m_UseRayQuery)
 			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 

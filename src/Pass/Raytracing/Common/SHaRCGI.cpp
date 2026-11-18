@@ -67,6 +67,7 @@ namespace Pass::Raytracing::Common
 		const bool definesChanged = defines != m_Defines;
 
 		m_Defines = defines;
+		m_UseRayQuery = GetRenderer()->UseRayQuery(settings);
 
 		if (!m_Enabled) {
 			m_UpdatePass.m_BindingSets.fill(nullptr);
@@ -111,7 +112,7 @@ namespace Pass::Raytracing::Common
 		m_UpdatePass.m_ShaderTable = nullptr;
 
 		nvrhi::BindingLayoutDesc globalBindingLayoutDesc;
-		globalBindingLayoutDesc.visibility = GetRenderer()->m_Settings.UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
+		globalBindingLayoutDesc.visibility = m_UseRayQuery ? nvrhi::ShaderType::Compute : nvrhi::ShaderType::AllRayTracing;
 		globalBindingLayoutDesc.bindings = {
 			nvrhi::BindingLayoutItem::Sampler(0),
 			nvrhi::BindingLayoutItem::Sampler(1),
@@ -147,13 +148,13 @@ namespace Pass::Raytracing::Common
 		};
 
 #if defined(NVAPI)
-		if (!GetRenderer()->IsVulkan() && !GetRenderer()->m_Settings.UseRayQuery)
+		if (!GetRenderer()->IsVulkan() && !m_UseRayQuery)
 			globalBindingLayoutDesc.bindings.push_back(nvrhi::BindingLayoutItem::TypedBuffer_UAV(127));
 #endif
 
 		m_UpdatePass.m_BindingLayout = device->createBindingLayout(globalBindingLayoutDesc);
 
-		if (GetRenderer()->m_Settings.UseRayQuery)
+		if (m_UseRayQuery)
 			CreateUpdateComputePipeline();
 		else
 			CreateUpdateRayTracingPipeline();
@@ -390,7 +391,7 @@ namespace Pass::Raytracing::Common
 		};
 
 #if defined(NVAPI)
-		if (!renderer->IsVulkan() && !renderer->m_Settings.UseRayQuery)
+		if (!renderer->IsVulkan() && !m_UseRayQuery)
 			bindingSetDesc.bindings.push_back(nvrhi::BindingSetItem::TypedBuffer_UAV(127, nullptr));
 #endif
 

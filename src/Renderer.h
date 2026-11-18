@@ -195,6 +195,13 @@ public:
 		return m_SupportedFeatures[static_cast<size_t>(a_Feature)];
 	}
 
+	// Whether the device and shader backend can compile and run SER (Shader Execution Reordering).
+	bool IsSERSupported() const;
+
+	// Effective ray tracing backend for the given settings. SER only works with the ray tracing
+	// pipeline, so when SER is requested and supported it overrides RendererSettings::UseRayQuery.
+	bool UseRayQuery(const Settings& settings) const;
+
 	[[nodiscard]] const wchar_t* GetShaderStage(ShaderStage a_Stage) const noexcept;
 	[[nodiscard]] std::wstring GetShaderTarget(ShaderStage a_Stage) const noexcept;
 
