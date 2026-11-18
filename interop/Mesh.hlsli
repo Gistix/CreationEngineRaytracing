@@ -14,6 +14,7 @@ namespace MeshType
     static const uint SubIndex = 4;
     static const uint Instanced = 5;
     static const uint MergedInstance = 6;
+    static const uint TreeAnim = 7;
 }
 #endif
 
@@ -49,6 +50,14 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     {
         return MaterialOffset;
     }
+
+#ifndef __cplusplus
+    // Meshes whose vertices are rewritten per frame and record previous positions for motion vectors.
+    bool HasPrevPositions()
+    {
+        return Type == MeshType::Skinned || Type == MeshType::Dynamic || Type == MeshType::TreeAnim;
+    }
+#endif
 };
 VALIDATE_TRIVIAL(MeshData);
 VALIDATE_ALIGNMENT(MeshData, 4);

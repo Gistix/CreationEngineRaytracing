@@ -278,5 +278,23 @@ namespace Util
 		RE::TESObjectREFR* GetUserData(RE::NiAVObject* object);
 		bool IsSpotLight(const RE::TESObjectLIGH* a_light);
 		RE::BSMultiBoundNode* AsMultiBoundNode(RE::NiNode* a_node);
+
+		// True when the shape uses vanilla TREE_ANIM and its vertex layout carries the normal (shift direction)
+		// and vertex color (alpha = shift weight). Always false outside Skyrim.
+		bool IsTreeAnim(RE::BSShaderProperty* a_shaderProperty, const RE::BSGraphics::VertexDesc& a_vertexDesc);
+
+#if defined(SKYRIM)
+		// Vanilla TREE_ANIM vertex shader inputs, packed as BSLightingShader does (REL::ID 100585 / SE):
+		// TreeParams = (0, windMagnitude, amplitude, frequency), WindTimers.x = timer.
+		struct TreeAnimParams
+		{
+			float windMagnitude;
+			float amplitude;  // distance-dampened
+			float frequency;
+			float timer;      // already scaled by 6
+		};
+
+		TreeAnimParams GetTreeAnimParams(RE::BSShaderProperty* a_shaderProperty);
+#endif
 	}
 }

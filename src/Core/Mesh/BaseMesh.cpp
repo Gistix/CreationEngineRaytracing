@@ -1,6 +1,7 @@
 #include "Core/Mesh/BaseMesh.h"
 #include "Core/Mesh/Mesh.h"
 #include "Core/Mesh/LandLODMesh.h"
+#include "Core/Mesh/TreeAnimMesh.h"
 #include "Core/Mesh/SkinnedMesh.h"
 #include "Core/Mesh/DynamicMesh.h"
 #include "Core/Mesh/SubIndexMesh.h"
@@ -64,6 +65,11 @@ eastl::unique_ptr<BaseMesh> BaseMesh::Create(RE::BSTriShape* bsTriShape, nvrhi::
 			logger::warn("BaseMesh::Create - Mesh {} has no vertex position.", MakeDebugName(bsTriShape).c_str());
 			return nullptr;
 		}
+#endif
+
+#if defined(SKYRIM)
+		if (Util::Adapter::IsTreeAnim(geometryData.shaderProperty, geometryData.rendererData->vertexDesc))
+			return validate(eastl::make_unique<TreeAnimMesh>(bsTriShape, commandList));
 #endif
 
 		return validate(eastl::make_unique<Mesh>(bsTriShape, commandList));

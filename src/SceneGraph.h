@@ -120,6 +120,8 @@ class SceneGraph
 	eastl::unique_ptr<BindlessTable> m_DynamicVertexLiveDescriptors;
 	eastl::unique_ptr<BindlessTable> m_PrevPositionDescriptors;
 	eastl::unique_ptr<BindlessTable> m_PrevPositionWriteDescriptors;
+	eastl::unique_ptr<BindlessTable> m_AnimatedPositionDescriptors;
+	eastl::unique_ptr<BindlessTable> m_AnimatedPositionWriteDescriptors;
 
 	uint32_t m_NumMeshes = 0;
 	uint32_t m_NumInstances = 0;
@@ -215,6 +217,8 @@ public:
 	inline auto& GetDynamicVertexDescriptors() const { return m_DynamicVertexLiveDescriptors; }
 	inline auto& GetPrevPositionDescriptors() const { return m_PrevPositionDescriptors; }
 	inline auto& GetPrevPositionWriteDescriptors() const { return m_PrevPositionWriteDescriptors; }
+	inline auto& GetAnimatedPositionDescriptors() const { return m_AnimatedPositionDescriptors; }
+	inline auto& GetAnimatedPositionWriteDescriptors() const { return m_AnimatedPositionWriteDescriptors; }
 
 	nvrhi::IBuffer* GetLightBuffer() const { return m_LightBuffer.current(); }
 	nvrhi::IBuffer* GetMeshBuffer() const { return m_MeshManager->GetMeshBuffer(); }

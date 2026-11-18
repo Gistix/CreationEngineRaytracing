@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Mesh/BaseMesh.h"
+#include "Types/TreeAnim.h"
 #include "Constants.h"
 #include "Interop/BoneTransform.hlsli"
 
@@ -49,6 +50,10 @@ public:
 
 	bool GetModelSpaceNormal() const { return m_ModelSpaceNormal; }
 
+	// True when the skinning input comes from the animated position buffer (VertexAnimation output)
+	// instead of the native rest-pose positions.
+	bool HasAnimatedPositions() const { return m_AnimatedPositionBuffer != nullptr; }
+
 	uint16_t GetIndexID(size_t geometryIndex) const override { 
 		if (m_Flags.none(Flags::DismemberSkinInstance))
 			return static_cast<uint16_t>(m_IndexBuffers[geometryIndex].m_Descriptor.Get());
@@ -89,6 +94,16 @@ protected:
 
 	void RefreshVisibleGeometryCache();
 
+	// Creates the pre-skin float4 position buffer written by VertexAnimation and read by Skinning,
+	// registered at the shared slot.
+	bool CreateAnimatedPositionBuffer();
+
+	// Refreshes the vertex animation source (e.g. uploads dynamic morphs); returns true when it changed.
+	virtual bool UpdateAnimationSource([[maybe_unused]] nvrhi::ICommandList* commandList) { return false; }
+
+	// Queues the VertexAnimation pass when the pre-skin positions must be re-evaluated this frame.
+	bool QueueVertexAnimation(nvrhi::ICommandList* commandList);
+
 	// One entry per skin partition.
 	eastl::vector<bool> m_PartitionVisibility;
 
@@ -106,6 +121,13 @@ protected:
 
 	// Previous skinned positions for per-vertex motion vectors.
 	nvrhi::BufferHandle m_PrevPositionBuffer;
+
+	// Pre-skin model-space positions (float4) produced by VertexAnimation; null when not animated.
+	nvrhi::BufferHandle m_AnimatedPositionBuffer;
+
+	// Vanilla TREE_ANIM sway applied before skinning (skinned tree leaves).
+	TreeAnimState m_TreeAnim;
+	bool m_IsTreeAnim = false;
 
 	uint32_t m_VertexCount = 0;
 

@@ -191,6 +191,32 @@ void SceneGraph::Initialize()
 		m_PrevPositionWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
 	}
 
+	// Animated position SRV descriptor table (pre-skin float4 positions written by vertex animation; skinning input)
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_SRV(10).setSize(UINT_MAX)
+		};
+
+		m_AnimatedPositionDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
+	// Animated position UAV descriptor table (pre-skin float4 positions; vertex animation output)
+	{
+		nvrhi::BindlessLayoutDesc bindlessLayoutDesc;
+		bindlessLayoutDesc.visibility = nvrhi::ShaderType::All;
+		bindlessLayoutDesc.firstSlot = 0;
+		bindlessLayoutDesc.maxCapacity = Constants::NUM_MESHES_MAX;
+		bindlessLayoutDesc.registerSpaces = {
+			nvrhi::BindingLayoutItem::StructuredBuffer_UAV(3).setSize(UINT_MAX)
+		};
+
+		m_AnimatedPositionWriteDescriptors = eastl::make_unique<BindlessTable>(device, bindlessLayoutDesc, true);
+	}
+
 	m_TextureManager = eastl::make_unique<TextureManager>();
 }
 
@@ -1060,7 +1086,9 @@ void SceneGraph::GetPendingMeshMemoryStats(uint32_t& outPendingCount, uint64_t& 
 	}
 	outPendingBytes = stats.skinnedLiveVertexBytes + stats.skinnedPrevPositionBytes +
 	                  stats.dynamicLiveBytes + stats.dynamicOriginalBytes +
-	                  stats.landLODLiveVertexBytes;
+	                  stats.landLODLiveVertexBytes +
+	                  stats.treeAnimLiveVertexBytes + stats.treeAnimPrevPositionBytes +
+	                  stats.animatedPositionBytes;
 }
 
 uint32_t SceneGraph::AllocateMeshIndex()

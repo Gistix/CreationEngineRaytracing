@@ -9,8 +9,8 @@
 StructuredBuffer<VertexUpdateData> UpdateData           : register(t0);
 StructuredBuffer<RowMajorFloat3x4> BoneMatrices               : register(t1);
 
-// Dynamic float4 positions (input). Lives in DynamicMesh, addressed by updateData.dynamicIndex.
-StructuredBuffer<float4> DynamicVertices[]             : register(t0, space1);
+// Pre-skin animated positions (VertexAnimation output: TREE_ANIM sway, dynamic morphs). Shared slot.
+VK_BINDING(1, 0) StructuredBuffer<float4> AnimatedPositions[] : register(t0, space10);
 // Original (rest-pose) vertices in native packed format; also carries inline skinning. Shared slot.
 ByteAddressBuffer OriginalVertices[]                   : register(t0, space2);
 
@@ -122,6 +122,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 
     const bool isDynamic = (updateData.meshFlags & Skinning::MeshFlags::Dynamic) != 0;
     const bool isMSN = (updateData.meshFlags & Skinning::MeshFlags::ModelSpaceNormal) != 0;
+    const bool isAnimated = (updateData.meshFlags & Skinning::MeshFlags::Animated) != 0;
     const bool doSkin = (updateData.updateFlags & Skinning::DirtyFlags::Skin) != 0;
 
 	VertexDesc vertexDesc = updateData.VertexDesc;
@@ -158,8 +159,16 @@ void Main(uint2 DTid : SV_DispatchThreadID)
             position4.w = f16tof32(packed.y >> 16);
         }
     }
-    else if (isDynamic)
-        position4 = DynamicVertices[dynSlot][vertexIndex];
+
+    // Animated meshes skin the VertexAnimation output; w (tangent.x) still comes from the native layout
+    // when it has a position, otherwise from the animated (dynamic) source.
+    if (isAnimated)
+    {
+        const float4 animated = AnimatedPositions[slot][vertexIndex];
+        position4.xyz = animated.xyz;
+        if (!hasPosition)
+            position4.w = animated.w;
+    }
 
 	float3 N = float3(0.0f, 0.0f, 1.0f);
 	float3 T = float3(1.0f, 0.0f, 0.0f);
@@ -206,7 +215,7 @@ void Main(uint2 DTid : SV_DispatchThreadID)
 		const float3x4 boneMatrix = GetBoneTransformMatrix(bones, weights, updateData.boneOffset);
         const float3x3 boneRot = ExtractNormalizedRotation(boneMatrix);
 
-        if (hasPosition || isDynamic)
+        if (hasPosition || isAnimated)
 			position4.xyz = mul(boneMatrix, float4(position4.xyz, 1.0f));
 
 		if (hasNormal)

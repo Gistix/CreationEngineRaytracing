@@ -87,7 +87,7 @@ namespace Pass
 			auto pipelineDesc = nvrhi::ComputePipelineDesc()
 				.setComputeShader(m_ComputeShader)
 				.addBindingLayout(m_BindingLayout)
-				.addBindingLayout(sceneGraph->GetDynamicVertexReadDescriptors()->m_Layout)
+				.addBindingLayout(sceneGraph->GetAnimatedPositionDescriptors()->m_Layout)
 				.addBindingLayout(sceneGraph->GetVertexCopyDescriptors()->m_Layout)
 				.addBindingLayout(sceneGraph->GetVertexWriteDescriptors()->m_Layout)
 				.addBindingLayout(sceneGraph->GetPrevPositionWriteDescriptors()->m_Layout)
@@ -143,6 +143,9 @@ namespace Pass
 
 			if (mesh->GetModelSpaceNormal())
 				meshFlags |= ::Skinning::MeshFlags::ModelSpaceNormal;
+
+			if (mesh->HasAnimatedPositions())
+				meshFlags |= ::Skinning::MeshFlags::Animated;
 
 			const uint64_t vertexDescRaw = mesh->GetVertexDescRaw();
 
@@ -284,7 +287,7 @@ namespace Pass
 		{
 			nvrhi::BindingSetVector bindings = {
 				m_BindingSets[currentSlot],
-				sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->GetDescriptorTable(),
+				sceneGraph->GetAnimatedPositionDescriptors()->m_DescriptorTable,
 				sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
 				sceneGraph->GetVertexWriteDescriptors()->m_DescriptorTable,
 				sceneGraph->GetPrevPositionWriteDescriptors()->m_DescriptorTable,

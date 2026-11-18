@@ -223,6 +223,21 @@ namespace VRAMTracker
 			totalBytes += meshStats.landLODLiveVertexBytes;
 		}
 
+		if (meshStats.treeAnimMeshCount > 0) {
+			std::string liveLabel = std::format("Tree Anim Live Vertex ({} meshes)", meshStats.treeAnimMeshCount);
+			entries.emplace_back(liveLabel.c_str(), meshStats.treeAnimLiveVertexBytes);
+			totalBytes += meshStats.treeAnimLiveVertexBytes;
+
+			std::string prevLabel = std::format("Tree Anim Prev Positions ({} meshes)", meshStats.treeAnimMeshCount);
+			entries.emplace_back(prevLabel.c_str(), meshStats.treeAnimPrevPositionBytes);
+			totalBytes += meshStats.treeAnimPrevPositionBytes;
+		}
+
+		if (meshStats.animatedPositionBytes > 0) {
+			entries.emplace_back("Animated Positions (pre-skin)", meshStats.animatedPositionBytes);
+			totalBytes += meshStats.animatedPositionBytes;
+		}
+
 		uint32_t pendingMeshCount = 0;
 		uint64_t pendingMeshBytes = 0;
 		sceneGraph->GetPendingMeshMemoryStats(pendingMeshCount, pendingMeshBytes);

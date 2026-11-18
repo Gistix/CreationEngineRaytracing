@@ -63,7 +63,7 @@ struct SurfaceMaker
 #   endif
         float3 prevPos0 = 0.0f, prevPos1 = 0.0f, prevPos2 = 0.0f;
         
-        if (computePrevPos && (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic))
+        if (computePrevPos && mesh.HasPrevPositions())
             GetVertices(mesh, props, payload.primitiveIndex, v0, v1, v2, prevPos0, prevPos1, prevPos2);
         else
 #endif        
@@ -131,9 +131,9 @@ struct SurfaceMaker
 #if defined(HAS_PREV_POSITIONS) && !(defined(SHARC) && SHARC_UPDATE)
         if (computePrevPos)
         {       
-            // Previous object-space position: per-vertex skinned/dynamic positions, else current.
+            // Previous object-space position: per-vertex skinned/dynamic/animated positions, else current.
             float3 prevObjectSpacePos = currentObjectSpacePos;
-            if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
+            if (mesh.HasPrevPositions())
                 prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
 
             // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.

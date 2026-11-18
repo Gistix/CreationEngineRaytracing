@@ -772,5 +772,57 @@ namespace Util
 			return a_node->IsMultiBoundNode();
 #endif
 		}
+
+		bool IsTreeAnim([[maybe_unused]] RE::BSShaderProperty* a_shaderProperty, [[maybe_unused]] const RE::BSGraphics::VertexDesc& a_vertexDesc)
+		{
+#if defined(SKYRIM)
+			if (!a_shaderProperty || !a_shaderProperty->flags.all(RE::BSShaderProperty::EShaderPropertyFlag::kTreeAnim))
+				return false;
+
+			if (!a_vertexDesc.HasFlag(RE::BSGraphics::Vertex::Flags::VF_NORMAL) ||
+				!a_vertexDesc.HasFlag(RE::BSGraphics::Vertex::Flags::VF_COLORS)) {
+				logger::debug("IsTreeAnim - TREE_ANIM geometry without normals or vertex colors, left static");
+				return false;
+			}
+
+			return true;
+#else
+			return false;
+#endif
+		}
+
+#if defined(SKYRIM)
+		TreeAnimParams GetTreeAnimParams(RE::BSShaderProperty* a_shaderProperty)
+		{
+			// Defaults match the shader setup when the property has no leaf anim node.
+			TreeAnimParams params{ 0.0f, 1.0f, 1.0f, 0.0f };
+
+			if (auto* shadowSceneNode = GetShadowSceneNode(0))
+				params.windMagnitude = shadowSceneNode->GetWindMagnitude();
+
+			auto* fadeNode = a_shaderProperty ? a_shaderProperty->fadeNode : nullptr;
+			auto* leafAnimNode = fadeNode ? fadeNode->AsLeafAnimNode() : nullptr;
+
+			float distance = 0.0f;
+			if (leafAnimNode) {
+				// Private members: sqrDistanceToCamera, leafAmplitudeRefr, leafFrequency, runningTime.
+				distance = std::sqrt(std::max(REL::RelocateMember<float>(leafAnimNode, 0x158, 0x110), 0.0f));
+				params.amplitude = REL::RelocateMember<float>(leafAnimNode, 0x15C, 0x114);
+				params.frequency = REL::RelocateMember<float>(leafAnimNode, 0x160, 0x118);
+				params.timer = REL::RelocateMember<float>(leafAnimNode, 0x164, 0x11C) * 6.0f;
+			}
+
+			// Amplitude fades out between fLeafAnimDampenDistStart and fLeafAnimDampenDistEnd.
+			const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
+			const float dampenStart = iniSettings.leafAnimDampenDistStart;
+			const float dampenEnd = iniSettings.leafAnimDampenDistEnd;
+			if (dampenEnd > dampenStart) {
+				const float dampened = (1.0f - (distance - dampenStart) / (dampenEnd - dampenStart)) * params.amplitude;
+				params.amplitude = std::min(params.amplitude, std::max(dampened, 0.0f));
+			}
+
+			return params;
+		}
+#endif
 	}
 }

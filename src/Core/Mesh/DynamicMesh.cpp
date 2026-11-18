@@ -141,6 +141,14 @@ DynamicMesh::DynamicMesh(RE::BSDynamicTriShape* bsDynamicTriShape, nvrhi::IComma
 	if (!BuildSkinned(bsDynamicTriShape, m_DynamicBuffer, static_cast<uint16_t>(sizeof(float4)), false))
 		return;
 
+	// Morphs always go through VertexAnimation, which produces the skinning input.
+	m_IsTreeAnim = Util::Adapter::IsTreeAnim(geometryData.shaderProperty, m_VertexDesc);
+	if (!CreateAnimatedPositionBuffer())
+		return;
+
+	// The animated positions start uninitialized; always run the first evaluation.
+	m_NeedsUpload = true;
+
 	CreateMaterial();
 
 	SetupOpacityMicromap(commandList);
@@ -172,14 +180,12 @@ void DynamicMesh::SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool
 		: nvrhi::ResourceStates::ShaderResource | nvrhi::ResourceStates::AccelStructBuildInput);
 }
 
-void DynamicMesh::Update(nvrhi::ICommandList* commandList)
+bool DynamicMesh::UpdateAnimationSource(nvrhi::ICommandList* commandList)
 {
-	SkinnedMesh::Update(commandList);
-
 	if (!m_NeedsUpload)
-		return;
+		return false;
 
-	// Upload the latest morph positions to the skinning input; the skinning pass produces the live buffer.
+	// Upload the latest morph positions to the VertexAnimation source.
 	// Static mutex serializes concurrent uploads from parallel worker threads.
 	{
 		static std::mutex uploadMutex;
@@ -187,9 +193,8 @@ void DynamicMesh::Update(nvrhi::ICommandList* commandList)
 		commandList->writeBuffer(m_OriginalDynamicBuffer, m_DynamicData.data(), m_DynamicData.size());
 	}
 
-	MarkDirty(DirtyFlags::Vertex);
-
 	m_NeedsUpload = false;
+	return true;
 }
 
 void DynamicMesh::CollectOwnedBuffers(OwnedBufferStats& stats) const

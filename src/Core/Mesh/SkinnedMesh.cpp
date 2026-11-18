@@ -7,6 +7,7 @@
 #include "Utils/Adapter.h"
 #include "Renderer/RenderNode.h"
 #include "Pass/Raytracing/Common/Skinning.h"
+#include "Pass/Raytracing/Common/VertexAnimation.h"
 #include "Types/RE/RE.h"
 
 SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* commandList)
@@ -91,6 +92,11 @@ SkinnedMesh::SkinnedMesh(RE::BSTriShape* bsTriShape, nvrhi::ICommandList* comman
 	if (!BuildSkinned(bsTriShape, m_LiveVertexBuffer, vertexStride, true))
 		return;
 #endif
+
+	// Skinned tree leaves sway in model space before skinning (vanilla TREE_ANIM).
+	m_IsTreeAnim = Util::Adapter::IsTreeAnim(geometryData.shaderProperty, m_VertexDesc);
+	if (m_IsTreeAnim && !CreateAnimatedPositionBuffer())
+		return;
 
 	CreateMaterial();
 
@@ -330,6 +336,24 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 	(void)geometryData;
 
 	auto skinData = Util::Adapter::GetSkinData(m_BSTriShape);
+
+	// Copies the current pose; returns false when the skin has no bones.
+	auto copyBoneWorlds = [&]() {
+		if (skinData.numBones == 0)
+			return false;
+
+		if (m_BoneWorlds.size() != skinData.numBones) {
+			m_BoneWorlds.resize(skinData.numBones);
+			InitSkinToBones(m_BSTriShape);
+		}
+
+		for (uint32_t i = 0; i < skinData.numBones; i++)
+			Util::Math::PackNiTransform(*skinData.boneWorldTransforms[i], m_BoneWorlds[i]);
+
+		Util::Math::PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
+		return true;
+	};
+
 	if (skinData.hasSkin) {
 		auto* scene = Scene::GetSingleton();
 		const bool isPathTracing = scene->IsPathTracingActive();
@@ -345,19 +369,8 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 		if (isVisible || m_SkinFrameID != frameID) {
 			m_SkinFrameID = frameID;
 
-			if (skinData.numBones != 0) {
-				if (m_BoneWorlds.size() != skinData.numBones) {
-					m_BoneWorlds.resize(skinData.numBones);
-					InitSkinToBones(m_BSTriShape);
-				}
-
-				for (uint32_t i = 0; i < skinData.numBones; i++)
-					Util::Math::PackNiTransform(*skinData.boneWorldTransforms[i], m_BoneWorlds[i]);
-
-				Util::Math::PackNiTransform(m_BSTriShape->world.Invert(), m_GeomInv_Rot0_Scale, m_GeomInv_Rot1, m_GeomInv_Rot2, m_GeomInv_Translate);
-
+			if (copyBoneWorlds())
 				MarkDirty(DirtyFlags::Skin);
-			}
 		}
 
 		// Dismember update.
@@ -372,11 +385,84 @@ void SkinnedMesh::Update(nvrhi::ICommandList* commandList)
 		}
 	}
 
+	// Pre-skin vertex animation (TREE_ANIM sway, dynamic morphs) changed the skinning input.
+	if (QueueVertexAnimation(commandList)) {
+		MarkDirty(DirtyFlags::Vertex);
+
+		// Skinning only applies bones on Skin updates; refresh the pose so the new animated positions
+		// are skinned rather than written through in model space.
+		if (skinData.hasSkin && !m_DirtyFlags.any(DirtyFlags::Skin) && copyBoneWorlds())
+			MarkDirty(DirtyFlags::Skin);
+	}
+
 	// Queue this mesh for the GPU skinning pass when the pose advanced or its vertices changed.
 	if (m_DirtyFlags.any(DirtyFlags::Vertex, DirtyFlags::Skin)) {
 		if (auto* skinningPass = Renderer::GetSingleton()->GetRenderGraph()->GetPass<Pass::Skinning>())
 			skinningPass->QueueUpdate(m_DirtyFlags.get(), this);
 	}
+}
+
+bool SkinnedMesh::CreateAnimatedPositionBuffer()
+{
+	auto device = Renderer::GetSingleton()->GetDevice();
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+	const uint32_t slot = GetSkinningSlot();
+
+	auto animatedPositionBufferDesc = nvrhi::BufferDesc()
+		.setByteSize(sizeof(float4) * m_VertexCount)
+		.setStructStride(sizeof(float4))
+		.setCanHaveUAVs(true)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setDebugName(std::format("{} (Animated Position Buffer)", m_Name.c_str()).c_str());
+
+	m_AnimatedPositionBuffer = device->createBuffer(animatedPositionBufferDesc);
+	if (!m_AnimatedPositionBuffer)
+		return false;
+
+	// Skinning reads the animated positions; VertexAnimation writes them.
+	device->writeDescriptorTable(sceneGraph->GetAnimatedPositionDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_SRV(slot, m_AnimatedPositionBuffer));
+	device->writeDescriptorTable(sceneGraph->GetAnimatedPositionWriteDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_UAV(slot, m_AnimatedPositionBuffer));
+	return true;
+}
+
+bool SkinnedMesh::QueueVertexAnimation(nvrhi::ICommandList* commandList)
+{
+	if (!m_AnimatedPositionBuffer)
+		return false;
+
+	VertexAnimationData data{};
+	data.Index = GetSkinningSlot();
+	data.VertexCount = m_VertexCount;
+	data.Flags = VertexAnimation::Flags::SkinnedOutput;
+
+	const uint64_t vertexDescRaw = GetVertexDescRaw();
+	std::memcpy(&data.VertexDesc, &vertexDescRaw, sizeof(uint64_t));
+
+	bool changed = UpdateAnimationSource(commandList);
+
+	if (AsDynamicMesh()) {
+		data.Flags |= VertexAnimation::Flags::DynamicSource;
+		data.DynamicIndex = GetDynamicIndex();
+	}
+
+	if (m_IsTreeAnim) {
+		data.Flags |= VertexAnimation::Flags::TreeAnim;
+		const bool treeAnimChanged = m_TreeAnim.Update(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty, data.Params);
+		changed = changed || treeAnimChanged;
+	}
+
+	if (!changed)
+		return false;
+
+	auto* animationPass = Renderer::GetSingleton()->GetRenderGraph()->GetPass<Pass::VertexAnimation>();
+	if (!animationPass)
+		return false;
+
+	animationPass->QueueUpdate(this, data);
+	return true;
 }
 
 void SkinnedMesh::RefreshVisibleGeometryCache()
@@ -405,5 +491,8 @@ void SkinnedMesh::CollectOwnedBuffers(OwnedBufferStats& stats) const
 	}
 	if (m_PrevPositionBuffer) {
 		stats.skinnedPrevPositionBytes += m_PrevPositionBuffer->getDesc().byteSize;
+	}
+	if (m_AnimatedPositionBuffer) {
+		stats.animatedPositionBytes += m_AnimatedPositionBuffer->getDesc().byteSize;
 	}
 }

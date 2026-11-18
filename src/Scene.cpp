@@ -16,6 +16,7 @@
 #include "Renderer/RenderNode.h"
 
 #include "Pass/Raytracing/Common/Skinning.h"
+#include "Pass/Raytracing/Common/VertexAnimation.h"
 #include "Pass/Raytracing/Common/SceneTLAS.h"
 #include "Pass/Raytracing/Common/LightTLAS.h"
 #include "Pass/Raytracing/Common/SHaRC.h"
@@ -96,6 +97,7 @@ void Scene::UpdateMode(Mode mode)
 
 	if (mode == Mode::GlobalIllumination) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
+		auto vertexAnimation = eastl::make_unique<Pass::VertexAnimation>(renderer);
 		auto landLod = eastl::make_unique<Pass::LandLODOccluder>(renderer);
 		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
 
@@ -116,6 +118,7 @@ void Scene::UpdateMode(Mode mode)
 		auto nrdRelaxPass = eastl::make_unique<Pass::NRD::NRDIntegration>(renderer, nrd::Denoiser::RELAX_DIFFUSE_SPECULAR, Mode::GlobalIllumination);
 		auto giComposite = eastl::make_unique<Pass::Common::GIComposite>(renderer, tlasPtr);
 
+		renderGraph->AddNode({ true, "Vertex Animation", eastl::move(vertexAnimation) });
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
@@ -133,6 +136,7 @@ void Scene::UpdateMode(Mode mode)
 	}
 	else if (mode == Mode::PathTracing) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
+		auto vertexAnimation = eastl::make_unique<Pass::VertexAnimation>(renderer);
 		auto landLod = eastl::make_unique<Pass::LandLODOccluder>(renderer);
 		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
@@ -151,6 +155,7 @@ void Scene::UpdateMode(Mode mode)
 		auto ptComposite = eastl::make_unique<Pass::Common::PTComposite>(renderer);
 		auto accumulation = eastl::make_unique<Pass::Common::Accumulation>(renderer);
 
+		renderGraph->AddNode({ true, "Vertex Animation", eastl::move(vertexAnimation) });
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "LandLOD Occluder", eastl::move(landLod) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
@@ -167,10 +172,12 @@ void Scene::UpdateMode(Mode mode)
 	}
 	else if (mode == Mode::Debug) {
 		auto skinning = eastl::make_unique<Pass::Skinning>(renderer);
+		auto vertexAnimation = eastl::make_unique<Pass::VertexAnimation>(renderer);
 		auto transformComp = eastl::make_unique<Pass::TransformComposition>(renderer);
 		auto sceneTLAS = eastl::make_unique<Pass::SceneTLAS>(renderer);
 		auto debugPass = eastl::make_unique<Pass::Debug>(renderer, sceneTLAS.get());
 
+		renderGraph->AddNode({ true, "Vertex Animation", eastl::move(vertexAnimation) });
 		renderGraph->AddNode({ true, "Skinning", eastl::move(skinning) });
 		renderGraph->AddNode({ true, "Transform Composition", eastl::move(transformComp) });
 		renderGraph->AddNode({ true, "Scene TLAS", eastl::move(sceneTLAS) });

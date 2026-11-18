@@ -11,6 +11,7 @@ namespace Skinning
         static const uint32_t None = 0;
         static const uint32_t Dynamic = (1 << 0);
         static const uint32_t ModelSpaceNormal = (1 << 1);
+        static const uint32_t Animated = (1 << 2);
     }
 	
     namespace DirtyFlags

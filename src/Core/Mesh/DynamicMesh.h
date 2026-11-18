@@ -8,10 +8,11 @@ class DynamicMesh : public SkinnedMesh
 	// Live (skinning output) float4 positions; read by the BLAS/RT path.
 	nvrhi::BufferHandle m_DynamicBuffer;
 
-	// Original (rest/morph) float4 positions copied from the game each frame; skinning input.
+	// Original (morph) float4 positions copied from the game; VertexAnimation source, which writes the
+	// pre-skin animated positions the skinning pass consumes.
 	nvrhi::BufferHandle m_OriginalDynamicBuffer;
 
-	// Shared bindless slot: original in DynamicVertexDescriptors (SRV), live in DynamicVertexWriteDescriptors (UAV).
+	// Dynamic bindless slot: original in DynamicVertexReadDescriptors (SRV), live in DynamicVertexWriteDescriptors (UAV).
 	DescriptorHandle m_DynamicDescriptor;
 
 	// CPU staging copy used to detect changes (lazy) and feed the GPU upload.
@@ -31,9 +32,12 @@ public:
 	// Called by hook
 	void UpdateDynamicData(void* dynamicData, uint32_t dataSize);
 
-	void Update(nvrhi::ICommandList* commandList) override;
 	void SetSkinningBufferStates(nvrhi::ICommandList* commandList, bool writing) override;
 	void CollectOwnedBuffers(OwnedBufferStats& stats) const override;
 
 	bool IsUpdatable() const override { return true; }
+
+protected:
+	// Uploads the latest morph positions when the game changed them.
+	bool UpdateAnimationSource(nvrhi::ICommandList* commandList) override;
 };

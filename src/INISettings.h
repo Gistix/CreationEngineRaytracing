@@ -7,6 +7,8 @@ struct INISettings
 	bool enableProjecteUVDiffuseNormalsOnCubemap;
 	float projectedUVDiffuseNormalTilingScale;
 	float projectedUVNormalDetailTilingScale;
+	float leafAnimDampenDistStart;
+	float leafAnimDampenDistEnd;
 
 	void Initialize();
 };

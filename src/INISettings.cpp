@@ -16,4 +16,13 @@ void INISettings::Initialize()
 	enableProjecteUVDiffuseNormalsOnCubemap = GetBool(RE::GetINISetting("bEnableProjecteUVDiffuseNormalsOnCubemap:Display"));
 	projectedUVDiffuseNormalTilingScale = RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display") ? RE::GetINISetting("fProjectedUVDiffuseNormalTilingScale:Display")->GetFloat() : 1.0f;
 	projectedUVNormalDetailTilingScale = RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display") ? RE::GetINISetting("fProjectedUVNormalDetailTilingScale:Display")->GetFloat() : 1.0f;
+
+	auto GetFloat = [](const char* name, float fallback) {
+		auto* setting = RE::GetINISetting(name);
+		return setting ? setting->GetFloat() : fallback;
+	};
+
+	// Missing settings disable the dampening (start == end).
+	leafAnimDampenDistStart = GetFloat("fLeafAnimDampenDistStart:Display", 0.0f);
+	leafAnimDampenDistEnd = GetFloat("fLeafAnimDampenDistEnd:Display", 0.0f);
 }

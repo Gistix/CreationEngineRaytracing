@@ -257,13 +257,13 @@ VertexOut MainVS(in uint vertexID : SV_VertexID, in uint instanceID : SV_Instanc
 
     // Previous-frame vertex position (mesh-local space) for motion vectors.
     // Mirrors Geometry.hlsli: skinned meshes and position-full dynamics read the prev-position
-    // buffer (written by the skinning pass); position-less dynamics keep the previous set
+    // buffer (written by the skinning / vertex animation passes); position-less dynamics keep the previous set
     // immediately after the current one; static meshes reuse the current position (PrevTransforms
     // capture object motion).
     float3 prevVertexPosition = vertex.Position;
     if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
         prevVertexPosition = dynPos[NonUniformResourceIndex(triVertex + mesh.NumVertices)].xyz;
-    else if (mesh.Type == MeshType::Skinned || mesh.Type == MeshType::Dynamic)
+    else if (mesh.HasPrevPositions())
         prevVertexPosition = PrevPositions[NonUniformResourceIndex(mesh.VertexID)][triVertex];
 
     float3 rootSpacePosition = mul(meshTransform.Transform, float4(vertex.Position, 1.0f));

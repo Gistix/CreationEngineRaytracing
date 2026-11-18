@@ -50,7 +50,8 @@ public:
 		Dynamic,
 		SubIndex,
 		Instanced,
-		MergedInstance
+		MergedInstance,
+		TreeAnim
 	};
 
 	enum class Flags : uint8_t
@@ -96,6 +97,13 @@ public:
 
 		uint32_t landLODMeshCount = 0;
 		uint64_t landLODLiveVertexBytes = 0;
+
+		uint32_t treeAnimMeshCount = 0;
+		uint64_t treeAnimLiveVertexBytes = 0;
+		uint64_t treeAnimPrevPositionBytes = 0;
+
+		// Pre-skin positions written by VertexAnimation (skinned trees, dynamic meshes).
+		uint64_t animatedPositionBytes = 0;
 	};
 
 	virtual void CollectOwnedBuffers(OwnedBufferStats&) const {}
