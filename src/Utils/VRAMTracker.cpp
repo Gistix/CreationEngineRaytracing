@@ -238,6 +238,12 @@ namespace VRAMTracker
 			totalBytes += meshStats.animatedPositionBytes;
 		}
 
+		if (meshStats.grassWindMeshCount > 0) {
+			std::string label = std::format("Grass Wind Positions ({} groups)", meshStats.grassWindMeshCount);
+			entries.emplace_back(label.c_str(), meshStats.grassWindPositionBytes);
+			totalBytes += meshStats.grassWindPositionBytes;
+		}
+
 		uint32_t pendingMeshCount = 0;
 		uint64_t pendingMeshBytes = 0;
 		sceneGraph->GetPendingMeshMemoryStats(pendingMeshCount, pendingMeshBytes);

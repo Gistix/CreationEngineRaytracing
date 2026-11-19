@@ -104,6 +104,10 @@ public:
 
 		// Pre-skin positions written by VertexAnimation (skinned trees, dynamic meshes).
 		uint64_t animatedPositionBytes = 0;
+
+		// Per-instance swayed grass positions (current + previous).
+		uint32_t grassWindMeshCount = 0;
+		uint64_t grassWindPositionBytes = 0;
 	};
 
 	virtual void CollectOwnedBuffers(OwnedBufferStats&) const {}
@@ -114,6 +118,11 @@ public:
 	bool IsGroupedInstance() const { return IsMergedInstance(); }
 	virtual uint32_t GetInstanceTransformBase() const { return 0; }
 	virtual uint32_t GetInstanceCount() const { return 0; }
+
+	// Merged-instance meshes only: MeshData::Flags and the native vertex byte offset shading reads attributes
+	// from (their BLAS geometry may read positions from a separate buffer).
+	virtual uint16_t GetMeshDataFlags() const { return 0; }
+	virtual uint32_t GetShadingVertexOffset() const { return 0; }
 	uint32_t GetGrassTransformBase() const { return GetInstanceTransformBase(); }
 	uint32_t GetGrassInstanceCount() const { return GetInstanceCount(); }
 

@@ -295,6 +295,15 @@ namespace Util
 		};
 
 		TreeAnimParams GetTreeAnimParams(RE::BSShaderProperty* a_shaderProperty);
+
+		// Vanilla grass wind inputs, as BSGrassShader::SetupGeometry computes them (REL::ID 99996 / SE).
+		struct GrassWindParams
+		{
+			float strength;  // WindVector.z
+			float timer;     // WindTimer
+		};
+
+		GrassWindParams GetGrassWindParams(RE::BSShaderProperty* a_grassShaderProperty);
 #endif
 	}
 }

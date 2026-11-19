@@ -25,4 +25,10 @@ void INISettings::Initialize()
 	// Missing settings disable the dampening (start == end).
 	leafAnimDampenDistStart = GetFloat("fLeafAnimDampenDistStart:Display", 0.0f);
 	leafAnimDampenDistEnd = GetFloat("fLeafAnimDampenDistEnd:Display", 0.0f);
+
+	grassWindMagnitudeMin = GetFloat("fGrassWindMagnitudeMin:Grass", 5.0f);
+	grassWindMagnitudeMax = GetFloat("fGrassWindMagnitudeMax:Grass", 125.0f);
+	windGrassMultiplier = GetFloat("fWindGrassMultiplier:Display", 1.0f);
+	grassStartFadeDistance = GetFloat("fGrassStartFadeDistance:Grass", 7000.0f);
+	grassFadeRange = GetFloat("fGrassFadeRange:Grass", 1000.0f);
 }

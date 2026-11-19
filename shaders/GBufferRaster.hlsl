@@ -261,7 +261,14 @@ VertexOut MainVS(in uint vertexID : SV_VertexID, in uint instanceID : SV_Instanc
     // immediately after the current one; static meshes reuse the current position (PrevTransforms
     // capture object motion).
     float3 prevVertexPosition = vertex.Position;
-    if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
+    if (mesh.HasWindPositions())
+    {
+        // Merged grass with wind: swayed per-instance positions, [current N*V | previous N*V].
+        const uint windIndex = instanceID * mesh.NumVertices + triVertex;
+        vertex.Position = dynPos[windIndex].xyz;
+        prevVertexPosition = dynPos[windIndex + mesh.InstanceCount * mesh.NumVertices].xyz;
+    }
+    else if (mesh.Type == MeshType::Dynamic && !mesh.VertexDesc.HasFlag(VertexFlags::Vertex))
         prevVertexPosition = dynPos[NonUniformResourceIndex(triVertex + mesh.NumVertices)].xyz;
     else if (mesh.HasPrevPositions())
         prevVertexPosition = PrevPositions[NonUniformResourceIndex(mesh.VertexID)][triVertex];

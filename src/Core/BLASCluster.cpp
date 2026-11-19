@@ -193,9 +193,10 @@ uint32_t BLASCluster::Update()
 					meshType,
 					dynamicIndex,
 					meshIndex,
-					0,
+					mesh->GetMeshDataFlags(),
 					static_cast<uint32_t>(geomTris.indexOffset),
-					static_cast<uint32_t>(geomTris.vertexOffset),
+					// Shading reads attributes from the native buffer; the BLAS may read a separate position buffer.
+					mesh->GetShadingVertexOffset(),
 					materialIndex,
 					mesh->GetInstanceTransformBase(),
 					mesh->GetInstanceCount(),

@@ -1,5 +1,7 @@
 #include "Core/Mesh/MergedInstanceMesh.h"
 #include "Core/MeshManager.h"
+#include "Pass/Raytracing/Common/VertexAnimation.h"
+#include "Renderer/RenderNode.h"
 #include "Renderer.h"
 #include "Scene.h"
 #include "SceneGraph.h"
@@ -127,6 +129,12 @@ MergedInstanceMesh::MergedInstanceMesh(
 		m_GeometryEntries.push_back(entry);
 	}
 
+	m_VertexCount = triShapeData.vertexCount;
+	if (!CreateWindBuffers(a_sourceShape, triShapeData.vertexCount, stride)) {
+		logger::warn("MergedInstanceMesh - Failed to create grass wind buffers for {}", m_Name);
+		return;
+	}
+
 	CreateMaterial();
 
 	// Pad the bounds by the blade radius (the group AABB is only used for culling).
@@ -149,6 +157,129 @@ MergedInstanceMesh::~MergedInstanceMesh()
 {
 	if (m_InstanceTransformBase != UINT32_MAX)
 		Scene::GetSingleton()->GetSceneGraph()->GetMeshManager()->ReleaseInstanceTransforms(m_InstanceTransformBase, m_InstanceCount);
+}
+
+bool MergedInstanceMesh::CreateWindBuffers(RE::BSTriShape* a_sourceShape, uint32_t a_vertexCount, uint16_t a_vertexStride)
+{
+	auto device = Renderer::GetSingleton()->GetDevice();
+	auto* sceneGraph = Scene::GetSingleton()->GetSceneGraph();
+
+	const uint64_t positionsPerBlock = static_cast<uint64_t>(m_InstanceCount) * a_vertexCount;
+
+	auto windBufferDesc = nvrhi::BufferDesc()
+		.setByteSize(2ull * positionsPerBlock * sizeof(float4))
+		.setStructStride(sizeof(float4))
+		.setCanHaveUAVs(true)
+		.enableAutomaticStateTracking(nvrhi::ResourceStates::ShaderResource)
+		.setIsAccelStructBuildInput(true)
+		.setDebugName(std::format("{} - Grass Wind Positions", m_Name.c_str()));
+
+	m_WindPositionBuffer = device->createBuffer(windBufferDesc);
+	if (!m_WindPositionBuffer)
+		return false;
+
+	// Dynamic slot: the read entry is unused for grass, the live SRV feeds shading, the UAV feeds VertexAnimation.
+	m_DynamicDescriptor = sceneGraph->GetDynamicVertexReadDescriptors()->m_DescriptorTable->CreateDescriptorHandle(
+		nvrhi::BindingSetItem::StructuredBuffer_SRV(0, m_WindPositionBuffer));
+	if (!m_DynamicDescriptor.IsValid()) {
+		m_WindPositionBuffer = nullptr;
+		return false;
+	}
+
+	device->writeDescriptorTable(sceneGraph->GetDynamicVertexWriteDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_UAV(m_DynamicDescriptor.Get(), m_WindPositionBuffer));
+	device->writeDescriptorTable(sceneGraph->GetDynamicVertexDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::StructuredBuffer_SRV(m_DynamicDescriptor.Get(), m_WindPositionBuffer));
+
+	// VertexAnimation reads the native blade vertices (position + color) through the copy table.
+	const uint32_t vertexSlot = m_VertexBuffer.m_Descriptor.Get();
+	const uint64_t nativeBytes = static_cast<uint64_t>(a_vertexCount) * a_vertexStride;
+	device->writeDescriptorTable(sceneGraph->GetVertexCopyDescriptors()->m_DescriptorTable,
+		nvrhi::BindingSetItem::RawBuffer_SRV(vertexSlot, m_VertexBuffer.m_Buffer, nvrhi::BufferRange(m_VertexBuffer.m_Offset, nativeBytes)));
+
+	// Each blade geometry reads its own block of swayed positions (float4 stride, xyz used).
+	for (size_t i = 0; i < m_GeometryEntries.size(); ++i) {
+		auto& triangles = m_GeometryEntries[i].desc.geometryData.triangles;
+		triangles.vertexBuffer = m_WindPositionBuffer;
+		triangles.vertexOffset = static_cast<uint64_t>(i) * a_vertexCount * sizeof(float4);
+		triangles.vertexStride = sizeof(float4);
+		triangles.vertexFormat = nvrhi::Format::RGB32_FLOAT;
+	}
+
+	XMStoreFloat3x4(&m_InverseShapeLocal, Util::Math::GetXMFromNiTransform(a_sourceShape->local.Invert()));
+	return true;
+}
+
+uint16_t MergedInstanceMesh::GetMeshDataFlags() const
+{
+	return m_WindPositionBuffer ? static_cast<uint16_t>(MeshDataFlags::WindPositions) : 0;
+}
+
+void MergedInstanceMesh::UpdateWind()
+{
+#if defined(SKYRIM)
+	if (!m_WindPositionBuffer || !m_BSTriShape)
+		return;
+
+	auto* animationPass = Renderer::GetSingleton()->GetRenderGraph()->GetPass<Pass::VertexAnimation>();
+	if (!animationPass)
+		return;
+
+	const auto wind = Util::Adapter::GetGrassWindParams(Util::Adapter::GetGeometryRuntimeData(m_BSTriShape).shaderProperty);
+
+	// Raster fades grass out past fGrassStartFadeDistance + fGrassFadeRange; skip the wind (and the refit) there.
+	const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
+	const RE::NiPoint3 cameraPosition = Util::Adapter::GetCameraEyePosition();
+	const float boundDistance = cameraPosition.GetDistance(m_WorldBound.center) - m_WorldBound.radius;
+	const bool inRange = wind.strength > 0.0f &&
+		boundDistance < iniSettings.grassStartFadeDistance + iniSettings.grassFadeRange;
+
+	// Leaving range still needs one evaluation (zero wind) so the positions settle back to the rest pose.
+	if (!inRange && !m_WindActive && !m_NeedsWindInit)
+		return;
+
+	const float prevTimer = m_NeedsWindInit ? wind.timer : m_PrevWindTimer;
+	m_PrevWindTimer = wind.timer;
+	m_WindActive = inRange;
+	m_NeedsWindInit = false;
+
+	// Vanilla WindVector.xy: world +Y in the shape's model space (inverse world rotation), z dropped.
+	const auto& world = m_BSTriShape->world;
+	RE::NiPoint3 windDirection = world.rotate.Transpose() * RE::NiPoint3(0.0f, 1.0f, 0.0f);
+	windDirection.Unitize();
+	windDirection.z = 0.0f;
+
+	// Displacement happens before the shape-local transform; express it in the instance pool's output space.
+	const auto& local = m_BSTriShape->local;
+	const RE::NiPoint3 windPool = (local.rotate * windDirection) * local.scale;
+
+	GrassWindData data{};
+	data.Index = m_VertexBuffer.m_Descriptor.Get();
+	data.DynamicIndex = m_DynamicDescriptor.Get();
+	data.VertexCount = m_VertexCount;
+	data.InstanceCount = m_InstanceCount;
+	data.InstanceTransformBase = m_InstanceTransformBase;
+
+	const uint64_t vertexDescRaw = GetVertexDescRaw();
+	std::memcpy(&data.VertexDesc, &vertexDescRaw, sizeof(uint64_t));
+
+	data.Wind = float4(windPool.x, windPool.y, windPool.z, inRange ? wind.strength : 0.0f);
+	data.Timers = float4(wind.timer, inRange ? prevTimer : wind.timer, 0.0f, 0.0f);
+	data.InverseShapeLocal = m_InverseShapeLocal;
+
+	animationPass->QueueGrassUpdate(this, data);
+
+	MarkDirty(DirtyFlags::Vertex);
+#endif
+}
+
+void MergedInstanceMesh::CollectOwnedBuffers(OwnedBufferStats& stats) const
+{
+	if (!m_WindPositionBuffer)
+		return;
+
+	stats.grassWindMeshCount++;
+	stats.grassWindPositionBytes += m_WindPositionBuffer->getDesc().byteSize;
 }
 
 void MergedInstanceMesh::Update([[maybe_unused]] nvrhi::ICommandList* a_commandList)

@@ -69,6 +69,18 @@ struct SurfaceMaker
 #endif        
         GetVertices(mesh, props, payload.primitiveIndex, v0, v1, v2);
 
+        // Merged grass with wind: the BLAS traces the swayed per-instance positions.
+        const bool hasWindPositions = mesh.HasWindPositions();
+        if (hasWindPositions)
+        {
+            const Triangle windTriangle = GetTriangle(mesh, payload.primitiveIndex);
+            GetWindPositions(mesh, payload.GetGeometryIndex(), windTriangle, v0.Position, v1.Position, v2.Position);
+#if defined(HAS_PREV_POSITIONS) && !(defined(SHARC) && SHARC_UPDATE)
+            if (computePrevPos)
+                GetPrevWindPositions(mesh, payload.GetGeometryIndex(), windTriangle, prevPos0, prevPos1, prevPos2);
+#endif
+        }
+
         float3 uvw = GetBary(payload.Barycentrics());
         float3 currentObjectSpacePos = Interpolate(v0.Position, v1.Position, v2.Position, uvw);
 
@@ -133,7 +145,7 @@ struct SurfaceMaker
         {       
             // Previous object-space position: per-vertex skinned/dynamic/animated positions, else current.
             float3 prevObjectSpacePos = currentObjectSpacePos;
-            if (mesh.HasPrevPositions())
+            if (mesh.HasPrevPositions() || hasWindPositions)
                 prevObjectSpacePos = Interpolate(prevPos0, prevPos1, prevPos2, uvw);
 
             // Separate, camera-relative-at-previous-frame position for reprojection/motion vectors.

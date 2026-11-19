@@ -1088,7 +1088,7 @@ void SceneGraph::GetPendingMeshMemoryStats(uint32_t& outPendingCount, uint64_t& 
 	                  stats.dynamicLiveBytes + stats.dynamicOriginalBytes +
 	                  stats.landLODLiveVertexBytes +
 	                  stats.treeAnimLiveVertexBytes + stats.treeAnimPrevPositionBytes +
-	                  stats.animatedPositionBytes;
+	                  stats.animatedPositionBytes + stats.grassWindPositionBytes;
 }
 
 uint32_t SceneGraph::AllocateMeshIndex()
@@ -1321,5 +1321,11 @@ void SceneGraph::UpdateGrassMeshes(nvrhi::ICommandList* commandList)
 		rawMesh->CommitDirtyFlags();
 
 		m_GrassGroupMeshes.emplace(build.serial, eastl::move(mesh));
+	}
+
+	// Grass wind animates the live groups each frame (VertexAnimation + BLAS refit).
+	for (auto& [serial, groupMesh] : m_GrassGroupMeshes) {
+		static_cast<MergedInstanceMesh*>(groupMesh.get())->UpdateWind();
+		groupMesh->CommitDirtyFlags();
 	}
 }

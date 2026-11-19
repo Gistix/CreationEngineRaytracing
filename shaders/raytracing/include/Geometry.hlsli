@@ -408,6 +408,26 @@ void GetVertices(in Mesh mesh, in Properties meshProps, in uint primitiveIndex, 
 }
 #endif
 
+// Merged grass with wind: per-instance swayed positions live in the dynamic position buffer,
+// [current N*V | previous N*V], indexed by instance (geometry index) * V + vertex.
+void GetWindPositions(in Mesh mesh, uint geometryIndex, in Triangle tri, out float3 p0, out float3 p1, out float3 p2)
+{
+    StructuredBuffer<float4> windPositions = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];
+    const uint base = geometryIndex * mesh.NumVertices;
+    p0 = windPositions[base + tri.x].xyz;
+    p1 = windPositions[base + tri.y].xyz;
+    p2 = windPositions[base + tri.z].xyz;
+}
+
+void GetPrevWindPositions(in Mesh mesh, uint geometryIndex, in Triangle tri, out float3 p0, out float3 p1, out float3 p2)
+{
+    StructuredBuffer<float4> windPositions = DynamicPositions[NonUniformResourceIndex(mesh.DynamicID)];
+    const uint base = (mesh.InstanceCount + geometryIndex) * mesh.NumVertices;
+    p0 = windPositions[base + tri.x].xyz;
+    p1 = windPositions[base + tri.y].xyz;
+    p2 = windPositions[base + tri.z].xyz;
+}
+
 half2 GetVertexTexcoord0(in ByteAddressBuffer vertices, in VertexDesc vertexDesc, uint vertexByteOffset, uint index)
 {
     if (vertexDesc.HasFlag(VertexFlags::UV))

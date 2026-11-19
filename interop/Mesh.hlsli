@@ -18,6 +18,13 @@ namespace MeshType
 }
 #endif
 
+namespace MeshDataFlags
+{
+    // Merged-instance grass with wind: per-instance swayed positions live in the dynamic position buffer
+    // (DynamicID), current block [0, N*V) then previous block [N*V, 2*N*V), indexed by instance * V + vertex.
+    static const uint32_t WindPositions = (1 << 0);
+}
+
 INTEROP_DATA_STRUCT(Mesh, 4)
 { 
     uint16_t IndexID;
@@ -28,7 +35,7 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     uint16_t Type;
     uint16_t DynamicID;
     uint16_t MeshID;
-    uint16_t Pad;
+    uint16_t Flags;
     uint IndexOffset;
     uint VertexOffset;
     uint MaterialOffset;
@@ -56,6 +63,11 @@ INTEROP_DATA_STRUCT(Mesh, 4)
     bool HasPrevPositions()
     {
         return Type == MeshType::Skinned || Type == MeshType::Dynamic || Type == MeshType::TreeAnim;
+    }
+
+    bool HasWindPositions()
+    {
+        return (Flags & MeshDataFlags::WindPositions) != 0;
     }
 #endif
 };

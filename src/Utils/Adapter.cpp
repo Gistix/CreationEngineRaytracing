@@ -823,6 +823,28 @@ namespace Util
 
 			return params;
 		}
+
+		GrassWindParams GetGrassWindParams(RE::BSShaderProperty* a_grassShaderProperty)
+		{
+			const auto& iniSettings = Scene::GetSingleton()->m_INISettings;
+
+			const auto* sky = RE::Sky::GetSingleton();
+			const float windSpeed = sky ? sky->windSpeed : 0.0f;
+
+			const float magnitude = iniSettings.grassWindMagnitudeMin +
+				(iniSettings.grassWindMagnitudeMax - iniSettings.grassWindMagnitudeMin) * windSpeed;
+
+			GrassWindParams params{};
+			params.strength = std::min(magnitude, 60.0f) * iniSettings.windGrassMultiplier;
+
+			// Shader timer (State::timerValues[4]) scaled to radians by the grass type's wave period.
+			const auto* grassProperty = netimmerse_cast<RE::BSGrassShaderProperty*>(a_grassShaderProperty);
+			const float wavePeriod = grassProperty ? grassProperty->wavePeriod : 0.0f;
+			const float shaderTimer = RE::BSShaderManager::State::GetSingleton().timerValues[4];
+			params.timer = shaderTimer * (1.0f / 600.0f) * 6.2831802f * wavePeriod;
+
+			return params;
+		}
 #endif
 	}
 }
